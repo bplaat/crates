@@ -7,50 +7,9 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include "camera.h"
-
-typedef enum BlockTexture {
-    BLOCK_TEXTURE_GRASS_TOP,
-    BLOCK_TEXTURE_GRASS_SIDE,
-    BLOCK_TEXTURE_DIRT,
-    BLOCK_TEXTURE_WATER,
-    BLOCK_TEXTURE_SAND,
-    BLOCK_TEXTURE_STONE,
-    BLOCK_TEXTURE_COAL,
-    BLOCK_TEXTURE_GOLD,
-    BLOCK_TEXTURE_TRUNK_TOP,
-    BLOCK_TEXTURE_TRUNK_SIDE,
-    BLOCK_TEXTURE_LEAVES,
-    BLOCK_TEXTURE_CACTUS_TOP,
-    BLOCK_TEXTURE_CACTUS_SIDE,
-    BLOCK_TEXTURE_SIZE
-} BlockTexture;
-
-typedef enum BlockType {
-    BLOCK_TYPE_AIR,
-    BLOCK_TYPE_GRASS,
-    BLOCK_TYPE_DIRT,
-    BLOCK_TYPE_WATER,
-    BLOCK_TYPE_SAND,
-    BLOCK_TYPE_STONE,
-    BLOCK_TYPE_COAL,
-    BLOCK_TYPE_GOLD,
-    BLOCK_TYPE_TRUNK,
-    BLOCK_TYPE_LEAVES,
-    BLOCK_TYPE_CACTUS,
-    BLOCK_TYPE_SIZE
-} BlockType;
-
-// BlockTexture BLOCK_FACES[BLOCK_TYPE_SIZE][6];
-
-#define CHUNK_SIZE 16
-
-typedef struct Chunk {
-    int x;
-    int y;
-    int z;
-    uint8_t *data;
-    uint8_t *visible;
-} Chunk;
+#include "shader.h"
+#include "texture_atlas.h"
+#include "world.h"
 
 typedef struct Game {
     char* title;
@@ -75,9 +34,9 @@ typedef struct Game {
     bool isMovingUp;
     bool isMovingDown;
 
-    int render_distance;
-    Chunk* chunks[512];
-    int chunks_size;
+    Shader* blockShader;
+    TextureAtlas* blocksTextureAtlas;
+    World *world;
 } Game;
 
 #define GAME_MIN_WIDTH 320
