@@ -3,7 +3,7 @@
 #include "chunk.h"
 #include <stdlib.h>
 #include "log.h"
-#include "block.h"
+#include "geometry/block.h"
 
 static int SEED;
 

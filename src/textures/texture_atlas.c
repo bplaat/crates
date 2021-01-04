@@ -1,9 +1,9 @@
-// PlaatCraft - TextureAtlas
+// PlaatCraft - Texture Atlas
 
-#include "texture_atlas.h"
+#include "textures/texture_atlas.h"
 #include <stdlib.h>
 #include <stdbool.h>
-#include "stb_image.h"
+#include "textures/stb_image.h"
 #include "log.h"
 
 TextureAtlas* texture_atlas_new(char* path, int tile_size) {

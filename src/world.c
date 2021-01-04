@@ -3,10 +3,11 @@
 #include "world.h"
 #include <stdlib.h>
 #include <math.h>
-#include "block.h"
+#include "geometry/block.h"
+#include "log.h"
 
 World* world_new(int seed) {
-    World *world = malloc(sizeof(World));
+    World* world = malloc(sizeof(World));
     world->seed = seed;
 
     for (size_t i = 0; i < sizeof(world->chunks) / sizeof(Chunk*); i++) {
@@ -25,7 +26,7 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
         }
     }
 
-    Chunk *chunk = chunk_new(chunk_x, chunk_y, chunk_z);
+    Chunk* chunk = chunk_new(chunk_x, chunk_y, chunk_z);
 
     if (world->chunks_size == (sizeof(world->chunks) / sizeof(Chunk*))) {
         world->chunks_size = 0;
@@ -38,10 +39,9 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     return chunk;
 }
 
-void world_render(World* world, Camera* camera, Shader* blockShader, TextureAtlas* blocksTextureAtlas) {
-    glUseProgram(blockShader->program);
+void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas) {
+    block_shader_use(blockShader);
 
-    glBindVertexArray(block_vertex_array);
     glBindTexture(GL_TEXTURE_2D_ARRAY, blocksTextureAtlas->textureArray);
 
     glUniformMatrix4fv(blockShader->projection_matrix_uniform, 1, GL_FALSE, (const GLfloat*)&camera->projectionMatrix);
@@ -54,32 +54,35 @@ void world_render(World* world, Camera* camera, Shader* blockShader, TextureAtla
     int player_chunk_y = floor(camera->position.y / (float)CHUNK_SIZE);
     int player_chunk_z = floor(camera->position.z / (float)CHUNK_SIZE);
 
-    // system("clear");
-    // log_info("Camera %.3g %.3g %.3g", game->camera->position.x, game->camera->position.y, game->camera->position.z);
+    // log_info("Camera %.3g %.3g %.3g", camera->position.x, camera->position.y, camera->position.z);
     // log_info("Chunk %d %d %d", player_chunk_x, player_chunk_y, player_chunk_z);
 
-    int render_distance = 2;
+    int render_distance = 3;
     for (int chunk_z = player_chunk_z - render_distance; chunk_z <= player_chunk_z + render_distance; chunk_z++) {
         for (int chunk_y = player_chunk_y - render_distance; chunk_y <= player_chunk_y + render_distance; chunk_y++) {
             for (int chunk_x = player_chunk_x - render_distance; chunk_x <= player_chunk_x + render_distance; chunk_x++) {
 
-                bool isVisible = true;
+                bool chunk_is_visible = true;
+
+                // int chunk_x_max = chunk_x < 0 ? -CHUNK_SIZE : CHUNK_SIZE;
+                // int chunk_y_max = chunk_y < 0 ? -CHUNK_SIZE : CHUNK_SIZE;
+                // int chunk_z_max = chunk_z < 0 ? -CHUNK_SIZE : CHUNK_SIZE;
 
                 // Vector4 corners[8] = {
                 //     { chunk_x, chunk_y, chunk_z, 1 },
-                //     { chunk_x + CHUNK_SIZE, chunk_y, chunk_z, 1 },
-                //     { chunk_x, chunk_y + CHUNK_SIZE, chunk_z, 1 },
-                //     { chunk_x + CHUNK_SIZE, chunk_y + CHUNK_SIZE, chunk_z, 1 },
+                //     { chunk_x + chunk_x_max, chunk_y, chunk_z, 1 },
+                //     { chunk_x, chunk_y + chunk_y_max, chunk_z, 1 },
+                //     { chunk_x + chunk_x_max, chunk_y + chunk_y_max, chunk_z, 1 },
 
-                //     { chunk_x, chunk_y, chunk_z + CHUNK_SIZE, 1 },
-                //     { chunk_x + CHUNK_SIZE, chunk_y, chunk_z + CHUNK_SIZE, 1 },
-                //     { chunk_x, chunk_y + CHUNK_SIZE, chunk_z + CHUNK_SIZE, 1 },
-                //     { chunk_x + CHUNK_SIZE, chunk_y + CHUNK_SIZE, chunk_z + CHUNK_SIZE, 1 }
+                //     { chunk_x, chunk_y, chunk_z + chunk_z_max, 1 },
+                //     { chunk_x + chunk_x_max, chunk_y, chunk_z + chunk_z_max, 1 },
+                //     { chunk_x, chunk_y + chunk_y_max, chunk_z + chunk_z_max, 1 },
+                //     { chunk_x + chunk_x_max, chunk_y + chunk_y_max, chunk_z + chunk_z_max, 1 }
                 // };
 
                 // for (size_t i = 0; i < sizeof(corners) / sizeof(Vector4); i++) {
-                //     vector4_mul(&corners[i], &game->camera->viewMatrix);
-                //     vector4_mul(&corners[i], &game->camera->projectionMatrix);
+                //     vector4_mul(&corners[i], &camera->viewMatrix);
+                //     vector4_mul(&corners[i], &camera->projectionMatrix);
 
                 //     #define within(a, b, c) ((a) >= (b) && (b) <= (c))
                 //     if (
@@ -87,13 +90,13 @@ void world_render(World* world, Camera* camera, Shader* blockShader, TextureAtla
                 //         within(-corners[i].w, corners[i].y, corners[i].w) &&
                 //         within(0, corners[i].z, corners[i].w)
                 //     ) {
-                //         isVisible = true;
+                //         chunk_is_visible = true;
                 //         break;
                 //     }
                 // }
 
-                if (isVisible) {
-                    Chunk *chunk = world_get_chunk(world, chunk_x, chunk_y, chunk_z);
+                if (chunk_is_visible) {
+                    Chunk* chunk = world_get_chunk(world, chunk_x, chunk_y, chunk_z);
 
                     chunk_update_data(chunk, world);
 
@@ -116,7 +119,7 @@ void world_render(World* world, Camera* camera, Shader* blockShader, TextureAtla
 
                                     glUniformMatrix4fv(blockShader->model_matrix_uniform, 1, GL_FALSE, (const GLfloat*)&modelMatrix.m11);
 
-                                    glUniform1iv(blockShader->texture_indexes_uniform, 6, (const GLint *)&BLOCK_TEXTURE_FACES[blockType]);
+                                    glUniform1iv(blockShader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TEXTURE_FACES[blockType]);
 
                                     glDrawArrays(GL_TRIANGLES, 0, 36);
                                 }
@@ -124,9 +127,6 @@ void world_render(World* world, Camera* camera, Shader* blockShader, TextureAtla
                         }
                     }
                 }
-                // else {
-                //     log_info("Skip chunk");
-                // }
             }
         }
     }

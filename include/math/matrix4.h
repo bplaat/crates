@@ -1,4 +1,4 @@
-// PlaatCraft - Matrix4 Header
+// PlaatCraft - Matrix4 Math Header
 
 #ifndef MATRIX4_H
 #define MATRIX4_H
@@ -12,7 +12,7 @@ typedef struct _MM_ALIGN16 Matrix4 {
     float m41, m42, m43, m44;
 } Matrix4;
 
-#include "vector4.h"
+#include "math/vector4.h"
 
 void matrix4_identity(Matrix4* matrix);
 

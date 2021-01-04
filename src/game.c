@@ -5,8 +5,7 @@
 #include <math.h>
 #include "glad.h"
 #include "log.h"
-#include "matrix4.h"
-#include "block.h"
+#include "math/matrix4.h"
 
 void game_init() {
     if (!glfwInit()) {
@@ -178,14 +177,13 @@ Game* game_new(char* title, int width, int height) {
 
     log_info("Using an OpenGL %d.%d context", GLVersion.major, GLVersion.minor);
 
-    // Init block
-    block_init();
+    // Load shaders and geometry
+    game->blockShader = block_shader_new();
+    game->flatShader = flat_shader_new();
 
-    // Create shader
-    game->blockShader = shader_new("assets/shaders/block.vert", "assets/shaders/block.frag");
-
-    // Load texture atlas
+    // Load textures
     game->blocksTextureAtlas = texture_atlas_new("assets/images/blocks.png", 128);
+    game->cursorTexture = texture_new("assets/images/cursor.png", true);
 
     // Create camera
     game->camera = camera_new(radians(45), (float)game->width / (float)game->height, 0.1, 1000);
@@ -225,12 +223,14 @@ void game_update(Game* game, float delta) {
     if (game->isMovingBackward) {
         game->velocity.z -= speed;
     }
+
     if (game->isMovingLeft) {
         game->velocity.x -=speed;
     }
     if (game->isMovingRight) {
         game->velocity.x += speed;
     }
+
     if (game->isMovingUp) {
         game->velocity.y += speed;
     }
@@ -247,6 +247,15 @@ void game_update(Game* game, float delta) {
 
     Vector4 update = game->velocity;
     vector4_mul(&update, &rotation_matrix);
+
+    if (game->isMovingUp || game->isMovingDown) {
+        update.x = 0;
+        update.z = 0;
+        update.y = game->velocity.y;
+    } else {
+        update.y = 0;
+    }
+
     vector4_add(&game->camera->position, &update);
 
     camera_update_matrix(game->camera);
@@ -260,7 +269,18 @@ void game_render(Game* game) {
     glClearColor(176.f / 255.f, 233.f / 255.f, 252.f / 255.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // Render world
     world_render(game->world, game->camera, game->blockShader, game->blocksTextureAtlas);
+
+    // Render cursor
+    // flat_shader_use(game->flatShader);
+
+    // glBindTexture(GL_TEXTURE_2D_ARRAY, game->cursorTexture->texture);
+
+    // Rect cursorRect = { 0, 0, 100, 100 };
+    // glUniformMatrix4fv(game->flatShader->matrix_uniform, 1, GL_FALSE, (const GLfloat*)&camera->projectionMatrix);
+
+    // glDrawArrays(GL_TRIANGLES, 0, 6);
 
     glfwSwapBuffers(game->window);
 }
@@ -279,8 +299,10 @@ void game_start(Game* game) {
         // Calculate fps
         frame++;
         if (time - lastFameTime >= 1.0) {
-            system("clear");
-            log_info("Fps %d", frame);
+            #ifdef DEBUG
+                system("clear");
+                log_info("Fps %d", frame);
+            #endif
             frame = 0;
             lastFameTime = time;
         }
@@ -296,13 +318,17 @@ void game_start(Game* game) {
 }
 
 void game_free(Game* game) {
+    // Free world
     world_free(game->world);
 
+    // Free textures
+    texture_free(game->cursorTexture);
     texture_atlas_free(game->blocksTextureAtlas);
 
-    shader_free(game->blockShader);
+    // Free shaders
+    block_shader_free(game->blockShader);
+    flat_shader_free(game->flatShader);
 
-    block_free();
-
+    // Destory game window
     glfwDestroyWindow(game->window);
 }

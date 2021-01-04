@@ -1,12 +1,14 @@
 // PlaatCraft - Shader
 
-#include "shader.h"
+#include "shaders/shader.h"
 #include <stdlib.h>
 #include "utils.h"
 #include "log.h"
 
 Shader* shader_new(char* vertex_path, char* fragment_path) {
     Shader* shader = malloc(sizeof(Shader));
+    shader->vertex_path = vertex_path;
+    shader->fragment_path = fragment_path;
 
     // Read and compile vertex shader
     const char* vertex_shader_text = file_read(vertex_path);
@@ -20,7 +22,7 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(vertex_shader, sizeof(infoLog), NULL, infoLog);
-        log_error("Can't compile vertex shader: %s\n", infoLog);
+        log_error("Can't compile vertex shader %s: %s\n", vertex_path, infoLog);
     }
 
     // Compile fragment shader
@@ -33,7 +35,7 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(fragment_shader, sizeof(infoLog), NULL, infoLog);
-        log_error("Can't compile fragment shader: %s\n", infoLog);
+        log_error("Can't compile fragment shader %s: %s\n", fragment_path, infoLog);
     }
 
     // Link program
@@ -51,26 +53,6 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     // Delete shaders
     glDeleteShader(vertex_shader);
     glDeleteShader(fragment_shader);
-
-    // Get attributes
-    shader->position_attribute = glGetAttribLocation(shader->program, "a_position");
-    glVertexAttribPointer(shader->position_attribute, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(shader->position_attribute);
-
-    shader->texture_position_attribute = glGetAttribLocation(shader->program, "a_texture_position");
-    glVertexAttribPointer(shader->texture_position_attribute, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(shader->texture_position_attribute);
-
-    shader->texture_face_attribute = glGetAttribLocation(shader->program, "a_texture_face");
-    glVertexAttribPointer(shader->texture_face_attribute, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
-    glEnableVertexAttribArray(shader->texture_face_attribute);
-
-
-    // Get uniforms
-    shader->model_matrix_uniform = glGetUniformLocation(shader->program, "u_model_matrix");
-    shader->view_matrix_uniform = glGetUniformLocation(shader->program, "u_view_matrix");
-    shader->projection_matrix_uniform = glGetUniformLocation(shader->program, "u_projection_matrix");
-    shader->texture_indexes_uniform = glGetUniformLocation(shader->program, "u_texture_indexes");
 
     return shader;
 }

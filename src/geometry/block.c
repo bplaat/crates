@@ -1,7 +1,7 @@
-// PlaatCraft - Block
+// PlaatCraft - Block Geometry
 
-#include "block.h"
-#include <math.h>
+#include "geometry/block.h"
+#include <stdlib.h>
 
 BlockTexture BLOCK_TEXTURE_FACES[BLOCK_TYPE_SIZE][6] = {
     { 0, 0, 0, 0, 0, 0 }, // Air
@@ -62,20 +62,25 @@ float BLOCK_VERTICES[] = {
     -0.5,  0.5, -0.5,  1, 1,  2
 };
 
-GLuint block_vertex_array;
+Block* block_new() {
+    Block* block = malloc(sizeof(Block));
 
-GLuint block_vertex_buffer;
+    glGenVertexArrays(1, &block->vertex_array);
+    glBindVertexArray(block->vertex_array);
 
-void block_init() {
-    glGenVertexArrays(1, &block_vertex_array);
-    glBindVertexArray(block_vertex_array);
-
-    glGenBuffers(1, &block_vertex_buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, block_vertex_buffer);
+    glGenBuffers(1, &block->vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, block->vertex_buffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(BLOCK_VERTICES), BLOCK_VERTICES, GL_STATIC_DRAW);
+
+    return block;
 }
 
-void block_free() {
-    glDeleteVertexArrays(1, &block_vertex_array);
-    glDeleteBuffers(1, &block_vertex_buffer);
+void block_use(Block* block) {
+    glBindVertexArray(block->vertex_array);
+}
+
+void block_free(Block* block) {
+    glDeleteVertexArrays(1, &block->vertex_array);
+    glDeleteBuffers(1, &block->vertex_buffer);
+    free(block);
 }

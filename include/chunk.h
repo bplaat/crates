@@ -16,7 +16,7 @@ typedef struct Chunk {
     int y;
     int z;
     bool is_changed;
-    uint8_t *data;
+    uint8_t* data;
 } Chunk;
 
 #include "world.h"

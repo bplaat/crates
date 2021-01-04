@@ -6,9 +6,11 @@
 #include <stdbool.h>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include "shaders/block_shader.h"
+#include "shaders/flat_shader.h"
+#include "textures/texture.h"
+#include "textures/texture_atlas.h"
 #include "camera.h"
-#include "shader.h"
-#include "texture_atlas.h"
 #include "world.h"
 
 typedef struct Game {
@@ -19,14 +21,18 @@ typedef struct Game {
     int oldHeight;
 
     GLFWwindow* window;
-
-    Camera* camera;
-    Vector4 velocity;
-
     bool isFullscreen;
     bool isWireframed;
     bool isCursorLocked;
 
+    BlockShader* blockShader;
+    FlatShader* flatShader;
+
+    TextureAtlas* blocksTextureAtlas;
+    Texture* cursorTexture;
+
+    Camera* camera;
+    Vector4 velocity;
     bool isMovingForward;
     bool isMovingBackward;
     bool isMovingLeft;
@@ -34,9 +40,7 @@ typedef struct Game {
     bool isMovingUp;
     bool isMovingDown;
 
-    Shader* blockShader;
-    TextureAtlas* blocksTextureAtlas;
-    World *world;
+    World* world;
 } Game;
 
 #define GAME_MIN_WIDTH 320

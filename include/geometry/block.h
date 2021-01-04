@@ -1,4 +1,4 @@
-// PlaatCraft - Block Header
+// PlaatCraft - Block Geometry Header
 
 #ifndef BLOCK_H
 #define BLOCK_H
@@ -41,12 +41,15 @@ extern BlockTexture BLOCK_TEXTURE_FACES[BLOCK_TYPE_SIZE][6];
 
 extern float BLOCK_VERTICES[];
 
-extern GLuint block_vertex_array;
+typedef struct Block {
+    GLuint vertex_array;
+    GLuint vertex_buffer;
+} Block;
 
-extern GLuint block_vertex_buffer;
+Block* block_new();
 
-void block_init();
+void block_use(Block* block);
 
-void block_free();
+void block_free(Block* block);
 
 #endif

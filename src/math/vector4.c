@@ -1,6 +1,6 @@
-// PlaatCraft - Vector4
+// PlaatCraft - Vector4 Math
 
-#include "vector4.h"
+#include "math/vector4.h"
 #include <emmintrin.h>
 
 void vector4_add(Vector4* vector, Vector4* rhs) {

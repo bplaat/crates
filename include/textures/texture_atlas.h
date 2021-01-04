@@ -1,4 +1,4 @@
-// PlaatCraft - TextureAtlas Header
+// PlaatCraft - Texture Atlas Header
 
 #ifndef TEXTURE_ATLAS_H
 #define TEXTURE_ATLAS_H

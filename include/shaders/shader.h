@@ -6,16 +6,9 @@
 #include "glad.h"
 
 typedef struct Shader {
+    char* vertex_path;
+    char* fragment_path;
     GLuint program;
-
-    GLint position_attribute;
-    GLint texture_position_attribute;
-    GLint texture_face_attribute;
-
-    GLint model_matrix_uniform;
-    GLint view_matrix_uniform;
-    GLint projection_matrix_uniform;
-    GLint texture_indexes_uniform;
 } Shader;
 
 Shader* shader_new(char* vertex_path, char* fragment_path);

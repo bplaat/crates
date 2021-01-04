@@ -1,6 +1,6 @@
-// PlaatCraft - Matrix4
+// PlaatCraft - Matrix4 Math
 
-#include "matrix4.h"
+#include "math/matrix4.h"
 #include <emmintrin.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
