@@ -3,7 +3,7 @@
 #include "game.h"
 #include <stdlib.h>
 #include <math.h>
-#include "glad.h"
+#include "glad/glad.h"
 #include "log.h"
 #include "math/matrix4.h"
 #include "math/rect.h"

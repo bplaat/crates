@@ -58,6 +58,8 @@ TextureAtlas* texture_atlas_new(char* path, int tile_size) {
 
     free(texture_buffer);
 
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+
     return textureAtlas;
 }
 

@@ -3,7 +3,7 @@
 #ifndef SHADER_H
 #define SHADER_H
 
-#include "glad.h"
+#include "glad/glad.h"
 
 typedef struct Shader {
     char* vertex_path;

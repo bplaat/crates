@@ -6,7 +6,11 @@
 #include "utils.h"
 #include "math/rect.h"
 
+#ifndef NO_SSIMD
 typedef struct _MM_ALIGN16 Matrix4 {
+#else
+typedef struct Matrix4 {
+#endif
     float m11, m12, m13, m14;
     float m21, m22, m23, m24;
     float m31, m32, m33, m34;

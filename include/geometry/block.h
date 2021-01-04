@@ -3,7 +3,7 @@
 #ifndef BLOCK_H
 #define BLOCK_H
 
-#include "glad.h"
+#include "glad/glad.h"
 
 typedef enum BlockTexture {
     BLOCK_TEXTURE_GRASS_TOP,

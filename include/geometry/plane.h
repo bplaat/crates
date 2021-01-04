@@ -3,7 +3,7 @@
 #ifndef PLANE_H
 #define PLANE_H
 
-#include "glad.h"
+#include "glad/glad.h"
 
 extern float PLANE_VERTICES[];
 

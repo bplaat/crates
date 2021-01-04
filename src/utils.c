@@ -1,18 +1,22 @@
 // PlaatCraft - Utils
 
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
+// Function to convert radians to degrees
 double degrees(double radians) {
     return radians * (180 / M_PI);
 }
 
+// Function to convert degrees to radians
 double radians(double degrees) {
     return degrees * (M_PI / 180);
 }
 
+// Function to read a file to string
 char* file_read(char* path) {
     FILE* file = fopen(path, "r");
     fseek(file, 0, SEEK_END);

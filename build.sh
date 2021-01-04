@@ -59,7 +59,7 @@ else
         if [[ $file -nt $object ]]; then
             rm -f $object
 
-            if [[ $file == "src/glad.c" ]] || [[ $file == "src/textures/stb_image.c" ]]; then
+            if [[ $file == "src/glad/glad.c" ]] || [[ $file == "src/textures/stb_image.c" ]]; then
                 if gcc -Iinclude -c $file -o $object; then
                     echo "Passed: ${file:4}"
                 else

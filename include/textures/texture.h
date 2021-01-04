@@ -3,7 +3,7 @@
 #ifndef TEXTURE_H
 #define TEXTURE_H
 
-#include "glad.h"
+#include "glad/glad.h"
 #include <stdbool.h>
 
 typedef struct Texture {

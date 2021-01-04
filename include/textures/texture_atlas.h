@@ -3,7 +3,7 @@
 #ifndef TEXTURE_ATLAS_H
 #define TEXTURE_ATLAS_H
 
-#include "glad.h"
+#include "glad/glad.h"
 
 typedef struct TextureAtlas {
     char* path;
