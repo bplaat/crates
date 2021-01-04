@@ -14,12 +14,15 @@ typedef struct FlatShader {
     GLint position_attribute;
     GLint texture_position_attribute;
 
-    GLint matrix_uniform;
+    GLint model_matrix_uniform;
+    GLint projection_matrix_uniform;
 } FlatShader;
 
 FlatShader* flat_shader_new();
 
-void flat_shader_use(FlatShader* flat_shader);
+void flat_shader_enable(FlatShader* flat_shader);
+
+void flat_shader_disable(FlatShader* flat_shader);
 
 void flat_shader_free(FlatShader* flat_shader);
 

@@ -16,6 +16,10 @@ typedef struct Texture {
 
 Texture* texture_new(char* path, bool isTransparent);
 
+void texture_enable(Texture* texture);
+
+void texture_disable(Texture* texture);
+
 void texture_free(Texture* texture);
 
 #endif

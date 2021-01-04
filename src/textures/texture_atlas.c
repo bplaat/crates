@@ -14,7 +14,7 @@ TextureAtlas* texture_atlas_new(char* path, int tile_size) {
     int32_t image_width, image_height, image_channels;
     uint8_t* image_buffer = stbi_load(path, &image_width, &image_height, &image_channels, STBI_rgb);
     if (!image_buffer) {
-        log_error("Can't load image: %s\n", path);
+        log_error("Can't load image %s", path);
     }
 
     int cols = image_width / tile_size;
@@ -61,6 +61,16 @@ TextureAtlas* texture_atlas_new(char* path, int tile_size) {
     return textureAtlas;
 }
 
+void texture_atlas_enable(TextureAtlas* textureAtlas) {
+    glBindTexture(GL_TEXTURE_2D_ARRAY, textureAtlas->textureArray);
+}
+
+void texture_atlas_disable(TextureAtlas* textureAtlas) {
+    (void)textureAtlas;
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+}
+
 void texture_atlas_free(TextureAtlas* textureAtlas) {
     glDeleteTextures(1, &textureAtlas->textureArray);
+    free(textureAtlas);
 }

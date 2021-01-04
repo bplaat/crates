@@ -62,6 +62,23 @@ void matrix4_scale(Matrix4* matrix, Vector4* scale) {
     _mm_store_ps(&matrix->m41, _mm_setr_ps(0, 0, 0, 1));
 }
 
+void matrix4_rect(Matrix4* matrix, Rect* rect, int viewportWidth, int viewportHeight) {
+    _mm_store_ps(&matrix->m11, _mm_setr_ps(2 / viewportWidth, 0, 0, 0));
+    _mm_store_ps(&matrix->m21, _mm_setr_ps(0, -2 / viewportHeight, 0, 0));
+    _mm_store_ps(&matrix->m31, _mm_setr_ps(-1, 1, 1, 0));
+    _mm_store_ps(&matrix->m41, _mm_setr_ps(0, 0, 0, 1));
+
+    Matrix4 scaleMatrix;
+    Vector4 scaleRect = { rect->width, rect->height, 1, 1 };
+    matrix4_scale(&scaleMatrix, &scaleRect);
+    matrix4_mul(matrix, &scaleMatrix);
+
+    Matrix4 translateMatrix;
+    Vector4 translateRect = { rect->x, rect->y, 0, 1 };
+    matrix4_translate(&translateMatrix, &translateRect);
+    matrix4_mul(matrix, &translateMatrix);
+}
+
 void matrix4_mul(Matrix4* matrix, Matrix4* rhs) {
     __m128 row1 = _mm_load_ps(&matrix->m11);
     __m128 row2 = _mm_load_ps(&matrix->m21);

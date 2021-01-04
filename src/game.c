@@ -6,6 +6,7 @@
 #include "glad.h"
 #include "log.h"
 #include "math/matrix4.h"
+#include "math/rect.h"
 
 void game_init() {
     if (!glfwInit()) {
@@ -152,7 +153,6 @@ Game* game_new(char* title, int width, int height) {
     if (!game->window) {
         log_error("Can't create glfw window");
     }
-
     game->isFullscreen = false;
     game->isWireframed = false;
     game->isCursorLocked = false;
@@ -192,16 +192,16 @@ Game* game_new(char* title, int width, int height) {
     game->camera->position.z = CHUNK_SIZE / 2;
     camera_update_matrix(game->camera);
 
+    game->velocity.x = 0;
+    game->velocity.y = 0;
+    game->velocity.z = 0;
+
     game->isMovingForward = false;
     game->isMovingLeft = false;
     game->isMovingRight = false;
     game->isMovingBackward = false;
     game->isMovingUp = false;
     game->isMovingDown = false;
-
-    game->velocity.x = 0;
-    game->velocity.y = 0;
-    game->velocity.z = 0;
 
     // Create world
     game->world = world_new(0);
@@ -273,15 +273,26 @@ void game_render(Game* game) {
     world_render(game->world, game->camera, game->blockShader, game->blocksTextureAtlas);
 
     // Render cursor
-    // flat_shader_use(game->flatShader);
+    flat_shader_enable(game->flatShader);
 
-    // glBindTexture(GL_TEXTURE_2D_ARRAY, game->cursorTexture->texture);
+    Matrix4 projectionMatrix;
+    matrix4_identity(&projectionMatrix);
+    glUniformMatrix4fv(game->flatShader->projection_matrix_uniform, 1, GL_FALSE, &projectionMatrix.m11);
 
+    Matrix4 modelMatrix;
+    Vector4 scaleVector = { 0.2, 0.2, 1, 1 };
+    matrix4_scale(&modelMatrix, &scaleVector);
     // Rect cursorRect = { 0, 0, 100, 100 };
-    // glUniformMatrix4fv(game->flatShader->matrix_uniform, 1, GL_FALSE, (const GLfloat*)&camera->projectionMatrix);
+    // matrix4_rect(&rectMatrix, &cursorRect, game->width, game->height);
+    glUniformMatrix4fv(game->flatShader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
 
-    // glDrawArrays(GL_TRIANGLES, 0, 6);
+    texture_enable(game->cursorTexture);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    texture_disable(game->cursorTexture);
 
+    flat_shader_disable(game->flatShader);
+
+    // Swap back buffer
     glfwSwapBuffers(game->window);
 }
 

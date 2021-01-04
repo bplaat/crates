@@ -40,12 +40,11 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
 }
 
 void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas) {
-    block_shader_use(blockShader);
+    block_shader_enable(blockShader);
+    texture_atlas_enable(blocksTextureAtlas);
 
-    glBindTexture(GL_TEXTURE_2D_ARRAY, blocksTextureAtlas->textureArray);
-
-    glUniformMatrix4fv(blockShader->projection_matrix_uniform, 1, GL_FALSE, (const GLfloat*)&camera->projectionMatrix);
-    glUniformMatrix4fv(blockShader->view_matrix_uniform, 1, GL_FALSE, (const GLfloat*)&camera->viewMatrix);
+    glUniformMatrix4fv(blockShader->projection_matrix_uniform, 1, GL_FALSE, &camera->projectionMatrix.m11);
+    glUniformMatrix4fv(blockShader->view_matrix_uniform, 1, GL_FALSE, &camera->viewMatrix.m11);
 
     Matrix4 rotationMatrix;
     matrix4_rotate_x(&rotationMatrix, radians(-90));
@@ -117,7 +116,7 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
                                     matrix4_translate(&modelMatrix, &blockPosition);
                                     matrix4_mul(&modelMatrix, &rotationMatrix);
 
-                                    glUniformMatrix4fv(blockShader->model_matrix_uniform, 1, GL_FALSE, (const GLfloat*)&modelMatrix.m11);
+                                    glUniformMatrix4fv(blockShader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
 
                                     glUniform1iv(blockShader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TEXTURE_FACES[blockType]);
 
@@ -130,6 +129,10 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
             }
         }
     }
+
+    texture_atlas_disable(blocksTextureAtlas);
+
+    block_shader_disable(blockShader);
 }
 
 void world_free(World* world) {

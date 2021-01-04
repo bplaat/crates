@@ -48,7 +48,9 @@ typedef struct Block {
 
 Block* block_new();
 
-void block_use(Block* block);
+void block_enable(Block* block);
+
+void block_disable(Block* block);
 
 void block_free(Block* block);
 

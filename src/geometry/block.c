@@ -75,8 +75,13 @@ Block* block_new() {
     return block;
 }
 
-void block_use(Block* block) {
+void block_enable(Block* block) {
     glBindVertexArray(block->vertex_array);
+}
+
+void block_disable(Block* block) {
+    (void)block;
+    glBindVertexArray(0);
 }
 
 void block_free(Block* block) {

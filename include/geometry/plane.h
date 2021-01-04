@@ -14,7 +14,9 @@ typedef struct Plane {
 
 Plane* plane_new();
 
-void plane_use(Plane* plane);
+void plane_enable(Plane* plane);
+
+void plane_disable(Plane* plane);
 
 void plane_free(Plane* plane);
 

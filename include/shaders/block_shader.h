@@ -23,7 +23,9 @@ typedef struct BlockShader {
 
 BlockShader* block_shader_new();
 
-void block_shader_use(BlockShader* block_shader);
+void block_shader_enable(BlockShader* block_shader);
+
+void block_shader_disable(BlockShader* block_shader);
 
 void block_shader_free(BlockShader* block_shader);
 

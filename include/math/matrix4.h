@@ -4,6 +4,7 @@
 #define MATRIX4_H
 
 #include "utils.h"
+#include "math/rect.h"
 
 typedef struct _MM_ALIGN16 Matrix4 {
     float m11, m12, m13, m14;
@@ -27,6 +28,8 @@ void matrix4_rotate_y(Matrix4* matrix, float y);
 void matrix4_rotate_z(Matrix4* matrix, float z);
 
 void matrix4_scale(Matrix4* matrix, Vector4* scale);
+
+void matrix4_rect(Matrix4* matrix, Rect* rect, int viewportWidth, int viewportHeight);
 
 void matrix4_mul(Matrix4* matrix, Matrix4* rhs);
 

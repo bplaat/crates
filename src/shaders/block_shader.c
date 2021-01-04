@@ -13,7 +13,7 @@ BlockShader* block_shader_new() {
 
     // Get attributes
     block_shader->position_attribute = glGetAttribLocation(block_shader->shader->program, "a_position");
-    glVertexAttribPointer(block_shader->position_attribute, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(block_shader->position_attribute, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), 0);
     glEnableVertexAttribArray(block_shader->position_attribute);
 
     block_shader->texture_position_attribute = glGetAttribLocation(block_shader->shader->program, "a_texture_position");
@@ -30,12 +30,20 @@ BlockShader* block_shader_new() {
     block_shader->projection_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_projection_matrix");
     block_shader->texture_indexes_uniform = glGetUniformLocation(block_shader->shader->program, "u_texture_indexes");
 
+    // Disable shader
+    glBindVertexArray(0);
+    block_shader_disable(block_shader);
+
     return block_shader;
 }
 
-void block_shader_use(BlockShader* block_shader) {
+void block_shader_enable(BlockShader* block_shader) {
     glUseProgram(block_shader->shader->program);
-    block_use(block_shader->block);
+    block_enable(block_shader->block);
+}
+
+void block_shader_disable(BlockShader* block_shader) {
+    block_disable(block_shader->block);
 }
 
 void block_shader_free(BlockShader* block_shader) {

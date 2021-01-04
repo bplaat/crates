@@ -13,6 +13,10 @@ typedef struct TextureAtlas {
 
 TextureAtlas* texture_atlas_new(char* path, int tile_size);
 
+void texture_atlas_enable(TextureAtlas* textureAtlas);
+
+void texture_atlas_disable(TextureAtlas* textureAtlas);
+
 void texture_atlas_free(TextureAtlas* textureAtlas);
 
 #endif

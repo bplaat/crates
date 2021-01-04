@@ -8,6 +8,7 @@ float PLANE_VERTICES[] = {
     -0.5, -0.5,  0, 0,
      0.5, -0.5,  1, 0,
      0.5,  0.5,  1, 1,
+
      0.5,  0.5,  1, 1,
     -0.5,  0.5,  0, 1,
     -0.5, -0.5,  0, 0
@@ -26,8 +27,13 @@ Plane* plane_new() {
     return plane;
 }
 
-void plane_use(Plane* plane) {
+void plane_enable(Plane* plane) {
     glBindVertexArray(plane->vertex_array);
+}
+
+void plane_disable(Plane* plane) {
+    (void)plane;
+    glBindVertexArray(0);
 }
 
 void plane_free(Plane* plane) {

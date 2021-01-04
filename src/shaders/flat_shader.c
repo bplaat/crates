@@ -13,22 +13,31 @@ FlatShader* flat_shader_new() {
 
     // Get attributes
     flat_shader->position_attribute = glGetAttribLocation(flat_shader->shader->program, "a_position");
-    glVertexAttribPointer(flat_shader->position_attribute, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(flat_shader->position_attribute, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
     glEnableVertexAttribArray(flat_shader->position_attribute);
 
     flat_shader->texture_position_attribute = glGetAttribLocation(flat_shader->shader->program, "a_texture_position");
-    glVertexAttribPointer(flat_shader->texture_position_attribute, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(flat_shader->texture_position_attribute, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(flat_shader->texture_position_attribute);
 
     // Get uniforms
-    flat_shader->matrix_uniform = glGetUniformLocation(flat_shader->shader->program, "u_matrix");
+    flat_shader->model_matrix_uniform = glGetUniformLocation(flat_shader->shader->program, "u_model_matrix");
+    flat_shader->projection_matrix_uniform = glGetUniformLocation(flat_shader->shader->program, "u_projection_matrix");
+
+    // Disable shader
+    glBindVertexArray(0);
+    flat_shader_disable(flat_shader);
 
     return flat_shader;
 }
 
-void flat_shader_use(FlatShader* flat_shader) {
+void flat_shader_enable(FlatShader* flat_shader) {
     glUseProgram(flat_shader->shader->program);
-    plane_use(flat_shader->plane);
+    plane_enable(flat_shader->plane);
+}
+
+void flat_shader_disable(FlatShader* flat_shader) {
+    plane_disable(flat_shader->plane);
 }
 
 void flat_shader_free(FlatShader* flat_shader) {
