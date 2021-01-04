@@ -33,8 +33,6 @@ void matrix4_rotate_z(Matrix4* matrix, float z);
 
 void matrix4_scale(Matrix4* matrix, Vector4* scale);
 
-void matrix4_rect(Matrix4* matrix, Rect* rect, int viewportWidth, int viewportHeight);
-
 void matrix4_mul(Matrix4* matrix, Matrix4* rhs);
 
 #endif

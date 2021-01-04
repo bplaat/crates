@@ -3,7 +3,7 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <pthread.h>
+#include <tinycthread/tinycthread.h>
 #include "camera.h"
 #include "shaders/block_shader.h"
 #include "textures/texture_atlas.h"
@@ -35,15 +35,15 @@ struct World {
 
     Chunk* chunk_cache[2048];
     int chunk_cache_size;
-    pthread_mutex_t chunk_cache_lock;
+    mtx_t  chunk_cache_lock;
 
     WorldRequest* request_queue[2048];
     int request_queue_size;
-    pthread_mutex_t request_queue_lock;
+    mtx_t  request_queue_lock;
 
-    pthread_t worker_threads[2];
+    thrd_t worker_threads[2];
     bool worker_running;
-    pthread_mutex_t worker_running_lock;
+    mtx_t  worker_running_lock;
 };
 
 World* world_new(int seed);
@@ -58,6 +58,6 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
 
 void world_free(World* world);
 
-void* world_worker_thread(void* argument);
+int world_worker_thread(void* argument);
 
 #endif

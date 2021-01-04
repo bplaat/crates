@@ -15,19 +15,19 @@ World* world_new(int seed) {
         world->chunk_cache[i] = NULL;
     }
     world->chunk_cache_size = 0;
-    pthread_mutex_init(&world->chunk_cache_lock, NULL);
+    mtx_init(&world->chunk_cache_lock, mtx_plain);
 
     for (size_t i = 0; i < sizeof(world->request_queue) / sizeof(WorldRequest*); i++) {
         world->request_queue[i] = NULL;
     }
     world->request_queue_size = 0;
-    pthread_mutex_init(&world->request_queue_lock, NULL);
+    mtx_init(&world->request_queue_lock, mtx_plain);
 
     world->worker_running = true;
-    pthread_mutex_init(&world->worker_running_lock, NULL);
+    mtx_init(&world->worker_running_lock, mtx_plain);
 
-    for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(pthread_t); i++) {
-        pthread_create(&world->worker_threads[i], NULL, world_worker_thread, world);
+    for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(thrd_t); i++) {
+        thrd_create(&world->worker_threads[i], world_worker_thread, world);
     }
 
     return world;
@@ -43,7 +43,7 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     }
 
     // When not found create chunk and add to cache
-    pthread_mutex_lock(&world->chunk_cache_lock);
+    mtx_lock(&world->chunk_cache_lock);
 
     Chunk* chunk = chunk_new(chunk_x, chunk_y, chunk_z);
 
@@ -55,7 +55,7 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     }
     world->chunk_cache[world->chunk_cache_size++] = chunk;
 
-    pthread_mutex_unlock(&world->chunk_cache_lock);
+    mtx_unlock(&world->chunk_cache_lock);
 
     return chunk;
 }
@@ -83,14 +83,14 @@ Chunk* world_request_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) 
     }
 
     // Create chunk new request and push it to the request queue
-    pthread_mutex_lock(&world->request_queue_lock);
+    mtx_lock(&world->request_queue_lock);
     WorldRequest* request = malloc(sizeof(WorldRequest));
     request->type = WORLD_REQUEST_TYPE_CHUNK_NEW;
     request->arguments.chunk_position.x = chunk_x;
     request->arguments.chunk_position.y = chunk_y;
     request->arguments.chunk_position.z = chunk_z;
     world->request_queue[world->request_queue_size++] = request;
-    pthread_mutex_unlock(&world->request_queue_lock);
+    mtx_unlock(&world->request_queue_lock);
     return NULL;
 }
 
@@ -107,12 +107,12 @@ void world_request_chunk_update(World* world, Chunk* chunk) {
     }
 
     // Create chunk update request and push it to the request queue
-    pthread_mutex_lock(&world->request_queue_lock);
+    mtx_lock(&world->request_queue_lock);
     WorldRequest* request = malloc(sizeof(WorldRequest));
     request->type = WORLD_REQUEST_TYPE_CHUNK_UPDATE;
     request->arguments.chunk_pointer = chunk;
     world->request_queue[world->request_queue_size++] = request;
-    pthread_mutex_unlock(&world->request_queue_lock);
+    mtx_unlock(&world->request_queue_lock);
 }
 
 void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas) {
@@ -214,12 +214,12 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
 }
 
 void world_free(World* world) {
-    pthread_mutex_lock(&world->worker_running_lock);
+    mtx_lock(&world->worker_running_lock);
     world->worker_running = false;
-    pthread_mutex_unlock(&world->worker_running_lock);
+    mtx_unlock(&world->worker_running_lock);
 
-    for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(pthread_t); i++) {
-        pthread_join(world->worker_threads[i], NULL);
+    for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(thrd_t); i++) {
+        thrd_join(world->worker_threads[i], NULL);
     }
 
     for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
@@ -231,13 +231,13 @@ void world_free(World* world) {
     free(world);
 }
 
-void* world_worker_thread(void* argument) {
+int world_worker_thread(void* argument) {
     World* world = (World*)argument;
 
     while (world->worker_running) {
         if (world->request_queue_size > 0) {
             // Get first request and remove it by shifting
-            pthread_mutex_lock(&world->request_queue_lock);
+            mtx_lock(&world->request_queue_lock);
 
             WorldRequest* request = world->request_queue[0];
 
@@ -246,7 +246,7 @@ void* world_worker_thread(void* argument) {
             }
             world->request_queue_size--;
 
-            pthread_mutex_unlock(&world->request_queue_lock);
+            mtx_unlock(&world->request_queue_lock);
 
             // Create chunk
             if (request->type == WORLD_REQUEST_TYPE_CHUNK_NEW) {
@@ -270,6 +270,5 @@ void* world_worker_thread(void* argument) {
         }
     }
 
-    pthread_exit(NULL);
-    return NULL;
+    return EXIT_SUCCESS;
 }

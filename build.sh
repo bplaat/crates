@@ -80,7 +80,7 @@ else
     if [ "$(uname -s)" == "Linux" ]; then
         rm -f target/debug/$name-v$version-$platform-debug
 
-        gcc $(find target/debug -name *.o) -lglfw -lm -lpthread -ldl -o target/debug/$name-v$version-$platform-debug
+        gcc $(find target/debug -name *.o) -lglfw -lm -ldl -o target/debug/$name-v$version-$platform-debug
 
         if [ "$1" == "debug" ]; then
             gdb ./target/debug/$name-v$version-$platform-debug
@@ -90,7 +90,7 @@ else
     else
         rm -f target/debug/$name-v$version-$platform-debug.exe
 
-        gcc $(find target/debug -name *.o) -lglfw3 -lm -lpthread -o target/debug/$name-v$version-$platform-debug.exe
+        gcc $(find target/debug -name *.o) -lglfw3 -lm -o target/debug/$name-v$version-$platform-debug.exe
 
         if [ "$1" == "debug" ]; then
             gdb ./target/debug/$name-v$version-$platform-debug.exe

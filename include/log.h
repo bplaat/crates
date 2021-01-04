@@ -3,9 +3,9 @@
 #ifndef LOG_H
 #define LOG_H
 
-#include <pthread.h>
+#include <tinycthread/tinycthread.h>
 
-extern pthread_mutex_t log_lock;
+extern mtx_t log_lock;
 
 void log_init();
 
