@@ -8,8 +8,8 @@
 BlockShader* block_shader_new() {
     BlockShader* block_shader = malloc(sizeof(Shader));
     block_shader->shader = shader_new("assets/shaders/block.vert", "assets/shaders/block.frag");
-
     block_shader->block = block_new();
+    block_shader_enable(block_shader);
 
     // Get attributes
     block_shader->position_attribute = glGetAttribLocation(block_shader->shader->program, "a_position");
@@ -31,14 +31,13 @@ BlockShader* block_shader_new() {
     block_shader->texture_indexes_uniform = glGetUniformLocation(block_shader->shader->program, "u_texture_indexes");
 
     // Disable shader
-    glBindVertexArray(0);
     block_shader_disable(block_shader);
 
     return block_shader;
 }
 
 void block_shader_enable(BlockShader* block_shader) {
-    glUseProgram(block_shader->shader->program);
+    shader_enable(block_shader->shader);
     block_enable(block_shader->block);
 }
 

@@ -66,11 +66,13 @@ Block* block_new() {
     Block* block = malloc(sizeof(Block));
 
     glGenVertexArrays(1, &block->vertex_array);
-    glBindVertexArray(block->vertex_array);
+    block_enable(block);
 
     glGenBuffers(1, &block->vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, block->vertex_buffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(BLOCK_VERTICES), BLOCK_VERTICES, GL_STATIC_DRAW);
+
+    block_disable(block);
 
     return block;
 }

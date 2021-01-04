@@ -18,11 +18,13 @@ Plane* plane_new() {
     Plane* plane = malloc(sizeof(Plane));
 
     glGenVertexArrays(1, &plane->vertex_array);
-    glBindVertexArray(plane->vertex_array);
+    plane_enable(plane);
 
     glGenBuffers(1, &plane->vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, plane->vertex_buffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(PLANE_VERTICES), PLANE_VERTICES, GL_STATIC_DRAW);
+
+    plane_disable(plane);
 
     return plane;
 }

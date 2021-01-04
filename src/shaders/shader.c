@@ -60,6 +60,10 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     return shader;
 }
 
+void shader_enable(Shader* shader) {
+    glUseProgram(shader->program);
+}
+
 void shader_free(Shader* shader) {
     // Delete program
     glDeleteProgram(shader->program);

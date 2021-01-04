@@ -45,7 +45,7 @@ TextureAtlas* texture_atlas_new(char* path, int tile_size) {
     }
 
     glGenTextures(1, &textureAtlas->textureArray);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, textureAtlas->textureArray);
+    texture_atlas_enable(textureAtlas);
 
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -58,17 +58,19 @@ TextureAtlas* texture_atlas_new(char* path, int tile_size) {
 
     free(texture_buffer);
 
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    texture_atlas_disable(textureAtlas);
 
     return textureAtlas;
 }
 
 void texture_atlas_enable(TextureAtlas* textureAtlas) {
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D_ARRAY, textureAtlas->textureArray);
 }
 
 void texture_atlas_disable(TextureAtlas* textureAtlas) {
     (void)textureAtlas;
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
 }
 

@@ -13,6 +13,8 @@ typedef struct Shader {
 
 Shader* shader_new(char* vertex_path, char* fragment_path);
 
+void shader_enable(Shader* shader);
+
 void shader_free(Shader* shader);
 
 #endif

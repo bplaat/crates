@@ -17,7 +17,7 @@ Texture* texture_new(char* path, bool isTransparent) {
     }
 
     glGenTextures(1, &texture->texture);
-    glBindTexture(GL_TEXTURE_2D, texture->texture);
+    texture_enable(texture);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -28,7 +28,7 @@ Texture* texture_new(char* path, bool isTransparent) {
 
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    texture_disable(texture);
 
     return texture;
 }
@@ -39,10 +39,12 @@ void texture_enable(Texture* texture) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture->texture);
 }
 
 void texture_disable(Texture* texture) {
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     if (texture->isTransparent) {

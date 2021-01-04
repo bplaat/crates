@@ -3,7 +3,6 @@
 #include "world.h"
 #include <stdlib.h>
 #include <math.h>
-#include <unistd.h>
 #include "geometry/block.h"
 #include "log.h"
 
@@ -133,7 +132,7 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
     // log_info("Chunk %d %d %d", player_chunk_x, player_chunk_y, player_chunk_z);
 
     int render_distance = 3;
-    for (int chunk_z = player_chunk_z - render_distance; chunk_z <= player_chunk_z + render_distance; chunk_z++) {
+    for (int chunk_z = player_chunk_z + render_distance; chunk_z > player_chunk_z - render_distance; chunk_z--) {
         for (int chunk_y = player_chunk_y - render_distance; chunk_y <= player_chunk_y + render_distance; chunk_y++) {
             for (int chunk_x = player_chunk_x - render_distance; chunk_x <= player_chunk_x + render_distance; chunk_x++) {
 
@@ -266,7 +265,8 @@ int world_worker_thread(void* argument) {
             // Free request
             free(request);
         } else {
-            usleep(250);
+            struct _tthread_timespec duration = { 0, WORLD_WORKER_THREAD_UPDATE_TIMEOUT * 1000 };
+            thrd_sleep(&duration, NULL);
         }
     }
 

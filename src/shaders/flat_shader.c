@@ -8,8 +8,8 @@
 FlatShader* flat_shader_new() {
     FlatShader* flat_shader = malloc(sizeof(Shader));
     flat_shader->shader = shader_new("assets/shaders/flat.vert", "assets/shaders/flat.frag");
-
     flat_shader->plane = plane_new();
+    flat_shader_enable(flat_shader);
 
     // Get attributes
     flat_shader->position_attribute = glGetAttribLocation(flat_shader->shader->program, "a_position");
@@ -25,14 +25,13 @@ FlatShader* flat_shader_new() {
     flat_shader->projection_matrix_uniform = glGetUniformLocation(flat_shader->shader->program, "u_projection_matrix");
 
     // Disable shader
-    glBindVertexArray(0);
     flat_shader_disable(flat_shader);
 
     return flat_shader;
 }
 
 void flat_shader_enable(FlatShader* flat_shader) {
-    glUseProgram(flat_shader->shader->program);
+    shader_enable(flat_shader->shader);
     plane_enable(flat_shader->plane);
 }
 
