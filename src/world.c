@@ -3,6 +3,7 @@
 #include "world.h"
 #include <stdlib.h>
 #include <math.h>
+#include <unistd.h>
 #include "geometry/block.h"
 #include "log.h"
 
@@ -10,33 +11,108 @@ World* world_new(int seed) {
     World* world = malloc(sizeof(World));
     world->seed = seed;
 
-    for (size_t i = 0; i < sizeof(world->chunks) / sizeof(Chunk*); i++) {
-        world->chunks[i] = NULL;
+    for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
+        world->chunk_cache[i] = NULL;
     }
-    world->chunks_size = 0;
+    world->chunk_cache_size = 0;
+    pthread_mutex_init(&world->chunk_cache_lock, NULL);
+
+    for (size_t i = 0; i < sizeof(world->request_queue) / sizeof(WorldRequest*); i++) {
+        world->request_queue[i] = NULL;
+    }
+    world->request_queue_size = 0;
+    pthread_mutex_init(&world->request_queue_lock, NULL);
+
+    world->worker_running = true;
+    pthread_mutex_init(&world->worker_running_lock, NULL);
+
+    for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(pthread_t); i++) {
+        pthread_create(&world->worker_threads[i], NULL, world_worker_thread, world);
+    }
 
     return world;
 }
 
 Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
-    for (int i = 0; i < world->chunks_size; i++) {
-        Chunk* chunk = world->chunks[i];
+    // Check if chunk is in cunk cache
+    for (int i = 0; i < world->chunk_cache_size; i++) {
+        Chunk* chunk = world->chunk_cache[i];
         if (chunk->x == chunk_x && chunk->y == chunk_y && chunk->z == chunk_z) {
             return chunk;
         }
     }
 
+    // When not found create chunk and add to cache
+    pthread_mutex_lock(&world->chunk_cache_lock);
+
     Chunk* chunk = chunk_new(chunk_x, chunk_y, chunk_z);
 
-    if (world->chunks_size == (sizeof(world->chunks) / sizeof(Chunk*))) {
-        world->chunks_size = 0;
+    if (world->chunk_cache_size == (sizeof(world->chunk_cache) / sizeof(Chunk*))) {
+        world->chunk_cache_size = 0;
     }
-    if (world->chunks[world->chunks_size] != NULL) {
-        chunk_free(world->chunks[world->chunks_size]);
+    if (world->chunk_cache[world->chunk_cache_size] != NULL) {
+        chunk_free(world->chunk_cache[world->chunk_cache_size]);
     }
-    world->chunks[world->chunks_size++] = chunk;
+    world->chunk_cache[world->chunk_cache_size++] = chunk;
+
+    pthread_mutex_unlock(&world->chunk_cache_lock);
 
     return chunk;
+}
+
+Chunk* world_request_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
+    // Check if chunk is in cunk cache
+    for (int i = 0; i < world->chunk_cache_size; i++) {
+        Chunk* chunk = world->chunk_cache[i];
+        if (chunk->x == chunk_x && chunk->y == chunk_y && chunk->z == chunk_z) {
+            return chunk;
+        }
+    }
+
+    // Check for an pending chunk new request
+    for (int i = 0; i < world->request_queue_size; i++) {
+        WorldRequest* request = world->request_queue[i];
+        if (
+            request->type == WORLD_REQUEST_TYPE_CHUNK_NEW &&
+            request->arguments.chunk_position.x == chunk_x &&
+            request->arguments.chunk_position.y == chunk_y &&
+            request->arguments.chunk_position.z == chunk_z
+        ) {
+            return NULL;
+        }
+    }
+
+    // Create chunk new request and push it to the request queue
+    pthread_mutex_lock(&world->request_queue_lock);
+    WorldRequest* request = malloc(sizeof(WorldRequest));
+    request->type = WORLD_REQUEST_TYPE_CHUNK_NEW;
+    request->arguments.chunk_position.x = chunk_x;
+    request->arguments.chunk_position.y = chunk_y;
+    request->arguments.chunk_position.z = chunk_z;
+    world->request_queue[world->request_queue_size++] = request;
+    pthread_mutex_unlock(&world->request_queue_lock);
+    return NULL;
+}
+
+void world_request_chunk_update(World* world, Chunk* chunk) {
+    // Check for an pending chunk update request
+    for (int i = 0; i < world->request_queue_size; i++) {
+        WorldRequest* request = world->request_queue[i];
+        if (
+            request->type == WORLD_REQUEST_TYPE_CHUNK_UPDATE &&
+            request->arguments.chunk_pointer == chunk
+        ) {
+            return;
+        }
+    }
+
+    // Create chunk update request and push it to the request queue
+    pthread_mutex_lock(&world->request_queue_lock);
+    WorldRequest* request = malloc(sizeof(WorldRequest));
+    request->type = WORLD_REQUEST_TYPE_CHUNK_UPDATE;
+    request->arguments.chunk_pointer = chunk;
+    world->request_queue[world->request_queue_size++] = request;
+    pthread_mutex_unlock(&world->request_queue_lock);
 }
 
 void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas) {
@@ -95,32 +171,35 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
                 // }
 
                 if (chunk_is_visible) {
-                    Chunk* chunk = world_get_chunk(world, chunk_x, chunk_y, chunk_z);
+                    Chunk* chunk = world_request_chunk(world, chunk_x, chunk_y, chunk_z);
+                    if (chunk != NULL) {
+                        if (chunk->is_changed) {
+                            world_request_chunk_update(world, chunk);
+                        } else {
+                            for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
+                                for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
+                                    for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
+                                        uint8_t block_data = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x];
+                                        if ((block_data & CHUNK_DATA_VISIBLE_BIT) != 0) {
+                                            BlockType blockType = block_data & CHUNK_DATA_BLOCK_TYPE;
 
-                    chunk_update_data(chunk, world);
+                                            Matrix4 modelMatrix;
+                                            Vector4 blockPosition = {
+                                                chunk_x * CHUNK_SIZE + block_x,
+                                                chunk_y * CHUNK_SIZE + block_y,
+                                                -(chunk_z * CHUNK_SIZE + block_z),
+                                                1
+                                            };
+                                            matrix4_translate(&modelMatrix, &blockPosition);
+                                            matrix4_mul(&modelMatrix, &rotationMatrix);
 
-                    for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
-                        for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
-                            for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
-                                uint8_t block_data = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x];
-                                if ((block_data & CHUNK_DATA_VISIBLE_BIT) != 0) {
-                                    BlockType blockType = block_data & CHUNK_DATA_BLOCK_TYPE;
+                                            glUniformMatrix4fv(blockShader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
 
-                                    Matrix4 modelMatrix;
-                                    Vector4 blockPosition = {
-                                        chunk_x * CHUNK_SIZE + block_x,
-                                        chunk_y * CHUNK_SIZE + block_y,
-                                        -(chunk_z * CHUNK_SIZE + block_z),
-                                        1
-                                    };
-                                    matrix4_translate(&modelMatrix, &blockPosition);
-                                    matrix4_mul(&modelMatrix, &rotationMatrix);
+                                            glUniform1iv(blockShader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TEXTURE_FACES[blockType]);
 
-                                    glUniformMatrix4fv(blockShader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
-
-                                    glUniform1iv(blockShader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TEXTURE_FACES[blockType]);
-
-                                    glDrawArrays(GL_TRIANGLES, 0, 36);
+                                            glDrawArrays(GL_TRIANGLES, 0, 36);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -131,16 +210,66 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
     }
 
     texture_atlas_disable(blocksTextureAtlas);
-
     block_shader_disable(blockShader);
 }
 
 void world_free(World* world) {
-    for (size_t i = 0; i < sizeof(world->chunks) / sizeof(Chunk*); i++) {
-        if (world->chunks[i] != NULL) {
-            chunk_free(world->chunks[i]);
+    pthread_mutex_lock(&world->worker_running_lock);
+    world->worker_running = false;
+    pthread_mutex_unlock(&world->worker_running_lock);
+
+    for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(pthread_t); i++) {
+        pthread_join(world->worker_threads[i], NULL);
+    }
+
+    for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
+        if (world->chunk_cache[i] != NULL) {
+            chunk_free(world->chunk_cache[i]);
         }
     }
 
     free(world);
+}
+
+void* world_worker_thread(void* argument) {
+    World* world = (World*)argument;
+
+    while (world->worker_running) {
+        if (world->request_queue_size > 0) {
+            // Get first request and remove it by shifting
+            pthread_mutex_lock(&world->request_queue_lock);
+
+            WorldRequest* request = world->request_queue[0];
+
+            for (int i = 1; i < world->request_queue_size; i++) {
+                world->request_queue[i - 1] = world->request_queue[i];
+            }
+            world->request_queue_size--;
+
+            pthread_mutex_unlock(&world->request_queue_lock);
+
+            // Create chunk
+            if (request->type == WORLD_REQUEST_TYPE_CHUNK_NEW) {
+                world_get_chunk(
+                    world,
+                    request->arguments.chunk_position.x,
+                    request->arguments.chunk_position.y,
+                    request->arguments.chunk_position.z
+                );
+            }
+
+            // Update chunk
+            if (request->type == WORLD_REQUEST_TYPE_CHUNK_UPDATE) {
+                chunk_update(request->arguments.chunk_pointer, world);
+            }
+
+            // Free request
+            free(request);
+        } else {
+            usleep(250);
+        }
+    }
+
+    pthread_exit(NULL);
+    return NULL;
 }

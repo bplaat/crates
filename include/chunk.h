@@ -23,7 +23,7 @@ typedef struct Chunk {
 
 Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z);
 
-void chunk_update_data(Chunk* chunk, World* world);
+void chunk_update(Chunk* chunk, World* world);
 
 void chunk_free(Chunk* chunk);
 
