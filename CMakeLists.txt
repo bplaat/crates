@@ -19,6 +19,9 @@ add_library(glad src/glad/glad.c)
 # STB Image Library
 add_library(stb_image src/stb_image/stb_image.c)
 
+# STB TrueType Library
+add_library(stb_truetype src/stb_truetype/stb_truetype.c)
+
 # Tiny C Thread Library
 add_library(tinycthread src/tinycthread/tinycthread.c)
 
@@ -34,7 +37,7 @@ add_executable(
 target_compile_options(plaatcraft PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 # Final linking with external libs
-target_link_libraries(plaatcraft glad stb_image tinycthread glfw m dl pthread)
+target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread glfw m dl pthread)
 
 # Assets folder
 file(COPY assets DESTINATION ${CMAKE_BINARY_DIR})
