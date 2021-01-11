@@ -3,33 +3,33 @@
 #ifndef GAME_H
 #define GAME_H
 
-#include <stdbool.h>
-#define GLFW_INCLUDE_NONE
+#include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include "shaders/block_shader.h"
 #include "shaders/flat_shader.h"
-#include "textures/texture.h"
 #include "textures/texture_atlas.h"
+#include "textures/texture.h"
 #include "camera.h"
+#include "math/vector4.h"
 #include "world.h"
 
 typedef struct Game {
-    char* title;
+    char *title;
     int width;
     int height;
     int oldWidth;
     int oldHeight;
 
     GLFWwindow* window;
-    bool isFullscreen;
-    bool isWireframed;
-    bool isCursorLocked;
+    bool is_fullscreened;
+    bool is_wireframed;
+    bool is_cursor_locked;
 
-    BlockShader* blockShader;
-    FlatShader* flatShader;
+    BlockShader* block_shader;
+    FlatShader* flat_shader;
 
-    TextureAtlas* blocksTextureAtlas;
-    Texture* cursorTexture;
+    TextureAtlas* blocks_texture_atlas;
+    Texture* cursor_texture;
 
     Camera* camera;
     Vector4 velocity;
@@ -40,13 +40,10 @@ typedef struct Game {
     bool isMovingUp;
     bool isMovingDown;
 
-    World* world;
+    World *world;
 } Game;
 
-#define GAME_MIN_WIDTH 320
-#define GAME_MIN_HEIGHT 240
-
-void game_init();
+void game_init(void);
 
 void game_framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
@@ -56,13 +53,13 @@ void game_mouse_button_callback(GLFWwindow* window, int button, int action, int 
 
 void game_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 
-Game* game_new(char* title, int width, int height);
+Game* game_new(char *title, int width, int height);
 
-void game_update(Game* game, float delta);
+void game_update(Game *game, float delta);
 
-void game_render(Game* game);
+void game_draw(Game *game);
 
-void game_start(Game* game);
+void game_start(Game *game);
 
 void game_free(Game* game);
 

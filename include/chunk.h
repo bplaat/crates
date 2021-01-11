@@ -8,7 +8,7 @@
 
 #define CHUNK_SIZE 16
 
-#define CHUNK_DATA_BLOCK_TYPE 127
+#define CHUNK_DATA_BLOCK_TYPE ((1 << 7) - 1)
 #define CHUNK_DATA_VISIBLE_BIT (1 << 7)
 
 typedef struct Chunk {

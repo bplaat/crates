@@ -3,8 +3,7 @@
 #include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include "log.h"
 
 // Function to convert radians to degrees
 double degrees(double radians) {
@@ -19,6 +18,9 @@ double radians(double degrees) {
 // Function to read a file to string
 char* file_read(char* path) {
     FILE* file = fopen(path, "r");
+    if (file == NULL) {
+        log_error("Can't load file %s", path);
+    }
     fseek(file, 0, SEEK_END);
     long file_size = ftell(file);
     fseek(file, 0, SEEK_SET);

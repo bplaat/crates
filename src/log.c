@@ -1,3 +1,5 @@
+// PlaatCraft - Log
+
 #include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +23,8 @@ void log_debug(char* format, ...) {
         va_end(args);
 
         mtx_unlock(&log_lock);
+    #else
+        (void)format;
     #endif
 }
 

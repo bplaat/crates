@@ -5,11 +5,7 @@
 
 #include "utils.h"
 
-#ifndef NO_SSIMD
 typedef struct _MM_ALIGN16 Vector4 {
-#else
-typedef struct Vector4 {
-#endif
     float x;
     float y;
     float z;

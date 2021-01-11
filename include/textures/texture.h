@@ -10,11 +10,11 @@ typedef struct Texture {
     char* path;
     int width;
     int height;
-    bool isTransparent;
+    bool is_transparent;
     GLuint texture;
 } Texture;
 
-Texture* texture_new(char* path, bool isTransparent);
+Texture* texture_new(char* path, bool is_transparent);
 
 void texture_enable(Texture* texture);
 

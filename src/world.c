@@ -131,7 +131,7 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
     // log_info("Camera %.3g %.3g %.3g", camera->position.x, camera->position.y, camera->position.z);
     // log_info("Chunk %d %d %d", player_chunk_x, player_chunk_y, player_chunk_z);
 
-    int render_distance = 3;
+    int render_distance = 4;
     for (int chunk_z = player_chunk_z + render_distance; chunk_z > player_chunk_z - render_distance; chunk_z--) {
         for (int chunk_y = player_chunk_y - render_distance; chunk_y <= player_chunk_y + render_distance; chunk_y++) {
             for (int chunk_x = player_chunk_x - render_distance; chunk_x <= player_chunk_x + render_distance; chunk_x++) {
@@ -265,7 +265,7 @@ int world_worker_thread(void* argument) {
             // Free request
             free(request);
         } else {
-            struct _tthread_timespec duration = { 0, WORLD_WORKER_THREAD_UPDATE_TIMEOUT * 1000 };
+            struct timespec duration = { 0, WORLD_WORKER_THREAD_UPDATE_TIMEOUT * 1000 };
             thrd_sleep(&duration, NULL);
         }
     }

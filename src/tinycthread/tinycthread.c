@@ -128,7 +128,7 @@ int mtx_lock(mtx_t *mtx)
   }
   return thrd_success;
 #else
-  return mtx_lock(mtx) == 0 ? thrd_success : thrd_error;
+  return pthread_mutex_lock(mtx) == 0 ? thrd_success : thrd_error;
 #endif
 }
 
@@ -276,7 +276,7 @@ int mtx_unlock(mtx_t *mtx)
   }
   return thrd_success;
 #else
-  return mtx_unlock(mtx) == 0 ? thrd_success : thrd_error;;
+  return pthread_mutex_unlock(mtx) == 0 ? thrd_success : thrd_error;;
 #endif
 }
 

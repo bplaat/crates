@@ -3,13 +3,13 @@
 #include "textures/texture_atlas.h"
 #include <stdlib.h>
 #include <stdbool.h>
-#include "textures/stb_image.h"
+#include "stb_image/stb_image.h"
 #include "log.h"
 
 TextureAtlas* texture_atlas_new(char* path, int tile_size) {
-    TextureAtlas* textureAtlas = malloc(sizeof(TextureAtlas));
-    textureAtlas->path = path;
-    textureAtlas->tileSize = tile_size;
+    TextureAtlas* texture_atlas = malloc(sizeof(TextureAtlas));
+    texture_atlas->path = path;
+    texture_atlas->tileSize = tile_size;
 
     int32_t image_width, image_height, image_channels;
     uint8_t* image_buffer = stbi_load(path, &image_width, &image_height, &image_channels, STBI_rgb);
@@ -44,8 +44,8 @@ TextureAtlas* texture_atlas_new(char* path, int tile_size) {
         }
     }
 
-    glGenTextures(1, &textureAtlas->textureArray);
-    texture_atlas_enable(textureAtlas);
+    glGenTextures(1, &texture_atlas->texture_array);
+    texture_atlas_enable(texture_atlas);
 
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -58,23 +58,21 @@ TextureAtlas* texture_atlas_new(char* path, int tile_size) {
 
     free(texture_buffer);
 
-    texture_atlas_disable(textureAtlas);
+    texture_atlas_disable(texture_atlas);
 
-    return textureAtlas;
+    return texture_atlas;
 }
 
-void texture_atlas_enable(TextureAtlas* textureAtlas) {
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, textureAtlas->textureArray);
+void texture_atlas_enable(TextureAtlas* texture_atlas) {
+    glBindTexture(GL_TEXTURE_2D_ARRAY, texture_atlas->texture_array);
 }
 
-void texture_atlas_disable(TextureAtlas* textureAtlas) {
-    (void)textureAtlas;
-    glActiveTexture(GL_TEXTURE0);
+void texture_atlas_disable(TextureAtlas* texture_atlas) {
+    (void)texture_atlas;
     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
 }
 
-void texture_atlas_free(TextureAtlas* textureAtlas) {
-    glDeleteTextures(1, &textureAtlas->textureArray);
-    free(textureAtlas);
+void texture_atlas_free(TextureAtlas* texture_atlas) {
+    glDeleteTextures(1, &texture_atlas->texture_array);
+    free(texture_atlas);
 }

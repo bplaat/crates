@@ -11,33 +11,33 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     shader->fragment_path = fragment_path;
 
     // Read and compile vertex shader
-    const char* vertex_shader_text = file_read(vertex_path);
+    const char* vertex_shader_source = file_read(vertex_path);
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex_shader, 1, &vertex_shader_text, NULL);
+    glShaderSource(vertex_shader, 1, &vertex_shader_source, NULL);
     glCompileShader(vertex_shader);
-    free((char*)vertex_shader_text);
+    free((char*)vertex_shader_source);
 
     int success;
-    char infoLog[512];
+    char info_log[512];
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        glGetShaderInfoLog(vertex_shader, sizeof(infoLog), NULL, infoLog);
+        glGetShaderInfoLog(vertex_shader, sizeof(info_log), NULL, info_log);
         log_error("Can't compile vertex shader %s:", vertex_path);
-        log_error("%s", infoLog);
+        log_error("%s", info_log);
     }
 
-    // Compile fragment shader
-    const char* fragment_shader_text = file_read(fragment_path);
+    //  Read and compile fragment shader
+    const char* fragment_shader_source = file_read(fragment_path);
     GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment_shader, 1, &fragment_shader_text, NULL);
+    glShaderSource(fragment_shader, 1, &fragment_shader_source, NULL);
     glCompileShader(fragment_shader);
-    free((char*)fragment_shader_text);
+    free((char*)fragment_shader_source);
 
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        glGetShaderInfoLog(fragment_shader, sizeof(infoLog), NULL, infoLog);
+        glGetShaderInfoLog(fragment_shader, sizeof(info_log), NULL, info_log);
         log_error("Can't compile fragment shader %s:", fragment_path);
-        log_error("%s", infoLog);
+        log_error("%s", info_log);
     }
 
     // Link program
@@ -48,9 +48,9 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
 
     glGetProgramiv(shader->program, GL_LINK_STATUS, &success);
     if(!success) {
-        glGetProgramInfoLog(shader->program, sizeof(infoLog), NULL, infoLog);
+        glGetProgramInfoLog(shader->program, sizeof(info_log), NULL, info_log);
         log_error("Can't link program %s and %s:", vertex_path, fragment_path);
-        log_error("%s", infoLog);
+        log_error("%s", info_log);
     }
 
     // Delete shaders
@@ -61,6 +61,7 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
 }
 
 void shader_enable(Shader* shader) {
+    // Use program
     glUseProgram(shader->program);
 }
 

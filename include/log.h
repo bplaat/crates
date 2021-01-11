@@ -3,7 +3,7 @@
 #ifndef LOG_H
 #define LOG_H
 
-#include <tinycthread/tinycthread.h>
+#include "tinycthread/tinycthread.h"
 
 extern mtx_t log_lock;
 

@@ -4,8 +4,7 @@
 #ifndef NO_SSIMD
     #include <emmintrin.h>
 #endif
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include "utils.h"
 
 void matrix4_identity(Matrix4* matrix) {
     #ifndef NO_SIMD

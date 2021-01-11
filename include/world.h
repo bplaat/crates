@@ -3,7 +3,7 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <tinycthread/tinycthread.h>
+#include "tinycthread/tinycthread.h"
 #include "camera.h"
 #include "shaders/block_shader.h"
 #include "textures/texture_atlas.h"
