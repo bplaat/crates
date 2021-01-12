@@ -4,7 +4,6 @@ A modern OpenGL Minecraft like game for a school project about Computer Graphics
 You will need a computer / graphics card which supports minimal the OpenGL 3.3 Core Profile
 
 # Todos:
-- Fix: cube vertex bug
 - Fix: chunk frostum culling
 - Fix: World generation
 - Add: add / remove block

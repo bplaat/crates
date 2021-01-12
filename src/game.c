@@ -76,7 +76,7 @@ void game_mouse_button_callback(GLFWwindow* window, int button, int action, int 
 
     Game* game = (Game*)glfwGetWindowUserPointer(window);
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !game->is_playing) {
-        glfwGetCursorPos(window, &game->camera->last_x, &game->camera->last_y);
+        game->camera->is_first_mouse_movement = true;
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         game->is_playing = true;
     }
@@ -181,7 +181,6 @@ void game_render(Game *game) {
 
     // Render world
     world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas, game->render_distance, game->is_wireframed, game->is_flat_shaded);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     // Enable flat shader
     glDisable(GL_DEPTH_TEST);

@@ -21,7 +21,7 @@ BlockShader* block_shader_new() {
     glEnableVertexAttribArray(block_shader->texture_position_attribute);
 
     block_shader->texture_face_attribute = glGetAttribLocation(block_shader->shader->program, "a_texture_face");
-    glVertexAttribPointer(block_shader->texture_face_attribute, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
+    glVertexAttribPointer(block_shader->texture_face_attribute, 1, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(block_shader->texture_face_attribute);
 
     // Get uniforms

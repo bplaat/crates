@@ -141,7 +141,7 @@ void world_render(World* world, Camera* camera, BlockShader* block_shader, Textu
     glUniformMatrix4fv(block_shader->camera_matrix_uniform, 1, GL_FALSE, &camera->cameraMatrix.m11);
 
     Matrix4 rotationMatrix;
-    matrix4_rotate_x(&rotationMatrix, 0); //radians(90));
+    matrix4_rotate_x(&rotationMatrix, radians(90));
 
     int player_chunk_x = floor(camera->position.x / (float)CHUNK_SIZE);
     int player_chunk_y = floor(camera->position.y / (float)CHUNK_SIZE);

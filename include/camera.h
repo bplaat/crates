@@ -30,6 +30,7 @@ typedef struct Camera {
     bool is_moving_up;
     bool is_moving_down;
 
+    bool is_first_mouse_movement;
     double last_x;
     double last_y;
     float yaw;

@@ -31,6 +31,10 @@ Camera* camera_new(float fov, float aspect, float near, float far) {
     camera->is_moving_up = false;
     camera->is_moving_down = false;
 
+    camera->is_first_mouse_movement = false;
+    camera->yaw = 0;
+    camera->pitch = 0;
+
     return camera;
 }
 
@@ -82,17 +86,20 @@ void camera_key_callback(Camera* camera, int key, int scancode, int action, int 
 }
 
 void camera_cursor_position_callback(Camera* camera, double xpos, double ypos) {
+    if (camera->is_first_mouse_movement) {
+        camera->is_first_mouse_movement = false;
+        camera->last_x = xpos;
+        camera->last_y = ypos;
+    }
+
     float xoffset = xpos - camera->last_x;
     float yoffset = camera->last_y - ypos;
     camera->last_x = xpos;
     camera->last_y = ypos;
 
     float sensitivity = 0.002;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
-
-    camera->yaw -= xoffset;
-    camera->pitch += yoffset;
+    camera->yaw -= xoffset * sensitivity;
+    camera->pitch += yoffset * sensitivity;
 
     if (camera->pitch > radians(90)) camera->pitch = radians(90);
     if (camera->pitch < -radians(90)) camera->pitch = -radians(90);
