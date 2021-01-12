@@ -180,7 +180,7 @@ void game_render(Game *game) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Render world
-    world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas, game->render_distance, game->is_wireframed, game->is_flat_shaded);
+    int rendered_chunks = world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas, game->render_distance, game->is_wireframed, game->is_flat_shaded);
 
     // Enable flat shader
     glDisable(GL_DEPTH_TEST);
@@ -213,8 +213,8 @@ void game_render(Game *game) {
 
             sprintf(
                 debug_lines[0],
-                "OpenGL %d.%d Core Profile - Render distance: %d chunks - Fps: %d",
-                GLVersion.major, GLVersion.minor, game->render_distance, game->fps
+                "OpenGL %d.%d Core Profile - Render distance: %d chunks - Rendered: %d chunks - Fps: %d",
+                GLVersion.major, GLVersion.minor, game->render_distance, rendered_chunks, game->fps
             );
 
             int player_chunk_x = floor(game->camera->position.x / (float)CHUNK_SIZE);

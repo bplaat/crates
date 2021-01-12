@@ -125,7 +125,7 @@ void world_request_chunk_update(World* world, Chunk* chunk) {
     mtx_unlock(&world->request_queue_lock);
 }
 
-void world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas,
+int world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas,
     int render_distance, bool is_wireframed, bool is_flat_shaded)
 {
     block_shader_enable(block_shader);
@@ -147,26 +147,25 @@ void world_render(World* world, Camera* camera, BlockShader* block_shader, Textu
     int player_chunk_y = floor(camera->position.y / (float)CHUNK_SIZE);
     int player_chunk_z = floor(camera->position.z / (float)CHUNK_SIZE);
 
+    int rendered_chunks = 0;
+
     for (int chunk_z = player_chunk_z + render_distance; chunk_z > player_chunk_z - render_distance; chunk_z--) {
         for (int chunk_y = player_chunk_y - render_distance; chunk_y <= player_chunk_y + render_distance; chunk_y++) {
             for (int chunk_x = player_chunk_x - render_distance; chunk_x <= player_chunk_x + render_distance; chunk_x++) {
-
                 bool chunk_is_visible = true;
 
-                // int chunk_x_max = chunk_x < 0 ? -CHUNK_SIZE : CHUNK_SIZE;
-                // int chunk_y_max = chunk_y < 0 ? -CHUNK_SIZE : CHUNK_SIZE;
-                // int chunk_z_max = chunk_z < 0 ? -CHUNK_SIZE : CHUNK_SIZE;
-
+                // #define chunk_min(a) ((a) * CHUNK_SIZE - 0.5)
+                // #define chunk_max(a) ((a) * CHUNK_SIZE + CHUNK_SIZE + 0.5)
                 // Vector4 corners[8] = {
-                //     { chunk_x, chunk_y, chunk_z, 1 },
-                //     { chunk_x + chunk_x_max, chunk_y, chunk_z, 1 },
-                //     { chunk_x, chunk_y + chunk_y_max, chunk_z, 1 },
-                //     { chunk_x + chunk_x_max, chunk_y + chunk_y_max, chunk_z, 1 },
+                //     { chunk_min(chunk_x), chunk_min(chunk_y), -chunk_min(chunk_z), 1 },
+                //     { chunk_max(chunk_x), chunk_min(chunk_y), -chunk_min(chunk_z), 1 },
+                //     { chunk_min(chunk_x), chunk_max(chunk_y), -chunk_min(chunk_z), 1 },
+                //     { chunk_max(chunk_x), chunk_max(chunk_y), -chunk_min(chunk_z), 1 },
 
-                //     { chunk_x, chunk_y, chunk_z + chunk_z_max, 1 },
-                //     { chunk_x + chunk_x_max, chunk_y, chunk_z + chunk_z_max, 1 },
-                //     { chunk_x, chunk_y + chunk_y_max, chunk_z + chunk_z_max, 1 },
-                //     { chunk_x + chunk_x_max, chunk_y + chunk_y_max, chunk_z + chunk_z_max, 1 }
+                //     { chunk_min(chunk_x), chunk_min(chunk_y), -chunk_max(chunk_z), 1 },
+                //     { chunk_max(chunk_x), chunk_min(chunk_y), -chunk_max(chunk_z), 1 },
+                //     { chunk_min(chunk_x), chunk_max(chunk_y), -chunk_max(chunk_z), 1 },
+                //     { chunk_max(chunk_x), chunk_max(chunk_y), -chunk_max(chunk_z), 1 }
                 // };
 
                 // for (size_t i = 0; i < sizeof(corners) / sizeof(Vector4); i++) {
@@ -176,8 +175,8 @@ void world_render(World* world, Camera* camera, BlockShader* block_shader, Textu
                 //     #define within(a, b, c) ((a) >= (b) && (b) <= (c))
                 //     if (
                 //         within(-corners[i].w, corners[i].x, corners[i].w) &&
-                //         within(-corners[i].w, corners[i].y, corners[i].w) &&
-                //         within(0, corners[i].z, corners[i].w)
+                //         within(-corners[i].w, corners[i].y, corners[i].w)
+                //         // && within(0, corners[i].z, corners[i].w)
                 //     ) {
                 //         chunk_is_visible = true;
                 //         break;
@@ -190,11 +189,15 @@ void world_render(World* world, Camera* camera, BlockShader* block_shader, Textu
                         if (chunk->is_changed) {
                             world_request_chunk_update(world, chunk);
                         } else {
+                            bool isABlockVisible = false;
+
                             for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
                                 for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
                                     for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
                                         uint8_t block_data = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x];
                                         if ((block_data & CHUNK_DATA_VISIBLE_BIT) != 0) {
+                                            isABlockVisible = true;
+
                                             BlockType blockType = block_data & CHUNK_DATA_BLOCK_TYPE;
 
                                             Matrix4 modelMatrix;
@@ -208,13 +211,15 @@ void world_render(World* world, Camera* camera, BlockShader* block_shader, Textu
                                             matrix4_mul(&modelMatrix, &rotationMatrix);
 
                                             glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
-
                                             glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TEXTURE_FACES[blockType]);
-
                                             glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
                                         }
                                     }
                                 }
+                            }
+
+                            if (isABlockVisible) {
+                                rendered_chunks++;
                             }
                         }
                     }
@@ -229,6 +234,8 @@ void world_render(World* world, Camera* camera, BlockShader* block_shader, Textu
 
     texture_atlas_disable(blocks_texture_atlas);
     block_shader_disable(block_shader);
+
+    return rendered_chunks;
 }
 
 void world_free(World* world) {
