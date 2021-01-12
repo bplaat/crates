@@ -9,7 +9,7 @@
 TextureAtlas* texture_atlas_new(char* path, int tile_size) {
     TextureAtlas* texture_atlas = malloc(sizeof(TextureAtlas));
     texture_atlas->path = path;
-    texture_atlas->tileSize = tile_size;
+    texture_atlas->tile_size = tile_size;
 
     int32_t image_width, image_height, image_channels;
     uint8_t* image_buffer = stbi_load(path, &image_width, &image_height, &image_channels, STBI_rgb);

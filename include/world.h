@@ -34,7 +34,7 @@ struct World {
     int seed;
 
     Chunk* chunk_cache[2048];
-    int chunk_cache_size;
+    int chunk_cache_start;
     mtx_t  chunk_cache_lock;
 
     WorldRequest* request_queue[2048];
@@ -54,7 +54,7 @@ Chunk* world_request_chunk(World* world, int chunk_x, int chunk_y, int chunk_z);
 
 void world_request_chunk_update(World* world, Chunk* chunk);
 
-void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas);
+void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas, int render_distance);
 
 void world_free(World* world);
 

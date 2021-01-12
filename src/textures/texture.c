@@ -5,27 +5,33 @@
 #include "stb_image/stb_image.h"
 #include "log.h"
 
-Texture* texture_new(char* path, bool is_transparent) {
-    Texture* texture = malloc(sizeof(texture));
-    texture->path = path;
-    texture->is_transparent = is_transparent;
-
-    int32_t image_channels;
-    uint8_t* image_buffer = stbi_load(path, &texture->width, &texture->height, &image_channels, is_transparent ? STBI_rgb_alpha : STBI_rgb);
-    if (!image_buffer) {
+Texture* texture_new_from_file(char* path, bool is_transparent) {
+    int32_t image_width, image_height, image_channels;
+    uint8_t* image_bitmap = stbi_load(path, &image_width, &image_height, &image_channels, is_transparent ? STBI_rgb_alpha : STBI_rgb);
+    if (!image_bitmap) {
         log_error("Can't load image %s", path);
     }
+
+    Texture* texture = texture_new_from_bitmap(path, image_width, image_height, is_transparent, image_bitmap);
+
+    stbi_image_free(image_bitmap);
+
+    return texture;
+}
+
+Texture* texture_new_from_bitmap(char* path, int width, int height, bool is_transparent, uint8_t* bitmap) {
+    Texture* texture = malloc(sizeof(texture));
+    texture->path = path;
+    texture->width = width;
+    texture->height = height;
+    texture->is_transparent = is_transparent;
 
     glGenTextures(1, &texture->texture);
     texture_enable(texture);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, is_transparent ? GL_RGBA : GL_RGB, texture->width, texture->height, 0, is_transparent ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, image_buffer);
-
-    stbi_image_free(image_buffer);
-
+    glTexImage2D(GL_TEXTURE_2D, 0, is_transparent ? GL_RGBA : GL_RGB, texture->width, texture->height, 0, is_transparent ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, bitmap);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     texture_disable(texture);

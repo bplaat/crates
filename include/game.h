@@ -5,6 +5,7 @@
 
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
+#include "font.h"
 #include "shaders/block_shader.h"
 #include "shaders/flat_shader.h"
 #include "textures/texture_atlas.h"
@@ -24,6 +25,9 @@ typedef struct Game {
     bool is_fullscreened;
     bool is_wireframed;
     bool is_cursor_locked;
+    int fps;
+
+    Font* text_font;
 
     BlockShader* block_shader;
     FlatShader* flat_shader;
@@ -57,7 +61,7 @@ Game* game_new(char *title, int width, int height);
 
 void game_update(Game *game, float delta);
 
-void game_draw(Game *game);
+void game_render(Game *game);
 
 void game_start(Game *game);
 

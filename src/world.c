@@ -13,7 +13,7 @@ World* world_new(int seed) {
     for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
         world->chunk_cache[i] = NULL;
     }
-    world->chunk_cache_size = 0;
+    world->chunk_cache_start = 0;
     mtx_init(&world->chunk_cache_lock, mtx_plain);
 
     for (size_t i = 0; i < sizeof(world->request_queue) / sizeof(WorldRequest*); i++) {
@@ -34,8 +34,13 @@ World* world_new(int seed) {
 
 Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     // Check if chunk is in cunk cache
-    for (int i = 0; i < world->chunk_cache_size; i++) {
+    for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
         Chunk* chunk = world->chunk_cache[i];
+
+        if (chunk == NULL) {
+            break;
+        }
+
         if (chunk->x == chunk_x && chunk->y == chunk_y && chunk->z == chunk_z) {
             return chunk;
         }
@@ -46,13 +51,14 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
 
     Chunk* chunk = chunk_new(chunk_x, chunk_y, chunk_z);
 
-    if (world->chunk_cache_size == (sizeof(world->chunk_cache) / sizeof(Chunk*))) {
-        world->chunk_cache_size = 0;
+    if (world->chunk_cache_start == (sizeof(world->chunk_cache) / sizeof(Chunk*))) {
+        world->chunk_cache_start = 0;
     }
-    if (world->chunk_cache[world->chunk_cache_size] != NULL) {
-        chunk_free(world->chunk_cache[world->chunk_cache_size]);
+    if (world->chunk_cache[world->chunk_cache_start] != NULL) {
+        chunk_free(world->chunk_cache[world->chunk_cache_start]);
     }
-    world->chunk_cache[world->chunk_cache_size++] = chunk;
+    world->chunk_cache[world->chunk_cache_start] = chunk;
+    world->chunk_cache_start++;
 
     mtx_unlock(&world->chunk_cache_lock);
 
@@ -61,8 +67,13 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
 
 Chunk* world_request_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     // Check if chunk is in cunk cache
-    for (int i = 0; i < world->chunk_cache_size; i++) {
+    for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
         Chunk* chunk = world->chunk_cache[i];
+
+        if (chunk == NULL) {
+            break;
+        }
+
         if (chunk->x == chunk_x && chunk->y == chunk_y && chunk->z == chunk_z) {
             return chunk;
         }
@@ -114,12 +125,12 @@ void world_request_chunk_update(World* world, Chunk* chunk) {
     mtx_unlock(&world->request_queue_lock);
 }
 
-void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas) {
+void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas, int render_distance) {
     block_shader_enable(blockShader);
     texture_atlas_enable(blocksTextureAtlas);
 
     glUniformMatrix4fv(blockShader->projection_matrix_uniform, 1, GL_FALSE, &camera->projectionMatrix.m11);
-    glUniformMatrix4fv(blockShader->view_matrix_uniform, 1, GL_FALSE, &camera->viewMatrix.m11);
+    glUniformMatrix4fv(blockShader->camera_matrix_uniform, 1, GL_FALSE, &camera->cameraMatrix.m11);
 
     Matrix4 rotationMatrix;
     matrix4_identity(&rotationMatrix);
@@ -129,10 +140,6 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
     int player_chunk_y = floor(camera->position.y / (float)CHUNK_SIZE);
     int player_chunk_z = floor(camera->position.z / (float)CHUNK_SIZE);
 
-    // log_info("Camera %.3g %.3g %.3g", camera->position.x, camera->position.y, camera->position.z);
-    // log_info("Chunk %d %d %d", player_chunk_x, player_chunk_y, player_chunk_z);
-
-    int render_distance = 4;
     for (int chunk_z = player_chunk_z + render_distance; chunk_z > player_chunk_z - render_distance; chunk_z--) {
         for (int chunk_y = player_chunk_y - render_distance; chunk_y <= player_chunk_y + render_distance; chunk_y++) {
             for (int chunk_x = player_chunk_x - render_distance; chunk_x <= player_chunk_x + render_distance; chunk_x++) {
@@ -156,7 +163,7 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
                 // };
 
                 // for (size_t i = 0; i < sizeof(corners) / sizeof(Vector4); i++) {
-                //     vector4_mul(&corners[i], &camera->viewMatrix);
+                //     vector4_mul(&corners[i], &camera->cameraMatrix);
                 //     vector4_mul(&corners[i], &camera->projectionMatrix);
 
                 //     #define within(a, b, c) ((a) >= (b) && (b) <= (c))
@@ -223,8 +230,9 @@ void world_free(World* world) {
     }
 
     for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
-        if (world->chunk_cache[i] != NULL) {
-            chunk_free(world->chunk_cache[i]);
+        Chunk* chunk = world->chunk_cache[i];
+        if (chunk != NULL) {
+            chunk_free(chunk);
         }
     }
 

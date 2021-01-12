@@ -16,7 +16,7 @@ typedef struct Camera {
     Vector4 rotation;
 
     Matrix4 projectionMatrix;
-    Matrix4 viewMatrix;
+    Matrix4 cameraMatrix;
 } Camera;
 
 Camera* camera_new(float fov, float aspect, float near, float far);

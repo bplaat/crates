@@ -11,11 +11,11 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     shader->fragment_path = fragment_path;
 
     // Read and compile vertex shader
-    const char* vertex_shader_source = file_read(vertex_path);
+    const char* vertex_shader_source = (const char*)file_read(vertex_path);
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex_shader, 1, &vertex_shader_source, NULL);
     glCompileShader(vertex_shader);
-    free((char*)vertex_shader_source);
+    free((uint8_t*)vertex_shader_source);
 
     int success;
     char info_log[512];
@@ -27,11 +27,11 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     }
 
     //  Read and compile fragment shader
-    const char* fragment_shader_source = file_read(fragment_path);
+    const char* fragment_shader_source = (const char*)file_read(fragment_path);
     GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment_shader, 1, &fragment_shader_source, NULL);
     glCompileShader(fragment_shader);
-    free((char*)fragment_shader_source);
+    free((uint8_t*)fragment_shader_source);
 
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
     if (!success) {

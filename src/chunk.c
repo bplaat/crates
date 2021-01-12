@@ -114,7 +114,7 @@ BlockType generate_block(int x, int y, int z) {
 
 
 Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z) {
-    log_info("Chunk create %d %d %d", chunk_x, chunk_y, chunk_z);
+    log_debug("Chunk create %d %d %d", chunk_x, chunk_y, chunk_z);
 
     Chunk *chunk = malloc(sizeof(Chunk));
     chunk->x = chunk_x;
@@ -176,7 +176,7 @@ void chunk_update(Chunk* chunk, World* world) {
     if (chunk->is_changed) {
         chunk->is_changed = false;
 
-        log_info("Chunk update %d %d %d", chunk->x, chunk->y, chunk->z);
+        log_debug("Chunk update %d %d %d", chunk->x, chunk->y, chunk->z);
 
         for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
             for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {

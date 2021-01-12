@@ -12,6 +12,10 @@
     #define M_PI 3.14159265358979323846
 #endif
 
+// Define min max macro's
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 // Align Vector4 and Mattrix4 structs at 16 bytes for SSE SIMD
 #ifndef NO_SSIMD
     #define _MM_ALIGN16 __attribute__((aligned(16)))
@@ -26,6 +30,6 @@ double degrees(double radians);
 double radians(double degrees);
 
 // Function to read a file to string
-char* file_read(char* path);
+uint8_t* file_read(char* path);
 
 #endif

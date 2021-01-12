@@ -7,7 +7,7 @@
 
 typedef struct TextureAtlas {
     char* path;
-    int tileSize;
+    int tile_size;
     GLuint texture_array;
 } TextureAtlas;
 

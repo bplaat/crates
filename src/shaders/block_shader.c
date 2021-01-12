@@ -26,7 +26,7 @@ BlockShader* block_shader_new() {
 
     // Get uniforms
     block_shader->model_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_model_matrix");
-    block_shader->view_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_view_matrix");
+    block_shader->camera_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_camera_matrix");
     block_shader->projection_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_projection_matrix");
     block_shader->texture_indexes_uniform = glGetUniformLocation(block_shader->shader->program, "u_texture_indexes");
 

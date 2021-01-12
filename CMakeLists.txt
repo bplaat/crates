@@ -27,17 +27,17 @@ add_library(tinycthread src/tinycthread/tinycthread.c)
 
 # Plaatcraft executable
 add_executable(
-    plaatcraft src/main.c src/log.c src/utils.c
+    plaatcraft src/main.c src/log.c src/utils.c src/font.c
     src/geometry/block.c src/geometry/plane.c
     src/math/vector4.c src/math/matrix4.c
     src/shaders/shader.c src/shaders/block_shader.c src/shaders/flat_shader.c
-    src/textures/texture.c src/textures/texture_atlas.c
+    src/textures/texture.c src/textures/texture_atlas.c src/textures/text_texture.c
     src/game.c src/camera.c src/chunk.c src/world.c
 )
-target_compile_options(plaatcraft PRIVATE -Wall -Wextra -Wpedantic -Werror)
+target_compile_options(plaatcraft PRIVATE -DDEBUG -Wall -Wextra -Wpedantic -Werror)
 
 # Final linking with external libs
 target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread glfw m dl pthread)
 
-# Assets folder
+# Copy assets folder
 file(COPY assets DESTINATION ${CMAKE_BINARY_DIR})
