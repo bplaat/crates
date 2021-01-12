@@ -4,7 +4,6 @@
 #define MATRIX4_H
 
 #include "utils.h"
-#include "math/rect.h"
 
 #undef near
 #undef far
