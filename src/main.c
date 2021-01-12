@@ -9,6 +9,9 @@
 #include <unistd.h>
 
 int main(void) {
+    // Init log
+    log_init();
+
     // Create game title string
     char game_title[128];
     sprintf(game_title, "PlaatCraft v%d.%d", PLAATCRAFT_VERSION_MAJOR, PLAATCRAFT_VERSION_MINOR);

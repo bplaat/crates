@@ -22,8 +22,7 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(vertex_shader, sizeof(info_log), NULL, info_log);
-        log_error("Can't compile vertex shader %s:", vertex_path);
-        log_error("%s", info_log);
+        log_error("Can't compile vertex shader %s:\n%s", vertex_path, info_log);
     }
 
     //  Read and compile fragment shader
@@ -36,8 +35,7 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(fragment_shader, sizeof(info_log), NULL, info_log);
-        log_error("Can't compile fragment shader %s:", fragment_path);
-        log_error("%s", info_log);
+        log_error("Can't compile fragment shader %s:\n%s", fragment_path, info_log);
     }
 
     // Link program
@@ -49,8 +47,7 @@ Shader* shader_new(char* vertex_path, char* fragment_path) {
     glGetProgramiv(shader->program, GL_LINK_STATUS, &success);
     if(!success) {
         glGetProgramInfoLog(shader->program, sizeof(info_log), NULL, info_log);
-        log_error("Can't link program %s and %s:", vertex_path, fragment_path);
-        log_error("%s", info_log);
+        log_error("Can't link program %s and %s:\n%s", vertex_path, fragment_path, info_log);
     }
 
     // Delete shaders

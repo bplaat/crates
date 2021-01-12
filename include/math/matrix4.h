@@ -6,6 +6,9 @@
 #include "utils.h"
 #include "math/rect.h"
 
+#undef near
+#undef far
+
 typedef struct _MM_ALIGN16 Matrix4 {
     float m11, m12, m13, m14;
     float m21, m22, m23, m24;

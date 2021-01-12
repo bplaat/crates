@@ -20,7 +20,7 @@ Texture* texture_new_from_file(char* path, bool is_transparent) {
 }
 
 Texture* texture_new_from_bitmap(char* path, int width, int height, bool is_transparent, uint8_t* bitmap) {
-    Texture* texture = malloc(sizeof(texture));
+    Texture* texture = malloc(sizeof(Texture));
     texture->path = path;
     texture->width = width;
     texture->height = height;

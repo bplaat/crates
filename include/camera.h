@@ -6,6 +6,9 @@
 #include "math/vector4.h"
 #include "math/matrix4.h"
 
+#undef near
+#undef far
+
 typedef struct Camera {
     float fov;
     float aspect;

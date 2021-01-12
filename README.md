@@ -12,7 +12,6 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 - Add: select right block
 - Add: Right spawn position
 - Add: walk physics
-- Fix: cmake Windows build
 - Add: cmake Windows static builds
 
 ## Dependencies:
