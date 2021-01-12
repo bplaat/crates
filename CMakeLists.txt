@@ -36,8 +36,11 @@ add_executable(
 )
 target_compile_options(plaatcraft PRIVATE -DDEBUG -Wall -Wextra -Wpedantic -Werror)
 
-# Final linking with external libs
-target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread glfw m dl pthread)
+# Final linking with external libs (uncomment for right Platform)
+# Windows:
+target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread glfw3)
+# Linux:
+# target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread glfw m dl pthread)
 
 # Copy assets folder
 file(COPY assets DESTINATION ${CMAKE_BINARY_DIR})

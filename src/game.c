@@ -160,6 +160,9 @@ Game* game_new(char *title, int width, int height) {
     glfwMakeContextCurrent(game->window);
     glfwSwapInterval(1);
 
+    game->is_fullscreened = false;
+    game->is_wireframed = false;
+    game->is_cursor_locked = false;
     game->fps = 0;
 
     glfwSetWindowUserPointer(game->window, game);
