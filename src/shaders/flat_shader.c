@@ -23,6 +23,8 @@ FlatShader* flat_shader_new() {
     // Get uniforms
     flat_shader->model_matrix_uniform = glGetUniformLocation(flat_shader->shader->program, "u_model_matrix");
     flat_shader->projection_matrix_uniform = glGetUniformLocation(flat_shader->shader->program, "u_projection_matrix");
+    flat_shader->is_textured_uniform = glGetUniformLocation(flat_shader->shader->program, "u_is_textured");
+    flat_shader->color_uniform = glGetUniformLocation(flat_shader->shader->program, "u_color");
 
     // Disable shader
     flat_shader_disable(flat_shader);

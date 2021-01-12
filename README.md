@@ -5,7 +5,6 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 
 # Todos:
 - Fix: cube vertex bug
-- Add: Menu overlay
 - Fix: chunk frostum culling
 - Fix: World generation
 - Add: add / remove block

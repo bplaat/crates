@@ -125,16 +125,23 @@ void world_request_chunk_update(World* world, Chunk* chunk) {
     mtx_unlock(&world->request_queue_lock);
 }
 
-void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas, int render_distance) {
-    block_shader_enable(blockShader);
-    texture_atlas_enable(blocksTextureAtlas);
+void world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas,
+    int render_distance, bool is_wireframed, bool is_flat_shaded)
+{
+    block_shader_enable(block_shader);
+    texture_atlas_enable(blocks_texture_atlas);
 
-    glUniformMatrix4fv(blockShader->projection_matrix_uniform, 1, GL_FALSE, &camera->projectionMatrix.m11);
-    glUniformMatrix4fv(blockShader->camera_matrix_uniform, 1, GL_FALSE, &camera->cameraMatrix.m11);
+    if (is_wireframed) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+
+    glUniform1i(block_shader->is_flad_shaded_uniform, is_flat_shaded);
+
+    glUniformMatrix4fv(block_shader->projection_matrix_uniform, 1, GL_FALSE, &camera->projectionMatrix.m11);
+    glUniformMatrix4fv(block_shader->camera_matrix_uniform, 1, GL_FALSE, &camera->cameraMatrix.m11);
 
     Matrix4 rotationMatrix;
-    matrix4_identity(&rotationMatrix);
-    // matrix4_rotate_x(&rotationMatrix, radians(-90));
+    matrix4_rotate_x(&rotationMatrix, 0); //radians(90));
 
     int player_chunk_x = floor(camera->position.x / (float)CHUNK_SIZE);
     int player_chunk_y = floor(camera->position.y / (float)CHUNK_SIZE);
@@ -200,11 +207,11 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
                                             matrix4_translate(&modelMatrix, &blockPosition);
                                             matrix4_mul(&modelMatrix, &rotationMatrix);
 
-                                            glUniformMatrix4fv(blockShader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
+                                            glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
 
-                                            glUniform1iv(blockShader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TEXTURE_FACES[blockType]);
+                                            glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TEXTURE_FACES[blockType]);
 
-                                            glDrawArrays(GL_TRIANGLES, 0, 36);
+                                            glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
                                         }
                                     }
                                 }
@@ -216,8 +223,12 @@ void world_render(World* world, Camera* camera, BlockShader* blockShader, Textur
         }
     }
 
-    texture_atlas_disable(blocksTextureAtlas);
-    block_shader_disable(blockShader);
+    if (is_wireframed) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+
+    texture_atlas_disable(blocks_texture_atlas);
+    block_shader_disable(block_shader);
 }
 
 void world_free(World* world) {

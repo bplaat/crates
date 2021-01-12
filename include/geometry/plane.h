@@ -5,6 +5,8 @@
 
 #include "glad/glad.h"
 
+#define PLANE_VERTICES_COUNT 6
+
 extern float PLANE_VERTICES[];
 
 typedef struct Plane {

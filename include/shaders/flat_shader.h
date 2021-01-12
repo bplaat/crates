@@ -16,6 +16,8 @@ typedef struct FlatShader {
 
     GLint model_matrix_uniform;
     GLint projection_matrix_uniform;
+    GLint is_textured_uniform;
+    GLint color_uniform;
 } FlatShader;
 
 FlatShader* flat_shader_new();

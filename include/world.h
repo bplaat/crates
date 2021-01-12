@@ -13,7 +13,7 @@ typedef struct World World;
 #include "chunk.h"
 
 typedef enum WorldRequestType {
-    WORLD_REQUEST_TYPE_CHUNK_NEW,
+    WORLD_REQUEST_TYPE_CHUNK_NEW = 0,
     WORLD_REQUEST_TYPE_CHUNK_UPDATE
 } WorldRequestType;
 
@@ -54,7 +54,8 @@ Chunk* world_request_chunk(World* world, int chunk_x, int chunk_y, int chunk_z);
 
 void world_request_chunk_update(World* world, Chunk* chunk);
 
-void world_render(World* world, Camera* camera, BlockShader* blockShader, TextureAtlas* blocksTextureAtlas, int render_distance);
+void world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas,
+    int render_distance, bool is_wireframed, bool is_flat_shaded);
 
 void world_free(World* world);
 

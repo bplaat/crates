@@ -5,13 +5,13 @@
 
 float PLANE_VERTICES[] = {
     // Vertex position, Texture position
-    -0.5f, -0.5f,  0.f, 0.f,
      0.5f, -0.5f,  1.f, 0.f,
      0.5f,  0.5f,  1.f, 1.f,
-
-     0.5f,  0.5f,  1.f, 1.f,
     -0.5f,  0.5f,  0.f, 1.f,
-    -0.5f, -0.5f,  0.f, 0.f
+
+    -0.5f,  0.5f,  0.f, 1.f,
+    -0.5f, -0.5f,  0.f, 0.f,
+     0.5f, -0.5f,  1.f, 0.f
 };
 
 Plane* plane_new() {

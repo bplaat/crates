@@ -133,7 +133,7 @@ Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z) {
                 // Change block
                 BlockType blockType = generate_block(chunk_x * CHUNK_SIZE + block_x, chunk_y * CHUNK_SIZE + block_y, chunk_z * CHUNK_SIZE + block_z);
                 if (blockType == BLOCK_TYPE_AIR) {
-                    if (chunk->data[block_index] != BLOCK_TYPE_TRUNK && chunk->data[block_index] != BLOCK_TYPE_LEAVES && chunk->data[block_index] != BLOCK_TYPE_CACTUS) {
+                    if (chunk->data[block_index] != BLOCK_TYPE_OAK_TRUNK && chunk->data[block_index] != BLOCK_TYPE_GREEN_LEAVES && chunk->data[block_index] != BLOCK_TYPE_CACTUS) {
                         chunk->data[block_index] = BLOCK_TYPE_AIR;
                     }
                 } else {
@@ -150,11 +150,11 @@ Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z) {
                             for (int leave_z = -1; leave_z <= 1; leave_z++) {
                                 for (int leave_x = -1; leave_x <= 1; leave_x++) {
                                     chunk->data[(block_z + leave_z) * CHUNK_SIZE * CHUNK_SIZE + (block_y + tree_y) * CHUNK_SIZE + (block_x + leave_x)] =
-                                        leave_z == 0 && leave_x == 0 && tree_y != 5 ? BLOCK_TYPE_TRUNK : BLOCK_TYPE_LEAVES;
+                                        leave_z == 0 && leave_x == 0 && tree_y != 5 ? BLOCK_TYPE_OAK_TRUNK : BLOCK_TYPE_GREEN_LEAVES;
                                 }
                             }
                         } else {
-                            chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y + tree_y) * CHUNK_SIZE + block_x] = BLOCK_TYPE_TRUNK;
+                            chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y + tree_y) * CHUNK_SIZE + block_x] = BLOCK_TYPE_OAK_TRUNK;
                         }
                     }
                 }

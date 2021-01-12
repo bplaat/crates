@@ -22,10 +22,13 @@ typedef struct Game {
     int oldHeight;
 
     GLFWwindow* window;
-    bool is_fullscreened;
+    bool is_playing;
+    bool is_fullscreen;
+    bool is_debugged;
     bool is_wireframed;
-    bool is_cursor_locked;
+    bool is_flat_shaded;
     int fps;
+    int render_distance;
 
     Font* text_font;
 
@@ -36,15 +39,7 @@ typedef struct Game {
     Texture* cursor_texture;
 
     Camera* camera;
-    Vector4 velocity;
-    bool isMovingForward;
-    bool isMovingBackward;
-    bool isMovingLeft;
-    bool isMovingRight;
-    bool isMovingUp;
-    bool isMovingDown;
-
-    World *world;
+    World* world;
 } Game;
 
 void game_init(void);

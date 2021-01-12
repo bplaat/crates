@@ -2,6 +2,7 @@
 
 #include "camera.h"
 #include <stdlib.h>
+#include <GLFW/glfw3.h>
 
 Camera* camera_new(float fov, float aspect, float near, float far) {
     Camera* camera = malloc(sizeof(Camera));
@@ -19,7 +20,136 @@ Camera* camera_new(float fov, float aspect, float near, float far) {
     camera->rotation.y = 0;
     camera->rotation.z = 0;
 
+    camera->velocity.x = 0;
+    camera->velocity.y = 0;
+    camera->velocity.z = 0;
+
+    camera->is_moving_forward = false;
+    camera->is_moving_left = false;
+    camera->is_moving_right = false;
+    camera->is_moving_backward = false;
+    camera->is_moving_up = false;
+    camera->is_moving_down = false;
+
     return camera;
+}
+
+void camera_key_callback(Camera* camera, int key, int scancode, int action, int mods) {
+    (void)scancode;
+    (void)mods;
+
+    if (action == GLFW_PRESS) {
+        if (key == GLFW_KEY_W || key == GLFW_KEY_UP) {
+            camera->is_moving_forward = true;
+        }
+        if (key == GLFW_KEY_S || key == GLFW_KEY_DOWN) {
+            camera->is_moving_backward = true;
+        }
+        if (key == GLFW_KEY_A || key == GLFW_KEY_LEFT) {
+            camera->is_moving_left = true;
+        }
+        if (key == GLFW_KEY_D || key == GLFW_KEY_RIGHT) {
+            camera->is_moving_right = true;
+        }
+        if (key == GLFW_KEY_SPACE) {
+            camera->is_moving_up = true;
+        }
+        if (key == GLFW_KEY_LEFT_SHIFT) {
+            camera->is_moving_down = true;
+        }
+    }
+
+    if (action == GLFW_RELEASE) {
+        if (key == GLFW_KEY_W || key == GLFW_KEY_UP) {
+            camera->is_moving_forward = false;
+        }
+        if (key == GLFW_KEY_S || key == GLFW_KEY_DOWN) {
+            camera->is_moving_backward = false;
+        }
+        if (key == GLFW_KEY_A || key == GLFW_KEY_LEFT) {
+            camera->is_moving_left = false;
+        }
+        if (key == GLFW_KEY_D || key == GLFW_KEY_RIGHT) {
+            camera->is_moving_right = false;
+        }
+        if (key == GLFW_KEY_SPACE) {
+            camera->is_moving_up = false;
+        }
+        if (key == GLFW_KEY_LEFT_SHIFT) {
+            camera->is_moving_down = false;
+        }
+    }
+}
+
+void camera_cursor_position_callback(Camera* camera, double xpos, double ypos) {
+    float xoffset = xpos - camera->last_x;
+    float yoffset = camera->last_y - ypos;
+    camera->last_x = xpos;
+    camera->last_y = ypos;
+
+    float sensitivity = 0.002;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    camera->yaw -= xoffset;
+    camera->pitch += yoffset;
+
+    if (camera->pitch > radians(90)) camera->pitch = radians(90);
+    if (camera->pitch < -radians(90)) camera->pitch = -radians(90);
+
+    camera->rotation.x = -camera->pitch;
+    camera->rotation.y = -camera->yaw;
+}
+
+void camera_update(Camera* camera, float delta) {
+    camera->velocity.z -= camera->velocity.z * 10 * delta;
+    camera->velocity.x -= camera->velocity.x * 10 * delta;
+    camera->velocity.y -= camera->velocity.y * 10 * delta;
+
+    float speed = 5 * delta;
+
+    if (camera->is_moving_forward) {
+        camera->velocity.z += speed;
+    }
+    if (camera->is_moving_backward) {
+        camera->velocity.z -= speed;
+    }
+
+    if (camera->is_moving_left) {
+        camera->velocity.x -=speed;
+    }
+    if (camera->is_moving_right) {
+        camera->velocity.x += speed;
+    }
+
+    if (camera->is_moving_up) {
+        camera->velocity.y += speed;
+    }
+    if (camera->is_moving_down) {
+        camera->velocity.y -= speed;
+    }
+
+    Matrix4 rotation_matrix;
+    matrix4_rotate_x(&rotation_matrix, camera->rotation.x);
+
+    Matrix4 temp_matrix;
+    matrix4_rotate_y(&temp_matrix, camera->rotation.y);
+    matrix4_mul(&rotation_matrix, &temp_matrix);
+
+    Vector4 update = camera->velocity;
+    vector4_mul(&update, &rotation_matrix);
+
+    if (camera->is_moving_up || camera->is_moving_down) {
+        update.x = 0;
+        update.z = 0;
+        update.y = camera->velocity.y;
+    } else {
+        update.y = 0;
+    }
+
+    vector4_add(&camera->position, &update);
+
+    camera_update_matrix(camera);
 }
 
 void camera_update_matrix(Camera* camera) {
