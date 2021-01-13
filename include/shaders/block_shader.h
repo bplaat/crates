@@ -18,6 +18,7 @@ typedef struct BlockShader {
     GLint model_matrix_uniform;
     GLint camera_matrix_uniform;
     GLint projection_matrix_uniform;
+    GLint is_lighted_uniform;
     GLint is_flad_shaded_uniform;
     GLint texture_indexes_uniform;
 } BlockShader;

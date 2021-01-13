@@ -52,9 +52,9 @@ typedef enum BlockType {
     BLOCK_TYPE_SIZE
 } BlockType;
 
-extern char* BLOCK_TEXTURE_NAMES[BLOCK_TYPE_SIZE];
+extern char* BLOCK_TYPE_NAMES[BLOCK_TYPE_SIZE];
 
-extern BlockTexture BLOCK_TEXTURE_FACES[BLOCK_TYPE_SIZE][6];
+extern BlockTexture BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_SIZE][6];
 
 #define BLOCK_VERTICES_COUNT 36
 

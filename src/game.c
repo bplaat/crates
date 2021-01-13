@@ -90,6 +90,26 @@ void game_cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
     }
 }
 
+void game_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    (void)xoffset;
+
+    Game* game = (Game*)glfwGetWindowUserPointer(window);
+    if (yoffset < 0) {
+        if (game->selected_block_type == BLOCK_TYPE_SIZE - 1) {
+            game->selected_block_type = 1; // Skip Air block type
+        } else {
+            game->selected_block_type++;
+        }
+    }
+    if (yoffset > 0) {
+        if (game->selected_block_type == 1) { // Skip Air block type
+            game->selected_block_type = BLOCK_TYPE_SIZE - 1;
+        } else {
+            game->selected_block_type--;
+        }
+    }
+}
+
 Game* game_new(char* title, int width, int height) {
     Game* game = malloc(sizeof(Game));
     game->title = title;
@@ -164,11 +184,15 @@ Game* game_new(char* title, int width, int height) {
     // Create world
     game->world = world_new(seed);
 
+    // Set selected block
+    game->selected_block_type = BLOCK_TYPE_GRASS;
+
     // Set callbacks
     glfwSetFramebufferSizeCallback(game->window, game_framebuffer_size_callback);
     glfwSetKeyCallback(game->window, game_key_callback);
     glfwSetMouseButtonCallback(game->window, game_mouse_button_callback);
     glfwSetCursorPosCallback(game->window, game_cursor_position_callback);
+    glfwSetScrollCallback(game->window, game_scroll_callback);
 
     return game;
 }
@@ -176,6 +200,10 @@ Game* game_new(char* title, int width, int height) {
 void game_update(Game* game, float delta) {
     // Update camera
     camera_update(game->camera, delta);
+
+    // Update selected block rotation
+    game->selected_block_rotation.x += radians(180) * delta;
+    game->selected_block_rotation.z += radians(180) * delta;
 }
 
 void game_render(Game* game) {
@@ -205,18 +233,9 @@ void game_render(Game* game) {
 
     // Render game hude
     if (game->is_playing) {
-        // Render cursor
-        {
-            matrix4_flat_rect(&modelMatrix, (game->width - game->cursor_texture->width) / 2, (game->height - game->cursor_texture->height) / 2, game->cursor_texture->width, game->cursor_texture->height);
-            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
-
-            glUniform1i(game->flat_shader->is_textured_uniform, true);
-            texture_enable(game->cursor_texture);
-            glDrawArrays(GL_TRIANGLES, 0, PLANE_VERTICES_COUNT);
-            texture_disable(game->cursor_texture);
-        }
-
         // Debug label
+        glUniform1i(game->flat_shader->is_textured_uniform, true);
+        Color text_color = { 17, 17, 17, 255 };
         if (game->is_debugged) {
             // Generate debug label
             #define DEBUG_LINES_COUNT 3
@@ -248,8 +267,6 @@ void game_render(Game* game) {
             );
 
             // Render debug label
-            Color text_color = { 17, 17, 17, 255 };
-            glUniform1i(game->flat_shader->is_textured_uniform, true);
             for (int i = 0; i < DEBUG_LINES_COUNT; i++) {
                 TextTexture* debug_text_texture = text_texture_new(debug_lines[i], game->text_font, 24, text_color);
 
@@ -262,6 +279,77 @@ void game_render(Game* game) {
 
                 text_texture_free(debug_text_texture);
             }
+        }
+
+        // Render cursor
+        {
+            matrix4_flat_rect(&modelMatrix, (game->width - game->cursor_texture->width) / 2, (game->height - game->cursor_texture->height) / 2, game->cursor_texture->width, game->cursor_texture->height);
+            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
+
+            texture_enable(game->cursor_texture);
+            glDrawArrays(GL_TRIANGLES, 0, PLANE_VERTICES_COUNT);
+            texture_disable(game->cursor_texture);
+        }
+
+        // Render selected block text
+        {
+            TextTexture* block_text_texture = text_texture_new(BLOCK_TYPE_NAMES[game->selected_block_type], game->text_font, 48, text_color);
+
+            float size = (game->width / 2) * 0.3;
+            matrix4_flat_rect(&modelMatrix, size * 1.15, (game->height - size) + (size - block_text_texture->texture->height) / 2, block_text_texture->texture->width, block_text_texture->texture->height);
+            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
+
+            texture_enable(block_text_texture->texture);
+            glDrawArrays(GL_TRIANGLES, 0, PLANE_VERTICES_COUNT);
+            texture_disable(block_text_texture->texture);
+
+            text_texture_free(block_text_texture);
+        }
+
+        // Render selected block
+        {
+            flat_shader_disable(game->flat_shader);
+
+            block_shader_enable(game->block_shader);
+            texture_atlas_enable(game->blocks_texture_atlas);
+
+            if (game->world->is_wireframed) {
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            }
+
+            glUniform1i(game->block_shader->is_lighted_uniform, false);
+            glUniform1i(game->block_shader->is_flad_shaded_uniform, game->world->is_flat_shaded);
+
+            glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projectionMatrix.m11);
+
+            Matrix4 cameraMatrix;
+            matrix4_identity(&cameraMatrix);
+            glUniformMatrix4fv(game->block_shader->camera_matrix_uniform, 1, GL_FALSE, &cameraMatrix.m11);
+
+            Vector4 blockPosition = { -1.2, -0.6, -2, 1 };
+            matrix4_translate(&modelMatrix, &blockPosition);
+
+            Matrix4 tempMatrix;
+            matrix4_rotate_x(&tempMatrix, game->selected_block_rotation.x + radians(90));
+            matrix4_mul(&modelMatrix, &tempMatrix);
+
+            matrix4_rotate_z(&tempMatrix, game->selected_block_rotation.z);
+            matrix4_mul(&modelMatrix, &tempMatrix);
+
+            Vector4 blockScale = { 0.2, 0.2, 0.2, 1 };
+            matrix4_scale(&tempMatrix, &blockScale);
+            matrix4_mul(&modelMatrix, &tempMatrix);
+
+            glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
+            glUniform1iv(game->block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[game->selected_block_type]);
+            glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
+
+            if (game->world->is_wireframed) {
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            }
+
+            texture_atlas_disable(game->blocks_texture_atlas);
+            block_shader_disable(game->block_shader);
         }
     }
 
@@ -289,8 +377,8 @@ void game_render(Game* game) {
         Color text_color = { 255, 255, 255, 255 };
         Color secondary_text_color = { 170, 170, 170, 255 };
 
-        #define CONTROLS_LINES_COUNT 8
-        int y = (game->height - (64 + 24 + 32 + 32 + (24 + 16) * CONTROLS_LINES_COUNT + 8 + 32)) / 2;
+        #define CONTROLS_LINES_COUNT 12
+        int y = (game->height - (64 + 24 + 32 + 32 + (24 + 8) * CONTROLS_LINES_COUNT + 8 + 32)) / 2;
 
         // Render title text
         {
@@ -326,6 +414,10 @@ void game_render(Game* game) {
                 "Clink to play the game, use ESC to pause",
                 "Use the WASD keys to walk around",
                 "Use your mouse pointer to look around",
+                "Use the left mouse button to place a block",
+                "Use the middle mouse button to select a block",
+                "Use the right mouse button to break a block",
+                "Use the scroll wheel to select other block",
                 "Use F11 to toggle fullscreen mode",
                 "Use Ctrl+R to toggle the render distance (near or far)",
                 "Use F3 to toggle debug mode",
@@ -338,7 +430,7 @@ void game_render(Game* game) {
 
                 matrix4_flat_rect(&modelMatrix, (game->width - control_text_texture->texture->width) / 2, y, control_text_texture->texture->width, control_text_texture->texture->height);
                 glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
-                y += 24 + 16;
+                y += 24 + 8;
 
                 texture_enable(control_text_texture->texture);
                 glDrawArrays(GL_TRIANGLES, 0, PLANE_VERTICES_COUNT);
@@ -352,7 +444,7 @@ void game_render(Game* game) {
         {
             TextTexture* footer_text_texture = text_texture_new("Made by Bastiaan van der Plaat", game->text_font, 32, text_color);
 
-            y += 8;
+            y += 16;
             matrix4_flat_rect(&modelMatrix, (game->width - footer_text_texture->texture->width) / 2, y, footer_text_texture->texture->width, footer_text_texture->texture->height);
             glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
 
@@ -362,9 +454,9 @@ void game_render(Game* game) {
 
             text_texture_free(footer_text_texture);
         }
-    }
 
-    flat_shader_disable(game->flat_shader);
+        flat_shader_disable(game->flat_shader);
+    }
 }
 
 void game_start(Game* game) {

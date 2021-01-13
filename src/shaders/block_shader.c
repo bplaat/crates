@@ -28,6 +28,7 @@ BlockShader* block_shader_new(void) {
     block_shader->model_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_model_matrix");
     block_shader->camera_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_camera_matrix");
     block_shader->projection_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_projection_matrix");
+    block_shader->is_lighted_uniform = glGetUniformLocation(block_shader->shader->program, "u_is_lighted");
     block_shader->is_flad_shaded_uniform = glGetUniformLocation(block_shader->shader->program, "u_is_flat_shaded");
     block_shader->texture_indexes_uniform = glGetUniformLocation(block_shader->shader->program, "u_texture_indexes");
 

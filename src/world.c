@@ -146,6 +146,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     }
 
+    glUniform1i(block_shader->is_lighted_uniform, true);
     glUniform1i(block_shader->is_flad_shaded_uniform, world->is_flat_shaded);
 
     glUniformMatrix4fv(block_shader->projection_matrix_uniform, 1, GL_FALSE, &camera->projectionMatrix.m11);
@@ -222,7 +223,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                                             matrix4_mul(&modelMatrix, &rotationMatrix);
 
                                             glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
-                                            glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TEXTURE_FACES[blockType]);
+                                            glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[blockType]);
                                             glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
                                         }
                                     }

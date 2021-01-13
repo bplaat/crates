@@ -9,7 +9,6 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 - Fix: chunk frostum culling bug
 - Fix: chunk update bugs
 - Add: select / add / remove block
-- Add: select right block
 - Add: Save chunks to sqlite3 file database
 - Add: Right spawn position
 - Add: walk physics

@@ -37,6 +37,9 @@ typedef struct Game {
 
     Camera* camera;
     World* world;
+
+    BlockType selected_block_type;
+    Vector4 selected_block_rotation;
 } Game;
 
 void game_init(void);
@@ -48,6 +51,8 @@ void game_key_callback(GLFWwindow* window, int key, int scancode, int action, in
 void game_mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 
 void game_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
+
+void game_scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 Game* game_new(char* title, int width, int height);
 

@@ -3,17 +3,18 @@
 #include "geometry/block.h"
 #include <stdlib.h>
 
-char* BLOCK_TEXTURE_NAMES[BLOCK_TYPE_SIZE] = {
+char* BLOCK_TYPE_NAMES[BLOCK_TYPE_SIZE] = {
     "Air",
 
     "Grass",
     "Dirt",
     "Water",
 
+    "Sand Top",
     "Sand",
     "Stone",
     "Coal",
-    "Goal",
+    "Gold",
 
     "Oak Trunk",
     "Beech Trunk",
@@ -23,7 +24,7 @@ char* BLOCK_TEXTURE_NAMES[BLOCK_TYPE_SIZE] = {
     "Cactus"
 };
 
-BlockTexture BLOCK_TEXTURE_FACES[BLOCK_TYPE_SIZE][6] = {
+BlockTexture BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_SIZE][6] = {
     { 0, 0, 0, 0, 0, 0 }, // Air
 
     { BLOCK_TEXTURE_GRASS_TOP, BLOCK_TEXTURE_GRASS_SIDE, BLOCK_TEXTURE_GRASS_SIDE, BLOCK_TEXTURE_GRASS_SIDE, BLOCK_TEXTURE_GRASS_SIDE, BLOCK_TEXTURE_DIRT }, // Grass
