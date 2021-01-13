@@ -31,7 +31,7 @@ Texture* texture_new_from_bitmap(char* path, int width, int height, bool is_tran
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, is_transparent ? GL_RGBA : GL_RGB, texture->width, texture->height, 0, is_transparent ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, bitmap);
+    glTexImage2D(GL_TEXTURE_2D, 0, is_transparent ? GL_RGBA : GL_RGB, width, height, 0, is_transparent ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, bitmap);
     glGenerateMipmap(GL_TEXTURE_2D);
 
     texture_disable(texture);

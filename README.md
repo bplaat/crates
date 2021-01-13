@@ -5,12 +5,13 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 
 # Todos:
 - Fix: text render bug
-- Fix: text texture trailing
-- Fix: chunk frostum culling
+- Fix: text texture trailing bug
+- Fix: chunk frostum culling bug
 - Fix: chunk update bugs
-- Add: Right spawn position
 - Add: select / add / remove block
 - Add: select right block
+- Add: Save chunks to sqlite3 file database
+- Add: Right spawn position
 - Add: walk physics
 - Add: cmake Windows static release builds
 

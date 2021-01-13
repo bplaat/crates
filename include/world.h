@@ -62,8 +62,6 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
 
 void world_free(World* world);
 
-#define WORLD_WORKER_THREAD_UPDATE_TIMEOUT 250
-
 int world_worker_thread(void* argument);
 
 #endif

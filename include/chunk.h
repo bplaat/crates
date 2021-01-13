@@ -15,11 +15,14 @@ typedef struct Chunk {
     int x;
     int y;
     int z;
+    bool is_freed;
     bool is_changed;
     uint8_t* data;
 } Chunk;
 
 #include "world.h"
+
+BlockType chunk_generate_block(int x, int y, int z);
 
 Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z);
 

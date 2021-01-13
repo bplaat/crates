@@ -71,8 +71,7 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     if (world->chunk_cache[world->chunk_cache_start] != NULL) {
         chunk_free(world->chunk_cache[world->chunk_cache_start]);
     }
-    world->chunk_cache[world->chunk_cache_start] = chunk;
-    world->chunk_cache_start++;
+    world->chunk_cache[world->chunk_cache_start++] = chunk;
 
     mtx_unlock(&world->chunk_cache_lock);
 
