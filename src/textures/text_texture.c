@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 TextTexture* text_texture_new(char* text, Font* font, int text_size, Color text_color) {
-    TextTexture *text_texture = malloc(sizeof(TextTexture));
+    TextTexture* text_texture = malloc(sizeof(TextTexture));
     text_texture->texture = NULL;
 
     text_texture->font = font;

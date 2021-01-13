@@ -25,6 +25,9 @@ add_library(stb_truetype src/stb_truetype/stb_truetype.c)
 # Tiny C Thread Library
 add_library(tinycthread src/tinycthread/tinycthread.c)
 
+# Perlin Noise Library
+add_library(perlin src/perlin/perlin.c)
+
 # Plaatcraft executable
 add_executable(
     plaatcraft src/main.c src/log.c src/utils.c src/font.c
@@ -38,9 +41,9 @@ target_compile_options(plaatcraft PRIVATE -DDEBUG -Wall -Wextra -Wpedantic -Werr
 
 # Final linking with external libs (uncomment for right Platform)
 # Windows:
-# target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread glfw3)
+# target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread perlin glfw3)
 # Linux:
-target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread glfw m dl pthread)
+target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread perlin glfw m dl pthread)
 
 # Copy assets folder
 file(COPY assets DESTINATION ${CMAKE_BINARY_DIR})

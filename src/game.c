@@ -3,6 +3,7 @@
 #include "game.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "config.h"
 #include "log.h"
 #include "math/matrix4.h"
@@ -54,18 +55,18 @@ void game_key_callback(GLFWwindow* window, int key, int scancode, int action, in
         }
 
         if ((mods & GLFW_MOD_CONTROL) != 0 && key == GLFW_KEY_T) {
-            game->is_flat_shaded = !game->is_flat_shaded;
+            game->world->is_flat_shaded = !game->world->is_flat_shaded;
         }
 
         if ((mods & GLFW_MOD_CONTROL) != 0 && key == GLFW_KEY_I) {
-            game->is_wireframed = !game->is_wireframed;
+            game->world->is_wireframed = !game->world->is_wireframed;
         }
 
         if ((mods & GLFW_MOD_CONTROL) != 0 && key == GLFW_KEY_R) {
-            if (game->render_distance == WORLD_RENDER_DISTANCE_NEAR) {
-                game->render_distance = WORLD_RENDER_DISTANCE_FAR;
+            if (game->world->render_distance == WORLD_RENDER_DISTANCE_NEAR) {
+                game->world->render_distance = WORLD_RENDER_DISTANCE_FAR;
             } else {
-                game->render_distance = WORLD_RENDER_DISTANCE_NEAR;
+                game->world->render_distance = WORLD_RENDER_DISTANCE_NEAR;
             }
         }
     }
@@ -89,12 +90,13 @@ void game_cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
     }
 }
 
-Game* game_new(char *title, int width, int height) {
+Game* game_new(char* title, int width, int height) {
     Game* game = malloc(sizeof(Game));
     game->title = title;
     game->width = width;
     game->height = height;
 
+    // Create window
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -107,14 +109,7 @@ Game* game_new(char *title, int width, int height) {
         log_error("Can't create glfw window");
     }
 
-    GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode* primaryScreen = glfwGetVideoMode(primaryMonitor);
-    glfwSetWindowPos(game->window, (primaryScreen->width - width) / 2, (primaryScreen->height - height) / 2);
-
-    glfwSetWindowSizeLimits(game->window, width / 2, height / 2, GLFW_DONT_CARE, GLFW_DONT_CARE);
-    glfwMakeContextCurrent(game->window);
-    glfwSwapInterval(1);
-
+    // Init game values
     game->is_playing = false;
     game->is_fullscreen = false;
     #if DEBUG
@@ -122,17 +117,20 @@ Game* game_new(char *title, int width, int height) {
     #else
         game->is_debugged = false;
     #endif
-    game->is_wireframed = false;
-    game->is_flat_shaded = false;
     game->fps = 0;
-    game->render_distance = 4;
 
+    // Center window
+    GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* primaryScreen = glfwGetVideoMode(primaryMonitor);
+    glfwSetWindowPos(game->window, (primaryScreen->width - width) / 2, (primaryScreen->height - height) / 2);
+
+    // Set some window props
     glfwSetWindowUserPointer(game->window, game);
-    glfwSetFramebufferSizeCallback(game->window, game_framebuffer_size_callback);
-    glfwSetKeyCallback(game->window, game_key_callback);
-    glfwSetMouseButtonCallback(game->window, game_mouse_button_callback);
-    glfwSetCursorPosCallback(game->window, game_cursor_position_callback);
+    glfwSetWindowSizeLimits(game->window, width / 2, height / 2, GLFW_DONT_CARE, GLFW_DONT_CARE);
+    glfwMakeContextCurrent(game->window);
+    glfwSwapInterval(1);
 
+    // Load OpenGL
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         log_error("Glad can't load the OpenGL 3.3 Core Profile");
     }
@@ -156,18 +154,31 @@ Game* game_new(char *title, int width, int height) {
     game->camera->position.z = CHUNK_SIZE / 2;
     camera_update_matrix(game->camera);
 
+    // Create world seed
+    int64_t seed = time(NULL);
+    srand(seed);
+    if (rand() % 2 == 0) {
+        seed = -seed;
+    }
+
     // Create world
-    game->world = world_new(0);
+    game->world = world_new(seed);
+
+    // Set callbacks
+    glfwSetFramebufferSizeCallback(game->window, game_framebuffer_size_callback);
+    glfwSetKeyCallback(game->window, game_key_callback);
+    glfwSetMouseButtonCallback(game->window, game_mouse_button_callback);
+    glfwSetCursorPosCallback(game->window, game_cursor_position_callback);
 
     return game;
 }
 
-void game_update(Game *game, float delta) {
+void game_update(Game* game, float delta) {
     // Update camera
     camera_update(game->camera, delta);
 }
 
-void game_render(Game *game) {
+void game_render(Game* game) {
     glViewport(0, 0, game->width, game->height);
 
     // Clear screen
@@ -180,7 +191,7 @@ void game_render(Game *game) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Render world
-    int rendered_chunks = world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas, game->render_distance, game->is_wireframed, game->is_flat_shaded);
+    int rendered_chunks = world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas);
 
     // Enable flat shader
     glDisable(GL_DEPTH_TEST);
@@ -214,7 +225,7 @@ void game_render(Game *game) {
             sprintf(
                 debug_lines[0],
                 "OpenGL %d.%d Core Profile - Render distance: %d chunks - Rendered: %d chunks - Fps: %d",
-                GLVersion.major, GLVersion.minor, game->render_distance, rendered_chunks, game->fps
+                GLVersion.major, GLVersion.minor, game->world->render_distance, rendered_chunks, game->fps
             );
 
             int player_chunk_x = floor(game->camera->position.x / (float)CHUNK_SIZE);
@@ -230,9 +241,10 @@ void game_render(Game *game) {
 
             sprintf(
                 debug_lines[2],
-                "Wireframed: %s - Flat shaded: %s",
-                game->is_wireframed ? "true" : "false",
-                game->is_flat_shaded ? "true" : "false"
+                "Seed: %ld - Wireframed: %s - Flat shaded: %s",
+                game->world->seed,
+                game->world->is_wireframed ? "true" : "false",
+                game->world->is_flat_shaded ? "true" : "false"
             );
 
             // Render debug label
@@ -355,7 +367,7 @@ void game_render(Game *game) {
     flat_shader_disable(game->flat_shader);
 }
 
-void game_start(Game *game) {
+void game_start(Game* game) {
     double fpsTime = 0;
     int frame = 0;
     double oldTime = 0;

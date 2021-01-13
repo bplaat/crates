@@ -8,16 +8,16 @@
 #include "color.h"
 
 typedef struct Font {
-    char *path;
-    uint8_t *font_buffer;
+    char* path;
+    uint8_t* font_buffer;
     stbtt_fontinfo font_info;
 } Font;
 
-Font* font_new(char *path);
+Font* font_new(char* path);
 
-int font_measure(Font* font, char *text, int text_size);
+int font_measure(Font* font, char* text, int text_size);
 
-Texture* font_render(Font* font, char *text, int text_size, Color text_color);
+Texture* font_render(Font* font, char* text, int text_size, Color text_color);
 
 void font_free(Font* font);
 

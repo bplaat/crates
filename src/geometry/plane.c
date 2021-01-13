@@ -14,7 +14,7 @@ float PLANE_VERTICES[] = {
      0.5f, -0.5f,  1.f, 0.f
 };
 
-Plane* plane_new() {
+Plane* plane_new(void) {
     Plane* plane = malloc(sizeof(Plane));
 
     glGenVertexArrays(1, &plane->vertex_array);

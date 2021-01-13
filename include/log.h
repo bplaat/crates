@@ -7,7 +7,7 @@
 
 extern mtx_t log_lock;
 
-void log_init();
+void log_init(void);
 
 void log_debug(char* format, ...);
 

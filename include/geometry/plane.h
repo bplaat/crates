@@ -14,7 +14,7 @@ typedef struct Plane {
     GLuint vertex_buffer;
 } Plane;
 
-Plane* plane_new();
+Plane* plane_new(void);
 
 void plane_enable(Plane* plane);
 

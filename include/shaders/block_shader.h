@@ -22,7 +22,7 @@ typedef struct BlockShader {
     GLint texture_indexes_uniform;
 } BlockShader;
 
-BlockShader* block_shader_new();
+BlockShader* block_shader_new(void);
 
 void block_shader_enable(BlockShader* block_shader);
 

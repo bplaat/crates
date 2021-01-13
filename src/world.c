@@ -3,28 +3,42 @@
 #include "world.h"
 #include <stdlib.h>
 #include <math.h>
+#include "config.h"
 #include "geometry/block.h"
+#include "perlin/perlin.h"
 #include "log.h"
 
-World* world_new(int seed) {
+World* world_new(int64_t seed) {
     World* world = malloc(sizeof(World));
     world->seed = seed;
+    world->is_wireframed = false;
+    world->is_flat_shaded = false;
+    #if DEBUG
+        world->render_distance = WORLD_RENDER_DISTANCE_FAR;
+    #else
+        world->render_distance = WORLD_RENDER_DISTANCE_NEAR;
+    #endif
 
+    // Init perlin noise with seed
+    perlin_init(seed);
+
+    // Init chuch chache
     for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
         world->chunk_cache[i] = NULL;
     }
     world->chunk_cache_start = 0;
     mtx_init(&world->chunk_cache_lock, mtx_plain);
 
+    // Init request queue
     for (size_t i = 0; i < sizeof(world->request_queue) / sizeof(WorldRequest*); i++) {
         world->request_queue[i] = NULL;
     }
     world->request_queue_size = 0;
     mtx_init(&world->request_queue_lock, mtx_plain);
 
+    // Init workers
     world->worker_running = true;
     mtx_init(&world->worker_running_lock, mtx_plain);
-
     for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(thrd_t); i++) {
         thrd_create(&world->worker_threads[i], world_worker_thread, world);
     }
@@ -125,17 +139,15 @@ void world_request_chunk_update(World* world, Chunk* chunk) {
     mtx_unlock(&world->request_queue_lock);
 }
 
-int world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas,
-    int render_distance, bool is_wireframed, bool is_flat_shaded)
-{
+int world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas) {
     block_shader_enable(block_shader);
     texture_atlas_enable(blocks_texture_atlas);
 
-    if (is_wireframed) {
+    if (world->is_wireframed) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     }
 
-    glUniform1i(block_shader->is_flad_shaded_uniform, is_flat_shaded);
+    glUniform1i(block_shader->is_flad_shaded_uniform, world->is_flat_shaded);
 
     glUniformMatrix4fv(block_shader->projection_matrix_uniform, 1, GL_FALSE, &camera->projectionMatrix.m11);
     glUniformMatrix4fv(block_shader->camera_matrix_uniform, 1, GL_FALSE, &camera->cameraMatrix.m11);
@@ -149,9 +161,9 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
 
     int rendered_chunks = 0;
 
-    for (int chunk_z = player_chunk_z + render_distance; chunk_z > player_chunk_z - render_distance; chunk_z--) {
-        for (int chunk_y = player_chunk_y - render_distance; chunk_y <= player_chunk_y + render_distance; chunk_y++) {
-            for (int chunk_x = player_chunk_x - render_distance; chunk_x <= player_chunk_x + render_distance; chunk_x++) {
+    for (int chunk_z = player_chunk_z + world->render_distance; chunk_z > player_chunk_z - world->render_distance; chunk_z--) {
+        for (int chunk_y = player_chunk_y - world->render_distance; chunk_y <= player_chunk_y + world->render_distance; chunk_y++) {
+            for (int chunk_x = player_chunk_x - world->render_distance; chunk_x <= player_chunk_x + world->render_distance; chunk_x++) {
                 bool chunk_is_visible = true;
 
                 // #define chunk_min(a) ((a) * CHUNK_SIZE - 0.5)
@@ -228,7 +240,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
         }
     }
 
-    if (is_wireframed) {
+    if (world->is_wireframed) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
 

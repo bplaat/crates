@@ -7,7 +7,7 @@
 
 mtx_t log_lock;
 
-void log_init() {
+void log_init(void) {
     mtx_init(&log_lock, mtx_plain);
 }
 

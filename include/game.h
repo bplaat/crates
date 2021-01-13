@@ -15,7 +15,7 @@
 #include "world.h"
 
 typedef struct Game {
-    char *title;
+    char* title;
     int width;
     int height;
     int oldWidth;
@@ -25,10 +25,7 @@ typedef struct Game {
     bool is_playing;
     bool is_fullscreen;
     bool is_debugged;
-    bool is_wireframed;
-    bool is_flat_shaded;
     int fps;
-    int render_distance;
 
     Font* text_font;
 
@@ -52,13 +49,13 @@ void game_mouse_button_callback(GLFWwindow* window, int button, int action, int 
 
 void game_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 
-Game* game_new(char *title, int width, int height);
+Game* game_new(char* title, int width, int height);
 
-void game_update(Game *game, float delta);
+void game_update(Game* game, float delta);
 
-void game_render(Game *game);
+void game_render(Game* game);
 
-void game_start(Game *game);
+void game_start(Game* game);
 
 void game_free(Game* game);
 

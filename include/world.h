@@ -3,6 +3,7 @@
 #ifndef WORLD_H
 #define WORLD_H
 
+#include <stdint.h>
 #include "tinycthread/tinycthread.h"
 #include "camera.h"
 #include "shaders/block_shader.h"
@@ -20,7 +21,7 @@ typedef enum WorldRequestType {
 typedef struct WorldRequest {
     WorldRequestType type;
     union {
-        Chunk *chunk_pointer;
+        Chunk* chunk_pointer;
 
         struct {
             int x;
@@ -31,7 +32,10 @@ typedef struct WorldRequest {
 } WorldRequest;
 
 struct World {
-    int seed;
+    int64_t seed;
+    bool is_wireframed;
+    bool is_flat_shaded;
+    int render_distance;
 
     Chunk* chunk_cache[2048];
     int chunk_cache_start;
@@ -46,7 +50,7 @@ struct World {
     mtx_t  worker_running_lock;
 };
 
-World* world_new(int seed);
+World* world_new(int64_t seed);
 
 Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z);
 
@@ -54,8 +58,7 @@ Chunk* world_request_chunk(World* world, int chunk_x, int chunk_y, int chunk_z);
 
 void world_request_chunk_update(World* world, Chunk* chunk);
 
-int world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas,
-    int render_distance, bool is_wireframed, bool is_flat_shaded);
+int world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas);
 
 void world_free(World* world);
 

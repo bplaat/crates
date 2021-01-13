@@ -5,7 +5,7 @@
 #include "utils.h"
 #include "log.h"
 
-FlatShader* flat_shader_new() {
+FlatShader* flat_shader_new(void) {
     FlatShader* flat_shader = malloc(sizeof(FlatShader));
     flat_shader->shader = shader_new("assets/shaders/flat.vert", "assets/shaders/flat.frag");
     flat_shader->plane = plane_new();

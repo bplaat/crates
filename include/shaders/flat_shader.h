@@ -20,7 +20,7 @@ typedef struct FlatShader {
     GLint color_uniform;
 } FlatShader;
 
-FlatShader* flat_shader_new();
+FlatShader* flat_shader_new(void);
 
 void flat_shader_enable(FlatShader* flat_shader);
 

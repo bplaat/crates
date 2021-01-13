@@ -5,7 +5,7 @@
 #include <string.h>
 #include "utils.h"
 
-Font* font_new(char *path) {
+Font* font_new(char* path) {
     Font* font = malloc(sizeof(Font));
     font->path = path;
     font->font_buffer = file_read(path);
@@ -17,7 +17,7 @@ Font* font_new(char *path) {
     return font;
 }
 
-int font_measure(Font* font, char *text, int text_size) {
+int font_measure(Font* font, char* text, int text_size) {
     float scale = stbtt_ScaleForPixelHeight(&font->font_info, text_size);
     int x_padding = text_size / 4;
     int width = x_padding * 2;
@@ -80,7 +80,7 @@ Texture* font_render(Font* font, char *text, int text_size, Color text_color) {
         }
     }
 
-    uint8_t *colored_bitmap = malloc(height * width * 4);
+    uint8_t* colored_bitmap = malloc(height * width * 4);
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             int pos = (y * width + x) * 4;

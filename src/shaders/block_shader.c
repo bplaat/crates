@@ -5,7 +5,7 @@
 #include "utils.h"
 #include "log.h"
 
-BlockShader* block_shader_new() {
+BlockShader* block_shader_new(void) {
     BlockShader* block_shader = malloc(sizeof(BlockShader));
     block_shader->shader = shader_new("assets/shaders/block.vert", "assets/shaders/block.frag");
     block_shader->block = block_new();

@@ -36,6 +36,7 @@ typedef enum BlockType {
     BLOCK_TYPE_DIRT,
     BLOCK_TYPE_WATER,
 
+    BLOCK_TYPE_SAND_TOP,
     BLOCK_TYPE_SAND,
     BLOCK_TYPE_STONE,
     BLOCK_TYPE_COAL,
@@ -64,7 +65,7 @@ typedef struct Block {
     GLuint vertex_buffer;
 } Block;
 
-Block* block_new();
+Block* block_new(void);
 
 void block_enable(Block* block);
 
