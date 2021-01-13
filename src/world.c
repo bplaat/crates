@@ -37,6 +37,7 @@ World* world_new(int64_t seed) {
 
     // Init World Database
     mtx_init(&world->database_lock, mtx_plain);
+    world->database_changes = 0;
     if (sqlite3_open("assets/world.db", &world->database) != SQLITE_OK) {
         log_error("Can't open the SQLLite database:\n%s", sqlite3_errmsg(world->database));
     }
@@ -46,7 +47,7 @@ World* world_new(int64_t seed) {
     if (sqlite3_exec(world->database, "CREATE TABLE IF NOT EXISTS [settings] ("
         "[key] VARCHAR(32) NOT NULL,"
         "[value] VARCHAR(255) NOT NULL"
-    ")", 0, 0, &error_message) != SQLITE_OK) {
+    ")", NULL, NULL, &error_message) != SQLITE_OK) {
         log_error("Can't create the world settings table:\n%s", error_message);
     }
 
@@ -82,7 +83,7 @@ World* world_new(int64_t seed) {
         "[y] INT NOT NULL,"
         "[z] INT NOT NULL,"
         "[data] BLOB NOT NULL"
-    ")", 0, 0, &error_message) != SQLITE_OK) {
+    ")", NULL, NULL, &error_message) != SQLITE_OK) {
         log_error("Can't create the world chunks table:\n%s", error_message);
     }
 
@@ -101,6 +102,11 @@ World* world_new(int64_t seed) {
         log_error("Can't create update chunks statement");
     }
 
+    // Begin database transaction
+    if (sqlite3_exec(world->database, "BEGIN", NULL, NULL, &error_message) != SQLITE_OK) {
+        log_error("Can't begin database transaction:\n%s", error_message);
+    }
+
     // Init workers
     world->worker_running = true;
     mtx_init(&world->worker_running_lock, mtx_plain);
@@ -112,6 +118,22 @@ World* world_new(int64_t seed) {
     perlin_init(world->seed);
 
     return world;
+}
+
+void world_check_database_commit(World* world) {
+    if (world->database_changes == WORLD_DATABASE_COMMIT_COUNT) {
+        world->database_changes = 0;
+
+        // Commit database transaction
+        mtx_lock(&world->database_lock);
+        char *error_message = NULL;
+        if (sqlite3_exec(world->database, "COMMIT;BEGIN", NULL, NULL, &error_message) != SQLITE_OK) {
+            log_error("Can't commit database transaction:\n%s", error_message);
+        }
+        mtx_unlock(&world->database_lock);
+    } else {
+        world->database_changes++;
+    }
 }
 
 void world_add_chunk_to_cache(World* world, Chunk* chunk) {
@@ -175,6 +197,7 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
         log_error("Can't insert chunk into database");
     }
     mtx_unlock(&world->database_lock);
+    world_check_database_commit(world);
 
     // Add chunk to world cache
     world_add_chunk_to_cache(world, chunk);
@@ -369,6 +392,12 @@ void world_free(World* world) {
         }
     }
 
+    // Commit database transaction
+    char *error_message = NULL;
+    if (sqlite3_exec(world->database, "COMMIT", NULL, NULL, &error_message) != SQLITE_OK) {
+        log_error("Can't begin database transaction:\n%s", error_message);
+    }
+
     sqlite3_finalize(world->chunk_select_statement);
     sqlite3_finalize(world->chunk_insert_statement);
     sqlite3_finalize(world->chunk_update_statement);
@@ -420,6 +449,7 @@ int world_worker_thread(void* argument) {
                     log_error("Can't update chunk in database");
                 }
                 mtx_unlock(&world->database_lock);
+                world_check_database_commit(world);
             }
 
             // Free request

@@ -38,7 +38,7 @@ struct World {
     bool is_flat_shaded;
     int render_distance;
 
-    Chunk* chunk_cache[2048];
+    Chunk* chunk_cache[1024];
     int chunk_cache_start;
     mtx_t chunk_cache_lock;
 
@@ -52,12 +52,15 @@ struct World {
 
     sqlite3* database;
     mtx_t database_lock;
+    int database_changes;
     sqlite3_stmt* chunk_select_statement;
     sqlite3_stmt* chunk_insert_statement;
     sqlite3_stmt* chunk_update_statement;
 };
 
 World* world_new(int64_t seed);
+
+void world_check_database_commit(World* world);
 
 void world_add_chunk_to_cache(World* world, Chunk* chunk);
 
