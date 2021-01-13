@@ -8,6 +8,7 @@
 #include "camera.h"
 #include "shaders/block_shader.h"
 #include "textures/texture_atlas.h"
+#include <sqlite3.h>
 
 typedef struct World World;
 
@@ -39,18 +40,26 @@ struct World {
 
     Chunk* chunk_cache[2048];
     int chunk_cache_start;
-    mtx_t  chunk_cache_lock;
+    mtx_t chunk_cache_lock;
 
     WorldRequest* request_queue[2048];
     int request_queue_size;
-    mtx_t  request_queue_lock;
+    mtx_t request_queue_lock;
 
     thrd_t worker_threads[2];
     bool worker_running;
-    mtx_t  worker_running_lock;
+    mtx_t worker_running_lock;
+
+    sqlite3* database;
+    mtx_t database_lock;
+    sqlite3_stmt* chunk_select_statement;
+    sqlite3_stmt* chunk_insert_statement;
+    sqlite3_stmt* chunk_update_statement;
 };
 
 World* world_new(int64_t seed);
+
+void world_add_chunk_to_cache(World* world, Chunk* chunk);
 
 Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z);
 

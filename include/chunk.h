@@ -24,7 +24,9 @@ typedef struct Chunk {
 
 BlockType chunk_generate_block(int x, int y, int z);
 
-Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z);
+Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z, bool is_changed);
+
+Chunk* chunk_new_from_data(int chunk_x, int chunk_y, int chunk_z, bool is_changed, uint8_t* chunk_data, bool is_copied);
 
 void chunk_update(Chunk* chunk, World* world);
 

@@ -91,6 +91,8 @@ Texture* font_render(Font* font, char *text, int text_size, Color text_color) {
         }
     }
 
+    free(bitmap);
+
     Texture* texture = texture_new_from_bitmap("Text", width, height, true, colored_bitmap);
 
     free(colored_bitmap);

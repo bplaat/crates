@@ -51,18 +51,9 @@ BlockType chunk_generate_block(int x, int y, int z) {
     return BLOCK_TYPE_AIR;
 }
 
-Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z) {
-    log_debug("Chunk create %d %d %d", chunk_x, chunk_y, chunk_z);
-
-    Chunk* chunk = malloc(sizeof(Chunk));
-    chunk->x = chunk_x;
-    chunk->y = chunk_y;
-    chunk->z = chunk_z;
-    chunk->is_freed = false;
-    chunk->is_changed = true;
-
-    chunk->data = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
-    memset(chunk->data, BLOCK_TYPE_AIR, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z, bool is_changed) {
+    uint8_t* chunk_data = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+    memset(chunk_data, BLOCK_TYPE_AIR, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
 
     srand(chunk_x + chunk_y + chunk_z);
     for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
@@ -74,16 +65,16 @@ Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z) {
                 BlockType blockType = chunk_generate_block(chunk_x * CHUNK_SIZE + block_x, chunk_y * CHUNK_SIZE + block_y, chunk_z * CHUNK_SIZE + block_z);
                 if (blockType == BLOCK_TYPE_AIR) {
                     if (
-                        chunk->data[block_index] != BLOCK_TYPE_OAK_TRUNK &&
-                        chunk->data[block_index] != BLOCK_TYPE_BEECH_TRUNK &&
-                        chunk->data[block_index] != BLOCK_TYPE_GREEN_LEAVES &&
-                        chunk->data[block_index] != BLOCK_TYPE_ORANGE_LEAVES &&
-                        chunk->data[block_index] != BLOCK_TYPE_CACTUS
+                        chunk_data[block_index] != BLOCK_TYPE_OAK_TRUNK &&
+                        chunk_data[block_index] != BLOCK_TYPE_BEECH_TRUNK &&
+                        chunk_data[block_index] != BLOCK_TYPE_GREEN_LEAVES &&
+                        chunk_data[block_index] != BLOCK_TYPE_ORANGE_LEAVES &&
+                        chunk_data[block_index] != BLOCK_TYPE_CACTUS
                     ) {
-                        chunk->data[block_index] = BLOCK_TYPE_AIR;
+                        chunk_data[block_index] = BLOCK_TYPE_AIR;
                     }
                 } else {
-                    chunk->data[block_index] = blockType;
+                    chunk_data[block_index] = blockType;
                 }
 
                 // Place trees
@@ -100,14 +91,14 @@ Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z) {
                         if (tree_y >= 3) {
                             for (int leave_z = -1; leave_z <= 1; leave_z++) {
                                 for (int leave_x = -1; leave_x <= 1; leave_x++) {
-                                    chunk->data[(block_z + leave_z) * CHUNK_SIZE * CHUNK_SIZE + (block_y + tree_y) * CHUNK_SIZE + (block_x + leave_x)] =
+                                    chunk_data[(block_z + leave_z) * CHUNK_SIZE * CHUNK_SIZE + (block_y + tree_y) * CHUNK_SIZE + (block_x + leave_x)] =
                                         leave_z == 0 && leave_x == 0 && tree_y != 5
                                             ? (oak_type ? BLOCK_TYPE_BEECH_TRUNK : BLOCK_TYPE_OAK_TRUNK)
                                             : (leave_type ? BLOCK_TYPE_GREEN_LEAVES : BLOCK_TYPE_ORANGE_LEAVES);
                                 }
                             }
                         } else {
-                            chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y + tree_y) * CHUNK_SIZE + block_x] =
+                            chunk_data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y + tree_y) * CHUNK_SIZE + block_x] =
                                 oak_type ? BLOCK_TYPE_BEECH_TRUNK : BLOCK_TYPE_OAK_TRUNK;
                         }
                     }
@@ -119,11 +110,31 @@ Chunk* chunk_new(int chunk_x, int chunk_y, int chunk_z) {
                     block_y >= 1 && block_y <= CHUNK_SIZE - 7
                 ) {
                     for (int cactus_y = 1; cactus_y < 5; cactus_y++) {
-                        chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y + cactus_y) * CHUNK_SIZE + block_x] = BLOCK_TYPE_CACTUS;
+                        chunk_data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y + cactus_y) * CHUNK_SIZE + block_x] = BLOCK_TYPE_CACTUS;
                     }
                 }
             }
         }
+    }
+
+    return chunk_new_from_data(chunk_x, chunk_y, chunk_z, is_changed, chunk_data, false);
+}
+
+Chunk* chunk_new_from_data(int chunk_x, int chunk_y, int chunk_z, bool is_changed, uint8_t* chunk_data, bool is_copied) {
+    // log_debug("Chunk create %d %d %d", chunk_x, chunk_y, chunk_z);
+
+    Chunk* chunk = malloc(sizeof(Chunk));
+    chunk->x = chunk_x;
+    chunk->y = chunk_y;
+    chunk->z = chunk_z;
+    chunk->is_freed = false;
+    chunk->is_changed = is_changed;
+
+    if (is_copied) {
+        chunk->data = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+        memcpy(chunk->data, chunk_data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+    } else {
+        chunk->data = chunk_data;
     }
 
     return chunk;
@@ -137,7 +148,7 @@ void chunk_update(Chunk* chunk, World* world) {
     if (chunk->is_changed) {
         chunk->is_changed = false;
 
-        log_debug("Chunk update %d %d %d", chunk->x, chunk->y, chunk->z);
+        // log_debug("Chunk update %d %d %d", chunk->x, chunk->y, chunk->z);
 
         uint8_t* temp_data = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
         memcpy(temp_data, chunk->data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
@@ -145,6 +156,11 @@ void chunk_update(Chunk* chunk, World* world) {
         for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
             for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
                 for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
+                    if (chunk->is_freed) {
+                        free(temp_data);
+                        return;
+                    }
+
                     int block_index = block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x;
 
                     // Check air block
@@ -256,9 +272,7 @@ void chunk_update(Chunk* chunk, World* world) {
             }
         }
 
-        if (!chunk->is_freed) {
-            memcpy(chunk->data, temp_data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
-        }
+        memcpy(chunk->data, temp_data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
         free(temp_data);
     }
 }

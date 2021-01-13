@@ -41,9 +41,9 @@ target_compile_options(plaatcraft PRIVATE -DDEBUG -Wall -Wextra -Wpedantic -Werr
 
 # Final linking with external libs (uncomment for right Platform)
 # Windows:
-# target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread perlin glfw3)
+# target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread perlin glfw3 sqlite3)
 # Linux:
-target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread perlin glfw m dl pthread)
+target_link_libraries(plaatcraft glad stb_image stb_truetype tinycthread perlin glfw sqlite3 m dl pthread)
 
 # Copy assets folder
 file(COPY assets DESTINATION ${CMAKE_BINARY_DIR})

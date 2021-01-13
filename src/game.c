@@ -174,7 +174,7 @@ Game* game_new(char* title, int width, int height) {
     game->camera->position.z = CHUNK_SIZE / 2;
     camera_update_matrix(game->camera);
 
-    // Create world seed
+    // Create new world seed
     int64_t seed = time(NULL);
     srand(seed);
     if (rand() % 2 == 0) {
@@ -207,22 +207,21 @@ void game_update(Game* game, float delta) {
 }
 
 void game_render(Game* game) {
+    // Init OpenGL viewport and culling
     glViewport(0, 0, game->width, game->height);
-
-    // Clear screen
-    glEnable(GL_DEPTH_TEST);
-
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CW);
 
+    // Clear screen
     glClearColor(176.f / 255.f, 233.f / 255.f, 252.f / 255.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Render world
+    glEnable(GL_DEPTH_TEST);
     int rendered_chunks = world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas);
+    glDisable(GL_DEPTH_TEST);
 
     // Enable flat shader
-    glDisable(GL_DEPTH_TEST);
     flat_shader_enable(game->flat_shader);
 
     Matrix4 projectionMatrix;
