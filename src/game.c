@@ -3,7 +3,6 @@
 #include "game.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include "config.h"
 #include "log.h"
 #include "math/matrix4.h"
@@ -169,20 +168,9 @@ Game* game_new(char* title, int width, int height) {
 
     // Create camera
     game->camera = camera_new(radians(45), (float)game->width / (float)game->height, 0.1, 1000);
-    game->camera->position.x = CHUNK_SIZE / 2;
-    game->camera->position.y = 1.5 + CHUNK_SIZE;
-    game->camera->position.z = CHUNK_SIZE / 2;
-    camera_update_matrix(game->camera);
 
-    // Create new world seed
-    int64_t seed = time(NULL);
-    srand(seed);
-    if (rand() % 2 == 0) {
-        seed = -seed;
-    }
-
-    // Create world
-    game->world = world_new(seed);
+    // Create world (and load world database)
+    game->world = world_new(game->camera);
 
     // Set selected block
     game->selected_block_type = BLOCK_TYPE_GRASS;
@@ -490,7 +478,7 @@ void game_start(Game* game) {
 
 void game_free(Game* game) {
     // Free world
-    world_free(game->world);
+    world_free(game->world, game->camera);
 
     // Free camera
     camera_free(game->camera);

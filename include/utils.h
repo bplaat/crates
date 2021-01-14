@@ -32,4 +32,7 @@ double radians(double degrees);
 // Function to read a file to string
 uint8_t* file_read(char* path);
 
+// Function to copy / clone a string
+char *string_copy(char *string);
+
 #endif

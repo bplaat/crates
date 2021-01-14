@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include "log.h"
 
 // Function to convert radians to degrees
@@ -30,4 +31,11 @@ uint8_t* file_read(char* path) {
     file_buffer[file_size] = 0;
     fclose(file);
     return file_buffer;
+}
+
+// Function to copy / clone a string
+char *string_copy(char *string) {
+    char *new_string = malloc(strlen(string) + 1);
+    strcpy(new_string, string);
+    return new_string;
 }

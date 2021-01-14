@@ -5,14 +5,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include "config.h"
 #include "geometry/block.h"
 #include "perlin/perlin.h"
 #include "log.h"
 
-World* world_new(int64_t seed) {
+World* world_new(Camera* camera) {
     World* world = malloc(sizeof(World));
-    world->seed = seed;
     world->is_wireframed = false;
     world->is_flat_shaded = false;
     #if DEBUG
@@ -20,6 +20,9 @@ World* world_new(int64_t seed) {
     #else
         world->render_distance = WORLD_RENDER_DISTANCE_NEAR;
     #endif
+
+    // Create database
+    world->database = database_new();
 
     // Init chuch chache
     for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
@@ -35,77 +38,30 @@ World* world_new(int64_t seed) {
     world->request_queue_size = 0;
     mtx_init(&world->request_queue_lock, mtx_plain);
 
-    // Init World Database
-    mtx_init(&world->database_lock, mtx_plain);
-    world->database_changes = 0;
-    if (sqlite3_open("assets/world.db", &world->database) != SQLITE_OK) {
-        log_error("Can't open the SQLLite database:\n%s", sqlite3_errmsg(world->database));
+    // Get world seed
+    world->seed = database_settings_get_int(world->database, "seed", 0);
+
+    // Generate when not set
+    if (world->seed == 0) {
+        srand(time(NULL));
+        do {
+            world->seed = rand();
+            if (rand() % 2 == 0) {
+                world->seed = -world->seed;
+            }
+        } while (world->seed == 0);
+        database_settings_set_int(world->database, "seed", world->seed);
     }
 
-    // Init database world settings table
-    char *error_message = NULL;
-    if (sqlite3_exec(world->database, "CREATE TABLE IF NOT EXISTS [settings] ("
-        "[key] VARCHAR(32) NOT NULL,"
-        "[value] VARCHAR(255) NOT NULL"
-    ")", NULL, NULL, &error_message) != SQLITE_OK) {
-        log_error("Can't create the world settings table:\n%s", error_message);
-    }
-
-    // Select world seed
-    sqlite3_stmt* seed_select_statement;
-    if (sqlite3_prepare_v2(world->database, "SELECT [value] FROM [settings] WHERE [key] = 'seed'", -1, &seed_select_statement, NULL) != SQLITE_OK) {
-        log_error("Can't create select world seed statement");
-    }
-
-    if (sqlite3_step(seed_select_statement) == SQLITE_ROW) {
-        // When found the world seed set world seed
-        const uint8_t* seed = sqlite3_column_text(seed_select_statement, 0);
-        world->seed = atoi((char*)seed);
-    } else {
-        // Else save world seed
-        sqlite3_stmt* seed_insert_statement;
-        if (sqlite3_prepare_v2(world->database, "INSERT INTO [settings] ([key], [value]) VALUES ('seed', ?)", -1, &seed_insert_statement, NULL) != SQLITE_OK) {
-            log_error("Can't create select world seed statement");
-        }
-        char seed_string_buffer[64];
-        sprintf(seed_string_buffer, "%ld", world->seed);
-        sqlite3_bind_text(seed_insert_statement, 1, seed_string_buffer, strlen(seed_string_buffer), SQLITE_STATIC);
-        if (sqlite3_step(seed_insert_statement) != SQLITE_DONE) {
-            log_error("Can't insert world seed into database");
-        }
-        sqlite3_finalize(seed_insert_statement);
-    }
-    sqlite3_finalize(seed_select_statement);
-
-    // Init database world chunks table
-    if (sqlite3_exec(world->database, "CREATE TABLE IF NOT EXISTS [chunks] ("
-        "[x] INT NOT NULL,"
-        "[y] INT NOT NULL,"
-        "[z] INT NOT NULL,"
-        "[data] BLOB NOT NULL"
-    ")", NULL, NULL, &error_message) != SQLITE_OK) {
-        log_error("Can't create the world chunks table:\n%s", error_message);
-    }
-
-    // Init chunk select statement
-    if (sqlite3_prepare_v2(world->database, "SELECT [data] FROM [chunks] WHERE [x] = ? AND [y] = ? AND [z] = ?", -1, &world->chunk_select_statement, NULL) != SQLITE_OK) {
-        log_error("Can't create select chunks statement");
-    }
-
-    // Init chunk insert statement
-    if (sqlite3_prepare_v2(world->database, "INSERT INTO [chunks] ([x], [y], [z], [data]) VALUES (?, ?, ?, ?)", -1, &world->chunk_insert_statement, NULL) != SQLITE_OK) {
-        log_error("Can't create insert chunks statement");
-    }
-
-    // Init chunk update statement
-    if (sqlite3_prepare_v2(world->database, "UPDATE [chunks] SET [data] = ? WHERE [x] = ? AND [y] = ? AND [z] = ?", -1, &world->chunk_update_statement, NULL) != SQLITE_OK) {
-        log_error("Can't create update chunks statement");
-    }
-
-    // Begin database transaction
-    if (sqlite3_exec(world->database, "BEGIN", NULL, NULL, &error_message) != SQLITE_OK) {
-        log_error("Can't begin database transaction:\n%s", error_message);
-    }
+    // Get old player position
+    camera->position.x = database_settings_get_float(world->database, "player_x", CHUNK_SIZE / 2);
+    camera->position.y = database_settings_get_float(world->database, "player_y", 1.5 + CHUNK_SIZE);
+    camera->position.z = database_settings_get_float(world->database, "player_z", CHUNK_SIZE / 2);
+    camera->pitch = database_settings_get_float(world->database, "player_pitch", 0);
+    camera->rotation.x = -camera->pitch;
+    camera->yaw = database_settings_get_float(world->database, "player_yaw", 0);
+    camera->rotation.y = -camera->yaw;
+    camera_update_matrix(camera);
 
     // Init workers
     world->worker_running = true;
@@ -120,21 +76,8 @@ World* world_new(int64_t seed) {
     return world;
 }
 
-void world_check_database_commit(World* world) {
-    if (world->database_changes == WORLD_DATABASE_COMMIT_COUNT) {
-        world->database_changes = 0;
 
-        // Commit database transaction
-        mtx_lock(&world->database_lock);
-        char *error_message = NULL;
-        if (sqlite3_exec(world->database, "COMMIT;BEGIN", NULL, NULL, &error_message) != SQLITE_OK) {
-            log_error("Can't commit database transaction:\n%s", error_message);
-        }
-        mtx_unlock(&world->database_lock);
-    } else {
-        world->database_changes++;
-    }
-}
+
 
 void world_add_chunk_to_cache(World* world, Chunk* chunk) {
     mtx_lock(&world->chunk_cache_lock);
@@ -163,43 +106,17 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     }
 
     // Select / Search chunk in database
-    mtx_lock(&world->database_lock);
-    sqlite3_reset(world->chunk_select_statement);
-    sqlite3_bind_int(world->chunk_select_statement, 1, chunk_x);
-    sqlite3_bind_int(world->chunk_select_statement, 2, chunk_y);
-    sqlite3_bind_int(world->chunk_select_statement, 3, chunk_z);
-    if (sqlite3_step(world->chunk_select_statement) == SQLITE_ROW) {
-        // When found create chunk from data
-        const uint8_t* chunk_data = sqlite3_column_blob(world->chunk_select_statement, 0);
-        Chunk* chunk = chunk_new_from_data(chunk_x, chunk_y, chunk_z, false, (uint8_t*)chunk_data, true);
-        mtx_unlock(&world->database_lock);
-
-        // Update the chunk
+    Chunk* chunk = database_chunks_get_chunk(world->database, chunk_x, chunk_y, chunk_z);
+    if (chunk != NULL) {
+        // When found update and add to cache
         chunk_update(chunk, world);
-
-        // Add chunk to world cache
         world_add_chunk_to_cache(world, chunk);
         return chunk;
     }
-    mtx_unlock(&world->database_lock);
 
-    // When not found generate chunk
-    Chunk* chunk = chunk_new_from_generator(chunk_x, chunk_y, chunk_z, true);
-
-    // Insert chunk in database
-    mtx_lock(&world->database_lock);
-    sqlite3_reset(world->chunk_insert_statement);
-    sqlite3_bind_int(world->chunk_insert_statement, 1, chunk->x);
-    sqlite3_bind_int(world->chunk_insert_statement, 2, chunk->y);
-    sqlite3_bind_int(world->chunk_insert_statement, 3, chunk->z);
-    sqlite3_bind_blob(world->chunk_insert_statement, 4, chunk->data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE, SQLITE_TRANSIENT);
-    if (sqlite3_step(world->chunk_insert_statement) != SQLITE_DONE) {
-        log_error("Can't insert chunk into database");
-    }
-    mtx_unlock(&world->database_lock);
-    world_check_database_commit(world);
-
-    // Add chunk to world cache
+    // When not found generate chunk and add it to database and cache
+    chunk = chunk_new_from_generator(chunk_x, chunk_y, chunk_z, true);
+    database_chunks_set_chunk(world->database, chunk);
     world_add_chunk_to_cache(world, chunk);
     return chunk;
 }
@@ -376,7 +293,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
     return rendered_chunks;
 }
 
-void world_free(World* world) {
+void world_free(World* world, Camera* camera) {
     mtx_lock(&world->worker_running_lock);
     world->worker_running = false;
     mtx_unlock(&world->worker_running_lock);
@@ -392,16 +309,14 @@ void world_free(World* world) {
         }
     }
 
-    // Commit database transaction
-    char *error_message = NULL;
-    if (sqlite3_exec(world->database, "COMMIT", NULL, NULL, &error_message) != SQLITE_OK) {
-        log_error("Can't begin database transaction:\n%s", error_message);
-    }
+    // Save old player position
+    database_settings_set_float(world->database, "player_x", camera->position.x);
+    database_settings_set_float(world->database, "player_y", camera->position.y);
+    database_settings_set_float(world->database, "player_z", camera->position.z);
+    database_settings_set_float(world->database, "player_pitch", camera->pitch);
+    database_settings_set_float(world->database, "player_yaw", camera->yaw);
 
-    sqlite3_finalize(world->chunk_select_statement);
-    sqlite3_finalize(world->chunk_insert_statement);
-    sqlite3_finalize(world->chunk_update_statement);
-    sqlite3_close(world->database);
+    database_free(world->database);
 
     free(world);
 }
@@ -437,19 +352,7 @@ int world_worker_thread(void* argument) {
             if (request->type == WORLD_REQUEST_TYPE_CHUNK_UPDATE) {
                 Chunk* chunk = request->arguments.chunk_pointer;
                 chunk_update(chunk, world);
-
-                // Update chunk in database
-                mtx_lock(&world->database_lock);
-                sqlite3_reset(world->chunk_update_statement);
-                sqlite3_bind_blob(world->chunk_update_statement, 1, chunk->data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE, SQLITE_TRANSIENT);
-                sqlite3_bind_int(world->chunk_update_statement, 2, chunk->x);
-                sqlite3_bind_int(world->chunk_update_statement, 3, chunk->y);
-                sqlite3_bind_int(world->chunk_update_statement, 4, chunk->z);
-                if (sqlite3_step(world->chunk_update_statement) != SQLITE_DONE) {
-                    log_error("Can't update chunk in database");
-                }
-                mtx_unlock(&world->database_lock);
-                world_check_database_commit(world);
+                database_chunks_set_chunk(world->database, chunk);
             }
 
             // Free request

@@ -98,9 +98,10 @@ void camera_cursor_position_callback(Camera* camera, double xpos, double ypos) {
     camera->last_y = ypos;
 
     float sensitivity = 0.002;
-    camera->yaw -= xoffset * sensitivity;
-    camera->pitch += yoffset * sensitivity;
 
+    camera->yaw -= xoffset * sensitivity;
+
+    camera->pitch += yoffset * sensitivity;
     if (camera->pitch > radians(90)) camera->pitch = radians(90);
     if (camera->pitch < -radians(90)) camera->pitch = -radians(90);
 

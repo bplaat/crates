@@ -35,7 +35,7 @@ add_executable(
     src/math/vector4.c src/math/matrix4.c
     src/shaders/shader.c src/shaders/block_shader.c src/shaders/flat_shader.c
     src/textures/texture.c src/textures/texture_atlas.c src/textures/text_texture.c
-    src/game.c src/camera.c src/chunk.c src/world.c
+    src/game.c src/camera.c src/chunk.c src/database.c src/world.c
 )
 target_compile_options(plaatcraft PRIVATE -DDEBUG -Wall -Wextra -Wpedantic -Werror)
 

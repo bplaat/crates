@@ -8,11 +8,10 @@
 #include "camera.h"
 #include "shaders/block_shader.h"
 #include "textures/texture_atlas.h"
-#include <sqlite3.h>
 
-typedef struct World World;
-
+typedef struct World World; // Fix circle dependancy
 #include "chunk.h"
+#include "database.h"
 
 typedef enum WorldRequestType {
     WORLD_REQUEST_TYPE_CHUNK_NEW = 0,
@@ -38,7 +37,9 @@ struct World {
     bool is_flat_shaded;
     int render_distance;
 
-    Chunk* chunk_cache[1024];
+    Database *database;
+
+    Chunk* chunk_cache[2048];
     int chunk_cache_start;
     mtx_t chunk_cache_lock;
 
@@ -49,18 +50,9 @@ struct World {
     thrd_t worker_threads[2];
     bool worker_running;
     mtx_t worker_running_lock;
-
-    sqlite3* database;
-    mtx_t database_lock;
-    int database_changes;
-    sqlite3_stmt* chunk_select_statement;
-    sqlite3_stmt* chunk_insert_statement;
-    sqlite3_stmt* chunk_update_statement;
 };
 
-World* world_new(int64_t seed);
-
-void world_check_database_commit(World* world);
+World* world_new(Camera* camera);
 
 void world_add_chunk_to_cache(World* world, Chunk* chunk);
 
@@ -72,7 +64,7 @@ void world_request_chunk_update(World* world, Chunk* chunk);
 
 int world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas);
 
-void world_free(World* world);
+void world_free(World* world, Camera* camera);
 
 int world_worker_thread(void* argument);
 

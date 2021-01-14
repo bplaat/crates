@@ -1,3 +1,4 @@
 .vscode/
+assets/*.db
 build/
-config.h
+include/config.h
