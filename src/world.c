@@ -259,7 +259,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                 if (chunk_is_visible) {
                     Chunk* chunk = world_request_chunk(world, chunk_x, chunk_y, chunk_z);
                     if (chunk != NULL) {
-                        if (chunk->is_changed) {
+                        if (!chunk->is_lighted) {
                             world_request_chunk_update(world, chunk);
                         } else {
                             bool isABlockVisible = false;
@@ -326,6 +326,10 @@ void world_free(World* world, Camera* camera) {
         }
     }
 
+    // Free mutex locks
+    mtx_destroy(&world->chunk_cache_lock);
+    mtx_destroy(&world->request_queue_lock);
+
     // Save old player position
     database_settings_set_float(world->database, "player_x", camera->position.x);
     database_settings_set_float(world->database, "player_y", camera->position.y);
@@ -368,8 +372,10 @@ int world_worker_thread(void* argument) {
             // Update chunk
             if (request->type == WORLD_REQUEST_TYPE_CHUNK_UPDATE) {
                 Chunk* chunk = request->arguments.chunk_pointer;
+                if (chunk->is_changed) {
+                    database_chunks_set_chunk(world->database, chunk);
+                }
                 chunk_update(chunk, world);
-                database_chunks_set_chunk(world->database, chunk);
             }
 
             // Free request

@@ -269,6 +269,9 @@ void database_free(Database* database) {
     // Close database connection
     sqlite3_close(database->database);
 
+    // Free database mutex lock
+    mtx_destroy(&database->database_lock);
+
     // Free database object
     free(database);
 }

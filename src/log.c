@@ -61,3 +61,7 @@ void log_error(char* format, ...) {
     mtx_unlock(&log_lock);
     exit(EXIT_FAILURE);
 }
+
+void log_close(void) {
+    mtx_destroy(&log_lock);
+}

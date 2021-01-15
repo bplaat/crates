@@ -17,4 +17,6 @@ void log_warning(char* format, ...);
 
 void log_error(char* format, ...);
 
+void log_close(void);
+
 #endif

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "config.h"
+#include "tinycthread/tinycthread.h"
 
 #define CHUNK_DATA_SIZE (CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE)
 #define CHUNK_DATA_VISIBLE_BIT (1 << 7)
@@ -15,9 +16,10 @@ typedef struct Chunk {
     int x;
     int y;
     int z;
-    bool is_freed;
+    bool is_lighted;
     bool is_changed;
     uint8_t* data;
+    mtx_t chunk_lock;
 } Chunk;
 
 #include "world.h"

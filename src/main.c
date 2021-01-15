@@ -25,5 +25,8 @@ int main(void) {
     game_start(game);
     game_free(game);
 
+    // Close log
+    log_close();
+
     return EXIT_SUCCESS;
 }
