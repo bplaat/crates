@@ -7,7 +7,6 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 - Fix: chunk frostum culling bug
 - Fix: chunk update bugs
 - Add: select / add / remove block
-- Add: Right spawn position
 - Add: walk physics
 - Add: cmake Windows static release builds
 

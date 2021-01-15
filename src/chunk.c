@@ -10,45 +10,48 @@
 BlockType chunk_generate_block(int x, int y, int z) {
     float scale = 64;
     int max_height = 24;
-    int height = perlin_noise((float)x / scale, 1, (float)z / scale) * max_height;
-    int weatness = perlin_noise((float)(x + 1000000) / scale, 1, (float)(z + 1000000) / scale) * (max_height / 2);
-
     int sea_level = -5;
-    if (y <= sea_level) {
+    int height = perlin_noise((float)x / scale, 1, (float)z / scale) * max_height;
+    if (height < sea_level) height = sea_level;
+    int dryness = perlin_noise((float)(x + 1000000) / scale, 1, (float)(z + 1000000) / scale) * (max_height / 2);
+
+    // Air layer
+    if (y > height) {
+        return BLOCK_TYPE_AIR;
+    }
+
+    // Sea layer
+    if (height == sea_level) {
         return BLOCK_TYPE_WATER;
     }
 
-    if (weatness < 0.5) {
+    // Grass / Dirt / Sand layer
+    if (dryness < 0.5) {
         if (y == height) {
             return BLOCK_TYPE_GRASS;
         }
-
-        if (y >= -8 + height && y < height) {
+        else if (y >= -8 + height) {
             return BLOCK_TYPE_DIRT;
         }
     } else {
         if (y == height) {
             return BLOCK_TYPE_SAND_TOP;
         }
-
-        if (y >= -8 + height && y < height) {
+        else if (y >= -8 + height) {
             return BLOCK_TYPE_SAND;
         }
     }
 
-    if (y >= -64 + height && y < -8 + height) {
-        if ((rand() % 10) == 0) {
-            return BLOCK_TYPE_COAL;
-        }
-
-        if ((rand() % 20) == 0) {
-            return BLOCK_TYPE_GOLD;
-        }
-
-        return BLOCK_TYPE_STONE;
+    // Stone layer
+    if ((rand() % 75) == 0) {
+        return BLOCK_TYPE_COAL;
     }
 
-    return BLOCK_TYPE_AIR;
+    if ((rand() % 100) == 0) {
+        return BLOCK_TYPE_GOLD;
+    }
+
+    return BLOCK_TYPE_STONE;
 }
 
 Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z) {

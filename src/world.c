@@ -52,10 +52,36 @@ World* world_new(Camera* camera) {
         database_settings_set_int(world->database, "seed", world->seed);
     }
 
+    // Init perlin noise with seed
+    perlin_init(world->seed);
+
+    // Get start location right hight (y position)
+    int start_x = CHUNK_SIZE / 2;
+    int start_y = -1;
+    int start_z = CHUNK_SIZE / 2;
+    int chunk_y = -4;
+    do {
+        Chunk *chunk = world_get_chunk(world, 0, chunk_y, 0);
+        for (int y = 0; y < CHUNK_SIZE; y++) {
+            BlockType block_type = chunk->data[start_z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + start_x];
+            block_type &= ~CHUNK_DATA_VISIBLE_BIT;
+            if (block_type == BLOCK_TYPE_GRASS || block_type == BLOCK_TYPE_SAND_TOP || block_type == BLOCK_TYPE_WATER) {
+                start_y = chunk_y * CHUNK_SIZE + y;
+                break;
+            }
+        }
+        chunk_y++;
+
+        if (chunk_y == 4) {
+            start_y = CHUNK_SIZE / 2;
+            break;
+        }
+    } while (start_y != -1);
+
     // Get old player position
-    camera->position.x = database_settings_get_float(world->database, "player_x", CHUNK_SIZE / 2);
-    camera->position.y = database_settings_get_float(world->database, "player_y", 1.5 + CHUNK_SIZE);
-    camera->position.z = database_settings_get_float(world->database, "player_z", CHUNK_SIZE / 2);
+    camera->position.x = database_settings_get_float(world->database, "player_x", start_x);
+    camera->position.y = database_settings_get_float(world->database, "player_y", start_y + CHUNK_SIZE / 2); // 1.5
+    camera->position.z = database_settings_get_float(world->database, "player_z", start_z);
     camera->pitch = database_settings_get_float(world->database, "player_pitch", 0);
     camera->rotation.x = -camera->pitch;
     camera->yaw = database_settings_get_float(world->database, "player_yaw", 0);
@@ -68,9 +94,6 @@ World* world_new(Camera* camera) {
     for (int i = 0; i < WORLD_WORKER_THREAD_COUNT; i++) {
         thrd_create(&world->worker_threads[i], world_worker_thread, world);
     }
-
-    // Init perlin noise with seed
-    perlin_init(world->seed);
 
     return world;
 }
@@ -244,11 +267,10 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                             for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
                                 for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
                                     for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
-                                        uint8_t block_data = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x];
-                                        if ((block_data & CHUNK_DATA_VISIBLE_BIT) != 0) {
+                                        BlockType block_type = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x];
+                                        if ((block_type & CHUNK_DATA_VISIBLE_BIT) != 0) {
                                             isABlockVisible = true;
-
-                                            BlockType blockType = block_data & (~CHUNK_DATA_VISIBLE_BIT);
+                                            block_type &= (~CHUNK_DATA_VISIBLE_BIT);
 
                                             Matrix4 modelMatrix;
                                             Vector4 blockPosition = {
@@ -261,7 +283,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                                             matrix4_mul(&modelMatrix, &rotationMatrix);
 
                                             glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
-                                            glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[blockType]);
+                                            glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[block_type]);
                                             glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
                                         }
                                     }
