@@ -51,9 +51,9 @@ BlockType chunk_generate_block(int x, int y, int z) {
     return BLOCK_TYPE_AIR;
 }
 
-Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z, bool is_changed) {
-    uint8_t* chunk_data = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
-    memset(chunk_data, BLOCK_TYPE_AIR, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z) {
+    uint8_t* chunk_data = malloc(CHUNK_DATA_SIZE);
+    memset(chunk_data, BLOCK_TYPE_AIR, CHUNK_DATA_SIZE);
 
     srand(chunk_x + chunk_y + chunk_z);
     for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
@@ -117,26 +117,19 @@ Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z, bool is_c
         }
     }
 
-    return chunk_new_from_data(chunk_x, chunk_y, chunk_z, is_changed, chunk_data, false);
+    return chunk_new_from_data(chunk_x, chunk_y, chunk_z, chunk_data);
 }
 
-Chunk* chunk_new_from_data(int chunk_x, int chunk_y, int chunk_z, bool is_changed, uint8_t* chunk_data, bool is_copied) {
-    // log_debug("Chunk create %d %d %d", chunk_x, chunk_y, chunk_z);
+Chunk* chunk_new_from_data(int chunk_x, int chunk_y, int chunk_z, uint8_t* chunk_data) {
+    log_debug("Chunk create %d %d %d", chunk_x, chunk_y, chunk_z);
 
     Chunk* chunk = malloc(sizeof(Chunk));
     chunk->x = chunk_x;
     chunk->y = chunk_y;
     chunk->z = chunk_z;
     chunk->is_freed = false;
-    chunk->is_changed = is_changed;
-
-    if (is_copied) {
-        chunk->data = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
-        memcpy(chunk->data, chunk_data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
-    } else {
-        chunk->data = chunk_data;
-    }
-
+    chunk->is_changed = true;
+    chunk->data = chunk_data;
     return chunk;
 }
 
@@ -148,10 +141,10 @@ void chunk_update(Chunk* chunk, World* world) {
     if (chunk->is_changed) {
         chunk->is_changed = false;
 
-        // log_debug("Chunk update %d %d %d", chunk->x, chunk->y, chunk->z);
+        log_debug("Chunk update %d %d %d", chunk->x, chunk->y, chunk->z);
 
-        uint8_t* temp_data = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
-        memcpy(temp_data, chunk->data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+        uint8_t* temp_data = malloc(CHUNK_DATA_SIZE);
+        memcpy(temp_data, chunk->data, CHUNK_DATA_SIZE);
 
         for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
             for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
@@ -272,9 +265,96 @@ void chunk_update(Chunk* chunk, World* world) {
             }
         }
 
-        memcpy(chunk->data, temp_data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+        memcpy(chunk->data, temp_data, CHUNK_DATA_SIZE);
         free(temp_data);
     }
+}
+
+// Compress chunk data with a simple run length encoding
+uint8_t* chunk_data_compress(uint8_t* chunk_data) {
+    uint8_t* compressed_data = malloc(CHUNK_DATA_SIZE + 2);
+
+    bool is_only_air = true;
+
+    int compressed_size = 2;
+    int position = 0;
+    while (position < CHUNK_DATA_SIZE) {
+        BlockType block_type = chunk_data[position++];
+        block_type &= ~CHUNK_DATA_VISIBLE_BIT;
+
+        if (block_type != BLOCK_TYPE_AIR) {
+            is_only_air = false;
+        }
+
+        int repeat_count = 0;
+        for (;;) {
+            BlockType next_block_type = chunk_data[position];
+            next_block_type &= ~CHUNK_DATA_VISIBLE_BIT;
+
+            if (
+                position < CHUNK_DATA_SIZE &&
+                block_type == next_block_type &&
+                repeat_count < UINT8_MAX
+            ) {
+                repeat_count++;
+                position++;
+            }
+            else {
+                if (repeat_count == 0) {
+                    compressed_data[compressed_size++] = block_type;
+                } else {
+                    compressed_data[compressed_size++] = block_type | CHUNK_COMPRESSED_DATA_REPEAT_BIT;
+                    compressed_data[compressed_size++] = repeat_count;
+                }
+                break;
+            }
+        }
+    }
+
+    if (is_only_air) {
+        compressed_size = 2;
+    }
+
+    compressed_data[0] = compressed_size & 0xff;
+    compressed_data[1] = (compressed_size >> 8) & 0xff;
+
+    compressed_data = realloc(compressed_data, compressed_size);
+
+    log_debug("Compressed chunk is %d bytes large", compressed_size);
+
+    return compressed_data;
+}
+
+// Decompress chunk data for a simple run length encoding
+uint8_t* chunk_data_decompress(uint8_t* compressed_data) {
+    int compressed_size = (compressed_data[1] << 8) | compressed_data[0];
+
+    log_debug("Decompressed chunk is %d bytes large", compressed_size);
+
+    uint8_t* chunk_data = malloc(CHUNK_DATA_SIZE);
+
+    if (compressed_size == 2) {
+        memset(chunk_data, BLOCK_TYPE_AIR, CHUNK_DATA_SIZE);
+    }
+    else {
+        int compressed_position = 2;
+        int position = 0;
+        while (compressed_position < compressed_size) {
+            if ((compressed_data[compressed_position] & CHUNK_COMPRESSED_DATA_REPEAT_BIT) != 0) {
+                BlockType block_type = compressed_data[compressed_position];
+                block_type &= ~CHUNK_COMPRESSED_DATA_REPEAT_BIT;
+                for (int i = 0; i <= compressed_data[compressed_position + 1]; i++) {
+                    chunk_data[position++] = block_type;
+                }
+                compressed_position += 2;
+            }
+            else {
+                chunk_data[position++] = compressed_data[compressed_position++];
+            }
+        }
+    }
+
+    return chunk_data;
 }
 
 void chunk_free(Chunk* chunk) {

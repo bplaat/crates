@@ -4,6 +4,7 @@
 #define WORLD_H
 
 #include <stdint.h>
+#include "config.h"
 #include "tinycthread/tinycthread.h"
 #include "camera.h"
 #include "shaders/block_shader.h"
@@ -39,15 +40,15 @@ struct World {
 
     Database *database;
 
-    Chunk* chunk_cache[2048];
+    Chunk* chunk_cache[WORLD_CHUNK_CACHE_COUNT];
     int chunk_cache_start;
     mtx_t chunk_cache_lock;
 
-    WorldRequest* request_queue[2048];
+    WorldRequest* request_queue[WORLD_REQUEST_QUEUE_COUNT];
     int request_queue_size;
     mtx_t request_queue_lock;
 
-    thrd_t worker_threads[2];
+    thrd_t worker_threads[WORLD_WORKER_THREAD_COUNT];
     bool worker_running;
     mtx_t worker_running_lock;
 };

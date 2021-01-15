@@ -20,7 +20,7 @@ Database* database_new(void) {
     // Create settings table if not exists
     char *error_message = NULL;
     if (sqlite3_exec(database->database, "CREATE TABLE IF NOT EXISTS [settings] ("
-        "[key] VARCHAR(32) NOT NULL,"
+        "[key] VARCHAR(32) UNIQUE NOT NULL,"
         "[value] VARCHAR(255) NOT NULL"
     ")", NULL, NULL, &error_message) != SQLITE_OK) {
         log_error("Can't create the settings table:\n%s", error_message);
@@ -46,7 +46,8 @@ Database* database_new(void) {
         "[x] INT NOT NULL,"
         "[y] INT NOT NULL,"
         "[z] INT NOT NULL,"
-        "[data] BLOB NOT NULL"
+        "[data] BLOB NOT NULL,"
+        "UNIQUE([x], [y], [z])"
     ")", NULL, NULL, &error_message) != SQLITE_OK) {
         log_error("Can't create the chunks table:\n%s", error_message);
     }
@@ -171,8 +172,9 @@ Chunk* database_chunks_get_chunk(Database* database, int chunk_x, int chunk_y, i
     sqlite3_bind_int(database->chunks_select_statement, 2, chunk_y);
     sqlite3_bind_int(database->chunks_select_statement, 3, chunk_z);
     if (sqlite3_step(database->chunks_select_statement) == SQLITE_ROW) {
-        const uint8_t* chunk_data = sqlite3_column_blob(database->chunks_select_statement, 0);
-        chunk = chunk_new_from_data(chunk_x, chunk_y, chunk_z, false, (uint8_t*)chunk_data, true);
+        const uint8_t* compressed_data = sqlite3_column_blob(database->chunks_select_statement, 0);
+        uint8_t *chunk_data = chunk_data_decompress((uint8_t*)compressed_data);
+        chunk = chunk_new_from_data(chunk_x, chunk_y, chunk_z, chunk_data);
     }
     else {
         chunk = NULL;
@@ -186,6 +188,10 @@ Chunk* database_chunks_get_chunk(Database* database, int chunk_x, int chunk_y, i
 void database_chunks_set_chunk(Database* database, Chunk* chunk) {
     mtx_lock(&database->database_lock);
 
+    // Compress chunk data
+    uint8_t* compressed_data = chunk_data_compress(chunk->data);
+    int compressed_size = (compressed_data[1] << 8) | compressed_data[0];
+
     // Do a select query to check if the chunk exists in the database
     sqlite3_reset(database->chunks_select_statement);
     sqlite3_bind_int(database->chunks_select_statement, 1, chunk->x);
@@ -196,7 +202,7 @@ void database_chunks_set_chunk(Database* database, Chunk* chunk) {
     // If it exists update the chunk
     if (result == SQLITE_ROW) {
         sqlite3_reset(database->chunks_update_statement);
-        sqlite3_bind_blob(database->chunks_update_statement, 1, chunk->data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE, SQLITE_TRANSIENT);
+        sqlite3_bind_blob(database->chunks_update_statement, 1, compressed_data, compressed_size, SQLITE_STATIC);
         sqlite3_bind_int(database->chunks_update_statement, 2, chunk->x);
         sqlite3_bind_int(database->chunks_update_statement, 3, chunk->y);
         sqlite3_bind_int(database->chunks_update_statement, 4, chunk->z);
@@ -211,11 +217,14 @@ void database_chunks_set_chunk(Database* database, Chunk* chunk) {
         sqlite3_bind_int(database->chunks_insert_statement, 1, chunk->x);
         sqlite3_bind_int(database->chunks_insert_statement, 2, chunk->y);
         sqlite3_bind_int(database->chunks_insert_statement, 3, chunk->z);
-        sqlite3_bind_blob(database->chunks_insert_statement, 4, chunk->data, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE, SQLITE_TRANSIENT);
+        sqlite3_bind_blob(database->chunks_insert_statement, 4, compressed_data, compressed_size, SQLITE_STATIC);
         if (sqlite3_step(database->chunks_insert_statement) != SQLITE_DONE) {
             log_error("Can't insert chunk into database");
         }
     }
+
+    // Free compressed data
+    free(compressed_data);
 
     mtx_unlock(&database->database_lock);
 

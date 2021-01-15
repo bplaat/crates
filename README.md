@@ -6,7 +6,6 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 # Todos:
 - Fix: chunk frostum culling bug
 - Fix: chunk update bugs
-- Add: compress chunk data via rle encoding
 - Add: select / add / remove block
 - Add: Right spawn position
 - Add: walk physics

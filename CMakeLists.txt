@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project version
-project(plaatcraft VERSION 0.3)
+project(plaatcraft VERSION 0.4)
 
 # Use the C99 standard
 set(CMAKE_C_STANDARD 99)

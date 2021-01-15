@@ -1,4 +1,5 @@
 .vscode/
-assets/*.db
 build/
-include/config.h
+config.h
+*.db
+*.db-journal

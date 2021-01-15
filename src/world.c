@@ -6,7 +6,6 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
-#include "config.h"
 #include "geometry/block.h"
 #include "perlin/perlin.h"
 #include "log.h"
@@ -25,14 +24,14 @@ World* world_new(Camera* camera) {
     world->database = database_new();
 
     // Init chuch chache
-    for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
+    for (int i = 0; i < WORLD_CHUNK_CACHE_COUNT; i++) {
         world->chunk_cache[i] = NULL;
     }
     world->chunk_cache_start = 0;
     mtx_init(&world->chunk_cache_lock, mtx_plain);
 
     // Init request queue
-    for (size_t i = 0; i < sizeof(world->request_queue) / sizeof(WorldRequest*); i++) {
+    for (int i = 0; i < WORLD_REQUEST_QUEUE_COUNT; i++) {
         world->request_queue[i] = NULL;
     }
     world->request_queue_size = 0;
@@ -66,7 +65,7 @@ World* world_new(Camera* camera) {
     // Init workers
     world->worker_running = true;
     mtx_init(&world->worker_running_lock, mtx_plain);
-    for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(thrd_t); i++) {
+    for (int i = 0; i < WORLD_WORKER_THREAD_COUNT; i++) {
         thrd_create(&world->worker_threads[i], world_worker_thread, world);
     }
 
@@ -76,12 +75,9 @@ World* world_new(Camera* camera) {
     return world;
 }
 
-
-
-
 void world_add_chunk_to_cache(World* world, Chunk* chunk) {
     mtx_lock(&world->chunk_cache_lock);
-    if (world->chunk_cache_start == (sizeof(world->chunk_cache) / sizeof(Chunk*))) {
+    if (world->chunk_cache_start == WORLD_CHUNK_CACHE_COUNT) {
         world->chunk_cache_start = 0;
     }
     if (world->chunk_cache[world->chunk_cache_start] != NULL) {
@@ -93,7 +89,7 @@ void world_add_chunk_to_cache(World* world, Chunk* chunk) {
 
 Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     // Check if chunk is in cunk cache
-    for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
+    for (int i = 0; i < WORLD_CHUNK_CACHE_COUNT; i++) {
         Chunk* chunk = world->chunk_cache[i];
 
         if (chunk == NULL) {
@@ -108,22 +104,21 @@ Chunk* world_get_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     // Select / Search chunk in database
     Chunk* chunk = database_chunks_get_chunk(world->database, chunk_x, chunk_y, chunk_z);
     if (chunk != NULL) {
-        // When found update and add to cache
-        chunk_update(chunk, world);
+        // When found add to cache
         world_add_chunk_to_cache(world, chunk);
         return chunk;
     }
 
-    // When not found generate chunk and add it to database and cache
-    chunk = chunk_new_from_generator(chunk_x, chunk_y, chunk_z, true);
-    database_chunks_set_chunk(world->database, chunk);
+    // When not found generate chunk and add to cache and add it to database
+    chunk = chunk_new_from_generator(chunk_x, chunk_y, chunk_z);
     world_add_chunk_to_cache(world, chunk);
+    database_chunks_set_chunk(world->database, chunk);
     return chunk;
 }
 
 Chunk* world_request_chunk(World* world, int chunk_x, int chunk_y, int chunk_z) {
     // Check if chunk is in cunk cache
-    for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
+    for (int i = 0; i < WORLD_CHUNK_CACHE_COUNT; i++) {
         Chunk* chunk = world->chunk_cache[i];
 
         if (chunk == NULL) {
@@ -253,7 +248,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                                         if ((block_data & CHUNK_DATA_VISIBLE_BIT) != 0) {
                                             isABlockVisible = true;
 
-                                            BlockType blockType = block_data & CHUNK_DATA_BLOCK_TYPE;
+                                            BlockType blockType = block_data & (~CHUNK_DATA_VISIBLE_BIT);
 
                                             Matrix4 modelMatrix;
                                             Vector4 blockPosition = {
@@ -298,11 +293,11 @@ void world_free(World* world, Camera* camera) {
     world->worker_running = false;
     mtx_unlock(&world->worker_running_lock);
 
-    for (size_t i = 0; i < sizeof(world->worker_threads) / sizeof(thrd_t); i++) {
+    for (int i = 0; i < WORLD_WORKER_THREAD_COUNT; i++) {
         thrd_join(world->worker_threads[i], NULL);
     }
 
-    for (size_t i = 0; i < sizeof(world->chunk_cache) / sizeof(Chunk*); i++) {
+    for (int i = 0; i < WORLD_CHUNK_CACHE_COUNT; i++) {
         Chunk* chunk = world->chunk_cache[i];
         if (chunk != NULL) {
             chunk_free(chunk);
