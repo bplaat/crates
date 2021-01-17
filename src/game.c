@@ -3,6 +3,7 @@
 #include "game.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include "config.h"
 #include "log.h"
 #include "math/matrix4.h"
@@ -247,7 +248,7 @@ void game_render(Game* game) {
 
             sprintf(
                 debug_lines[2],
-                "Seed: %ld - Wireframed: %s - Flat shaded: %s",
+                "Seed: %"PRId64" - Wireframed: %s - Flat shaded: %s",
                 game->world->seed,
                 game->world->is_wireframed ? "true" : "false",
                 game->world->is_flat_shaded ? "true" : "false"
