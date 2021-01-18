@@ -23,6 +23,7 @@ typedef struct Camera {
     Matrix4 cameraMatrix;
 
     Vector4 velocity;
+    float speed;
     bool is_moving_forward;
     bool is_moving_backward;
     bool is_moving_left;

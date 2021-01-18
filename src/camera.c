@@ -3,6 +3,7 @@
 #include "camera.h"
 #include <stdlib.h>
 #include <GLFW/glfw3.h>
+#include "config.h"
 
 Camera* camera_new(float fov, float aspect, float near, float far) {
     Camera* camera = malloc(sizeof(Camera));
@@ -23,7 +24,7 @@ Camera* camera_new(float fov, float aspect, float near, float far) {
     camera->velocity.x = 0;
     camera->velocity.y = 0;
     camera->velocity.z = 0;
-
+    camera->speed = CAMERA_SPEED;
     camera->is_moving_forward = false;
     camera->is_moving_left = false;
     camera->is_moving_right = false;
@@ -110,51 +111,36 @@ void camera_cursor_position_callback(Camera* camera, double xpos, double ypos) {
 }
 
 void camera_update(Camera* camera, float delta) {
-    camera->velocity.z -= camera->velocity.z * 10 * delta;
-    camera->velocity.x -= camera->velocity.x * 10 * delta;
-    camera->velocity.y -= camera->velocity.y * 10 * delta;
-
-    float speed = 5 * delta;
+    camera->velocity.z -= camera->velocity.z * (camera->speed * 2) * delta;
+    camera->velocity.x -= camera->velocity.x * (camera->speed * 2) * delta;
+    camera->velocity.y -= camera->velocity.y * (camera->speed * 2) * delta;
 
     if (camera->is_moving_forward) {
-        camera->velocity.z += speed;
+        camera->velocity.z += camera->speed * delta;;
     }
     if (camera->is_moving_backward) {
-        camera->velocity.z -= speed;
+        camera->velocity.z -= camera->speed * delta;;
     }
 
     if (camera->is_moving_left) {
-        camera->velocity.x -=speed;
+        camera->velocity.x -= camera->speed * delta;;
     }
     if (camera->is_moving_right) {
-        camera->velocity.x += speed;
+        camera->velocity.x += camera->speed * delta;;
     }
 
     if (camera->is_moving_up) {
-        camera->velocity.y += speed;
+        camera->velocity.y += camera->speed * delta;;
     }
     if (camera->is_moving_down) {
-        camera->velocity.y -= speed;
+        camera->velocity.y -= camera->speed * delta;;
     }
 
     Matrix4 rotation_matrix;
-    matrix4_rotate_x(&rotation_matrix, camera->rotation.x);
-
-    Matrix4 temp_matrix;
-    matrix4_rotate_y(&temp_matrix, camera->rotation.y);
-    matrix4_mul(&rotation_matrix, &temp_matrix);
+    matrix4_rotate_y(&rotation_matrix, camera->rotation.y);
 
     Vector4 update = camera->velocity;
     vector4_mul(&update, &rotation_matrix);
-
-    if (camera->is_moving_up || camera->is_moving_down) {
-        update.x = 0;
-        update.z = 0;
-        update.y = camera->velocity.y;
-    } else {
-        update.y = 0;
-    }
-
     vector4_add(&camera->position, &update);
 
     camera_update_matrix(camera);

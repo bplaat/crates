@@ -4,8 +4,9 @@ A modern OpenGL Minecraft like game for a school project about Computer Graphics
 You will need a computer / graphics card which supports minimal the OpenGL 3.3 Core Profile
 
 # Todos:
+- Add: Get selected block
+- Add: Draw selected block outline
 - Add: select / add / remove block
-- Add: walk physics and fix controls
 
 ## Dependencies:
 - GLFW3 (extern)

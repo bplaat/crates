@@ -252,9 +252,10 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                                             };
                                             matrix4_translate(&modelMatrix, &blockPosition);
                                             matrix4_mul(&modelMatrix, &rotationMatrix);
-
                                             glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
+
                                             glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[block_type]);
+
                                             glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
                                         }
                                     }
