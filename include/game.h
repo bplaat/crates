@@ -40,6 +40,7 @@ typedef struct Game {
 
     BlockType selected_block_type;
     Vector4 selected_block_rotation;
+    // Vector4 selected_block_position;
 } Game;
 
 void game_init(void);

@@ -74,12 +74,25 @@ void game_key_callback(GLFWwindow* window, int key, int scancode, int action, in
 
 void game_mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     (void)mods;
-
     Game* game = (Game*)glfwGetWindowUserPointer(window);
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !game->is_playing) {
-        game->camera->is_first_mouse_movement = true;
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        game->is_playing = true;
+    if (game->is_playing) {
+        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
+            // Remove block
+        }
+
+        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_MIDDLE) {
+            // Select block
+        }
+
+        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_RIGHT) {
+            // Place block
+        }
+    } else {
+        if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
+            game->camera->is_first_mouse_movement = true;
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            game->is_playing = true;
+        }
     }
 }
 
@@ -87,25 +100,46 @@ void game_cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
     Game* game = (Game*)glfwGetWindowUserPointer(window);
     if (game->is_playing) {
         camera_cursor_position_callback(game->camera, xpos, ypos);
+
+        // Get selected block
+        Vector4 position_vector = { 0, 0, 0, 1 };
+        glReadPixels(game->width / 2, game->height / 2, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &position_vector.z);
+
+        Matrix4 inverse_matrix = game->camera->cameraMatrix;
+        matrix4_mul(&inverse_matrix, &game->camera->projectionMatrix);
+        matrix4_inverse(&inverse_matrix);
+
+        vector4_mul(&position_vector, &inverse_matrix);
+
+        log_debug("%f %f %f", position_vector.x, position_vector.y, position_vector.z);
+
+        // game->selected_block_position.x = game->camera->position.x;
+        // game->selected_block_position.y = game->camera->position.y - 1;
+        // game->selected_block_position.z = game->camera->position.z;
+
+        // * projection^-1
+        // * camera^-1
+        // * model^-1
     }
 }
 
 void game_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     (void)xoffset;
-
     Game* game = (Game*)glfwGetWindowUserPointer(window);
-    if (yoffset < 0) {
-        if (game->selected_block_type == BLOCK_TYPE_SIZE - 1) {
-            game->selected_block_type = 1; // Skip Air block type
-        } else {
-            game->selected_block_type++;
+    if (game->is_playing) {
+        if (yoffset < 0) {
+            if (game->selected_block_type == BLOCK_TYPE_SIZE - 1) {
+                game->selected_block_type = 1; // Skip Air block type
+            } else {
+                game->selected_block_type++;
+            }
         }
-    }
-    if (yoffset > 0) {
-        if (game->selected_block_type == 1) { // Skip Air block type
-            game->selected_block_type = BLOCK_TYPE_SIZE - 1;
-        } else {
-            game->selected_block_type--;
+        if (yoffset > 0) {
+            if (game->selected_block_type == 1) { // Skip Air block type
+                game->selected_block_type = BLOCK_TYPE_SIZE - 1;
+            } else {
+                game->selected_block_type--;
+            }
         }
     }
 }
@@ -174,7 +208,7 @@ Game* game_new(char* title, int width, int height) {
     game->world = world_new(game->camera);
 
     // Set selected block
-    game->selected_block_type = BLOCK_TYPE_GRASS;
+    game->selected_block_type = BLOCK_TYPE_BROWN_WOOD;
 
     // Set callbacks
     glfwSetFramebufferSizeCallback(game->window, game_framebuffer_size_callback);
@@ -202,12 +236,31 @@ void game_render(Game* game) {
     glFrontFace(GL_CW);
 
     // Clear screen
-    glClearColor(176.f / 255.f, 233.f / 255.f, 252.f / 255.f, 1.f);
+    glClearColor(0.69, 0.91, 0.99, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Render world
     glEnable(GL_DEPTH_TEST);
     int rendered_chunks = world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas);
+
+    // Render select block outline
+    // block_shader_enable(game->block_shader);
+    // glUniform1i(game->block_shader->is_lighted_uniform, false);
+    // glUniform1i(game->block_shader->is_flad_shaded_uniform, true);
+
+    // glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projectionMatrix.m11);
+    // glUniformMatrix4fv(game->block_shader->camera_matrix_uniform, 1, GL_FALSE, &game->camera->cameraMatrix.m11);
+
+    Matrix4 modelMatrix;
+    // matrix4_translate(&modelMatrix, &game->selected_block_position);
+    // Matrix4 rotationMatrix;
+    // matrix4_rotate_x(&rotationMatrix, radians(90));
+    // matrix4_mul(&modelMatrix, &rotationMatrix);
+    // glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
+    // glDrawArrays(GL_LINES, 0, BLOCK_VERTICES_COUNT);
+
+    // block_shader_disable(game->block_shader);
+
     glDisable(GL_DEPTH_TEST);
 
     // Enable flat shader
@@ -216,8 +269,6 @@ void game_render(Game* game) {
     Matrix4 projectionMatrix;
     matrix4_flat_projection(&projectionMatrix, game->width, game->height);
     glUniformMatrix4fv(game->flat_shader->projection_matrix_uniform, 1, GL_FALSE, &projectionMatrix.m11);
-
-    Matrix4 modelMatrix;
 
     // Render game hude
     if (game->is_playing) {
@@ -463,7 +514,7 @@ void game_start(Game* game) {
 
         // Update fps counter
         double time = glfwGetTime();
-        if (time - fpsTime >= 1.f) {
+        if (time - fpsTime >= 1) {
             fpsTime = time;
             game->fps = frame;
             frame = 0;
