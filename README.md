@@ -8,7 +8,6 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 - Fix: chunk update bugs
 - Add: select / add / remove block
 - Add: walk physics and fix controls
-- Add: cmake Windows static release builds
 
 ## Dependencies:
 - GLFW3 (extern)
