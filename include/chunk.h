@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "config.h"
 #include "tinycthread/tinycthread.h"
+#include "camera.h"
 
 #define CHUNK_DATA_SIZE (CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE)
 #define CHUNK_DATA_VISIBLE_BIT (1 << 7)
@@ -31,6 +32,8 @@ Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z);
 Chunk* chunk_new_from_data(int chunk_x, int chunk_y, int chunk_z, uint8_t* chunk_data);
 
 void chunk_update(Chunk* chunk, World* world);
+
+bool chunk_is_visible(Chunk* chunk, Camera* camera);
 
 uint8_t* chunk_data_compress(uint8_t* chunk_data);
 

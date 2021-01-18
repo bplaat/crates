@@ -1,7 +1,7 @@
 // PlaatCraft - Matrix4 Math
 
 #include "math/matrix4.h"
-#ifndef NO_SSIMD
+#ifndef NO_SIMD
     #include <emmintrin.h>
 #endif
 #include "utils.h"
@@ -141,30 +141,30 @@ void matrix4_mul(Matrix4* matrix, Matrix4* rhs) {
             ));
         }
     #else
-        float _m11 = rhs.m11 * m11 + rhs.m12 * m21 + rhs.m13 * m31 + rhs.m14 * m41;
-        float _m12 = rhs.m11 * m12 + rhs.m12 * m22 + rhs.m13 * m32 + rhs.m14 * m42;
-        float _m13 = rhs.m11 * m13 + rhs.m12 * m23 + rhs.m13 * m33 + rhs.m14 * m43;
-        float _m14 = rhs.m11 * m14 + rhs.m12 * m24 + rhs.m13 * m34 + rhs.m14 * m44;
+        float _m11 = rhs->m11 * matrix->m11 + rhs->m12 * matrix->m21 + rhs->m13 * matrix->m31 + rhs->m14 * matrix->m41;
+        float _m12 = rhs->m11 * matrix->m12 + rhs->m12 * matrix->m22 + rhs->m13 * matrix->m32 + rhs->m14 * matrix->m42;
+        float _m13 = rhs->m11 * matrix->m13 + rhs->m12 * matrix->m23 + rhs->m13 * matrix->m33 + rhs->m14 * matrix->m43;
+        float _m14 = rhs->m11 * matrix->m14 + rhs->m12 * matrix->m24 + rhs->m13 * matrix->m34 + rhs->m14 * matrix->m44;
 
-        float _m21 = rhs.m21 * m11 + rhs.m22 * m21 + rhs.m23 * m31 + rhs.m24 * m41;
-        float _m22 = rhs.m21 * m12 + rhs.m22 * m22 + rhs.m23 * m32 + rhs.m24 * m42;
-        float _m23 = rhs.m21 * m13 + rhs.m22 * m23 + rhs.m23 * m33 + rhs.m24 * m43;
-        float _m24 = rhs.m21 * m14 + rhs.m22 * m24 + rhs.m23 * m34 + rhs.m24 * m44;
+        float _m21 = rhs->m21 * matrix->m11 + rhs->m22 * matrix->m21 + rhs->m23 * matrix->m31 + rhs->m24 * matrix->m41;
+        float _m22 = rhs->m21 * matrix->m12 + rhs->m22 * matrix->m22 + rhs->m23 * matrix->m32 + rhs->m24 * matrix->m42;
+        float _m23 = rhs->m21 * matrix->m13 + rhs->m22 * matrix->m23 + rhs->m23 * matrix->m33 + rhs->m24 * matrix->m43;
+        float _m24 = rhs->m21 * matrix->m14 + rhs->m22 * matrix->m24 + rhs->m23 * matrix->m34 + rhs->m24 * matrix->m44;
 
-        float _m31 = rhs.m31 * m11 + rhs.m32 * m21 + rhs.m33 * m31 + rhs.m34 * m41;
-        float _m32 = rhs.m31 * m12 + rhs.m32 * m22 + rhs.m33 * m32 + rhs.m34 * m42;
-        float _m33 = rhs.m31 * m13 + rhs.m32 * m23 + rhs.m33 * m33 + rhs.m34 * m43;
-        float _m34 = rhs.m31 * m14 + rhs.m32 * m24 + rhs.m33 * m34 + rhs.m34 * m44;
+        float _m31 = rhs->m31 * matrix->m11 + rhs->m32 * matrix->m21 + rhs->m33 * matrix->m31 + rhs->m34 * matrix->m41;
+        float _m32 = rhs->m31 * matrix->m12 + rhs->m32 * matrix->m22 + rhs->m33 * matrix->m32 + rhs->m34 * matrix->m42;
+        float _m33 = rhs->m31 * matrix->m13 + rhs->m32 * matrix->m23 + rhs->m33 * matrix->m33 + rhs->m34 * matrix->m43;
+        float _m34 = rhs->m31 * matrix->m14 + rhs->m32 * matrix->m24 + rhs->m33 * matrix->m34 + rhs->m34 * matrix->m44;
 
-        float _m41 = rhs.m41 * m11 + rhs.m42 * m21 + rhs.m43 * m31 + rhs.m44 * m41;
-        float _m42 = rhs.m41 * m12 + rhs.m42 * m22 + rhs.m43 * m32 + rhs.m44 * m42;
-        float _m43 = rhs.m41 * m13 + rhs.m42 * m23 + rhs.m43 * m33 + rhs.m44 * m43;
-        float _m44 = rhs.m41 * m14 + rhs.m42 * m24 + rhs.m43 * m34 + rhs.m44 * m44;
+        float _m41 = rhs->m41 * matrix->m11 + rhs->m42 * matrix->m21 + rhs->m43 * matrix->m31 + rhs->m44 * matrix->m41;
+        float _m42 = rhs->m41 * matrix->m12 + rhs->m42 * matrix->m22 + rhs->m43 * matrix->m32 + rhs->m44 * matrix->m42;
+        float _m43 = rhs->m41 * matrix->m13 + rhs->m42 * matrix->m23 + rhs->m43 * matrix->m33 + rhs->m44 * matrix->m43;
+        float _m44 = rhs->m41 * matrix->m14 + rhs->m42 * matrix->m24 + rhs->m43 * matrix->m34 + rhs->m44 * matrix->m44;
 
-        m11 = _m11; m12 = _m12; m13 = _m13; m14 = _m14;
-        m21 = _m21; m22 = _m22; m23 = _m23; m24 = _m24;
-        m31 = _m31; m32 = _m32; m33 = _m33; m34 = _m34;
-        m41 = _m41; m42 = _m42; m43 = _m43; m44 = _m44;
+        matrix->m11 = _m11; matrix->m12 = _m12; matrix->m13 = _m13; matrix->m14 = _m14;
+        matrix->m21 = _m21; matrix->m22 = _m22; matrix->m23 = _m23; matrix->m24 = _m24;
+        matrix->m31 = _m31; matrix->m32 = _m32; matrix->m33 = _m33; matrix->m34 = _m34;
+        matrix->m41 = _m41; matrix->m42 = _m42; matrix->m43 = _m43; matrix->m44 = _m44;
     #endif
 }
 

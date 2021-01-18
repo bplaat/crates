@@ -220,68 +220,27 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
     Matrix4 rotationMatrix;
     matrix4_rotate_x(&rotationMatrix, radians(90));
 
+    // Loop over all rendered chunks
     int player_chunk_x = floor(camera->position.x / (float)CHUNK_SIZE);
     int player_chunk_y = floor(camera->position.y / (float)CHUNK_SIZE);
     int player_chunk_z = floor(camera->position.z / (float)CHUNK_SIZE);
-
     int rendered_chunks = 0;
-
     for (int chunk_z = player_chunk_z + world->render_distance; chunk_z > player_chunk_z - world->render_distance; chunk_z--) {
         for (int chunk_y = player_chunk_y - world->render_distance; chunk_y <= player_chunk_y + world->render_distance; chunk_y++) {
             for (int chunk_x = player_chunk_x - world->render_distance; chunk_x <= player_chunk_x + world->render_distance; chunk_x++) {
-                bool chunk_is_visible = false;
-
-                #define chunk_min(a) ((a) * CHUNK_SIZE - 0.5)
-                #define chunk_max(a) ((a) * CHUNK_SIZE + CHUNK_SIZE + 0.5)
-                Vector4 corners[8] = {
-                    { chunk_min(chunk_x), chunk_min(chunk_y), -chunk_min(chunk_z), 1 },
-                    { chunk_max(chunk_x), chunk_min(chunk_y), -chunk_min(chunk_z), 1 },
-                    { chunk_min(chunk_x), chunk_max(chunk_y), -chunk_min(chunk_z), 1 },
-                    { chunk_max(chunk_x), chunk_max(chunk_y), -chunk_min(chunk_z), 1 },
-
-                    { chunk_min(chunk_x), chunk_min(chunk_y), -chunk_max(chunk_z), 1 },
-                    { chunk_max(chunk_x), chunk_min(chunk_y), -chunk_max(chunk_z), 1 },
-                    { chunk_min(chunk_x), chunk_max(chunk_y), -chunk_max(chunk_z), 1 },
-                    { chunk_max(chunk_x), chunk_max(chunk_y), -chunk_max(chunk_z), 1 }
-                };
-
-                for (size_t i = 0; i < sizeof(corners) / sizeof(Vector4); i++) {
-                    Matrix4 modelMatrix;
-                    matrix4_translate(&modelMatrix, &corners[i]);
-                    matrix4_mul(&modelMatrix, &rotationMatrix);
-
-                    glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
-                    glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_GOLD]);
-                    glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
-
-                    vector4_mul(&corners[i], &camera->cameraMatrix);
-                    vector4_mul(&corners[i], &camera->projectionMatrix);
-
-                    #define within(a, b, c) ((a) >= (b) && (b) <= (c))
-                    if (
-                        within(-corners[i].w, corners[i].x, corners[i].w) &&
-                        within(-corners[i].w, corners[i].y, corners[i].w) &&
-                        within(0, corners[i].z, corners[i].w)
-                    ) {
-                        chunk_is_visible = true;
-                        break;
-                    }
-                }
-
-                if (chunk_is_visible) {
-                    Chunk* chunk = world_request_chunk(world, chunk_x, chunk_y, chunk_z);
-                    if (chunk != NULL) {
-                        if (!chunk->is_lighted) {
-                            world_request_chunk_update(world, chunk);
-                        } else {
-                            bool isABlockVisible = false;
-
+                // Get chunk
+                Chunk* chunk = world_request_chunk(world, chunk_x, chunk_y, chunk_z);
+                if (chunk != NULL) {
+                    if (!chunk->is_lighted) {
+                        world_request_chunk_update(world, chunk);
+                    } else {
+                        // Render the chunk when visible
+                        if (chunk_is_visible(chunk, camera)) {
                             for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
                                 for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
                                     for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
                                         BlockType block_type = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x];
                                         if ((block_type & CHUNK_DATA_VISIBLE_BIT) != 0) {
-                                            isABlockVisible = true;
                                             block_type &= (~CHUNK_DATA_VISIBLE_BIT);
 
                                             Matrix4 modelMatrix;
@@ -302,9 +261,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                                 }
                             }
 
-                            if (isABlockVisible) {
-                                rendered_chunks++;
-                            }
+                            rendered_chunks++;
                         }
                     }
                 }

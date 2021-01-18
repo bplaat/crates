@@ -231,8 +231,10 @@ void game_render(Game* game) {
 
             sprintf(
                 debug_lines[0],
-                "OpenGL %d.%d Core Profile - Render distance: %d chunks - Rendered: %d chunks - Fps: %d",
-                GLVersion.major, GLVersion.minor, game->world->render_distance, rendered_chunks, game->fps
+                "OpenGL %d.%d Core Profile - Render distance: %d chunks - Rendered: %d / %d chunks - Fps: %d",
+                GLVersion.major, GLVersion.minor, game->world->render_distance, rendered_chunks,
+                (game->world->render_distance * 2 + 1) * (game->world->render_distance * 2 + 1) * (game->world->render_distance * 2 + 1),
+                game->fps
             );
 
             int player_chunk_x = floor(game->camera->position.x / (float)CHUNK_SIZE);
@@ -248,10 +250,15 @@ void game_render(Game* game) {
 
             sprintf(
                 debug_lines[2],
-                "Seed: %"PRId64" - Wireframed: %s - Flat shaded: %s",
+                "Seed: %"PRId64" - Wireframed: %s - Flat shaded: %s - SIMD: %s",
                 game->world->seed,
                 game->world->is_wireframed ? "true" : "false",
-                game->world->is_flat_shaded ? "true" : "false"
+                game->world->is_flat_shaded ? "true" : "false",
+                #ifndef NO_SIMD
+                    "true"
+                #else
+                    "false"
+                #endif
             );
 
             // Render debug label

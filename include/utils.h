@@ -17,7 +17,7 @@
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 // Align Vector4 and Mattrix4 structs at 16 bytes for SSE SIMD
-#ifndef NO_SSIMD
+#ifndef NO_SIMD
     #define _MM_ALIGN16 __attribute__((aligned(16)))
 #endif
 

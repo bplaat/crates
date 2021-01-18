@@ -4,14 +4,20 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project version
-project(plaatcraft VERSION 0.4)
+project(plaatcraft VERSION 0.5)
 
 # Use the C99 standard
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED True)
+set(CMAKE_C_STANDARD_REQUIRED TRUE)
 
 # Set debug flag when using debug configuration
-set(CMAKE_C_FLAGS_DEBUG -DDEBUG)
+set(CMAKE_C_FLAGS_DEBUG "-DDEBUG")
+
+# No SIMD option
+option(NO_SIMD "Build with without SSE2 SIMD instructions" OFF)
+if (NO_SIMD)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNO_SIMD -DSTBI_NO_SIMD")
+endif()
 
 ### LIBRARIES ###
 

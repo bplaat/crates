@@ -8,7 +8,7 @@
 #undef near
 #undef far
 
-#ifndef NO_SSIMD
+#ifndef NO_SIMD
 typedef struct _MM_ALIGN16 Matrix4 {
 #else
 typedef struct Matrix4 {

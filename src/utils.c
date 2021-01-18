@@ -27,7 +27,8 @@ uint8_t* file_read(char* path) {
     size_t file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
     uint8_t* file_buffer = malloc(file_size + 1);
-    fread(file_buffer, 1, file_size, file);
+    size_t file_bytes_read = fread(file_buffer, 1, file_size, file);
+    (void)file_bytes_read;
     file_buffer[file_size] = 0;
     fclose(file);
     return file_buffer;

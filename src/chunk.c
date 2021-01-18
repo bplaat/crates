@@ -264,6 +264,83 @@ void chunk_update(Chunk* chunk, World* world) {
     }
 }
 
+// Check if a lighted chunk is in the camera frustum
+bool chunk_is_visible(Chunk* chunk, Camera* camera) {
+    // Fast check if the chunk is visible via chunk corners
+    float chunk_min_x = chunk->x * CHUNK_SIZE - 0.5;
+    float chunk_max_x = chunk->x * CHUNK_SIZE + CHUNK_SIZE + 0.5;
+    float chunk_min_y = chunk->y * CHUNK_SIZE - 0.5;
+    float chunk_max_y = chunk->y * CHUNK_SIZE + CHUNK_SIZE + 0.5;
+    float chunk_min_z = chunk->z * CHUNK_SIZE - 0.5;
+    float chunk_max_z = chunk->z * CHUNK_SIZE + CHUNK_SIZE + 0.5;
+
+    Vector4 chunk_corners[BLOCK_CORNERS_COUNT] = {
+        { chunk_min_x, chunk_min_y, -chunk_min_z, 1 },
+        { chunk_max_x, chunk_min_y, -chunk_min_z, 1 },
+        { chunk_min_x, chunk_max_y, -chunk_min_z, 1 },
+        { chunk_max_x, chunk_max_y, -chunk_min_z, 1 },
+        { chunk_min_x, chunk_min_y, -chunk_max_z, 1 },
+        { chunk_max_x, chunk_min_y, -chunk_max_z, 1 },
+        { chunk_min_x, chunk_max_y, -chunk_max_z, 1 },
+        { chunk_max_x, chunk_max_y, -chunk_max_z, 1 }
+    };
+
+    for (int i = 0; i < BLOCK_CORNERS_COUNT; i++) {
+        vector4_mul(&chunk_corners[i], &camera->cameraMatrix);
+        vector4_mul(&chunk_corners[i], &camera->projectionMatrix);
+        if (
+            chunk_corners[i].x >= -chunk_corners[i].w && chunk_corners[i].x <= chunk_corners[i].w &&
+            chunk_corners[i].y >= -chunk_corners[i].w && chunk_corners[i].y <= chunk_corners[i].w &&
+            chunk_corners[i].z >= 0 && chunk_corners[i].z <= chunk_corners[i].w
+        ) {
+            return true;
+        }
+    }
+
+    // Check for each block in the chunk if it is visible
+    for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
+        for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
+            for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
+                BlockType block_type = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x];
+                if ((block_type & CHUNK_DATA_VISIBLE_BIT) != 0) {
+
+                    float block_min_x = chunk->x * CHUNK_SIZE + block_x - 0.5;
+                    float block_max_x = chunk->x * CHUNK_SIZE + block_x + 0.5;
+                    float block_min_y = chunk->y * CHUNK_SIZE + block_y - 0.5;
+                    float block_max_y = chunk->y * CHUNK_SIZE + block_y + 0.5;
+                    float block_min_z = chunk->z * CHUNK_SIZE + block_z - 0.5;
+                    float block_max_z = chunk->z * CHUNK_SIZE + block_z + 0.5;
+
+                    Vector4 block_corners[BLOCK_CORNERS_COUNT] = {
+                        { block_min_x, block_min_y, -block_min_z, 1 },
+                        { block_max_x, block_min_y, -block_min_z, 1 },
+                        { block_min_x, block_max_y, -block_min_z, 1 },
+                        { block_max_x, block_max_y, -block_min_z, 1 },
+                        { block_min_x, block_min_y, -block_max_z, 1 },
+                        { block_max_x, block_min_y, -block_max_z, 1 },
+                        { block_min_x, block_max_y, -block_max_z, 1 },
+                        { block_max_x, block_max_y, -block_max_z, 1 }
+                    };
+
+                    for (int i = 0; i < BLOCK_CORNERS_COUNT; i++) {
+                        vector4_mul(&block_corners[i], &camera->cameraMatrix);
+                        vector4_mul(&block_corners[i], &camera->projectionMatrix);
+                        if (
+                            block_corners[i].x >= -block_corners[i].w && block_corners[i].x <= block_corners[i].w &&
+                            block_corners[i].y >= -block_corners[i].w && block_corners[i].y <= block_corners[i].w &&
+                            block_corners[i].z >= 0 && block_corners[i].z <= block_corners[i].w
+                        ) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
 // Compress chunk data with a simple run length encoding
 uint8_t* chunk_data_compress(uint8_t* chunk_data) {
     uint8_t* compressed_data = malloc(CHUNK_DATA_SIZE + 2);
@@ -314,7 +391,7 @@ uint8_t* chunk_data_compress(uint8_t* chunk_data) {
 
     compressed_data = realloc(compressed_data, compressed_size);
 
-    log_debug("Compressed chunk is %d bytes large", compressed_size);
+    // log_debug("Compressor: compressed chunk is %d bytes large", compressed_size);
 
     return compressed_data;
 }
@@ -323,7 +400,7 @@ uint8_t* chunk_data_compress(uint8_t* chunk_data) {
 uint8_t* chunk_data_decompress(uint8_t* compressed_data) {
     int compressed_size = (compressed_data[1] << 8) | compressed_data[0];
 
-    log_debug("Decompressed chunk is %d bytes large", compressed_size);
+    // log_debug("Decompressor: compressed chunk is %d bytes large", compressed_size);
 
     uint8_t* chunk_data = malloc(CHUNK_DATA_SIZE);
 
