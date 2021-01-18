@@ -13,16 +13,20 @@ void log_init(void) {
 
 void log_debug(char* format, ...) {
     #ifdef DEBUG
-        mtx_lock(&log_lock);
+        #ifndef __WIN32__
+            mtx_lock(&log_lock);
 
-        va_list args;
-        va_start(args, format);
-        printf("[DEBUG] ");
-        vprintf(format, args);
-        printf("\n");
-        va_end(args);
+            va_list args;
+            va_start(args, format);
+            printf("[DEBUG] ");
+            vprintf(format, args);
+            printf("\n");
+            va_end(args);
 
-        mtx_unlock(&log_lock);
+            mtx_unlock(&log_lock);
+        #else
+            (void)format;
+        #endif
     #else
         (void)format;
     #endif

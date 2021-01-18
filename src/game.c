@@ -132,7 +132,7 @@ Game* game_new(char* title, int width, int height) {
     // Init game values
     game->is_playing = false;
     game->is_fullscreen = false;
-    #if DEBUG
+    #ifdef DEBUG
         game->is_debugged = true;
     #else
         game->is_debugged = false;

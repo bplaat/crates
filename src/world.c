@@ -14,8 +14,12 @@ World* world_new(Camera* camera) {
     World* world = malloc(sizeof(World));
     world->is_wireframed = false;
     world->is_flat_shaded = false;
-    #if DEBUG
-        world->render_distance = WORLD_RENDER_DISTANCE_FAR;
+    #ifdef DEBUG
+        #ifndef __WIN32__
+            world->render_distance = WORLD_RENDER_DISTANCE_FAR;
+        #else
+            world->render_distance = WORLD_RENDER_DISTANCE_NEAR;
+        #endif
     #else
         world->render_distance = WORLD_RENDER_DISTANCE_NEAR;
     #endif
@@ -225,36 +229,44 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
     for (int chunk_z = player_chunk_z + world->render_distance; chunk_z > player_chunk_z - world->render_distance; chunk_z--) {
         for (int chunk_y = player_chunk_y - world->render_distance; chunk_y <= player_chunk_y + world->render_distance; chunk_y++) {
             for (int chunk_x = player_chunk_x - world->render_distance; chunk_x <= player_chunk_x + world->render_distance; chunk_x++) {
-                bool chunk_is_visible = true;
+                bool chunk_is_visible = false;
 
-                // #define chunk_min(a) ((a) * CHUNK_SIZE - 0.5)
-                // #define chunk_max(a) ((a) * CHUNK_SIZE + CHUNK_SIZE + 0.5)
-                // Vector4 corners[8] = {
-                //     { chunk_min(chunk_x), chunk_min(chunk_y), -chunk_min(chunk_z), 1 },
-                //     { chunk_max(chunk_x), chunk_min(chunk_y), -chunk_min(chunk_z), 1 },
-                //     { chunk_min(chunk_x), chunk_max(chunk_y), -chunk_min(chunk_z), 1 },
-                //     { chunk_max(chunk_x), chunk_max(chunk_y), -chunk_min(chunk_z), 1 },
+                #define chunk_min(a) ((a) * CHUNK_SIZE - 0.5)
+                #define chunk_max(a) ((a) * CHUNK_SIZE + CHUNK_SIZE + 0.5)
+                Vector4 corners[8] = {
+                    { chunk_min(chunk_x), chunk_min(chunk_y), -chunk_min(chunk_z), 1 },
+                    { chunk_max(chunk_x), chunk_min(chunk_y), -chunk_min(chunk_z), 1 },
+                    { chunk_min(chunk_x), chunk_max(chunk_y), -chunk_min(chunk_z), 1 },
+                    { chunk_max(chunk_x), chunk_max(chunk_y), -chunk_min(chunk_z), 1 },
 
-                //     { chunk_min(chunk_x), chunk_min(chunk_y), -chunk_max(chunk_z), 1 },
-                //     { chunk_max(chunk_x), chunk_min(chunk_y), -chunk_max(chunk_z), 1 },
-                //     { chunk_min(chunk_x), chunk_max(chunk_y), -chunk_max(chunk_z), 1 },
-                //     { chunk_max(chunk_x), chunk_max(chunk_y), -chunk_max(chunk_z), 1 }
-                // };
+                    { chunk_min(chunk_x), chunk_min(chunk_y), -chunk_max(chunk_z), 1 },
+                    { chunk_max(chunk_x), chunk_min(chunk_y), -chunk_max(chunk_z), 1 },
+                    { chunk_min(chunk_x), chunk_max(chunk_y), -chunk_max(chunk_z), 1 },
+                    { chunk_max(chunk_x), chunk_max(chunk_y), -chunk_max(chunk_z), 1 }
+                };
 
-                // for (size_t i = 0; i < sizeof(corners) / sizeof(Vector4); i++) {
-                //     vector4_mul(&corners[i], &camera->cameraMatrix);
-                //     vector4_mul(&corners[i], &camera->projectionMatrix);
+                for (size_t i = 0; i < sizeof(corners) / sizeof(Vector4); i++) {
+                    Matrix4 modelMatrix;
+                    matrix4_translate(&modelMatrix, &corners[i]);
+                    matrix4_mul(&modelMatrix, &rotationMatrix);
 
-                //     #define within(a, b, c) ((a) >= (b) && (b) <= (c))
-                //     if (
-                //         within(-corners[i].w, corners[i].x, corners[i].w) &&
-                //         within(-corners[i].w, corners[i].y, corners[i].w)
-                //         // && within(0, corners[i].z, corners[i].w)
-                //     ) {
-                //         chunk_is_visible = true;
-                //         break;
-                //     }
-                // }
+                    glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
+                    glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_GOLD]);
+                    glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
+
+                    vector4_mul(&corners[i], &camera->cameraMatrix);
+                    vector4_mul(&corners[i], &camera->projectionMatrix);
+
+                    #define within(a, b, c) ((a) >= (b) && (b) <= (c))
+                    if (
+                        within(-corners[i].w, corners[i].x, corners[i].w) &&
+                        within(-corners[i].w, corners[i].y, corners[i].w) &&
+                        within(0, corners[i].z, corners[i].w)
+                    ) {
+                        chunk_is_visible = true;
+                        break;
+                    }
+                }
 
                 if (chunk_is_visible) {
                     Chunk* chunk = world_request_chunk(world, chunk_x, chunk_y, chunk_z);

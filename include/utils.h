@@ -19,8 +19,6 @@
 // Align Vector4 and Mattrix4 structs at 16 bytes for SSE SIMD
 #ifndef NO_SSIMD
     #define _MM_ALIGN16 __attribute__((aligned(16)))
-#else
-    #define _MM_ALIGN16
 #endif
 
 // Function to convert radians to degrees
