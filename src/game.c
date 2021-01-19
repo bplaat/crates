@@ -243,8 +243,12 @@ void game_render(Game* game) {
         block_shader_enable(game->block_shader);
         texture_atlas_enable(game->selected_texture_atlas);
 
+        if (game->world->is_wireframed) {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        }
+
         glUniform1i(game->block_shader->is_lighted_uniform, false);
-        glUniform1i(game->block_shader->is_flad_shaded_uniform, false);
+        glUniform1i(game->block_shader->is_flad_shaded_uniform, game->world->is_flat_shaded);
 
         glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.m11);
         glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &game->camera->view_matrix.m11);
@@ -267,6 +271,10 @@ void game_render(Game* game) {
         glUniform1iv(game->block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_SELECTED]);
 
         glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
+
+        if (game->world->is_wireframed) {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        }
 
         texture_atlas_disable(game->selected_texture_atlas);
         block_shader_disable(game->block_shader);
@@ -416,7 +424,9 @@ void game_render(Game* game) {
             matrix4_mul(&model_matrix, &temp_matrix);
 
             glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+
             glUniform1iv(game->block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[game->selected_block_type]);
+
             glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
 
             if (game->world->is_wireframed) {
@@ -489,10 +499,10 @@ void game_render(Game* game) {
                 "Clink to play the game, use ESC to pause",
                 "Use the WASD keys to walk around",
                 "Use your mouse pointer to look around",
-                "Use the left mouse button to place a block",
+                "Use the left mouse button to break a block",
                 "Use the middle mouse button to select a block",
-                "Use the right mouse button to break a block",
-                "Use the scroll wheel to select other block",
+                "Use the right mouse button to place a block",
+                "Use the scroll wheel to select other blocks",
                 "Use F11 to toggle fullscreen mode",
                 "Use Ctrl+R to toggle the render distance (near or far)",
                 "Use F3 to toggle debug mode",
