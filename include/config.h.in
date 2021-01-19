@@ -6,7 +6,7 @@
 #define PLAATCRAFT_VERSION_MAJOR @plaatcraft_VERSION_MAJOR@
 #define PLAATCRAFT_VERSION_MINOR @plaatcraft_VERSION_MINOR@
 
-#define CAMERA_SPEED 8
+#define CAMERA_SPEED 4
 
 #define CHUNK_SIZE 16
 

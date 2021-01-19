@@ -234,7 +234,7 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
     for (int chunk_z = player_chunk_z + world->render_distance; chunk_z > player_chunk_z - world->render_distance; chunk_z--) {
         for (int chunk_y = player_chunk_y - world->render_distance; chunk_y <= player_chunk_y + world->render_distance; chunk_y++) {
             for (int chunk_x = player_chunk_x - world->render_distance; chunk_x <= player_chunk_x + world->render_distance; chunk_x++) {
-                // Get chunk
+                // Get lighted chunk data
                 Chunk* chunk = world_request_chunk(world, chunk_x, chunk_y, chunk_z);
                 if (chunk != NULL) {
                     if (!chunk->is_lighted) {
@@ -284,6 +284,144 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
     block_shader_disable(block_shader);
 
     return rendered_chunks;
+}
+
+BlockPosition *world_get_selected_block(World* world, Camera* camera) {
+    Vector4 ray_point = camera->position;
+
+    Matrix4 rotation_x_matrix;
+    matrix4_rotate_x(&rotation_x_matrix, camera->rotation.x);
+
+    Matrix4 rotation_y_matrix;
+    matrix4_rotate_y(&rotation_y_matrix, camera->rotation.y);
+
+    int player_chunk_x = floor(camera->position.x / (float)CHUNK_SIZE);
+    int player_chunk_y = floor(camera->position.y / (float)CHUNK_SIZE);
+    int player_chunk_z = floor(camera->position.z / (float)CHUNK_SIZE);
+
+    float distance = 0;
+    while (distance < CHUNK_SIZE * (world->render_distance + 1)) {
+        // Check all chunks for block collision
+        for (int chunk_z = player_chunk_z + world->render_distance; chunk_z > player_chunk_z - world->render_distance; chunk_z--) {
+            for (int chunk_y = player_chunk_y - world->render_distance; chunk_y <= player_chunk_y + world->render_distance; chunk_y++) {
+                for (int chunk_x = player_chunk_x - world->render_distance; chunk_x <= player_chunk_x + world->render_distance; chunk_x++) {
+                    // Check if ray point falls in chunk
+                    float chunk_min_x = chunk_x * CHUNK_SIZE - 0.5;
+                    float chunk_max_x = chunk_x * CHUNK_SIZE + CHUNK_SIZE + 0.5;
+                    float chunk_min_y = chunk_y * CHUNK_SIZE - 0.5;
+                    float chunk_max_y = chunk_y * CHUNK_SIZE + CHUNK_SIZE + 0.5;
+                    float chunk_min_z = chunk_z * CHUNK_SIZE - 0.5;
+                    float chunk_max_z = chunk_z * CHUNK_SIZE + CHUNK_SIZE + 0.5;
+                    if (
+                        ray_point.x >= chunk_min_x && ray_point.x <= chunk_max_x &&
+                        ray_point.y >= chunk_min_y && ray_point.y <= chunk_max_y &&
+                        ray_point.z >= chunk_min_z && ray_point.z <= chunk_max_z
+                    ) {
+                        // Get lighted chunk data
+                        Chunk* chunk = world_request_chunk(world, chunk_x, chunk_y, chunk_z);
+                        if (chunk != NULL) {
+                            if (!chunk->is_lighted) {
+                                world_request_chunk_update(world, chunk);
+                            } else {
+                                // Ray point is in chunk check all blocks for collision
+                                for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
+                                    for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
+                                        for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
+                                            BlockType block_type = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x];
+                                            if ((block_type & CHUNK_DATA_VISIBLE_BIT) != 0) {
+                                                // Check if ray point falls in block
+                                                float block_min_x = chunk->x * CHUNK_SIZE + block_x - 0.5;
+                                                float block_max_x = chunk->x * CHUNK_SIZE + block_x + 0.5;
+                                                float block_min_y = chunk->y * CHUNK_SIZE + block_y - 0.5;
+                                                float block_max_y = chunk->y * CHUNK_SIZE + block_y + 0.5;
+                                                float block_min_z = chunk->z * CHUNK_SIZE + block_z - 0.5;
+                                                float block_max_z = chunk->z * CHUNK_SIZE + block_z + 0.5;
+                                                if (
+                                                    ray_point.x >= block_min_x && ray_point.x <= block_max_x &&
+                                                    ray_point.y >= block_min_y && ray_point.y <= block_max_y &&
+                                                    ray_point.z >= block_min_z && ray_point.z <= block_max_z
+                                                ) {
+                                                    // Collision detect return absolute block position
+                                                    BlockPosition *block_position = malloc(sizeof(BlockPosition));
+                                                    block_position->chunk_x = chunk_x;
+                                                    block_position->chunk_y = chunk_y;
+                                                    block_position->chunk_z = chunk_z;
+                                                    block_position->block_x = block_x;
+                                                    block_position->block_y = block_y;
+                                                    block_position->block_z = block_z;
+                                                    return block_position;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Increase point by a block and check again
+        float increase = 0.5;
+        distance += increase;
+        Vector4 update = { 0, 0, increase, 1 };
+        vector4_mul(&update, &rotation_x_matrix);
+        vector4_mul(&update, &rotation_y_matrix);
+        vector4_add(&ray_point, &update);
+    }
+
+    return NULL;
+}
+
+BlockType world_get_block(World* world, BlockPosition* block_position) {
+    Chunk* chunk = world_get_chunk(world, block_position->chunk_x, block_position->chunk_y, block_position->chunk_z);
+    BlockType block_type = chunk->data[block_position->block_z * CHUNK_SIZE * CHUNK_SIZE + block_position->block_y * CHUNK_SIZE + block_position->block_x];
+    block_type &= ~CHUNK_DATA_VISIBLE_BIT;
+    return block_type;
+}
+
+void world_set_block(World* world, BlockPosition* block_position, BlockType block_type) {
+    Chunk* chunk = world_get_chunk(world, block_position->chunk_x, block_position->chunk_y, block_position->chunk_z);
+    chunk->is_changed = true;
+    chunk->data[block_position->block_z * CHUNK_SIZE * CHUNK_SIZE + block_position->block_y * CHUNK_SIZE + block_position->block_x] = block_type;
+    world_request_chunk_update(world, chunk);
+
+    if (block_position->block_x == 0) {
+        Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x - 1, block_position->chunk_y, block_position->chunk_z);
+        other_chunk->is_lighted = false;
+        world_request_chunk_update(world, other_chunk);
+    }
+
+    if (block_position->block_x == CHUNK_SIZE - 1) {
+        Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x + 1, block_position->chunk_y, block_position->chunk_z);
+        other_chunk->is_lighted = false;
+        world_request_chunk_update(world, other_chunk);
+    }
+
+    if (block_position->block_y == 0) {
+        Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x, block_position->chunk_y - 1, block_position->chunk_z);
+        other_chunk->is_lighted = false;
+        world_request_chunk_update(world, other_chunk);
+    }
+
+    if (block_position->block_y == CHUNK_SIZE - 1) {
+        Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x, block_position->chunk_y + 1, block_position->chunk_z);
+        other_chunk->is_lighted = false;
+        world_request_chunk_update(world, other_chunk);
+    }
+
+    if (block_position->block_z == 0) {
+        Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x, block_position->chunk_y, block_position->chunk_z - 1);
+        other_chunk->is_lighted = false;
+        world_request_chunk_update(world, other_chunk);
+    }
+
+    if (block_position->block_z == CHUNK_SIZE - 1) {
+        Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x, block_position->chunk_y, block_position->chunk_z + 1);
+        other_chunk->is_lighted = false;
+        world_request_chunk_update(world, other_chunk);
+    }
 }
 
 void world_free(World* world, Camera* camera) {

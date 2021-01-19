@@ -111,9 +111,9 @@ void camera_cursor_position_callback(Camera* camera, double xpos, double ypos) {
 }
 
 void camera_update(Camera* camera, float delta) {
-    camera->velocity.z -= camera->velocity.z * (camera->speed * 2) * delta;
-    camera->velocity.x -= camera->velocity.x * (camera->speed * 2) * delta;
-    camera->velocity.y -= camera->velocity.y * (camera->speed * 2) * delta;
+    camera->velocity.z -= camera->velocity.z * (camera->speed * 3) * delta;
+    camera->velocity.x -= camera->velocity.x * (camera->speed * 3) * delta;
+    camera->velocity.y -= camera->velocity.y * (camera->speed * 3) * delta;
 
     if (camera->is_moving_forward) {
         camera->velocity.z += camera->speed * delta;;

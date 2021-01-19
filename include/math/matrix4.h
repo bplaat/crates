@@ -38,8 +38,6 @@ void matrix4_flat_rect(Matrix4* matrix, int x, int y, int width, int height);
 
 void matrix4_transpose(Matrix4* matrix);
 
-void matrix4_inverse(Matrix4* matrix);
-
 void matrix4_mul(Matrix4* matrix, Matrix4* rhs);
 
 #endif

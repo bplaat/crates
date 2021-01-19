@@ -65,6 +65,12 @@ void world_request_chunk_update(World* world, Chunk* chunk);
 
 int world_render(World* world, Camera* camera, BlockShader* block_shader, TextureAtlas* blocks_texture_atlas);
 
+BlockPosition *world_get_selected_block(World* world, Camera* camera);
+
+BlockType world_get_block(World* world, BlockPosition* block_position);
+
+void world_set_block(World* world, BlockPosition* block_position, BlockType block_type);
+
 void world_free(World* world, Camera* camera);
 
 int world_worker_thread(void* argument);

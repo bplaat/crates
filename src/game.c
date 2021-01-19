@@ -72,20 +72,28 @@ void game_key_callback(GLFWwindow* window, int key, int scancode, int action, in
     }
 }
 
+
+float dti(float val) {
+  return fabsf(val - roundf(val));
+}
+
 void game_mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     (void)mods;
     Game* game = (Game*)glfwGetWindowUserPointer(window);
     if (game->is_playing) {
-        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
-            // Remove block
-        }
+        if (game->selected_block != NULL) {
+            if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
+                world_set_block(game->world, game->selected_block, BLOCK_TYPE_AIR);
+            }
 
-        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_MIDDLE) {
-            // Select block
-        }
+            if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_MIDDLE) {
+                game->selected_block_type = world_get_block(game->world, game->selected_block);
+            }
 
-        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_RIGHT) {
-            // Place block
+            if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_RIGHT) {
+
+                world_set_block(game->world, game->selected_block, game->selected_block_type);
+            }
         }
     } else {
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
@@ -100,26 +108,6 @@ void game_cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
     Game* game = (Game*)glfwGetWindowUserPointer(window);
     if (game->is_playing) {
         camera_cursor_position_callback(game->camera, xpos, ypos);
-
-        // Get selected block
-        Vector4 position_vector = { 0, 0, 0, 1 };
-        glReadPixels(game->width / 2, game->height / 2, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &position_vector.z);
-
-        Matrix4 inverse_matrix = game->camera->projection_matrix;
-        matrix4_mul(&inverse_matrix, &game->camera->view_matrix);
-        matrix4_inverse(&inverse_matrix);
-
-        vector4_mul(&position_vector, &inverse_matrix);
-
-        // log_debug("%f %f %f", position_vector.x, position_vector.y, position_vector.z);
-
-        game->selected_block_x = position_vector.x;
-        game->selected_block_y = position_vector.y;
-        game->selected_block_z = position_vector.z;
-
-        // * projection^-1
-        // * camera^-1
-        // * model^-1
     }
 }
 
@@ -208,7 +196,10 @@ Game* game_new(char* title, int width, int height) {
     game->world = world_new(game->camera);
 
     // Set selected block
+    game->selected_block = NULL;
     game->selected_block_type = BLOCK_TYPE_BROWN_WOOD;
+    game->selected_block_rotation.x = 0;
+    game->selected_block_rotation.y = 0;
 
     // Set callbacks
     glfwSetFramebufferSizeCallback(game->window, game_framebuffer_size_callback);
@@ -229,6 +220,8 @@ void game_update(Game* game, float delta) {
     game->selected_block_rotation.z += radians(180) * delta;
 }
 
+
+
 void game_render(Game* game) {
     // Init OpenGL viewport and culling
     glViewport(0, 0, game->width, game->height);
@@ -242,26 +235,33 @@ void game_render(Game* game) {
     // Render world
     glEnable(GL_DEPTH_TEST);
     int rendered_chunks = world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas);
+    glDisable(GL_DEPTH_TEST);
+
+    // Get selected block
+    if (game->selected_block != NULL) {
+        free(game->selected_block);
+    }
+    game->selected_block = world_get_selected_block(game->world, game->camera);
 
     // Render select block outline
-    // block_shader_enable(game->block_shader);
-    // glUniform1i(game->block_shader->is_lighted_uniform, false);
-    // glUniform1i(game->block_shader->is_flad_shaded_uniform, true);
-
-    // glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.m11);
-    // glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &game->camera->camera_matrix.m11);
-
     Matrix4 model_matrix;
-    // matrix4_translate(&model_matrix, &game->selected_block_position);
-    // Matrix4 rotationMatrix;
-    // matrix4_rotate_x(&rotationMatrix, radians(90));
-    // matrix4_mul(&model_matrix, &rotationMatrix);
-    // glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
-    // glDrawArrays(GL_LINES, 0, BLOCK_VERTICES_COUNT);
+    // if (game->selected_block != NULL) {
+    //     block_shader_enable(game->block_shader);
+    //     glUniform1i(game->block_shader->is_lighted_uniform, false);
+    //     glUniform1i(game->block_shader->is_flad_shaded_uniform, true);
 
-    // block_shader_disable(game->block_shader);
+    //     glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.m11);
+    //     glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &game->camera->view_matrix.m11);
 
-    glDisable(GL_DEPTH_TEST);
+    //     matrix4_translate(&model_matrix, game->selected_block);
+    //     Matrix4 rotationMatrix;
+    //     matrix4_rotate_x(&rotationMatrix, radians(90));
+    //     matrix4_mul(&model_matrix, &rotationMatrix);
+    //     glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+    //     glDrawArrays(GL_LINES, 0, BLOCK_VERTICES_COUNT);
+
+    //     block_shader_disable(game->block_shader);
+    // }
 
     // Enable flat shader
     flat_shader_enable(game->flat_shader);
@@ -312,13 +312,23 @@ void game_render(Game* game) {
                 #endif
             );
 
-            sprintf(
-                debug_lines[3],
-                "Selected block: %d %d %d",
-                game->selected_block_x,
-                game->selected_block_y,
-                game->selected_block_z
-            );
+            if (game->selected_block != NULL) {
+                sprintf(
+                    debug_lines[3],
+                    "Selected block: %d %d %d and %d %d %d",
+                    game->selected_block->chunk_x,
+                    game->selected_block->chunk_y,
+                    game->selected_block->chunk_z,
+                    game->selected_block->block_x,
+                    game->selected_block->block_y,
+                    game->selected_block->block_z
+                );
+            } else {
+                sprintf(
+                    debug_lines[3],
+                    "Selected block: ?"
+                );
+            }
 
             // Render debug label
             for (int i = 0; i < DEBUG_LINES_COUNT; i++) {

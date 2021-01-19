@@ -24,6 +24,15 @@ typedef struct Chunk {
     mtx_t chunk_lock;
 } Chunk;
 
+typedef struct BlockPosition {
+    int chunk_x;
+    int chunk_y;
+    int chunk_z;
+    int block_x;
+    int block_y;
+    int block_z;
+} BlockPosition;
+
 #include "world.h"
 
 BlockType chunk_generate_block(Random *random, int x, int y, int z);

@@ -161,38 +161,6 @@ void chunk_update(Chunk* chunk, World* world) {
                         continue;
                     }
 
-                    // Check above block
-                    if (block_y == 0) {
-                        Chunk *otherChunk = world_get_chunk(world, chunk->x, chunk->y - 1, chunk->z);
-                        BlockType blockType = otherChunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (CHUNK_SIZE - 1) * CHUNK_SIZE + block_x];
-                        if (blockType == BLOCK_TYPE_AIR) {
-                            chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
-                            continue;
-                        }
-                    } else {
-                        BlockType blockType = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y - 1) * CHUNK_SIZE + block_x];
-                        if (blockType == BLOCK_TYPE_AIR) {
-                            chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
-                            continue;
-                        }
-                    }
-
-                    // Check below block
-                    if (block_y == CHUNK_SIZE - 1) {
-                        Chunk *otherChunk = world_get_chunk(world, chunk->x, chunk->y + 1, chunk->z);
-                        BlockType blockType = otherChunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + 0 * CHUNK_SIZE + block_x];
-                        if (blockType == BLOCK_TYPE_AIR) {
-                            chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
-                            continue;
-                        }
-                    } else {
-                        BlockType blockType = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y + 1) * CHUNK_SIZE + block_x];
-                        if (blockType == BLOCK_TYPE_AIR) {
-                            chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
-                            continue;
-                        }
-                    }
-
                     // Check left block
                     if (block_x == 0) {
                         Chunk *otherChunk = world_get_chunk(world, chunk->x - 1, chunk->y, chunk->z);
@@ -219,6 +187,38 @@ void chunk_update(Chunk* chunk, World* world) {
                         }
                     } else {
                         BlockType blockType = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + (block_x + 1)];
+                        if (blockType == BLOCK_TYPE_AIR) {
+                            chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
+                            continue;
+                        }
+                    }
+
+                    // Check above block
+                    if (block_y == 0) {
+                        Chunk *otherChunk = world_get_chunk(world, chunk->x, chunk->y - 1, chunk->z);
+                        BlockType blockType = otherChunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (CHUNK_SIZE - 1) * CHUNK_SIZE + block_x];
+                        if (blockType == BLOCK_TYPE_AIR) {
+                            chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
+                            continue;
+                        }
+                    } else {
+                        BlockType blockType = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y - 1) * CHUNK_SIZE + block_x];
+                        if (blockType == BLOCK_TYPE_AIR) {
+                            chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
+                            continue;
+                        }
+                    }
+
+                    // Check below block
+                    if (block_y == CHUNK_SIZE - 1) {
+                        Chunk *otherChunk = world_get_chunk(world, chunk->x, chunk->y + 1, chunk->z);
+                        BlockType blockType = otherChunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + 0 * CHUNK_SIZE + block_x];
+                        if (blockType == BLOCK_TYPE_AIR) {
+                            chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
+                            continue;
+                        }
+                    } else {
+                        BlockType blockType = chunk->data[block_z * CHUNK_SIZE * CHUNK_SIZE + (block_y + 1) * CHUNK_SIZE + block_x];
                         if (blockType == BLOCK_TYPE_AIR) {
                             chunk->data[block_index] |= CHUNK_DATA_VISIBLE_BIT;
                             continue;

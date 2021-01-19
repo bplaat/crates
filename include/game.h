@@ -38,9 +38,7 @@ typedef struct Game {
     Camera* camera;
     World* world;
 
-    int selected_block_x;
-    int selected_block_y;
-    int selected_block_z;
+    BlockPosition* selected_block;
     BlockType selected_block_type;
     Vector4 selected_block_rotation;
 } Game;
