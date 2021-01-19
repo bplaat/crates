@@ -135,19 +135,21 @@ Chunk* chunk_new_from_data(int chunk_x, int chunk_y, int chunk_z, uint8_t* chunk
     chunk->z = chunk_z;
     chunk->is_changed = false;
     chunk->is_lighted = false;
+    chunk->is_relighted = false;
     chunk->data = chunk_data;
     mtx_init(&chunk->chunk_lock, mtx_plain);
     return chunk;
 }
 
 void chunk_update(Chunk* chunk, World* world) {
-    if (chunk->is_changed || !chunk->is_lighted) {
+    if (chunk->is_changed || !chunk->is_lighted || !chunk->is_relighted) {
         log_debug("Chunk update %d %d %d", chunk->x, chunk->y, chunk->z);
 
         mtx_lock(&chunk->chunk_lock);
 
         chunk->is_changed = false;
         chunk->is_lighted = true;
+        chunk->is_relighted = true;
 
         for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
             for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {

@@ -240,11 +240,10 @@ Game* game_new(char* title, int width, int height) {
     game->camera = camera_new(radians(45), (float)game->width / (float)game->height, 0.1, 1000);
 
     // Create world (and load world database)
-    game->world = world_new(game->camera);
+    game->world = world_new(game->camera, &game->selected_block_type);
 
     // Set selected block
     game->selected_block = NULL;
-    game->selected_block_type = BLOCK_TYPE_BROWN_WOOD;
     game->selected_block_rotation.x = 0;
     game->selected_block_rotation.y = 0;
 
@@ -271,7 +270,6 @@ void game_update(Game* game, float delta) {
     // Update selected block rotation
     game->selected_block_rotation.x += radians(180) * delta;
     game->selected_block_rotation.z += radians(180) * delta;
-
 }
 
 void game_render(Game* game) {
@@ -597,9 +595,9 @@ void game_render(Game* game) {
 }
 
 void game_start(Game* game) {
-    double fpsTime = 0;
+    double fpsTime = glfwGetTime();
     int frame = 0;
-    double oldTime = 0;
+    double oldTime = glfwGetTime();
     while (!glfwWindowShouldClose(game->window)) {
         glfwPollEvents();
 
@@ -628,7 +626,7 @@ void game_start(Game* game) {
 
 void game_free(Game* game) {
     // Free world
-    world_free(game->world, game->camera);
+    world_free(game->world, game->camera, &game->selected_block_type);
 
     // Free camera
     camera_free(game->camera);

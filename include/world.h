@@ -53,7 +53,7 @@ struct World {
     mtx_t worker_running_lock;
 };
 
-World* world_new(Camera* camera);
+World* world_new(Camera* camera, BlockType *selected_block_type);
 
 void world_add_chunk_to_cache(World* world, Chunk* chunk);
 
@@ -71,7 +71,7 @@ BlockType world_get_block(World* world, BlockPosition* block_position);
 
 void world_set_block(World* world, BlockPosition* block_position, BlockType block_type);
 
-void world_free(World* world, Camera* camera);
+void world_free(World* world, Camera* camera, BlockType *selected_block_type);
 
 int world_worker_thread(void* argument);
 

@@ -11,7 +11,7 @@
 #include "random.h"
 #include "log.h"
 
-World* world_new(Camera* camera) {
+World* world_new(Camera* camera, BlockType *selected_block_type) {
     World* world = malloc(sizeof(World));
     world->is_wireframed = false;
     world->is_flat_shaded = false;
@@ -92,11 +92,16 @@ World* world_new(Camera* camera) {
     camera->position.x = database_settings_get_float(world->database, "player_x", start_x);
     camera->position.y = database_settings_get_float(world->database, "player_y", start_y + CHUNK_SIZE / 2); // 1.5
     camera->position.z = database_settings_get_float(world->database, "player_z", start_z);
+
+    // Get old player rotation
     camera->pitch = database_settings_get_float(world->database, "player_pitch", 0);
     camera->rotation.x = -camera->pitch;
     camera->yaw = database_settings_get_float(world->database, "player_yaw", 0);
     camera->rotation.y = -camera->yaw;
     camera_update_matrix(camera);
+
+    // Get old player selected block
+    *selected_block_type = database_settings_get_int(world->database, "player_selected_block_type", BLOCK_TYPE_BROWN_WOOD);
 
     // Init workers
     world->worker_running = true;
@@ -420,42 +425,42 @@ void world_set_block(World* world, BlockPosition* block_position, BlockType bloc
 
     if (block_position->block_x == 0) {
         Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x - 1, block_position->chunk_y, block_position->chunk_z);
-        other_chunk->is_lighted = false;
+        other_chunk->is_relighted = false;
         world_request_chunk_update(world, other_chunk);
     }
 
     if (block_position->block_x == CHUNK_SIZE - 1) {
         Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x + 1, block_position->chunk_y, block_position->chunk_z);
-        other_chunk->is_lighted = false;
+        other_chunk->is_relighted = false;
         world_request_chunk_update(world, other_chunk);
     }
 
     if (block_position->block_y == 0) {
         Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x, block_position->chunk_y - 1, block_position->chunk_z);
-        other_chunk->is_lighted = false;
+        other_chunk->is_relighted = false;
         world_request_chunk_update(world, other_chunk);
     }
 
     if (block_position->block_y == CHUNK_SIZE - 1) {
         Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x, block_position->chunk_y + 1, block_position->chunk_z);
-        other_chunk->is_lighted = false;
+        other_chunk->is_relighted = false;
         world_request_chunk_update(world, other_chunk);
     }
 
     if (block_position->block_z == 0) {
         Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x, block_position->chunk_y, block_position->chunk_z - 1);
-        other_chunk->is_lighted = false;
+        other_chunk->is_relighted = false;
         world_request_chunk_update(world, other_chunk);
     }
 
     if (block_position->block_z == CHUNK_SIZE - 1) {
         Chunk* other_chunk =  world_get_chunk(world, block_position->chunk_x, block_position->chunk_y, block_position->chunk_z + 1);
-        other_chunk->is_lighted = false;
+        other_chunk->is_relighted = false;
         world_request_chunk_update(world, other_chunk);
     }
 }
 
-void world_free(World* world, Camera* camera) {
+void world_free(World* world, Camera* camera, BlockType *selected_block_type) {
     mtx_lock(&world->worker_running_lock);
     world->worker_running = false;
     mtx_unlock(&world->worker_running_lock);
@@ -475,12 +480,17 @@ void world_free(World* world, Camera* camera) {
     mtx_destroy(&world->chunk_cache_lock);
     mtx_destroy(&world->request_queue_lock);
 
-    // Save old player position
+    // Save player position
     database_settings_set_float(world->database, "player_x", camera->position.x);
     database_settings_set_float(world->database, "player_y", camera->position.y);
     database_settings_set_float(world->database, "player_z", camera->position.z);
+
+    // Save player rotation
     database_settings_set_float(world->database, "player_pitch", camera->pitch);
     database_settings_set_float(world->database, "player_yaw", camera->yaw);
+
+    // Save player selected block
+    database_settings_set_int(world->database, "player_selected_block_type", *selected_block_type);
 
     database_free(world->database);
 

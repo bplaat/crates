@@ -19,8 +19,9 @@ typedef struct Chunk {
     int x;
     int y;
     int z;
-    bool is_lighted;
     bool is_changed;
+    bool is_lighted;
+    bool is_relighted;
     uint8_t* data;
     mtx_t chunk_lock;
 } Chunk;
