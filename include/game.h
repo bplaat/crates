@@ -33,6 +33,7 @@ typedef struct Game {
     FlatShader* flat_shader;
 
     TextureAtlas* blocks_texture_atlas;
+    TextureAtlas* selected_texture_atlas;
     Texture* cursor_texture;
 
     Camera* camera;

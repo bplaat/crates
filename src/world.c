@@ -363,7 +363,7 @@ BlockPosition *world_get_selected_block(World* world, Camera* camera) {
         }
 
         // Increase point by a block and check again
-        float increase = 0.5;
+        float increase = 0.2;
         distance += increase;
         Vector4 update = { 0, 0, increase, 1 };
         vector4_mul(&update, &rotation_x_matrix);

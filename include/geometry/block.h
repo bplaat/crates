@@ -31,6 +31,8 @@ typedef enum BlockTexture {
     BLOCK_TEXTURE_GRAY_BRICKS,
     BLOCK_TEXTURE_RED_BRICKS,
 
+    BLOCK_TEXTURE_SELECTED,
+
     BLOCK_TEXTURE_SIZE
 } BlockTexture;
 
@@ -58,6 +60,8 @@ typedef enum BlockType {
     BLOCK_TYPE_RED_WOOD,
     BLOCK_TYPE_GRAY_BRICKS,
     BLOCK_TYPE_RED_BRICKS,
+
+    BLOCK_TYPE_SELECTED,
 
     BLOCK_TYPE_SIZE
 } BlockType;

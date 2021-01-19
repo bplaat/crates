@@ -72,31 +72,26 @@ void game_key_callback(GLFWwindow* window, int key, int scancode, int action, in
     }
 }
 
-
-float dti(float val) {
-  return fabsf(val - roundf(val));
-}
-
 void game_mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     (void)mods;
     Game* game = (Game*)glfwGetWindowUserPointer(window);
     if (game->is_playing) {
         if (game->selected_block != NULL) {
-            if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
+            if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
                 world_set_block(game->world, game->selected_block, BLOCK_TYPE_AIR);
             }
 
-            if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_MIDDLE) {
+            if (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_RELEASE) {
                 game->selected_block_type = world_get_block(game->world, game->selected_block);
             }
 
-            if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_RIGHT) {
-
+            if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE) {
+                // TODO
                 world_set_block(game->world, game->selected_block, game->selected_block_type);
             }
         }
     } else {
-        if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
             game->camera->is_first_mouse_movement = true;
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             game->is_playing = true;
@@ -116,7 +111,7 @@ void game_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     Game* game = (Game*)glfwGetWindowUserPointer(window);
     if (game->is_playing) {
         if (yoffset < 0) {
-            if (game->selected_block_type == BLOCK_TYPE_SIZE - 1) {
+            if (game->selected_block_type == BLOCK_TYPE_SIZE - 2) { // Skip Selected block type
                 game->selected_block_type = 1; // Skip Air block type
             } else {
                 game->selected_block_type++;
@@ -124,7 +119,7 @@ void game_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
         }
         if (yoffset > 0) {
             if (game->selected_block_type == 1) { // Skip Air block type
-                game->selected_block_type = BLOCK_TYPE_SIZE - 1;
+                game->selected_block_type = BLOCK_TYPE_SIZE - 2; // Skip Selected block type
             } else {
                 game->selected_block_type--;
             }
@@ -186,7 +181,8 @@ Game* game_new(char* title, int width, int height) {
     game->flat_shader = flat_shader_new();
 
     // Load textures
-    game->blocks_texture_atlas = texture_atlas_new("assets/images/blocks.png", 128);
+    game->blocks_texture_atlas = texture_atlas_new("assets/images/blocks.png", 128, false);
+    game->selected_texture_atlas = texture_atlas_new("assets/images/selected.png", 128, true);
     game->cursor_texture = texture_new_from_file("assets/images/cursor.png", true);
 
     // Create camera
@@ -215,12 +211,17 @@ void game_update(Game* game, float delta) {
     // Update camera
     camera_update(game->camera, delta);
 
+    // Get selected block
+    if (game->selected_block != NULL) {
+        free(game->selected_block);
+    }
+    game->selected_block = world_get_selected_block(game->world, game->camera);
+
     // Update selected block rotation
     game->selected_block_rotation.x += radians(180) * delta;
     game->selected_block_rotation.z += radians(180) * delta;
+
 }
-
-
 
 void game_render(Game* game) {
     // Init OpenGL viewport and culling
@@ -235,33 +236,43 @@ void game_render(Game* game) {
     // Render world
     glEnable(GL_DEPTH_TEST);
     int rendered_chunks = world_render(game->world, game->camera, game->block_shader, game->blocks_texture_atlas);
-    glDisable(GL_DEPTH_TEST);
-
-    // Get selected block
-    if (game->selected_block != NULL) {
-        free(game->selected_block);
-    }
-    game->selected_block = world_get_selected_block(game->world, game->camera);
 
     // Render select block outline
     Matrix4 model_matrix;
-    // if (game->selected_block != NULL) {
-    //     block_shader_enable(game->block_shader);
-    //     glUniform1i(game->block_shader->is_lighted_uniform, false);
-    //     glUniform1i(game->block_shader->is_flad_shaded_uniform, true);
+    if (game->is_playing && game->selected_block != NULL) {
+        block_shader_enable(game->block_shader);
+        texture_atlas_enable(game->selected_texture_atlas);
 
-    //     glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.m11);
-    //     glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &game->camera->view_matrix.m11);
+        glUniform1i(game->block_shader->is_lighted_uniform, false);
+        glUniform1i(game->block_shader->is_flad_shaded_uniform, false);
 
-    //     matrix4_translate(&model_matrix, game->selected_block);
-    //     Matrix4 rotationMatrix;
-    //     matrix4_rotate_x(&rotationMatrix, radians(90));
-    //     matrix4_mul(&model_matrix, &rotationMatrix);
-    //     glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
-    //     glDrawArrays(GL_LINES, 0, BLOCK_VERTICES_COUNT);
+        glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.m11);
+        glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &game->camera->view_matrix.m11);
 
-    //     block_shader_disable(game->block_shader);
-    // }
+        Vector4 translate_vector = {
+            game->selected_block->chunk_x * CHUNK_SIZE + game->selected_block->block_x,
+            game->selected_block->chunk_y * CHUNK_SIZE + game->selected_block->block_y,
+            -(game->selected_block->chunk_z * CHUNK_SIZE + game->selected_block->block_z),
+            1
+        };
+        matrix4_translate(&model_matrix, &translate_vector);
+
+        Matrix4 scale_matrix;
+        Vector4 scale_vector = { 1.02, 1.02, 1.02, 1 };
+        matrix4_scale(&scale_matrix, &scale_vector);
+        matrix4_mul(&model_matrix, &scale_matrix);
+
+        glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+
+        glUniform1iv(game->block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_SELECTED]);
+
+        glDrawArrays(GL_TRIANGLES, 0, BLOCK_VERTICES_COUNT);
+
+        texture_atlas_disable(game->selected_texture_atlas);
+        block_shader_disable(game->block_shader);
+    }
+
+    glDisable(GL_DEPTH_TEST);
 
     // Enable flat shader
     flat_shader_enable(game->flat_shader);
@@ -562,6 +573,7 @@ void game_free(Game* game) {
 
     // Free textures
     texture_atlas_free(game->blocks_texture_atlas);
+    texture_atlas_free(game->selected_texture_atlas);
     texture_free(game->cursor_texture);
 
     // Free shaders
