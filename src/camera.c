@@ -116,24 +116,24 @@ void camera_update(Camera* camera, float delta) {
     camera->velocity.y -= camera->velocity.y * (camera->speed * 4) * delta;
 
     if (camera->is_moving_forward) {
-        camera->velocity.z += camera->speed * delta;;
+        camera->velocity.z += camera->speed * delta;
     }
     if (camera->is_moving_backward) {
-        camera->velocity.z -= camera->speed * delta;;
+        camera->velocity.z -= camera->speed * delta;
     }
 
     if (camera->is_moving_left) {
-        camera->velocity.x -= camera->speed * delta;;
+        camera->velocity.x -= camera->speed * delta;
     }
     if (camera->is_moving_right) {
-        camera->velocity.x += camera->speed * delta;;
+        camera->velocity.x += camera->speed * delta;
     }
 
     if (camera->is_moving_up) {
-        camera->velocity.y += camera->speed * delta;;
+        camera->velocity.y += camera->speed * delta;
     }
     if (camera->is_moving_down) {
-        camera->velocity.y -= camera->speed * delta;;
+        camera->velocity.y -= camera->speed * delta;
     }
 
     Matrix4 rotation_matrix;

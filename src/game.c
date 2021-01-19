@@ -272,7 +272,7 @@ void game_update(Game* game, float delta) {
     game->selected_block_rotation.z += radians(180) * delta;
 }
 
-void game_render(Game* game) {
+void game_render(Game* game, float delta) {
     // Init OpenGL viewport and culling
     glViewport(0, 0, game->width, game->height);
     glEnable(GL_CULL_FACE);
@@ -369,15 +369,16 @@ void game_render(Game* game) {
 
             sprintf(
                 debug_lines[2],
-                "Seed: %"PRId64" - Wireframed: %s - Flat shaded: %s - SIMD: %s",
+                "Seed: %"PRId64" - Wireframed: %s - Flat shaded: %s - SIMD: %s - Delta: %.04f",
                 game->world->seed,
                 game->world->is_wireframed ? "true" : "false",
                 game->world->is_flat_shaded ? "true" : "false",
                 #ifndef NO_SIMD
-                    "true"
+                    "true",
                 #else
-                    "false"
+                    "false",
                 #endif
+                delta
             );
 
             if (game->selected_block != NULL) {
@@ -395,7 +396,7 @@ void game_render(Game* game) {
             } else {
                 sprintf(
                     debug_lines[3],
-                    "Selected block: ?"
+                    "Selected block: none"
                 );
             }
 
@@ -610,14 +611,17 @@ void game_start(Game* game) {
         }
 
         // Update game
-        game_update(game, time - oldTime);
-        oldTime = time;
+        float delta = time - oldTime;
+        game_update(game, delta);
 
         // Render game
-        game_render(game);
+        game_render(game, delta);
 
         // Swap frame buffers
         glfwSwapBuffers(game->window);
+
+        // New time is old time
+        oldTime = time;
 
         // Increase frame counter
         frame++;

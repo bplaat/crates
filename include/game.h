@@ -60,7 +60,7 @@ Game* game_new(char* title, int width, int height);
 
 void game_update(Game* game, float delta);
 
-void game_render(Game* game);
+void game_render(Game* game, float delta);
 
 void game_start(Game* game);
 
