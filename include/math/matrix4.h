@@ -35,12 +35,14 @@ void matrix4_rotate_z(Matrix4* matrix, float z);
 
 void matrix4_scale(Matrix4* matrix, Vector4* scale);
 
-void matrix4_mul(Matrix4* matrix, Matrix4* rhs);
-
-void matrix4_inverse(Matrix4* matrix);
-
 void matrix4_flat_projection(Matrix4* matrix, int viewport_width, int viewport_height);
 
 void matrix4_flat_rect(Matrix4* matrix, int x, int y, int width, int height);
+
+void matrix4_transpose(Matrix4* matrix);
+
+void matrix4_inverse(Matrix4* matrix);
+
+void matrix4_mul(Matrix4* matrix, Matrix4* rhs);
 
 #endif

@@ -3,7 +3,6 @@
 #include "shaders/block_shader.h"
 #include <stdlib.h>
 #include "utils.h"
-#include "log.h"
 
 BlockShader* block_shader_new(void) {
     BlockShader* block_shader = malloc(sizeof(BlockShader));
@@ -26,7 +25,7 @@ BlockShader* block_shader_new(void) {
 
     // Get uniforms
     block_shader->model_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_model_matrix");
-    block_shader->camera_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_camera_matrix");
+    block_shader->view_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_view_matrix");
     block_shader->projection_matrix_uniform = glGetUniformLocation(block_shader->shader->program, "u_projection_matrix");
     block_shader->is_lighted_uniform = glGetUniformLocation(block_shader->shader->program, "u_is_lighted");
     block_shader->is_flad_shaded_uniform = glGetUniformLocation(block_shader->shader->program, "u_is_flat_shaded");

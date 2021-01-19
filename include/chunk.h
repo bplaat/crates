@@ -8,6 +8,7 @@
 #include "config.h"
 #include "tinycthread/tinycthread.h"
 #include "camera.h"
+#include "random.h"
 
 #define CHUNK_DATA_SIZE (CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE)
 #define CHUNK_DATA_VISIBLE_BIT (1 << 7)
@@ -25,7 +26,7 @@ typedef struct Chunk {
 
 #include "world.h"
 
-BlockType chunk_generate_block(int x, int y, int z);
+BlockType chunk_generate_block(Random *random, int x, int y, int z);
 
 Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z);
 

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "utils.h"
+#include "log.h"
 
 Font* font_new(char* path) {
     Font* font = malloc(sizeof(Font));

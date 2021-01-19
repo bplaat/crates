@@ -5,6 +5,7 @@
     #include <emmintrin.h>
 #endif
 #include "utils.h"
+#include "log.h"
 
 void matrix4_identity(Matrix4* matrix) {
     #ifndef NO_SIMD
@@ -116,6 +117,30 @@ void matrix4_scale(Matrix4* matrix, Vector4* scale) {
     #endif
 }
 
+void matrix4_flat_projection(Matrix4* matrix, int viewport_width, int viewport_height) {
+    #ifndef NO_SIMD
+        _mm_store_ps(&matrix->m11, _mm_setr_ps(2 / (float)viewport_width, 0, 0, 0));
+        _mm_store_ps(&matrix->m21, _mm_setr_ps(0, -2 / (float)viewport_height, 0, 0));
+        _mm_store_ps(&matrix->m31, _mm_setr_ps(0, 0, 1, 0));
+        _mm_store_ps(&matrix->m41, _mm_setr_ps(-1, 1, 0, 1));
+    #else
+        matrix->m11 = 2 / (float)viewport_width; matrix->m12 = 0; matrix->m13 = 0; matrix->m14 = 0;
+        matrix->m21 = 0; matrix->m22 = -2 / (float)viewport_height; matrix->m23 = 0; matrix->m24 = 0;
+        matrix->m31 = 0; matrix->m32 = 0; matrix->m33 = 1; matrix->m34 = 0;
+        matrix->m41 = -1; matrix->m42 = 1; matrix->m43 = 0; matrix->m44 = 1;
+    #endif
+}
+
+void matrix4_flat_rect(Matrix4* matrix, int x, int y, int width, int height) {
+    Vector4 translate_vector = { x + width / 2, y + height / 2, 0, 1 };
+    matrix4_translate(matrix, &translate_vector);
+
+    Matrix4 temp_matrix;
+    Vector4 scale_vector = { width, height, 0, 1 };
+    matrix4_scale(&temp_matrix, &scale_vector);
+    matrix4_mul(matrix, &temp_matrix);
+}
+
 void matrix4_mul(Matrix4* matrix, Matrix4* rhs) {
     #ifndef NO_SIMD
         __m128 row1 = _mm_load_ps(&matrix->m11);
@@ -168,21 +193,47 @@ void matrix4_mul(Matrix4* matrix, Matrix4* rhs) {
     #endif
 }
 
+
+void matrix4_transpose(Matrix4* matrix) {
+    #ifndef NO_SIMD
+        __m128 row1 = _mm_load_ps(&matrix->m11);
+        __m128 row2 = _mm_load_ps(&matrix->m21);
+        __m128 row3 = _mm_load_ps(&matrix->m31);
+        __m128 row4 = _mm_load_ps(&matrix->m41);
+        _MM_TRANSPOSE4_PS(row1, row2, row3, row4);
+        _mm_store_ps(&matrix->m11, row1);
+        _mm_store_ps(&matrix->m21, row2);
+        _mm_store_ps(&matrix->m31, row3);
+        _mm_store_ps(&matrix->m41, row4);
+    #else
+        float _m12 = matrix->m21;
+        float _m13 = matrix->m31;
+        float _m14 = matrix->m41;
+
+        float _m21 = matrix->m12;
+        float _m23 = matrix->m32;
+        float _m24 = matrix->m42;
+
+        float _m31 = matrix->m13;
+        float _m32 = matrix->m23;
+        float _m34 = matrix->m43;
+
+        float _m41 = matrix->m14;
+        float _m42 = matrix->m24;
+        float _m43 = matrix->m34;
+
+        matrix->m12 = _m12; matrix->m13 = _m13; matrix->m14 = _m14;
+        matrix->m21 = _m21; matrix->m23 = _m23; matrix->m24 = _m24;
+        matrix->m31 = _m31; matrix->m32 = _m32; matrix->m34 = _m34;
+        matrix->m41 = _m41; matrix->m42 = _m42; matrix->m43 = _m43;
+    #endif
+}
+
 void matrix4_inverse(Matrix4* matrix) {
     double inv[16], det;
     int i;
 
     float *m = &matrix->m11;
-
-    __m128 row1 = _mm_load_ps(&matrix->m11);
-    __m128 row2 = _mm_load_ps(&matrix->m21);
-    __m128 row3 = _mm_load_ps(&matrix->m31);
-    __m128 row4 = _mm_load_ps(&matrix->m41);
-    _MM_TRANSPOSE4_PS(row1, row2, row3, row4);
-    _mm_store_ps(&matrix->m11, row1);
-    _mm_store_ps(&matrix->m21, row2);
-    _mm_store_ps(&matrix->m31, row3);
-    _mm_store_ps(&matrix->m41, row4);
 
     inv[0] = m[5]  * m[10] * m[15] -
              m[5]  * m[11] * m[14] -
@@ -306,28 +357,4 @@ void matrix4_inverse(Matrix4* matrix) {
 
     for (i = 0; i < 16; i++)
         m[i] = m[i] * det;
-}
-
-void matrix4_flat_projection(Matrix4* matrix, int viewport_width, int viewport_height) {
-    #ifndef NO_SIMD
-        _mm_store_ps(&matrix->m11, _mm_setr_ps(2 / (float)viewport_width, 0, 0, 0));
-        _mm_store_ps(&matrix->m21, _mm_setr_ps(0, -2 / (float)viewport_height, 0, 0));
-        _mm_store_ps(&matrix->m31, _mm_setr_ps(0, 0, 1, 0));
-        _mm_store_ps(&matrix->m41, _mm_setr_ps(-1, 1, 0, 1));
-    #else
-        matrix->m11 = 2 / (float)viewport_width; matrix->m12 = 0; matrix->m13 = 0; matrix->m14 = 0;
-        matrix->m21 = 0; matrix->m22 = -2 / (float)viewport_height; matrix->m23 = 0; matrix->m24 = 0;
-        matrix->m31 = 0; matrix->m32 = 0; matrix->m33 = 1; matrix->m34 = 0;
-        matrix->m41 = -1; matrix->m42 = 1; matrix->m43 = 0; matrix->m44 = 1;
-    #endif
-}
-
-void matrix4_flat_rect(Matrix4* matrix, int x, int y, int width, int height) {
-    Vector4 translateVector = { x + width / 2, y + height / 2, 0, 1 };
-    matrix4_translate(matrix, &translateVector);
-
-    Matrix4 tempMatrix;
-    Vector4 scaleVector = { width, height, 0, 1 };
-    matrix4_scale(&tempMatrix, &scaleVector);
-    matrix4_mul(matrix, &tempMatrix);
 }

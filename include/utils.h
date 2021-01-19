@@ -5,7 +5,6 @@
 
 #include <math.h>
 #include "glad/glad.h"
-#include "log.h"
 
 // Define PI when not defined
 #ifndef M_PI

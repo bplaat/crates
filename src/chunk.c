@@ -7,7 +7,7 @@
 #include "geometry/block.h"
 #include "perlin/perlin.h"
 
-BlockType chunk_generate_block(int x, int y, int z) {
+BlockType chunk_generate_block(Random *random, int x, int y, int z) {
     float scale = 64;
     int max_height = 24;
     int sea_level = -5;
@@ -43,11 +43,11 @@ BlockType chunk_generate_block(int x, int y, int z) {
     }
 
     // Stone layer
-    if ((rand() % 75) == 0) {
+    if (random_rand(random, 1, 75) == 1) {
         return BLOCK_TYPE_COAL;
     }
 
-    if ((rand() % 100) == 0) {
+    if (random_rand(random, 1, 100) == 1) {
         return BLOCK_TYPE_GOLD;
     }
 
@@ -58,14 +58,15 @@ Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z) {
     uint8_t* chunk_data = malloc(CHUNK_DATA_SIZE);
     memset(chunk_data, BLOCK_TYPE_AIR, CHUNK_DATA_SIZE);
 
-    srand(chunk_x + chunk_y + chunk_z);
+    Random *random = random_new(chunk_x + chunk_y + chunk_z);
+
     for (int block_z = 0; block_z < CHUNK_SIZE; block_z++) {
         for (int block_y = 0; block_y < CHUNK_SIZE; block_y++) {
             for (int block_x = 0; block_x < CHUNK_SIZE; block_x++) {
                 int block_index = block_z * CHUNK_SIZE * CHUNK_SIZE + block_y * CHUNK_SIZE + block_x;
 
                 // Change block
-                BlockType blockType = chunk_generate_block(chunk_x * CHUNK_SIZE + block_x, chunk_y * CHUNK_SIZE + block_y, chunk_z * CHUNK_SIZE + block_z);
+                BlockType blockType = chunk_generate_block(random, chunk_x * CHUNK_SIZE + block_x, chunk_y * CHUNK_SIZE + block_y, chunk_z * CHUNK_SIZE + block_z);
                 if (blockType == BLOCK_TYPE_AIR) {
                     if (
                         chunk_data[block_index] != BLOCK_TYPE_OAK_TRUNK &&
@@ -82,13 +83,13 @@ Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z) {
 
                 // Place trees
                 if (
-                    blockType == BLOCK_TYPE_GRASS && (rand() % 75) == 0 &&
+                    blockType == BLOCK_TYPE_GRASS && random_rand(random, 1, 75) == 1 &&
                     block_x >= 2 && block_x <= CHUNK_SIZE - 2 &&
                     block_y >= 1 && block_y <= CHUNK_SIZE - 7 &&
                     block_z >= 2 && block_z <= CHUNK_SIZE - 2
                 ) {
-                    int oak_type = rand() % 2 == 0;
-                    int leave_type = rand() % 2 == 0;
+                    bool oak_type = random_rand(random, 1, 2) == 1;
+                    bool leave_type = random_rand(random, 1, 2) == 1;
 
                     for (int tree_y = 1; tree_y < 6; tree_y++) {
                         if (tree_y >= 3) {
@@ -109,7 +110,7 @@ Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z) {
 
                 // Place cactuses
                 if (
-                    blockType == BLOCK_TYPE_SAND_TOP && (rand() % 150) == 0 &&
+                    blockType == BLOCK_TYPE_SAND_TOP && random_rand(random, 1, 150) == 1 &&
                     block_y >= 1 && block_y <= CHUNK_SIZE - 7
                 ) {
                     for (int cactus_y = 1; cactus_y < 5; cactus_y++) {
@@ -119,6 +120,8 @@ Chunk* chunk_new_from_generator(int chunk_x, int chunk_y, int chunk_z) {
             }
         }
     }
+
+    random_free(random);
 
     return chunk_new_from_data(chunk_x, chunk_y, chunk_z, chunk_data);
 }
@@ -286,8 +289,8 @@ bool chunk_is_visible(Chunk* chunk, Camera* camera) {
     };
 
     for (int i = 0; i < BLOCK_CORNERS_COUNT; i++) {
-        vector4_mul(&chunk_corners[i], &camera->cameraMatrix);
-        vector4_mul(&chunk_corners[i], &camera->projectionMatrix);
+        vector4_mul(&chunk_corners[i], &camera->view_matrix);
+        vector4_mul(&chunk_corners[i], &camera->projection_matrix);
         if (
             chunk_corners[i].x >= -chunk_corners[i].w && chunk_corners[i].x <= chunk_corners[i].w &&
             chunk_corners[i].y >= -chunk_corners[i].w && chunk_corners[i].y <= chunk_corners[i].w &&
@@ -323,8 +326,8 @@ bool chunk_is_visible(Chunk* chunk, Camera* camera) {
                     };
 
                     for (int i = 0; i < BLOCK_CORNERS_COUNT; i++) {
-                        vector4_mul(&block_corners[i], &camera->cameraMatrix);
-                        vector4_mul(&block_corners[i], &camera->projectionMatrix);
+                        vector4_mul(&block_corners[i], &camera->view_matrix);
+                        vector4_mul(&block_corners[i], &camera->projection_matrix);
                         if (
                             block_corners[i].x >= -block_corners[i].w && block_corners[i].x <= block_corners[i].w &&
                             block_corners[i].y >= -block_corners[i].w && block_corners[i].y <= block_corners[i].w &&

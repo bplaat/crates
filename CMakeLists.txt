@@ -48,7 +48,7 @@ configure_file(include/config.h.in ../include/config.h)
 
 # Create main executable
 add_executable(
-    ${PROJECT_NAME} src/main.c src/log.c src/utils.c src/font.c
+    ${PROJECT_NAME} src/main.c src/log.c src/utils.c src/random.c src/font.c
     src/geometry/block.c src/geometry/plane.c
     src/math/vector4.c src/math/matrix4.c
     src/shaders/shader.c src/shaders/block_shader.c src/shaders/flat_shader.c

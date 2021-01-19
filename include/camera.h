@@ -19,8 +19,8 @@ typedef struct Camera {
     Vector4 position;
     Vector4 rotation;
 
-    Matrix4 projectionMatrix;
-    Matrix4 cameraMatrix;
+    Matrix4 projection_matrix;
+    Matrix4 view_matrix;
 
     Vector4 velocity;
     float speed;

@@ -8,6 +8,7 @@
 #include <time.h>
 #include "geometry/block.h"
 #include "perlin/perlin.h"
+#include "random.h"
 #include "log.h"
 
 World* world_new(Camera* camera) {
@@ -46,13 +47,18 @@ World* world_new(Camera* camera) {
 
     // Generate when not set
     if (world->seed == 0) {
-        srand(time(NULL));
+        time_t now = time(NULL);
+        struct tm *tm;
+        if ((tm = localtime(&now)) == NULL) {
+            log_error("Can't read / extract the local system time");
+        }
+
+        Random *random = random_new(tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec);
         do {
-            world->seed = rand();
-            if (rand() % 2 == 0) {
-                world->seed = -world->seed;
-            }
+            world->seed = random_rand(random, INT16_MIN, INT16_MAX);
         } while (world->seed == 0);
+        random_free(random);
+
         database_settings_set_int(world->database, "seed", world->seed);
     }
 
@@ -214,11 +220,11 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
     glUniform1i(block_shader->is_lighted_uniform, true);
     glUniform1i(block_shader->is_flad_shaded_uniform, world->is_flat_shaded);
 
-    glUniformMatrix4fv(block_shader->projection_matrix_uniform, 1, GL_FALSE, &camera->projectionMatrix.m11);
-    glUniformMatrix4fv(block_shader->camera_matrix_uniform, 1, GL_FALSE, &camera->cameraMatrix.m11);
+    glUniformMatrix4fv(block_shader->projection_matrix_uniform, 1, GL_FALSE, &camera->projection_matrix.m11);
+    glUniformMatrix4fv(block_shader->view_matrix_uniform, 1, GL_FALSE, &camera->view_matrix.m11);
 
-    Matrix4 rotationMatrix;
-    matrix4_rotate_x(&rotationMatrix, radians(90));
+    Matrix4 rotation_matrix;
+    matrix4_rotate_x(&rotation_matrix, radians(90));
 
     // Loop over all rendered chunks
     int player_chunk_x = floor(camera->position.x / (float)CHUNK_SIZE);
@@ -243,16 +249,16 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                                         if ((block_type & CHUNK_DATA_VISIBLE_BIT) != 0) {
                                             block_type &= (~CHUNK_DATA_VISIBLE_BIT);
 
-                                            Matrix4 modelMatrix;
-                                            Vector4 blockPosition = {
+                                            Matrix4 model_matrix;
+                                            Vector4 block_position_vector = {
                                                 chunk_x * CHUNK_SIZE + block_x,
                                                 chunk_y * CHUNK_SIZE + block_y,
                                                 -(chunk_z * CHUNK_SIZE + block_z),
                                                 1
                                             };
-                                            matrix4_translate(&modelMatrix, &blockPosition);
-                                            matrix4_mul(&modelMatrix, &rotationMatrix);
-                                            glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &modelMatrix.m11);
+                                            matrix4_translate(&model_matrix, &block_position_vector);
+                                            matrix4_mul(&model_matrix, &rotation_matrix);
+                                            glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
 
                                             glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[block_type]);
 

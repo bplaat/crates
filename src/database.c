@@ -6,6 +6,7 @@
 #include <string.h>
 #include "config.h"
 #include "utils.h"
+#include "log.h"
 
 Database* database_new(void) {
     Database* database = malloc(sizeof(Database));

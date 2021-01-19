@@ -3,7 +3,6 @@
 #include "shaders/flat_shader.h"
 #include <stdlib.h>
 #include "utils.h"
-#include "log.h"
 
 FlatShader* flat_shader_new(void) {
     FlatShader* flat_shader = malloc(sizeof(FlatShader));
