@@ -60,6 +60,15 @@ BlockTexture BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_SIZE][6] = {
     { BLOCK_TEXTURE_SELECTED, BLOCK_TEXTURE_SELECTED, BLOCK_TEXTURE_SELECTED, BLOCK_TEXTURE_SELECTED, BLOCK_TEXTURE_SELECTED, BLOCK_TEXTURE_SELECTED } // Selected
 };
 
+char* BLOCK_SIDE_NAMES[BLOCK_SIDE_SIZE] = {
+    "left",
+    "right",
+    "above",
+    "below",
+    "front",
+    "back"
+};
+
 float BLOCK_VERTICES[] = {
     // Vertex position, Texture position, Texture face
     -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,  1.f,

@@ -66,9 +66,21 @@ typedef enum BlockType {
     BLOCK_TYPE_SIZE
 } BlockType;
 
+typedef enum BlockSide {
+    BLOCK_SIDE_LEFT = 0,
+    BLOCK_SIDE_RIGHT,
+    BLOCK_SIDE_ABOVE,
+    BLOCK_SIDE_BELOW,
+    BLOCK_SIDE_FRONT,
+    BLOCK_SIDE_BACK,
+    BLOCK_SIDE_SIZE
+} BlockSide;
+
 extern char* BLOCK_TYPE_NAMES[BLOCK_TYPE_SIZE];
 
 extern BlockTexture BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_SIZE][6];
+
+extern char* BLOCK_SIDE_NAMES[BLOCK_SIDE_SIZE];
 
 #define BLOCK_VERTICES_COUNT 36
 #define BLOCK_CORNERS_COUNT 8

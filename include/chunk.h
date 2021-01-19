@@ -9,6 +9,7 @@
 #include "tinycthread/tinycthread.h"
 #include "camera.h"
 #include "random.h"
+#include "geometry/block.h"
 
 #define CHUNK_DATA_SIZE (CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE)
 #define CHUNK_DATA_VISIBLE_BIT (1 << 7)
@@ -31,6 +32,7 @@ typedef struct BlockPosition {
     int block_x;
     int block_y;
     int block_z;
+    BlockSide block_side;
 } BlockPosition;
 
 #include "world.h"

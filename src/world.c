@@ -349,6 +349,37 @@ BlockPosition *world_get_selected_block(World* world, Camera* camera) {
                                                     block_position->block_x = block_x;
                                                     block_position->block_y = block_y;
                                                     block_position->block_z = block_z;
+
+                                                    // Check good block side
+                                                    float distance = 1;
+
+                                                    if (fabs(ray_point.x - block_min_x) < distance) {
+                                                        distance = fabs(ray_point.x - block_min_x);
+                                                        block_position->block_side = BLOCK_SIDE_LEFT;
+                                                    }
+                                                    if (fabs(ray_point.x - block_max_x) < distance) {
+                                                        distance = fabs(ray_point.x - block_max_x);
+                                                        block_position->block_side = BLOCK_SIDE_RIGHT;
+                                                    }
+
+                                                    if (fabs(ray_point.y - block_min_y) < distance) {
+                                                        distance = fabs(ray_point.y - block_min_y);
+                                                        block_position->block_side = BLOCK_SIDE_BELOW;
+                                                    }
+                                                    if (fabs(ray_point.y - block_max_y) < distance) {
+                                                        distance = fabs(ray_point.y - block_max_y);
+                                                        block_position->block_side = BLOCK_SIDE_ABOVE;
+                                                    }
+
+                                                    if (fabs(ray_point.z - block_min_z) < distance) {
+                                                        distance = fabs(ray_point.z - block_min_z);
+                                                        block_position->block_side = BLOCK_SIDE_FRONT;
+                                                    }
+                                                    if (fabs(ray_point.z - block_max_z) < distance) {
+                                                        distance = fabs(ray_point.z - block_max_z);
+                                                        block_position->block_side = BLOCK_SIDE_BACK;
+                                                    }
+
                                                     return block_position;
                                                 }
                                             }
@@ -363,7 +394,7 @@ BlockPosition *world_get_selected_block(World* world, Camera* camera) {
         }
 
         // Increase point by a block and check again
-        float increase = 0.2;
+        float increase = 0.1;
         distance += increase;
         Vector4 update = { 0, 0, increase, 1 };
         vector4_mul(&update, &rotation_x_matrix);

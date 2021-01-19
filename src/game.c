@@ -86,8 +86,60 @@ void game_mouse_button_callback(GLFWwindow* window, int button, int action, int 
             }
 
             if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE) {
-                // TODO
-                world_set_block(game->world, game->selected_block, game->selected_block_type);
+                BlockPosition block_position = *game->selected_block;
+
+                if (block_position.block_side == BLOCK_SIDE_LEFT) {
+                    if (block_position.block_x == 0) {
+                        block_position.chunk_x--;
+                        block_position.block_x = CHUNK_SIZE - 1;
+                    } else {
+                        block_position.block_x--;
+                    }
+                }
+                if (block_position.block_side == BLOCK_SIDE_RIGHT) {
+                    if (block_position.block_x == CHUNK_SIZE - 1) {
+                        block_position.chunk_x++;
+                        block_position.block_x = 0;
+                    } else {
+                        block_position.block_x++;
+                    }
+                }
+
+                if (block_position.block_side == BLOCK_SIDE_ABOVE) {
+                    if (block_position.block_y == CHUNK_SIZE - 1) {
+                        block_position.chunk_y++;
+                        block_position.block_y = 0;
+                    } else {
+                        block_position.block_y++;
+                    }
+                }
+                if (block_position.block_side == BLOCK_SIDE_BELOW) {
+                    if (block_position.block_y == 0) {
+                        block_position.chunk_y--;
+                        block_position.block_y = CHUNK_SIZE - 1;
+                    } else {
+                        block_position.block_y--;
+                    }
+                }
+
+                if (block_position.block_side == BLOCK_SIDE_FRONT) {
+                    if (block_position.block_z == 0) {
+                        block_position.chunk_z--;
+                        block_position.block_z = CHUNK_SIZE - 1;
+                    } else {
+                        block_position.block_z--;
+                    }
+                }
+                if (block_position.block_side == BLOCK_SIDE_BACK) {
+                    if (block_position.block_z == CHUNK_SIZE - 1) {
+                        block_position.chunk_z++;
+                        block_position.block_z = 0;
+                    } else {
+                        block_position.block_z++;
+                    }
+                }
+
+                world_set_block(game->world, &block_position, game->selected_block_type);
             }
         }
     } else {
@@ -165,7 +217,6 @@ Game* game_new(char* title, int width, int height) {
     glfwSetWindowUserPointer(game->window, game);
     glfwSetWindowSizeLimits(game->window, width / 2, height / 2, GLFW_DONT_CARE, GLFW_DONT_CARE);
     glfwMakeContextCurrent(game->window);
-    glfwSwapInterval(1);
 
     // Load OpenGL
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -334,13 +385,14 @@ void game_render(Game* game) {
             if (game->selected_block != NULL) {
                 sprintf(
                     debug_lines[3],
-                    "Selected block: %d %d %d and %d %d %d",
+                    "Selected block: %d %d %d chunk, %d %d %d block, %s face",
                     game->selected_block->chunk_x,
                     game->selected_block->chunk_y,
                     game->selected_block->chunk_z,
                     game->selected_block->block_x,
                     game->selected_block->block_y,
-                    game->selected_block->block_z
+                    game->selected_block->block_z,
+                    BLOCK_SIDE_NAMES[game->selected_block->block_side]
                 );
             } else {
                 sprintf(
