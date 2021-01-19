@@ -3,6 +3,9 @@ A modern OpenGL Minecraft like game for a school project about Computer Graphics
 
 You will need a computer / graphics card which supports minimal the OpenGL 3.3 Core Profile
 
+## Screenshot
+![PlaatCraft screenshot](docs/screenshot.png)
+
 ## Dependencies:
 - GLFW3 (extern)
 - SQLite3 (extern)
