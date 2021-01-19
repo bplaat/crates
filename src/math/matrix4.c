@@ -21,15 +21,15 @@ void matrix4_identity(Matrix4* matrix) {
     #endif
 }
 
-void matrix4_perspective(Matrix4* matrix, float fov, float aspect, float near, float far) {
+void matrix4_perspective(Matrix4* matrix, float fov, float aspect, float _near, float _far) {
     float f = tan(M_PI * 0.5 - 0.5 * fov);
-    float r = 1 / (near - far);
+    float r = 1 / (_near - _far);
 
     #ifndef NO_SIMD
         _mm_store_ps(&matrix->m11, _mm_setr_ps(f / aspect, 0, 0, 0));
         _mm_store_ps(&matrix->m21, _mm_setr_ps(0, f, 0, 0));
-        _mm_store_ps(&matrix->m31, _mm_setr_ps(0, 0, (near + far) * r, -1));
-        _mm_store_ps(&matrix->m41, _mm_setr_ps(0, 0, near * far * r * 2, 0));
+        _mm_store_ps(&matrix->m31, _mm_setr_ps(0, 0, (_near + _far) * r, -1));
+        _mm_store_ps(&matrix->m41, _mm_setr_ps(0, 0, _near * _far * r * 2, 0));
     #else
         matrix->m11 = f / aspect; matrix->m12 = 0; matrix->m13 = 0; matrix->m14 = 0;
         matrix->m21 = 0; matrix->m22 = f; matrix->m23 = 0; matrix->m24 = 0;

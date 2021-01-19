@@ -5,9 +5,6 @@
 
 #include "utils.h"
 
-#undef near
-#undef far
-
 #ifndef NO_SIMD
 typedef struct _MM_ALIGN16 Matrix4 {
 #else
@@ -23,7 +20,7 @@ typedef struct Matrix4 {
 
 void matrix4_identity(Matrix4* matrix);
 
-void matrix4_perspective(Matrix4* matrix, float fov, float aspect, float near, float far);
+void matrix4_perspective(Matrix4* matrix, float fov, float aspect, float _near, float _far);
 
 void matrix4_translate(Matrix4* matrix, Vector4* position);
 
