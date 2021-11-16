@@ -367,17 +367,18 @@ void game_render(Game* game, float delta) {
                 game->camera->rotation.x, game->camera->rotation.y
             );
 
+            #ifndef NO_SIMD
+                char *has_simd = "true";
+            #else
+                char *has_simd = "false";
+            #endif
             sprintf(
                 debug_lines[2],
                 "Seed: %"PRId64" - Wireframed: %s - Flat shaded: %s - SIMD: %s - Delta: %.04f",
                 game->world->seed,
                 game->world->is_wireframed ? "true" : "false",
                 game->world->is_flat_shaded ? "true" : "false",
-                #ifndef NO_SIMD
-                    "true",
-                #else
-                    "false",
-                #endif
+                has_simd,
                 delta
             );
 

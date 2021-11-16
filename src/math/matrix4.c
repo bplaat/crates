@@ -33,8 +33,8 @@ void matrix4_perspective(Matrix4* matrix, float fov, float aspect, float _near, 
     #else
         matrix->m11 = f / aspect; matrix->m12 = 0; matrix->m13 = 0; matrix->m14 = 0;
         matrix->m21 = 0; matrix->m22 = f; matrix->m23 = 0; matrix->m24 = 0;
-        matrix->m31 = 0; matrix->m32 = 0; matrix->m33 = (near + far) * r; matrix->m34 = -1;
-        matrix->m41 = 0; matrix->m42 = 0; matrix->m43 = near * far * r * 2; matrix->m44 = 0;
+        matrix->m31 = 0; matrix->m32 = 0; matrix->m33 = (_near + _far) * r; matrix->m34 = -1;
+        matrix->m41 = 0; matrix->m42 = 0; matrix->m43 = _near * _far * r * 2; matrix->m44 = 0;
     #endif
 }
 
