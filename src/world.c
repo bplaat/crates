@@ -225,8 +225,8 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
     glUniform1i(block_shader->is_lighted_uniform, true);
     glUniform1i(block_shader->is_flad_shaded_uniform, world->is_flat_shaded);
 
-    glUniformMatrix4fv(block_shader->projection_matrix_uniform, 1, GL_FALSE, &camera->projection_matrix.m11);
-    glUniformMatrix4fv(block_shader->view_matrix_uniform, 1, GL_FALSE, &camera->view_matrix.m11);
+    glUniformMatrix4fv(block_shader->projection_matrix_uniform, 1, GL_FALSE, &camera->projection_matrix.elements[0]);
+    glUniformMatrix4fv(block_shader->view_matrix_uniform, 1, GL_FALSE, &camera->view_matrix.elements[0]);
 
     Matrix4 rotation_matrix;
     matrix4_rotate_x(&rotation_matrix, radians(90));
@@ -262,8 +262,8 @@ int world_render(World* world, Camera* camera, BlockShader* block_shader, Textur
                                                 1
                                             };
                                             matrix4_translate(&model_matrix, &block_position_vector);
-                                            matrix4_mul(&model_matrix, &rotation_matrix);
-                                            glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+                                            matrix4_mul_matrix4(&model_matrix, &rotation_matrix);
+                                            glUniformMatrix4fv(block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
 
                                             glUniform1iv(block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[block_type]);
 
@@ -402,9 +402,9 @@ BlockPosition *world_get_selected_block(World* world, Camera* camera) {
         float increase = 0.1;
         distance += increase;
         Vector4 update = { 0, 0, increase, 1 };
-        vector4_mul(&update, &rotation_x_matrix);
-        vector4_mul(&update, &rotation_y_matrix);
-        vector4_add(&ray_point, &update);
+        vector4_mul_matrix4(&update, &rotation_x_matrix);
+        vector4_mul_matrix4(&update, &rotation_y_matrix);
+        vector4_add_vector4(&ray_point, &update);
     }
 
     return NULL;

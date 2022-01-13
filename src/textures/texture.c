@@ -26,6 +26,7 @@ Texture* texture_new_from_bitmap(char* path, int width, int height, bool is_tran
     texture->height = height;
     texture->is_transparent = is_transparent;
 
+    glActiveTexture(GL_TEXTURE0);
     glGenTextures(1, &texture->texture);
     texture_enable(texture);
 
@@ -45,6 +46,7 @@ void texture_enable(Texture* texture) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture->texture);
 }
 

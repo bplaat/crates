@@ -1,10 +1,10 @@
 # PlaatCraft - CMake build file
-# Works on Linux with gcc env
-# And works on Windows via a mingw64-gcc env
+# Works on Linux and macOS
+# And works on Windows via mingw64-gcc
 cmake_minimum_required(VERSION 3.10)
 
 # Project version
-project(plaatcraft VERSION 0.6)
+project(plaatcraft VERSION 0.7)
 
 # Use the C99 standard
 set(CMAKE_C_STANDARD 99)
@@ -13,19 +13,32 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 # Set debug flag when using debug configuration
 set(CMAKE_C_FLAGS_DEBUG "-DDEBUG")
 
-# No SIMD option
-option(NO_SIMD "Build with without SSE2 SIMD instructions" OFF)
-if (NO_SIMD)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNO_SIMD -DSTBI_NO_SIMD")
+# Use SSE2 SIMD option
+option(USE_SSE2_SIMD "Use x86 SSE2 SIMD instructions" OFF)
+if (USE_SSE2_SIMD)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_SSE2_SIMD")
+endif()
+
+# Use NEON SIMD option
+option(USE_NEON_SIMD "Use ARM NEON SIMD instructions" OFF)
+if (USE_NEON_SIMD)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -USE_NEON_SIMD")
 endif()
 
 ### LIBRARIES ###
+
+# GLFW3 headers
+find_package(PkgConfig)
+pkg_check_modules(GLFW3 REQUIRED glfw3)
 
 # Glad Library
 add_library(glad src/glad/glad.c)
 target_include_directories(glad PRIVATE include)
 
 # STB Image Library
+if (NOT (USE_SSE2_SIMD OR USE_NEON_SIMD))
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSTBI_NO_SIMD")
+endif()
 add_library(stb_image src/stb_image/stb_image.c)
 target_include_directories(stb_image PRIVATE include)
 
@@ -56,6 +69,7 @@ add_executable(
     src/game.c src/camera.c src/chunk.c src/database.c src/world.c
 )
 target_include_directories(${PROJECT_NAME} PRIVATE include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW3_INCLUDE_DIRS})
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 # Link main executable with external libs
@@ -66,7 +80,7 @@ if (WIN32)
     )
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE glad stb_image stb_truetype tinycthread perlin
-        glfw sqlite3 m dl pthread
+        ${GLFW3_LINK_LIBRARIES} sqlite3 m dl pthread
     )
 endif()
 

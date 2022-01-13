@@ -33,6 +33,23 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
    make -j$(nproc)
    ```
 
+### MacOS
+
+1. Install dependencies:
+   ```
+   brew install cmake glfw sqlite
+   ```
+
+2. Generate MakeFile via CMake:
+   ```
+   mkdir build && cd build && cmake ..
+   ```
+
+3. Build the project:
+   ```
+   make -j$(sysctl -n hw.ncpu)
+   ```
+
 ### Windows
 
 1. Install [MSYS2](https://www.msys2.org/)

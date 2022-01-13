@@ -140,8 +140,8 @@ void camera_update(Camera* camera, float delta) {
     matrix4_rotate_y(&rotation_matrix, camera->rotation.y);
 
     Vector4 update = camera->velocity;
-    vector4_mul(&update, &rotation_matrix);
-    vector4_add(&camera->position, &update);
+    vector4_mul_matrix4(&update, &rotation_matrix);
+    vector4_add_vector4(&camera->position, &update);
 
     camera_update_matrix(camera);
 }
@@ -153,14 +153,14 @@ void camera_update_matrix(Camera* camera) {
 
     Matrix4 temp_matrix;
     matrix4_rotate_y(&temp_matrix, camera->rotation.y);
-    matrix4_mul(&camera->view_matrix, &temp_matrix);
+    matrix4_mul_matrix4(&camera->view_matrix, &temp_matrix);
 
     matrix4_rotate_z(&temp_matrix, camera->rotation.z);
-    matrix4_mul(&camera->view_matrix, &temp_matrix);
+    matrix4_mul_matrix4(&camera->view_matrix, &temp_matrix);
 
     Vector4 temp_vector = { -camera->position.x, -camera->position.y, camera->position.z, 1 };
     matrix4_translate(&temp_matrix, &temp_vector);
-    matrix4_mul(&camera->view_matrix, &temp_matrix);
+    matrix4_mul_matrix4(&camera->view_matrix, &temp_matrix);
 }
 
 void camera_free(Camera* camera) {

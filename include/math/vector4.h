@@ -5,11 +5,7 @@
 
 #include "utils.h"
 
-#ifndef NO_SIMD
-typedef struct _MM_ALIGN16 Vector4 {
-#else
-typedef struct Vector4 {
-#endif
+typedef __attribute__((aligned(16))) struct Vector4 {
     float x;
     float y;
     float z;
@@ -18,8 +14,8 @@ typedef struct Vector4 {
 
 #include "math/matrix4.h"
 
-void vector4_add(Vector4* vector, Vector4* rhs);
+void vector4_add_vector4(Vector4* vector, Vector4* rhs);
 
-void vector4_mul(Vector4* vector, Matrix4* rhs);
+void vector4_mul_matrix4(Vector4* vector, Matrix4* rhs);
 
 #endif

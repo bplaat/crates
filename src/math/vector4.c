@@ -1,12 +1,17 @@
 // PlaatCraft - Vector4 Math
 
 #include "math/vector4.h"
-#ifndef NO_SIMD
+#ifdef ENABLE_NEON_SIMD
+    #include <arm_neon.h>
+#endif
+#ifdef ENABLE_SSE2_SIMD
     #include <emmintrin.h>
 #endif
 
-void vector4_add(Vector4* vector, Vector4* rhs) {
-    #ifndef NO_SIMD
+void vector4_add_vector4(Vector4* vector, Vector4* rhs) {
+    #ifdef ENABLE_NEON_SIMD
+        vst1q_f32(&vector->x, vaddq_f32(vld1q_f32(&vector->x), vld1q_f32(&rhs->x)));
+    #elif defined ENABLE_SSE2_SIMD
         _mm_store_ps(&vector->x, _mm_add_ps(_mm_load_ps(&vector->x), _mm_load_ps(&rhs->x)));
     #else
         vector->x += rhs->x;
@@ -16,25 +21,26 @@ void vector4_add(Vector4* vector, Vector4* rhs) {
     #endif
 }
 
-void vector4_mul(Vector4* vector, Matrix4* rhs) {
-    #ifndef NO_SIMD
-        __m128 row1 = _mm_mul_ps(_mm_load_ps(&rhs->m11), _mm_load1_ps(&vector->x));
-        __m128 row2 = _mm_mul_ps(_mm_load_ps(&rhs->m21), _mm_load1_ps(&vector->y));
-        __m128 row3 = _mm_mul_ps(_mm_load_ps(&rhs->m31), _mm_load1_ps(&vector->z));
-        __m128 row4 = _mm_mul_ps(_mm_load_ps(&rhs->m41), _mm_load1_ps(&vector->w));
-        _mm_store_ps(&vector->x, _mm_add_ps(
-            _mm_add_ps(row1, row2),
-            _mm_add_ps(row3, row4)
-        ));
+void vector4_mul_matrix4(Vector4* vector, Matrix4* rhs) {
+    #ifdef ENABLE_NEON_SIMD
+        float32x4_t vec = vld1q_f32(&vector->x);
+        float32x4_t sum = vmulq_f32(vld1q_f32(&rhs->elements[0]), vmovq_n_f32(vec[0]));
+        sum = vmlaq_f32(sum, vld1q_f32(&rhs->elements[4]), vmovq_n_f32(vec[1]));
+        sum = vmlaq_f32(sum, vld1q_f32(&rhs->elements[8]), vmovq_n_f32(vec[2]));
+        sum = vmlaq_f32(sum, vld1q_f32(&rhs->elements[12]), vmovq_n_f32(vec[3]));
+        vst1q_f32(&vector->x, sum);
+    #elif defined ENABLE_SSE2_SIMD
+        __m128 vec = _mm_load_ps(&vector->x);
+        __m128 sum = _mm_mul_ps(_mm_load_ps(&rhs->elements[0]), _mm_set1_ps(vec[0]));
+        sum = _mm_add_ps(sum, _mm_mul_ps(_mm_load_ps(&rhs->elements[4]), _mm_set1_ps(vec[1])));
+        sum = _mm_add_ps(sum, _mm_mul_ps(_mm_load_ps(&rhs->elements[8]), _mm_set1_ps(vec[2])));
+        sum = _mm_add_ps(sum, _mm_mul_ps(_mm_load_ps(&rhs->elements[12]), _mm_set1_ps(vec[3])));
+        _mm_store_ps(&vector->x, sum);
     #else
-        float _x = rhs->m11 * vector->x + rhs->m21 * vector->y + rhs->m31 * vector->z + rhs->m41 * vector->w;
-        float _y = rhs->m12 * vector->x + rhs->m22 * vector->y + rhs->m32 * vector->z + rhs->m42 * vector->w;
-        float _z = rhs->m13 * vector->x + rhs->m23 * vector->y + rhs->m33 * vector->z + rhs->m43 * vector->w;
-        float _w = rhs->m14 * vector->x + rhs->m24 * vector->y + rhs->m34 * vector->z + rhs->m44 * vector->w;
-
-        vector->x = _x;
-        vector->y = _y;
-        vector->z = _z;
-        vector->w = _w;
+        float x = vector->x, y = vector->y, z = vector->z, w = vector->w;
+        vector->x = rhs->elements[0] * x + rhs->elements[4] * y + rhs->elements[8] * z + rhs->elements[12] * w;
+        vector->y = rhs->elements[1] * x + rhs->elements[5] * y + rhs->elements[9] * z + rhs->elements[13] * w;
+        vector->z = rhs->elements[2] * x + rhs->elements[6] * y + rhs->elements[10] * z + rhs->elements[14] * w;
+        vector->w = rhs->elements[3] * x + rhs->elements[7] * y + rhs->elements[11] * z + rhs->elements[15] * w;
     #endif
 }

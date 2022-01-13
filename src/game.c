@@ -16,7 +16,7 @@ void game_init(void) {
     atexit(glfwTerminate);
 }
 
-void game_framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+void game_size_callback(GLFWwindow* window, int width, int height) {
     Game* game = (Game*)glfwGetWindowUserPointer(window);
     game->width = width;
     game->height = height;
@@ -179,6 +179,12 @@ void game_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     }
 }
 
+void game_content_scale_callback(GLFWwindow* window, float scale_x, float scale_y) {
+    Game* game = (Game*)glfwGetWindowUserPointer(window);
+    game->scale_x = scale_x;
+    game->scale_y = scale_y;
+}
+
 Game* game_new(char* title, int width, int height) {
     Game* game = malloc(sizeof(Game));
     game->title = title;
@@ -216,6 +222,7 @@ Game* game_new(char* title, int width, int height) {
     // Set some window props
     glfwSetWindowUserPointer(game->window, game);
     glfwSetWindowSizeLimits(game->window, width / 2, height / 2, GLFW_DONT_CARE, GLFW_DONT_CARE);
+    glfwGetWindowContentScale(game->window, &game->scale_x, &game->scale_y);
     glfwMakeContextCurrent(game->window);
 
     // Load OpenGL
@@ -248,11 +255,12 @@ Game* game_new(char* title, int width, int height) {
     game->selected_block_rotation.y = 0;
 
     // Set callbacks
-    glfwSetFramebufferSizeCallback(game->window, game_framebuffer_size_callback);
+    glfwSetWindowSizeCallback(game->window, game_size_callback);
     glfwSetKeyCallback(game->window, game_key_callback);
     glfwSetMouseButtonCallback(game->window, game_mouse_button_callback);
     glfwSetCursorPosCallback(game->window, game_cursor_position_callback);
     glfwSetScrollCallback(game->window, game_scroll_callback);
+    glfwSetWindowContentScaleCallback(game->window, game_content_scale_callback);
 
     return game;
 }
@@ -274,7 +282,7 @@ void game_update(Game* game, float delta) {
 
 void game_render(Game* game, float delta) {
     // Init OpenGL viewport and culling
-    glViewport(0, 0, game->width, game->height);
+    glViewport(0, 0, game->width * game->scale_x, game->height * game->scale_y);
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CW);
 
@@ -299,8 +307,8 @@ void game_render(Game* game, float delta) {
         glUniform1i(game->block_shader->is_lighted_uniform, false);
         glUniform1i(game->block_shader->is_flad_shaded_uniform, game->world->is_flat_shaded);
 
-        glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.m11);
-        glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &game->camera->view_matrix.m11);
+        glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.elements[0]);
+        glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &game->camera->view_matrix.elements[0]);
 
         Vector4 translate_vector = {
             game->selected_block->chunk_x * CHUNK_SIZE + game->selected_block->block_x,
@@ -313,9 +321,9 @@ void game_render(Game* game, float delta) {
         Matrix4 scale_matrix;
         Vector4 scale_vector = { 1.02, 1.02, 1.02, 1 };
         matrix4_scale(&scale_matrix, &scale_vector);
-        matrix4_mul(&model_matrix, &scale_matrix);
+        matrix4_mul_matrix4(&model_matrix, &scale_matrix);
 
-        glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+        glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
 
         glUniform1iv(game->block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[BLOCK_TYPE_SELECTED]);
 
@@ -336,7 +344,7 @@ void game_render(Game* game, float delta) {
 
     Matrix4 projection_matrix;
     matrix4_flat_projection(&projection_matrix, game->width, game->height);
-    glUniformMatrix4fv(game->flat_shader->projection_matrix_uniform, 1, GL_FALSE, &projection_matrix.m11);
+    glUniformMatrix4fv(game->flat_shader->projection_matrix_uniform, 1, GL_FALSE, &projection_matrix.elements[0]);
 
     // Render game hude
     if (game->is_playing) {
@@ -406,7 +414,7 @@ void game_render(Game* game, float delta) {
                 TextTexture* debug_text_texture = text_texture_new(debug_lines[i], game->text_font, 24, text_color);
 
                 matrix4_flat_rect(&model_matrix, 16, 16 + i * (24 + 16), debug_text_texture->texture->width, debug_text_texture->texture->height);
-                glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+                glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
 
                 texture_enable(debug_text_texture->texture);
                 glDrawArrays(GL_TRIANGLES, 0, PLANE_VERTICES_COUNT);
@@ -419,7 +427,7 @@ void game_render(Game* game, float delta) {
         // Render cursor
         {
             matrix4_flat_rect(&model_matrix, (game->width - game->cursor_texture->width) / 2, (game->height - game->cursor_texture->height) / 2, game->cursor_texture->width, game->cursor_texture->height);
-            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
 
             texture_enable(game->cursor_texture);
             glDrawArrays(GL_TRIANGLES, 0, PLANE_VERTICES_COUNT);
@@ -432,7 +440,7 @@ void game_render(Game* game, float delta) {
 
             float size = (game->width / 2) * 0.3;
             matrix4_flat_rect(&model_matrix, size * 1.15, (game->height - size) + (size - block_text_texture->texture->height) / 2, block_text_texture->texture->width, block_text_texture->texture->height);
-            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
 
             texture_enable(block_text_texture->texture);
             glDrawArrays(GL_TRIANGLES, 0, PLANE_VERTICES_COUNT);
@@ -455,27 +463,27 @@ void game_render(Game* game, float delta) {
             glUniform1i(game->block_shader->is_lighted_uniform, false);
             glUniform1i(game->block_shader->is_flad_shaded_uniform, game->world->is_flat_shaded);
 
-            glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.m11);
+            glUniformMatrix4fv(game->block_shader->projection_matrix_uniform, 1, GL_FALSE, &game->camera->projection_matrix.elements[0]);
 
             Matrix4 view_matrix;
             matrix4_identity(&view_matrix);
-            glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &view_matrix.m11);
+            glUniformMatrix4fv(game->block_shader->view_matrix_uniform, 1, GL_FALSE, &view_matrix.elements[0]);
 
             Vector4 block_position_camera = { -1.2, -0.6, -2, 1 };
             matrix4_translate(&model_matrix, &block_position_camera);
 
             Matrix4 temp_matrix;
             matrix4_rotate_x(&temp_matrix, game->selected_block_rotation.x + radians(90));
-            matrix4_mul(&model_matrix, &temp_matrix);
+            matrix4_mul_matrix4(&model_matrix, &temp_matrix);
 
             matrix4_rotate_z(&temp_matrix, game->selected_block_rotation.z);
-            matrix4_mul(&model_matrix, &temp_matrix);
+            matrix4_mul_matrix4(&model_matrix, &temp_matrix);
 
             Vector4 block_scale_vector = { 0.2, 0.2, 0.2, 1 };
             matrix4_scale(&temp_matrix, &block_scale_vector);
-            matrix4_mul(&model_matrix, &temp_matrix);
+            matrix4_mul_matrix4(&model_matrix, &temp_matrix);
 
-            glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+            glUniformMatrix4fv(game->block_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
 
             glUniform1iv(game->block_shader->texture_indexes_uniform, 6, (const GLint*)&BLOCK_TYPE_TEXTURE_FACES[game->selected_block_type]);
 
@@ -495,7 +503,7 @@ void game_render(Game* game, float delta) {
         // Render darker background overlay
         {
             matrix4_flat_rect(&model_matrix, 0, 0, game->width + 1, game->height + 1);
-            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
 
             glUniform1i(game->flat_shader->is_textured_uniform, false);
             glUniform4f(game->flat_shader->color_uniform, 0, 0, 0, 0.75);
@@ -522,7 +530,7 @@ void game_render(Game* game, float delta) {
             TextTexture* title_text_texture = text_texture_new(game->title, game->text_font, 64, text_color);
 
             matrix4_flat_rect(&model_matrix, (game->width - title_text_texture->texture->width) / 2, y, title_text_texture->texture->width, title_text_texture->texture->height);
-            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
             y += 64 + 24;
 
             texture_enable(title_text_texture->texture);
@@ -535,7 +543,7 @@ void game_render(Game* game, float delta) {
             TextTexture* description_text_texture = text_texture_new("A modern OpenGL Minecraft like game for a school project about Computer Graphics", game->text_font, 32, text_color);
 
             matrix4_flat_rect(&model_matrix, (game->width - description_text_texture->texture->width) / 2, y, description_text_texture->texture->width, description_text_texture->texture->height);
-            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
             y += 32 + 32;
 
             texture_enable(description_text_texture->texture);
@@ -566,7 +574,7 @@ void game_render(Game* game, float delta) {
                 TextTexture* control_text_texture = text_texture_new(controls_lines[i], game->text_font, 24, secondary_text_color);
 
                 matrix4_flat_rect(&model_matrix, (game->width - control_text_texture->texture->width) / 2, y, control_text_texture->texture->width, control_text_texture->texture->height);
-                glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+                glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
                 y += 24 + 8;
 
                 texture_enable(control_text_texture->texture);
@@ -583,7 +591,7 @@ void game_render(Game* game, float delta) {
 
             y += 16;
             matrix4_flat_rect(&model_matrix, (game->width - footer_text_texture->texture->width) / 2, y, footer_text_texture->texture->width, footer_text_texture->texture->height);
-            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.m11);
+            glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
 
             texture_enable(footer_text_texture->texture);
             glDrawArrays(GL_TRIANGLES, 0, PLANE_VERTICES_COUNT);

@@ -291,8 +291,8 @@ bool chunk_is_visible(Chunk* chunk, Camera* camera) {
     };
 
     for (int i = 0; i < BLOCK_CORNERS_COUNT; i++) {
-        vector4_mul(&chunk_corners[i], &camera->view_matrix);
-        vector4_mul(&chunk_corners[i], &camera->projection_matrix);
+        vector4_mul_matrix4(&chunk_corners[i], &camera->view_matrix);
+        vector4_mul_matrix4(&chunk_corners[i], &camera->projection_matrix);
         if (
             chunk_corners[i].x >= -chunk_corners[i].w && chunk_corners[i].x <= chunk_corners[i].w &&
             chunk_corners[i].y >= -chunk_corners[i].w && chunk_corners[i].y <= chunk_corners[i].w &&
@@ -328,8 +328,8 @@ bool chunk_is_visible(Chunk* chunk, Camera* camera) {
                     };
 
                     for (int i = 0; i < BLOCK_CORNERS_COUNT; i++) {
-                        vector4_mul(&block_corners[i], &camera->view_matrix);
-                        vector4_mul(&block_corners[i], &camera->projection_matrix);
+                        vector4_mul_matrix4(&block_corners[i], &camera->view_matrix);
+                        vector4_mul_matrix4(&block_corners[i], &camera->projection_matrix);
                         if (
                             block_corners[i].x >= -block_corners[i].w && block_corners[i].x <= block_corners[i].w &&
                             block_corners[i].y >= -block_corners[i].w && block_corners[i].y <= block_corners[i].w &&

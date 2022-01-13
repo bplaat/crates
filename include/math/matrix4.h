@@ -5,15 +5,8 @@
 
 #include "utils.h"
 
-#ifndef NO_SIMD
-typedef struct _MM_ALIGN16 Matrix4 {
-#else
-typedef struct Matrix4 {
-#endif
-    float m11, m12, m13, m14;
-    float m21, m22, m23, m24;
-    float m31, m32, m33, m34;
-    float m41, m42, m43, m44;
+typedef __attribute__((aligned(16))) struct Matrix4 {
+    float elements[16];
 } Matrix4;
 
 #include "math/vector4.h"
@@ -36,8 +29,6 @@ void matrix4_flat_projection(Matrix4* matrix, int viewport_width, int viewport_h
 
 void matrix4_flat_rect(Matrix4* matrix, int x, int y, int width, int height);
 
-void matrix4_transpose(Matrix4* matrix);
-
-void matrix4_mul(Matrix4* matrix, Matrix4* rhs);
+void matrix4_mul_matrix4(Matrix4* matrix, Matrix4* rhs);
 
 #endif

@@ -18,6 +18,8 @@ typedef struct Game {
     char* title;
     int width;
     int height;
+    float scale_x;
+    float scale_y;
     int oldWidth;
     int oldHeight;
 
@@ -46,7 +48,7 @@ typedef struct Game {
 
 void game_init(void);
 
-void game_framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void game_size_callback(GLFWwindow* window, int width, int height);
 
 void game_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
@@ -55,6 +57,8 @@ void game_mouse_button_callback(GLFWwindow* window, int button, int action, int 
 void game_cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
 
 void game_scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+void game_content_scale_callback(GLFWwindow* window, float scale_x, float scale_y);
 
 Game* game_new(char* title, int width, int height);
 

@@ -49,6 +49,7 @@ TextureAtlas* texture_atlas_new(char* path, int tile_size, bool is_transparent) 
         }
     }
 
+    glActiveTexture(GL_TEXTURE0);
     glGenTextures(1, &texture_atlas->texture_array);
     texture_atlas_enable(texture_atlas);
 
@@ -74,6 +75,7 @@ void texture_atlas_enable(TextureAtlas* texture_atlas) {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D_ARRAY, texture_atlas->texture_array);
 }
 
