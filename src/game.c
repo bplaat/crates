@@ -50,7 +50,7 @@ void game_key_callback(GLFWwindow* window, int key, int scancode, int action, in
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
 
-        if (key == GLFW_KEY_F3) {
+        if (key == GLFW_KEY_F3 || ((mods & GLFW_MOD_CONTROL) != 0 && key == GLFW_KEY_Y)) {
             game->is_debugged = !game->is_debugged;
         }
 
@@ -375,10 +375,12 @@ void game_render(Game* game, float delta) {
                 game->camera->rotation.x, game->camera->rotation.y
             );
 
-            #ifndef NO_SIMD
-                char *has_simd = "true";
+            #ifndef USE_NEON_SIMD
+                char *simd_type = "NEON";
+            #elif defined USE_SSE2_SIMD
+                char *simd_type = "SSE2";
             #else
-                char *has_simd = "false";
+                char *simd_type = "none";
             #endif
             sprintf(
                 debug_lines[2],
@@ -386,7 +388,7 @@ void game_render(Game* game, float delta) {
                 game->world->seed,
                 game->world->is_wireframed ? "true" : "false",
                 game->world->is_flat_shaded ? "true" : "false",
-                has_simd,
+                simd_type,
                 delta
             );
 
@@ -565,7 +567,7 @@ void game_render(Game* game, float delta) {
                 "Use the scroll wheel to select other blocks",
                 "Use F11 to toggle fullscreen mode",
                 "Use Ctrl+R to toggle the render distance (near or far)",
-                "Use F3 to toggle debug mode",
+                "Use F3 or Ctrl+Y to toggle debug mode",
                 "Use Ctrl+I to toggle wireframe mode",
                 "Use Ctrl+T to toggle flat shading mode",
             };
