@@ -375,9 +375,9 @@ void game_render(Game* game, float delta) {
                 game->camera->rotation.x, game->camera->rotation.y
             );
 
-            #ifndef USE_NEON_SIMD
+            #ifdef ENABLE_NEON_SIMD
                 char *simd_type = "NEON";
-            #elif defined USE_SSE2_SIMD
+            #elif defined ENABLE_SSE2_SIMD
                 char *simd_type = "SSE2";
             #else
                 char *simd_type = "none";

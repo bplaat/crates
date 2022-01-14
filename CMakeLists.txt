@@ -14,15 +14,15 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 set(CMAKE_C_FLAGS_DEBUG "-DDEBUG")
 
 # Use SSE2 SIMD option
-option(USE_SSE2_SIMD "Use x86 SSE2 SIMD instructions" OFF)
-if (USE_SSE2_SIMD)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_SSE2_SIMD")
+option(ENABLE_SSE2_SIMD "Use x86 SSE2 SIMD instructions" OFF)
+if (ENABLE_SSE2_SIMD)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_SSE2_SIMD")
 endif()
 
 # Use NEON SIMD option
-option(USE_NEON_SIMD "Use ARM NEON SIMD instructions" OFF)
-if (USE_NEON_SIMD)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -USE_NEON_SIMD")
+option(ENABLE_NEON_SIMD "Use ARM NEON SIMD instructions" OFF)
+if (ENABLE_NEON_SIMD)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_NEON_SIMD")
 endif()
 
 ### LIBRARIES ###
@@ -36,7 +36,7 @@ add_library(glad src/glad/glad.c)
 target_include_directories(glad PRIVATE include)
 
 # STB Image Library
-if (NOT (USE_SSE2_SIMD OR USE_NEON_SIMD))
+if (NOT (ENABLE_SSE2_SIMD OR ENABLE_NEON_SIMD))
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSTBI_NO_SIMD")
 endif()
 add_library(stb_image src/stb_image/stb_image.c)

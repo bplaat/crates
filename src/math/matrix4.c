@@ -17,13 +17,13 @@ void matrix4_identity(Matrix4 *matrix) {
     matrix->elements[12] = 0; matrix->elements[13] = 0; matrix->elements[14] = 0; matrix->elements[15] = 1;
 }
 
-void matrix4_perspective(Matrix4 *matrix, float fov, float aspect, float near, float far) {
+void matrix4_perspective(Matrix4 *matrix, float fov, float aspect, float _near, float _far) {
     float f = tanf(M_PI * 0.5f - 0.5f * fov);
-    float r = 1.0 / (near - far);
+    float r = 1.0 / (_near - _far);
     matrix->elements[0] = f / aspect; matrix->elements[1] = 0; matrix->elements[2] = 0; matrix->elements[3] = 0;
     matrix->elements[4] = 0; matrix->elements[5] = f; matrix->elements[6] = 0; matrix->elements[7] = 0;
-    matrix->elements[8] = 0; matrix->elements[9] = 0; matrix->elements[10] = (near + far) * r; matrix->elements[11] = -1;
-    matrix->elements[12] = 0; matrix->elements[13] = 0; matrix->elements[14] = near * far * r * 2; matrix->elements[15] = 0;
+    matrix->elements[8] = 0; matrix->elements[9] = 0; matrix->elements[10] = (_near + _far) * r; matrix->elements[11] = -1;
+    matrix->elements[12] = 0; matrix->elements[13] = 0; matrix->elements[14] = _near * _far * r * 2; matrix->elements[15] = 0;
 }
 
 void matrix4_translate(Matrix4 *matrix, Vector4* position) {
@@ -148,9 +148,9 @@ void matrix4_mul_matrix4(Matrix4* matrix, Matrix4* rhs) {
 
         b = _mm_load_ps(&rhs->elements[12]);
         sum = _mm_mul_ps(a0, _mm_set1_ps(b[0]));
-        sum = _mm_add_ps(_mm_mul_ps(a1, _mm_set1_ps(b[1])));
-        sum = _mm_add_ps(_mm_mul_ps(a2, _mm_set1_ps(b[2])));
-        sum = _mm_add_ps(_mm_mul_ps(a3, _mm_set1_ps(b[3])));
+        sum = _mm_add_ps(sum, _mm_mul_ps(a1, _mm_set1_ps(b[1])));
+        sum = _mm_add_ps(sum, _mm_mul_ps(a2, _mm_set1_ps(b[2])));
+        sum = _mm_add_ps(sum, _mm_mul_ps(a3, _mm_set1_ps(b[3])));
         _mm_store_ps(&matrix->elements[12], sum);
     #else
         float a00 = matrix->elements[0];
