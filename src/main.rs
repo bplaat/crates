@@ -1,7 +1,6 @@
 use std::env;
 use std::io;
 use std::io::Write;
-use std::collections::HashMap;
 
 mod interpreter;
 mod lexer;
@@ -9,7 +8,7 @@ mod parser;
 
 fn repl() {
     println!("BassieCalc");
-    let mut env = HashMap::new();
+    let mut interpreter = interpreter::Interpreter::new();
     loop {
         let mut text = String::new();
         print!("> ");
@@ -33,7 +32,7 @@ fn repl() {
         let node = parser::parser(&tokens);
         println!("Node: {:?}", node);
 
-        let result = interpreter::interpreter(&mut env, node);
+        let result = interpreter.eval(node);
         println!("Result: {}", result);
     }
 }
@@ -57,7 +56,7 @@ fn main() {
     let node = parser::parser(&tokens);
     println!("Node: {:?}", node);
 
-    let mut env = HashMap::new();
-    let result = interpreter::interpreter(&mut env, node);
+    let mut interpreter = interpreter::Interpreter::new();
+    let result = interpreter.eval(node);
     println!("Result: {}", result);
 }

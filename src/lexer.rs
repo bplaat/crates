@@ -97,5 +97,5 @@ pub fn lexer(text: &str) -> Vec<Token> {
     }
 
     tokens.push(Token::EOF);
-    return tokens;
+    tokens
 }
