@@ -7,7 +7,9 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter { env: HashMap::new() }
+        Interpreter {
+            env: HashMap::new(),
+        }
     }
 
     pub fn eval(&mut self, node: Box<Node>) -> i64 {
@@ -35,24 +37,12 @@ impl Interpreter {
                 result
             }
             Node::Neg(unary) => -self.eval(unary),
-            Node::Add(lhs, rhs) => {
-                self.eval(lhs) + self.eval(rhs)
-            }
-            Node::Sub(lhs, rhs) => {
-                self.eval(lhs) - self.eval(rhs)
-            }
-            Node::Mul(lhs, rhs) => {
-                self.eval(lhs) * self.eval(rhs)
-            }
-            Node::Exp(lhs, rhs) => {
-                self.eval(lhs).pow(self.eval(rhs) as u32)
-            }
-            Node::Div(lhs, rhs) => {
-                self.eval(lhs) / self.eval(rhs)
-            }
-            Node::Mod(lhs, rhs) => {
-                self.eval(lhs) % self.eval(rhs)
-            }
+            Node::Add(lhs, rhs) => self.eval(lhs) + self.eval(rhs),
+            Node::Sub(lhs, rhs) => self.eval(lhs) - self.eval(rhs),
+            Node::Mul(lhs, rhs) => self.eval(lhs) * self.eval(rhs),
+            Node::Exp(lhs, rhs) => self.eval(lhs).pow(self.eval(rhs) as u32),
+            Node::Div(lhs, rhs) => self.eval(lhs) / self.eval(rhs),
+            Node::Mod(lhs, rhs) => self.eval(lhs) % self.eval(rhs),
         }
     }
 }
