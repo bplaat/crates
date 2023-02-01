@@ -36,6 +36,10 @@ impl<'a> Parser<'a> {
         &self.tokens[self.position]
     }
 
+    fn peek_next(&self) -> Option<&Token> {
+        self.tokens.get(self.position + 1)
+    }
+
     fn next(&mut self) {
         self.position += 1;
     }
@@ -60,16 +64,16 @@ impl<'a> Parser<'a> {
     }
 
     fn assign(&mut self) -> Result<Box<Node>, String> {
-        if self.position + 1 >= self.tokens.len() {
-            return self.add();
-        }
-        match self.tokens[self.position + 1] {
-            Token::Assign => {
-                let lhs = self.add()?;
-                self.next();
-                Ok(Box::new(Node::Assign(lhs, self.assign()?)))
-            }
-            _ => self.add(),
+        match self.peek_next() {
+            Some(token) => match token {
+                Token::Assign => {
+                    let lhs = self.add()?;
+                    self.next();
+                    Ok(Box::new(Node::Assign(lhs, self.assign()?)))
+                }
+                _ => self.add(),
+            },
+            None => self.add(),
         }
     }
 
