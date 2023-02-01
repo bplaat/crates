@@ -25,7 +25,10 @@ fn repl() {
             break;
         }
 
-        println!("Result: {}", context.eval(text.as_str()));
+        match context.eval(text.as_str()) {
+            Ok(result) => println!("Result: {}", result),
+            Err(error) => println!("Error: {}", error),
+        }
     }
 }
 
@@ -37,5 +40,8 @@ fn main() {
     }
 
     let mut context = Context::new();
-    println!("Result: {}", context.eval(args[1].as_str()));
+    match context.eval(args[1].as_str()) {
+        Ok(result) => println!("Result: {}", result),
+        Err(error) => println!("Error: {}", error),
+    }
 }

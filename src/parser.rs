@@ -28,7 +28,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn node(&mut self) -> Box<Node> {
+    pub fn node(&mut self) -> Result<Box<Node>, String> {
         self.nodes()
     }
 
@@ -40,10 +40,10 @@ impl<'a> Parser<'a> {
         self.position += 1;
     }
 
-    fn nodes(&mut self) -> Box<Node> {
+    fn nodes(&mut self) -> Result<Box<Node>, String> {
         let mut nodes = vec![];
         loop {
-            nodes.push(self.assign());
+            nodes.push(self.assign()?);
             match self.peek() {
                 Token::Comma => {
                     self.next();
@@ -56,72 +56,72 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Box::new(Node::Nodes(nodes))
+        Ok(Box::new(Node::Nodes(nodes)))
     }
 
-    fn assign(&mut self) -> Box<Node> {
+    fn assign(&mut self) -> Result<Box<Node>, String> {
         if self.position + 1 >= self.tokens.len() {
             return self.add();
         }
         match self.tokens[self.position + 1] {
             Token::Assign => {
-                let lhs = self.add();
+                let lhs = self.add()?;
                 self.next();
-                Box::new(Node::Assign(lhs, self.assign()))
+                Ok(Box::new(Node::Assign(lhs, self.assign()?)))
             }
             _ => self.add(),
         }
     }
 
-    fn add(&mut self) -> Box<Node> {
-        let mut node = self.mul();
+    fn add(&mut self) -> Result<Box<Node>, String> {
+        let mut node = self.mul()?;
         loop {
             match self.peek() {
                 Token::Add => {
                     self.next();
-                    node = Box::new(Node::Add(node, self.mul()));
+                    node = Box::new(Node::Add(node, self.mul()?));
                 }
                 Token::Sub => {
                     self.next();
-                    node = Box::new(Node::Sub(node, self.mul()));
+                    node = Box::new(Node::Sub(node, self.mul()?));
                 }
                 _ => {
                     break;
                 }
             }
         }
-        node
+        Ok(node)
     }
 
-    fn mul(&mut self) -> Box<Node> {
-        let mut node = self.unary();
+    fn mul(&mut self) -> Result<Box<Node>, String> {
+        let mut node = self.unary()?;
         loop {
             match self.peek() {
                 Token::Mul => {
                     self.next();
-                    node = Box::new(Node::Mul(node, self.unary()));
+                    node = Box::new(Node::Mul(node, self.unary()?));
                 }
                 Token::Exp => {
                     self.next();
-                    node = Box::new(Node::Exp(node, self.unary()));
+                    node = Box::new(Node::Exp(node, self.unary()?));
                 }
                 Token::Div => {
                     self.next();
-                    node = Box::new(Node::Div(node, self.unary()));
+                    node = Box::new(Node::Div(node, self.unary()?));
                 }
                 Token::Mod => {
                     self.next();
-                    node = Box::new(Node::Mod(node, self.unary()));
+                    node = Box::new(Node::Mod(node, self.unary()?));
                 }
                 _ => {
                     break;
                 }
             }
         }
-        node
+        Ok(node)
     }
 
-    fn unary(&mut self) -> Box<Node> {
+    fn unary(&mut self) -> Result<Box<Node>, String> {
         match self.peek() {
             Token::Add => {
                 self.next();
@@ -129,32 +129,31 @@ impl<'a> Parser<'a> {
             }
             Token::Sub => {
                 self.next();
-                Box::new(Node::Neg(self.unary()))
+                Ok(Box::new(Node::Neg(self.unary()?)))
             }
             _ => self.primary(),
         }
     }
 
-    fn primary(&mut self) -> Box<Node> {
+    fn primary(&mut self) -> Result<Box<Node>, String> {
         match self.peek() {
             Token::LParen => {
                 self.next();
-                let node = self.add();
+                let node = self.add()?;
                 self.next();
-                node
+                Ok(node)
             }
             Token::Number(number) => {
                 let node = Box::new(Node::Number(*number));
                 self.next();
-                node
+                Ok(node)
             }
             Token::Variable(variable) => {
                 let node = Box::new(Node::Variable(variable.clone()));
                 self.next();
-                node
+                Ok(node)
             }
-            Token::EOF => Box::new(Node::Number(0)),
-            _ => panic!("Unknown node type"),
+            _ => Err(String::from("Parser: unknown node type")),
         }
     }
 }
