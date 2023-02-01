@@ -60,12 +60,15 @@ impl<'a> Parser<'a> {
     }
 
     fn assign(&mut self) -> Box<Node> {
+        if self.position + 1 >= self.tokens.len() {
+            return self.add();
+        }
         match self.tokens[self.position + 1] {
             Token::Assign => {
                 let lhs = self.add();
                 self.next();
                 Box::new(Node::Assign(lhs, self.assign()))
-            },
+            }
             _ => self.add(),
         }
     }
@@ -150,6 +153,7 @@ impl<'a> Parser<'a> {
                 self.next();
                 node
             }
+            Token::EOF => Box::new(Node::Number(0)),
             _ => panic!("Unknown node type"),
         }
     }

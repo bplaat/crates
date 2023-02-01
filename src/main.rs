@@ -12,9 +12,10 @@ fn repl() {
     println!("BassieCalc");
     let mut context = Context::new();
     loop {
-        let mut text = String::new();
         print!("> ");
         _ = io::stdout().flush();
+
+        let mut text = String::new();
         _ = io::stdin().read_line(&mut text);
 
         if text == "\n" {

@@ -24,6 +24,10 @@ pub fn lexer(text: &str) -> Vec<Token> {
         let char = chars.next();
         match char {
             Some(char) => {
+                if char.is_whitespace() {
+                    continue;
+                }
+
                 if char.is_digit(10) {
                     let mut number = String::from(char);
                     loop {
@@ -38,6 +42,7 @@ pub fn lexer(text: &str) -> Vec<Token> {
                         }
                     }
                     tokens.push(Token::Number(number.parse().unwrap()));
+                    continue;
                 }
 
                 if char.is_alphabetic() {
@@ -54,28 +59,36 @@ pub fn lexer(text: &str) -> Vec<Token> {
                         }
                     }
                     tokens.push(Token::Variable(variable));
+                    continue;
                 }
 
                 if char == '(' {
                     tokens.push(Token::LParen);
+                    continue;
                 }
                 if char == ')' {
                     tokens.push(Token::RParen);
+                    continue;
                 }
                 if char == ',' {
                     tokens.push(Token::Comma);
+                    continue;
                 }
                 if char == ';' {
                     tokens.push(Token::Semicolon);
+                    continue;
                 }
                 if char == '=' {
                     tokens.push(Token::Assign);
+                    continue;
                 }
                 if char == '+' {
                     tokens.push(Token::Add);
+                    continue;
                 }
                 if char == '-' {
                     tokens.push(Token::Sub);
+                    continue;
                 }
                 if char == '*' {
                     if *chars.peek().unwrap() == '*' {
@@ -84,13 +97,18 @@ pub fn lexer(text: &str) -> Vec<Token> {
                         continue;
                     }
                     tokens.push(Token::Mul);
+                    continue;
                 }
                 if char == '/' {
                     tokens.push(Token::Div);
+                    continue;
                 }
                 if char == '%' {
                     tokens.push(Token::Mod);
+                    continue;
                 }
+
+                panic!("Unknown character: {}", char);
             }
             None => {
                 break;
