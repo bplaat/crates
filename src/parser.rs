@@ -5,8 +5,8 @@ pub enum Node {
     Nodes(Vec<Box<Node>>),
     Number(i64),
     Variable(String),
-    Assign(Box<Node>, Box<Node>),
     Neg(Box<Node>),
+    Assign(Box<Node>, Box<Node>),
     Add(Box<Node>, Box<Node>),
     Sub(Box<Node>, Box<Node>),
     Mul(Box<Node>, Box<Node>),
@@ -15,15 +15,15 @@ pub enum Node {
     Mod(Box<Node>, Box<Node>),
 }
 
-pub struct Parser {
-    tokens: Vec<Token>,
+pub struct Parser<'a> {
+    tokens: &'a Vec<Token>,
     position: usize,
 }
 
-impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+impl<'a> Parser<'a> {
+    pub fn new(tokens: &'a Vec<Token>) -> Self {
         Parser {
-            tokens,
+            tokens: tokens,
             position: 0,
         }
     }
@@ -72,7 +72,7 @@ impl Parser {
                 }
             }
         }
-        return node;
+        node
     }
 
     fn add(&mut self) -> Box<Node> {
@@ -92,7 +92,7 @@ impl Parser {
                 }
             }
         }
-        return node;
+        node
     }
 
     fn mul(&mut self) -> Box<Node> {
@@ -120,7 +120,7 @@ impl Parser {
                 }
             }
         }
-        return node;
+        node
     }
 
     fn unary(&mut self) -> Box<Node> {
@@ -143,7 +143,7 @@ impl Parser {
                 self.next();
                 let node = self.add();
                 self.next();
-                return node;
+                node
             }
             Token::Number(number) => {
                 let node = Box::new(Node::Number(*number));

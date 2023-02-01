@@ -1,12 +1,12 @@
 #[derive(Debug)]
 pub enum Token {
+    Number(i64),
+    Variable(String),
     EOF,
     LParen,
     RParen,
     Comma,
     Semicolon,
-    Number(i64),
-    Variable(String),
     Assign,
     Add,
     Sub,
@@ -78,10 +78,12 @@ pub fn lexer(text: &str) -> Vec<Token> {
                     tokens.push(Token::Sub);
                 }
                 if char == '*' {
+                    if *chars.peek().unwrap() == '*' {
+                        chars.next();
+                        tokens.push(Token::Exp);
+                        continue;
+                    }
                     tokens.push(Token::Mul);
-                }
-                if char == '^' {
-                    tokens.push(Token::Exp);
                 }
                 if char == '/' {
                     tokens.push(Token::Div);

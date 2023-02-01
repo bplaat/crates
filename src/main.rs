@@ -29,8 +29,7 @@ fn repl() {
         }
         println!();
 
-        let mut parser = parser::Parser::new(tokens);
-        let node = parser.node();
+        let node = parser::Parser::new(&tokens).node();
         println!("Node: {:?}", node);
 
         let result = interpreter.eval(node);
@@ -45,19 +44,19 @@ fn main() {
         return;
     }
 
-    // let text = args[1].as_str();
+    let text = args[1].as_str();
 
-    // let tokens = lexer::lexer(text);
-    // print!("Tokens: ");
-    // for token in &tokens {
-    //     print!("{:?}, ", token);
-    // }
-    // println!();
+    let tokens = lexer::lexer(text);
+    print!("Tokens: ");
+    for token in &tokens {
+        print!("{:?}, ", token);
+    }
+    println!();
 
-    // let node = parser::parser(&tokens);
-    // println!("Node: {:?}", node);
+    let node = parser::Parser::new(&tokens).node();
+    println!("Node: {:?}", node);
 
-    // let mut interpreter = interpreter::Interpreter::new();
-    // let result = interpreter.eval(node);
-    // println!("Result: {}", result);
+    let mut interpreter = interpreter::Interpreter::new();
+    let result = interpreter.eval(node);
+    println!("Result: {}", result);
 }
