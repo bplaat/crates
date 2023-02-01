@@ -2,13 +2,15 @@ use std::env;
 use std::io;
 use std::io::Write;
 
+mod context;
 mod interpreter;
 mod lexer;
 mod parser;
+use crate::context::Context;
 
 fn repl() {
     println!("BassieCalc");
-    let mut interpreter = interpreter::Interpreter::new();
+    let mut context = Context::new();
     loop {
         let mut text = String::new();
         print!("> ");
@@ -22,18 +24,7 @@ fn repl() {
             break;
         }
 
-        let tokens = lexer::lexer(text.as_str());
-        print!("Tokens: ");
-        for token in &tokens {
-            print!("{:?}, ", token);
-        }
-        println!();
-
-        let node = parser::Parser::new(&tokens).node();
-        println!("Node: {:?}", node);
-
-        let result = interpreter.eval(node);
-        println!("Result: {}", result);
+        println!("Result: {}", context.eval(text.as_str()));
     }
 }
 
@@ -44,19 +35,6 @@ fn main() {
         return;
     }
 
-    let text = args[1].as_str();
-
-    let tokens = lexer::lexer(text);
-    print!("Tokens: ");
-    for token in &tokens {
-        print!("{:?}, ", token);
-    }
-    println!();
-
-    let node = parser::Parser::new(&tokens).node();
-    println!("Node: {:?}", node);
-
-    let mut interpreter = interpreter::Interpreter::new();
-    let result = interpreter.eval(node);
-    println!("Result: {}", result);
+    let mut context = Context::new();
+    println!("Result: {}", context.eval(args[1].as_str()));
 }

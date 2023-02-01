@@ -1,15 +1,13 @@
 use crate::parser::Node;
 use std::collections::HashMap;
 
-pub struct Interpreter {
-    env: HashMap<String, i64>,
+pub struct Interpreter<'a> {
+    env: &'a mut HashMap<String, i64>,
 }
 
-impl Interpreter {
-    pub fn new() -> Self {
-        Interpreter {
-            env: HashMap::new(),
-        }
+impl<'a> Interpreter<'a> {
+    pub fn new(env: &'a mut HashMap<String, i64>) -> Self {
+        Interpreter { env }
     }
 
     pub fn eval(&mut self, node: Box<Node>) -> i64 {

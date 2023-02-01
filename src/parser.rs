@@ -60,19 +60,14 @@ impl<'a> Parser<'a> {
     }
 
     fn assign(&mut self) -> Box<Node> {
-        let mut node = self.add();
-        loop {
-            match self.peek() {
-                Token::Assign => {
-                    self.next();
-                    node = Box::new(Node::Assign(node, self.add()));
-                }
-                _ => {
-                    break;
-                }
-            }
+        match self.tokens[self.position + 1] {
+            Token::Assign => {
+                let lhs = self.add();
+                self.next();
+                Box::new(Node::Assign(lhs, self.assign()))
+            },
+            _ => self.add(),
         }
-        node
     }
 
     fn add(&mut self) -> Box<Node> {
