@@ -27,16 +27,11 @@ pub fn lexer(text: &str) -> Result<Vec<Token>, String> {
 
         if char.is_digit(10) {
             let mut number = String::from(char);
-            loop {
-                match chars.peek() {
-                    Some(char) => {
-                        if !char.is_digit(10) {
-                            break;
-                        }
-                        number.push(chars.next().unwrap());
-                    }
-                    None => break,
+            while let Some(char) = chars.peek() {
+                if !char.is_digit(10) {
+                    break;
                 }
+                number.push(chars.next().unwrap());
             }
             tokens.push(Token::Number(number.parse().unwrap()));
             continue;
@@ -44,16 +39,11 @@ pub fn lexer(text: &str) -> Result<Vec<Token>, String> {
 
         if char.is_alphabetic() {
             let mut variable = String::from(char);
-            loop {
-                match chars.peek() {
-                    Some(char) => {
-                        if !char.is_alphanumeric() {
-                            break;
-                        }
-                        variable.push(chars.next().unwrap());
-                    }
-                    None => break,
+            while let Some(char) = chars.peek() {
+                if !char.is_alphanumeric() {
+                    break;
                 }
+                variable.push(chars.next().unwrap());
             }
             tokens.push(Token::Variable(variable));
             continue;

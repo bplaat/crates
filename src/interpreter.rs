@@ -39,7 +39,10 @@ impl<'a> Interpreter<'a> {
             Node::Sub(lhs, rhs) => Ok(self.eval(lhs)? - self.eval(rhs)?),
             Node::Mul(lhs, rhs) => Ok(self.eval(lhs)? * self.eval(rhs)?),
             Node::Exp(lhs, rhs) => Ok(self.eval(lhs)?.pow(self.eval(rhs)? as u32)),
-            Node::Div(lhs, rhs) => Ok(self.eval(lhs)? / self.eval(rhs)?),
+            Node::Div(lhs, rhs) => {
+                let rhs = self.eval(rhs)?;
+                Ok(if rhs != 0 { self.eval(lhs)? / rhs } else { 0 })
+            }
             Node::Mod(lhs, rhs) => Ok(self.eval(lhs)? % self.eval(rhs)?),
         }
     }
