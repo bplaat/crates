@@ -19,10 +19,10 @@ fn repl(verbose: bool) {
         let mut text = String::new();
         _ = io::stdin().read_line(&mut text);
 
-        if text == "\n" {
+        if text == "\n" || text == "\r\n" {
             continue;
         }
-        if text == ".exit\n" {
+        if text == ".exit\n" || text == ".exit\r\n" {
             break;
         }
 
