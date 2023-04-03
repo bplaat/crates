@@ -1,10 +1,10 @@
-# bplaat/plaatcraft
+# PlaatCraft
 A modern OpenGL Minecraft like game for a school project about Computer Graphics
 
 You will need a computer / graphics card which supports minimal the OpenGL 3.3 Core Profile
 
 ## Screenshot
-![PlaatCraft screenshot](docs/screenshot.png)
+![PlaatCraft screenshot](docs/desktop-screenshot.png)
 
 ## Dependencies
 - GLFW3 (extern)
@@ -25,7 +25,7 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 
 2. Generate MakeFile via CMake (also enable x86 SSE2 or ARM NEON SIMD if you want):
    ```
-   mkdir build && cd build && cmake -DENABLE_SSE2_SIMD=ON ..
+   cd desktop && mkdir build && cd build && cmake -DENABLE_SSE2_SIMD=ON ..
    ```
 
 3. Build the project:
@@ -42,7 +42,7 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 
 2. Generate MakeFile via CMake (also enable x86 SSE2 or ARM NEON SIMD if you want):
    ```
-   mkdir build && cd build && cmake -DENABLE_NEON_SIMD=ON ..
+   cd desktop && mkdir build && cd build && cmake -DENABLE_NEON_SIMD=ON ..
    ```
 
 3. Build the project:
@@ -61,7 +61,7 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
 
 3. Generate MakeFile via CMake (also enable x86 SSE2 or ARM NEON SIMD if you want):
    ```
-   mkdir build && cd build && cmake -G "MinGW Makefiles" -DENABLE_SSE2_SIMD=ON ..
+   cd desktop && mkdir build && cd build && cmake -G "MinGW Makefiles" -DENABLE_SSE2_SIMD=ON ..
    ```
 
 4. Build the project:
