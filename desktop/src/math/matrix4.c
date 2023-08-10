@@ -1,10 +1,10 @@
 // PlaatCraft - Matrix4 Math
 
 #include "math/matrix4.h"
-#ifdef ENABLE_NEON_SIMD
+#ifdef __ARM_NEON__
     #include <arm_neon.h>
 #endif
-#ifdef ENABLE_SSE2_SIMD
+#ifdef __SSE2__
     #include <emmintrin.h>
 #endif
 #include "utils.h"
@@ -86,7 +86,7 @@ void matrix4_flat_rect(Matrix4* matrix, int x, int y, int width, int height) {
 }
 
 void matrix4_mul_matrix4(Matrix4* matrix, Matrix4* rhs) {
-    #ifdef ENABLE_NEON_SIMD
+    #ifdef __ARM_NEON__
         float32x4_t a0 = vld1q_f32(&matrix->elements[0]);
         float32x4_t a1 = vld1q_f32(&matrix->elements[4]);
         float32x4_t a2 = vld1q_f32(&matrix->elements[8]);
@@ -119,7 +119,7 @@ void matrix4_mul_matrix4(Matrix4* matrix, Matrix4* rhs) {
         sum = vmlaq_f32(sum, a2, vmovq_n_f32(b[2]));
         sum = vmlaq_f32(sum, a3, vmovq_n_f32(b[3]));
         vst1q_f32(&matrix->elements[12], sum);
-    #elif defined ENABLE_SSE2_SIMD
+    #elif defined(__SSE2__)
         __m128 a0 = _mm_load_ps(&matrix->elements[0]);
         __m128 a1 = _mm_load_ps(&matrix->elements[4]);
         __m128 a2 = _mm_load_ps(&matrix->elements[8]);

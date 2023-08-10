@@ -23,9 +23,9 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
    sudo apt install build-essential cmake libglfw3-dev libsqlite3-dev
    ```
 
-2. Generate MakeFile via CMake (also enable x86 SSE2 or ARM NEON SIMD if you want):
+2. Generate MakeFile via CMake:
    ```
-   cd desktop && mkdir build && cd build && cmake -DENABLE_SSE2_SIMD=ON ..
+   cd desktop && mkdir build && cd build && cmake ..
    ```
 
 3. Build the project:
@@ -40,9 +40,9 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
    brew install cmake glfw sqlite
    ```
 
-2. Generate MakeFile via CMake (also enable x86 SSE2 or ARM NEON SIMD if you want):
+2. Generate MakeFile via CMake:
    ```
-   cd desktop && mkdir build && cd build && cmake -DENABLE_NEON_SIMD=ON ..
+   cd desktop && mkdir build && cd build && cmake ..
    ```
 
 3. Build the project:
@@ -59,9 +59,9 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
    pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-glfw mingw-w64-x86_64-sqlite3
    ```
 
-3. Generate MakeFile via CMake (also enable x86 SSE2 or ARM NEON SIMD if you want):
+3. Generate MakeFile via CMake:
    ```
-   cd desktop && mkdir build && cd build && cmake -G "MinGW Makefiles" -DENABLE_SSE2_SIMD=ON ..
+   cd desktop && mkdir build && cd build && cmake -G "MinGW Makefiles" ..
    ```
 
 4. Build the project:

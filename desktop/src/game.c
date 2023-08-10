@@ -375,20 +375,12 @@ void game_render(Game* game, float delta) {
                 game->camera->rotation.x, game->camera->rotation.y
             );
 
-            #ifdef ENABLE_NEON_SIMD
-                char *simd_type = "NEON";
-            #elif defined ENABLE_SSE2_SIMD
-                char *simd_type = "SSE2";
-            #else
-                char *simd_type = "none";
-            #endif
             sprintf(
                 debug_lines[2],
-                "Seed: %"PRId64" - Wireframed: %s - Flat shaded: %s - SIMD: %s - Delta: %.04f",
+                "Seed: %"PRId64" - Wireframed: %s - Flat shaded: %s - Delta: %.04f",
                 game->world->seed,
                 game->world->is_wireframed ? "true" : "false",
                 game->world->is_flat_shaded ? "true" : "false",
-                simd_type,
                 delta
             );
 

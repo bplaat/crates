@@ -1,17 +1,17 @@
 // PlaatCraft - Vector4 Math
 
 #include "math/vector4.h"
-#ifdef ENABLE_NEON_SIMD
+#ifdef __ARM_NEON__
     #include <arm_neon.h>
 #endif
-#ifdef ENABLE_SSE2_SIMD
+#ifdef __SSE2__
     #include <emmintrin.h>
 #endif
 
 void vector4_add_vector4(Vector4* vector, Vector4* rhs) {
-    #ifdef ENABLE_NEON_SIMD
+    #ifdef __ARM_NEON__
         vst1q_f32(&vector->x, vaddq_f32(vld1q_f32(&vector->x), vld1q_f32(&rhs->x)));
-    #elif defined ENABLE_SSE2_SIMD
+    #elif defined(__SSE2__)
         _mm_store_ps(&vector->x, _mm_add_ps(_mm_load_ps(&vector->x), _mm_load_ps(&rhs->x)));
     #else
         vector->x += rhs->x;
@@ -22,14 +22,14 @@ void vector4_add_vector4(Vector4* vector, Vector4* rhs) {
 }
 
 void vector4_mul_matrix4(Vector4* vector, Matrix4* rhs) {
-    #ifdef ENABLE_NEON_SIMD
+    #ifdef __ARM_NEON__
         float32x4_t vec = vld1q_f32(&vector->x);
         float32x4_t sum = vmulq_f32(vld1q_f32(&rhs->elements[0]), vmovq_n_f32(vec[0]));
         sum = vmlaq_f32(sum, vld1q_f32(&rhs->elements[4]), vmovq_n_f32(vec[1]));
         sum = vmlaq_f32(sum, vld1q_f32(&rhs->elements[8]), vmovq_n_f32(vec[2]));
         sum = vmlaq_f32(sum, vld1q_f32(&rhs->elements[12]), vmovq_n_f32(vec[3]));
         vst1q_f32(&vector->x, sum);
-    #elif defined ENABLE_SSE2_SIMD
+    #elif defined(__SSE2__)
         __m128 vec = _mm_load_ps(&vector->x);
         __m128 sum = _mm_mul_ps(_mm_load_ps(&rhs->elements[0]), _mm_set1_ps(vec[0]));
         sum = _mm_add_ps(sum, _mm_mul_ps(_mm_load_ps(&rhs->elements[4]), _mm_set1_ps(vec[1])));
