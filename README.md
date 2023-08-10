@@ -1,7 +1,5 @@
 # PlaatCraft
-A modern OpenGL Minecraft like game for a school project about Computer Graphics
-
-You will need a computer / graphics card which supports minimal the OpenGL 3.3 Core Profile
+A modern OpenGL Minecraft like game
 
 ## Screenshot
 ![PlaatCraft screenshot](docs/desktop-screenshot.png)
@@ -33,7 +31,7 @@ You will need a computer / graphics card which supports minimal the OpenGL 3.3 C
    make -j$(nproc)
    ```
 
-### MacOS
+### macOS
 
 1. Install dependencies:
    ```

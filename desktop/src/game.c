@@ -534,7 +534,7 @@ void game_render(Game* game, float delta) {
 
         // Render description text
         {
-            TextTexture* description_text_texture = text_texture_new("A modern OpenGL Minecraft like game for a school project about Computer Graphics", game->text_font, 32, text_color);
+            TextTexture* description_text_texture = text_texture_new("A modern OpenGL Minecraft like game", game->text_font, 32, text_color);
 
             matrix4_flat_rect(&model_matrix, (game->width - description_text_texture->texture->width) / 2, y, description_text_texture->texture->width, description_text_texture->texture->height);
             glUniformMatrix4fv(game->flat_shader->model_matrix_uniform, 1, GL_FALSE, &model_matrix.elements[0]);
