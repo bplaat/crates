@@ -1,4 +1,6 @@
 use getrandom;
+use serde::ser::{Serialize, Serializer};
+use std::fmt;
 
 pub struct Uuid([u8; 16]);
 
@@ -12,20 +14,23 @@ impl Uuid {
     }
 }
 
-const HEXS: [char; 16] = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-];
-
-impl ToString for Uuid {
-    fn to_string(&self) -> String {
-        let mut sb = String::with_capacity(20);
+impl fmt::Display for Uuid {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for i in 0..16 {
-            sb.push(HEXS[(self.0[i] >> 4) as usize]);
-            sb.push(HEXS[(self.0[i] & 15) as usize]);
+            write!(f, "{:02x}", self.0[i])?;
             if i == 3 || i == 5 || i == 7 || i == 9 {
-                sb.push('-');
+                write!(f, "-")?;
             }
         }
-        sb
+        Ok(())
+    }
+}
+
+impl Serialize for Uuid {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.to_string().as_str())
     }
 }

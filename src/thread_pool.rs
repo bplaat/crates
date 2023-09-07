@@ -29,8 +29,7 @@ impl ThreadPool {
     where
         F: FnOnce() + Send + 'static,
     {
-        let job = Box::new(f);
-        self.sender.as_ref().unwrap().send(job).unwrap();
+        self.sender.as_ref().unwrap().send(Box::new(f)).unwrap();
     }
 }
 
@@ -55,12 +54,8 @@ impl Worker {
         let thread = thread::spawn(move || loop {
             let message = receiver.lock().unwrap().recv();
             match message {
-                Ok(job) => {
-                    job();
-                }
-                Err(_) => {
-                    break;
-                }
+                Ok(job) => job(),
+                Err(_) => break,
             }
         });
         Worker {
