@@ -13,7 +13,6 @@ use libsqlite3_sys::*;
 use serde::{Deserialize, Serialize};
 
 use crate::statement::Statement;
-use crate::value::ValueSerializer;
 
 struct Raw(*mut sqlite3);
 unsafe impl Send for Raw {}
@@ -43,7 +42,12 @@ impl Connection {
         if result != SQLITE_OK {
             bail!("Can't open database");
         }
-        Ok(Self::new(db))
+        let db = Self::new(db);
+
+        // Use Write-Ahead Logging  mode
+        db.execute("PRAGMA journal_mode=WAL")?;
+
+        Ok(db)
     }
 
     pub fn execute(&self, query: impl AsRef<str>) -> Result<()> {
@@ -59,24 +63,8 @@ impl Connection {
         Ok(())
     }
 
-    pub fn query<T>(&self, query: impl AsRef<str>, params: impl Serialize) -> Result<Statement<T>>
-    where
-        T: for<'de> Deserialize<'de>,
-    {
-        // Prepare statement
-        let statement = self.prepare_statement::<T>(query.as_ref())?;
-
-        // Serialize parameters to values
-        let mut serializer = ValueSerializer::new();
-        params.serialize(&mut serializer)?;
-        let values = serializer.into_inner();
-
-        // Bind values to statement
-        statement.bind_values(&values)?;
-        Ok(statement)
-    }
-
-    fn prepare_statement<T>(&self, query: &str) -> Result<Statement<T>> {
+    pub fn prepare<T>(&self, query: impl AsRef<str>) -> Result<Statement<T>> {
+        let query = query.as_ref();
         let mut statement = ptr::null_mut();
         let result = unsafe {
             sqlite3_prepare_v2(
@@ -91,6 +79,15 @@ impl Connection {
             bail!("Can't prepare statement: {}", result);
         }
         Ok(Statement::new(statement))
+    }
+
+    pub fn query<T>(&self, query: impl AsRef<str>, params: impl Serialize) -> Result<Statement<T>>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let statement = self.prepare::<T>(query.as_ref())?;
+        statement.bind(params)?;
+        Ok(statement)
     }
 }
 

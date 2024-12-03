@@ -10,9 +10,9 @@ use std::slice;
 
 use anyhow::{anyhow, bail, Context, Result};
 use libsqlite3_sys::*;
-use serde::de::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::value::{Value, ValueDeserializer, ValuesDeserializer};
+use crate::value::{Value, ValueDeserializer, ValueSerializer, ValuesDeserializer};
 
 pub struct Statement<T> {
     statement: *mut sqlite3_stmt,
@@ -27,13 +27,21 @@ impl<T> Statement<T> {
         }
     }
 
-    pub(crate) fn bind_values(&self, values: &[Value]) -> Result<()> {
-        for (index, value) in values.iter().enumerate() {
-            let index = index as i32 + 1;
+    pub fn bind(&self, params: impl Serialize) -> Result<()> {
+        // Reset statement
+        unsafe { sqlite3_reset(self.statement) };
+
+        // Serialize params
+        let mut serializer = ValueSerializer::new();
+        params.serialize(&mut serializer)?;
+
+        // Bind values
+        let mut index = 1;
+        for value in serializer.into_inner() {
             let result = match value {
                 Value::Null => unsafe { sqlite3_bind_null(self.statement, index) },
-                Value::Integer(i) => unsafe { sqlite3_bind_int64(self.statement, index, *i) },
-                Value::Real(f) => unsafe { sqlite3_bind_double(self.statement, index, *f) },
+                Value::Integer(i) => unsafe { sqlite3_bind_int64(self.statement, index, i) },
+                Value::Real(f) => unsafe { sqlite3_bind_double(self.statement, index, f) },
                 Value::Text(s) => unsafe {
                     sqlite3_bind_text(
                         self.statement,
@@ -56,6 +64,7 @@ impl<T> Statement<T> {
             if result != SQLITE_OK {
                 bail!("Can't bind value");
             }
+            index += 1;
         }
         Ok(())
     }
