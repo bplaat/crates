@@ -1,10 +1,14 @@
-use crate::thread_pool::ThreadPool;
-use std::{
-    collections::HashMap,
-    io::{prelude::*, BufReader},
-    net::{TcpListener, TcpStream},
-    str,
-};
+/*
+ * Copyright (c) 2023-2024 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+use std::collections::HashMap;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::net::{TcpListener, TcpStream};
+use std::str;
 
 pub struct Request {
     protocol: String,
@@ -99,7 +103,7 @@ impl Response {
         for (name, value) in &self.headers {
             sb.push_str(name.as_str());
             sb.push_str(": ");
-            sb.push_str(&value.as_str());
+            sb.push_str(value.as_str());
             sb.push_str("\r\n");
         }
         if self.protocol != "HTTP/1.0" {
@@ -114,23 +118,25 @@ impl Response {
     }
 }
 
-pub fn serve(callback: fn(&Request, &mut Response), port: i32) {
+pub fn serve_with_context<T>(callback: fn(&Request, &mut Response, ctx: T), port: i32, ctx: T)
+where
+    T: Clone + Send + Sync + 'static,
+{
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
-    let pool = ThreadPool::new(16);
-    for stream in listener.incoming() {
-        if let Ok(mut stream) = stream {
-            pool.execute(move || {
-                if let Some(request) = Request::from_stream(&mut stream) {
-                    let mut response = Response {
-                        protocol: request.protocol.clone(),
-                        status: 200,
-                        headers: HashMap::new(),
-                        body: String::new(),
-                    };
-                    callback(&request, &mut response);
-                    response.write_to_stream(&mut stream);
-                }
-            });
-        }
+    let pool = threadpool::ThreadPool::new(16);
+    for mut stream in listener.incoming().flatten() {
+        let ctx = ctx.clone();
+        pool.execute(move || {
+            if let Some(request) = Request::from_stream(&mut stream) {
+                let mut response = Response {
+                    protocol: request.protocol.clone(),
+                    status: 200,
+                    headers: HashMap::new(),
+                    body: String::new(),
+                };
+                callback(&request, &mut response, ctx);
+                response.write_to_stream(&mut stream);
+            }
+        });
     }
 }

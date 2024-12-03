@@ -1,16 +1,27 @@
-use crate::uuid::Uuid;
+/*
+ * Copyright (c) 2023-2024 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+use std::thread;
+use std::time::{Duration, SystemTime};
+
 use serde::{Deserialize, Serialize};
-use std::{thread, time::Duration};
+use uuid::Uuid;
 
 mod http;
-mod thread_pool;
-mod uuid;
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct Person {
     id: Uuid,
     name: String,
     age: i32,
+    created_at: SystemTime,
+}
+#[derive(Clone)]
+struct Context {
+    persons: Vec<Person>,
 }
 
 #[derive(Deserialize)]
@@ -18,7 +29,7 @@ struct GreetBody {
     name: String,
 }
 
-fn handler(req: &http::Request, res: &mut http::Response) {
+fn handler(req: &http::Request, res: &mut http::Response, ctx: Context) {
     println!("{} {}", req.method, req.path);
 
     if req.path == "/" {
@@ -30,7 +41,7 @@ fn handler(req: &http::Request, res: &mut http::Response) {
     if req.path == "/greet" {
         if req.method == "POST" {
             println!("{}", req.body);
-            if let Ok(body) = serde_json::from_str::<GreetBody>(req.body.as_str()) {
+            if let Ok(body) = serde_urlencoded::from_str::<GreetBody>(req.body.as_str()) {
                 res.status = 200;
                 res.body = format!("Hello {}!", body.name);
                 return;
@@ -58,39 +69,68 @@ fn handler(req: &http::Request, res: &mut http::Response) {
     }
 
     if req.path == "/persons" {
-        let mut persons = Vec::with_capacity(4);
-        persons.push(Person {
-            id: Uuid::new(),
-            name: "Bastiaan".to_string(),
-            age: 20,
-        });
-        persons.push(Person {
-            id: Uuid::new(),
-            name: "Sander".to_string(),
-            age: 19,
-        });
-        persons.push(Person {
-            id: Uuid::new(),
-            name: "Leonard".to_string(),
-            age: 16,
-        });
-        persons.push(Person {
-            id: Uuid::new(),
-            name: "Jiska".to_string(),
-            age: 14,
-        });
-
         res.set_header("Content-Type", "application/json");
-        res.body = serde_json::to_string(&persons).unwrap();
+        res.body = serde_json::to_string(&ctx.persons).unwrap();
+        return;
+    }
+
+    if req.path.starts_with("/persons/") {
+        let person_id = match req.path["/persons/".len()..].parse::<Uuid>() {
+            Ok(id) => id,
+            Err(_) => {
+                res.status = 400;
+                res.body = "400 Bad Request".into();
+                return;
+            }
+        };
+
+        let person = ctx.persons.iter().find(|p| p.id == person_id);
+        match person {
+            Some(p) => {
+                res.set_header("Content-Type", "application/json");
+                res.body = serde_json::to_string(p).unwrap();
+            }
+            None => {
+                res.status = 404;
+                res.body = "404 Not Found".to_string();
+            }
+        }
         return;
     }
 
     res.status = 404;
     res.set_header("Content-Type", "text/html");
-    res.body = String::from("<h1>404 Not Found</h1>");
+    res.body = "<h1>404 Not Found</h1>".into();
 }
 
 fn main() {
-    println!("Server is listening on http://localhost:8080/");
-    http::serve(handler, 8080);
+    let persons = vec![
+        Person {
+            id: Uuid::now_v7(),
+            name: "Bastiaan".to_string(),
+            age: 20,
+            created_at: SystemTime::now(),
+        },
+        Person {
+            id: Uuid::now_v7(),
+            name: "Sander".to_string(),
+            age: 19,
+            created_at: SystemTime::now(),
+        },
+        Person {
+            id: Uuid::now_v7(),
+            name: "Leonard".to_string(),
+            age: 16,
+            created_at: SystemTime::now(),
+        },
+        Person {
+            id: Uuid::now_v7(),
+            name: "Jiska".to_string(),
+            age: 14,
+            created_at: SystemTime::now(),
+        },
+    ];
+    let ctx = Context { persons };
+    println!("Server is listening on: http://localhost:8080/");
+    http::serve_with_context(handler, 8080, ctx);
 }

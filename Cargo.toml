@@ -4,13 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-getrandom = "0.2.8"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_urlencoded = "0.7.1"
+threadpool = "1.8"
+uuid = { version = "1.11", features = ["serde", "v7"] }
 
 [profile.release]
+opt-level = "z"
 strip = true
-opt-level = 'z'
 lto = true
 panic = "abort"
 overflow-checks = false
