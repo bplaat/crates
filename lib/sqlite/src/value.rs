@@ -4,218 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, c_void, CStr, CString};
-use std::marker::PhantomData;
-use std::ptr::{null, null_mut};
-use std::{error, fmt, ptr, slice};
+use std::{error, fmt};
 
-use anyhow::{anyhow, bail, Context, Result};
-use libsqlite3_sys::*;
-use serde::de::{self, Deserialize, DeserializeSeed, Deserializer, SeqAccess, Visitor};
+use anyhow::Result;
+use serde::de::{self, DeserializeSeed, Deserializer, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, Serializer};
-use uuid::Uuid;
 
-// MARK: Connection
-struct Raw(*mut sqlite3);
-unsafe impl Send for Raw {}
-unsafe impl Sync for Raw {}
-
-pub struct Connection {
-    db: Raw,
-}
-
-impl Connection {
-    fn new(db: *mut sqlite3) -> Self {
-        Self { db: Raw(db) }
-    }
-
-    pub fn open(path: &str) -> Result<Self> {
-        // Open database
-        let mut db = ptr::null_mut();
-        let path = CString::new(path)?;
-        let result = unsafe {
-            sqlite3_open_v2(
-                path.as_ptr(),
-                &mut db,
-                SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
-                null(),
-            )
-        };
-        if result != SQLITE_OK {
-            bail!("Can't open database");
-        }
-        Ok(Self::new(db))
-    }
-
-    pub fn execute(&self, query: impl AsRef<str>) -> Result<()> {
-        // Execute query
-        let query = CString::new(query.as_ref())?;
-        let mut error: *mut c_char = ptr::null_mut();
-        let result =
-            unsafe { sqlite3_exec(self.db.0, query.as_ptr(), None, null_mut(), &mut error) };
-        if result != SQLITE_OK {
-            let error = unsafe { CStr::from_ptr(error) };
-            bail!("Error: {}", error.to_str()?);
-        }
-        Ok(())
-    }
-
-    pub fn query<T>(&self, query: impl AsRef<str>, params: impl Serialize) -> Result<Statement<T>>
-    where
-        T: for<'de> Deserialize<'de>,
-    {
-        // Prepare statement
-        let statement = self.prepare_statement::<T>(query.as_ref())?;
-
-        // Serialize parameters to values
-        let mut serializer = ValueSerializer::new();
-        params.serialize(&mut serializer)?;
-        let values = serializer.into_inner();
-
-        // Bind values to statement
-        statement.bind_values(&values)?;
-        Ok(statement)
-    }
-
-    fn prepare_statement<T>(&self, query: &str) -> Result<Statement<T>> {
-        let mut statement = ptr::null_mut();
-        let result = unsafe {
-            sqlite3_prepare_v2(
-                self.db.0,
-                query.as_ptr() as *const c_char,
-                query.as_bytes().len() as i32,
-                &mut statement,
-                null_mut(),
-            )
-        };
-        if result != SQLITE_OK {
-            bail!("Can't prepare statement: {}", result);
-        }
-        Ok(Statement::new(statement))
-    }
-}
-
-impl Drop for Connection {
-    fn drop(&mut self) {
-        unsafe { sqlite3_close(self.db.0) };
-    }
-}
-
-// MARK: Statement
-pub struct Statement<T> {
-    statement: *mut sqlite3_stmt,
-    _maker: PhantomData<T>,
-}
-
-impl<T> Statement<T> {
-    fn new(statement: *mut sqlite3_stmt) -> Self {
-        Self {
-            statement,
-            _maker: PhantomData,
-        }
-    }
-
-    fn bind_values(&self, values: &[Value]) -> Result<()> {
-        for (index, value) in values.iter().enumerate() {
-            let index = index as i32 + 1;
-            let result = match value {
-                Value::Null => unsafe { sqlite3_bind_null(self.statement, index) },
-                Value::Integer(i) => unsafe { sqlite3_bind_int64(self.statement, index, *i) },
-                Value::Real(f) => unsafe { sqlite3_bind_double(self.statement, index, *f) },
-                Value::Text(s) => unsafe {
-                    sqlite3_bind_text(
-                        self.statement,
-                        index,
-                        s.as_ptr() as *const c_char,
-                        s.as_bytes().len() as i32,
-                        SQLITE_TRANSIENT(),
-                    )
-                },
-                Value::Blob(b) => unsafe {
-                    sqlite3_bind_blob(
-                        self.statement,
-                        index,
-                        b.as_ptr() as *const c_void,
-                        b.len() as i32,
-                        SQLITE_TRANSIENT(),
-                    )
-                },
-            };
-            if result != SQLITE_OK {
-                bail!("Can't bind value");
-            }
-        }
-        Ok(())
-    }
-
-    fn read_row_values(&self) -> Vec<Value> {
-        let column_count = unsafe { sqlite3_column_count(self.statement) };
-        let mut values: Vec<_> = Vec::with_capacity(column_count as usize);
-        for index in 0..column_count {
-            values.push(
-                #[allow(non_snake_case)]
-                match unsafe { sqlite3_column_type(self.statement, index) } {
-                    SQLITE_NULL => Value::Null,
-                    SQLITE_INTEGER => {
-                        Value::Integer(unsafe { sqlite3_column_int64(self.statement, index) })
-                    }
-                    SQLITE_FLOAT => {
-                        Value::Real(unsafe { sqlite3_column_double(self.statement, index) })
-                    }
-                    SQLITE_TEXT => {
-                        let text = unsafe { sqlite3_column_text(self.statement, index) };
-                        let text: String = unsafe { CStr::from_ptr(text as *const c_char) }
-                            .to_string_lossy()
-                            .into_owned();
-                        Value::Text(text)
-                    }
-                    SQLITE_BLOB => {
-                        let blob = unsafe { sqlite3_column_blob(self.statement, index) };
-                        let size = unsafe { sqlite3_column_bytes(self.statement, index) };
-                        let blob =
-                            unsafe { slice::from_raw_parts(blob as *const u8, size as usize) }
-                                .to_vec();
-                        Value::Blob(blob)
-                    }
-                    _ => unreachable!(),
-                },
-            );
-        }
-        values
-    }
-}
-
-impl<T> Iterator for Statement<T>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    type Item = Result<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = unsafe { sqlite3_step(self.statement) };
-        if result == SQLITE_ROW {
-            let values = self.read_row_values();
-
-            // Deserialize values to type
-            let deserializer = ValuesDeserializer::new(values);
-            Some(T::deserialize(deserializer).context("Can't deserialize row"))
-        } else if result == SQLITE_DONE {
-            None
-        } else {
-            Some(Err(anyhow!("Can't step statement")))
-        }
-    }
-}
-
-impl<T> Drop for Statement<T> {
-    fn drop(&mut self) {
-        unsafe { sqlite3_finalize(self.statement) };
-    }
-}
-
-// MARK: Value
 #[derive(Debug)]
-enum Value {
+pub(crate) enum Value {
     Null,
     Integer(i64),
     Real(f64),
@@ -225,7 +21,7 @@ enum Value {
 
 // MARK: ValueError
 #[derive(Debug)]
-struct ValueError {
+pub(crate) struct ValueError {
     message: String,
 }
 
@@ -246,16 +42,16 @@ impl serde::ser::Error for ValueError {
 }
 
 // MARK: ValueSerializer
-struct ValueSerializer {
+pub(crate) struct ValueSerializer {
     output: Vec<Value>,
 }
 
 impl ValueSerializer {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { output: Vec::new() }
     }
 
-    fn into_inner(self) -> Vec<Value> {
+    pub(crate) fn into_inner(self) -> Vec<Value> {
         self.output
     }
 }
@@ -334,9 +130,16 @@ impl Serializer for &mut ValueSerializer {
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
         // Hack: Save UUID as blob
-        if let Ok(uuid) = Uuid::parse_str(v) {
-            self.output.push(Value::Blob(uuid.as_bytes().to_vec()));
-        } else {
+        #[cfg(feature = "uuid")]
+        {
+            if let Ok(uuid) = Uuid::parse_str(v) {
+                self.output.push(Value::Blob(uuid.as_bytes().to_vec()));
+            } else {
+                self.output.push(Value::Text(v.to_string()));
+            }
+        }
+        #[cfg(not(feature = "uuid"))]
+        {
             self.output.push(Value::Text(v.to_string()));
         }
         Ok(())
@@ -573,13 +376,13 @@ impl ser::SerializeStructVariant for &mut ValueSerializer {
 }
 
 // MARK: ValuesDeserializer
-struct ValuesDeserializer {
+pub(crate) struct ValuesDeserializer {
     values: Vec<Value>,
     index: usize,
 }
 
 impl ValuesDeserializer {
-    pub fn new(values: Vec<Value>) -> Self {
+    pub(crate) fn new(values: Vec<Value>) -> Self {
         Self { values, index: 0 }
     }
 }
@@ -617,7 +420,13 @@ impl<'de> SeqAccess<'de> for ValuesDeserializer {
     }
 }
 
-struct ValueDeserializer<'a>(&'a Value);
+pub(crate) struct ValueDeserializer<'a>(&'a Value);
+
+impl<'a> ValueDeserializer<'a> {
+    pub(crate) fn new(value: &'a Value) -> Self {
+        ValueDeserializer(value)
+    }
+}
 
 impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
     type Error = de::value::Error;

@@ -1,2 +1,3 @@
-# bplaat/rustweb
-An example of a simple http rest api written in rust without any major dependency
+# Bassie's Rust crates
+
+A collection of minimal Rust crates that I created for myself mainly for building REST API's

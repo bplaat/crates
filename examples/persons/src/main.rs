@@ -5,28 +5,32 @@
  */
 
 use std::sync::Arc;
-use std::time::Duration;
-use std::{fs, thread};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use garde::Validate;
+use http::{Method, Request, Response, Status};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::http::{Method, Request, Response, Status};
-
-mod http;
-mod sqlite;
-
-const HTTP_PORT: u16 = 8082;
+const HTTP_PORT: u16 = 8000;
 
 #[derive(Clone)]
 struct Context {
     database: Arc<sqlite::Connection>,
 }
 
-// MARK: Persons
+// MARK: Routes
+fn home(_: &Request, _: Response, _: Context) -> Result<Response> {
+    Ok(Response::new().body(concat!("Persons v", env!("CARGO_PKG_VERSION"))))
+}
+
+fn not_found(_: &Request, _: Response, _: Context) -> Result<Response> {
+    Ok(Response::new()
+        .status(Status::NotFound)
+        .body("404 Not Found"))
+}
+
 #[derive(Deserialize, Serialize)]
 struct Person {
     id: Uuid,
@@ -100,45 +104,13 @@ fn persons_show(_: &Request, res: Response, ctx: Context, person_id: Uuid) -> Re
 // MARK: Handler
 fn handler(req: &Request, ctx: Context) -> Result<Response> {
     println!("{} {}", req.method, req.path);
+    let res = Response::new().header("Access-Control-Allow-Origin", "*");
 
     if req.path == "/" {
-        return Ok(Response::new().html("<h1>Hello World!</h1>"));
+        return home(req, res, ctx);
     }
 
-    if req.path == "/greet" {
-        if req.method != Method::Post {
-            return Ok(Response::new()
-                .status(Status::MethodNotAllowed)
-                .body("405 Method Not Allowed"));
-        }
-
-        #[derive(Deserialize)]
-        struct GreetBody {
-            name: String,
-        }
-        let body = match serde_urlencoded::from_str::<GreetBody>(&req.body) {
-            Ok(body) => body,
-            Err(_) => {
-                return Ok(Response::new()
-                    .status(Status::BadRequest)
-                    .body("400 Bad Request"));
-            }
-        };
-        return Ok(Response::new().html(format!("<h1>Hello {}!</h1>", body.name)));
-    }
-
-    if req.path == "/redirect" {
-        return Ok(Response::new().redirect("/"));
-    }
-
-    if req.path == "/sleep" {
-        thread::sleep(Duration::from_secs(5));
-        return Ok(Response::new().html("<h1>Sleeping done!</h1>"));
-    }
-
-    // REST API example
     if req.path.starts_with("/persons") {
-        let res = Response::new().header("Access-Control-Allow-Origin", "*");
         if req.path == "/persons" {
             if req.method == Method::Post {
                 return persons_create(req, res, ctx);
@@ -157,20 +129,15 @@ fn handler(req: &Request, ctx: Context) -> Result<Response> {
         }
     }
 
-    Ok(Response::new()
-        .status(Status::NotFound)
-        .html("<h1>404 Not Found</h1>"))
+    not_found(req, res, ctx)
 }
 
 // MARK: Database
 fn open_database() -> Result<sqlite::Connection> {
-    // Remove old database
-    fs::remove_file("database.db")?;
-
     // Create new database
     let database = sqlite::Connection::open("database.db")?;
     database.execute(
-        "CREATE TABLE persons (
+        "CREATE TABLE IF NOT EXISTS persons(
             id BLOB PRIMARY KEY,
             name TEXT NOT NULL,
             age INTEGER NOT NULL,
@@ -179,40 +146,47 @@ fn open_database() -> Result<sqlite::Connection> {
     )?;
 
     // Insert persons
-    let persons = vec![
-        Person {
-            id: Uuid::now_v7(),
-            name: "Bastiaan".to_string(),
-            age: 20,
-            created_at: Utc::now(),
-        },
-        Person {
-            id: Uuid::now_v7(),
-            name: "Sander".to_string(),
-            age: 19,
-            created_at: Utc::now(),
-        },
-        Person {
-            id: Uuid::now_v7(),
-            name: "Leonard".to_string(),
-            age: 16,
-            created_at: Utc::now(),
-        },
-        Person {
-            id: Uuid::now_v7(),
-            name: "Jiska".to_string(),
-            age: 14,
-            created_at: Utc::now(),
-        },
-    ];
-    for person in &persons {
-        database
-            .query::<()>(
-                "INSERT INTO persons (id, name, age, created_at) VALUES (?, ?, ?, ?)",
-                person,
-            )?
-            .next();
+    let persons_count = database
+        .query::<usize>("SELECT COUNT(id) FROM persons", ())?
+        .next()
+        .expect("Should be some")?;
+    if persons_count == 0 {
+        let persons = vec![
+            Person {
+                id: Uuid::now_v7(),
+                name: "Bastiaan".to_string(),
+                age: 20,
+                created_at: Utc::now(),
+            },
+            Person {
+                id: Uuid::now_v7(),
+                name: "Sander".to_string(),
+                age: 19,
+                created_at: Utc::now(),
+            },
+            Person {
+                id: Uuid::now_v7(),
+                name: "Leonard".to_string(),
+                age: 16,
+                created_at: Utc::now(),
+            },
+            Person {
+                id: Uuid::now_v7(),
+                name: "Jiska".to_string(),
+                age: 14,
+                created_at: Utc::now(),
+            },
+        ];
+        for person in &persons {
+            database
+                .query::<()>(
+                    "INSERT INTO persons (id, name, age, created_at) VALUES (?, ?, ?, ?)",
+                    person,
+                )?
+                .next();
+        }
     }
+
     Ok(database)
 }
 
@@ -222,5 +196,17 @@ fn main() -> Result<()> {
         database: Arc::new(open_database()?),
     };
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
-    http::serve_with_ctx(handler, HTTP_PORT, ctx)
+    http::serve_with_ctx(
+        |req, ctx| match handler(req, ctx) {
+            Ok(response) => response,
+            Err(err) => {
+                println!("\nError: {:?}", err);
+                Response::new()
+                    .status(Status::InternalServerError)
+                    .body("500 Internal Server Error")
+            }
+        },
+        HTTP_PORT,
+        ctx,
+    )
 }
