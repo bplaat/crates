@@ -234,7 +234,7 @@ where
                 match handler(&request, ctx) {
                     Ok(response) => response.write_to_stream(&mut stream),
                     Err(err) => {
-                        println!("Error: {}", err);
+                        println!("\nError: {:?}", err);
                         Response::new()
                             .status(Status::InternalServerError)
                             .body("500 Internal Server Error")

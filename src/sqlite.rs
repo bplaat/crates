@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::c_char;
-use std::fmt;
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::marker::PhantomData;
 use std::ptr::{null, null_mut};
+use std::{error, fmt, ptr, slice};
 
 use anyhow::{anyhow, bail, Context, Result};
 use libsqlite3_sys::*;
@@ -25,10 +25,14 @@ pub struct Connection {
 }
 
 impl Connection {
+    fn new(db: *mut sqlite3) -> Self {
+        Self { db: Raw(db) }
+    }
+
     pub fn open(path: &str) -> Result<Self> {
         // Open database
-        let mut db = std::ptr::null_mut();
-        let path = std::ffi::CString::new(path)?;
+        let mut db = ptr::null_mut();
+        let path = CString::new(path)?;
         let result = unsafe {
             sqlite3_open_v2(
                 path.as_ptr(),
@@ -40,28 +44,41 @@ impl Connection {
         if result != SQLITE_OK {
             bail!("Can't open database");
         }
-        Ok(Self { db: Raw(db) })
+        Ok(Self::new(db))
     }
 
-    pub fn execute(&self, query: &str) -> Result<()> {
+    pub fn execute(&self, query: impl AsRef<str>) -> Result<()> {
         // Execute query
-        let query = std::ffi::CString::new(query)?;
-        let mut error: *mut c_char = std::ptr::null_mut();
+        let query = CString::new(query.as_ref())?;
+        let mut error: *mut c_char = ptr::null_mut();
         let result =
             unsafe { sqlite3_exec(self.db.0, query.as_ptr(), None, null_mut(), &mut error) };
         if result != SQLITE_OK {
-            let error = unsafe { std::ffi::CStr::from_ptr(error) };
+            let error = unsafe { CStr::from_ptr(error) };
             bail!("Error: {}", error.to_str()?);
         }
         Ok(())
     }
 
-    pub fn query<T>(&self, query: &str, params: impl Serialize) -> Result<Statement<T>>
+    pub fn query<T>(&self, query: impl AsRef<str>, params: impl Serialize) -> Result<Statement<T>>
     where
         T: for<'de> Deserialize<'de>,
     {
         // Prepare statement
-        let mut statement = std::ptr::null_mut();
+        let statement = self.prepare_statement::<T>(query.as_ref())?;
+
+        // Serialize parameters to values
+        let mut serializer = ValueSerializer::new();
+        params.serialize(&mut serializer)?;
+        let values = serializer.into_inner();
+
+        // Bind values to statement
+        statement.bind_values(&values)?;
+        Ok(statement)
+    }
+
+    fn prepare_statement<T>(&self, query: &str) -> Result<Statement<T>> {
+        let mut statement = ptr::null_mut();
         let result = unsafe {
             sqlite3_prepare_v2(
                 self.db.0,
@@ -74,46 +91,7 @@ impl Connection {
         if result != SQLITE_OK {
             bail!("Can't prepare statement: {}", result);
         }
-
-        // Serialize parameters to values
-        let mut serializer = ValueSerializer::new();
-        params.serialize(&mut serializer)?;
-        let values = serializer.into_inner();
-
-        // Bind values to statement
-        for (index, param) in values.iter().enumerate() {
-            let result = match param {
-                Value::Null => unsafe { sqlite3_bind_null(statement, index as i32 + 1) },
-                Value::Integer(value) => unsafe {
-                    sqlite3_bind_int64(statement, index as i32 + 1, *value)
-                },
-                Value::Real(value) => unsafe {
-                    sqlite3_bind_double(statement, index as i32 + 1, *value)
-                },
-                Value::Text(value) => unsafe {
-                    sqlite3_bind_text(
-                        statement,
-                        index as i32 + 1,
-                        value.as_ptr() as *const c_char,
-                        value.as_bytes().len() as i32,
-                        SQLITE_TRANSIENT(),
-                    )
-                },
-                Value::Blob(value) => unsafe {
-                    sqlite3_bind_blob(
-                        statement,
-                        index as i32 + 1,
-                        value.as_ptr() as *const std::ffi::c_void,
-                        value.len() as i32,
-                        SQLITE_TRANSIENT(),
-                    )
-                },
-            };
-            if result != SQLITE_OK {
-                bail!("Can't bind value to statement");
-            }
-        }
-        Ok(Statement::<T>(statement, PhantomData::<T>))
+        Ok(Statement::new(statement))
     }
 }
 
@@ -124,7 +102,88 @@ impl Drop for Connection {
 }
 
 // MARK: Statement
-pub struct Statement<T>(*mut sqlite3_stmt, PhantomData<T>);
+pub struct Statement<T> {
+    statement: *mut sqlite3_stmt,
+    _maker: PhantomData<T>,
+}
+
+impl<T> Statement<T> {
+    fn new(statement: *mut sqlite3_stmt) -> Self {
+        Self {
+            statement,
+            _maker: PhantomData,
+        }
+    }
+
+    fn bind_values(&self, values: &[Value]) -> Result<()> {
+        for (index, value) in values.iter().enumerate() {
+            let index = index as i32 + 1;
+            let result = match value {
+                Value::Null => unsafe { sqlite3_bind_null(self.statement, index) },
+                Value::Integer(i) => unsafe { sqlite3_bind_int64(self.statement, index, *i) },
+                Value::Real(f) => unsafe { sqlite3_bind_double(self.statement, index, *f) },
+                Value::Text(s) => unsafe {
+                    sqlite3_bind_text(
+                        self.statement,
+                        index,
+                        s.as_ptr() as *const c_char,
+                        s.as_bytes().len() as i32,
+                        SQLITE_TRANSIENT(),
+                    )
+                },
+                Value::Blob(b) => unsafe {
+                    sqlite3_bind_blob(
+                        self.statement,
+                        index,
+                        b.as_ptr() as *const c_void,
+                        b.len() as i32,
+                        SQLITE_TRANSIENT(),
+                    )
+                },
+            };
+            if result != SQLITE_OK {
+                bail!("Can't bind value");
+            }
+        }
+        Ok(())
+    }
+
+    fn read_row_values(&self) -> Vec<Value> {
+        let column_count = unsafe { sqlite3_column_count(self.statement) };
+        let mut values: Vec<_> = Vec::with_capacity(column_count as usize);
+        for index in 0..column_count {
+            values.push(
+                #[allow(non_snake_case)]
+                match unsafe { sqlite3_column_type(self.statement, index) } {
+                    SQLITE_NULL => Value::Null,
+                    SQLITE_INTEGER => {
+                        Value::Integer(unsafe { sqlite3_column_int64(self.statement, index) })
+                    }
+                    SQLITE_FLOAT => {
+                        Value::Real(unsafe { sqlite3_column_double(self.statement, index) })
+                    }
+                    SQLITE_TEXT => {
+                        let text = unsafe { sqlite3_column_text(self.statement, index) };
+                        let text: String = unsafe { CStr::from_ptr(text as *const c_char) }
+                            .to_string_lossy()
+                            .into_owned();
+                        Value::Text(text)
+                    }
+                    SQLITE_BLOB => {
+                        let blob = unsafe { sqlite3_column_blob(self.statement, index) };
+                        let size = unsafe { sqlite3_column_bytes(self.statement, index) };
+                        let blob =
+                            unsafe { slice::from_raw_parts(blob as *const u8, size as usize) }
+                                .to_vec();
+                        Value::Blob(blob)
+                    }
+                    _ => unreachable!(),
+                },
+            );
+        }
+        values
+    }
+}
 
 impl<T> Iterator for Statement<T>
 where
@@ -133,35 +192,9 @@ where
     type Item = Result<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let result = unsafe { sqlite3_step(self.0) };
+        let result = unsafe { sqlite3_step(self.statement) };
         if result == SQLITE_ROW {
-            // Read values from statement
-            let column_count = unsafe { sqlite3_column_count(self.0) };
-            let mut values: Vec<_> = Vec::with_capacity(column_count as usize);
-            for i in 0..column_count {
-                #[allow(non_snake_case)]
-                values.push(match unsafe { sqlite3_column_type(self.0, i) } {
-                    SQLITE_NULL => Value::Null,
-                    SQLITE_INTEGER => Value::Integer(unsafe { sqlite3_column_int64(self.0, i) }),
-                    SQLITE_FLOAT => Value::Real(unsafe { sqlite3_column_double(self.0, i) }),
-                    SQLITE_TEXT => {
-                        let text = unsafe { sqlite3_column_text(self.0, i) };
-                        let text = unsafe { std::ffi::CStr::from_ptr(text as *const c_char) }
-                            .to_string_lossy()
-                            .into_owned();
-                        Value::Text(text)
-                    }
-                    SQLITE_BLOB => {
-                        let blob = unsafe { sqlite3_column_blob(self.0, i) };
-                        let size = unsafe { sqlite3_column_bytes(self.0, i) };
-                        let blob =
-                            unsafe { std::slice::from_raw_parts(blob as *const u8, size as usize) }
-                                .to_vec();
-                        Value::Blob(blob)
-                    }
-                    _ => unreachable!(),
-                });
-            }
+            let values = self.read_row_values();
 
             // Deserialize values to type
             let deserializer = ValuesDeserializer::new(values);
@@ -176,7 +209,7 @@ where
 
 impl<T> Drop for Statement<T> {
     fn drop(&mut self) {
-        unsafe { sqlite3_finalize(self.0) };
+        unsafe { sqlite3_finalize(self.statement) };
     }
 }
 
@@ -202,7 +235,7 @@ impl fmt::Display for ValueError {
     }
 }
 
-impl std::error::Error for ValueError {}
+impl error::Error for ValueError {}
 
 impl serde::ser::Error for ValueError {
     fn custom<T: fmt::Display>(msg: T) -> Self {
