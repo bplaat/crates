@@ -218,7 +218,7 @@ impl Response {
 }
 
 pub fn serve_with_ctx<T>(
-    handler: fn(Request, ctx: T) -> Result<Response>,
+    handler: fn(&Request, ctx: T) -> Result<Response>,
     port: u16,
     ctx: T,
 ) -> Result<()>
@@ -231,7 +231,7 @@ where
         let ctx = ctx.clone();
         pool.execute(move || {
             if let Ok(request) = Request::from_stream(&mut stream) {
-                match handler(request, ctx) {
+                match handler(&request, ctx) {
                     Ok(response) => response.write_to_stream(&mut stream),
                     Err(err) => {
                         println!("Error: {}", err);

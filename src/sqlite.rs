@@ -13,6 +13,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use libsqlite3_sys::*;
 use serde::de::{self, Deserialize, DeserializeSeed, Deserializer, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, Serializer};
+use uuid::Uuid;
 
 // MARK: Connection
 struct Raw(*mut sqlite3);
@@ -138,6 +139,7 @@ where
             let column_count = unsafe { sqlite3_column_count(self.0) };
             let mut values: Vec<_> = Vec::with_capacity(column_count as usize);
             for i in 0..column_count {
+                #[allow(non_snake_case)]
                 values.push(match unsafe { sqlite3_column_type(self.0, i) } {
                     SQLITE_NULL => Value::Null,
                     SQLITE_INTEGER => Value::Integer(unsafe { sqlite3_column_int64(self.0, i) }),
@@ -298,7 +300,12 @@ impl Serializer for &mut ValueSerializer {
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Text(v.to_string()));
+        // Hack: Save UUID as blob
+        if let Ok(uuid) = Uuid::parse_str(v) {
+            self.output.push(Value::Blob(uuid.as_bytes().to_vec()));
+        } else {
+            self.output.push(Value::Text(v.to_string()));
+        }
         Ok(())
     }
 
