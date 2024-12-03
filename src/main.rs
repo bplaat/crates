@@ -38,37 +38,38 @@ struct GreetBody {
 
 const HTTP_PORT: u16 = 8082;
 
-fn handler(req: Request, ctx: Context) -> Response {
+fn handler(req: Request, ctx: Context) -> Result<Response> {
     println!("{} {}", req.method, req.path);
 
     if req.path == "/" {
-        return Response::new().html("<h1>Hello World!</h1>");
+        return Ok(Response::new().html("<h1>Hello World!</h1>"));
     }
 
     if req.path == "/greet" {
-        if req.method == Method::Post {
-            let body = match serde_urlencoded::from_str::<GreetBody>(&req.body) {
-                Ok(body) => body,
-                Err(_) => {
-                    return Response::new()
-                        .status(Status::BadRequest)
-                        .body("400 Bad Request");
-                }
-            };
-            return Response::new().html(format!("<h1>Hello {}!</h1>", body.name));
+        if req.method != Method::Post {
+            return Ok(Response::new()
+                .status(Status::MethodNotAllowed)
+                .body("405 Method Not Allowed"));
         }
-        return Response::new()
-            .status(Status::MethodNotAllowed)
-            .body("405 Method Not Allowed");
+
+        let body = match serde_urlencoded::from_str::<GreetBody>(&req.body) {
+            Ok(body) => body,
+            Err(_) => {
+                return Ok(Response::new()
+                    .status(Status::BadRequest)
+                    .body("400 Bad Request"));
+            }
+        };
+        return Ok(Response::new().html(format!("<h1>Hello {}!</h1>", body.name)));
     }
 
     if req.path == "/redirect" {
-        return Response::new().redirect("/");
+        return Ok(Response::new().redirect("/"));
     }
 
     if req.path == "/sleep" {
         thread::sleep(Duration::from_secs(5));
-        return Response::new().html("<h1>Sleeping done!</h1>");
+        return Ok(Response::new().html("<h1>Sleeping done!</h1>"));
     }
 
     // REST API example
@@ -78,18 +79,16 @@ fn handler(req: Request, ctx: Context) -> Response {
         if req.path == "/persons" {
             let persons = ctx
                 .database
-                .query::<Person>("SELECT id, name, age, created_at FROM persons", ())
-                .expect("Can't run query")
-                .map(|person| person.expect("Can't query person"))
-                .collect::<Vec<Person>>();
-            return res.json(persons);
+                .query::<Person>("SELECT id, name, age, created_at FROM persons", ())?
+                .collect::<Result<Vec<_>>>()?;
+            return Ok(res.json(persons));
         }
 
         if req.path.starts_with("/persons/") {
             let person_id = match req.path["/persons/".len()..].parse::<Uuid>() {
                 Ok(id) => id,
                 Err(_) => {
-                    return res.status(Status::BadRequest).body("400 Bad Request");
+                    return Ok(res.status(Status::BadRequest).body("400 Bad Request"));
                 }
             };
 
@@ -98,20 +97,19 @@ fn handler(req: Request, ctx: Context) -> Response {
                 .query::<Person>(
                     "SELECT id, name, age, created_at FROM persons WHERE id = ? LIMIT 1",
                     person_id,
-                )
-                .expect("Can't run query")
+                )?
                 .next();
             if let Some(Ok(person)) = person {
-                return res.json(person);
+                return Ok(res.json(person));
             }
         }
 
-        return res.status(Status::NotFound).body("404 Not Found");
+        return Ok(res.status(Status::NotFound).body("404 Not Found"));
     }
 
-    Response::new()
+    Ok(Response::new()
         .status(Status::NotFound)
-        .html("<h1>404 Not Found</h1>")
+        .html("<h1>404 Not Found</h1>"))
 }
 
 fn main() -> Result<()> {

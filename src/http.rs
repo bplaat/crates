@@ -59,6 +59,7 @@ pub enum Status {
     BadRequest = 400,
     NotFound = 404,
     MethodNotAllowed = 405,
+    InternalServerError = 500,
 }
 
 // Request
@@ -203,6 +204,7 @@ impl Response {
             Status::BadRequest => b"400 Bad Request\r\n",
             Status::NotFound => b"404 Not Found\r\n",
             Status::MethodNotAllowed => b"405 Method Not Allowed\r\n",
+            Status::InternalServerError => b"500 Internal Server Error\r\n",
         });
         for (name, value) in &self.headers {
             _ = stream.write(name.as_bytes());
@@ -215,7 +217,11 @@ impl Response {
     }
 }
 
-pub fn serve_with_ctx<T>(handler: fn(Request, ctx: T) -> Response, port: u16, ctx: T) -> Result<()>
+pub fn serve_with_ctx<T>(
+    handler: fn(Request, ctx: T) -> Result<Response>,
+    port: u16,
+    ctx: T,
+) -> Result<()>
 where
     T: Clone + Send + Sync + 'static,
 {
@@ -225,7 +231,16 @@ where
         let ctx = ctx.clone();
         pool.execute(move || {
             if let Ok(request) = Request::from_stream(&mut stream) {
-                handler(request, ctx).write_to_stream(&mut stream);
+                match handler(request, ctx) {
+                    Ok(response) => response.write_to_stream(&mut stream),
+                    Err(err) => {
+                        println!("Error: {}", err);
+                        Response::new()
+                            .status(Status::InternalServerError)
+                            .body("500 Internal Server Error")
+                            .write_to_stream(&mut stream);
+                    }
+                }
             }
         });
     }
