@@ -74,10 +74,18 @@ impl Request {
         _ = reader.read_line(&mut line);
         let mut req = {
             let mut parts = line.split(" ");
-            let method = parts.next().unwrap().trim().to_string();
-            let path = parts.next().unwrap().trim().to_string();
+            let method = parts
+                .next()
+                .expect("Can't parse http header")
+                .trim()
+                .to_string();
+            let path = parts
+                .next()
+                .expect("Can't parse http header")
+                .trim()
+                .to_string();
             Request {
-                method: method.parse().unwrap(),
+                method: method.parse().expect("Unknown http method"),
                 path,
                 headers: BTreeMap::new(),
                 body: String::new(),
@@ -93,17 +101,27 @@ impl Request {
                     }
                     let mut parts = line.split(":");
                     req.headers.insert(
-                        parts.next().unwrap().trim().to_string(),
-                        parts.next().unwrap().trim().to_string(),
+                        parts
+                            .next()
+                            .expect("Can't parse http header")
+                            .trim()
+                            .to_string(),
+                        parts
+                            .next()
+                            .expect("Can't parse http header")
+                            .trim()
+                            .to_string(),
                     );
                 }
                 Err(_) => break,
             }
         }
 
-        if req.method == Method::Post {
-            let length = req.headers.get("Content-Length").unwrap().parse().unwrap();
-            let mut buffer = vec![0_u8; length];
+        if let Some(content_length) = req.headers.get("Content-Length") {
+            let content_length = content_length
+                .parse()
+                .expect("Can't parse Content-Length header");
+            let mut buffer = vec![0_u8; content_length];
             _ = reader.read(&mut buffer);
             if let Ok(text) = str::from_utf8(&buffer) {
                 req.body.push_str(text);
@@ -156,7 +174,7 @@ impl Response {
     pub fn json(mut self, value: &impl serde::Serialize) -> Self {
         self.headers
             .insert("Content-Type".to_string(), "application/json".to_string());
-        self.body = serde_json::to_string(value).unwrap();
+        self.body = serde_json::to_string(value).expect("Can't serialize json");
         self
     }
 
@@ -198,7 +216,7 @@ pub fn serve_with_ctx<T>(handler: fn(Request, ctx: T) -> Response, port: u16, ct
 where
     T: Clone + Send + Sync + 'static,
 {
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).unwrap();
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).expect("Can't bind to port");
     let pool = threadpool::ThreadPool::new(16);
     for mut stream in listener.incoming().flatten() {
         let ctx = ctx.clone();
