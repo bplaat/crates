@@ -5,8 +5,9 @@
  */
 
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,7 +18,7 @@ struct Person {
     id: Uuid,
     name: String,
     age: i32,
-    created_at: SystemTime,
+    created_at: DateTime<Utc>,
 }
 #[derive(Clone)]
 struct Context {
@@ -28,6 +29,8 @@ struct Context {
 struct GreetBody {
     name: String,
 }
+
+const HTTP_PORT: u16 = 8081;
 
 fn handler(req: &http::Request, res: &mut http::Response, ctx: Context) {
     println!("{} {}", req.method, req.path);
@@ -109,28 +112,28 @@ fn main() {
             id: Uuid::now_v7(),
             name: "Bastiaan".to_string(),
             age: 20,
-            created_at: SystemTime::now(),
+            created_at: Utc::now(),
         },
         Person {
             id: Uuid::now_v7(),
             name: "Sander".to_string(),
             age: 19,
-            created_at: SystemTime::now(),
+            created_at: Utc::now(),
         },
         Person {
             id: Uuid::now_v7(),
             name: "Leonard".to_string(),
             age: 16,
-            created_at: SystemTime::now(),
+            created_at: Utc::now(),
         },
         Person {
             id: Uuid::now_v7(),
             name: "Jiska".to_string(),
             age: 14,
-            created_at: SystemTime::now(),
+            created_at: Utc::now(),
         },
     ];
     let ctx = Context { persons };
-    println!("Server is listening on: http://localhost:8080/");
-    http::serve_with_context(handler, 8080, ctx);
+    println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
+    http::serve_with_context(handler, HTTP_PORT, ctx);
 }

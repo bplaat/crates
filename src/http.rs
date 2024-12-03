@@ -118,7 +118,7 @@ impl Response {
     }
 }
 
-pub fn serve_with_context<T>(callback: fn(&Request, &mut Response, ctx: T), port: i32, ctx: T)
+pub fn serve_with_context<T>(callback: fn(&Request, &mut Response, ctx: T), port: u16, ctx: T)
 where
     T: Clone + Send + Sync + 'static,
 {
