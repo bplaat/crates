@@ -11,6 +11,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::http::{Request, Response, Status};
+
 mod http;
 
 #[derive(Serialize, Clone)]
@@ -20,6 +22,7 @@ struct Person {
     age: i32,
     created_at: DateTime<Utc>,
 }
+
 #[derive(Clone)]
 struct Context {
     persons: Vec<Person>,
@@ -32,78 +35,66 @@ struct GreetBody {
 
 const HTTP_PORT: u16 = 8081;
 
-fn handler(req: &http::Request, res: &mut http::Response, ctx: Context) {
+fn handler(req: Request, ctx: Context) -> Response {
     println!("{} {}", req.method, req.path);
 
     if req.path == "/" {
-        res.set_header("Content-Type", "text/html");
-        res.body = String::from("<h1>Hello World!</h1>");
-        return;
+        return Response::new().html("<h1>Hello World!</h1>");
     }
 
     if req.path == "/greet" {
         if req.method == "POST" {
-            println!("{}", req.body);
-            if let Ok(body) = serde_urlencoded::from_str::<GreetBody>(req.body.as_str()) {
-                res.status = 200;
-                res.body = format!("Hello {}!", body.name);
-                return;
-            }
-            res.status = 400;
-            res.body = String::from("Bad Request");
-        } else {
-            res.status = 405;
-            res.body = String::from("Method Not Allowed");
+            let body = match serde_urlencoded::from_str::<GreetBody>(&req.body) {
+                Ok(body) => body,
+                Err(_) => {
+                    return Response::new()
+                        .status(Status::BadRequest)
+                        .body("Bad Request");
+                }
+            };
+            return Response::new().html(format!("<h1>Hello {}!</h1>", body.name));
         }
-        return;
+        return Response::new()
+            .status(Status::MethodNotAllowed)
+            .body("Method Not Allowed");
     }
 
     if req.path == "/redirect" {
-        res.status = 307;
-        res.set_header("Location", "/");
-        return;
+        return Response::new().redirect("/");
     }
 
     if req.path == "/sleep" {
         thread::sleep(Duration::from_secs(5));
-        res.set_header("Content-Type", "text/html");
-        res.body = String::from("<h1>Sleeping done!</h1>");
-        return;
+        return Response::new().html("<h1>Sleeping done!</h1>");
     }
 
-    if req.path == "/persons" {
-        res.set_header("Content-Type", "application/json");
-        res.body = serde_json::to_string(&ctx.persons).unwrap();
-        return;
-    }
+    // REST API example
+    if req.path.starts_with("/persons") {
+        let res = Response::new().header("Access-Control-Allow-Origin", "*");
 
-    if req.path.starts_with("/persons/") {
-        let person_id = match req.path["/persons/".len()..].parse::<Uuid>() {
-            Ok(id) => id,
-            Err(_) => {
-                res.status = 400;
-                res.body = "400 Bad Request".into();
-                return;
-            }
-        };
+        if req.path == "/persons" {
+            return res.json(&ctx.persons);
+        }
 
-        let person = ctx.persons.iter().find(|p| p.id == person_id);
-        match person {
-            Some(p) => {
-                res.set_header("Content-Type", "application/json");
-                res.body = serde_json::to_string(p).unwrap();
-            }
-            None => {
-                res.status = 404;
-                res.body = "404 Not Found".to_string();
+        if req.path.starts_with("/persons/") {
+            let person_id = match req.path["/persons/".len()..].parse::<Uuid>() {
+                Ok(id) => id,
+                Err(_) => {
+                    return res.status(Status::BadRequest).body("Bad Request");
+                }
+            };
+
+            if let Some(person) = ctx.persons.iter().find(|p| p.id == person_id) {
+                return res.json(person);
             }
         }
-        return;
+
+        return res.status(Status::NotFound).body("Not Found");
     }
 
-    res.status = 404;
-    res.set_header("Content-Type", "text/html");
-    res.body = "<h1>404 Not Found</h1>".into();
+    Response::new()
+        .status(Status::NotFound)
+        .html("<h1>404 Not Found</h1>")
 }
 
 fn main() {
@@ -135,5 +126,5 @@ fn main() {
     ];
     let ctx = Context { persons };
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
-    http::serve_with_context(handler, HTTP_PORT, ctx);
+    http::serve_with_ctx(handler, HTTP_PORT, ctx);
 }

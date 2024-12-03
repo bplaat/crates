@@ -7,11 +7,20 @@
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::net::{TcpListener, TcpStream};
+use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::str;
 
+// Status
+pub enum Status {
+    Ok = 200,
+    TemporaryRedirect = 307,
+    BadRequest = 400,
+    NotFound = 404,
+    MethodNotAllowed = 405,
+}
+
+// Request
 pub struct Request {
-    protocol: String,
     pub method: String,
     pub path: String,
     pub headers: HashMap<String, String>,
@@ -28,9 +37,7 @@ impl Request {
             let mut parts = line.split(" ");
             let method = parts.next().unwrap().trim().to_string();
             let path = parts.next().unwrap().trim().to_string();
-            let protocol = parts.next().unwrap().trim().to_string();
             Request {
-                protocol,
                 method,
                 path,
                 headers: HashMap::new(),
@@ -67,75 +74,103 @@ impl Request {
     }
 }
 
+// Response
 pub struct Response {
     protocol: String,
-    pub status: i32,
+    status: Status,
     headers: HashMap<String, String>,
-    pub body: String,
+    body: String,
 }
 
 impl Response {
-    pub fn set_header(&mut self, name: &str, value: &str) {
-        self.headers.insert(name.to_string(), value.to_string());
+    pub fn new() -> Self {
+        Self {
+            protocol: "HTTP/1.1".to_string(),
+            status: Status::Ok,
+            headers: HashMap::new(),
+            body: String::new(),
+        }
     }
 
-    fn write_to_stream(&self, stream: &mut TcpStream) {
-        let mut sb = self.protocol.clone();
-        sb.push(' ');
-        sb.push_str(self.status.to_string().as_str());
-        sb.push(' ');
-        if self.status == 200 {
-            sb.push_str("OK\r\n");
-        }
-        if self.status == 307 {
-            sb.push_str("Temporary Redirect\r\n");
-        }
-        if self.status == 400 {
-            sb.push_str("Bad Request\r\n");
-        }
-        if self.status == 404 {
-            sb.push_str("Not Found\r\n");
-        }
-        if self.status == 405 {
-            sb.push_str("Method Not Allowed\r\n");
-        }
+    pub fn status(mut self, status: Status) -> Self {
+        self.status = status;
+        self
+    }
 
-        for (name, value) in &self.headers {
-            sb.push_str(name.as_str());
-            sb.push_str(": ");
-            sb.push_str(value.as_str());
-            sb.push_str("\r\n");
-        }
+    pub fn header(mut self, name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
+        self.headers
+            .insert(name.as_ref().to_string(), value.as_ref().to_string());
+        self
+    }
+
+    pub fn body(mut self, body: impl AsRef<str>) -> Self {
+        self.body = body.as_ref().to_string();
+        self
+    }
+
+    // Helpers
+    pub fn html(mut self, body: impl AsRef<str>) -> Self {
+        self.headers
+            .insert("Content-Type".to_string(), "text/html".to_string());
+        self.body = body.as_ref().to_string();
+        self
+    }
+
+    pub fn json(mut self, value: &impl serde::Serialize) -> Self {
+        self.headers
+            .insert("Content-Type".to_string(), "application/json".to_string());
+        self.body = serde_json::to_string(value).unwrap();
+        self
+    }
+
+    pub fn redirect(mut self, location: impl AsRef<str>) -> Self {
+        self.status = Status::TemporaryRedirect;
+        self.headers
+            .insert("Location".to_string(), location.as_ref().to_string());
+        self
+    }
+
+    fn write_to_stream(mut self, stream: &mut TcpStream) {
+        // Finish headers
         if self.protocol != "HTTP/1.0" {
-            sb.push_str("Connection: close\r\n");
+            self.headers
+                .insert("Connection".to_string(), "close".to_string());
         }
-        sb.push_str("Content-Length: ");
-        sb.push_str(self.body.len().to_string().as_str());
-        sb.push_str("\r\n\r\n");
+        self.headers
+            .insert("Content-Length".to_string(), self.body.len().to_string());
 
-        sb.push_str(self.body.as_str());
-        _ = stream.write_all(sb.as_bytes());
+        // Write response
+        _ = stream.write(self.protocol.as_bytes());
+        _ = stream.write(b" ");
+        _ = stream.write(match self.status {
+            Status::Ok => b"200 OK\r\n",
+            Status::TemporaryRedirect => b"307 Temporary Redirect\r\n",
+            Status::BadRequest => b"400 Bad Request\r\n",
+            Status::NotFound => b"404 Not Found\r\n",
+            Status::MethodNotAllowed => b"405 Method Not Allowed\r\n",
+        });
+        for (name, value) in &self.headers {
+            _ = stream.write(name.as_bytes());
+            _ = stream.write(b": ");
+            _ = stream.write(value.as_bytes());
+            _ = stream.write(b"\r\n");
+        }
+        _ = stream.write(b"\r\n");
+        _ = stream.write(self.body.as_bytes());
     }
 }
 
-pub fn serve_with_context<T>(callback: fn(&Request, &mut Response, ctx: T), port: u16, ctx: T)
+pub fn serve_with_ctx<T>(handler: fn(Request, ctx: T) -> Response, port: u16, ctx: T)
 where
     T: Clone + Send + Sync + 'static,
 {
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).unwrap();
     let pool = threadpool::ThreadPool::new(16);
     for mut stream in listener.incoming().flatten() {
         let ctx = ctx.clone();
         pool.execute(move || {
             if let Some(request) = Request::from_stream(&mut stream) {
-                let mut response = Response {
-                    protocol: request.protocol.clone(),
-                    status: 200,
-                    headers: HashMap::new(),
-                    body: String::new(),
-                };
-                callback(&request, &mut response, ctx);
-                response.write_to_stream(&mut stream);
+                handler(request, ctx).write_to_stream(&mut stream);
             }
         });
     }
