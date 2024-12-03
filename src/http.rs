@@ -11,6 +11,8 @@ use std::io::BufReader;
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::str::{self, FromStr};
 
+use anyhow::{Context, Result};
+
 // Method
 #[derive(Eq, PartialEq)]
 pub enum Method {
@@ -21,14 +23,15 @@ pub enum Method {
 }
 
 impl FromStr for Method {
-    type Err = ();
+    type Err = anyhow::Error;
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "GET" => Ok(Method::Get),
             "POST" => Ok(Method::Post),
             "PUT" => Ok(Method::Put),
             "DELETE" => Ok(Method::Delete),
-            _ => Err(()),
+            _ => Err(anyhow::anyhow!("Unknown http method")),
         }
     }
 }
@@ -67,7 +70,7 @@ pub struct Request {
 }
 
 impl Request {
-    fn from_stream(stream: &mut TcpStream) -> Option<Request> {
+    fn from_stream(stream: &mut TcpStream) -> Result<Request> {
         let mut reader = BufReader::new(stream);
 
         let mut line = String::new();
@@ -76,16 +79,16 @@ impl Request {
             let mut parts = line.split(" ");
             let method = parts
                 .next()
-                .expect("Can't parse http header")
+                .context("Can't parse http header")?
                 .trim()
                 .to_string();
             let path = parts
                 .next()
-                .expect("Can't parse http header")
+                .context("Can't parse http header")?
                 .trim()
                 .to_string();
             Request {
-                method: method.parse().expect("Unknown http method"),
+                method: method.parse()?,
                 path,
                 headers: BTreeMap::new(),
                 body: String::new(),
@@ -103,12 +106,12 @@ impl Request {
                     req.headers.insert(
                         parts
                             .next()
-                            .expect("Can't parse http header")
+                            .context("Can't parse http header")?
                             .trim()
                             .to_string(),
                         parts
                             .next()
-                            .expect("Can't parse http header")
+                            .context("Can't parse http header")?
                             .trim()
                             .to_string(),
                     );
@@ -120,14 +123,14 @@ impl Request {
         if let Some(content_length) = req.headers.get("Content-Length") {
             let content_length = content_length
                 .parse()
-                .expect("Can't parse Content-Length header");
+                .context("Can't parse Content-Length header")?;
             let mut buffer = vec![0_u8; content_length];
             _ = reader.read(&mut buffer);
             if let Ok(text) = str::from_utf8(&buffer) {
                 req.body.push_str(text);
             }
         }
-        Some(req)
+        Ok(req)
     }
 }
 
@@ -171,10 +174,10 @@ impl Response {
         self
     }
 
-    pub fn json(mut self, value: &impl serde::Serialize) -> Self {
+    pub fn json(mut self, value: impl serde::Serialize) -> Self {
         self.headers
             .insert("Content-Type".to_string(), "application/json".to_string());
-        self.body = serde_json::to_string(value).expect("Can't serialize json");
+        self.body = serde_json::to_string(&value).expect("Can't serialize json");
         self
     }
 
@@ -212,18 +215,19 @@ impl Response {
     }
 }
 
-pub fn serve_with_ctx<T>(handler: fn(Request, ctx: T) -> Response, port: u16, ctx: T)
+pub fn serve_with_ctx<T>(handler: fn(Request, ctx: T) -> Response, port: u16, ctx: T) -> Result<()>
 where
     T: Clone + Send + Sync + 'static,
 {
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).expect("Can't bind to port");
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))?;
     let pool = threadpool::ThreadPool::new(16);
     for mut stream in listener.incoming().flatten() {
         let ctx = ctx.clone();
         pool.execute(move || {
-            if let Some(request) = Request::from_stream(&mut stream) {
+            if let Ok(request) = Request::from_stream(&mut stream) {
                 handler(request, ctx).write_to_stream(&mut stream);
             }
         });
     }
+    Ok(())
 }

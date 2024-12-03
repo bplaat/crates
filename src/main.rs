@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::thread;
+use std::sync::Arc;
 use std::time::Duration;
+use std::{fs, thread};
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -14,18 +16,19 @@ use uuid::Uuid;
 use crate::http::{Method, Request, Response, Status};
 
 mod http;
+mod sqlite;
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 struct Person {
     id: Uuid,
     name: String,
-    age: i32,
+    age: i64,
     created_at: DateTime<Utc>,
 }
 
 #[derive(Clone)]
 struct Context {
-    persons: Vec<Person>,
+    database: Arc<sqlite::Connection>,
 }
 
 #[derive(Deserialize)]
@@ -33,7 +36,7 @@ struct GreetBody {
     name: String,
 }
 
-const HTTP_PORT: u16 = 8081;
+const HTTP_PORT: u16 = 8082;
 
 fn handler(req: Request, ctx: Context) -> Response {
     println!("{} {}", req.method, req.path);
@@ -49,14 +52,14 @@ fn handler(req: Request, ctx: Context) -> Response {
                 Err(_) => {
                     return Response::new()
                         .status(Status::BadRequest)
-                        .body("Bad Request");
+                        .body("400 Bad Request");
                 }
             };
             return Response::new().html(format!("<h1>Hello {}!</h1>", body.name));
         }
         return Response::new()
             .status(Status::MethodNotAllowed)
-            .body("Method Not Allowed");
+            .body("405 Method Not Allowed");
     }
 
     if req.path == "/redirect" {
@@ -73,23 +76,37 @@ fn handler(req: Request, ctx: Context) -> Response {
         let res = Response::new().header("Access-Control-Allow-Origin", "*");
 
         if req.path == "/persons" {
-            return res.json(&ctx.persons);
+            let persons = ctx
+                .database
+                .query::<Person>("SELECT id, name, age, created_at FROM persons", ())
+                .expect("Can't run query")
+                .map(|person| person.expect("Can't query person"))
+                .collect::<Vec<Person>>();
+            return res.json(persons);
         }
 
         if req.path.starts_with("/persons/") {
             let person_id = match req.path["/persons/".len()..].parse::<Uuid>() {
                 Ok(id) => id,
                 Err(_) => {
-                    return res.status(Status::BadRequest).body("Bad Request");
+                    return res.status(Status::BadRequest).body("400 Bad Request");
                 }
             };
 
-            if let Some(person) = ctx.persons.iter().find(|p| p.id == person_id) {
+            let person = ctx
+                .database
+                .query::<Person>(
+                    "SELECT id, name, age, created_at FROM persons WHERE id = ? LIMIT 1",
+                    person_id,
+                )
+                .expect("Can't run query")
+                .next();
+            if let Some(Ok(person)) = person {
                 return res.json(person);
             }
         }
 
-        return res.status(Status::NotFound).body("Not Found");
+        return res.status(Status::NotFound).body("404 Not Found");
     }
 
     Response::new()
@@ -97,7 +114,21 @@ fn handler(req: Request, ctx: Context) -> Response {
         .html("<h1>404 Not Found</h1>")
 }
 
-fn main() {
+fn main() -> Result<()> {
+    // Remove old database
+    fs::remove_file("database.db")?;
+
+    // Create new database
+    let database = sqlite::Connection::open("database.db")?;
+    database.execute(
+        "CREATE TABLE persons (
+            id BLOB PRIMARY KEY,
+            name TEXT NOT NULL,
+            age INTEGER NOT NULL,
+            created_at TIMESTAMP NOT NULL
+        )",
+    )?;
+
     let persons = vec![
         Person {
             id: Uuid::now_v7(),
@@ -124,7 +155,19 @@ fn main() {
             created_at: Utc::now(),
         },
     ];
-    let ctx = Context { persons };
+    for person in &persons {
+        database
+            .query::<()>(
+                "INSERT INTO persons (id, name, age, created_at) VALUES (?, ?, ?, ?)",
+                person,
+            )?
+            .next();
+    }
+
+    // Start server
+    let ctx = Context {
+        database: Arc::new(database),
+    };
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
-    http::serve_with_ctx(handler, HTTP_PORT, ctx);
+    http::serve_with_ctx(handler, HTTP_PORT, ctx)
 }
