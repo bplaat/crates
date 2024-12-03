@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::http::{Request, Response, Status};
+use crate::http::{Method, Request, Response, Status};
 
 mod http;
 
@@ -43,7 +43,7 @@ fn handler(req: Request, ctx: Context) -> Response {
     }
 
     if req.path == "/greet" {
-        if req.method == "POST" {
+        if req.method == Method::Post {
             let body = match serde_urlencoded::from_str::<GreetBody>(&req.body) {
                 Ok(body) => body,
                 Err(_) => {

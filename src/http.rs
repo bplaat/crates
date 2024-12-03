@@ -4,13 +4,52 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
-use std::str;
+use std::str::{self, FromStr};
+
+// Method
+#[derive(Eq, PartialEq)]
+pub enum Method {
+    Get,
+    Post,
+    Put,
+    Delete,
+}
+
+impl FromStr for Method {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "GET" => Ok(Method::Get),
+            "POST" => Ok(Method::Post),
+            "PUT" => Ok(Method::Put),
+            "DELETE" => Ok(Method::Delete),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Display for Method {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Method::Get => "GET",
+                Method::Post => "POST",
+                Method::Put => "PUT",
+                Method::Delete => "DELETE",
+            }
+        )
+    }
+}
 
 // Status
+#[derive(Eq, PartialEq)]
 pub enum Status {
     Ok = 200,
     TemporaryRedirect = 307,
@@ -21,9 +60,9 @@ pub enum Status {
 
 // Request
 pub struct Request {
-    pub method: String,
+    pub method: Method,
     pub path: String,
-    pub headers: HashMap<String, String>,
+    pub headers: BTreeMap<String, String>,
     pub body: String,
 }
 
@@ -38,9 +77,9 @@ impl Request {
             let method = parts.next().unwrap().trim().to_string();
             let path = parts.next().unwrap().trim().to_string();
             Request {
-                method,
+                method: method.parse().unwrap(),
                 path,
-                headers: HashMap::new(),
+                headers: BTreeMap::new(),
                 body: String::new(),
             }
         };
@@ -62,8 +101,8 @@ impl Request {
             }
         }
 
-        if req.method == "POST" {
-            let length: usize = req.headers["Content-Length"].parse().unwrap();
+        if req.method == Method::Post {
+            let length = req.headers.get("Content-Length").unwrap().parse().unwrap();
             let mut buffer = vec![0_u8; length];
             _ = reader.read(&mut buffer);
             if let Ok(text) = str::from_utf8(&buffer) {
@@ -76,18 +115,16 @@ impl Request {
 
 // Response
 pub struct Response {
-    protocol: String,
     status: Status,
-    headers: HashMap<String, String>,
+    headers: BTreeMap<String, String>,
     body: String,
 }
 
 impl Response {
     pub fn new() -> Self {
         Self {
-            protocol: "HTTP/1.1".to_string(),
             status: Status::Ok,
-            headers: HashMap::new(),
+            headers: BTreeMap::new(),
             body: String::new(),
         }
     }
@@ -132,16 +169,13 @@ impl Response {
 
     fn write_to_stream(mut self, stream: &mut TcpStream) {
         // Finish headers
-        if self.protocol != "HTTP/1.0" {
-            self.headers
-                .insert("Connection".to_string(), "close".to_string());
-        }
         self.headers
             .insert("Content-Length".to_string(), self.body.len().to_string());
+        self.headers
+            .insert("Connection".to_string(), "close".to_string());
 
         // Write response
-        _ = stream.write(self.protocol.as_bytes());
-        _ = stream.write(b" ");
+        _ = stream.write(b"HTTP/1.1 ");
         _ = stream.write(match self.status {
             Status::Ok => b"200 OK\r\n",
             Status::TemporaryRedirect => b"307 Temporary Redirect\r\n",
