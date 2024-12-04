@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::net::{Ipv4Addr, TcpListener};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -179,9 +180,9 @@ fn open_database() -> Result<sqlite::Connection> {
 }
 
 // MARK: Main
-fn main() -> Result<()> {
+fn main() {
     let ctx = Context {
-        database: Arc::new(open_database()?),
+        database: Arc::new(open_database().expect("Can't open database")),
     };
 
     let router = Arc::new(
@@ -194,22 +195,21 @@ fn main() -> Result<()> {
     );
 
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
-    http::serve(
-        move |req| {
-            // Error middleware
-            let res = match router.next(req, &ctx) {
-                Ok(res) => res,
-                Err(err) => {
-                    println!("Error: {:?}", err);
-                    Response::new()
-                        .status(http::Status::InternalServerError)
-                        .body("500 Internal Server Error")
-                }
-            };
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
+        .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
+    http::serve(listener, move |req| {
+        // Error middleware
+        let res = match router.next(req, &ctx) {
+            Ok(res) => res,
+            Err(err) => {
+                println!("Error: {:?}", err);
+                Response::new()
+                    .status(http::Status::InternalServerError)
+                    .body("500 Internal Server Error")
+            }
+        };
 
-            // Cors middleware
-            res.header("Access-Control-Allow-Origin", "*")
-        },
-        HTTP_PORT,
-    )
+        // Cors middleware
+        res.header("Access-Control-Allow-Origin", "*")
+    });
 }

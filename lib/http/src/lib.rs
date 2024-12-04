@@ -4,56 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::fmt::{self, Display, Formatter};
-use std::net::{Ipv4Addr, TcpListener};
-use std::str::{self, FromStr};
+use std::net::TcpListener;
 
-use anyhow::{anyhow, Result};
 use threadpool::ThreadPool;
 
+pub use crate::method::Method;
 pub use crate::request::Request;
 pub use crate::response::Response;
 
+mod method;
 mod request;
 mod response;
-
-// MARK: Method
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum Method {
-    Get,
-    Post,
-    Put,
-    Delete,
-}
-
-impl FromStr for Method {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "GET" => Ok(Method::Get),
-            "POST" => Ok(Method::Post),
-            "PUT" => Ok(Method::Put),
-            "DELETE" => Ok(Method::Delete),
-            _ => Err(anyhow!("Unknown http method")),
-        }
-    }
-}
-
-impl Display for Method {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Method::Get => "GET",
-                Method::Post => "POST",
-                Method::Put => "PUT",
-                Method::Delete => "DELETE",
-            }
-        )
-    }
-}
 
 // MARK: Status
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -67,11 +28,10 @@ pub enum Status {
 }
 
 // MARK: Serve
-pub fn serve<F>(handler: F, port: u16) -> Result<()>
+pub fn serve<F>(listener: TcpListener, handler: F)
 where
     F: Fn(&Request) -> Response + Clone + Send + Sync + 'static,
 {
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))?;
     let pool = ThreadPool::new(16);
     for mut stream in listener.incoming().flatten() {
         let handler = handler.clone();
@@ -80,5 +40,4 @@ where
             Err(err) => println!("Error: Invalid http request: {:?}", err),
         });
     }
-    Ok(())
 }

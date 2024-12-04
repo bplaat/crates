@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::net::{Ipv4Addr, TcpListener};
 use std::thread;
 use std::time::Duration;
 
@@ -57,5 +58,7 @@ fn handler(req: &Request) -> Response {
 
 fn main() {
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
-    http::serve(handler, HTTP_PORT).expect("Server has panicked");
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
+        .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
+    http::serve(listener, handler);
 }

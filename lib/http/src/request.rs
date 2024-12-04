@@ -5,11 +5,11 @@
  */
 
 use std::collections::BTreeMap;
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read};
 use std::net::TcpStream;
 use std::str::{self};
-
-use anyhow::{Context, Result};
 
 use crate::Method;
 
@@ -21,25 +21,17 @@ pub struct Request {
 }
 
 impl Request {
-    pub(crate) fn from_stream(stream: &mut TcpStream) -> Result<Request> {
+    pub(crate) fn from_stream(stream: &mut TcpStream) -> Result<Request, InvalidRequestError> {
         let mut reader = BufReader::new(stream);
 
         let mut line = String::new();
         _ = reader.read_line(&mut line);
         let mut req = {
             let mut parts = line.split(" ");
-            let method = parts
-                .next()
-                .context("Can't parse http header")?
-                .trim()
-                .to_string();
-            let path = parts
-                .next()
-                .context("Can't parse http header")?
-                .trim()
-                .to_string();
+            let method = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
+            let path = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
             Request {
-                method: method.parse()?,
+                method: method.parse().map_err(|_| InvalidRequestError)?,
                 path,
                 headers: BTreeMap::new(),
                 body: String::new(),
@@ -55,16 +47,8 @@ impl Request {
                     }
                     let mut parts = line.split(":");
                     req.headers.insert(
-                        parts
-                            .next()
-                            .context("Can't parse http header")?
-                            .trim()
-                            .to_string(),
-                        parts
-                            .next()
-                            .context("Can't parse http header")?
-                            .trim()
-                            .to_string(),
+                        parts.next().ok_or(InvalidRequestError)?.trim().to_string(),
+                        parts.next().ok_or(InvalidRequestError)?.trim().to_string(),
                     );
                 }
                 Err(_) => break,
@@ -72,9 +56,7 @@ impl Request {
         }
 
         if let Some(content_length) = req.headers.get("Content-Length") {
-            let content_length = content_length
-                .parse()
-                .context("Can't parse Content-Length header")?;
+            let content_length = content_length.parse().map_err(|_| InvalidRequestError)?;
             let mut buffer = vec![0_u8; content_length];
             _ = reader.read(&mut buffer);
             if let Ok(text) = str::from_utf8(&buffer) {
@@ -84,3 +66,15 @@ impl Request {
         Ok(req)
     }
 }
+
+// MARK: InvalidRequestError
+#[derive(Debug)]
+pub struct InvalidRequestError;
+
+impl Display for InvalidRequestError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Invalid request")
+    }
+}
+
+impl Error for InvalidRequestError {}
