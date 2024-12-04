@@ -8,7 +8,7 @@ use std::fmt::{self, Display, Formatter};
 use std::net::{Ipv4Addr, TcpListener};
 use std::str::{self, FromStr};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use threadpool::ThreadPool;
 
 pub use crate::request::Request;
@@ -18,7 +18,7 @@ mod request;
 mod response;
 
 // MARK: Method
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Method {
     Get,
     Post,
@@ -29,13 +29,13 @@ pub enum Method {
 impl FromStr for Method {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "GET" => Ok(Method::Get),
             "POST" => Ok(Method::Post),
             "PUT" => Ok(Method::Put),
             "DELETE" => Ok(Method::Delete),
-            _ => Err(anyhow::anyhow!("Unknown http method")),
+            _ => Err(anyhow!("Unknown http method")),
         }
     }
 }
@@ -56,7 +56,7 @@ impl Display for Method {
 }
 
 // MARK: Status
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Status {
     Ok = 200,
     TemporaryRedirect = 307,
@@ -67,31 +67,17 @@ pub enum Status {
 }
 
 // MARK: Serve
-pub fn serve(handler: fn(&Request) -> Response, port: u16) -> Result<()> {
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))?;
-    let pool = ThreadPool::new(16);
-    for mut stream in listener.incoming().flatten() {
-        pool.execute(move || {
-            if let Ok(request) = Request::from_stream(&mut stream) {
-                handler(&request).write_to_stream(&mut stream);
-            }
-        });
-    }
-    Ok(())
-}
-
-pub fn serve_with_ctx<T>(handler: fn(&Request, ctx: T) -> Response, port: u16, ctx: T) -> Result<()>
+pub fn serve<F>(handler: F, port: u16) -> Result<()>
 where
-    T: Clone + Send + Sync + 'static,
+    F: Fn(&Request) -> Response + Clone + Send + Sync + 'static,
 {
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))?;
     let pool = ThreadPool::new(16);
     for mut stream in listener.incoming().flatten() {
-        let ctx = ctx.clone();
-        pool.execute(move || {
-            if let Ok(request) = Request::from_stream(&mut stream) {
-                handler(&request, ctx).write_to_stream(&mut stream)
-            }
+        let handler = handler.clone();
+        pool.execute(move || match Request::from_stream(&mut stream) {
+            Ok(req) => handler(&req).write_to_stream(&mut stream),
+            Err(err) => println!("Error: Invalid http request: {:?}", err),
         });
     }
     Ok(())

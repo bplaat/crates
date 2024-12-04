@@ -9,7 +9,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use garde::Validate;
-use http::{Method, Request, Response, Status};
+use http::{Request, Response, Status};
+use router::{Path, Router};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -21,11 +22,11 @@ struct Context {
 }
 
 // MARK: Routes
-fn home(_: &Request, _: Response, _: Context) -> Result<Response> {
+fn home(_: &Request, _: &Context, _: &Path) -> Result<Response> {
     Ok(Response::new().body(concat!("Persons v", env!("CARGO_PKG_VERSION"))))
 }
 
-fn not_found(_: &Request, _: Response, _: Context) -> Result<Response> {
+fn not_found(_: &Request, _: &Context, _: &Path) -> Result<Response> {
     Ok(Response::new()
         .status(Status::NotFound)
         .body("404 Not Found"))
@@ -39,16 +40,16 @@ struct Person {
     created_at: DateTime<Utc>,
 }
 
-fn persons_index(_: &Request, res: Response, ctx: Context) -> Result<Response> {
+fn persons_index(_: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     // Get persons
     let persons = ctx
         .database
         .query::<Person>("SELECT id, name, age, created_at FROM persons", ())?
         .collect::<Result<Vec<_>>>()?;
-    Ok(res.json(persons))
+    Ok(Response::new().json(persons))
 }
 
-fn persons_create(req: &Request, res: Response, ctx: Context) -> Result<Response> {
+fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     // Parse and validate body
     #[derive(Deserialize, Validate)]
     struct PersonsCreateBody {
@@ -60,11 +61,13 @@ fn persons_create(req: &Request, res: Response, ctx: Context) -> Result<Response
     let body = match serde_urlencoded::from_str::<PersonsCreateBody>(&req.body) {
         Ok(body) => body,
         Err(_) => {
-            return Ok(res.status(Status::BadRequest).body("400 Bad Request"));
+            return Ok(Response::new()
+                .status(Status::BadRequest)
+                .body("400 Bad Request"));
         }
     };
     if let Err(err) = body.validate() {
-        return Ok(res.status(Status::BadRequest).json(err));
+        return Ok(Response::new().status(Status::BadRequest).json(err));
     }
 
     // Create person
@@ -81,10 +84,24 @@ fn persons_create(req: &Request, res: Response, ctx: Context) -> Result<Response
         )?
         .next();
 
-    Ok(res.json(person))
+    Ok(Response::new().json(person))
 }
 
-fn persons_show(_: &Request, res: Response, ctx: Context, person_id: Uuid) -> Result<Response> {
+fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Result<Response> {
+    // Parse person id from url
+    let person_id = match path
+        .get("person_id")
+        .expect("Should be some")
+        .parse::<Uuid>()
+    {
+        Ok(id) => id,
+        Err(_) => {
+            return Ok(Response::new()
+                .status(Status::BadRequest)
+                .body("400 Bad Request"));
+        }
+    };
+
     // Get person
     let person = ctx
         .database
@@ -95,41 +112,12 @@ fn persons_show(_: &Request, res: Response, ctx: Context, person_id: Uuid) -> Re
         .next();
 
     if let Some(Ok(person)) = person {
-        Ok(res.json(person))
+        Ok(Response::new().json(person))
     } else {
-        Ok(res.status(Status::NotFound).body("404 Not Found"))
+        Ok(Response::new()
+            .status(Status::NotFound)
+            .body("404 Not Found"))
     }
-}
-
-// MARK: Handler
-fn handler(req: &Request, ctx: Context) -> Result<Response> {
-    println!("{} {}", req.method, req.path);
-    let res = Response::new().header("Access-Control-Allow-Origin", "*");
-
-    if req.path == "/" {
-        return home(req, res, ctx);
-    }
-
-    if req.path.starts_with("/persons") {
-        if req.path == "/persons" {
-            if req.method == Method::Post {
-                return persons_create(req, res, ctx);
-            }
-            return persons_index(req, res, ctx);
-        }
-        if req.path.starts_with("/persons/") {
-            // Parse person id from url
-            let person_id = match req.path["/persons/".len()..].parse::<Uuid>() {
-                Ok(id) => id,
-                Err(_) => {
-                    return Ok(res.status(Status::BadRequest).body("400 Bad Request"));
-                }
-            };
-            return persons_show(req, res, ctx, person_id);
-        }
-    }
-
-    not_found(req, res, ctx)
 }
 
 // MARK: Database
@@ -195,18 +183,33 @@ fn main() -> Result<()> {
     let ctx = Context {
         database: Arc::new(open_database()?),
     };
+
+    let router = Arc::new(
+        Router::<Context>::new()
+            .get("/", home)
+            .get("/persons", persons_index)
+            .post("/persons", persons_create)
+            .get("/persons/:person_id", persons_show)
+            .fallback(not_found),
+    );
+
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
-    http::serve_with_ctx(
-        |req, ctx| match handler(req, ctx) {
-            Ok(response) => response,
-            Err(err) => {
-                println!("\nError: {:?}", err);
-                Response::new()
-                    .status(Status::InternalServerError)
-                    .body("500 Internal Server Error")
-            }
+    http::serve(
+        move |req| {
+            // Error middleware
+            let res = match router.next(req, &ctx) {
+                Ok(res) => res,
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                    Response::new()
+                        .status(http::Status::InternalServerError)
+                        .body("500 Internal Server Error")
+                }
+            };
+
+            // Cors middleware
+            res.header("Access-Control-Allow-Origin", "*")
         },
         HTTP_PORT,
-        ctx,
     )
 }
