@@ -46,7 +46,7 @@ fn persons_index(_: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     let persons = ctx
         .database
         .query::<Person>("SELECT id, name, age, created_at FROM persons", ())?
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>, sqlite::Error>>()?;
     Ok(Response::new().json(persons))
 }
 

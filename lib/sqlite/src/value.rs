@@ -6,7 +6,6 @@
 
 use std::{error, fmt};
 
-use anyhow::Result;
 use serde::de::{self, DeserializeSeed, Deserializer, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, Serializer};
 
@@ -132,7 +131,7 @@ impl Serializer for &mut ValueSerializer {
         // Hack: Save UUID as blob
         #[cfg(feature = "uuid")]
         {
-            if let Ok(uuid) = Uuid::parse_str(v) {
+            if let Ok(uuid) = uuid::Uuid::parse_str(v) {
                 self.output.push(Value::Blob(uuid.as_bytes().to_vec()));
             } else {
                 self.output.push(Value::Text(v.to_string()));

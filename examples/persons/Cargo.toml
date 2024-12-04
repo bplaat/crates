@@ -8,7 +8,7 @@ authors.workspace = true
 [dependencies]
 http = { path = "../../lib/http", features = ["json"] }
 router = { path = "../../lib/router" }
-sqlite = { path = "../../lib/sqlite" }
+sqlite = { path = "../../lib/sqlite", features = ["uuid"] }
 
 anyhow = "1.0"
 chrono = { version = "0.4.38", features = ["serde"] }

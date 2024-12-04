@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-anyhow = "1.0"
 libsqlite3-sys = "0.30.1"
 serde = "1.0"
 uuid = { version = "1.11", optional = true }

@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, CString};
 use std::ptr;
 use std::ptr::{null, null_mut};
 
-use anyhow::{bail, Result};
 use libsqlite3_sys::*;
 use serde::{Deserialize, Serialize};
 
+use crate::error::{Error, Result};
 use crate::statement::Statement;
 
 struct Raw(*mut sqlite3);
@@ -30,7 +30,7 @@ impl Connection {
     pub fn open(path: &str) -> Result<Self> {
         // Open database
         let mut db = ptr::null_mut();
-        let path = CString::new(path)?;
+        let path = CString::new(path).expect("Can't convert &str to CString");
         let result = unsafe {
             sqlite3_open_v2(
                 path.as_ptr(),
@@ -40,7 +40,7 @@ impl Connection {
             )
         };
         if result != SQLITE_OK {
-            bail!("Can't open database");
+            return Err(Error::new("Can't open database"));
         }
         let db = Self::new(db);
 
@@ -52,13 +52,12 @@ impl Connection {
 
     pub fn execute(&self, query: impl AsRef<str>) -> Result<()> {
         // Execute query
-        let query = CString::new(query.as_ref())?;
-        let mut error: *mut c_char = ptr::null_mut();
+        let query = CString::new(query.as_ref()).expect("Can't convert &str to CString");
+
         let result =
-            unsafe { sqlite3_exec(self.db.0, query.as_ptr(), None, null_mut(), &mut error) };
+            unsafe { sqlite3_exec(self.db.0, query.as_ptr(), None, null_mut(), null_mut()) };
         if result != SQLITE_OK {
-            let error = unsafe { CStr::from_ptr(error) };
-            bail!("Error: {}", error.to_str()?);
+            return Err(Error::new("Can't execute query"));
         }
         Ok(())
     }
@@ -76,7 +75,7 @@ impl Connection {
             )
         };
         if result != SQLITE_OK {
-            bail!("Can't prepare statement: {}", result);
+            return Err(Error::new("Can't prepare statement"));
         }
         Ok(Statement::new(statement))
     }

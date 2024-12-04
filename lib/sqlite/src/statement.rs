@@ -8,10 +8,10 @@ use std::ffi::{c_char, c_void, CStr};
 use std::marker::PhantomData;
 use std::slice;
 
-use anyhow::{anyhow, bail, Context, Result};
 use libsqlite3_sys::*;
 use serde::{Deserialize, Serialize};
 
+use crate::error::{Error, Result};
 use crate::value::{Value, ValueDeserializer, ValueSerializer, ValuesDeserializer};
 
 pub struct Statement<T> {
@@ -33,7 +33,9 @@ impl<T> Statement<T> {
 
         // Serialize params
         let mut serializer = ValueSerializer::new();
-        params.serialize(&mut serializer)?;
+        params
+            .serialize(&mut serializer)
+            .map_err(|_| Error::new("Can't serialize params"))?;
 
         // Bind values
         let mut index = 1;
@@ -62,7 +64,7 @@ impl<T> Statement<T> {
                 },
             };
             if result != SQLITE_OK {
-                bail!("Can't bind value");
+                return Err(Error::new("Can't bind value"));
             }
             index += 1;
         }
@@ -120,15 +122,15 @@ where
             // Deserialize values to type
             if values.len() == 1 {
                 let deserializer = ValueDeserializer::new(values.first().expect("Should be some"));
-                Some(T::deserialize(deserializer).context("Can't deserialize row"))
+                Some(T::deserialize(deserializer).map_err(|_| Error::new("Can't deserialize row")))
             } else {
                 let deserializer = ValuesDeserializer::new(values);
-                Some(T::deserialize(deserializer).context("Can't deserialize row"))
+                Some(T::deserialize(deserializer).map_err(|_| Error::new("Can't deserialize row")))
             }
         } else if result == SQLITE_DONE {
             None
         } else {
-            Some(Err(anyhow!("Can't step statement")))
+            Some(Err(Error::new("Can't step statement")))
         }
     }
 }
