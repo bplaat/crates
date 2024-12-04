@@ -8,10 +8,10 @@ use std::ffi::{c_char, c_void, CStr};
 use std::marker::PhantomData;
 use std::slice;
 
-use libsqlite3_sys::*;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::sys::*;
 use crate::value::{Value, ValueDeserializer, ValueSerializer, ValuesDeserializer};
 
 pub struct Statement<T> {
@@ -50,7 +50,7 @@ impl<T> Statement<T> {
                         index,
                         s.as_ptr() as *const c_char,
                         s.as_bytes().len() as i32,
-                        SQLITE_TRANSIENT(),
+                        SQLITE_TRANSIENT,
                     )
                 },
                 Value::Blob(b) => unsafe {
@@ -59,7 +59,7 @@ impl<T> Statement<T> {
                         index,
                         b.as_ptr() as *const c_void,
                         b.len() as i32,
-                        SQLITE_TRANSIENT(),
+                        SQLITE_TRANSIENT,
                     )
                 },
             };
