@@ -11,21 +11,12 @@ use threadpool::ThreadPool;
 pub use crate::method::Method;
 pub use crate::request::Request;
 pub use crate::response::Response;
+pub use crate::status::Status;
 
 mod method;
 mod request;
 mod response;
-
-// MARK: Status
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum Status {
-    Ok = 200,
-    TemporaryRedirect = 307,
-    BadRequest = 400,
-    NotFound = 404,
-    MethodNotAllowed = 405,
-    InternalServerError = 500,
-}
+mod status;
 
 // MARK: Serve
 pub fn serve<F>(listener: TcpListener, handler: F)

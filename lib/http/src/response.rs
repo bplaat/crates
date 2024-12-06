@@ -72,14 +72,7 @@ impl Response {
 
         // Write response
         _ = stream.write(b"HTTP/1.1 ");
-        _ = stream.write(match self.status {
-            Status::Ok => b"200 OK\r\n",
-            Status::TemporaryRedirect => b"307 Temporary Redirect\r\n",
-            Status::BadRequest => b"400 Bad Request\r\n",
-            Status::NotFound => b"404 Not Found\r\n",
-            Status::MethodNotAllowed => b"405 Method Not Allowed\r\n",
-            Status::InternalServerError => b"500 Internal Server Error\r\n",
-        });
+        _ = stream.write(self.status.to_string().as_bytes());
         for (name, value) in &self.headers {
             _ = stream.write(name.as_bytes());
             _ = stream.write(b": ");
