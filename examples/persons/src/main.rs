@@ -84,7 +84,7 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
             format!(
                 "INSERT INTO persons ({}) VALUES ({})",
                 Person::columns(),
-                Person::params()
+                Person::values()
             ),
             (
                 person.id,
@@ -185,7 +185,7 @@ fn open_database() -> Result<sqlite::Connection> {
                     format!(
                         "INSERT INTO persons ({}) VALUES ({})",
                         Person::columns(),
-                        Person::params()
+                        Person::values()
                     ),
                     person,
                 )?

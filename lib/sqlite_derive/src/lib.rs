@@ -28,11 +28,19 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
         }
     }
 
-    let mut params = "".to_string();
-    for i in 0..fields.len() {
-        params.push('?');
+    let mut sets = "".to_string();
+    for (i, field) in fields.iter().enumerate() {
+        sets.push_str(&format!("{} = ?", field.ident.as_ref().unwrap()));
         if i < fields.len() - 1 {
-            params.push_str(", ");
+            sets.push_str(", ");
+        }
+    }
+
+    let mut values = "".to_string();
+    for i in 0..fields.len() {
+        values.push('?');
+        if i < fields.len() - 1 {
+            values.push_str(", ");
         }
     }
 
@@ -56,8 +64,11 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
             pub fn columns() -> &'static str {
                 #columns
             }
-            pub fn params() -> &'static str {
-                #params
+            pub fn values() -> &'static str {
+                #values
+            }
+            pub fn sets() -> &'static str {
+                #sets
             }
         }
         impl sqlite::Bind for #name {
