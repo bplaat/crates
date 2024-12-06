@@ -117,10 +117,12 @@ impl Request {
         // Read body
         if let Some(content_length) = req.headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidRequestError)?;
-            let mut buffer = vec![0_u8; content_length];
-            _ = reader.read(&mut buffer);
-            if let Ok(text) = str::from_utf8(&buffer) {
-                req.body.push_str(text);
+            if content_length > 0 {
+                let mut buffer = vec![0_u8; content_length];
+                _ = reader.read(&mut buffer);
+                if let Ok(text) = str::from_utf8(&buffer) {
+                    req.body.push_str(text);
+                }
             }
         }
         Ok(req)
@@ -130,10 +132,8 @@ impl Request {
         // Finish headers
         self.headers
             .insert("Host".to_string(), format!("{}:{}", self.host, self.port));
-        if !self.body.is_empty() {
-            self.headers
-                .insert("Content-Length".to_string(), self.body.len().to_string());
-        }
+        self.headers
+            .insert("Content-Length".to_string(), self.body.len().to_string());
         self.headers
             .insert("Connection".to_string(), "close".to_string());
 
@@ -142,10 +142,7 @@ impl Request {
         for (name, value) in &self.headers {
             _ = write!(stream, "{}: {}\r\n", name, value);
         }
-        _ = write!(stream, "\r\n");
-        if !self.body.is_empty() {
-            _ = write!(stream, "{}", self.body);
-        }
+        _ = write!(stream, "\r\n{}", self.body);
     }
 }
 

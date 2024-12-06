@@ -54,13 +54,13 @@ fn persons_index(_: &Request, ctx: &Context, _: &Path) -> Result<Response> {
 fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     // Parse and validate body
     #[derive(Deserialize, Validate)]
-    struct PersonsCreateBody {
+    struct Body {
         #[garde(ascii, length(min = 3, max = 25))]
         name: String,
         #[garde(range(min = 8))]
         age: i64,
     }
-    let body = match serde_urlencoded::from_str::<PersonsCreateBody>(&req.body) {
+    let body = match serde_urlencoded::from_str::<Body>(&req.body) {
         Ok(body) => body,
         Err(_) => {
             return Ok(Response::new()
@@ -215,6 +215,8 @@ fn main() {
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
     http::serve(listener, move |req| {
+        println!("{} {}", req.method, req.path);
+
         // Error middleware
         let res = match router.next(req, &ctx) {
             Ok(res) => res,

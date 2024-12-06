@@ -102,10 +102,12 @@ impl Response {
         // Read body
         if let Some(content_length) = res.headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidResponseError)?;
-            let mut buffer = vec![0_u8; content_length];
-            _ = reader.read(&mut buffer);
-            if let Ok(text) = str::from_utf8(&buffer) {
-                res.body.push_str(text);
+            if content_length > 0 {
+                let mut buffer = vec![0_u8; content_length];
+                _ = reader.read(&mut buffer);
+                if let Ok(text) = str::from_utf8(&buffer) {
+                    res.body.push_str(text);
+                }
             }
         }
         Ok(res)
