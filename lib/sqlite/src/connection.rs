@@ -42,8 +42,25 @@ impl Connection {
         }
         let db = Self::new(db);
 
-        // Use Write-Ahead Logging  mode
-        db.execute("PRAGMA journal_mode=WAL")?;
+        // Apply some SQLite performance settings (https://briandouglas.ie/sqlite-defaults/):
+        // - Set the journal mode to Write-Ahead Logging for concurrency
+        db.execute("PRAGMA journal_mode = WAL")?;
+        // - Set synchronous mode to NORMAL for performance and data safety balance
+        db.execute("PRAGMA synchronous = NORMAL")?;
+        // - Set busy timeout to 5 seconds to avoid "database is locked" errors
+        db.execute("PRAGMA busy_timeout = 5000")?;
+        // - Set cache size to 20MB for faster data access
+        db.execute("PRAGMA cache_size = 20000")?;
+        // - Enable foreign key constraint enforcement
+        db.execute("PRAGMA foreign_keys = ON")?;
+        // - Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
+        db.execute("PRAGMA auto_vacuum = INCREMENTAL")?;
+        // - Store temporary tables and data in memory for better performance
+        db.execute("PRAGMA temp_store = MEMORY")?;
+        // - Set the mmap_size to 2GB for faster read/write access using memory-mapped I/O
+        db.execute("PRAGMA mmap_size = 2147483648")?;
+        // - Set the page size to 8KB for balanced memory usage and performance
+        db.execute("PRAGMA page_size = 8192")?;
 
         Ok(db)
     }
