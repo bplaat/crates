@@ -11,7 +11,7 @@ use std::time::Duration;
 use http::{Method, Request, Response, Status};
 use serde::Deserialize;
 
-const HTTP_PORT: u16 = 8000;
+const HTTP_PORT: u16 = 8080;
 
 fn handler(req: &Request) -> Response {
     println!("{} {}", req.method, req.path);

@@ -101,24 +101,33 @@ impl<T> Router<T> {
         // Match routes
         for route in self.routes.iter().rev() {
             if route.re.is_match(&req.path) {
-                // Check if method is allowed
-                if !route.methods.contains(&req.method) {
-                    return Ok(Response::new()
-                        .status(http::Status::MethodNotAllowed)
-                        .body("405 Method Not Allowed"));
-                }
-
-                // Get path parameters captured by regex
-                let captures = route.re.captures(&req.path).expect("Should be some");
-                let mut path = BTreeMap::new();
-                for name in route.re.capture_names().flatten() {
-                    if let Some(value) = captures.name(name) {
-                        path.insert(name.to_string(), value.as_str().to_string());
+                for route in self
+                    .routes
+                    .iter()
+                    .filter(|route| route.re.is_match(&req.path))
+                {
+                    // Check if method is allowed
+                    if !route.methods.contains(&req.method) {
+                        continue;
                     }
+
+                    // Get path parameters captured by regex
+                    let captures = route.re.captures(&req.path).expect("Should be some");
+                    let mut path = BTreeMap::new();
+                    for name in route.re.capture_names().flatten() {
+                        if let Some(value) = captures.name(name) {
+                            path.insert(name.to_string(), value.as_str().to_string());
+                        }
+                    }
+
+                    // Run route handler
+                    return (route.handler)(req, ctx, &path);
                 }
 
-                // Run route handler
-                return (route.handler)(req, ctx, &path);
+                // Method not allowed
+                return Ok(Response::new()
+                    .status(http::Status::MethodNotAllowed)
+                    .body("405 Method Not Allowed"));
             }
         }
 

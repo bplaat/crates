@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use sqlite::FromRow;
 use uuid::Uuid;
 
-const HTTP_PORT: u16 = 8000;
+const HTTP_PORT: u16 = 8080;
 
 #[derive(Clone)]
 struct Context {
