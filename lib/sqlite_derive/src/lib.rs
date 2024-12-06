@@ -53,10 +53,10 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         impl #name {
-            fn columns() -> &'static str {
+            pub fn columns() -> &'static str {
                 #columns
             }
-            fn params() -> &'static str {
+            pub fn params() -> &'static str {
                 #params
             }
         }
