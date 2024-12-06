@@ -5,16 +5,18 @@
  */
 
 use std::collections::BTreeMap;
-use std::io::Write;
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::str::{self};
 
-use crate::Status;
+use crate::status::Status;
 
 pub struct Response {
-    status: Status,
-    headers: BTreeMap<String, String>,
-    body: String,
+    pub status: Status,
+    pub headers: BTreeMap<String, String>,
+    pub body: String,
 }
 
 impl Default for Response {
@@ -63,6 +65,52 @@ impl Response {
         self
     }
 
+    pub(crate) fn read_from_stream(stream: &mut TcpStream) -> Result<Self, InvalidResponseError> {
+        let mut reader = BufReader::new(stream);
+
+        // Read first line
+        let mut res = {
+            let mut line = String::new();
+            _ = reader.read_line(&mut line);
+            let mut parts = line.splitn(3, ' ');
+            let _http_version = parts.next().ok_or(InvalidResponseError)?;
+            let status_code = parts
+                .next()
+                .ok_or(InvalidResponseError)?
+                .parse::<i32>()
+                .map_err(|_| InvalidResponseError)?;
+            Response::default()
+                .status(Status::try_from(status_code).map_err(|_| InvalidResponseError)?)
+        };
+
+        // Read headers
+        loop {
+            let mut line = String::new();
+            reader
+                .read_line(&mut line)
+                .map_err(|_| InvalidResponseError)?;
+            if line == "\r\n" {
+                break;
+            }
+            let mut parts = line.split(":");
+            res.headers.insert(
+                parts.next().ok_or(InvalidResponseError)?.trim().to_string(),
+                parts.next().ok_or(InvalidResponseError)?.trim().to_string(),
+            );
+        }
+
+        // Read body
+        if let Some(content_length) = res.headers.get("Content-Length") {
+            let content_length = content_length.parse().map_err(|_| InvalidResponseError)?;
+            let mut buffer = vec![0_u8; content_length];
+            _ = reader.read(&mut buffer);
+            if let Ok(text) = str::from_utf8(&buffer) {
+                res.body.push_str(text);
+            }
+        }
+        Ok(res)
+    }
+
     pub(crate) fn write_to_stream(mut self, stream: &mut TcpStream) {
         // Finish headers
         self.headers
@@ -71,15 +119,22 @@ impl Response {
             .insert("Connection".to_string(), "close".to_string());
 
         // Write response
-        _ = stream.write(b"HTTP/1.1 ");
-        _ = stream.write(self.status.to_string().as_bytes());
+        _ = write!(stream, "HTTP/1.1 {}\r\n", self.status);
         for (name, value) in &self.headers {
-            _ = stream.write(name.as_bytes());
-            _ = stream.write(b": ");
-            _ = stream.write(value.as_bytes());
-            _ = stream.write(b"\r\n");
+            _ = write!(stream, "{}: {}\r\n", name, value);
         }
-        _ = stream.write(b"\r\n");
-        _ = stream.write(self.body.as_bytes());
+        _ = write!(stream, "\r\n{}", self.body);
     }
 }
+
+// MARK: InvalidResponseError
+#[derive(Debug)]
+pub struct InvalidResponseError;
+
+impl Display for InvalidResponseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Invalid request")
+    }
+}
+
+impl Error for InvalidResponseError {}

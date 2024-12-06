@@ -53,6 +53,20 @@ fn handler(req: &Request) -> Response {
         return res.body("<h1>Sleeping done!</h1>");
     }
 
+    if req.path == "/ipinfo" {
+        let data_res = match http::fetch(Request::new().host("ipinfo.io").path("/json")) {
+            Ok(res) => res,
+            Err(_) => {
+                return res
+                    .status(Status::InternalServerError)
+                    .body("<h1>Can't fetch ipinfo.io</h1>");
+            }
+        };
+        return res
+            .header("Content-Type", "application/json")
+            .body(data_res.body);
+    }
+
     res.status(Status::NotFound).body("<h1>404 Not Found</h1>")
 }
 
