@@ -1,3 +1,6 @@
+# VSCode configuration
+
+```json
 {
     "recommendations": [
         "EditorConfig.EditorConfig",
@@ -15,3 +18,4 @@
     "rust-analyzer.rustfmt.extraArgs": ["+nightly"],
     "rust-analyzer.check.command": "clippy"
 }
+```

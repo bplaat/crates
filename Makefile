@@ -3,7 +3,7 @@ all: ci
 
 .PHONY: ci
 ci:
-	./check_copyright.sh
+	./meta/check_copyright.sh
 	cargo +nightly fmt --all -- --check
 	cargo clippy --locked --all --all-targets -- -D warnings
 	cargo build --locked --release
