@@ -100,7 +100,14 @@ impl<T> Router<T> {
     pub fn next(&self, req: &Request, ctx: &T) -> Result<Response> {
         // Match routes
         for route in self.routes.iter().rev() {
-            if route.methods.contains(&req.method) && route.re.is_match(&req.path) {
+            if route.re.is_match(&req.path) {
+                // Check if method is allowed
+                if !route.methods.contains(&req.method) {
+                    return Ok(Response::new()
+                        .status(http::Status::MethodNotAllowed)
+                        .body("405 Method Not Allowed"));
+                }
+
                 // Get path parameters captured by regex
                 let captures = route.re.captures(&req.path).expect("Should be some");
                 let mut path = BTreeMap::new();
