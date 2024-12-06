@@ -6,10 +6,14 @@
 
 pub use crate::connection::Connection;
 pub use crate::error::{Error, Result};
-pub use crate::statement::Statement;
+pub use crate::statement::{Bind, FromRow, Statement};
+pub use crate::value::Value;
 
 mod connection;
 mod error;
 mod statement;
-mod sys;
+pub mod sys;
 mod value;
+
+#[cfg(feature = "derive")]
+pub use sqlite_derive::FromRow;

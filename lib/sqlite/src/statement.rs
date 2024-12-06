@@ -4,16 +4,76 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, c_void, CStr};
 use std::marker::PhantomData;
-use std::slice;
-
-use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::sys::*;
-use crate::value::{Value, ValueDeserializer, ValueSerializer, ValuesDeserializer};
+use crate::value::Value;
 
+// MARK: Bind
+pub trait Bind {
+    fn bind(self, statement: *mut sqlite3_stmt) -> Result<()>;
+}
+
+impl Bind for () {
+    fn bind(self, _statement: *mut sqlite3_stmt) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl<T> Bind for T
+where
+    T: Into<Value>,
+{
+    fn bind(self, statement: *mut sqlite3_stmt) -> Result<()> {
+        self.into().bind_to_statement(statement, 1)
+    }
+}
+
+macro_rules! impl_bind_for_tuple {
+    ($($n:tt: $t:ident),*) => (
+        impl<$($t,)*> Bind for ($($t,)*)
+        where
+            $($t: Into<Value>,)+
+        {
+            fn bind(self, statement: *mut sqlite3_stmt) -> Result<()> {
+                $( self.$n.into().bind_to_statement(statement, $n + 1)?; )*
+                Ok(())
+            }
+        }
+    );
+}
+impl_bind_for_tuple!(0: A);
+impl_bind_for_tuple!(0: A, 1: B);
+impl_bind_for_tuple!(0: A, 1: B, 2: C);
+impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D);
+impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E);
+impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F);
+impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G);
+impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H);
+
+// MARK: FromRow
+pub trait FromRow: Sized {
+    fn from_row(statement: *mut sqlite3_stmt) -> Result<Self>;
+}
+
+impl FromRow for () {
+    fn from_row(_statement: *mut sqlite3_stmt) -> Result<Self> {
+        Ok(())
+    }
+}
+
+impl<T> FromRow for T
+where
+    T: TryFrom<Value>,
+{
+    fn from_row(statement: *mut sqlite3_stmt) -> Result<Self> {
+        T::try_from(Value::read_from_statement(statement, 0)?)
+            .map_err(|_| Error::new("Can't convert to value"))
+    }
+}
+
+// MARK: Statement
 pub struct Statement<T> {
     statement: *mut sqlite3_stmt,
     _maker: PhantomData<T>,
@@ -27,106 +87,26 @@ impl<T> Statement<T> {
         }
     }
 
-    pub fn bind(&self, params: impl Serialize) -> Result<()> {
-        // Reset statement
-        unsafe { sqlite3_reset(self.statement) };
-
-        // Serialize params
-        let mut serializer = ValueSerializer::new();
-        params
-            .serialize(&mut serializer)
-            .map_err(|_| Error::new("Can't serialize params"))?;
-
-        // Bind values
-        let mut index = 1;
-        for value in serializer.into_inner() {
-            let result = match value {
-                Value::Null => unsafe { sqlite3_bind_null(self.statement, index) },
-                Value::Integer(i) => unsafe { sqlite3_bind_int64(self.statement, index, i) },
-                Value::Real(f) => unsafe { sqlite3_bind_double(self.statement, index, f) },
-                Value::Text(s) => unsafe {
-                    sqlite3_bind_text(
-                        self.statement,
-                        index,
-                        s.as_ptr() as *const c_char,
-                        s.as_bytes().len() as i32,
-                        SQLITE_TRANSIENT,
-                    )
-                },
-                Value::Blob(b) => unsafe {
-                    sqlite3_bind_blob(
-                        self.statement,
-                        index,
-                        b.as_ptr() as *const c_void,
-                        b.len() as i32,
-                        SQLITE_TRANSIENT,
-                    )
-                },
-            };
-            if result != SQLITE_OK {
-                return Err(Error::new("Can't bind value"));
-            }
-            index += 1;
-        }
-        Ok(())
+    pub fn bind(&mut self, params: impl Bind) -> Result<()> {
+        params.bind(self.statement)
     }
 
-    fn read_values(&self) -> Vec<Value> {
-        let column_count = unsafe { sqlite3_column_count(self.statement) };
-        let mut values: Vec<_> = Vec::with_capacity(column_count as usize);
-        for index in 0..column_count {
-            values.push(
-                #[allow(non_snake_case)]
-                match unsafe { sqlite3_column_type(self.statement, index) } {
-                    SQLITE_NULL => Value::Null,
-                    SQLITE_INTEGER => {
-                        Value::Integer(unsafe { sqlite3_column_int64(self.statement, index) })
-                    }
-                    SQLITE_FLOAT => {
-                        Value::Real(unsafe { sqlite3_column_double(self.statement, index) })
-                    }
-                    SQLITE_TEXT => {
-                        let text = unsafe { sqlite3_column_text(self.statement, index) };
-                        let text: String = unsafe { CStr::from_ptr(text as *const c_char) }
-                            .to_string_lossy()
-                            .into_owned();
-                        Value::Text(text)
-                    }
-                    SQLITE_BLOB => {
-                        let blob = unsafe { sqlite3_column_blob(self.statement, index) };
-                        let size = unsafe { sqlite3_column_bytes(self.statement, index) };
-                        let blob =
-                            unsafe { slice::from_raw_parts(blob as *const u8, size as usize) }
-                                .to_vec();
-                        Value::Blob(blob)
-                    }
-                    _ => unreachable!(),
-                },
-            );
-        }
-        values
+    pub fn reset(&mut self) -> Result<()> {
+        unsafe { sqlite3_reset(self.statement) };
+        Ok(())
     }
 }
 
 impl<T> Iterator for Statement<T>
 where
-    T: for<'de> Deserialize<'de>,
+    T: FromRow,
 {
     type Item = Result<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let result = unsafe { sqlite3_step(self.statement) };
         if result == SQLITE_ROW {
-            let values = self.read_values();
-
-            // Deserialize values to type
-            if values.len() == 1 {
-                let deserializer = ValueDeserializer::new(values.first().expect("Should be some"));
-                Some(T::deserialize(deserializer).map_err(|_| Error::new("Can't deserialize row")))
-            } else {
-                let deserializer = ValuesDeserializer::new(values);
-                Some(T::deserialize(deserializer).map_err(|_| Error::new("Can't deserialize row")))
-            }
+            Some(T::from_row(self.statement))
         } else if result == SQLITE_DONE {
             None
         } else {

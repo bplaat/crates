@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::{error, fmt};
+use std::ffi::{c_char, c_void, CStr};
 
-use serde::de::{self, DeserializeSeed, Deserializer, SeqAccess, Visitor};
-use serde::ser::{self, Serialize, Serializer};
+use crate::error::{Error, Result};
+use crate::sys::*;
 
 #[derive(Debug)]
-pub(crate) enum Value {
+pub enum Value {
     Null,
     Integer(i64),
     Real(f64),
@@ -18,434 +18,290 @@ pub(crate) enum Value {
     Blob(Vec<u8>),
 }
 
-// MARK: ValueError
-#[derive(Debug)]
-pub(crate) struct ValueError {
-    message: String,
-}
-
-impl fmt::Display for ValueError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ValueError: {}", self.message)
-    }
-}
-
-impl error::Error for ValueError {}
-
-impl serde::ser::Error for ValueError {
-    fn custom<T: fmt::Display>(msg: T) -> Self {
-        ValueError {
-            message: msg.to_string(),
+impl Value {
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn bind_to_statement(&self, statement: *mut sqlite3_stmt, index: i32) -> Result<()> {
+        let result = match self {
+            Value::Null => unsafe { sqlite3_bind_null(statement, index) },
+            Value::Integer(i) => unsafe { sqlite3_bind_int64(statement, index, *i) },
+            Value::Real(f) => unsafe { sqlite3_bind_double(statement, index, *f) },
+            Value::Text(s) => unsafe {
+                sqlite3_bind_text(
+                    statement,
+                    index,
+                    s.as_ptr() as *const c_char,
+                    s.as_bytes().len() as i32,
+                    SQLITE_TRANSIENT,
+                )
+            },
+            Value::Blob(b) => unsafe {
+                sqlite3_bind_blob(
+                    statement,
+                    index,
+                    b.as_ptr() as *const c_void,
+                    b.len() as i32,
+                    SQLITE_TRANSIENT,
+                )
+            },
+        };
+        if result != SQLITE_OK {
+            return Err(Error::new("Can't bind value"));
         }
-    }
-}
-
-// MARK: ValueSerializer
-pub(crate) struct ValueSerializer {
-    output: Vec<Value>,
-}
-
-impl ValueSerializer {
-    pub(crate) fn new() -> Self {
-        Self { output: Vec::new() }
-    }
-
-    pub(crate) fn into_inner(self) -> Vec<Value> {
-        self.output
-    }
-}
-
-impl Serializer for &mut ValueSerializer {
-    type Ok = ();
-    type Error = ValueError;
-
-    type SerializeSeq = Self;
-    type SerializeTuple = Self;
-    type SerializeTupleStruct = Self;
-    type SerializeTupleVariant = Self;
-    type SerializeMap = Self;
-    type SerializeStruct = Self;
-    type SerializeStructVariant = Self;
-
-    fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v as i64));
         Ok(())
     }
 
-    fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v as i64));
-        Ok(())
-    }
-
-    fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v as i64));
-        Ok(())
-    }
-
-    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v as i64));
-        Ok(())
-    }
-
-    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v));
-        Ok(())
-    }
-
-    fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v as i64));
-        Ok(())
-    }
-
-    fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v as i64));
-        Ok(())
-    }
-
-    fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v as i64));
-        Ok(())
-    }
-
-    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Integer(v as i64));
-        Ok(())
-    }
-
-    fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Real(v as f64));
-        Ok(())
-    }
-
-    fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Real(v));
-        Ok(())
-    }
-
-    fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Text(v.to_string()));
-        Ok(())
-    }
-
-    fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        // Hack: Save UUID as blob
-        #[cfg(feature = "uuid")]
-        {
-            if let Ok(uuid) = uuid::Uuid::parse_str(v) {
-                self.output.push(Value::Blob(uuid.as_bytes().to_vec()));
-            } else {
-                self.output.push(Value::Text(v.to_string()));
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn read_from_statement(statement: *mut sqlite3_stmt, index: i32) -> Result<Self> {
+        match unsafe { sqlite3_column_type(statement, index) } {
+            SQLITE_NULL => Ok(Value::Null),
+            SQLITE_INTEGER => Ok(Value::Integer(unsafe {
+                sqlite3_column_int64(statement, index)
+            })),
+            SQLITE_FLOAT => Ok(Value::Real(unsafe {
+                sqlite3_column_double(statement, index)
+            })),
+            SQLITE_TEXT => {
+                let text = unsafe { sqlite3_column_text(statement, index) };
+                let text: String = unsafe { CStr::from_ptr(text as *const c_char) }
+                    .to_string_lossy()
+                    .into_owned();
+                Ok(Value::Text(text))
             }
-        }
-        #[cfg(not(feature = "uuid"))]
-        {
-            self.output.push(Value::Text(v.to_string()));
-        }
-        Ok(())
-    }
-
-    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Blob(v.to_vec()));
-        Ok(())
-    }
-
-    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Null);
-        Ok(())
-    }
-
-    fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(self)
-    }
-
-    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-
-    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-
-    fn serialize_unit_variant(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        self.output.push(Value::Text(variant.to_string()));
-        Ok(())
-    }
-
-    fn serialize_newtype_struct<T>(
-        self,
-        _name: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(self)
-    }
-
-    fn serialize_newtype_variant<T>(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        self.output.push(Value::Text(variant.to_string()));
-        value.serialize(self)
-    }
-
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        Ok(self)
-    }
-
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        Ok(self)
-    }
-
-    fn serialize_tuple_struct(
-        self,
-        _name: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Ok(self)
-    }
-
-    fn serialize_tuple_variant(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        self.output.push(Value::Text(variant.to_string()));
-        Ok(self)
-    }
-
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Ok(self)
-    }
-
-    fn serialize_struct(
-        self,
-        _name: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeStruct, Self::Error> {
-        Ok(self)
-    }
-
-    fn serialize_struct_variant(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        self.output.push(Value::Text(variant.to_string()));
-        Ok(self)
-    }
-}
-
-impl ser::SerializeSeq for &mut ValueSerializer {
-    type Ok = ();
-    type Error = ValueError;
-
-    fn serialize_element<T>(&mut self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl ser::SerializeTuple for &mut ValueSerializer {
-    type Ok = ();
-    type Error = ValueError;
-
-    fn serialize_element<T>(&mut self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl ser::SerializeTupleStruct for &mut ValueSerializer {
-    type Ok = ();
-    type Error = ValueError;
-
-    fn serialize_field<T>(&mut self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl ser::SerializeTupleVariant for &mut ValueSerializer {
-    type Ok = ();
-    type Error = ValueError;
-
-    fn serialize_field<T>(&mut self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl ser::SerializeMap for &mut ValueSerializer {
-    type Ok = ();
-    type Error = ValueError;
-
-    fn serialize_key<T>(&mut self, key: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        key.serialize(&mut **self)
-    }
-
-    fn serialize_value<T>(&mut self, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl ser::SerializeStruct for &mut ValueSerializer {
-    type Ok = ();
-    type Error = ValueError;
-
-    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl ser::SerializeStructVariant for &mut ValueSerializer {
-    type Ok = ();
-    type Error = ValueError;
-
-    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<Self::Ok, Self::Error>
-    where
-        T: Serialize + ?Sized,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-// MARK: ValuesDeserializer
-pub(crate) struct ValuesDeserializer {
-    values: Vec<Value>,
-    index: usize,
-}
-
-impl ValuesDeserializer {
-    pub(crate) fn new(values: Vec<Value>) -> Self {
-        Self { values, index: 0 }
-    }
-}
-
-impl<'de> Deserializer<'de> for ValuesDeserializer {
-    type Error = de::value::Error;
-
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_seq(self)
-    }
-
-    serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
-    }
-}
-
-impl<'de> SeqAccess<'de> for ValuesDeserializer {
-    type Error = de::value::Error;
-
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        if self.index >= self.values.len() {
-            return Ok(None);
-        }
-        let value = &self.values[self.index];
-        self.index += 1;
-        seed.deserialize(ValueDeserializer(value)).map(Some)
-    }
-}
-
-pub(crate) struct ValueDeserializer<'a>(&'a Value);
-
-impl<'a> ValueDeserializer<'a> {
-    pub(crate) fn new(value: &'a Value) -> Self {
-        ValueDeserializer(value)
-    }
-}
-
-impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
-    type Error = de::value::Error;
-
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        match self.0 {
-            Value::Null => visitor.visit_none(),
-            Value::Integer(i) => visitor.visit_i64(*i),
-            Value::Real(f) => visitor.visit_f64(*f),
-            Value::Text(s) => visitor.visit_str(s),
-            Value::Blob(b) => visitor.visit_bytes(b),
+            SQLITE_BLOB => {
+                let blob = unsafe { sqlite3_column_blob(statement, index) };
+                let len = unsafe { sqlite3_column_bytes(statement, index) };
+                let slice = unsafe { std::slice::from_raw_parts(blob as *const u8, len as usize) };
+                Ok(Value::Blob(slice.to_vec()))
+            }
+            _ => Err(Error::new("Can't read value")),
         }
     }
+}
 
-    serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
+// MARK: From T
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        Value::Integer(value)
+    }
+}
+impl TryFrom<Value> for i64 {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Integer(v) => Ok(v),
+            _ => Err(Error::new("Value is not an integer")),
+        }
+    }
+}
+
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        Value::Real(value)
+    }
+}
+impl TryFrom<Value> for f64 {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Real(v) => Ok(v),
+            _ => Err(Error::new("Value is not a real")),
+        }
+    }
+}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Value::Text(value)
+    }
+}
+impl TryFrom<Value> for String {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Text(v) => Ok(v),
+            _ => Err(Error::new("Value is not a text")),
+        }
+    }
+}
+
+impl From<Vec<u8>> for Value {
+    fn from(value: Vec<u8>) -> Self {
+        Value::Blob(value)
+    }
+}
+impl TryFrom<Value> for Vec<u8> {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Blob(v) => Ok(v),
+            _ => Err(Error::new("Value is not a blob")),
+        }
+    }
+}
+
+// MARK: From Uuid
+#[cfg(feature = "uuid")]
+impl From<uuid::Uuid> for Value {
+    fn from(value: uuid::Uuid) -> Self {
+        Value::Blob(value.into_bytes().to_vec())
+    }
+}
+#[cfg(feature = "uuid")]
+impl TryFrom<Value> for uuid::Uuid {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Blob(v) => {
+                Ok(uuid::Uuid::from_slice(&v).map_err(|_| Error::new("Can't convert to Uuid"))?)
+            }
+            _ => Err(Error::new("Value is not a blob")),
+        }
+    }
+}
+
+// MARK: From DateTime
+#[cfg(feature = "chrono")]
+impl From<chrono::DateTime<chrono::Utc>> for Value {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+        Value::Text(value.to_rfc3339())
+    }
+}
+#[cfg(feature = "chrono")]
+impl TryFrom<Value> for chrono::DateTime<chrono::Utc> {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Text(v) => Ok(chrono::DateTime::parse_from_rfc3339(&v)
+                .map_err(|_| Error::new("Can't convert to DateTime"))?
+                .with_timezone(&chrono::Utc)),
+            _ => Err(Error::new("Value is not a text")),
+        }
+    }
+}
+
+// MARK: From Option<T>
+impl From<Option<i64>> for Value {
+    fn from(value: Option<i64>) -> Self {
+        match value {
+            Some(v) => Value::Integer(v),
+            None => Value::Null,
+        }
+    }
+}
+impl TryFrom<Value> for Option<i64> {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Integer(v) => Ok(Some(v)),
+            Value::Null => Ok(None),
+            _ => Err(Error::new("Value is not an integer or null")),
+        }
+    }
+}
+
+impl From<Option<f64>> for Value {
+    fn from(value: Option<f64>) -> Self {
+        match value {
+            Some(v) => Value::Real(v),
+            None => Value::Null,
+        }
+    }
+}
+impl TryFrom<Value> for Option<f64> {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Real(v) => Ok(Some(v)),
+            Value::Null => Ok(None),
+            _ => Err(Error::new("Value is not a real or null")),
+        }
+    }
+}
+
+impl From<Option<String>> for Value {
+    fn from(value: Option<String>) -> Self {
+        match value {
+            Some(v) => Value::Text(v),
+            None => Value::Null,
+        }
+    }
+}
+impl TryFrom<Value> for Option<String> {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Text(v) => Ok(Some(v)),
+            Value::Null => Ok(None),
+            _ => Err(Error::new("Value is not a text or null")),
+        }
+    }
+}
+
+impl From<Option<Vec<u8>>> for Value {
+    fn from(value: Option<Vec<u8>>) -> Self {
+        match value {
+            Some(v) => Value::Blob(v),
+            None => Value::Null,
+        }
+    }
+}
+impl TryFrom<Value> for Option<Vec<u8>> {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Blob(v) => Ok(Some(v)),
+            Value::Null => Ok(None),
+            _ => Err(Error::new("Value is not a blob or null")),
+        }
+    }
+}
+
+// MARK: From Option<Uuid>
+#[cfg(feature = "uuid")]
+impl From<Option<uuid::Uuid>> for Value {
+    fn from(value: Option<uuid::Uuid>) -> Self {
+        match value {
+            Some(v) => Value::Blob(v.into_bytes().to_vec()),
+            None => Value::Null,
+        }
+    }
+}
+#[cfg(feature = "uuid")]
+impl TryFrom<Value> for Option<uuid::Uuid> {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Blob(v) => Ok(Some(
+                uuid::Uuid::from_slice(&v).map_err(|_| Error::new("Can't convert to Uuid"))?,
+            )),
+            Value::Null => Ok(None),
+            _ => Err(Error::new("Value is not a blob or null")),
+        }
+    }
+}
+
+// MARK: From Option<DateTime>
+#[cfg(feature = "chrono")]
+impl From<Option<chrono::DateTime<chrono::Utc>>> for Value {
+    fn from(value: Option<chrono::DateTime<chrono::Utc>>) -> Self {
+        match value {
+            Some(v) => Value::Text(v.to_rfc3339()),
+            None => Value::Null,
+        }
+    }
+}
+#[cfg(feature = "chrono")]
+impl TryFrom<Value> for Option<chrono::DateTime<chrono::Utc>> {
+    type Error = Error;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Text(v) => Ok(Some(
+                chrono::DateTime::parse_from_rfc3339(&v)
+                    .map_err(|_| Error::new("Can't convert to DateTime"))?
+                    .with_timezone(&chrono::Utc),
+            )),
+            Value::Null => Ok(None),
+            _ => Err(Error::new("Value is not a text or null")),
+        }
     }
 }

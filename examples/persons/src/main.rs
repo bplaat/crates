@@ -13,6 +13,7 @@ use garde::Validate;
 use http::{Request, Response, Status};
 use router::{Path, Router};
 use serde::{Deserialize, Serialize};
+use sqlite::FromRow;
 use uuid::Uuid;
 
 const HTTP_PORT: u16 = 8000;
@@ -33,11 +34,11 @@ fn not_found(_: &Request, _: &Context, _: &Path) -> Result<Response> {
         .body("404 Not Found"))
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Serialize, FromRow)]
 struct Person {
     id: Uuid,
     name: String,
-    age: i32,
+    age: i64,
     created_at: DateTime<Utc>,
 }
 
@@ -45,7 +46,7 @@ fn persons_index(_: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     // Get persons
     let persons = ctx
         .database
-        .query::<Person>("SELECT id, name, age, created_at FROM persons", ())?
+        .query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())?
         .collect::<Result<Vec<_>, sqlite::Error>>()?;
     Ok(Response::new().json(persons))
 }
@@ -57,7 +58,7 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
         #[garde(ascii, length(min = 3, max = 25))]
         name: String,
         #[garde(range(min = 8))]
-        age: i32,
+        age: i64,
     }
     let body = match serde_urlencoded::from_str::<PersonsCreateBody>(&req.body) {
         Ok(body) => body,
@@ -80,8 +81,17 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     };
     ctx.database
         .query::<()>(
-            "INSERT INTO persons (id, name, age, created_at) VALUES (?, ?, ?, ?)",
-            &person,
+            format!(
+                "INSERT INTO persons ({}) VALUES ({})",
+                Person::columns(),
+                Person::params()
+            ),
+            (
+                person.id,
+                person.name.clone(),
+                person.age,
+                person.created_at,
+            ),
         )?
         .next();
 
@@ -107,7 +117,10 @@ fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Result<Response> {
     let person = ctx
         .database
         .query::<Person>(
-            "SELECT id, name, age, created_at FROM persons WHERE id = ? LIMIT 1",
+            format!(
+                "SELECT {} FROM persons WHERE id = ? LIMIT 1",
+                Person::columns()
+            ),
             person_id,
         )?
         .next();
@@ -136,7 +149,7 @@ fn open_database() -> Result<sqlite::Connection> {
 
     // Insert persons
     let persons_count = database
-        .query::<usize>("SELECT COUNT(id) FROM persons", ())?
+        .query::<i64>("SELECT COUNT(id) FROM persons", ())?
         .next()
         .expect("Should be some")?;
     if persons_count == 0 {
@@ -166,10 +179,14 @@ fn open_database() -> Result<sqlite::Connection> {
                 created_at: Utc::now(),
             },
         ];
-        for person in &persons {
+        for person in persons {
             database
                 .query::<()>(
-                    "INSERT INTO persons (id, name, age, created_at) VALUES (?, ?, ?, ?)",
+                    format!(
+                        "INSERT INTO persons ({}) VALUES ({})",
+                        Person::columns(),
+                        Person::params()
+                    ),
                     person,
                 )?
                 .next();

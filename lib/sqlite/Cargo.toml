@@ -6,8 +6,11 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-serde = "1.0"
+chrono = { version = "0.4.38", optional = true }
+sqlite_derive = { path = "../sqlite_derive", optional = true }
 uuid = { version = "1.11", optional = true }
 
 [features]
+chrono = ["dep:chrono"]
+derive = ["dep:sqlite_derive"]
 uuid = ["dep:uuid"]

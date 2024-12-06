@@ -29,9 +29,3 @@ impl Display for Error {
 }
 
 impl error::Error for Error {}
-
-impl serde::ser::Error for Error {
-    fn custom<T: Display>(msg: T) -> Self {
-        Error::new(&msg.to_string())
-    }
-}

@@ -8,10 +8,8 @@ use std::ffi::{c_char, CString};
 use std::ptr;
 use std::ptr::{null, null_mut};
 
-use serde::{Deserialize, Serialize};
-
 use crate::error::{Error, Result};
-use crate::statement::Statement;
+use crate::statement::{Bind, FromRow, Statement};
 use crate::sys::*;
 
 struct Raw(*mut sqlite3);
@@ -68,7 +66,10 @@ impl Connection {
         Ok(())
     }
 
-    pub fn prepare<T>(&self, query: impl AsRef<str>) -> Result<Statement<T>> {
+    pub fn prepare<T>(&self, query: impl AsRef<str>) -> Result<Statement<T>>
+    where
+        T: FromRow,
+    {
         let query = query.as_ref();
         let mut statement = ptr::null_mut();
         let result = unsafe {
@@ -86,11 +87,11 @@ impl Connection {
         Ok(Statement::new(statement))
     }
 
-    pub fn query<T>(&self, query: impl AsRef<str>, params: impl Serialize) -> Result<Statement<T>>
+    pub fn query<T>(&self, query: impl AsRef<str>, params: impl Bind) -> Result<Statement<T>>
     where
-        T: for<'de> Deserialize<'de>,
+        T: FromRow,
     {
-        let statement = self.prepare::<T>(query.as_ref())?;
+        let mut statement = self.prepare::<T>(query.as_ref())?;
         statement.bind(params)?;
         Ok(statement)
     }
