@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::str::{self};
 
 use crate::method::Method;
@@ -20,6 +20,7 @@ pub struct Request {
     pub method: Method,
     pub headers: BTreeMap<String, String>,
     pub body: String,
+    pub client_addr: Option<SocketAddr>,
 }
 
 impl Default for Request {
@@ -31,6 +32,7 @@ impl Default for Request {
             path: "/".to_string(),
             headers: BTreeMap::new(),
             body: String::new(),
+            client_addr: None,
         }
     }
 }
@@ -72,7 +74,10 @@ impl Request {
     }
 
     pub(crate) fn read_from_stream(stream: &mut TcpStream) -> Result<Request, InvalidRequestError> {
-        let addr = stream.peer_addr().expect("Can't get tcp stream addr");
+        let local_addr = stream
+            .local_addr()
+            .expect("Can't get tcp stream local addr");
+        let client_addr = stream.peer_addr().ok();
         let mut reader = BufReader::new(stream);
 
         // Read first line
@@ -83,12 +88,13 @@ impl Request {
             let method = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
             let path = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
             Request {
-                host: addr.ip().to_string(),
-                port: addr.port(),
+                host: local_addr.ip().to_string(),
+                port: local_addr.port(),
                 method: method.parse().map_err(|_| InvalidRequestError)?,
                 path,
                 headers: BTreeMap::new(),
                 body: String::new(),
+                client_addr,
             }
         };
 
