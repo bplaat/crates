@@ -151,8 +151,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             },
             #[cfg(feature = "email")]
             Rule::Email => quote! {
-                let re = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
-                if !re.is_match(&self.#field_name) {
+                if validate::is_valid_email(&self.#field_name) {
                     errors
                         .entry(stringify!(#field_name).to_string())
                         .or_insert_with(Vec::new)
