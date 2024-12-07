@@ -1,0 +1,16 @@
+[package]
+name = "validate"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"], optional = true }
+regex = { version = "1.11", optional = true }
+validate_derive = { path = "../validate_derive", optional = true }
+
+[features]
+email = ["dep:regex", "validate_derive/email"]
+derive = ["dep:validate_derive"]
+serde = ["dep:serde"]

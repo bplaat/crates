@@ -14,6 +14,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
+    // Parse fields and skip fields with #[sqlite(skip)]
     let (fields, has_skipped) = if let syn::Data::Struct(data) = input.data {
         let mut fields = Vec::new();
         let mut has_skipped = false;
@@ -35,6 +36,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
         panic!("FromRow can only be used on structs");
     };
 
+    // Generate code
     let mut columns = "".to_string();
     for (i, field) in fields.iter().enumerate() {
         columns.push_str(&field.ident.as_ref().unwrap().to_string());
