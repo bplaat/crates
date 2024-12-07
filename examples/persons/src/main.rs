@@ -9,18 +9,26 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use garde::Validate;
 use http::{Request, Response, Status};
 use router::{Path, Router};
 use serde::{Deserialize, Serialize};
 use sqlite::FromRow;
 use uuid::Uuid;
+use validate::Validate;
 
 const HTTP_PORT: u16 = 8080;
 
 #[derive(Clone)]
 struct Context {
     database: sqlite::Connection,
+}
+
+fn validate_name(name: &str) -> validate::Result<()> {
+    if name.to_lowercase() == "bastiaan" {
+        Err(validate::Error::new("name can't be Bastiaan"))
+    } else {
+        Ok(())
+    }
 }
 
 // MARK: Routes
@@ -55,9 +63,9 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     // Parse and validate body
     #[derive(Deserialize, Validate)]
     struct Body {
-        #[garde(ascii, length(min = 3, max = 25))]
+        #[validate(ascii, length(min = 3, max = 25), custom(validate_name))]
         name: String,
-        #[garde(range(min = 8))]
+        #[validate(range(min = 8))]
         age: i64,
     }
     let body = match serde_urlencoded::from_str::<Body>(&req.body) {
@@ -68,8 +76,8 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
                 .body("400 Bad Request"));
         }
     };
-    if let Err(err) = body.validate() {
-        return Ok(Response::new().status(Status::BadRequest).json(err));
+    if let Err(errors) = body.validate() {
+        return Ok(Response::new().status(Status::BadRequest).json(errors));
     }
 
     // Create person
