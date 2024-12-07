@@ -5,14 +5,12 @@
  */
 
 pub use crate::connection::Connection;
-pub use crate::error::{Error, Result};
-pub use crate::statement::{Bind, FromRow, Statement};
+pub use crate::statement::{Bind, FromRow, RawStatement, Statement};
 pub use crate::value::Value;
 
 mod connection;
-mod error;
 mod statement;
-pub mod sys;
+mod sys;
 mod value;
 
 #[cfg(feature = "derive")]

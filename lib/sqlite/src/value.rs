@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, c_void, CStr};
-
-use crate::error::{Error, Result};
-use crate::sys::*;
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
 pub enum Value {
@@ -18,65 +16,19 @@ pub enum Value {
     Blob(Vec<u8>),
 }
 
-impl Value {
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    pub fn bind_to_statement(&self, statement: *mut sqlite3_stmt, index: i32) -> Result<()> {
-        let result = match self {
-            Value::Null => unsafe { sqlite3_bind_null(statement, index) },
-            Value::Integer(i) => unsafe { sqlite3_bind_int64(statement, index, *i) },
-            Value::Real(f) => unsafe { sqlite3_bind_double(statement, index, *f) },
-            Value::Text(s) => unsafe {
-                sqlite3_bind_text(
-                    statement,
-                    index,
-                    s.as_ptr() as *const c_char,
-                    s.as_bytes().len() as i32,
-                    SQLITE_TRANSIENT,
-                )
-            },
-            Value::Blob(b) => unsafe {
-                sqlite3_bind_blob(
-                    statement,
-                    index,
-                    b.as_ptr() as *const c_void,
-                    b.len() as i32,
-                    SQLITE_TRANSIENT,
-                )
-            },
-        };
-        if result != SQLITE_OK {
-            return Err(Error::new("Can't bind value"));
-        }
-        Ok(())
-    }
+// MARK: ValueError
+type Result<T> = std::result::Result<T, ValueError>;
 
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    pub fn read_from_statement(statement: *mut sqlite3_stmt, index: i32) -> Result<Self> {
-        match unsafe { sqlite3_column_type(statement, index) } {
-            SQLITE_NULL => Ok(Value::Null),
-            SQLITE_INTEGER => Ok(Value::Integer(unsafe {
-                sqlite3_column_int64(statement, index)
-            })),
-            SQLITE_FLOAT => Ok(Value::Real(unsafe {
-                sqlite3_column_double(statement, index)
-            })),
-            SQLITE_TEXT => {
-                let text = unsafe { sqlite3_column_text(statement, index) };
-                let text: String = unsafe { CStr::from_ptr(text as *const c_char) }
-                    .to_string_lossy()
-                    .into_owned();
-                Ok(Value::Text(text))
-            }
-            SQLITE_BLOB => {
-                let blob = unsafe { sqlite3_column_blob(statement, index) };
-                let len = unsafe { sqlite3_column_bytes(statement, index) };
-                let slice = unsafe { std::slice::from_raw_parts(blob as *const u8, len as usize) };
-                Ok(Value::Blob(slice.to_vec()))
-            }
-            _ => Err(Error::new("Can't read value")),
-        }
+#[derive(Debug)]
+pub struct ValueError;
+
+impl Display for ValueError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Value error")
     }
 }
+
+impl Error for ValueError {}
 
 // MARK: From T
 impl From<i64> for Value {
@@ -85,11 +37,11 @@ impl From<i64> for Value {
     }
 }
 impl TryFrom<Value> for i64 {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(v) => Ok(v),
-            _ => Err(Error::new("Value is not an integer")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -100,11 +52,11 @@ impl From<f64> for Value {
     }
 }
 impl TryFrom<Value> for f64 {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Real(v) => Ok(v),
-            _ => Err(Error::new("Value is not a real")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -115,11 +67,11 @@ impl From<String> for Value {
     }
 }
 impl TryFrom<Value> for String {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Text(v) => Ok(v),
-            _ => Err(Error::new("Value is not a text")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -130,11 +82,11 @@ impl From<Vec<u8>> for Value {
     }
 }
 impl TryFrom<Value> for Vec<u8> {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Blob(v) => Ok(v),
-            _ => Err(Error::new("Value is not a blob")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -148,13 +100,11 @@ impl From<uuid::Uuid> for Value {
 }
 #[cfg(feature = "uuid")]
 impl TryFrom<Value> for uuid::Uuid {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Blob(v) => {
-                Ok(uuid::Uuid::from_slice(&v).map_err(|_| Error::new("Can't convert to Uuid"))?)
-            }
-            _ => Err(Error::new("Value is not a blob")),
+            Value::Blob(v) => Ok(uuid::Uuid::from_slice(&v).map_err(|_| ValueError)?),
+            _ => Err(ValueError),
         }
     }
 }
@@ -168,13 +118,13 @@ impl From<chrono::DateTime<chrono::Utc>> for Value {
 }
 #[cfg(feature = "chrono")]
 impl TryFrom<Value> for chrono::DateTime<chrono::Utc> {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Text(v) => Ok(chrono::DateTime::parse_from_rfc3339(&v)
-                .map_err(|_| Error::new("Can't convert to DateTime"))?
+                .map_err(|_| ValueError)?
                 .with_timezone(&chrono::Utc)),
-            _ => Err(Error::new("Value is not a text")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -189,12 +139,12 @@ impl From<Option<i64>> for Value {
     }
 }
 impl TryFrom<Value> for Option<i64> {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(v) => Ok(Some(v)),
             Value::Null => Ok(None),
-            _ => Err(Error::new("Value is not an integer or null")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -208,12 +158,12 @@ impl From<Option<f64>> for Value {
     }
 }
 impl TryFrom<Value> for Option<f64> {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Real(v) => Ok(Some(v)),
             Value::Null => Ok(None),
-            _ => Err(Error::new("Value is not a real or null")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -227,12 +177,12 @@ impl From<Option<String>> for Value {
     }
 }
 impl TryFrom<Value> for Option<String> {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Text(v) => Ok(Some(v)),
             Value::Null => Ok(None),
-            _ => Err(Error::new("Value is not a text or null")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -246,12 +196,12 @@ impl From<Option<Vec<u8>>> for Value {
     }
 }
 impl TryFrom<Value> for Option<Vec<u8>> {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Blob(v) => Ok(Some(v)),
             Value::Null => Ok(None),
-            _ => Err(Error::new("Value is not a blob or null")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -268,14 +218,12 @@ impl From<Option<uuid::Uuid>> for Value {
 }
 #[cfg(feature = "uuid")]
 impl TryFrom<Value> for Option<uuid::Uuid> {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Blob(v) => Ok(Some(
-                uuid::Uuid::from_slice(&v).map_err(|_| Error::new("Can't convert to Uuid"))?,
-            )),
+            Value::Blob(v) => Ok(Some(uuid::Uuid::from_slice(&v).map_err(|_| ValueError)?)),
             Value::Null => Ok(None),
-            _ => Err(Error::new("Value is not a blob or null")),
+            _ => Err(ValueError),
         }
     }
 }
@@ -292,16 +240,16 @@ impl From<Option<chrono::DateTime<chrono::Utc>>> for Value {
 }
 #[cfg(feature = "chrono")]
 impl TryFrom<Value> for Option<chrono::DateTime<chrono::Utc>> {
-    type Error = Error;
+    type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Text(v) => Ok(Some(
                 chrono::DateTime::parse_from_rfc3339(&v)
-                    .map_err(|_| Error::new("Can't convert to DateTime"))?
+                    .map_err(|_| ValueError)?
                     .with_timezone(&chrono::Utc),
             )),
             Value::Null => Ok(None),
-            _ => Err(Error::new("Value is not a text or null")),
+            _ => Err(ValueError),
         }
     }
 }

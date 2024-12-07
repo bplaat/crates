@@ -46,17 +46,14 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
 
     let binds = fields.iter().enumerate().map(|(index, field)| {
         let field = field.ident.as_ref().unwrap();
-        let index = index as i32 + 1;
-        quote! {
-            let value: sqlite::Value = self.#field.into();
-            value.bind_to_statement(statement, #index)?;
-        }
+        let index = index as i32;
+        quote! { statement.bind_value(self.#field, #index) }
     });
 
     let from_rows = fields.iter().enumerate().map(|(index, field)| {
         let field = field.ident.as_ref().unwrap();
         let index = index as i32;
-        quote! { #field: sqlite::Value::read_from_statement(statement, #index)?.try_into()? }
+        quote! { #field: statement.read_value(#index).try_into().unwrap() }
     });
 
     TokenStream::from(quote! {
@@ -67,21 +64,17 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
             pub fn values() -> &'static str {
                 #values
             }
-            pub fn sets() -> &'static str {
-                #sets
-            }
         }
         impl sqlite::Bind for #name {
-            fn bind(self, statement: *mut sqlite::sys::sqlite3_stmt) -> sqlite::Result<()> {
-                #( #binds )*
-                Ok(())
+            fn bind(self, statement: &mut sqlite::RawStatement) {
+                #( #binds; )*
             }
         }
         impl sqlite::FromRow for #name {
-            fn from_row(statement: *mut sqlite::sys::sqlite3_stmt) -> sqlite::Result<Self> {
-                Ok(Self {
+            fn from_row(statement: &mut sqlite::RawStatement) -> Self {
+                Self {
                     #( #from_rows, )*
-                })
+                }
             }
         }
     })

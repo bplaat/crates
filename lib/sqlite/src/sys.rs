@@ -33,13 +33,6 @@ extern "C" {
         flags: c_int,
         zVfs: *const c_char,
     ) -> c_int;
-    pub fn sqlite3_exec(
-        db: *mut sqlite3,
-        sql: *const c_char,
-        callback: *mut c_void,
-        arg: *mut c_void,
-        errmsg: *mut *mut c_char,
-    ) -> c_int;
     pub fn sqlite3_prepare_v2(
         db: *mut sqlite3,
         zSql: *const c_char,
@@ -70,7 +63,6 @@ extern "C" {
         n: c_int,
         xDel: isize,
     ) -> c_int;
-    pub fn sqlite3_column_count(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_column_type(pStmt: *mut sqlite3_stmt, iCol: c_int) -> c_int;
     pub fn sqlite3_column_int64(pStmt: *mut sqlite3_stmt, iCol: c_int) -> i64;
     pub fn sqlite3_column_double(pStmt: *mut sqlite3_stmt, iCol: c_int) -> f64;

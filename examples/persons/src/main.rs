@@ -20,7 +20,7 @@ const HTTP_PORT: u16 = 8080;
 
 #[derive(Clone)]
 struct Context {
-    database: Arc<sqlite::Connection>,
+    database: sqlite::Connection,
 }
 
 // MARK: Routes
@@ -46,8 +46,8 @@ fn persons_index(_: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     // Get persons
     let persons = ctx
         .database
-        .query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())?
-        .collect::<Result<Vec<_>, sqlite::Error>>()?;
+        .query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())
+        .collect::<Vec<_>>();
     Ok(Response::new().json(persons))
 }
 
@@ -79,32 +79,26 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
         age: body.age,
         created_at: Utc::now(),
     };
-    ctx.database
-        .query::<()>(
-            format!(
-                "INSERT INTO persons ({}) VALUES ({})",
-                Person::columns(),
-                Person::values()
-            ),
-            (
-                person.id,
-                person.name.clone(),
-                person.age,
-                person.created_at,
-            ),
-        )?
-        .next();
+    ctx.database.execute(
+        format!(
+            "INSERT INTO persons ({}) VALUES ({})",
+            Person::columns(),
+            Person::values()
+        ),
+        (
+            person.id,
+            person.name.clone(),
+            person.age,
+            person.created_at,
+        ),
+    );
 
     Ok(Response::new().json(person))
 }
 
 fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Result<Response> {
     // Parse person id from url
-    let person_id = match path
-        .get("person_id")
-        .expect("Should be some")
-        .parse::<Uuid>()
-    {
+    let person_id = match path.get("person_id").unwrap().parse::<Uuid>() {
         Ok(id) => id,
         Err(_) => {
             return Ok(Response::new()
@@ -122,10 +116,10 @@ fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Result<Response> {
                 Person::columns()
             ),
             person_id,
-        )?
+        )
         .next();
 
-    if let Some(Ok(person)) = person {
+    if let Some(person) = person {
         Ok(Response::new().json(person))
     } else {
         Ok(Response::new()
@@ -145,13 +139,14 @@ fn open_database() -> Result<sqlite::Connection> {
             age INTEGER NOT NULL,
             created_at TIMESTAMP NOT NULL
         )",
-    )?;
+        (),
+    );
 
     // Insert persons
     let persons_count = database
-        .query::<i64>("SELECT COUNT(id) FROM persons", ())?
+        .query::<i64>("SELECT COUNT(id) FROM persons", ())
         .next()
-        .expect("Should be some")?;
+        .unwrap();
     if persons_count == 0 {
         let persons = vec![
             Person {
@@ -180,16 +175,14 @@ fn open_database() -> Result<sqlite::Connection> {
             },
         ];
         for person in persons {
-            database
-                .query::<()>(
-                    format!(
-                        "INSERT INTO persons ({}) VALUES ({})",
-                        Person::columns(),
-                        Person::values()
-                    ),
-                    person,
-                )?
-                .next();
+            database.execute(
+                format!(
+                    "INSERT INTO persons ({}) VALUES ({})",
+                    Person::columns(),
+                    Person::values()
+                ),
+                person,
+            );
         }
     }
 
@@ -199,7 +192,7 @@ fn open_database() -> Result<sqlite::Connection> {
 // MARK: Main
 fn main() {
     let ctx = Context {
-        database: Arc::new(open_database().expect("Can't open database")),
+        database: open_database().expect("Can't open database"),
     };
 
     let router = Arc::new(

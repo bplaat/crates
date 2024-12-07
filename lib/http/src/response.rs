@@ -135,7 +135,7 @@ pub struct InvalidResponseError;
 
 impl Display for InvalidResponseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Invalid request")
+        write!(f, "Invalid response")
     }
 }
 
