@@ -23,7 +23,7 @@ struct Context {
     database: sqlite::Connection,
 }
 
-fn validate_name(name: &str) -> validate::Result<()> {
+fn validate_name(name: &str) -> validate::Result {
     if name.to_lowercase() == "bastiaan" {
         Err(validate::Error::new("name can't be Bastiaan"))
     } else {

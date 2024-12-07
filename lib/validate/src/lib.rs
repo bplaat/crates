@@ -9,7 +9,7 @@ use std::error;
 use std::fmt::{self, Display, Formatter};
 
 // MARK: Error
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result = std::result::Result<(), Error>;
 
 #[derive(Debug)]
 pub struct Error {
