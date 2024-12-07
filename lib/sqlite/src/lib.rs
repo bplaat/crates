@@ -6,7 +6,7 @@
 
 pub use crate::connection::Connection;
 pub use crate::statement::{Bind, FromRow, RawStatement, Statement};
-pub use crate::value::Value;
+pub use crate::value::{Value, ValueError};
 
 mod connection;
 mod statement;
