@@ -61,6 +61,8 @@ pub use validate_derive::Validate;
 
 #[cfg(feature = "email")]
 pub fn is_valid_email(email: &str) -> bool {
-    let re = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
+    let re =
+        regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
+            .unwrap();
     re.is_match(email)
 }
