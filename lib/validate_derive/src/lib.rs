@@ -151,7 +151,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             },
             #[cfg(feature = "email")]
             Rule::Email => quote! {
-                if validate::is_valid_email(&self.#field_name) {
+                if !validate::is_valid_email(&self.#field_name) {
                     errors
                         .entry(stringify!(#field_name).to_string())
                         .or_insert_with(Vec::new)
