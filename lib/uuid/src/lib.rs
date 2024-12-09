@@ -85,7 +85,7 @@ impl FromStr for Uuid {
 impl Uuid {
     pub fn new_v4() -> Uuid {
         let mut bytes = [0; 16];
-        _ = getrandom::getrandom(&mut bytes);
+        getrandom::getrandom(&mut bytes).unwrap();
         bytes[6] = bytes[6] & 0x0f | 0x40;
         bytes[8] = bytes[8] & 0x3f | 0x80;
         Uuid(bytes)
@@ -106,7 +106,7 @@ impl Uuid {
         bytes[3] = (timestamp >> 16) as u8;
         bytes[4] = (timestamp >> 8) as u8;
         bytes[5] = timestamp as u8;
-        _ = getrandom::getrandom(&mut bytes[6..]);
+        getrandom::getrandom(&mut bytes[6..]).unwrap();
         bytes[6] = bytes[6] & 0x0f | 0x70;
         bytes[8] = bytes[8] & 0x3f | 0x80;
         Uuid(bytes)
