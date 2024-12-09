@@ -7,9 +7,8 @@
 use std::net::{Ipv4Addr, TcpListener};
 use std::sync::Arc;
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
-use http::{Request, Response, Status};
+use http::{Method, Request, Response, Status};
 use router::{Path, Router};
 use serde::{Deserialize, Serialize};
 use sqlite::FromRow;
@@ -32,14 +31,14 @@ fn validate_name(name: &str) -> validate::Result {
 }
 
 // MARK: Routes
-fn home(_: &Request, _: &Context, _: &Path) -> Result<Response> {
-    Ok(Response::new().body(concat!("Persons v", env!("CARGO_PKG_VERSION"))))
+fn home(_: &Request, _: &Context, _: &Path) -> Response {
+    Response::new().body(concat!("Persons v", env!("CARGO_PKG_VERSION")))
 }
 
-fn not_found(_: &Request, _: &Context, _: &Path) -> Result<Response> {
-    Ok(Response::new()
+fn not_found(_: &Request, _: &Context, _: &Path) -> Response {
+    Response::new()
         .status(Status::NotFound)
-        .body("404 Not Found"))
+        .body("404 Not Found")
 }
 
 #[derive(Clone, Serialize, FromRow)]
@@ -50,16 +49,16 @@ struct Person {
     created_at: DateTime<Utc>,
 }
 
-fn persons_index(_: &Request, ctx: &Context, _: &Path) -> Result<Response> {
+fn persons_index(_: &Request, ctx: &Context, _: &Path) -> Response {
     // Get persons
     let persons = ctx
         .database
         .query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())
         .collect::<Vec<_>>();
-    Ok(Response::new().json(persons))
+    Response::new().json(persons)
 }
 
-fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
+fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
     // Parse and validate body
     #[derive(Deserialize, Validate)]
     struct Body {
@@ -71,13 +70,13 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
     let body = match serde_urlencoded::from_str::<Body>(&req.body) {
         Ok(body) => body,
         Err(_) => {
-            return Ok(Response::new()
+            return Response::new()
                 .status(Status::BadRequest)
-                .body("400 Bad Request"));
+                .body("400 Bad Request");
         }
     };
     if let Err(errors) = body.validate() {
-        return Ok(Response::new().status(Status::BadRequest).json(errors));
+        return Response::new().status(Status::BadRequest).json(errors);
     }
 
     // Create person
@@ -101,17 +100,17 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Result<Response> {
         ),
     );
 
-    Ok(Response::new().json(person))
+    Response::new().json(person)
 }
 
-fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Result<Response> {
+fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Response {
     // Parse person id from url
     let person_id = match path.get("person_id").unwrap().parse::<Uuid>() {
         Ok(id) => id,
         Err(_) => {
-            return Ok(Response::new()
+            return Response::new()
                 .status(Status::BadRequest)
-                .body("400 Bad Request"));
+                .body("400 Bad Request");
         }
     };
 
@@ -128,16 +127,16 @@ fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Result<Response> {
         .next();
 
     if let Some(person) = person {
-        Ok(Response::new().json(person))
+        Response::new().json(person)
     } else {
-        Ok(Response::new()
+        Response::new()
             .status(Status::NotFound)
-            .body("404 Not Found"))
+            .body("404 Not Found")
     }
 }
 
 // MARK: Database
-fn open_database() -> Result<sqlite::Connection> {
+fn open_database() -> Result<sqlite::Connection, sqlite::ConnectionError> {
     // Create new database
     let database = sqlite::Connection::open("database.db")?;
     database.execute(
@@ -218,18 +217,18 @@ fn main() {
     http::serve(listener, move |req| {
         println!("{} {}", req.method, req.path);
 
-        // Error middleware
-        let res = match router.next(req, &ctx) {
-            Ok(res) => res,
-            Err(err) => {
-                println!("Error: {:?}", err);
-                Response::new()
-                    .status(http::Status::InternalServerError)
-                    .body("500 Internal Server Error")
-            }
-        };
+        // Cors middleware
+        if req.method == Method::Options {
+            return Response::new()
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Access-Control-Allow-Methods", "GET, POST");
+        }
+
+        // Router
+        let res = router.next(req, &ctx);
 
         // Cors middleware
         res.header("Access-Control-Allow-Origin", "*")
+            .header("Access-Control-Allow-Methods", "GET, POST")
     });
 }

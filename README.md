@@ -14,6 +14,6 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 
 ## TODO
 
--   [ ] Router: Remove regex dep
 -   [ ] Router: Improve handler injection
 -   [ ] Router: Add middleware
+-   [ ] Uuid: Bring back uuid library

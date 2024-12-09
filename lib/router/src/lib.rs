@@ -7,46 +7,89 @@
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
-use anyhow::Result;
 use http::{Method, Request, Response};
-use lazy_static::lazy_static;
-use regex::{Captures, Regex};
 
+// MARK: Route
 pub type Path = BTreeMap<String, String>;
 
-type Handler<T> = fn(&Request, &T, &Path) -> Result<Response>;
+type Handler<T> = fn(&Request, &T, &Path) -> Response;
 
-lazy_static! {
-    static ref PATH_PARAM_REGEX: Regex = Regex::new(":([a-z_]+)").expect("Should compile");
+#[derive(Debug)]
+enum RoutePart {
+    Static(String),
+    Param(String),
 }
 
 struct Route<T> {
     methods: Vec<Method>,
-    re: Regex,
+    route: String,
+    parts: Vec<RoutePart>,
     handler: Handler<T>,
 }
 
 impl<T> Route<T> {
     fn new(methods: Vec<Method>, route: String, handler: Handler<T>) -> Self {
+        let parts = route
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .map(|part| {
+                if let Some(stripped) = part.strip_prefix(':') {
+                    RoutePart::Param(stripped.to_string())
+                } else {
+                    RoutePart::Static(part.to_string())
+                }
+            })
+            .collect();
         Self {
             methods,
-            re: Regex::new(&format!(
-                "^{}$",
-                PATH_PARAM_REGEX.replace_all(&route, |captures: &Captures| format!(
-                    "(?P<{}>[^/]+)",
-                    captures.get(1).unwrap().as_str()
-                ))
-            ))
-            .expect("Invalid route"),
+            route,
+            parts,
             handler,
         }
     }
+
+    fn matches(&self, path: &str) -> (bool, Option<Path>) {
+        let mut path_parts = path.split('/').filter(|part| !part.is_empty());
+        let mut params = BTreeMap::new();
+        for part in &self.parts {
+            match part {
+                RoutePart::Static(expected) => {
+                    if let Some(actual) = path_parts.next() {
+                        if actual != *expected {
+                            return (false, None);
+                        }
+                    } else {
+                        return (false, None);
+                    }
+                }
+                RoutePart::Param(name) => {
+                    if let Some(actual) = path_parts.next() {
+                        params.insert(name.to_string(), actual.to_string());
+                    } else {
+                        return (false, None);
+                    }
+                }
+            }
+        }
+        (path_parts.next().is_none(), Some(params))
+    }
 }
 
+// MARK: Router
 pub struct Router<T> {
     routes: Vec<Route<T>>,
     fallback_handler: Option<Handler<T>>,
     _marker: PhantomData<T>,
+}
+
+impl<T> Default for Router<T> {
+    fn default() -> Self {
+        Self {
+            routes: Vec::new(),
+            fallback_handler: None,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<T> Router<T> {
@@ -97,37 +140,23 @@ impl<T> Router<T> {
         self
     }
 
-    pub fn next(&self, req: &Request, ctx: &T) -> Result<Response> {
+    pub fn next(&self, req: &Request, ctx: &T) -> Response {
         // Match routes
         for route in self.routes.iter().rev() {
-            if route.re.is_match(&req.path) {
-                for route in self
-                    .routes
-                    .iter()
-                    .filter(|route| route.re.is_match(&req.path))
-                {
-                    // Check if method is allowed
+            let (matches, path) = route.matches(&req.path);
+            if matches {
+                // Find matching route by method
+                for route in self.routes.iter().filter(|r| r.route == route.route) {
                     if !route.methods.contains(&req.method) {
                         continue;
                     }
-
-                    // Get path parameters captured by regex
-                    let captures = route.re.captures(&req.path).expect("Should be some");
-                    let mut path = BTreeMap::new();
-                    for name in route.re.capture_names().flatten() {
-                        if let Some(value) = captures.name(name) {
-                            path.insert(name.to_string(), value.as_str().to_string());
-                        }
-                    }
-
-                    // Run route handler
-                    return (route.handler)(req, ctx, &path);
+                    return (route.handler)(req, ctx, &path.unwrap());
                 }
 
-                // Method not allowed
-                return Ok(Response::new()
+                // When method is not allowed
+                return Response::new()
                     .status(http::Status::MethodNotAllowed)
-                    .body("405 Method Not Allowed"));
+                    .body("405 Method Not Allowed");
             }
         }
 
@@ -135,19 +164,9 @@ impl<T> Router<T> {
         if let Some(fallback_handler) = self.fallback_handler {
             fallback_handler(req, ctx, &BTreeMap::new())
         } else {
-            Ok(Response::new()
+            Response::new()
                 .status(http::Status::NotFound)
-                .body("404 Not Found"))
-        }
-    }
-}
-
-impl<T> Default for Router<T> {
-    fn default() -> Self {
-        Self {
-            routes: Vec::new(),
-            fallback_handler: None,
-            _marker: PhantomData,
+                .body("404 Not Found")
         }
     }
 }

@@ -11,7 +11,6 @@ router = { path = "../../lib/router" }
 sqlite = { path = "../../lib/sqlite", features = ["derive", "chrono", "uuid"] }
 validate = { path = "../../lib/validate", features = ["derive", "serde"] }
 
-anyhow = "1.0"
 chrono = { version = "0.4.38", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
