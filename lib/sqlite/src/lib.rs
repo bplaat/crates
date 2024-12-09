@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-pub use crate::connection::Connection;
+pub use crate::connection::{Connection, ConnectionError};
 pub use crate::statement::{Bind, FromRow, RawStatement, Statement};
 pub use crate::value::{Value, ValueError};
 
