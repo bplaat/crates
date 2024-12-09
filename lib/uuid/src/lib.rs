@@ -8,7 +8,7 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::str::FromStr;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Uuid([u8; 16]);
 
 impl Uuid {
