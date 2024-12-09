@@ -221,7 +221,8 @@ fn main() {
         if req.method == Method::Options {
             return Response::new()
                 .header("Access-Control-Allow-Origin", "*")
-                .header("Access-Control-Allow-Methods", "GET, POST");
+                .header("Access-Control-Allow-Methods", "GET, POST")
+                .header("Access-Control-Max-Age", "86400");
         }
 
         // Router
@@ -230,5 +231,6 @@ fn main() {
         // Cors middleware
         res.header("Access-Control-Allow-Origin", "*")
             .header("Access-Control-Allow-Methods", "GET, POST")
+            .header("Access-Control-Max-Age", "86400")
     });
 }
