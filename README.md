@@ -17,3 +17,4 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 
 -   [ ] Router: Improve handler injection
 -   [ ] Router: Add middleware
+-   [ ] http: keep-alive requests

@@ -71,7 +71,9 @@ impl Response {
         // Read first line
         let mut res = {
             let mut line = String::new();
-            _ = reader.read_line(&mut line);
+            reader
+                .read_line(&mut line)
+                .map_err(|_| InvalidResponseError)?;
             let mut parts = line.splitn(3, ' ');
             let _http_version = parts.next().ok_or(InvalidResponseError)?;
             let status_code = parts
@@ -104,7 +106,7 @@ impl Response {
             let content_length = content_length.parse().map_err(|_| InvalidResponseError)?;
             if content_length > 0 {
                 let mut buffer = vec![0_u8; content_length];
-                _ = reader.read(&mut buffer);
+                reader.read(&mut buffer).map_err(|_| InvalidResponseError)?;
                 if let Ok(text) = str::from_utf8(&buffer) {
                     res.body.push_str(text);
                 }

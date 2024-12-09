@@ -83,7 +83,9 @@ impl Request {
         // Read first line
         let mut req = {
             let mut line = String::new();
-            _ = reader.read_line(&mut line);
+            reader
+                .read_line(&mut line)
+                .map_err(|_| InvalidRequestError)?;
             let mut parts = line.split(" ");
             let method = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
             let path = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
@@ -119,7 +121,7 @@ impl Request {
             let content_length = content_length.parse().map_err(|_| InvalidRequestError)?;
             if content_length > 0 {
                 let mut buffer = vec![0_u8; content_length];
-                _ = reader.read(&mut buffer);
+                reader.read(&mut buffer).map_err(|_| InvalidRequestError)?;
                 if let Ok(text) = str::from_utf8(&buffer) {
                     req.body.push_str(text);
                 }
