@@ -12,6 +12,10 @@ use std::str::FromStr;
 pub struct Uuid([u8; 16]);
 
 impl Uuid {
+    pub fn nil() -> Uuid {
+        Uuid([0; 16])
+    }
+
     pub fn from_bytes(bytes: [u8; 16]) -> Uuid {
         Uuid(bytes)
     }
