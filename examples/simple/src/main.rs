@@ -14,15 +14,16 @@ use serde::Deserialize;
 const HTTP_PORT: u16 = 8080;
 
 fn handler(req: &Request) -> Response {
-    println!("{} {}", req.method, req.path);
+    let path = req.url.path.as_str();
+    println!("{} {}", req.method, path);
 
     let res = Response::new().header("Content-Type", "text/html");
 
-    if req.path == "/" {
+    if path == "/" {
         return res.body("<h1>Hello World!</h1>");
     }
 
-    if req.path == "/greet" {
+    if path == "/greet" {
         if req.method != Method::Post {
             return res
                 .status(Status::MethodNotAllowed)
@@ -44,17 +45,17 @@ fn handler(req: &Request) -> Response {
         return res.body(format!("<h1>Hello {}!</h1>", body.name));
     }
 
-    if req.path == "/redirect" {
+    if path == "/redirect" {
         return Response::new().redirect("/");
     }
 
-    if req.path == "/sleep" {
+    if path == "/sleep" {
         thread::sleep(Duration::from_secs(5));
         return res.body("<h1>Sleeping done!</h1>");
     }
 
-    if req.path == "/ipinfo" {
-        let data_res = match http::fetch(Request::new().host("ipinfo.io").path("/json")) {
+    if path == "/ipinfo" {
+        let data_res = match http::fetch(Request::with_url("http://ipinfo.io/json")) {
             Ok(res) => res,
             Err(_) => {
                 return res

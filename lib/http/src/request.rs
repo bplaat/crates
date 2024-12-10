@@ -9,14 +9,14 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::str::{self};
+use std::str::{self, FromStr};
+
+use url::Url;
 
 use crate::method::Method;
 
 pub struct Request {
-    pub host: String,
-    pub port: u16,
-    pub path: String,
+    pub url: Url,
     pub method: Method,
     pub headers: BTreeMap<String, String>,
     pub body: String,
@@ -26,10 +26,8 @@ pub struct Request {
 impl Default for Request {
     fn default() -> Self {
         Self {
-            host: "localhost".to_string(),
-            port: 80,
+            url: Url::from_str("http://localhost").unwrap(),
             method: Method::Get,
-            path: "/".to_string(),
             headers: BTreeMap::new(),
             body: String::new(),
             client_addr: None,
@@ -42,18 +40,15 @@ impl Request {
         Self::default()
     }
 
-    pub fn host(mut self, host: impl AsRef<str>) -> Self {
-        self.host = host.as_ref().to_string();
-        self
+    pub fn with_url(url: impl AsRef<str>) -> Self {
+        Self {
+            url: url.as_ref().parse().unwrap(),
+            ..Self::default()
+        }
     }
 
-    pub fn port(mut self, port: u16) -> Self {
-        self.port = port;
-        self
-    }
-
-    pub fn path(mut self, path: impl AsRef<str>) -> Self {
-        self.path = path.as_ref().to_string();
+    pub fn url(mut self, url: Url) -> Self {
+        self.url = url;
         self
     }
 
@@ -81,7 +76,7 @@ impl Request {
         let mut reader = BufReader::new(stream);
 
         // Read first line
-        let mut req = {
+        let (method, path) = {
             let mut line = String::new();
             reader
                 .read_line(&mut line)
@@ -89,18 +84,11 @@ impl Request {
             let mut parts = line.split(" ");
             let method = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
             let path = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
-            Request {
-                host: local_addr.ip().to_string(),
-                port: local_addr.port(),
-                method: method.parse().map_err(|_| InvalidRequestError)?,
-                path,
-                headers: BTreeMap::new(),
-                body: String::new(),
-                client_addr,
-            }
+            (method.parse().map_err(|_| InvalidRequestError)?, path)
         };
 
         // Read headers
+        let mut headers = BTreeMap::new();
         loop {
             let mut line = String::new();
             reader
@@ -110,37 +98,65 @@ impl Request {
                 break;
             }
             let mut parts = line.split(":");
-            req.headers.insert(
+            headers.insert(
                 parts.next().ok_or(InvalidRequestError)?.trim().to_string(),
                 parts.next().ok_or(InvalidRequestError)?.trim().to_string(),
             );
         }
 
         // Read body
-        if let Some(content_length) = req.headers.get("Content-Length") {
+        let mut body = String::new();
+        if let Some(content_length) = headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidRequestError)?;
             if content_length > 0 {
                 let mut buffer = vec![0_u8; content_length];
                 reader.read(&mut buffer).map_err(|_| InvalidRequestError)?;
                 if let Ok(text) = str::from_utf8(&buffer) {
-                    req.body.push_str(text);
+                    body = text.to_string();
                 }
             }
         }
-        Ok(req)
+
+        // Parse URL
+        let url = Url::from_str(&format!(
+            "http://{}{}",
+            headers.get("Host").unwrap_or(&local_addr.to_string()),
+            path
+        ))
+        .map_err(|_| InvalidRequestError)?;
+
+        Ok(Request {
+            url,
+            method,
+            headers,
+            body,
+            client_addr,
+        })
     }
 
     pub(crate) fn write_to_stream(mut self, stream: &mut TcpStream) {
         // Finish headers
-        self.headers
-            .insert("Host".to_string(), format!("{}:{}", self.host, self.port));
+        let authority = self.url.authority.as_ref().unwrap();
+        self.headers.insert(
+            "Host".to_string(),
+            if let Some(port) = authority.port {
+                format!("{}:{}", authority.host, port)
+            } else {
+                authority.host.clone()
+            },
+        );
         self.headers
             .insert("Content-Length".to_string(), self.body.len().to_string());
         self.headers
             .insert("Connection".to_string(), "close".to_string());
 
         // Write request
-        _ = write!(stream, "{} {} HTTP/1.1\r\n", self.method, self.path);
+        let path = if let Some(query) = self.url.query {
+            format!("{}?{}", self.url.path, query)
+        } else {
+            self.url.path
+        };
+        _ = write!(stream, "{} {} HTTP/1.1\r\n", self.method, path);
         for (name, value) in &self.headers {
             _ = write!(stream, "{}: {}\r\n", name, value);
         }

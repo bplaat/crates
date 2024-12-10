@@ -11,13 +11,20 @@ use std::net::TcpStream;
 use crate::request::Request;
 use crate::response::Response;
 
+// MARK: Fetch
 pub fn fetch(req: Request) -> Result<Response, FetchError> {
-    let mut stream =
-        TcpStream::connect(format!("{}:{}", req.host, req.port)).map_err(|_| FetchError)?;
+    let authority = req.url.authority.as_ref().unwrap();
+    let mut stream = TcpStream::connect(format!(
+        "{}:{}",
+        authority.host,
+        authority.port.unwrap_or(80)
+    ))
+    .map_err(|_| FetchError)?;
     req.write_to_stream(&mut stream);
     Response::read_from_stream(&mut stream).map_err(|_| FetchError)
 }
 
+// MARK: FetchError
 #[derive(Debug)]
 pub struct FetchError;
 

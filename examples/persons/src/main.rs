@@ -215,7 +215,7 @@ fn main() {
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
     http::serve(listener, move |req| {
-        println!("{} {}", req.method, req.path);
+        println!("{} {}", req.method, req.url.path);
 
         // Cors middleware
         if req.method == Method::Options {

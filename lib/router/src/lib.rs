@@ -141,18 +141,9 @@ impl<T> Router<T> {
     }
 
     pub fn next(&self, req: &Request, ctx: &T) -> Response {
-        // Parse pathname
-        let mut path = req.path.as_str();
-        if let Some(i) = path.find('#') {
-            path = &path[..i];
-        }
-        if let Some(i) = path.find('?') {
-            path = &path[..i];
-        }
-
         // Match routes
         for route in self.routes.iter().rev() {
-            let (matches, path) = route.matches(path);
+            let (matches, path) = route.matches(&req.url.path);
             if matches {
                 // Find matching route by method
                 for route in self.routes.iter().filter(|r| r.route == route.route) {
