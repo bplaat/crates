@@ -34,9 +34,20 @@ impl Response {
         Self::default()
     }
 
+    pub fn with_status(status: Status) -> Self {
+        Self {
+            status,
+            ..Default::default()
+        }
+    }
+
     pub fn status(mut self, status: Status) -> Self {
         self.status = status;
         self
+    }
+
+    pub fn with_header(name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
+        Self::default().header(name, value)
     }
 
     pub fn header(mut self, name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
@@ -45,9 +56,21 @@ impl Response {
         self
     }
 
+    pub fn with_body(body: impl AsRef<str>) -> Self {
+        Self {
+            body: body.as_ref().to_string(),
+            ..Default::default()
+        }
+    }
+
     pub fn body(mut self, body: impl AsRef<str>) -> Self {
         self.body = body.as_ref().to_string();
         self
+    }
+
+    #[cfg(feature = "json")]
+    pub fn with_json(value: impl serde::Serialize) -> Self {
+        Self::default().json(value)
     }
 
     #[cfg(feature = "json")]
@@ -56,6 +79,10 @@ impl Response {
             .insert("Content-Type".to_string(), "application/json".to_string());
         self.body = serde_json::to_string(&value).expect("Can't serialize json");
         self
+    }
+
+    pub fn with_redirect(location: impl AsRef<str>) -> Self {
+        Self::default().redirect(location)
     }
 
     pub fn redirect(mut self, location: impl AsRef<str>) -> Self {

@@ -32,13 +32,11 @@ fn validate_name(name: &str) -> validate::Result {
 
 // MARK: Routes
 fn home(_: &Request, _: &Context, _: &Path) -> Response {
-    Response::new().body(concat!("Persons v", env!("CARGO_PKG_VERSION")))
+    Response::with_body(concat!("Persons v", env!("CARGO_PKG_VERSION")))
 }
 
 fn not_found(_: &Request, _: &Context, _: &Path) -> Response {
-    Response::new()
-        .status(Status::NotFound)
-        .body("404 Not Found")
+    Response::with_status(Status::NotFound)
 }
 
 #[derive(Clone, Serialize, FromRow)]
@@ -49,34 +47,56 @@ struct Person {
     created_at: DateTime<Utc>,
 }
 
-fn persons_index(_: &Request, ctx: &Context, _: &Path) -> Response {
-    // Get persons
-    let persons = ctx
-        .database
-        .query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())
-        .collect::<Vec<_>>();
-    Response::new().json(persons)
+#[derive(Deserialize, Validate)]
+struct PersonBody {
+    #[validate(ascii, length(min = 3, max = 25), custom(validate_name))]
+    name: String,
+    #[validate(range(min = 8))]
+    age: i64,
+}
+
+fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
+    // Parse request query
+    #[derive(Deserialize)]
+    struct Query {
+        #[serde(rename = "q")]
+        query: Option<String>,
+    }
+    let query = match req.url.query.as_ref() {
+        Some(query) => match serde_urlencoded::from_str::<Query>(query) {
+            Ok(query) => query,
+            Err(_) => return Response::with_status(Status::BadRequest),
+        },
+        None => Query { query: None },
+    };
+
+    // Get or search persons
+    let persons = if let Some(query) = query.query {
+        ctx.database.query::<Person>(
+            format!(
+                "SELECT {} FROM persons WHERE name LIKE ?",
+                Person::columns()
+            ),
+            format!("%{}%", query),
+        )
+    } else {
+        ctx.database
+            .query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())
+    }
+    .collect::<Vec<_>>();
+
+    // Persons response
+    Response::with_json(persons)
 }
 
 fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
     // Parse and validate body
-    #[derive(Deserialize, Validate)]
-    struct Body {
-        #[validate(ascii, length(min = 3, max = 25), custom(validate_name))]
-        name: String,
-        #[validate(range(min = 8))]
-        age: i64,
-    }
-    let body = match serde_urlencoded::from_str::<Body>(&req.body) {
+    let body = match serde_urlencoded::from_str::<PersonBody>(&req.body) {
         Ok(body) => body,
-        Err(_) => {
-            return Response::new()
-                .status(Status::BadRequest)
-                .body("400 Bad Request");
-        }
+        Err(_) => return Response::with_status(Status::BadRequest),
     };
     if let Err(errors) = body.validate() {
-        return Response::new().status(Status::BadRequest).json(errors);
+        return Response::with_status(Status::BadRequest).json(errors);
     }
 
     // Create person
@@ -92,31 +112,22 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
             Person::columns(),
             Person::values()
         ),
-        (
-            person.id,
-            person.name.clone(),
-            person.age,
-            person.created_at,
-        ),
+        person.clone(),
     );
 
-    Response::new().json(person)
+    // Created person response
+    Response::with_json(person)
 }
 
-fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Response {
+fn get_person(ctx: &Context, path: &Path) -> Option<Person> {
     // Parse person id from url
     let person_id = match path.get("person_id").unwrap().parse::<Uuid>() {
         Ok(id) => id,
-        Err(_) => {
-            return Response::new()
-                .status(Status::BadRequest)
-                .body("400 Bad Request");
-        }
+        Err(_) => return None,
     };
 
     // Get person
-    let person = ctx
-        .database
+    ctx.database
         .query::<Person>(
             format!(
                 "SELECT {} FROM persons WHERE id = ? LIMIT 1",
@@ -124,15 +135,63 @@ fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Response {
             ),
             person_id,
         )
-        .next();
+        .next()
+}
 
-    if let Some(person) = person {
-        Response::new().json(person)
-    } else {
-        Response::new()
-            .status(Status::NotFound)
-            .body("404 Not Found")
+fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Response {
+    // Get person
+    let person = match get_person(ctx, path) {
+        Some(person) => person,
+        None => return Response::with_status(Status::NotFound),
+    };
+
+    // Person response
+    Response::with_json(person)
+}
+
+fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
+    // Get person
+    let mut person = match get_person(ctx, path) {
+        Some(person) => person,
+        None => return Response::with_status(Status::NotFound),
+    };
+
+    // Parse and validate body
+    let body = match serde_urlencoded::from_str::<PersonBody>(&req.body) {
+        Ok(body) => body,
+        Err(_) => return Response::with_status(Status::BadRequest),
+    };
+    if let Err(errors) = body.validate() {
+        return Response::with_status(Status::BadRequest).json(errors);
     }
+
+    // Update person
+    person.name = body.name;
+    person.age = body.age;
+    ctx.database.execute(
+        "UPDATE persons SET name = ?, age = ? WHERE id = ? LIMIT 1",
+        (person.name.clone(), person.age, person.id),
+    );
+
+    // Updated person response
+    Response::with_json(person)
+}
+
+fn persons_delete(_: &Request, ctx: &Context, path: &Path) -> Response {
+    // Get person
+    let person = match get_person(ctx, path) {
+        Some(person) => person,
+        None => {
+            return Response::with_status(Status::NotFound);
+        }
+    };
+
+    // Delete person
+    ctx.database
+        .execute("DELETE FROM persons WHERE id = ?", person.id);
+
+    // Success response
+    Response::new()
 }
 
 // MARK: Database
@@ -208,6 +267,8 @@ fn main() {
             .get("/persons", persons_index)
             .post("/persons", persons_create)
             .get("/persons/:person_id", persons_show)
+            .put("/persons/:person_id", persons_update)
+            .delete("/persons/:person_id", persons_delete)
             .fallback(not_found),
     );
 
@@ -219,8 +280,7 @@ fn main() {
 
         // Cors middleware
         if req.method == Method::Options {
-            return Response::new()
-                .header("Access-Control-Allow-Origin", "*")
+            return Response::with_header("Access-Control-Allow-Origin", "*")
                 .header("Access-Control-Allow-Methods", "GET, POST")
                 .header("Access-Control-Max-Age", "86400");
         }
