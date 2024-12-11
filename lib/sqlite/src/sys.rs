@@ -24,7 +24,6 @@ pub const SQLITE_TEXT: i32 = 3;
 pub const SQLITE_BLOB: i32 = 4;
 pub const SQLITE_NULL: i32 = 5;
 
-#[link(name = "sqlite3")]
 extern "C" {
     // sqlite3
     pub fn sqlite3_open_v2(

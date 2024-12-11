@@ -14,8 +14,7 @@ ci:
 	CARGO_TARGET_DIR=target/udeps cargo +nightly udeps --locked --all-targets
 	cargo deny check --hide-inclusion-graph
 
+TARGETS = x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 .PHONY: release
 release:
-	cargo +nightly build --release -Z build-std=std,panic_abort \
-		-Z build-std-features=optimize_for_size \
-		-Z build-std-features=panic_immediate_abort
+	$(foreach target,$(TARGETS),cargo build --release --target $(target);)
