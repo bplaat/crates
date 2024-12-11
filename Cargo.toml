@@ -6,10 +6,3 @@ resolver = "2"
 edition = "2021"
 license = "MIT"
 authors = ["Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>"]
-
-[profile.release]
-strip = true
-opt-level = "z"
-lto = "fat"
-panic = "abort"
-overflow-checks = false

@@ -3,3 +3,10 @@ linker = "x86_64-linux-musl-gcc"
 
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-musl-gcc"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = "fat"
+panic = "abort"
+overflow-checks = false

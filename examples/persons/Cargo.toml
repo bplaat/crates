@@ -8,12 +8,7 @@ authors.workspace = true
 [dependencies]
 http = { path = "../../lib/http", features = ["json"] }
 router = { path = "../../lib/router" }
-sqlite = { path = "../../lib/sqlite", features = [
-    "bundled",
-    "derive",
-    "chrono",
-    "uuid",
-] }
+sqlite = { path = "../../lib/sqlite", features = ["derive", "chrono", "uuid"] }
 validate = { path = "../../lib/validate", features = ["derive", "serde"] }
 
 chrono = { version = "0.4.38", features = ["serde"] }
@@ -21,3 +16,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.1"
 uuid = { path = "../../lib/uuid", features = ["v7", "serde"] }
+
+[target.'cfg(all(target_env = "musl"))'.dependencies]
+sqlite = { path = "../../lib/sqlite", features = [
+    "bundled",
+    "derive",
+    "chrono",
+    "uuid",
+] }
