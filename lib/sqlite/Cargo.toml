@@ -10,7 +10,11 @@ chrono = { version = "0.4.38", optional = true }
 sqlite_derive = { path = "../sqlite_derive", optional = true }
 uuid = { path = "../uuid", optional = true }
 
+[build-dependencies]
+cc = { version = "1.2.3", optional = true }
+
 [features]
+bundled = ["dep:cc"]
 chrono = ["dep:chrono"]
 derive = ["dep:sqlite_derive"]
 uuid = ["dep:uuid"]
