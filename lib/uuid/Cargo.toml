@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 getrandom = { version = "0.2.15", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }

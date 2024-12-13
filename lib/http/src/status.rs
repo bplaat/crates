@@ -8,14 +8,22 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
 // MARK: Status
+/// Http status
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Status {
+    /// 200 OK
     Ok = 200,
+    /// 307 Temporary Redirect
     TemporaryRedirect = 307,
+    /// 400 Bad Request
     BadRequest = 400,
+    /// 401 Unauthorized
     Unauthorized = 401,
+    /// 404 Not Found
     NotFound = 404,
+    /// 405 Method Not Allowed
     MethodNotAllowed = 405,
+    /// 500 Internal Server Error
     InternalServerError = 500,
 }
 

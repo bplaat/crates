@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 http = { path = "../../lib/http", features = ["json"] }
 router = { path = "../../lib/router" }

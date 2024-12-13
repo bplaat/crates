@@ -6,3 +6,8 @@ resolver = "2"
 edition = "2021"
 license = "MIT"
 authors = ["Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>"]
+
+[workspace.lints.rust]
+unreachable_pub = "deny"
+unused_qualifications = "deny"
+missing_docs = "deny"

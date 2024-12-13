@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-extern crate proc_macro;
+//! Validation derive macro's library
+
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -24,6 +25,7 @@ enum Rule {
     Custom(Ident),
 }
 
+/// [Validate] derive
 #[proc_macro_derive(Validate, attributes(validate))]
 pub fn validate_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -143,7 +145,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         let validate_rules = rules.iter().map(|rule| match rule {
             Rule::Ascii => quote! {
                 if !self.#field_name.is_ascii() {
-                    errors
+                    report
                         .entry(stringify!(#field_name).to_string())
                         .or_insert_with(Vec::new)
                         .push(format!("{} must only contain ascii characters", stringify!(#field_name)));
@@ -152,7 +154,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             #[cfg(feature = "email")]
             Rule::Email => quote! {
                 if !validate::is_valid_email(&self.#field_name) {
-                    errors
+                    report
                         .entry(stringify!(#field_name).to_string())
                         .or_insert_with(Vec::new)
                         .push(format!("{} must be a valid email address", stringify!(#field_name)));
@@ -160,7 +162,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             },
             Rule::LengthMin(min) => quote! {
                 if self.#field_name.len() < #min {
-                    errors
+                    report
                         .entry(stringify!(#field_name).to_string())
                         .or_insert_with(Vec::new)
                         .push(format!("{} must be at least {} characters long", stringify!(#field_name), #min));
@@ -168,7 +170,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             },
             Rule::LengthMax(max) => quote! {
                 if self.#field_name.len() > #max {
-                    errors
+                    report
                         .entry(stringify!(#field_name).to_string())
                         .or_insert_with(Vec::new)
                         .push(format!("{} must be at most {} characters long", stringify!(#field_name), #max));
@@ -176,7 +178,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             },
             Rule::RangeMin(min) => quote! {
                 if self.#field_name < #min {
-                    errors
+                    report
                         .entry(stringify!(#field_name).to_string())
                         .or_insert_with(Vec::new)
                         .push(format!("{} must be at least {}", stringify!(#field_name), #min));
@@ -184,7 +186,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             },
             Rule::RangeMax(max) => quote! {
                 if self.#field_name > #max {
-                    errors
+                    report
                         .entry(stringify!(#field_name).to_string())
                         .or_insert_with(Vec::new)
                         .push(format!("{} must be at most {}", stringify!(#field_name), #max));
@@ -193,7 +195,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             Rule::Custom(custom) => if context.is_some() {
                 quote! {
                     if let Err(error) = #custom(&self.#field_name, context) {
-                        errors
+                        report
                             .entry(stringify!(#field_name).to_string())
                             .or_insert_with(Vec::new)
                             .push(error.message().to_string());
@@ -202,7 +204,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             } else {
                 quote! {
                     if let Err(error) = #custom(&self.#field_name) {
-                        errors
+                        report
                             .entry(stringify!(#field_name).to_string())
                             .or_insert_with(Vec::new)
                             .push(error.message().to_string());
@@ -218,13 +220,13 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(quote! {
         impl validate::Validate for #name {
             type Context = #context_type;
-            fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), validate::Errors> {
-                let mut errors = std::collections::BTreeMap::new();
+            fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), validate::Report> {
+                let mut report = std::collections::BTreeMap::new();
                 #(#validate_fields;)*
-                if errors.is_empty() {
+                if report.is_empty() {
                     Ok(())
                 } else {
-                    Err(validate::Errors(errors))
+                    Err(validate::Report(report))
                 }
             }
         }

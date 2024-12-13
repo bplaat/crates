@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A SQLite Rust library
+
 pub use crate::connection::{Connection, ConnectionError};
 pub use crate::statement::{Bind, FromRow, RawStatement, Statement};
 pub use crate::value::{Value, ValueError};

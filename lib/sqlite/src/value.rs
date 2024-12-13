@@ -8,11 +8,17 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
+/// A SQLite value
 pub enum Value {
+    /// A NULL value
     Null,
+    /// An 64-bit integer value
     Integer(i64),
+    /// A 64-bit floating point value
     Real(f64),
+    /// A text value
     Text(String),
+    /// A blob value
     Blob(Vec<u8>),
 }
 
@@ -20,6 +26,7 @@ pub enum Value {
 type Result<T> = std::result::Result<T, ValueError>;
 
 #[derive(Debug)]
+/// A value error
 pub struct ValueError;
 
 impl Display for ValueError {

@@ -8,7 +8,6 @@ use std::error::Error;
 use std::ffi::{c_char, CString};
 use std::fmt::{self, Display, Formatter};
 use std::ptr;
-use std::ptr::{null, null_mut};
 use std::sync::Arc;
 
 use crate::statement::{Bind, FromRow, Statement};
@@ -20,7 +19,7 @@ unsafe impl Send for RawConnection {}
 unsafe impl Sync for RawConnection {}
 
 impl RawConnection {
-    pub fn open(path: &str) -> Result<Self, ConnectionError> {
+    fn open(path: &str) -> Result<Self, ConnectionError> {
         // Open database
         let mut db = ptr::null_mut();
         let path = CString::new(path).expect("Can't convert &str to CString");
@@ -29,7 +28,7 @@ impl RawConnection {
                 path.as_ptr(),
                 &mut db,
                 SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
-                null(),
+                ptr::null(),
             )
         };
         if result != SQLITE_OK {
@@ -60,7 +59,7 @@ impl RawConnection {
         Ok(db)
     }
 
-    pub fn prepare<T>(&self, query: impl AsRef<str>) -> Statement<T>
+    fn prepare<T>(&self, query: impl AsRef<str>) -> Statement<T>
     where
         T: FromRow,
     {
@@ -72,7 +71,7 @@ impl RawConnection {
                 query.as_ptr() as *const c_char,
                 query.as_bytes().len() as i32,
                 &mut statement,
-                null_mut(),
+                ptr::null_mut(),
             )
         };
         if result != SQLITE_OK {
@@ -81,7 +80,7 @@ impl RawConnection {
         Statement::new(statement)
     }
 
-    pub fn query<T>(&self, query: impl AsRef<str>, params: impl Bind) -> Statement<T>
+    fn query<T>(&self, query: impl AsRef<str>, params: impl Bind) -> Statement<T>
     where
         T: FromRow,
     {
@@ -90,7 +89,7 @@ impl RawConnection {
         statement
     }
 
-    pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
+    fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
         self.query::<()>(query.as_ref(), params).next();
     }
 }
@@ -103,6 +102,7 @@ impl Drop for RawConnection {
 
 // MARK: Connection Error
 #[derive(Debug)]
+/// A connection error
 pub struct ConnectionError;
 
 impl Display for ConnectionError {
@@ -115,13 +115,16 @@ impl Error for ConnectionError {}
 
 // MARK: Connection
 #[derive(Clone)]
+/// A SQLite connection
 pub struct Connection(Arc<RawConnection>);
 
 impl Connection {
+    /// Open a connection to a SQLite database
     pub fn open(path: &str) -> Result<Self, ConnectionError> {
         Ok(Connection(Arc::new(RawConnection::open(path)?)))
     }
 
+    /// Prepare a statement
     pub fn prepare<T>(&self, query: impl AsRef<str>) -> Statement<T>
     where
         T: FromRow,
@@ -129,6 +132,7 @@ impl Connection {
         self.0.prepare(query)
     }
 
+    /// Run a query
     pub fn query<T>(&self, query: impl AsRef<str>, params: impl Bind) -> Statement<T>
     where
         T: FromRow,
@@ -136,6 +140,7 @@ impl Connection {
         self.0.query(query, params)
     }
 
+    /// Execute a query
     pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
         self.0.execute(query, params);
     }

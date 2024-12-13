@@ -4,28 +4,33 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A very basic thread pool library
+
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
+/// Thread pool
 pub struct ThreadPool {
     workers: Vec<Worker>,
     sender: mpsc::Sender<Job>,
 }
 
 impl ThreadPool {
-    pub fn new(size: usize) -> ThreadPool {
-        assert!(size > 0);
+    /// Create thread pool with worker count
+    pub fn new(worker_count: usize) -> ThreadPool {
+        assert!(worker_count > 0);
         let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
-        let mut workers = Vec::with_capacity(size);
-        for id in 0..size {
+        let mut workers = Vec::with_capacity(worker_count);
+        for id in 0..worker_count {
             workers.push(Worker::new(id, Arc::clone(&receiver)));
         }
         ThreadPool { workers, sender }
     }
 
+    /// Execute task on thread pool
     pub fn execute<F>(&self, f: F)
     where
         F: FnOnce() + Send + 'static,

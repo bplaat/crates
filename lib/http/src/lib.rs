@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A simple HTTP/1.1 server/client library
+
 pub use crate::fetch::fetch;
 pub use crate::method::Method;
 pub use crate::request::Request;

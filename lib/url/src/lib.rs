@@ -4,21 +4,33 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A minimal URL parser library
+
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
+/// Url
 pub struct Url {
+    /// Scheme
     pub scheme: String,
+    /// Authority
     pub authority: Option<Authority>,
+    /// Path
     pub path: String,
+    /// Query
     pub query: Option<String>,
+    /// Fragment
     pub fragment: Option<String>,
 }
 
+/// Url authority
 pub struct Authority {
+    /// User info
     pub userinfo: Option<String>,
+    /// Host
     pub host: String,
+    /// Port
     pub port: Option<u16>,
 }
 
@@ -86,6 +98,7 @@ impl FromStr for Url {
 }
 
 // MARK: ParseError
+/// Url parser error
 #[derive(Debug)]
 pub struct ParseError;
 

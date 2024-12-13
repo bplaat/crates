@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-extern crate proc_macro;
+//! SQLite derive macro's library
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput, Ident};
 
+/// [FromRow] derive
 #[proc_macro_derive(FromRow, attributes(sqlite))]
 pub fn from_row_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

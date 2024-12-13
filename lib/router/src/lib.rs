@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A simple router for HTTP library
+
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
 use http::{Method, Request, Response};
 
 // MARK: Route
+/// Parsed path parameters
 pub type Path = BTreeMap<String, String>;
 
 type Handler<T> = fn(&Request, &T, &Path) -> Response;
@@ -76,6 +79,7 @@ impl<T> Route<T> {
 }
 
 // MARK: Router
+/// Router
 pub struct Router<T> {
     routes: Vec<Route<T>>,
     fallback_handler: Option<Handler<T>>,
@@ -93,10 +97,12 @@ impl<T> Default for Router<T> {
 }
 
 impl<T> Router<T> {
+    /// Create new router
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Add route
     pub fn route(
         mut self,
         methods: &[Method],
@@ -111,6 +117,7 @@ impl<T> Router<T> {
         self
     }
 
+    /// Add route for any method
     pub fn any(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
         self.route(
             &[Method::Get, Method::Post, Method::Put, Method::Delete],
@@ -119,27 +126,33 @@ impl<T> Router<T> {
         )
     }
 
+    /// Add route for GET method
     pub fn get(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
         self.route(&[Method::Get], route, handler)
     }
 
+    /// Add route for POST method
     pub fn post(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
         self.route(&[Method::Post], route, handler)
     }
 
+    /// Add route for PUT method
     pub fn put(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
         self.route(&[Method::Put], route, handler)
     }
 
+    /// Add route for DELETE method
     pub fn delete(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
         self.route(&[Method::Delete], route, handler)
     }
 
+    /// Set fallback handler
     pub fn fallback(mut self, handler: Handler<T>) -> Self {
         self.fallback_handler = Some(handler);
         self
     }
 
+    /// Run router
     pub fn next(&self, req: &Request, ctx: &T) -> Response {
         // Match routes
         for route in self.routes.iter().rev() {

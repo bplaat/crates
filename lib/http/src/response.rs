@@ -13,9 +13,13 @@ use std::str::{self};
 
 use crate::status::Status;
 
+/// HTTP response
 pub struct Response {
+    /// Status
     pub status: Status,
+    /// Headers
     pub headers: BTreeMap<String, String>,
+    /// Body
     pub body: String,
 }
 
@@ -30,10 +34,12 @@ impl Default for Response {
 }
 
 impl Response {
+    /// Create new response
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Create new response with status
     pub fn with_status(status: Status) -> Self {
         Self {
             status,
@@ -41,21 +47,25 @@ impl Response {
         }
     }
 
+    /// Set status
     pub fn status(mut self, status: Status) -> Self {
         self.status = status;
         self
     }
 
+    /// Create new response with header
     pub fn with_header(name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
         Self::default().header(name, value)
     }
 
+    /// Set header
     pub fn header(mut self, name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
         self.headers
             .insert(name.as_ref().to_string(), value.as_ref().to_string());
         self
     }
 
+    /// Create new response with body
     pub fn with_body(body: impl AsRef<str>) -> Self {
         Self {
             body: body.as_ref().to_string(),
@@ -63,16 +73,19 @@ impl Response {
         }
     }
 
+    /// Set body
     pub fn body(mut self, body: impl AsRef<str>) -> Self {
         self.body = body.as_ref().to_string();
         self
     }
 
+    /// Create new response with json body
     #[cfg(feature = "json")]
     pub fn with_json(value: impl serde::Serialize) -> Self {
         Self::default().json(value)
     }
 
+    /// Set json body
     #[cfg(feature = "json")]
     pub fn json(mut self, value: impl serde::Serialize) -> Self {
         self.headers
@@ -81,10 +94,12 @@ impl Response {
         self
     }
 
+    /// Create new response with redirect header
     pub fn with_redirect(location: impl AsRef<str>) -> Self {
         Self::default().redirect(location)
     }
 
+    /// Set redirect header
     pub fn redirect(mut self, location: impl AsRef<str>) -> Self {
         self.status = Status::TemporaryRedirect;
         self.headers
@@ -160,7 +175,7 @@ impl Response {
 
 // MARK: InvalidResponseError
 #[derive(Debug)]
-pub struct InvalidResponseError;
+pub(crate) struct InvalidResponseError;
 
 impl Display for InvalidResponseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
