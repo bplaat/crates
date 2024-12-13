@@ -8,7 +8,8 @@
         "tamasfe.even-better-toml"
     ],
     "search.exclude": {
-        "**/target/**": true
+        "**/target/**": true,
+        "**/sqlite3/**": true
     },
     // Rust extensions settings
     "[rust]": {
