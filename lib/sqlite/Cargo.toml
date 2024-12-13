@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 chrono = { version = "0.4.38", optional = true }
 sqlite_derive = { path = "../sqlite_derive", optional = true }

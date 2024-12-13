@@ -1,9 +1,11 @@
+# Use correct gcc toolchains for musl targets
 [target.x86_64-unknown-linux-musl]
 linker = "x86_64-linux-musl-gcc"
 
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-musl-gcc"
 
+# Enable optimizations for release builds for smaller binaries
 [profile.release]
 strip = true
 opt-level = "z"

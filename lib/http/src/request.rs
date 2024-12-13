@@ -15,11 +15,17 @@ use url::Url;
 
 use crate::method::Method;
 
+/// HTTP request
 pub struct Request {
+    /// URL
     pub url: Url,
+    /// Method
     pub method: Method,
+    /// Headers
     pub headers: BTreeMap<String, String>,
+    /// Body
     pub body: String,
+    /// Client address
     pub client_addr: Option<SocketAddr>,
 }
 
@@ -36,10 +42,12 @@ impl Default for Request {
 }
 
 impl Request {
+    /// Create new request
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Create new request with URL
     pub fn with_url(url: impl AsRef<str>) -> Self {
         Self {
             url: url.as_ref().parse().unwrap(),
@@ -47,22 +55,26 @@ impl Request {
         }
     }
 
+    /// Set URL
     pub fn url(mut self, url: Url) -> Self {
         self.url = url;
         self
     }
 
+    /// Set method
     pub fn method(mut self, method: Method) -> Self {
         self.method = method;
         self
     }
 
+    /// Set header
     pub fn header(mut self, name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
         self.headers
             .insert(name.as_ref().to_string(), value.as_ref().to_string());
         self
     }
 
+    /// Set body
     pub fn body(mut self, body: impl AsRef<str>) -> Self {
         self.body = body.as_ref().to_string();
         self
@@ -166,7 +178,7 @@ impl Request {
 
 // MARK: InvalidRequestError
 #[derive(Debug)]
-pub struct InvalidRequestError;
+pub(crate) struct InvalidRequestError;
 
 impl Display for InvalidRequestError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

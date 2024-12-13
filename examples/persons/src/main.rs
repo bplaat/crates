@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A simple persons REST API example
+
 use std::net::{Ipv4Addr, TcpListener};
 use std::sync::Arc;
 
@@ -95,8 +97,8 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
         Ok(body) => body,
         Err(_) => return Response::with_status(Status::BadRequest),
     };
-    if let Err(errors) = body.validate() {
-        return Response::with_status(Status::BadRequest).json(errors);
+    if let Err(report) = body.validate() {
+        return Response::with_status(Status::BadRequest).json(report);
     }
 
     // Create person
@@ -161,8 +163,8 @@ fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
         Ok(body) => body,
         Err(_) => return Response::with_status(Status::BadRequest),
     };
-    if let Err(errors) = body.validate() {
-        return Response::with_status(Status::BadRequest).json(errors);
+    if let Err(report) = body.validate() {
+        return Response::with_status(Status::BadRequest).json(report);
     }
 
     // Update person

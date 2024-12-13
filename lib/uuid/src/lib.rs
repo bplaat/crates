@@ -4,22 +4,29 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A minimal UUID library
+
 use std::error::Error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::str::FromStr;
 
+// MARK: Uuid
+/// UUID
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Uuid([u8; 16]);
 
 impl Uuid {
+    /// Create zero UUID
     pub fn nil() -> Uuid {
         Uuid([0; 16])
     }
 
+    /// Create UUID from bytes
     pub fn from_bytes(bytes: [u8; 16]) -> Uuid {
         Uuid(bytes)
     }
 
+    /// Create UUID from slice
     pub fn from_slice(slice: &[u8]) -> Result<Uuid, InvalidError> {
         if slice.len() != 16 {
             return Err(InvalidError);
@@ -29,6 +36,7 @@ impl Uuid {
         Ok(Uuid(bytes))
     }
 
+    /// Get bytes from UUID
     pub fn into_bytes(self) -> [u8; 16] {
         self.0
     }
@@ -87,6 +95,7 @@ impl FromStr for Uuid {
 
 #[cfg(feature = "v4")]
 impl Uuid {
+    /// Create UUID v4
     pub fn new_v4() -> Uuid {
         let mut bytes = [0; 16];
         getrandom::getrandom(&mut bytes).unwrap();
@@ -98,6 +107,7 @@ impl Uuid {
 
 #[cfg(feature = "v7")]
 impl Uuid {
+    /// Create UUID v7 with time
     pub fn new_v7(time: std::time::SystemTime) -> Uuid {
         let mut bytes = [0; 16];
         let timestamp = time
@@ -116,6 +126,7 @@ impl Uuid {
         Uuid(bytes)
     }
 
+    /// Create UUID v7 with current time
     pub fn now_v7() -> Uuid {
         Self::new_v7(std::time::SystemTime::now())
     }
@@ -137,6 +148,7 @@ impl<'de> serde::Deserialize<'de> for Uuid {
 }
 
 // MARK: InvalidError
+/// Invalid UUID error
 #[derive(Debug)]
 pub struct InvalidError;
 

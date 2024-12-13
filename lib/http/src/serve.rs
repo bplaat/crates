@@ -11,6 +11,7 @@ use threadpool::ThreadPool;
 use crate::request::Request;
 use crate::response::Response;
 
+/// Start HTTP server
 pub fn serve<F>(listener: TcpListener, handler: F)
 where
     F: Fn(&Request) -> Response + Clone + Send + Sync + 'static,

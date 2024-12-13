@@ -9,16 +9,26 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 // MARK: Method
+/// HTTP method
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Method {
+    /// GET
     Get,
+    /// HEAD
     Head,
+    /// POST
     Post,
+    /// PUT
     Put,
+    /// DELETE
     Delete,
+    /// CONNECT
     Connect,
+    /// OPTIONS
     Options,
+    /// TRACE
     Trace,
+    /// PATCH
     Patch,
 }
 

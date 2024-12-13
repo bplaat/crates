@@ -4,24 +4,30 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A simple struct validation library
+
 use std::collections::BTreeMap;
 use std::error;
 use std::fmt::{self, Display, Formatter};
 
 // MARK: Error
+/// Validate result
 pub type Result = std::result::Result<(), Error>;
 
+/// Validate error
 #[derive(Debug)]
 pub struct Error {
     message: String,
 }
 impl Error {
+    /// Create validate error
     pub fn new(message: impl AsRef<str>) -> Self {
         Self {
             message: message.as_ref().to_string(),
         }
     }
 
+    /// Get error message
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -33,19 +39,23 @@ impl Display for Error {
 }
 impl error::Error for Error {}
 
-// MARK: Errors
+// MARK: Report
+/// Validation report
 #[cfg(feature = "serde")]
 #[derive(serde::Serialize)]
-pub struct Errors(pub BTreeMap<String, Vec<String>>);
+pub struct Report(pub BTreeMap<String, Vec<String>>);
 
 #[cfg(not(feature = "serde"))]
-pub struct Errors(pub BTreeMap<String, Vec<String>>);
+pub struct Report(pub BTreeMap<String, Vec<String>>);
 
 // MARK: Validate
+/// Validate trait
 pub trait Validate {
+    /// Validate context
     type Context;
 
-    fn validate(&self) -> std::result::Result<(), Errors>
+    /// Validate self
+    fn validate(&self) -> std::result::Result<(), Report>
     where
         Self::Context: Default,
     {
@@ -53,7 +63,8 @@ pub trait Validate {
         self.validate_with(&ctx)
     }
 
-    fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), Errors>;
+    /// Validate self with context
+    fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), Report>;
 }
 
 #[cfg(feature = "derive")]

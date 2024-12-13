@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! A simple HTTP server example
+
 use std::net::{Ipv4Addr, TcpListener};
 use std::thread;
 use std::time::Duration;

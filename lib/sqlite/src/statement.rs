@@ -11,7 +11,9 @@ use crate::sys::*;
 use crate::value::Value;
 
 // MARK: Bind
+/// A trait for binding values to a statement
 pub trait Bind {
+    /// Bind values to a statement
     fn bind(self, statement: &mut RawStatement);
 }
 
@@ -50,7 +52,9 @@ impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G);
 impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H);
 
 // MARK: FromRow
+/// A trait for converting read values from a statement to a row
 pub trait FromRow: Sized {
+    /// Convert read values from a statement to a row
     fn from_row(statement: &mut RawStatement) -> Self;
 }
 
@@ -71,6 +75,7 @@ where
 }
 
 // MARK: Raw Statement
+/// Raw SQLite statement without type information
 pub struct RawStatement(*mut sqlite3_stmt);
 
 impl RawStatement {
@@ -78,14 +83,17 @@ impl RawStatement {
         Self(statement)
     }
 
+    /// Reset the statement
     pub fn reset(&mut self) {
         unsafe { sqlite3_reset(self.0) };
     }
 
+    /// Bind values to the statement
     pub fn bind(&mut self, params: impl Bind) {
         params.bind(self);
     }
 
+    /// Bind a value to the statement
     pub fn bind_value(&mut self, value: impl Into<Value>, index: i32) {
         let index = index + 1;
         let result = match value.into() {
@@ -116,6 +124,7 @@ impl RawStatement {
         }
     }
 
+    /// Read a value from the statement
     pub fn read_value(&self, index: i32) -> Value {
         match unsafe { sqlite3_column_type(self.0, index) } {
             SQLITE_NULL => Value::Null,
@@ -146,6 +155,7 @@ impl Drop for RawStatement {
 }
 
 // MARK: Statement
+/// A SQLite statement with type information
 pub struct Statement<T>(RawStatement, PhantomData<T>);
 
 impl<T> Statement<T> {
@@ -153,18 +163,22 @@ impl<T> Statement<T> {
         Self(RawStatement::new(statement), PhantomData)
     }
 
+    /// Reset the statement
     pub fn reset(&mut self) {
         self.0.reset();
     }
 
+    /// Bind values to the statement
     pub fn bind(&mut self, params: impl Bind) {
         self.0.bind(params);
     }
 
+    /// Bind a value to the statement
     pub fn bind_value(&mut self, value: impl Into<Value>, index: i32) {
         self.0.bind_value(value, index);
     }
 
+    /// Read a value from the statement
     pub fn read_value(&self, index: i32) -> Value {
         self.0.read_value(index)
     }
