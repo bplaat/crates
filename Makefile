@@ -17,7 +17,12 @@ ci:
 	CARGO_TARGET_DIR=target/udeps cargo +nightly udeps --locked --all-targets
 	cargo deny check --hide-inclusion-graph
 # 	Test
-	cargo test --locked --all --all-targets
+	cargo nextest run
+
+# Get test coverage
+.PHONY: coverage
+coverage:
+	cargo llvm-cov nextest
 
 # Build linux static release binaries
 TARGETS = x86_64-unknown-linux-musl aarch64-unknown-linux-musl

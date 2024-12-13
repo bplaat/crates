@@ -16,6 +16,8 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 
 ## TODO
 
+-   [ ] http+url: Add tests and improve coverage
 -   [ ] Router: Improve handler injection
 -   [ ] Router: Add middleware
 -   [ ] http: keep-alive requests
+-   [ ] http: multipart/form-data

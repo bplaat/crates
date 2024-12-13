@@ -71,6 +71,7 @@ pub trait Validate {
 pub use validate_derive::Validate;
 
 #[cfg(feature = "email")]
+/// Validate email
 pub fn is_valid_email(email: &str) -> bool {
     let re =
         regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
