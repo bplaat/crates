@@ -10,6 +10,7 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
+// MARK: URL
 /// Url
 pub struct Url {
     /// Scheme
@@ -65,7 +66,7 @@ impl FromStr for Url {
             path = &path[..idx];
         }
 
-        let authority = authority.map(|auth| {
+        let authority = if let Some(auth) = authority {
             let parts: Vec<&str> = auth.split('@').collect();
             let (userinfo, hostport) = if parts.len() == 2 {
                 (Some(parts[0].to_string()), parts[1])
@@ -75,17 +76,22 @@ impl FromStr for Url {
 
             let parts: Vec<&str> = hostport.split(':').collect();
             let (host, port) = if parts.len() == 2 {
-                (parts[0].to_string(), Some(parts[1].parse().unwrap()))
+                (
+                    parts[0].to_string(),
+                    Some(parts[1].parse::<u16>().map_err(|_| ParseError)?),
+                )
             } else {
                 (parts[0].to_string(), None)
             };
 
-            Authority {
+            Some(Authority {
                 userinfo,
                 host,
                 port,
-            }
-        });
+            })
+        } else {
+            None
+        };
 
         Ok(Url {
             scheme,
@@ -109,3 +115,46 @@ impl Display for ParseError {
 }
 
 impl Error for ParseError {}
+
+// MARK: Tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse() {
+        let urls = [
+            "http://example.com",
+            "http://example.com/",
+            "http://example.com/?",
+            "http://example.com/#",
+            "http://example.com/?#",
+            "http://example.com/path",
+            "http://example.com/path/",
+            "http://example.com/path/?",
+            "http://example.com/path/#",
+            "http://example.com/path/?#",
+            "http://example.com/path?query",
+            "http://example.com/path/?query",
+            "http://example.com/path#fragment",
+            "http://example.com/path/#fragment",
+            "http://example.com/path?query#fragment",
+            "http://example.com/path/?query#fragment",
+            "http://user:pass@example.com",
+            "http://user:pass@example.com/",
+            "http://user:pass@example.com/path",
+            "http://user:pass@example.com/path?query",
+            "http://user:pass@example.com/path#fragment",
+            "http://user:pass@example.com/path?query#fragment",
+            "http://example.com:8080",
+            "http://example.com:8080/",
+            "http://example.com:8080/path",
+            "http://example.com:8080/path?query",
+            "http://example.com:8080/path#fragment",
+            "http://example.com:8080/path?query#fragment",
+        ];
+        for url in &urls {
+            assert!(Url::from_str(url).is_ok());
+        }
+    }
+}
