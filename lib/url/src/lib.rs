@@ -44,49 +44,52 @@ impl FromStr for Url {
         }
 
         let scheme = parts[0].to_string();
-        let rest = parts[1];
-
-        let mut authority = None;
-        let mut path = rest;
-        let mut query = None;
-        let mut fragment = None;
-
-        if let Some(idx) = rest.find('/') {
-            authority = Some(rest[..idx].to_string());
-            path = &rest[idx..];
+        let mut path = parts[1];
+        if scheme.is_empty() || path.is_empty() {
+            return Err(ParseError);
         }
 
+        let mut authority = None;
+        if let Some(idx) = path.find('/') {
+            authority = Some(path[..idx].to_string());
+            path = &path[idx..];
+        }
+
+        let mut query = None;
         if let Some(idx) = path.find('?') {
             query = Some(path[idx + 1..].to_string());
             path = &path[..idx];
         }
 
+        let mut fragment = None;
         if let Some(idx) = path.find('#') {
             fragment = Some(path[idx + 1..].to_string());
             path = &path[..idx];
         }
 
-        let authority = if let Some(auth) = authority {
-            let parts: Vec<&str> = auth.split('@').collect();
-            let (userinfo, hostport) = if parts.len() == 2 {
-                (Some(parts[0].to_string()), parts[1])
-            } else {
-                (None, parts[0])
-            };
+        let authority = if let Some(authority) = authority {
+            let mut authority = authority.as_str();
+            let mut userinfo = None;
+            if let Some(idx) = authority.find('@') {
+                userinfo = Some(authority[..idx].to_string());
+                authority = &authority[idx + 1..];
+            }
 
-            let parts: Vec<&str> = hostport.split(':').collect();
-            let (host, port) = if parts.len() == 2 {
-                (
-                    parts[0].to_string(),
-                    Some(parts[1].parse::<u16>().map_err(|_| ParseError)?),
-                )
-            } else {
-                (parts[0].to_string(), None)
-            };
+            let mut host = authority;
+            let mut port = None;
+            if let Some(idx) = authority.find(':') {
+                host = &authority[..idx];
+                port = Some(authority[idx + 1..].parse().map_err(|_| ParseError)?);
+                if let Some(port) = port {
+                    if port == 0 {
+                        return Err(ParseError);
+                    }
+                }
+            }
 
             Some(Authority {
                 userinfo,
-                host,
+                host: host.to_string(),
                 port,
             })
         } else {
@@ -155,6 +158,29 @@ mod tests {
         ];
         for url in &urls {
             assert!(Url::from_str(url).is_ok());
+        }
+    }
+
+    #[test]
+    fn parse_invalid() {
+        let invalid_urls = [
+            "http://",
+            "://example.com",
+            "http://example.com:abc/",
+            "http://example.com:0/",
+            "http://example.com:999999/",
+            "http://example.com:65536/",
+            "http://example.com:-1/",
+            "http://example.com:1a2b3c/",
+            "http://example.com:/",
+            "http://example.com:/path",
+            "http://example.com:/path/",
+            "http://example.com:/path?query",
+            "http://example.com:/path#fragment",
+            "http://example.com:/path?query#fragment",
+        ];
+        for url in &invalid_urls {
+            assert!(Url::from_str(url).is_err());
         }
     }
 }
