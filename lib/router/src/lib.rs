@@ -54,7 +54,6 @@ impl<T> Handler<T> {
 }
 
 // MARK: Route
-#[derive(Debug)]
 enum RoutePart {
     Static(String),
     Param(String),

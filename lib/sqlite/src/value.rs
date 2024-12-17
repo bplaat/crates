@@ -7,8 +7,8 @@
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
-#[derive(Debug)]
 /// A SQLite value
+#[derive(Debug)]
 pub enum Value {
     /// A NULL value
     Null,
@@ -25,8 +25,8 @@ pub enum Value {
 // MARK: ValueError
 type Result<T> = std::result::Result<T, ValueError>;
 
-#[derive(Debug)]
 /// A value error
+#[derive(Debug)]
 pub struct ValueError;
 
 impl Display for ValueError {

@@ -101,8 +101,8 @@ impl Drop for RawConnection {
 }
 
 // MARK: Connection Error
-#[derive(Debug)]
 /// A connection error
+#[derive(Debug)]
 pub struct ConnectionError;
 
 impl Display for ConnectionError {
