@@ -19,17 +19,43 @@ use validate::Validate;
 
 const HTTP_PORT: u16 = 8080;
 
-#[derive(Clone)]
-struct Context {
-    database: sqlite::Connection,
-}
-
+// MARK: Utils
 fn validate_name(name: &str) -> validate::Result {
     if name.to_lowercase() == "bastiaan" {
         Err(validate::Error::new("name can't be Bastiaan"))
     } else {
         Ok(())
     }
+}
+
+// MARK: Context
+#[derive(Clone)]
+struct Context {
+    database: sqlite::Connection,
+}
+
+// MARK: Layers
+fn log_layer(req: &Request, _: &Context) -> Option<Response> {
+    println!("{} {}", req.method, req.url.path);
+    None
+}
+
+fn cors_pre_layer(req: &Request, _: &Context) -> Option<Response> {
+    if req.method == Method::Options {
+        Some(
+            Response::with_header("Access-Control-Allow-Origin", "*")
+                .header("Access-Control-Allow-Methods", "GET, POST")
+                .header("Access-Control-Max-Age", "86400"),
+        )
+    } else {
+        None
+    }
+}
+
+fn cors_post_layer(_: &Request, _: &Context, res: Response) -> Response {
+    res.header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Allow-Methods", "GET, POST")
+        .header("Access-Control-Max-Age", "86400")
 }
 
 // MARK: Routes
@@ -265,26 +291,9 @@ fn main() {
 
     let router = Arc::new(
         Router::<Context>::new()
-            .pre_layer(|req| {
-                println!("{} {}", req.method, req.url.path);
-                None
-            })
-            .pre_layer(|req| {
-                if req.method == Method::Options {
-                    Some(
-                        Response::with_header("Access-Control-Allow-Origin", "*")
-                            .header("Access-Control-Allow-Methods", "GET, POST")
-                            .header("Access-Control-Max-Age", "86400"),
-                    )
-                } else {
-                    None
-                }
-            })
-            .post_layer(|_, res| {
-                res.header("Access-Control-Allow-Origin", "*")
-                    .header("Access-Control-Allow-Methods", "GET, POST")
-                    .header("Access-Control-Max-Age", "86400")
-            })
+            .pre_layer(log_layer)
+            .pre_layer(cors_pre_layer)
+            .post_layer(cors_post_layer)
             .get("/", home)
             .get("/persons", persons_index)
             .post("/persons", persons_create)

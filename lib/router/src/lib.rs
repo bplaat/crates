@@ -17,20 +17,20 @@ use http::{Method, Request, Response};
 pub type Path = BTreeMap<String, String>;
 
 type HandlerFn<T> = fn(&Request, &T, &Path) -> Response;
-type PreLayerFn = fn(&Request) -> Option<Response>;
-type PostLayerFn = fn(&Request, Response) -> Response;
+type PreLayerFn<T> = fn(&Request, &T) -> Option<Response>;
+type PostLayerFn<T> = fn(&Request, &T, Response) -> Response;
 
 struct Handler<T> {
     handler: HandlerFn<T>,
-    pre_layers: Vec<PreLayerFn>,
-    post_layers: Vec<PostLayerFn>,
+    pre_layers: Vec<PreLayerFn<T>>,
+    post_layers: Vec<PostLayerFn<T>>,
 }
 
 impl<T> Handler<T> {
     fn new(
         handler: HandlerFn<T>,
-        pre_layers: Vec<PreLayerFn>,
-        post_layers: Vec<PostLayerFn>,
+        pre_layers: Vec<PreLayerFn<T>>,
+        post_layers: Vec<PostLayerFn<T>>,
     ) -> Self {
         Self {
             handler,
@@ -41,13 +41,13 @@ impl<T> Handler<T> {
 
     fn call(&self, req: &Request, ctx: &T, path: &Path) -> Response {
         for pre_layer in &self.pre_layers {
-            if let Some(res) = pre_layer(req) {
+            if let Some(res) = pre_layer(req, ctx) {
                 return res;
             }
         }
         let mut res = (self.handler)(req, ctx, path);
         for post_layer in &self.post_layers {
-            res = post_layer(req, res);
+            res = post_layer(req, ctx, res);
         }
         res
     }
@@ -122,8 +122,8 @@ impl<T> Route<T> {
 // MARK: Router
 /// Router
 pub struct Router<T> {
-    pre_layers: Vec<PreLayerFn>,
-    post_layers: Vec<PostLayerFn>,
+    pre_layers: Vec<PreLayerFn<T>>,
+    post_layers: Vec<PostLayerFn<T>>,
     routes: Vec<Route<T>>,
     fallback_handler: Option<Handler<T>>,
     _marker: PhantomData<T>,
@@ -148,13 +148,13 @@ impl<T> Router<T> {
     }
 
     /// Add pre layer
-    pub fn pre_layer(mut self, layer: PreLayerFn) -> Self {
+    pub fn pre_layer(mut self, layer: PreLayerFn<T>) -> Self {
         self.pre_layers.push(layer);
         self
     }
 
     /// Add post layer
-    pub fn post_layer(mut self, layer: PostLayerFn) -> Self {
+    pub fn post_layer(mut self, layer: PostLayerFn<T>) -> Self {
         self.post_layers.push(layer);
         self
     }
@@ -228,19 +228,31 @@ impl<T> Router<T> {
                 }
 
                 // When method is not allowed
-                return Response::new()
-                    .status(http::Status::MethodNotAllowed)
-                    .body("405 Method Not Allowed");
+                return Handler::new(
+                    |_, _, _| {
+                        Response::new()
+                            .status(http::Status::MethodNotAllowed)
+                            .body("405 Method Not Allowed")
+                    },
+                    self.pre_layers.clone(),
+                    self.post_layers.clone(),
+                )
+                .call(req, ctx, &path.unwrap());
             }
         }
 
         // Else run fallback handler
-        if let Some(fallback_handler) = &self.fallback_handler {
-            fallback_handler.call(req, ctx, &BTreeMap::new())
-        } else {
-            Response::new()
-                .status(http::Status::NotFound)
-                .body("404 Not Found")
-        }
+        self.fallback_handler
+            .as_ref()
+            .unwrap_or(&Handler::new(
+                |_, _, _| {
+                    Response::new()
+                        .status(http::Status::NotFound)
+                        .body("404 Not Found")
+                },
+                self.pre_layers.clone(),
+                self.post_layers.clone(),
+            ))
+            .call(req, ctx, &BTreeMap::new())
     }
 }
