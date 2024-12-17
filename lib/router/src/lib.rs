@@ -11,12 +11,49 @@ use std::marker::PhantomData;
 
 use http::{Method, Request, Response};
 
-// MARK: Route
+// MARK: Handler
+
 /// Parsed path parameters
 pub type Path = BTreeMap<String, String>;
 
-type Handler<T> = fn(&Request, &T, &Path) -> Response;
+type HandlerFn<T> = fn(&Request, &T, &Path) -> Response;
+type PreLayerFn = fn(&Request) -> Option<Response>;
+type PostLayerFn = fn(&Request, Response) -> Response;
 
+struct Handler<T> {
+    handler: HandlerFn<T>,
+    pre_layers: Vec<PreLayerFn>,
+    post_layers: Vec<PostLayerFn>,
+}
+
+impl<T> Handler<T> {
+    fn new(
+        handler: HandlerFn<T>,
+        pre_layers: Vec<PreLayerFn>,
+        post_layers: Vec<PostLayerFn>,
+    ) -> Self {
+        Self {
+            handler,
+            pre_layers,
+            post_layers,
+        }
+    }
+
+    fn call(&self, req: &Request, ctx: &T, path: &Path) -> Response {
+        for pre_layer in &self.pre_layers {
+            if let Some(res) = pre_layer(req) {
+                return res;
+            }
+        }
+        let mut res = (self.handler)(req, ctx, path);
+        for post_layer in &self.post_layers {
+            res = post_layer(req, res);
+        }
+        res
+    }
+}
+
+// MARK: Route
 #[derive(Debug)]
 enum RoutePart {
     Static(String),
@@ -32,7 +69,17 @@ struct Route<T> {
 
 impl<T> Route<T> {
     fn new(methods: Vec<Method>, route: String, handler: Handler<T>) -> Self {
-        let parts = route
+        let parts = Self::route_parse_parts(&route);
+        Self {
+            methods,
+            route,
+            parts,
+            handler,
+        }
+    }
+
+    fn route_parse_parts(route: &str) -> Vec<RoutePart> {
+        route
             .split('/')
             .filter(|part| !part.is_empty())
             .map(|part| {
@@ -42,13 +89,7 @@ impl<T> Route<T> {
                     RoutePart::Static(part.to_string())
                 }
             })
-            .collect();
-        Self {
-            methods,
-            route,
-            parts,
-            handler,
-        }
+            .collect()
     }
 
     fn matches(&self, path: &str) -> (bool, Option<Path>) {
@@ -81,6 +122,8 @@ impl<T> Route<T> {
 // MARK: Router
 /// Router
 pub struct Router<T> {
+    pre_layers: Vec<PreLayerFn>,
+    post_layers: Vec<PostLayerFn>,
     routes: Vec<Route<T>>,
     fallback_handler: Option<Handler<T>>,
     _marker: PhantomData<T>,
@@ -89,6 +132,8 @@ pub struct Router<T> {
 impl<T> Default for Router<T> {
     fn default() -> Self {
         Self {
+            pre_layers: Vec::new(),
+            post_layers: Vec::new(),
             routes: Vec::new(),
             fallback_handler: None,
             _marker: PhantomData,
@@ -102,23 +147,35 @@ impl<T> Router<T> {
         Self::default()
     }
 
+    /// Add pre layer
+    pub fn pre_layer(mut self, layer: PreLayerFn) -> Self {
+        self.pre_layers.push(layer);
+        self
+    }
+
+    /// Add post layer
+    pub fn post_layer(mut self, layer: PostLayerFn) -> Self {
+        self.post_layers.push(layer);
+        self
+    }
+
     /// Add route
     pub fn route(
         mut self,
         methods: &[Method],
         route: impl AsRef<str>,
-        handler: Handler<T>,
+        handler: HandlerFn<T>,
     ) -> Self {
         self.routes.push(Route::new(
             methods.to_vec(),
             route.as_ref().to_string(),
-            handler,
+            Handler::new(handler, self.pre_layers.clone(), self.post_layers.clone()),
         ));
         self
     }
 
     /// Add route for any method
-    pub fn any(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
+    pub fn any(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
         self.route(
             &[Method::Get, Method::Post, Method::Put, Method::Delete],
             route,
@@ -127,33 +184,37 @@ impl<T> Router<T> {
     }
 
     /// Add route for GET method
-    pub fn get(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
+    pub fn get(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
         self.route(&[Method::Get], route, handler)
     }
 
     /// Add route for POST method
-    pub fn post(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
+    pub fn post(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
         self.route(&[Method::Post], route, handler)
     }
 
     /// Add route for PUT method
-    pub fn put(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
+    pub fn put(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
         self.route(&[Method::Put], route, handler)
     }
 
     /// Add route for DELETE method
-    pub fn delete(self, route: impl AsRef<str>, handler: Handler<T>) -> Self {
+    pub fn delete(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
         self.route(&[Method::Delete], route, handler)
     }
 
     /// Set fallback handler
-    pub fn fallback(mut self, handler: Handler<T>) -> Self {
-        self.fallback_handler = Some(handler);
+    pub fn fallback(mut self, handler: HandlerFn<T>) -> Self {
+        self.fallback_handler = Some(Handler::new(
+            handler,
+            self.pre_layers.clone(),
+            self.post_layers.clone(),
+        ));
         self
     }
 
-    /// Run router
-    pub fn next(&self, req: &Request, ctx: &T) -> Response {
+    /// Handle request
+    pub fn handle(&self, req: &Request, ctx: &T) -> Response {
         // Match routes
         for route in self.routes.iter().rev() {
             let (matches, path) = route.matches(&req.url.path);
@@ -163,7 +224,7 @@ impl<T> Router<T> {
                     if !route.methods.contains(&req.method) {
                         continue;
                     }
-                    return (route.handler)(req, ctx, &path.unwrap());
+                    return route.handler.call(req, ctx, &path.unwrap());
                 }
 
                 // When method is not allowed
@@ -174,8 +235,8 @@ impl<T> Router<T> {
         }
 
         // Else run fallback handler
-        if let Some(fallback_handler) = self.fallback_handler {
-            fallback_handler(req, ctx, &BTreeMap::new())
+        if let Some(fallback_handler) = &self.fallback_handler {
+            fallback_handler.call(req, ctx, &BTreeMap::new())
         } else {
             Response::new()
                 .status(http::Status::NotFound)

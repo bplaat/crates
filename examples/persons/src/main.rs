@@ -265,6 +265,26 @@ fn main() {
 
     let router = Arc::new(
         Router::<Context>::new()
+            .pre_layer(|req| {
+                println!("{} {}", req.method, req.url.path);
+                None
+            })
+            .pre_layer(|req| {
+                if req.method == Method::Options {
+                    Some(
+                        Response::with_header("Access-Control-Allow-Origin", "*")
+                            .header("Access-Control-Allow-Methods", "GET, POST")
+                            .header("Access-Control-Max-Age", "86400"),
+                    )
+                } else {
+                    None
+                }
+            })
+            .post_layer(|_, res| {
+                res.header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Methods", "GET, POST")
+                    .header("Access-Control-Max-Age", "86400")
+            })
             .get("/", home)
             .get("/persons", persons_index)
             .post("/persons", persons_create)
@@ -277,22 +297,5 @@ fn main() {
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
-    http::serve(listener, move |req| {
-        println!("{} {}", req.method, req.url.path);
-
-        // Cors middleware
-        if req.method == Method::Options {
-            return Response::with_header("Access-Control-Allow-Origin", "*")
-                .header("Access-Control-Allow-Methods", "GET, POST")
-                .header("Access-Control-Max-Age", "86400");
-        }
-
-        // Router
-        let res = router.next(req, &ctx);
-
-        // Cors middleware
-        res.header("Access-Control-Allow-Origin", "*")
-            .header("Access-Control-Allow-Methods", "GET, POST")
-            .header("Access-Control-Max-Age", "86400")
-    });
+    http::serve(listener, move |req| router.handle(req, &ctx));
 }
