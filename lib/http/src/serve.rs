@@ -14,7 +14,7 @@ use crate::response::Response;
 /// Start HTTP server
 pub fn serve<F>(listener: TcpListener, handler: F)
 where
-    F: Fn(&Request) -> Response + Clone + Send + Sync + 'static,
+    F: Fn(&Request) -> Response + Clone + Send + 'static,
 {
     let pool = ThreadPool::new(16);
     for mut stream in listener.incoming().flatten() {
