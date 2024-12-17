@@ -34,12 +34,12 @@ struct Context {
 }
 
 // MARK: Layers
-fn log_layer(req: &Request, _: &Context) -> Option<Response> {
+fn log_layer(req: &Request, _: &mut Context) -> Option<Response> {
     println!("{} {}", req.method, req.url.path);
     None
 }
 
-fn cors_pre_layer(req: &Request, _: &Context) -> Option<Response> {
+fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
     if req.method == Method::Options {
         Some(
             Response::with_header("Access-Control-Allow-Origin", "*")
@@ -51,7 +51,7 @@ fn cors_pre_layer(req: &Request, _: &Context) -> Option<Response> {
     }
 }
 
-fn cors_post_layer(_: &Request, _: &Context, res: Response) -> Response {
+fn cors_post_layer(_: &Request, _: &mut Context, res: Response) -> Response {
     res.header("Access-Control-Allow-Origin", "*")
         .header("Access-Control-Allow-Methods", "GET, POST")
         .header("Access-Control-Max-Age", "86400")
@@ -286,7 +286,7 @@ fn main() {
         database: open_database().expect("Can't open database"),
     };
 
-    let router = Router::<Context>::new()
+    let router = Router::<Context>::with(ctx)
         .pre_layer(log_layer)
         .pre_layer(cors_pre_layer)
         .post_layer(cors_post_layer)
@@ -302,5 +302,5 @@ fn main() {
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
-    http::serve(listener, move |req| router.handle(req, &ctx));
+    http::serve(listener, move |req| router.handle(req));
 }

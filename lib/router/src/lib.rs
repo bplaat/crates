@@ -17,8 +17,8 @@ use http::{Method, Request, Response};
 pub type Path = BTreeMap<String, String>;
 
 type HandlerFn<T> = fn(&Request, &T, &Path) -> Response;
-type PreLayerFn<T> = fn(&Request, &T) -> Option<Response>;
-type PostLayerFn<T> = fn(&Request, &T, Response) -> Response;
+type PreLayerFn<T> = fn(&Request, &mut T) -> Option<Response>;
+type PostLayerFn<T> = fn(&Request, &mut T, Response) -> Response;
 
 struct Handler<T> {
     handler: HandlerFn<T>,
@@ -39,7 +39,7 @@ impl<T> Handler<T> {
         }
     }
 
-    fn call(&self, req: &Request, ctx: &T, path: &Path) -> Response {
+    fn call(&self, req: &Request, ctx: &mut T, path: &Path) -> Response {
         for pre_layer in &self.pre_layers {
             if let Some(res) = pre_layer(req, ctx) {
                 return res;
@@ -135,7 +135,8 @@ impl<T> Route<T> {
 
 // MARK: Router
 /// Router
-pub struct Router<T> {
+pub struct Router<T: Clone> {
+    ctx: T,
     pre_layers: Vec<PreLayerFn<T>>,
     post_layers: Vec<PostLayerFn<T>>,
     routes: Vec<Route<T>>,
@@ -143,22 +144,17 @@ pub struct Router<T> {
     fallback_handler: Option<Handler<T>>,
 }
 
-impl<T> Default for Router<T> {
-    fn default() -> Self {
+impl<T: Clone> Router<T> {
+    /// Create new router with context
+    pub fn with(ctx: T) -> Self {
         Self {
+            ctx,
             pre_layers: Vec::new(),
             post_layers: Vec::new(),
             routes: Vec::new(),
             not_allowed_method_handler: None,
             fallback_handler: None,
         }
-    }
-}
-
-impl<T> Router<T> {
-    /// Create new router
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Complete building router
@@ -255,7 +251,9 @@ impl<T> Router<T> {
     }
 
     /// Handle request
-    pub fn handle(&self, req: &Request, ctx: &T) -> Response {
+    pub fn handle(&self, req: &Request) -> Response {
+        let mut ctx = self.ctx.clone();
+
         // Match routes
         for route in self.routes.iter().rev() {
             if route.is_match(&req.url.path) {
@@ -266,7 +264,7 @@ impl<T> Router<T> {
                     if !route.methods.contains(&req.method) {
                         continue;
                     }
-                    return route.handler.call(req, ctx, &path);
+                    return route.handler.call(req, &mut ctx, &path);
                 }
 
                 // Else run not allowed method handler
@@ -274,7 +272,7 @@ impl<T> Router<T> {
                     .not_allowed_method_handler
                     .as_ref()
                     .unwrap()
-                    .call(req, ctx, &path);
+                    .call(req, &mut ctx, &path);
             }
         }
 
@@ -282,6 +280,6 @@ impl<T> Router<T> {
         self.fallback_handler
             .as_ref()
             .unwrap()
-            .call(req, ctx, &BTreeMap::new())
+            .call(req, &mut ctx, &BTreeMap::new())
     }
 }
