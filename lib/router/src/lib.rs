@@ -7,7 +7,7 @@
 //! A simple router for HTTP library
 
 use std::collections::BTreeMap;
-use std::marker::PhantomData;
+use std::sync::Arc;
 
 use http::{Method, Request, Response};
 
@@ -91,30 +91,45 @@ impl<T> Route<T> {
             .collect()
     }
 
-    fn matches(&self, path: &str) -> (bool, Option<Path>) {
+    fn is_match(&self, path: &str) -> bool {
         let mut path_parts = path.split('/').filter(|part| !part.is_empty());
-        let mut params = BTreeMap::new();
         for part in &self.parts {
             match part {
                 RoutePart::Static(expected) => {
                     if let Some(actual) = path_parts.next() {
                         if actual != *expected {
-                            return (false, None);
+                            return false;
                         }
                     } else {
-                        return (false, None);
+                        return false;
                     }
                 }
-                RoutePart::Param(name) => {
-                    if let Some(actual) = path_parts.next() {
-                        params.insert(name.to_string(), actual.to_string());
-                    } else {
-                        return (false, None);
+                RoutePart::Param(_) => {
+                    if path_parts.next().is_none() {
+                        return false;
                     }
                 }
             }
         }
-        (path_parts.next().is_none(), Some(params))
+        path_parts.next().is_none()
+    }
+
+    fn match_path(&self, path: &str) -> Path {
+        let mut path_parts = path.split('/').filter(|part| !part.is_empty());
+        let mut params = BTreeMap::new();
+        for part in &self.parts {
+            match part {
+                RoutePart::Static(_) => {
+                    path_parts.next();
+                }
+                RoutePart::Param(name) => {
+                    if let Some(value) = path_parts.next() {
+                        params.insert(name.clone(), value.to_string());
+                    }
+                }
+            }
+        }
+        params
     }
 }
 
@@ -124,8 +139,8 @@ pub struct Router<T> {
     pre_layers: Vec<PreLayerFn<T>>,
     post_layers: Vec<PostLayerFn<T>>,
     routes: Vec<Route<T>>,
+    not_allowed_method_handler: Option<Handler<T>>,
     fallback_handler: Option<Handler<T>>,
-    _marker: PhantomData<T>,
 }
 
 impl<T> Default for Router<T> {
@@ -134,8 +149,8 @@ impl<T> Default for Router<T> {
             pre_layers: Vec::new(),
             post_layers: Vec::new(),
             routes: Vec::new(),
+            not_allowed_method_handler: None,
             fallback_handler: None,
-            _marker: PhantomData,
         }
     }
 }
@@ -144,6 +159,33 @@ impl<T> Router<T> {
     /// Create new router
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Complete building router
+    pub fn build(mut self) -> Arc<Self> {
+        // Set default handlers
+        if self.fallback_handler.is_none() {
+            self.fallback_handler = Some(Handler::new(
+                |_, _, _| {
+                    Response::new()
+                        .status(http::Status::NotFound)
+                        .body("404 Not Found")
+                },
+                self.pre_layers.clone(),
+                self.post_layers.clone(),
+            ));
+        }
+        self.not_allowed_method_handler = Some(Handler::new(
+            |_, _, _| {
+                Response::new()
+                    .status(http::Status::MethodNotAllowed)
+                    .body("405 Method Not Allowed")
+            },
+            self.pre_layers.clone(),
+            self.post_layers.clone(),
+        ));
+
+        Arc::new(self)
     }
 
     /// Add pre layer
@@ -216,42 +258,30 @@ impl<T> Router<T> {
     pub fn handle(&self, req: &Request, ctx: &T) -> Response {
         // Match routes
         for route in self.routes.iter().rev() {
-            let (matches, path) = route.matches(&req.url.path);
-            if matches {
+            if route.is_match(&req.url.path) {
+                let path = route.match_path(&req.url.path);
+
                 // Find matching route by method
                 for route in self.routes.iter().filter(|r| r.route == route.route) {
                     if !route.methods.contains(&req.method) {
                         continue;
                     }
-                    return route.handler.call(req, ctx, &path.unwrap());
+                    return route.handler.call(req, ctx, &path);
                 }
 
-                // When method is not allowed
-                return Handler::new(
-                    |_, _, _| {
-                        Response::new()
-                            .status(http::Status::MethodNotAllowed)
-                            .body("405 Method Not Allowed")
-                    },
-                    self.pre_layers.clone(),
-                    self.post_layers.clone(),
-                )
-                .call(req, ctx, &path.unwrap());
+                // Else run not allowed method handler
+                return self
+                    .not_allowed_method_handler
+                    .as_ref()
+                    .unwrap()
+                    .call(req, ctx, &path);
             }
         }
 
         // Else run fallback handler
         self.fallback_handler
             .as_ref()
-            .unwrap_or(&Handler::new(
-                |_, _, _| {
-                    Response::new()
-                        .status(http::Status::NotFound)
-                        .body("404 Not Found")
-                },
-                self.pre_layers.clone(),
-                self.post_layers.clone(),
-            ))
+            .unwrap()
             .call(req, ctx, &BTreeMap::new())
     }
 }

@@ -7,7 +7,6 @@
 //! A simple persons REST API example
 
 use std::net::{Ipv4Addr, TcpListener};
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use http::{Method, Request, Response, Status};
@@ -64,7 +63,7 @@ fn home(_: &Request, _: &Context, _: &Path) -> Response {
 }
 
 fn not_found(_: &Request, _: &Context, _: &Path) -> Response {
-    Response::with_status(Status::NotFound)
+    Response::with_status(Status::NotFound).body("404 Not found")
 }
 
 #[derive(Clone, Serialize, FromRow)]
@@ -166,11 +165,11 @@ fn get_person(ctx: &Context, path: &Path) -> Option<Person> {
         .next()
 }
 
-fn persons_show(_: &Request, ctx: &Context, path: &Path) -> Response {
+fn persons_show(req: &Request, ctx: &Context, path: &Path) -> Response {
     // Get person
     let person = match get_person(ctx, path) {
         Some(person) => person,
-        None => return Response::with_status(Status::NotFound),
+        None => return not_found(req, ctx, path),
     };
 
     // Person response
@@ -181,7 +180,7 @@ fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
     // Get person
     let mut person = match get_person(ctx, path) {
         Some(person) => person,
-        None => return Response::with_status(Status::NotFound),
+        None => return not_found(req, ctx, path),
     };
 
     // Parse and validate body
@@ -205,13 +204,11 @@ fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
     Response::with_json(person)
 }
 
-fn persons_delete(_: &Request, ctx: &Context, path: &Path) -> Response {
+fn persons_delete(req: &Request, ctx: &Context, path: &Path) -> Response {
     // Get person
     let person = match get_person(ctx, path) {
         Some(person) => person,
-        None => {
-            return Response::with_status(Status::NotFound);
-        }
+        None => return not_found(req, ctx, path),
     };
 
     // Delete person
@@ -289,19 +286,18 @@ fn main() {
         database: open_database().expect("Can't open database"),
     };
 
-    let router = Arc::new(
-        Router::<Context>::new()
-            .pre_layer(log_layer)
-            .pre_layer(cors_pre_layer)
-            .post_layer(cors_post_layer)
-            .get("/", home)
-            .get("/persons", persons_index)
-            .post("/persons", persons_create)
-            .get("/persons/:person_id", persons_show)
-            .put("/persons/:person_id", persons_update)
-            .delete("/persons/:person_id", persons_delete)
-            .fallback(not_found),
-    );
+    let router = Router::<Context>::new()
+        .pre_layer(log_layer)
+        .pre_layer(cors_pre_layer)
+        .post_layer(cors_post_layer)
+        .get("/", home)
+        .get("/persons", persons_index)
+        .post("/persons", persons_create)
+        .get("/persons/:person_id", persons_show)
+        .put("/persons/:person_id", persons_update)
+        .delete("/persons/:person_id", persons_delete)
+        .fallback(not_found)
+        .build();
 
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))

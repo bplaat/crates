@@ -120,8 +120,8 @@ pub struct Connection(Arc<RawConnection>);
 
 impl Connection {
     /// Open a connection to a SQLite database
-    pub fn open(path: &str) -> Result<Self, ConnectionError> {
-        Ok(Connection(Arc::new(RawConnection::open(path)?)))
+    pub fn open(path: impl AsRef<str>) -> Result<Self, ConnectionError> {
+        Ok(Connection(Arc::new(RawConnection::open(path.as_ref())?)))
     }
 
     /// Prepare a statement
