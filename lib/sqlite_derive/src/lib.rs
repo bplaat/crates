@@ -41,7 +41,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
     // Generate code
     let mut columns = "".to_string();
     for (i, field) in fields.iter().enumerate() {
-        columns.push_str(&field.ident.as_ref().unwrap().to_string());
+        columns.push_str(&field.ident.as_ref().unwrap().to_string().replace("r#", ""));
         if i < fields.len() - 1 {
             columns.push_str(", ");
         }
