@@ -5,7 +5,7 @@
  */
 
 use std::error::Error;
-use std::ffi::{c_char, CString};
+use std::ffi::{c_char, CStr, CString};
 use std::fmt::{self, Display, Formatter};
 use std::ptr;
 use std::sync::Arc;
@@ -32,7 +32,10 @@ impl RawConnection {
             )
         };
         if result != SQLITE_OK {
-            return Err(ConnectionError);
+            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(db)) }.to_string_lossy();
+            return Err(ConnectionError {
+                msg: format!("Failed to open database: {}", error),
+            });
         }
         let db: RawConnection = RawConnection(db);
 
@@ -75,7 +78,8 @@ impl RawConnection {
             )
         };
         if result != SQLITE_OK {
-            panic!("Can't prepare statement");
+            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(self.0)) }.to_string_lossy();
+            panic!("Failed to prepare statement: {}", error);
         }
         Statement::new(statement)
     }
@@ -103,11 +107,13 @@ impl Drop for RawConnection {
 // MARK: Connection Error
 /// A connection error
 #[derive(Debug)]
-pub struct ConnectionError;
+pub struct ConnectionError {
+    msg: String,
+}
 
 impl Display for ConnectionError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Connection error")
+        write!(f, "Connection error: {}", self.msg)
     }
 }
 

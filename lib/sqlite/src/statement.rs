@@ -120,7 +120,8 @@ impl RawStatement {
             },
         };
         if result != SQLITE_OK {
-            panic!("Can't bind value to statement");
+            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(self.0)) }.to_string_lossy();
+            panic!("Can't bind value to statement: {}", error);
         }
     }
 
@@ -143,7 +144,7 @@ impl RawStatement {
                 let slice = unsafe { std::slice::from_raw_parts(blob as *const u8, len as usize) };
                 Value::Blob(slice.to_vec())
             }
-            _ => panic!("Can't read value from statement"),
+            _ => panic!("Can't read unknown value type from statement"),
         }
     }
 }

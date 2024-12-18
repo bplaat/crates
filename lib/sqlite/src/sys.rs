@@ -39,6 +39,7 @@ extern "C" {
         ppStmt: *mut *mut sqlite3_stmt,
         pzTail: *mut *const c_char,
     ) -> c_int;
+    pub(crate) fn sqlite3_errmsg(db: *mut sqlite3) -> *const c_char;
     pub(crate) fn sqlite3_close(db: *mut sqlite3) -> c_int;
 
     // sqlite3_stmt
