@@ -12,8 +12,6 @@ ci:
 # 	Lint
 	cargo +nightly fmt --all -- --check
 	cargo clippy --locked --all --all-targets -- -D warnings
-# 	Build
-	cargo build --locked --release
 	CARGO_TARGET_DIR=target/udeps cargo +nightly udeps --locked --all-targets
 	cargo deny check --hide-inclusion-graph
 # 	Test
@@ -28,4 +26,4 @@ coverage:
 TARGETS = x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 .PHONY: release
 release:
-	$(foreach target,$(TARGETS),cargo build --release --target $(target);)
+	$(foreach target,$(TARGETS),cargo zigbuild --release --target $(target);)
