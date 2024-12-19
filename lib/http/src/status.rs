@@ -9,9 +9,10 @@ use std::fmt::{self, Display, Formatter};
 
 // MARK: Status
 /// Http status
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub enum Status {
     /// 200 OK
+    #[default]
     Ok = 200,
     /// 307 Temporary Redirect
     TemporaryRedirect = 307,

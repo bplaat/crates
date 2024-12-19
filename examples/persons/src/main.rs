@@ -84,7 +84,7 @@ struct PersonBody {
 
 fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
     // Parse request query
-    #[derive(Deserialize, Validate)]
+    #[derive(Default, Deserialize, Validate)]
     struct Query {
         #[serde(rename = "q")]
         query: Option<String>,
@@ -98,11 +98,7 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
             Ok(query) => query,
             Err(_) => return Response::with_status(Status::BadRequest),
         },
-        None => Query {
-            query: None,
-            page: None,
-            limit: None,
-        },
+        None => Query::default(),
     };
     if let Err(report) = query.validate() {
         return Response::with_status(Status::BadRequest).json(report);

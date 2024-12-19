@@ -14,6 +14,7 @@ use std::str::{self};
 use crate::status::Status;
 
 /// HTTP response
+#[derive(Default)]
 pub struct Response {
     /// Status
     pub status: Status,
@@ -21,16 +22,6 @@ pub struct Response {
     pub headers: BTreeMap<String, String>,
     /// Body
     pub body: String,
-}
-
-impl Default for Response {
-    fn default() -> Self {
-        Self {
-            status: Status::Ok,
-            headers: BTreeMap::new(),
-            body: String::new(),
-        }
-    }
 }
 
 impl Response {
