@@ -12,7 +12,6 @@ pub use crate::value::{Value, ValueError};
 
 mod connection;
 mod statement;
-mod sys;
 mod value;
 
 #[cfg(feature = "derive")]

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A SQLite Rust library
+//! A SQLite3 sys bindings library
 
 fn main() {
     // Link to the system SQLite library

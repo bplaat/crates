@@ -7,7 +7,8 @@
 use std::ffi::{c_char, c_void, CStr};
 use std::marker::PhantomData;
 
-use crate::sys::*;
+use sqlite3_sys::*;
+
 use crate::value::Value;
 
 // MARK: Bind

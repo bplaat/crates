@@ -10,8 +10,9 @@ use std::fmt::{self, Display, Formatter};
 use std::ptr;
 use std::sync::Arc;
 
+use sqlite3_sys::*;
+
 use crate::statement::{Bind, FromRow, Statement};
-use crate::sys::*;
 
 // MARK: Raw Connection
 struct RawConnection(*mut sqlite3);
