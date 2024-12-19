@@ -148,7 +148,11 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
 
 fn get_person(ctx: &Context, path: &Path) -> Option<Person> {
     // Parse person id from url
-    let person_id = match path.get("person_id").unwrap().parse::<Uuid>() {
+    let person_id = match path
+        .get("person_id")
+        .expect("Should be some")
+        .parse::<Uuid>()
+    {
         Ok(id) => id,
         Err(_) => return None,
     };
@@ -237,7 +241,7 @@ fn open_database() -> Result<sqlite::Connection, sqlite::ConnectionError> {
     let persons_count = database
         .query::<i64>("SELECT COUNT(id) FROM persons", ())
         .next()
-        .unwrap();
+        .expect("Should be some");
     if persons_count == 0 {
         let persons = vec![
             Person {

@@ -35,7 +35,7 @@ impl ThreadPool {
     where
         F: FnOnce() + Send + 'static,
     {
-        self.sender.send(Box::new(f)).unwrap();
+        self.sender.send(Box::new(f)).expect("Can't send job");
     }
 }
 
@@ -43,7 +43,7 @@ impl Drop for ThreadPool {
     fn drop(&mut self) {
         for worker in &mut self.workers {
             if let Some(thread) = worker.thread.take() {
-                thread.join().unwrap();
+                thread.join().expect("Can't join worker thread");
             }
         }
     }
@@ -58,7 +58,7 @@ struct Worker {
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
         let thread = thread::spawn(move || loop {
-            let message = receiver.lock().unwrap().recv();
+            let message = receiver.lock().expect("Can't receive job").recv();
             match message {
                 Ok(job) => job(),
                 Err(_) => break,

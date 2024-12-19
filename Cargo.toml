@@ -11,3 +11,6 @@ authors = ["Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>"]
 unreachable_pub = "deny"
 unused_qualifications = "deny"
 missing_docs = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"

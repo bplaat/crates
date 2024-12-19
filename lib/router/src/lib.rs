@@ -271,7 +271,7 @@ impl<T: Clone> Router<T> {
                 return self
                     .not_allowed_method_handler
                     .as_ref()
-                    .unwrap()
+                    .expect("Should be some")
                     .call(req, &mut ctx, &path);
             }
         }
@@ -279,7 +279,7 @@ impl<T: Clone> Router<T> {
         // Else run fallback handler
         self.fallback_handler
             .as_ref()
-            .unwrap()
+            .expect("Should be some")
             .call(req, &mut ctx, &BTreeMap::new())
     }
 }

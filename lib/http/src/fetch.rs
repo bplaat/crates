@@ -14,7 +14,7 @@ use crate::response::Response;
 // MARK: Fetch
 /// Fetch request with http client
 pub fn fetch(req: Request) -> Result<Response, FetchError> {
-    let authority = req.url.authority.as_ref().unwrap();
+    let authority = req.url.authority.as_ref().expect("Invalid request url");
     let mut stream = TcpStream::connect(format!(
         "{}:{}",
         authority.host,

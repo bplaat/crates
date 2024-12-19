@@ -19,3 +19,4 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 -   [ ] Router: Improve handler injection
 -   [ ] http: keep-alive requests
 -   [ ] http: multipart/form-data
+-   [ ] sqlite+http: Add easy way to write e2e tests

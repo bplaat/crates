@@ -23,7 +23,9 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
         for field in data.fields {
             let mut skip = false;
             for attr in &field.attrs {
-                if attr.path().is_ident("sqlite") && attr.parse_args::<Ident>().unwrap() == "skip" {
+                if attr.path().is_ident("sqlite")
+                    && attr.parse_args::<Ident>().expect("Invalid attribute") == "skip"
+                {
                     skip = true;
                     has_skipped = true;
                     break;
@@ -41,7 +43,8 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
     // Generate code
     let mut columns = "".to_string();
     for (i, field) in fields.iter().enumerate() {
-        let field_name = field.ident.as_ref().unwrap().to_string().replace("r#", "");
+        let field = field.ident.as_ref().expect("Invalid field");
+        let field_name = field.to_string().replace("r#", "");
         columns.push_str(&field_name);
         if i < fields.len() - 1 {
             columns.push_str(", ");
@@ -57,13 +60,13 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
     }
 
     let binds = fields.iter().enumerate().map(|(index, field)| {
-        let field = field.ident.as_ref().unwrap();
+        let field = field.ident.as_ref().expect("Invalid field");
         let index = index as i32;
         quote! { statement.bind_value(self.#field, #index) }
     });
 
     let from_rows = fields.iter().enumerate().map(|(index, field)| {
-        let field = field.ident.as_ref().unwrap();
+        let field = field.ident.as_ref().expect("Invalid field");
         let field_name = field.to_string().replace("r#", "");
         let index = index as i32;
         quote! { #field: statement.read_value(#index).try_into().unwrap_or_else(|_| panic!(

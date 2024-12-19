@@ -37,15 +37,15 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         if attr.path().is_ident("validate") {
             let list = attr
                 .parse_args_with(Punctuated::<_, syn::token::Comma>::parse_terminated)
-                .unwrap();
+                .expect("Invalid attribute");
             for item in list {
                 if let Meta::List(meta_list) = item {
                     if meta_list.path.is_ident("context") {
                         let list = meta_list
                             .parse_args_with(Punctuated::<_, syn::token::Comma>::parse_terminated)
-                            .unwrap();
+                            .expect("Invalid attribute");
                         if let Meta::Path(path) = &list[0] {
-                            context = Some(path.get_ident().unwrap().clone());
+                            context = Some(path.get_ident().expect("Invalid attribute").clone());
                         }
                     }
                 }
@@ -62,7 +62,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                 if attr.path().is_ident("validate") {
                     let list = attr
                         .parse_args_with(Punctuated::<_, syn::token::Comma>::parse_terminated)
-                        .unwrap();
+                        .expect("Invalid attribute");
                     for item in list {
                         match item {
                             Meta::Path(path) => {
@@ -79,19 +79,19 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                     .parse_args_with(
                                         Punctuated::<_, syn::token::Comma>::parse_terminated,
                                     )
-                                    .unwrap();
+                                    .expect("Invalid attribute");
                                 if meta_list.path.is_ident("length") {
                                     for item in &list {
                                         if let Meta::NameValue(name_value) = item {
                                             if name_value.path.is_ident("min") {
-                                                rules.push(Rule::LengthMin(
-                                                    expr_to::<usize>(&name_value.value).unwrap(),
-                                                ));
+                                                rules.push(Rule::LengthMin(expr_to::<usize>(
+                                                    &name_value.value,
+                                                )));
                                             }
                                             if name_value.path.is_ident("max") {
-                                                rules.push(Rule::LengthMax(
-                                                    expr_to::<usize>(&name_value.value).unwrap(),
-                                                ));
+                                                rules.push(Rule::LengthMax(expr_to::<usize>(
+                                                    &name_value.value,
+                                                )));
                                             }
                                         }
                                     }
@@ -100,14 +100,14 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                     for item in &list {
                                         if let Meta::NameValue(name_value) = item {
                                             if name_value.path.is_ident("min") {
-                                                rules.push(Rule::RangeMin(
-                                                    expr_to::<i64>(&name_value.value).unwrap(),
-                                                ));
+                                                rules.push(Rule::RangeMin(expr_to::<i64>(
+                                                    &name_value.value,
+                                                )));
                                             }
                                             if name_value.path.is_ident("max") {
-                                                rules.push(Rule::RangeMax(
-                                                    expr_to::<i64>(&name_value.value).unwrap(),
-                                                ));
+                                                rules.push(Rule::RangeMax(expr_to::<i64>(
+                                                    &name_value.value,
+                                                )));
                                             }
                                         }
                                     }
@@ -116,7 +116,9 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                     for item in &list {
                                         if let Meta::Path(path) = item {
                                             rules.push(Rule::Custom(
-                                                path.get_ident().unwrap().clone(),
+                                                path.get_ident()
+                                                    .expect("Invalid attribute")
+                                                    .clone(),
                                             ));
                                         }
                                     }
@@ -141,7 +143,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     };
 
     let validate_fields = fields.iter().map(|(field, rules)| {
-        let field_name = field.ident.as_ref().unwrap();
+        let field_name = field.ident.as_ref().expect("Invalid field");
         let validate_rules = rules.iter().map(|rule| match rule {
             Rule::Ascii => quote! {
                 if !self.#field_name.is_ascii() {
@@ -233,7 +235,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     })
 }
 
-fn expr_to<N>(expr: &Expr) -> Option<N>
+fn expr_to<N>(expr: &Expr) -> N
 where
     N: FromStr,
     N::Err: Display,
@@ -245,4 +247,5 @@ where
         }) => lit_int.base10_parse::<N>().ok(),
         _ => None,
     }
+    .expect("Invalid attribute")
 }

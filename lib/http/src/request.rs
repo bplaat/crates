@@ -32,7 +32,7 @@ pub struct Request {
 impl Default for Request {
     fn default() -> Self {
         Self {
-            url: Url::from_str("http://localhost").unwrap(),
+            url: Url::from_str("http://localhost").expect("Should parse"),
             method: Method::Get,
             headers: BTreeMap::new(),
             body: String::new(),
@@ -50,7 +50,7 @@ impl Request {
     /// Create new request with URL
     pub fn with_url(url: impl AsRef<str>) -> Self {
         Self {
-            url: url.as_ref().parse().unwrap(),
+            url: url.as_ref().parse().expect("Invalid url"),
             ..Self::default()
         }
     }
@@ -148,7 +148,7 @@ impl Request {
 
     pub(crate) fn write_to_stream(mut self, stream: &mut TcpStream) {
         // Finish headers
-        let authority = self.url.authority.as_ref().unwrap();
+        let authority = self.url.authority.as_ref().expect("Invalid url");
         self.headers.insert(
             "Host".to_string(),
             if let Some(port) = authority.port {

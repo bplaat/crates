@@ -98,7 +98,7 @@ impl Uuid {
     /// Create UUID v4
     pub fn new_v4() -> Uuid {
         let mut bytes = [0; 16];
-        getrandom::getrandom(&mut bytes).unwrap();
+        getrandom::getrandom(&mut bytes).expect("Failed to generate random bytes");
         bytes[6] = bytes[6] & 0x0f | 0x40;
         bytes[8] = bytes[8] & 0x3f | 0x80;
         Uuid(bytes)
@@ -112,7 +112,7 @@ impl Uuid {
         let mut bytes = [0; 16];
         let timestamp = time
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("Time went backwards")
             .as_millis() as u64;
         bytes[0] = (timestamp >> 40) as u8;
         bytes[1] = (timestamp >> 32) as u8;
@@ -120,7 +120,7 @@ impl Uuid {
         bytes[3] = (timestamp >> 16) as u8;
         bytes[4] = (timestamp >> 8) as u8;
         bytes[5] = timestamp as u8;
-        getrandom::getrandom(&mut bytes[6..]).unwrap();
+        getrandom::getrandom(&mut bytes[6..]).expect("Failed to generate random bytes");
         bytes[6] = bytes[6] & 0x0f | 0x70;
         bytes[8] = bytes[8] & 0x3f | 0x80;
         Uuid(bytes)
