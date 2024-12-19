@@ -41,7 +41,10 @@ impl<T> Handler<T> {
 
     fn call(&self, req: &Request, ctx: &mut T, path: &Path) -> Response {
         for pre_layer in &self.pre_layers {
-            if let Some(res) = pre_layer(req, ctx) {
+            if let Some(mut res) = pre_layer(req, ctx) {
+                for post_layer in &self.post_layers {
+                    res = post_layer(req, ctx, res);
+                }
                 return res;
             }
         }
