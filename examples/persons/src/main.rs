@@ -17,6 +17,8 @@ use uuid::Uuid;
 use validate::Validate;
 
 const HTTP_PORT: u16 = 8080;
+const LIMIT_DEFAULT: i64 = 20;
+const LIMIT_MAX: i64 = 50;
 
 // MARK: Utils
 fn validate_name(name: &str) -> validate::Result {
@@ -90,7 +92,7 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
         query: Option<String>,
         #[validate(range(min = 1))]
         page: Option<i64>,
-        #[validate(range(min = 1, max = 50))]
+        #[validate(range(min = 1, max = LIMIT_MAX))]
         limit: Option<i64>,
     }
     let query = match req.url.query.as_ref() {
@@ -105,7 +107,7 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
     }
 
     // Get or search persons
-    let limit = query.limit.unwrap_or(20);
+    let limit = query.limit.unwrap_or(LIMIT_DEFAULT);
     let persons = ctx
         .database
         .query::<Person>(
@@ -114,7 +116,7 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
                 Person::columns()
             ),
             (
-                format!("%{}%", query.query.unwrap_or("".to_string())),
+                format!("%{}%", query.query.unwrap_or_default().replace("%", "\\%")),
                 limit,
                 (query.page.unwrap_or(1) - 1) * limit,
             ),

@@ -6,13 +6,12 @@
 
 //! Validation derive macro's library
 
-use std::fmt::Display;
-use std::str::FromStr;
+use core::panic;
 
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::punctuated::Punctuated;
-use syn::{parse_macro_input, DeriveInput, Expr, ExprLit, Ident, Lit, Meta};
+use syn::{parse_macro_input, DeriveInput, Expr, Ident, Meta};
 
 struct Rule {
     r#type: RuleType,
@@ -23,10 +22,10 @@ enum RuleType {
     Ascii,
     #[cfg(feature = "email")]
     Email,
-    LengthMin(usize),
-    LengthMax(usize),
-    RangeMin(i64),
-    RangeMax(i64),
+    LengthMin(Expr),
+    LengthMax(Expr),
+    RangeMin(Expr),
+    RangeMax(Expr),
     Custom(Ident),
 }
 
@@ -97,21 +96,17 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                         if let Meta::NameValue(name_value) = item {
                                             if name_value.path.is_ident("min") {
                                                 rules.push(Rule {
-                                                    r#type: RuleType::LengthMin(expr_to_number::<
-                                                        usize,
-                                                    >(
-                                                        &name_value.value,
-                                                    )),
+                                                    r#type: RuleType::LengthMin(
+                                                        name_value.value.clone(),
+                                                    ),
                                                     is_option,
                                                 });
                                             }
                                             if name_value.path.is_ident("max") {
                                                 rules.push(Rule {
-                                                    r#type: RuleType::LengthMax(expr_to_number::<
-                                                        usize,
-                                                    >(
-                                                        &name_value.value,
-                                                    )),
+                                                    r#type: RuleType::LengthMax(
+                                                        name_value.value.clone(),
+                                                    ),
                                                     is_option,
                                                 });
                                             }
@@ -124,7 +119,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                             if name_value.path.is_ident("min") {
                                                 rules.push(Rule {
                                                     r#type: RuleType::RangeMin(
-                                                        expr_to_number::<i64>(&name_value.value),
+                                                        name_value.value.clone(),
                                                     ),
                                                     is_option,
                                                 });
@@ -132,7 +127,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                             if name_value.path.is_ident("max") {
                                                 rules.push(Rule {
                                                     r#type: RuleType::RangeMax(
-                                                        expr_to_number::<i64>(&name_value.value),
+                                                        name_value.value.clone(),
                                                     ),
                                                     is_option,
                                                 });
@@ -177,15 +172,15 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         let field_name = field.ident.as_ref().expect("Invalid field");
         let validate_rules = rules.iter().map(|rule| {
             let test_condition = |condition, error| {
-                let error = format!("{} {}", field_name.to_string().replace("r#", ""), error);
+                let field_name_string = field_name.to_string().replace("r#", "");
                 if rule.is_option {
                     quote! {
                         if let Some(value) = &self.#field_name {
                             if #condition {
                                 report
-                                    .entry(stringify!(#field_name).to_string())
+                                    .entry(#field_name_string.to_string())
                                     .or_insert_with(Vec::new)
-                                    .push(#error.to_string());
+                                    .push(#error);
                             }
                         }
                     }
@@ -194,9 +189,9 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                         let value = &self.#field_name;
                         if #condition {
                             report
-                                .entry(stringify!(#field_name).to_string())
+                                .entry(#field_name_string.to_string())
                                 .or_insert_with(Vec::new)
-                                .push(#error.to_string());
+                                .push(#error);
                         }
                     }
                 }
@@ -205,28 +200,28 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             match &rule.r#type {
                 RuleType::Ascii => test_condition(
                     quote! { !value.is_ascii() },
-                    "must only contain ASCII characters",
+                    quote! { "must only contain ASCII characters".to_string() },
                 ),
                 #[cfg(feature = "email")]
                 RuleType::Email => test_condition(
                     quote! { !validate::is_valid_email(value) },
-                    "must be a valid email address",
+                    quote! { "must be a valid email address".to_string() },
                 ),
                 RuleType::LengthMin(min) => test_condition(
-                    quote! { value.len() < #min },
-                    &format!("must be at least {} characters long", min),
+                    quote! { value.len() < #min as usize },
+                    quote! { format!("must be at least {} characters long", #min) },
                 ),
                 RuleType::LengthMax(max) => test_condition(
-                    quote! { value.len() > #max },
-                    &format!("must be at most {} characters long", max),
+                    quote! { value.len() > #max as usize },
+                    quote! { format!("must be at most {} characters long", #max) },
                 ),
                 RuleType::RangeMin(min) => test_condition(
                     quote! { *value < #min },
-                    &format!("must be at least {}", min),
+                    quote! { format!("must be at least {}", #min) },
                 ),
                 RuleType::RangeMax(max) => test_condition(
                     quote! { *value > #max },
-                    &format!("must be at most {}", max),
+                    quote! { format!("must be at most {}", #max) },
                 ),
                 RuleType::Custom(custom) => {
                     if context.is_some() {
@@ -296,19 +291,4 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             }
         }
     })
-}
-
-fn expr_to_number<N>(expr: &Expr) -> N
-where
-    N: FromStr,
-    N::Err: Display,
-{
-    match expr {
-        Expr::Lit(ExprLit {
-            lit: Lit::Int(lit_int),
-            ..
-        }) => lit_int.base10_parse::<N>().ok(),
-        _ => None,
-    }
-    .expect("Invalid attribute")
 }
