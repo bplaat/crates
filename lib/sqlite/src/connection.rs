@@ -97,6 +97,14 @@ impl RawConnection {
     fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
         self.query::<()>(query.as_ref(), params).next();
     }
+
+    fn affected_rows(&self) -> i64 {
+        unsafe { sqlite3_changes64(self.0) }
+    }
+
+    fn last_insert_row_id(&self) -> i64 {
+        unsafe { sqlite3_last_insert_rowid(self.0) }
+    }
 }
 
 impl Drop for RawConnection {
@@ -150,5 +158,15 @@ impl Connection {
     /// Execute a query
     pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
         self.0.execute(query, params);
+    }
+
+    /// Get the number of affected rows
+    pub fn affected_rows(&self) -> i64 {
+        self.0.affected_rows()
+    }
+
+    /// Get the last inserted row id
+    pub fn last_insert_row_id(&self) -> i64 {
+        self.0.last_insert_row_id()
     }
 }

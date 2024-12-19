@@ -41,6 +41,8 @@ extern "C" {
         ppStmt: *mut *mut sqlite3_stmt,
         pzTail: *mut *const c_char,
     ) -> c_int;
+    pub fn sqlite3_changes64(db: *mut sqlite3) -> i64;
+    pub fn sqlite3_last_insert_rowid(db: *mut sqlite3) -> i64;
     pub fn sqlite3_errmsg(db: *mut sqlite3) -> *const c_char;
     pub fn sqlite3_close(db: *mut sqlite3) -> c_int;
 
