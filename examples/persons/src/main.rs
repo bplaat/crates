@@ -84,33 +84,46 @@ struct PersonBody {
 
 fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
     // Parse request query
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Validate)]
     struct Query {
         #[serde(rename = "q")]
         query: Option<String>,
+        #[validate(range(min = 1))]
+        page: Option<i64>,
+        #[validate(range(min = 1, max = 50))]
+        limit: Option<i64>,
     }
     let query = match req.url.query.as_ref() {
         Some(query) => match serde_urlencoded::from_str::<Query>(query) {
             Ok(query) => query,
             Err(_) => return Response::with_status(Status::BadRequest),
         },
-        None => Query { query: None },
+        None => Query {
+            query: None,
+            page: None,
+            limit: None,
+        },
     };
+    if let Err(report) = query.validate() {
+        return Response::with_status(Status::BadRequest).json(report);
+    }
 
     // Get or search persons
-    let persons = if let Some(query) = query.query {
-        ctx.database.query::<Person>(
+    let limit = query.limit.unwrap_or(20);
+    let persons = ctx
+        .database
+        .query::<Person>(
             format!(
-                "SELECT {} FROM persons WHERE name LIKE ?",
+                "SELECT {} FROM persons WHERE name LIKE ? LIMIT ? OFFSET ?",
                 Person::columns()
             ),
-            format!("%{}%", query),
+            (
+                format!("%{}%", query.query.unwrap_or("".to_string())),
+                limit,
+                (query.page.unwrap_or(1) - 1) * limit,
+            ),
         )
-    } else {
-        ctx.database
-            .query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())
-    }
-    .collect::<Vec<_>>();
+        .collect::<Vec<_>>();
 
     // Persons response
     Response::with_json(persons)

@@ -8,9 +8,10 @@ clean:
 
 .PHONY: ci
 ci:
+# 	Format
 	./meta/check_copyright.sh
-# 	Lint
 	cargo +nightly fmt --all -- --check
+# 	Lint
 	cargo clippy --locked --all --all-targets -- -D warnings
 	CARGO_TARGET_DIR=target/udeps cargo +nightly udeps --locked --all-targets
 	cargo deny check --hide-inclusion-graph

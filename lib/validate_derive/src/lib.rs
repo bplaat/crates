@@ -10,11 +10,16 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, DeriveInput, Expr, ExprLit, Ident, Lit, Meta};
 
-enum Rule {
+struct Rule {
+    r#type: RuleType,
+    is_option: bool,
+}
+
+enum RuleType {
     Ascii,
     #[cfg(feature = "email")]
     Email,
@@ -57,6 +62,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     let fields = if let syn::Data::Struct(data) = input.data {
         let mut fields = Vec::new();
         for field in data.fields {
+            let is_option = field.ty.to_token_stream().to_string().starts_with("Option");
             let mut rules = Vec::new();
             for attr in field.attrs.iter() {
                 if attr.path().is_ident("validate") {
@@ -67,11 +73,17 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                         match item {
                             Meta::Path(path) => {
                                 if path.is_ident("ascii") {
-                                    rules.push(Rule::Ascii);
+                                    rules.push(Rule {
+                                        r#type: RuleType::Ascii,
+                                        is_option,
+                                    });
                                 }
                                 #[cfg(feature = "email")]
                                 if path.is_ident("email") {
-                                    rules.push(Rule::Email);
+                                    rules.push(Rule {
+                                        r#type: RuleType::Email,
+                                        is_option,
+                                    });
                                 }
                             }
                             Meta::List(meta_list) => {
@@ -84,14 +96,24 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                     for item in &list {
                                         if let Meta::NameValue(name_value) = item {
                                             if name_value.path.is_ident("min") {
-                                                rules.push(Rule::LengthMin(expr_to::<usize>(
-                                                    &name_value.value,
-                                                )));
+                                                rules.push(Rule {
+                                                    r#type: RuleType::LengthMin(expr_to_number::<
+                                                        usize,
+                                                    >(
+                                                        &name_value.value,
+                                                    )),
+                                                    is_option,
+                                                });
                                             }
                                             if name_value.path.is_ident("max") {
-                                                rules.push(Rule::LengthMax(expr_to::<usize>(
-                                                    &name_value.value,
-                                                )));
+                                                rules.push(Rule {
+                                                    r#type: RuleType::LengthMax(expr_to_number::<
+                                                        usize,
+                                                    >(
+                                                        &name_value.value,
+                                                    )),
+                                                    is_option,
+                                                });
                                             }
                                         }
                                     }
@@ -100,14 +122,20 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                     for item in &list {
                                         if let Meta::NameValue(name_value) = item {
                                             if name_value.path.is_ident("min") {
-                                                rules.push(Rule::RangeMin(expr_to::<i64>(
-                                                    &name_value.value,
-                                                )));
+                                                rules.push(Rule {
+                                                    r#type: RuleType::RangeMin(
+                                                        expr_to_number::<i64>(&name_value.value),
+                                                    ),
+                                                    is_option,
+                                                });
                                             }
                                             if name_value.path.is_ident("max") {
-                                                rules.push(Rule::RangeMax(expr_to::<i64>(
-                                                    &name_value.value,
-                                                )));
+                                                rules.push(Rule {
+                                                    r#type: RuleType::RangeMax(
+                                                        expr_to_number::<i64>(&name_value.value),
+                                                    ),
+                                                    is_option,
+                                                });
                                             }
                                         }
                                     }
@@ -115,11 +143,14 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                 if meta_list.path.is_ident("custom") {
                                     for item in &list {
                                         if let Meta::Path(path) = item {
-                                            rules.push(Rule::Custom(
-                                                path.get_ident()
-                                                    .expect("Invalid attribute")
-                                                    .clone(),
-                                            ));
+                                            rules.push(Rule {
+                                                r#type: RuleType::Custom(
+                                                    path.get_ident()
+                                                        .expect("Invalid attribute")
+                                                        .clone(),
+                                                ),
+                                                is_option,
+                                            });
                                         }
                                     }
                                 }
@@ -144,75 +175,107 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
 
     let validate_fields = fields.iter().map(|(field, rules)| {
         let field_name = field.ident.as_ref().expect("Invalid field");
-        let validate_rules = rules.iter().map(|rule| match rule {
-            Rule::Ascii => quote! {
-                if !self.#field_name.is_ascii() {
-                    report
-                        .entry(stringify!(#field_name).to_string())
-                        .or_insert_with(Vec::new)
-                        .push(format!("{} must only contain ascii characters", stringify!(#field_name)));
-                }
-            },
-            #[cfg(feature = "email")]
-            Rule::Email => quote! {
-                if !validate::is_valid_email(&self.#field_name) {
-                    report
-                        .entry(stringify!(#field_name).to_string())
-                        .or_insert_with(Vec::new)
-                        .push(format!("{} must be a valid email address", stringify!(#field_name)));
-                }
-            },
-            Rule::LengthMin(min) => quote! {
-                if self.#field_name.len() < #min {
-                    report
-                        .entry(stringify!(#field_name).to_string())
-                        .or_insert_with(Vec::new)
-                        .push(format!("{} must be at least {} characters long", stringify!(#field_name), #min));
-                }
-            },
-            Rule::LengthMax(max) => quote! {
-                if self.#field_name.len() > #max {
-                    report
-                        .entry(stringify!(#field_name).to_string())
-                        .or_insert_with(Vec::new)
-                        .push(format!("{} must be at most {} characters long", stringify!(#field_name), #max));
-                }
-            },
-            Rule::RangeMin(min) => quote! {
-                if self.#field_name < #min {
-                    report
-                        .entry(stringify!(#field_name).to_string())
-                        .or_insert_with(Vec::new)
-                        .push(format!("{} must be at least {}", stringify!(#field_name), #min));
-                }
-            },
-            Rule::RangeMax(max) => quote! {
-                if self.#field_name > #max {
-                    report
-                        .entry(stringify!(#field_name).to_string())
-                        .or_insert_with(Vec::new)
-                        .push(format!("{} must be at most {}", stringify!(#field_name), #max));
-                }
-            },
-            Rule::Custom(custom) => if context.is_some() {
-                quote! {
-                    if let Err(error) = #custom(&self.#field_name, context) {
-                        report
-                            .entry(stringify!(#field_name).to_string())
-                            .or_insert_with(Vec::new)
-                            .push(error.message().to_string());
+        let validate_rules = rules.iter().map(|rule| {
+            let test_condition = |condition, error| {
+                let error = format!("{} {}", field_name.to_string().replace("r#", ""), error);
+                if rule.is_option {
+                    quote! {
+                        if let Some(value) = &self.#field_name {
+                            if #condition {
+                                report
+                                    .entry(stringify!(#field_name).to_string())
+                                    .or_insert_with(Vec::new)
+                                    .push(#error.to_string());
+                            }
+                        }
+                    }
+                } else {
+                    quote! {
+                        let value = &self.#field_name;
+                        if #condition {
+                            report
+                                .entry(stringify!(#field_name).to_string())
+                                .or_insert_with(Vec::new)
+                                .push(#error.to_string());
+                        }
                     }
                 }
-            } else {
-                quote! {
-                    if let Err(error) = #custom(&self.#field_name) {
-                        report
-                            .entry(stringify!(#field_name).to_string())
-                            .or_insert_with(Vec::new)
-                            .push(error.message().to_string());
+            };
+
+            match &rule.r#type {
+                RuleType::Ascii => test_condition(
+                    quote! { !value.is_ascii() },
+                    "must only contain ASCII characters",
+                ),
+                #[cfg(feature = "email")]
+                RuleType::Email => test_condition(
+                    quote! { !validate::is_valid_email(value) },
+                    "must be a valid email address",
+                ),
+                RuleType::LengthMin(min) => test_condition(
+                    quote! { value.len() < #min },
+                    &format!("must be at least {} characters long", min),
+                ),
+                RuleType::LengthMax(max) => test_condition(
+                    quote! { value.len() > #max },
+                    &format!("must be at most {} characters long", max),
+                ),
+                RuleType::RangeMin(min) => test_condition(
+                    quote! { *value < #min },
+                    &format!("must be at least {}", min),
+                ),
+                RuleType::RangeMax(max) => test_condition(
+                    quote! { *value > #max },
+                    &format!("must be at most {}", max),
+                ),
+                RuleType::Custom(custom) => {
+                    if context.is_some() {
+                        if rule.is_option {
+                            quote! {
+                                if let Some(value) = &self.#field_name {
+                                    if let Err(error) = #custom(value, context) {
+                                        report
+                                            .entry(stringify!(#field_name).to_string())
+                                            .or_insert_with(Vec::new)
+                                            .push(error.message().to_string());
+                                    }
+                                }
+                            }
+                        } else {
+                            quote! {
+                                let value = &self.#field_name;
+                                if let Err(error) = #custom(value, context) {
+                                    report
+                                        .entry(stringify!(#field_name).to_string())
+                                        .or_insert_with(Vec::new)
+                                        .push(error.message().to_string());
+                                }
+                            }
+                        }
+                    } else if rule.is_option {
+                        quote! {
+                            if let Some(value) = &self.#field_name {
+                                if let Err(error) = #custom(value) {
+                                    report
+                                        .entry(stringify!(#field_name).to_string())
+                                        .or_insert_with(Vec::new)
+                                        .push(error.message().to_string());
+                                }
+                            }
+                        }
+                    } else {
+                        quote! {
+                            let value = &self.#field_name;
+                            if let Err(error) = #custom(value) {
+                                report
+                                    .entry(stringify!(#field_name).to_string())
+                                    .or_insert_with(Vec::new)
+                                    .push(error.message().to_string());
+                            }
+                        }
                     }
                 }
-            },
+            }
         });
         quote! {
             #(#validate_rules)*
@@ -235,7 +298,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     })
 }
 
-fn expr_to<N>(expr: &Expr) -> N
+fn expr_to_number<N>(expr: &Expr) -> N
 where
     N: FromStr,
     N::Err: Display,
