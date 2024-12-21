@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use http::{Method, Request, Response, Status};
 use router::{Path, Router};
 use serde::{Deserialize, Serialize};
-use sqlite::FromRow;
+use sqlite::{FromRow, FromValue};
 use uuid::Uuid;
 use validate::Validate;
 
@@ -73,7 +73,18 @@ struct Person {
     id: Uuid,
     name: String,
     age: i64,
+    relation: Relation,
     created_at: DateTime<Utc>,
+}
+
+#[derive(Copy, Clone, Deserialize, Serialize, FromValue)]
+enum Relation {
+    #[serde(rename = "me")]
+    Me = 0,
+    #[serde(rename = "brother")]
+    Brother = 1,
+    #[serde(rename = "sister")]
+    Sister = 2,
 }
 
 #[derive(Deserialize, Validate)]
@@ -82,6 +93,7 @@ struct PersonBody {
     name: String,
     #[validate(range(min = 8))]
     age: i64,
+    relation: Relation,
 }
 
 fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
@@ -142,6 +154,7 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
         id: Uuid::now_v7(),
         name: body.name,
         age: body.age,
+        relation: body.relation,
         created_at: Utc::now(),
     };
     ctx.database.execute(
@@ -210,6 +223,7 @@ fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
     // Update person
     person.name = body.name;
     person.age = body.age;
+    person.relation = body.relation;
     ctx.database.execute(
         "UPDATE persons SET name = ?, age = ? WHERE id = ? LIMIT 1",
         (person.name.clone(), person.age, person.id),
@@ -243,6 +257,7 @@ fn open_database() -> Result<sqlite::Connection, sqlite::ConnectionError> {
             id BLOB PRIMARY KEY,
             name TEXT NOT NULL,
             age INTEGER NOT NULL,
+            relation INTEGER NOT NULL,
             created_at TIMESTAMP NOT NULL
         )",
         (),
@@ -259,24 +274,28 @@ fn open_database() -> Result<sqlite::Connection, sqlite::ConnectionError> {
                 id: Uuid::now_v7(),
                 name: "Bastiaan".to_string(),
                 age: 20,
+                relation: Relation::Me,
                 created_at: Utc::now(),
             },
             Person {
                 id: Uuid::now_v7(),
                 name: "Sander".to_string(),
                 age: 19,
+                relation: Relation::Brother,
                 created_at: Utc::now(),
             },
             Person {
                 id: Uuid::now_v7(),
                 name: "Leonard".to_string(),
                 age: 16,
+                relation: Relation::Brother,
                 created_at: Utc::now(),
             },
             Person {
                 id: Uuid::now_v7(),
                 name: "Jiska".to_string(),
                 age: 14,
+                relation: Relation::Sister,
                 created_at: Utc::now(),
             },
         ];

@@ -10,54 +10,48 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput, Ident};
 
-/// [FromRow] derive
+/// [FromRow] derive for structs
 #[proc_macro_derive(FromRow, attributes(sqlite))]
 pub fn from_row_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
     // Parse fields and skip fields with #[sqlite(skip)]
-    let (fields, has_skipped) = if let syn::Data::Struct(data) = input.data {
-        let mut fields = Vec::new();
-        let mut has_skipped = false;
-        for field in data.fields {
-            let mut skip = false;
-            for attr in &field.attrs {
-                if attr.path().is_ident("sqlite")
-                    && attr.parse_args::<Ident>().expect("Invalid attribute") == "skip"
-                {
-                    skip = true;
-                    has_skipped = true;
-                    break;
-                }
-            }
-            if !skip {
-                fields.push(field);
-            }
+    let (fields, has_skipped) = match input.data {
+        syn::Data::Struct(data) => {
+            let fields_len = data.fields.len();
+            let fields: Vec<_> = data
+                .fields
+                .into_iter()
+                .filter(|field| {
+                    !field.attrs.iter().any(|attr| {
+                        attr.path().is_ident("sqlite")
+                            && attr
+                                .parse_args::<Ident>()
+                                .map_or(false, |ident| ident == "skip")
+                    })
+                })
+                .collect();
+            let has_skipped = fields.len() != fields_len;
+            (fields, has_skipped)
         }
-        (fields, has_skipped)
-    } else {
-        panic!("FromRow can only be used on structs");
+        _ => panic!("FromRow can only be used on structs"),
     };
 
     // Generate code
-    let mut columns = "".to_string();
-    for (i, field) in fields.iter().enumerate() {
-        let field = field.ident.as_ref().expect("Invalid field");
-        let field_name = field.to_string().replace("r#", "");
-        columns.push_str(&field_name);
-        if i < fields.len() - 1 {
-            columns.push_str(", ");
-        }
-    }
-
-    let mut values = "".to_string();
-    for i in 0..fields.len() {
-        values.push('?');
-        if i < fields.len() - 1 {
-            values.push_str(", ");
-        }
-    }
+    let columns = fields
+        .iter()
+        .map(|field| {
+            field
+                .ident
+                .as_ref()
+                .expect("Invalid field")
+                .to_string()
+                .replace("r#", "")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let values = vec!["?"; fields.len()].join(", ");
 
     let binds = fields.iter().enumerate().map(|(index, field)| {
         let field = field.ident.as_ref().expect("Invalid field");
@@ -98,6 +92,62 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
                 Self {
                     #( #from_rows, )*
                     #from_rows_default
+                }
+            }
+        }
+    })
+}
+
+/// [FromValue] derive for enums
+#[proc_macro_derive(FromValue)]
+pub fn from_value_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    let variants = if let syn::Data::Enum(data) = input.data {
+        data.variants
+    } else {
+        panic!("FromValue can only be used on enums");
+    };
+
+    let from_impls = variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+        let discriminant = if let Some((_, expr)) = &variant.discriminant {
+            quote! { #expr }
+        } else {
+            panic!("Enum variants must have discriminants");
+        };
+        quote! {
+            sqlite::Value::Integer(#discriminant) => Ok(#name::#variant_name),
+        }
+    });
+
+    let to_impls = variants.iter().map(|variant| {
+        let variant_name = &variant.ident;
+        let discriminant = if let Some((_, expr)) = &variant.discriminant {
+            quote! { #expr }
+        } else {
+            panic!("Enum variants must have discriminants");
+        };
+        quote! {
+            #name::#variant_name => sqlite::Value::Integer(#discriminant),
+        }
+    });
+
+    TokenStream::from(quote! {
+        impl From<#name> for sqlite::Value {
+            fn from(value: #name) -> Self {
+                match value {
+                    #( #to_impls )*
+                }
+            }
+        }
+        impl TryFrom<sqlite::Value> for #name {
+            type Error = sqlite::ValueError;
+            fn try_from(value: sqlite::Value) -> Result<Self, Self::Error> {
+                match value {
+                    #( #from_impls )*
+                    _ => Err(sqlite::ValueError),
                 }
             }
         }
