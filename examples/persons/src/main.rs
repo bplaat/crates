@@ -72,9 +72,25 @@ fn not_found(_: &Request, _: &Context, _: &Path) -> Response {
 struct Person {
     id: Uuid,
     name: String,
-    age: i64,
+    #[sqlite(rename = "age")]
+    age_in_years: i64,
     relation: Relation,
+    #[sqlite(skip)]
+    nonce: i64,
     created_at: DateTime<Utc>,
+}
+
+impl Default for Person {
+    fn default() -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            name: String::default(),
+            age_in_years: 0,
+            relation: Relation::Me,
+            nonce: 0,
+            created_at: Utc::now(),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Deserialize, Serialize, FromValue)]
@@ -151,11 +167,10 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
 
     // Create person
     let person = Person {
-        id: Uuid::now_v7(),
         name: body.name,
-        age: body.age,
+        age_in_years: body.age,
         relation: body.relation,
-        created_at: Utc::now(),
+        ..Default::default()
     };
     ctx.database.execute(
         format!(
@@ -222,11 +237,11 @@ fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
 
     // Update person
     person.name = body.name;
-    person.age = body.age;
+    person.age_in_years = body.age;
     person.relation = body.relation;
     ctx.database.execute(
         "UPDATE persons SET name = ?, age = ? WHERE id = ? LIMIT 1",
-        (person.name.clone(), person.age, person.id),
+        (person.name.clone(), person.age_in_years, person.id),
     );
 
     // Updated person response
@@ -271,32 +286,28 @@ fn open_database() -> Result<sqlite::Connection, sqlite::ConnectionError> {
     if persons_count == 0 {
         let persons = vec![
             Person {
-                id: Uuid::now_v7(),
                 name: "Bastiaan".to_string(),
-                age: 20,
+                age_in_years: 20,
                 relation: Relation::Me,
-                created_at: Utc::now(),
+                ..Default::default()
             },
             Person {
-                id: Uuid::now_v7(),
                 name: "Sander".to_string(),
-                age: 19,
+                age_in_years: 19,
                 relation: Relation::Brother,
-                created_at: Utc::now(),
+                ..Default::default()
             },
             Person {
-                id: Uuid::now_v7(),
                 name: "Leonard".to_string(),
-                age: 16,
+                age_in_years: 16,
                 relation: Relation::Brother,
-                created_at: Utc::now(),
+                ..Default::default()
             },
             Person {
-                id: Uuid::now_v7(),
                 name: "Jiska".to_string(),
-                age: 14,
+                age_in_years: 14,
                 relation: Relation::Sister,
-                created_at: Utc::now(),
+                ..Default::default()
             },
         ];
         for person in persons {
