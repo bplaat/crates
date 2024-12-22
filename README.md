@@ -22,3 +22,5 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 -   [ ] http: multipart/form-data
 -   [ ] http: Chunked transfer encoding
 -   [ ] sqlite+http: Add easy way to write e2e tests
+-   [ ] useragent: User agent parsing library
+-   [ ] ipinfo: MaxDB ipinfo database resolver

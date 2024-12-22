@@ -71,10 +71,12 @@ pub trait Validate {
 pub use validate_derive::Validate;
 
 #[cfg(feature = "email")]
+lazy_static::lazy_static! {
+    static ref EMAIL_REGEX: regex::Regex = regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$").expect("Should compile");
+}
+
+#[cfg(feature = "email")]
 /// Validate email
 pub fn is_valid_email(email: &str) -> bool {
-    let re =
-        regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
-            .unwrap();
-    re.is_match(email)
+    EMAIL_REGEX.is_match(email)
 }
