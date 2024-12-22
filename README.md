@@ -5,6 +5,7 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 ## Crates
 
 -   [http](lib/http) A simple HTTP/1.1 server/client library
+-   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [router](lib/router) A simple router for HTTP library
 -   [sqlite](lib/sqlite) A SQLite Rust library
 -   [sqlite_derive](lib/sqlite_derive) SQLite derive macro's library
@@ -17,10 +18,12 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 
 ## TODO
 
+-   [ ] openapi-generator: Add TypeScript schemas generation
 -   [ ] Router: Improve handler injection
+-   [ ] sqlite+http: Add easy way to write e2e tests
 -   [ ] http: keep-alive requests
 -   [ ] http: multipart/form-data
 -   [ ] http: Chunked transfer encoding
--   [ ] sqlite+http: Add easy way to write e2e tests
+-   [ ] openapi-generator: Add TypeScript client generation
 -   [ ] useragent: User agent parsing library
 -   [ ] ipinfo: MaxDB ipinfo database resolver

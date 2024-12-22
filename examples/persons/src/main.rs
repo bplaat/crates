@@ -11,10 +11,14 @@ use std::net::{Ipv4Addr, TcpListener};
 use chrono::{DateTime, Utc};
 use http::{Method, Request, Response, Status};
 use router::{Path, Router};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlite::{FromRow, FromValue};
 use uuid::Uuid;
 use validate::Validate;
+
+mod api {
+    include!(concat!(env!("OUT_DIR"), "/persons_api.rs"));
+}
 
 const HTTP_PORT: u16 = 8080;
 const LIMIT_DEFAULT: i64 = 20;
@@ -59,24 +63,14 @@ fn cors_post_layer(_: &Request, _: &mut Context, res: Response) -> Response {
         .header("Access-Control-Max-Age", "86400")
 }
 
-// MARK: Routes
-fn home(_: &Request, _: &Context, _: &Path) -> Response {
-    Response::with_body(concat!("Persons v", env!("CARGO_PKG_VERSION")))
-}
-
-fn not_found(_: &Request, _: &Context, _: &Path) -> Response {
-    Response::with_status(Status::NotFound).body("404 Not found")
-}
-
-#[derive(Clone, Serialize, FromRow)]
+// MARK: Person
+#[derive(Clone, FromRow)]
 struct Person {
     id: Uuid,
     name: String,
     #[sqlite(rename = "age")]
     age_in_years: i64,
     relation: Relation,
-    #[sqlite(skip)]
-    nonce: i64,
     created_at: DateTime<Utc>,
 }
 
@@ -87,48 +81,78 @@ impl Default for Person {
             name: String::default(),
             age_in_years: 0,
             relation: Relation::Me,
-            nonce: 0,
             created_at: Utc::now(),
         }
     }
 }
 
-#[derive(Copy, Clone, Deserialize, Serialize, FromValue)]
+impl From<Person> for api::Person {
+    fn from(person: Person) -> Self {
+        Self {
+            id: person.id,
+            name: person.name,
+            age_in_years: person.age_in_years,
+            relation: person.relation.into(),
+            is_adult: Some(person.age_in_years >= 18),
+            created_at: person.created_at,
+        }
+    }
+}
+
+#[derive(Copy, Clone, FromValue)]
 enum Relation {
-    #[serde(rename = "me")]
     Me = 0,
-    #[serde(rename = "brother")]
     Brother = 1,
-    #[serde(rename = "sister")]
     Sister = 2,
 }
 
-#[derive(Deserialize, Validate)]
-struct PersonBody {
-    #[validate(ascii, length(min = 3, max = 25), custom(validate_name))]
-    name: String,
-    #[validate(range(min = 8))]
-    age: i64,
-    relation: Relation,
+impl From<api::Relation> for Relation {
+    fn from(relation: api::Relation) -> Self {
+        match relation {
+            api::Relation::Me => Relation::Me,
+            api::Relation::Brother => Relation::Brother,
+            api::Relation::Sister => Relation::Sister,
+        }
+    }
+}
+
+impl From<Relation> for api::Relation {
+    fn from(relation: Relation) -> Self {
+        match relation {
+            Relation::Me => api::Relation::Me,
+            Relation::Brother => api::Relation::Brother,
+            Relation::Sister => api::Relation::Sister,
+        }
+    }
+}
+
+// MARK: Routes
+fn home(_: &Request, _: &Context, _: &Path) -> Response {
+    Response::with_body(concat!("Persons v", env!("CARGO_PKG_VERSION")))
+}
+
+fn not_found(_: &Request, _: &Context, _: &Path) -> Response {
+    Response::with_status(Status::NotFound).body("404 Not found")
+}
+
+#[derive(Default, Deserialize, Validate)]
+struct IndexQuery {
+    #[serde(rename = "q")]
+    query: Option<String>,
+    #[validate(range(min = 1))]
+    page: Option<i64>,
+    #[validate(range(min = 1, max = LIMIT_MAX))]
+    limit: Option<i64>,
 }
 
 fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
     // Parse request query
-    #[derive(Default, Deserialize, Validate)]
-    struct Query {
-        #[serde(rename = "q")]
-        query: Option<String>,
-        #[validate(range(min = 1))]
-        page: Option<i64>,
-        #[validate(range(min = 1, max = LIMIT_MAX))]
-        limit: Option<i64>,
-    }
     let query = match req.url.query.as_ref() {
-        Some(query) => match serde_urlencoded::from_str::<Query>(query) {
+        Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
             Err(_) => return Response::with_status(Status::BadRequest),
         },
-        None => Query::default(),
+        None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
         return Response::with_status(Status::BadRequest).json(report);
@@ -149,15 +173,25 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
                 (query.page.unwrap_or(1) - 1) * limit,
             ),
         )
+        .map(Into::<api::Person>::into)
         .collect::<Vec<_>>();
 
-    // Persons response
+    // Return persons
     Response::with_json(persons)
+}
+
+#[derive(Deserialize, Validate)]
+struct PersonCreateUpdateBody {
+    #[validate(ascii, length(min = 3, max = 25), custom(validate_name))]
+    name: String,
+    #[validate(range(min = 8))]
+    age_in_years: i64,
+    relation: api::Relation,
 }
 
 fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
     // Parse and validate body
-    let body = match serde_urlencoded::from_str::<PersonBody>(&req.body) {
+    let body = match serde_urlencoded::from_str::<PersonCreateUpdateBody>(&req.body) {
         Ok(body) => body,
         Err(_) => return Response::with_status(Status::BadRequest),
     };
@@ -168,8 +202,8 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
     // Create person
     let person = Person {
         name: body.name,
-        age_in_years: body.age,
-        relation: body.relation,
+        age_in_years: body.age_in_years,
+        relation: body.relation.into(),
         ..Default::default()
     };
     ctx.database.execute(
@@ -181,8 +215,8 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
         person.clone(),
     );
 
-    // Created person response
-    Response::with_json(person)
+    // Return created person
+    Response::with_json(Into::<api::Person>::into(person))
 }
 
 fn get_person(ctx: &Context, path: &Path) -> Option<Person> {
@@ -215,8 +249,8 @@ fn persons_show(req: &Request, ctx: &Context, path: &Path) -> Response {
         None => return not_found(req, ctx, path),
     };
 
-    // Person response
-    Response::with_json(person)
+    // Return person
+    Response::with_json(Into::<api::Person>::into(person))
 }
 
 fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
@@ -227,7 +261,7 @@ fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
     };
 
     // Parse and validate body
-    let body = match serde_urlencoded::from_str::<PersonBody>(&req.body) {
+    let body = match serde_urlencoded::from_str::<PersonCreateUpdateBody>(&req.body) {
         Ok(body) => body,
         Err(_) => return Response::with_status(Status::BadRequest),
     };
@@ -237,15 +271,15 @@ fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
 
     // Update person
     person.name = body.name;
-    person.age_in_years = body.age;
-    person.relation = body.relation;
+    person.age_in_years = body.age_in_years;
+    person.relation = body.relation.into();
     ctx.database.execute(
         "UPDATE persons SET name = ?, age = ? WHERE id = ? LIMIT 1",
         (person.name.clone(), person.age_in_years, person.id),
     );
 
-    // Updated person response
-    Response::with_json(person)
+    // Return updated person
+    Response::with_json(Into::<api::Person>::into(person))
 }
 
 fn persons_delete(req: &Request, ctx: &Context, path: &Path) -> Response {

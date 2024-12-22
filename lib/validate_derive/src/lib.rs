@@ -281,7 +281,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         impl validate::Validate for #name {
             type Context = #context_type;
             fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), validate::Report> {
-                let mut report = std::collections::BTreeMap::new();
+                let mut report = std::collections::HashMap::new();
                 #(#validate_fields;)*
                 if report.is_empty() {
                     Ok(())

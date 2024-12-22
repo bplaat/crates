@@ -6,7 +6,7 @@
 
 //! A simple router for HTTP library
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use http::{Method, Request, Response};
@@ -14,7 +14,7 @@ use http::{Method, Request, Response};
 // MARK: Handler
 
 /// Parsed path parameters
-pub type Path = BTreeMap<String, String>;
+pub type Path = HashMap<String, String>;
 
 type HandlerFn<T> = fn(&Request, &T, &Path) -> Response;
 type PreLayerFn<T> = fn(&Request, &mut T) -> Option<Response>;
@@ -119,7 +119,7 @@ impl<T> Route<T> {
 
     fn match_path(&self, path: &str) -> Path {
         let mut path_parts = path.split('/').filter(|part| !part.is_empty());
-        let mut params = BTreeMap::new();
+        let mut params = HashMap::new();
         for part in &self.parts {
             match part {
                 RoutePart::Static(_) => {
@@ -283,6 +283,6 @@ impl<T: Clone> Router<T> {
         self.fallback_handler
             .as_ref()
             .expect("Should be some")
-            .call(req, &mut ctx, &BTreeMap::new())
+            .call(req, &mut ctx, &HashMap::new())
     }
 }

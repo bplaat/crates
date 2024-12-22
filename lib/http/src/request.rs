@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -22,7 +22,7 @@ pub struct Request {
     /// Method
     pub method: Method,
     /// Headers
-    pub headers: BTreeMap<String, String>,
+    pub headers: HashMap<String, String>,
     /// Body
     pub body: String,
     /// Client address
@@ -34,7 +34,7 @@ impl Default for Request {
         Self {
             url: Url::from_str("http://localhost").expect("Should parse"),
             method: Method::Get,
-            headers: BTreeMap::new(),
+            headers: HashMap::new(),
             body: String::new(),
             client_addr: None,
         }
@@ -100,7 +100,7 @@ impl Request {
         };
 
         // Read headers
-        let mut headers = BTreeMap::new();
+        let mut headers = HashMap::new();
         loop {
             let mut line = String::new();
             reader

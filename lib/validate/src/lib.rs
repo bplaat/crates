@@ -6,7 +6,7 @@
 
 //! A simple struct validation library
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::error;
 use std::fmt::{self, Display, Formatter};
 
@@ -43,11 +43,11 @@ impl error::Error for Error {}
 /// Validation report
 #[cfg(feature = "serde")]
 #[derive(serde::Serialize)]
-pub struct Report(pub BTreeMap<String, Vec<String>>);
+pub struct Report(pub HashMap<String, Vec<String>>);
 
 /// Validation report
 #[cfg(not(feature = "serde"))]
-pub struct Report(pub BTreeMap<String, Vec<String>>);
+pub struct Report(pub HashMap<String, Vec<String>>);
 
 // MARK: Validate
 /// Validate trait

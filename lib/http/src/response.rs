@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -19,7 +19,7 @@ pub struct Response {
     /// Status
     pub status: Status,
     /// Headers
-    pub headers: BTreeMap<String, String>,
+    pub headers: HashMap<String, String>,
     /// Body
     pub body: String,
 }

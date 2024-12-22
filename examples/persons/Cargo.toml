@@ -20,6 +20,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.1"
 
+[build-dependencies]
+openapi-generator = { path = "../../lib/openapi-generator" }
+
 [target.'cfg(all(target_env = "musl"))'.dependencies]
 sqlite = { path = "../../lib/sqlite", features = [
     "bundled",
