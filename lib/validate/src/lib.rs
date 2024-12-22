@@ -45,6 +45,7 @@ impl error::Error for Error {}
 #[derive(serde::Serialize)]
 pub struct Report(pub BTreeMap<String, Vec<String>>);
 
+/// Validation report
 #[cfg(not(feature = "serde"))]
 pub struct Report(pub BTreeMap<String, Vec<String>>);
 
