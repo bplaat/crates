@@ -7,5 +7,5 @@
 //! A simple persons REST API example
 
 fn main() {
-    openapi_generator::generate_schemas("openapi.yaml");
+    openapi_generator::generate_schemas("openapi.yaml", "persons_api.rs");
 }

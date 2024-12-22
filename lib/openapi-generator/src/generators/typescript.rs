@@ -34,15 +34,12 @@ fn schema_generate_code(
     if let Some(r#enum) = &schema.r#enum {
         let name = name.to_capitalize();
         let mut code = String::new();
-        code.push_str(
-            "#[derive(Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]\n",
-        );
-        code.push_str(&format!("pub(crate) enum {} {{\n", name));
+        code.push_str(&format!("export enum {} {{\n", name));
         for variant in r#enum {
             code.push_str(&format!(
-                "    #[serde(rename = \"{}\")]\n    {},\n",
-                variant,
-                variant.to_capitalize()
+                "    {} = '{}',\n",
+                variant.to_capitalize(),
+                variant
             ));
         }
         code.push_str("}\n\n");
@@ -52,21 +49,14 @@ fn schema_generate_code(
 
     if let Some(additional_properties) = &schema.additional_properties {
         let field_type = schema_generate_code(schemas, name.clone(), additional_properties, true);
-        let code = format!(
-            "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {}(std::collections::HashMap<String, {}>);\n\n",
-            name,
-            field_type
-        );
+        let code = format!("export type {} = Map<string, {}>;\n\n", name, field_type);
         schemas.insert(name.clone(), code);
         return name;
     }
 
     if schema.r#type == "object" {
         let mut code = String::new();
-        code.push_str(&format!(
-            "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {} {{\n",
-            name
-        ));
+        code.push_str(&format!("export interface {} {{\n", name));
         if let Some(properties) = &schema.properties {
             for (prop_name, prop_schema) in properties {
                 let prop_type = schema_generate_code(
@@ -79,7 +69,7 @@ fn schema_generate_code(
                         .map(|required| required.contains(prop_name))
                         .unwrap_or_else(|| false),
                 );
-                code.push_str(&format!("    pub {}: {},\n", prop_name, prop_type));
+                code.push_str(&format!("    {}: {},\n", prop_name, prop_type));
             }
         }
         code.push_str("}\n\n");
@@ -92,35 +82,20 @@ fn schema_generate_code(
             if schema.r#enum.is_some() {
                 return schema_generate_code(schemas, name, schema, true);
             }
-            match schema.format.as_deref() {
-                Some("uuid") => "uuid::Uuid",
-                Some("date-time") => "chrono::DateTime<chrono::Utc>",
-                _ => "String",
-            }
+            "string"
         }
         .to_string(),
-        "number" => match schema.format.as_deref() {
-            Some("float") => "f32",
-            Some("double") => "f64",
-            _ => "f64",
-        }
-        .to_string(),
-        "integer" => match schema.format.as_deref() {
-            Some("int32") => "i32",
-            Some("int64") => "i64",
-            _ => "i64",
-        }
-        .to_string(),
-        "boolean" => "bool".to_string(),
+        "number" | "integer" => "number".to_string(),
+        "boolean" => "boolean".to_string(),
         "array" => {
             let items = schema.items.as_ref().expect("No items");
             let item_type = schema_generate_code(schemas, "item".to_string(), items, true);
-            format!("Vec<{}>", item_type)
+            format!("Array<{}>", item_type)
         }
         _ => panic!("Unsupported type"),
     };
     if !is_required {
-        format!("Option<{}>", r#type)
+        format!("{} | undefined", r#type)
     } else {
         r#type
     }

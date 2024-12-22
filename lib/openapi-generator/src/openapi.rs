@@ -4,108 +4,108 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![allow(dead_code)]
+#![allow(dead_code, missing_docs)]
 
 use indexmap::IndexMap;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-pub(crate) struct OpenApi {
-    pub(crate) openapi: String,
-    pub(crate) info: Info,
-    pub(crate) servers: Vec<Server>,
-    pub(crate) paths: IndexMap<String, PathItem>,
-    pub(crate) components: Option<Components>,
+pub struct OpenApi {
+    pub openapi: String,
+    pub info: Info,
+    pub servers: Vec<Server>,
+    pub paths: IndexMap<String, PathItem>,
+    pub components: Option<Components>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Info {
-    pub(crate) title: String,
-    pub(crate) description: String,
-    pub(crate) version: String,
+pub struct Info {
+    pub title: String,
+    pub description: String,
+    pub version: String,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Server {
-    pub(crate) url: String,
+pub struct Server {
+    pub url: String,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct PathItem {
-    pub(crate) get: Option<Operation>,
-    pub(crate) post: Option<Operation>,
-    pub(crate) put: Option<Operation>,
-    pub(crate) delete: Option<Operation>,
+pub struct PathItem {
+    pub get: Option<Operation>,
+    pub post: Option<Operation>,
+    pub put: Option<Operation>,
+    pub delete: Option<Operation>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Operation {
-    pub(crate) tags: Vec<String>,
-    pub(crate) summary: String,
-    pub(crate) responses: Responses,
+pub struct Operation {
+    pub tags: Vec<String>,
+    pub summary: String,
+    pub responses: Responses,
     #[serde(rename = "requestBody")]
-    pub(crate) request_body: Option<RequestBody>,
-    pub(crate) parameters: Option<Vec<Parameter>>,
+    pub request_body: Option<RequestBody>,
+    pub parameters: Option<Vec<Parameter>>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Responses {
+pub struct Responses {
     #[serde(rename = "200")]
-    pub(crate) ok: Option<Response>,
+    pub ok: Option<Response>,
     #[serde(rename = "400")]
-    pub(crate) bad_request: Option<Response>,
+    pub bad_request: Option<Response>,
     #[serde(rename = "404")]
-    pub(crate) not_found: Option<Response>,
+    pub not_found: Option<Response>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Response {
-    pub(crate) description: String,
-    pub(crate) content: Option<Content>,
+pub struct Response {
+    pub description: String,
+    pub content: Option<Content>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Content {
+pub struct Content {
     #[serde(rename = "text/plain")]
-    pub(crate) text_plain: Option<ContentSchema>,
+    pub text_plain: Option<ContentSchema>,
     #[serde(rename = "application/json")]
-    pub(crate) application_json: Option<ContentSchema>,
+    pub application_json: Option<ContentSchema>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct ContentSchema {
-    pub(crate) schema: Schema,
+pub struct ContentSchema {
+    pub schema: Schema,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Schema {
-    pub(crate) r#type: String,
-    pub(crate) format: Option<String>,
-    pub(crate) properties: Option<IndexMap<String, Schema>>,
+pub struct Schema {
+    pub r#type: String,
+    pub format: Option<String>,
+    pub properties: Option<IndexMap<String, Schema>>,
     #[serde(rename = "additionalProperties")]
-    pub(crate) additional_properties: Option<Box<Schema>>,
-    pub(crate) required: Option<Vec<String>>,
-    pub(crate) items: Option<Box<Schema>>,
-    pub(crate) r#enum: Option<Vec<String>>,
+    pub additional_properties: Option<Box<Schema>>,
+    pub required: Option<Vec<String>>,
+    pub items: Option<Box<Schema>>,
+    pub r#enum: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct RequestBody {
-    pub(crate) required: bool,
-    pub(crate) content: Content,
+pub struct RequestBody {
+    pub required: bool,
+    pub content: Content,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Parameter {
-    pub(crate) name: String,
+pub struct Parameter {
+    pub name: String,
     #[serde(rename = "in")]
-    pub(crate) location: String,
-    pub(crate) required: bool,
-    pub(crate) schema: Schema,
+    pub location: String,
+    pub required: bool,
+    pub schema: Schema,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct Components {
-    pub(crate) parameters: IndexMap<String, Parameter>,
-    pub(crate) schemas: IndexMap<String, Schema>,
+pub struct Components {
+    pub parameters: IndexMap<String, Parameter>,
+    pub schemas: IndexMap<String, Schema>,
 }

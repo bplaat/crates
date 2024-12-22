@@ -6,30 +6,53 @@
 
 //! OpenAPI Generator
 
+use std::str::FromStr;
+
 use serde_yaml::Value;
 
 mod generators;
-mod openapi;
+pub mod openapi;
+mod utils;
 
-/// Generate crate from an OpenAPI file for usage in build.rs
-pub fn generate_schemas(path: &str) {
-    let input_file = format!(
+/// Generate schemas for usage in build.rs
+pub fn generate_schemas(spec_path: &str, output_path: &str) {
+    let spec_path = format!(
         "{}/{}",
         std::env::var("CARGO_MANIFEST_DIR").expect("Should exist"),
-        path
+        spec_path
     );
-    let output_dir = std::env::var("OUT_DIR").expect("Should exists");
-    generate_internal(&input_file, Generator::Rust, &output_dir);
+    let output_file = format!(
+        "{}/{}",
+        std::env::var("OUT_DIR").expect("Should exists"),
+        output_path
+    );
+    generate(&spec_path, Generator::Rust, &output_file);
     println!("cargo::rerun-if-changed=build.rs");
 }
 
-enum Generator {
+/// Generator type
+pub enum Generator {
+    /// Rust generator
     Rust,
+    /// TypeScript generator
+    TypeScript,
 }
 
-fn generate_internal(input: &str, generator: Generator, output: &str) {
-    // Read input file
-    let text = std::fs::read_to_string(input).expect("Failed to read input file");
+impl FromStr for Generator {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "rust" => Ok(Generator::Rust),
+            "typescript" => Ok(Generator::TypeScript),
+            _ => Err("Invalid generator".to_string()),
+        }
+    }
+}
+
+/// Generate schemas
+pub fn generate(spec_path: &str, generator: Generator, output_path: &str) {
+    // Read spec file
+    let text = std::fs::read_to_string(spec_path).expect("Failed to read spec file");
     let yaml = serde_yaml::from_str::<Value>(&text).expect("Failed to parse YAML");
 
     // Resolve $refs
@@ -39,7 +62,8 @@ fn generate_internal(input: &str, generator: Generator, output: &str) {
 
     // Run generator
     match generator {
-        Generator::Rust => generators::rust::generator(spec, output),
+        Generator::Rust => generators::rust::generator(spec, output_path),
+        Generator::TypeScript => generators::typescript::generator(spec, output_path),
     }
 }
 
