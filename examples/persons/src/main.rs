@@ -307,7 +307,7 @@ fn open_database() -> Result<sqlite::Connection, sqlite::ConnectionError> {
             name TEXT NOT NULL,
             age INTEGER NOT NULL,
             relation INTEGER NOT NULL,
-            created_at TIMESTAMP NOT NULL
+            created_at INTEGER NOT NULL
         )",
         (),
     );
