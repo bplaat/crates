@@ -441,6 +441,7 @@ dependencies = [
  "lazy_static",
  "regex",
  "serde",
+ "url",
  "validate_derive",
 ]
 

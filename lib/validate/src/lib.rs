@@ -81,3 +81,10 @@ lazy_static::lazy_static! {
 pub fn is_valid_email(email: &str) -> bool {
     EMAIL_REGEX.is_match(email)
 }
+
+#[cfg(feature = "url")]
+/// Validate url
+pub fn is_valid_url(url: &str) -> bool {
+    use std::str::FromStr;
+    url::Url::from_str(url).is_ok()
+}

@@ -18,3 +18,4 @@ syn = "2.0"
 
 [features]
 email = []
+url = []

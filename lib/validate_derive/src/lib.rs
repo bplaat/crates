@@ -22,6 +22,8 @@ enum RuleType {
     Ascii,
     #[cfg(feature = "email")]
     Email,
+    #[cfg(feature = "url")]
+    Url,
     LengthMin(Expr),
     LengthMax(Expr),
     RangeMin(Expr),
@@ -81,6 +83,13 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                 if path.is_ident("email") {
                                     rules.push(Rule {
                                         r#type: RuleType::Email,
+                                        is_option,
+                                    });
+                                }
+                                #[cfg(feature = "url")]
+                                if path.is_ident("url") {
+                                    rules.push(Rule {
+                                        r#type: RuleType::Url,
                                         is_option,
                                     });
                                 }
@@ -206,6 +215,11 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                 RuleType::Email => test_condition(
                     quote! { !validate::is_valid_email(value) },
                     quote! { "must be a valid email address".to_string() },
+                ),
+                #[cfg(feature = "url")]
+                RuleType::Url => test_condition(
+                    quote! { !validate::is_valid_url(value) },
+                    quote! { "must be a valid url".to_string() },
                 ),
                 RuleType::LengthMin(min) => test_condition(
                     quote! { value.len() < #min as usize },
