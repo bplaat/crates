@@ -129,7 +129,8 @@ impl RawStatement {
             },
         };
         if result != SQLITE_OK {
-            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(self.0)) }.to_string_lossy();
+            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0))) }
+                .to_string_lossy();
             panic!("Can't bind value to statement: {}", error);
         }
     }
@@ -153,7 +154,7 @@ impl RawStatement {
                 let slice = unsafe { std::slice::from_raw_parts(blob as *const u8, len as usize) };
                 Value::Blob(slice.to_vec())
             }
-            _ => panic!("Can't read unknown value type from statement"),
+            r#type => panic!("Can't read unknown value type from statement: {}", r#type),
         }
     }
 }
@@ -207,7 +208,9 @@ where
         } else if result == SQLITE_DONE {
             None
         } else {
-            panic!("Can't step statement")
+            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0 .0))) }
+                .to_string_lossy();
+            panic!("Can't step statement: {}", error);
         }
     }
 }
