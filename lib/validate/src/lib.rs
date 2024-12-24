@@ -73,7 +73,7 @@ pub use validate_derive::Validate;
 
 #[cfg(feature = "email")]
 lazy_static::lazy_static! {
-    static ref EMAIL_REGEX: regex::Regex = regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$").expect("Should compile");
+    static ref EMAIL_REGEX: regex::Regex = regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$").expect("Invalid regex");
 }
 
 #[cfg(feature = "email")]

@@ -426,6 +426,15 @@ name = "url"
 version = "0.1.0"
 
 [[package]]
+name = "useragent"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "uuid"
 version = "0.1.0"
 dependencies = [
