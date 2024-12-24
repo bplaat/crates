@@ -127,10 +127,10 @@ impl Response {
             if line == "\r\n" {
                 break;
             }
-            let mut parts = line.split(":");
+            let split = line.find(":").ok_or(InvalidResponseError)?;
             res.headers.insert(
-                parts.next().ok_or(InvalidResponseError)?.trim().to_string(),
-                parts.next().ok_or(InvalidResponseError)?.trim().to_string(),
+                line[0..split].trim().to_string(),
+                line[split + 1..].trim().to_string(),
             );
         }
 
