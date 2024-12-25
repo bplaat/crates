@@ -237,6 +237,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pbkdf2"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "getrandom",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

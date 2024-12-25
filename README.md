@@ -8,6 +8,7 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 -   [getrandom](lib/getrandom) A minimal crypto random bytes library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
+-   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [router](lib/router) A simple router for HTTP library
 -   [sqlite](lib/sqlite) A SQLite Rust library
 -   [sqlite_derive](lib/sqlite_derive) SQLite derive macro's library
