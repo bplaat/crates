@@ -4,6 +4,7 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 
 ## Crates
 
+-   [getrandom](lib/getrandom) A minimal crypto random bytes library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [router](lib/router) A simple router for HTTP library
@@ -26,4 +27,3 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 -   [ ] http: multipart/form-data
 -   [ ] http: Chunked transfer encoding
 -   [ ] openapi-generator: Add TypeScript client generation
--   [ ] ipinfo: MaxDB ipinfo database resolver

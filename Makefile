@@ -23,8 +23,11 @@ ci:
 coverage:
 	cargo llvm-cov nextest
 
-# Build linux static release binaries
-TARGETS = x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+# Build release binaries
+TARGETS = x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
+	x86_64-apple-darwin aarch64-apple-darwin \
+	x86_64-pc-windows-gnu
 .PHONY: release
 release:
 	$(foreach target,$(TARGETS),cargo zigbuild --release --target $(target);)
+	rm .intentionally-empty-file.o

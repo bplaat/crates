@@ -23,7 +23,15 @@ serde_urlencoded = "0.7.1"
 [build-dependencies]
 openapi-generator = { path = "../../lib/openapi-generator" }
 
+# Bundle sqlite3 on platforms that don't have it
 [target.'cfg(all(target_env = "musl"))'.dependencies]
+sqlite = { path = "../../lib/sqlite", features = [
+    "bundled",
+    "derive",
+    "chrono",
+    "uuid",
+] }
+[target.'cfg(windows)'.dependencies]
 sqlite = { path = "../../lib/sqlite", features = [
     "bundled",
     "derive",
