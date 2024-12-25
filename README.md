@@ -4,6 +4,7 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 
 ## Crates
 
+-   [base64](lib/base64) A base64 encoder and decoder
 -   [getrandom](lib/getrandom) A minimal crypto random bytes library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator

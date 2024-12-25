@@ -67,7 +67,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn randomness() {
+    fn test_randomness() {
         let mut buf1 = [0u8; 32];
         getrandom(&mut buf1).unwrap();
 

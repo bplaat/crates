@@ -125,7 +125,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse() {
+    fn test_parse_correct() {
         let urls = [
             "http://example.com",
             "http://example.com/",
@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_invalid() {
+    fn test_parse_invalid() {
         let invalid_urls = [
             "http://",
             "://example.com",
