@@ -88,6 +88,9 @@ fn schema_generate_code(
                 if prop_type == name {
                     prop_type = format!("Box<{}>", prop_type);
                 }
+                if prop_type.starts_with("Option<") {
+                    code.push_str("    #[serde(skip_serializing_if = \"Option::is_none\")]\n");
+                }
                 code.push_str(&format!("    pub {}: {},\n", prop_name, prop_type));
             }
         }
