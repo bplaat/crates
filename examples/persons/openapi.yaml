@@ -36,9 +36,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Person"
+                $ref: "#/components/schemas/PersonIndexResponse"
     post:
       tags: [Persons]
       summary: Create a new person
@@ -54,7 +52,7 @@ paths:
           content:
             application/x-www-form-urlencoded:
               schema:
-                $ref: "#/components/schemas/PersonCreateUpdate"
+                $ref: "#/components/schemas/PersonCreateUpdateBody"
         "400":
           description: Invalid request
           content:
@@ -87,7 +85,7 @@ paths:
         content:
           application/x-www-form-urlencoded:
             schema:
-              $ref: "#/components/schemas/PersonCreateUpdate"
+              $ref: "#/components/schemas/PersonCreateUpdateBody"
       responses:
         "200":
           description: Person updated
@@ -151,14 +149,28 @@ components:
         maximum: 50
         default: 20
 
-  # MARK: Schemas
   schemas:
+    # MARK: General schemas
     Report:
       type: object
       additionalProperties:
         type: array
         items:
           type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+      required:
+        - page
+        - limit
+        - total
 
     Relation:
       type: string
@@ -188,7 +200,21 @@ components:
         - relation
         - created_at
 
-    PersonCreateUpdate:
+    # MARK: Page schemas
+    PersonIndexResponse:
+      type: object
+      properties:
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Person"
+      required:
+        - pagination
+        - data
+
+    PersonCreateUpdateBody:
       type: object
       properties:
         name:

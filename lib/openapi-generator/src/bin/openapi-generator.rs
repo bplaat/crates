@@ -6,7 +6,7 @@
 
 //! OpenAPI Generator cli
 
-use openapi_generator::{generate, Generator};
+use openapi_generator::{generate_schemas, Generator};
 
 struct Args {
     input: String,
@@ -49,5 +49,5 @@ fn parse_args() -> Args {
 
 fn main() {
     let args = parse_args();
-    generate(&args.input, args.generator, &args.output);
+    generate_schemas(&args.input, args.generator, &args.output);
 }
