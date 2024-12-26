@@ -159,7 +159,17 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
     }
 
     // Get or search persons
+    let search_query = format!("%{}%", query.query.unwrap_or_default().replace("%", "\\%"));
+    let page = query.page.unwrap_or(1);
     let limit = query.limit.unwrap_or(LIMIT_DEFAULT);
+    let total = ctx
+        .database
+        .query::<i64>(
+            "SELECT COUNT(id) FROM persons WHERE name LIKE ?",
+            search_query.clone(),
+        )
+        .next()
+        .expect("Should be some");
     let persons = ctx
         .database
         .query::<Person>(
@@ -167,17 +177,16 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
                 "SELECT {} FROM persons WHERE name LIKE ? LIMIT ? OFFSET ?",
                 Person::columns()
             ),
-            (
-                format!("%{}%", query.query.unwrap_or_default().replace("%", "\\%")),
-                limit,
-                (query.page.unwrap_or(1) - 1) * limit,
-            ),
+            (search_query, limit, (page - 1) * limit),
         )
         .map(Into::<api::Person>::into)
         .collect::<Vec<_>>();
 
     // Return persons
-    Response::with_json(persons)
+    Response::with_json(api::PersonIndexResponse {
+        pagination: api::Pagination { page, limit, total },
+        data: persons,
+    })
 }
 
 #[derive(Deserialize, Validate)]

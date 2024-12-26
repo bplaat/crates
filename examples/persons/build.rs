@@ -7,5 +7,11 @@
 //! A simple persons REST API example
 
 fn main() {
-    openapi_generator::generate_schemas("openapi.yaml", "persons_api.rs");
+    openapi_generator::generate_schemas_build(
+        "openapi.yaml",
+        format!(
+            "{}/persons_api.rs",
+            std::env::var("OUT_DIR").expect("OUT_DIR not set")
+        ),
+    );
 }
