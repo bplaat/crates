@@ -34,11 +34,7 @@ fn schema_generate_code(
 ) -> String {
     if let Some(r#ref) = &schema.r#ref {
         let ref_parts: Vec<&str> = r#ref.split('/').collect();
-        let ref_name = ref_parts.last().expect("Invalid ref");
-        if name == *ref_name {
-            return format!("Box<{}>", ref_name);
-        }
-        return ref_name.to_string();
+        return ref_parts.last().expect("Invalid ref").to_string();
     }
 
     if let Some(r#enum) = &schema.r#enum {
@@ -78,7 +74,7 @@ fn schema_generate_code(
         ));
         if let Some(properties) = &schema.properties {
             for (prop_name, prop_schema) in properties {
-                let prop_type = schema_generate_code(
+                let mut prop_type = schema_generate_code(
                     code_schemas,
                     prop_name.to_string(),
                     prop_schema,
@@ -89,6 +85,9 @@ fn schema_generate_code(
                         .unwrap_or_else(|| true),
                 );
                 let prop_name = prop_name.replace("type", "r#type");
+                if prop_type == name {
+                    prop_type = format!("Box<{}>", prop_type);
+                }
                 code.push_str(&format!("    pub {}: {},\n", prop_name, prop_type));
             }
         }
