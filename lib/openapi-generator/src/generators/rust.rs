@@ -88,6 +88,7 @@ fn schema_generate_code(
                         .map(|required| !required.contains(prop_name))
                         .unwrap_or_else(|| true),
                 );
+                let prop_name = prop_name.replace("type", "r#type");
                 code.push_str(&format!("    pub {}: {},\n", prop_name, prop_type));
             }
         }
