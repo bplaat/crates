@@ -43,7 +43,7 @@ fn schema_generate_code(
         for variant in r#enum {
             code.push_str(&format!(
                 "    {} = '{}',\n",
-                variant.to_capitalize(),
+                variant.to_uppercase(),
                 variant
             ));
         }
