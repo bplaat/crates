@@ -14,7 +14,7 @@ pub(crate) fn generate_schemas(schemas: IndexMap<String, Schema>, output_path: &
 
     // Generate code for schemas
     for (name, schema) in schemas {
-        schema_generate_code(&mut code_schemas, name.clone(), &schema, false);
+        schema_generate_code(&mut code_schemas, name.clone(), &schema);
     }
 
     // Write .rs file
@@ -30,7 +30,6 @@ fn schema_generate_code(
     code_schemas: &mut IndexMap<String, String>,
     name: String,
     schema: &Schema,
-    is_optional: bool,
 ) -> String {
     if let Some(r#ref) = &schema.r#ref {
         let ref_parts: Vec<&str> = r#ref.split('/').collect();
@@ -54,8 +53,7 @@ fn schema_generate_code(
     }
 
     if let Some(additional_properties) = &schema.additional_properties {
-        let field_type =
-            schema_generate_code(code_schemas, name.clone(), additional_properties, false);
+        let field_type = schema_generate_code(code_schemas, name.clone(), additional_properties);
         let code = format!(
             "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {}(std::collections::HashMap<String, {}>);\n\n",
             name,
@@ -74,24 +72,22 @@ fn schema_generate_code(
         ));
         if let Some(properties) = &schema.properties {
             for (prop_name, prop_schema) in properties {
-                let mut prop_type = schema_generate_code(
-                    code_schemas,
-                    prop_name.to_string(),
-                    prop_schema,
-                    schema
-                        .required
-                        .as_ref()
-                        .map(|required| !required.contains(prop_name))
-                        .unwrap_or_else(|| true),
-                );
+                let is_optional = schema
+                    .required
+                    .as_ref()
+                    .map(|required| !required.contains(prop_name))
+                    .unwrap_or_else(|| true);
+                let mut prop_type =
+                    schema_generate_code(code_schemas, prop_name.to_string(), prop_schema);
                 let prop_name = prop_name.replace("type", "r#type");
                 if prop_type == name {
                     prop_type = format!("Box<{}>", prop_type);
                 }
-                if prop_type.starts_with("Option<") {
-                    code.push_str("    #[serde(skip_serializing_if = \"Option::is_none\")]\n");
+                if is_optional {
+                    code.push_str(&format!("    #[serde(skip_serializing_if = \"Option::is_none\")]\n    pub {}: Option<{}>,\n", prop_name, prop_type));
+                } else {
+                    code.push_str(&format!("    pub {}: {},\n", prop_name, prop_type));
                 }
-                code.push_str(&format!("    pub {}: {},\n", prop_name, prop_type));
             }
         }
         code.push_str("}\n\n");
@@ -99,10 +95,10 @@ fn schema_generate_code(
         return name;
     }
 
-    let r#type = match r#type.as_str() {
+    match r#type.as_str() {
         "string" => {
             if schema.r#enum.is_some() {
-                return schema_generate_code(code_schemas, name, schema, false);
+                return schema_generate_code(code_schemas, name, schema);
             }
             match schema.format.as_deref() {
                 Some("uuid") => "uuid::Uuid",
@@ -124,14 +120,9 @@ fn schema_generate_code(
         "boolean" => "bool".to_string(),
         "array" => {
             let items = schema.items.as_ref().expect("No items");
-            let item_type = schema_generate_code(code_schemas, "item".to_string(), items, false);
+            let item_type = schema_generate_code(code_schemas, "item".to_string(), items);
             format!("Vec<{}>", item_type)
         }
         _ => panic!("Unsupported type"),
-    };
-    if is_optional {
-        format!("Option<{}>", r#type)
-    } else {
-        r#type
     }
 }

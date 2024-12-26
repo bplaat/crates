@@ -14,7 +14,7 @@ pub(crate) fn generate_schemas(schemas: IndexMap<String, Schema>, output_path: &
 
     // Generate code for schemas
     for (name, schema) in schemas {
-        schema_generate_code(&mut code_schemas, name.clone(), &schema, false);
+        schema_generate_code(&mut code_schemas, name.clone(), &schema);
     }
 
     // Write .rs file
@@ -30,7 +30,6 @@ fn schema_generate_code(
     code_schemas: &mut IndexMap<String, String>,
     name: String,
     schema: &Schema,
-    is_optional: bool,
 ) -> String {
     if let Some(r#ref) = &schema.r#ref {
         let ref_parts: Vec<&str> = r#ref.split('/').collect();
@@ -54,8 +53,7 @@ fn schema_generate_code(
     }
 
     if let Some(additional_properties) = &schema.additional_properties {
-        let field_type =
-            schema_generate_code(code_schemas, name.clone(), additional_properties, false);
+        let field_type = schema_generate_code(code_schemas, name.clone(), additional_properties);
         let code = format!(
             "export type {} = {{ [key: string]: {} }};\n\n",
             name, field_type
@@ -70,17 +68,18 @@ fn schema_generate_code(
         code.push_str(&format!("export interface {} {{\n", name));
         if let Some(properties) = &schema.properties {
             for (prop_name, prop_schema) in properties {
-                let prop_type = schema_generate_code(
-                    code_schemas,
-                    prop_name.to_string(),
-                    prop_schema,
-                    schema
-                        .required
-                        .as_ref()
-                        .map(|required| !required.contains(prop_name))
-                        .unwrap_or_else(|| true),
-                );
-                code.push_str(&format!("    {}: {},\n", prop_name, prop_type));
+                let is_optional = schema
+                    .required
+                    .as_ref()
+                    .map(|required| !required.contains(prop_name))
+                    .unwrap_or_else(|| true);
+                let prop_type =
+                    schema_generate_code(code_schemas, prop_name.to_string(), prop_schema);
+                if is_optional {
+                    code.push_str(&format!("    {}?: {},\n", prop_name, prop_type));
+                } else {
+                    code.push_str(&format!("    {}: {},\n", prop_name, prop_type));
+                }
             }
         }
         code.push_str("}\n\n");
@@ -88,10 +87,10 @@ fn schema_generate_code(
         return name;
     }
 
-    let r#type = match r#type.as_str() {
+    match r#type.as_str() {
         "string" => {
             if schema.r#enum.is_some() {
-                return schema_generate_code(code_schemas, name, schema, false);
+                return schema_generate_code(code_schemas, name, schema);
             }
             "string".to_string()
         }
@@ -100,14 +99,9 @@ fn schema_generate_code(
         "boolean" => "boolean".to_string(),
         "array" => {
             let items = schema.items.as_ref().expect("No items");
-            let item_type = schema_generate_code(code_schemas, "item".to_string(), items, false);
+            let item_type = schema_generate_code(code_schemas, "item".to_string(), items);
             format!("Array<{}>", item_type)
         }
         _ => panic!("Unsupported type"),
-    };
-    if is_optional {
-        format!("{} | undefined", r#type)
-    } else {
-        r#type
     }
 }
