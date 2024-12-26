@@ -20,16 +20,21 @@ mod api {
     include!(concat!(env!("OUT_DIR"), "/persons_api.rs"));
 }
 
-const HTTP_PORT: u16 = 8080;
-const LIMIT_DEFAULT: i64 = 20;
-const LIMIT_MAX: i64 = 50;
+// MARK: Consts
+mod consts {
+    pub(crate) const HTTP_PORT: u16 = 8080;
+    pub(crate) const LIMIT_DEFAULT: i64 = 20;
+    pub(crate) const LIMIT_MAX: i64 = 50;
+}
 
-// MARK: Utils
-fn validate_name(name: &str) -> validate::Result {
-    if name.to_lowercase() == "bastiaan" {
-        Err(validate::Error::new("name can't be Bastiaan"))
-    } else {
-        Ok(())
+// MARK: Validators
+mod validators {
+    pub(crate) fn name(name: &str) -> validate::Result {
+        if name.to_lowercase() == "bastiaan" {
+            Err(validate::Error::new("name can't be Bastiaan"))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -40,27 +45,31 @@ struct Context {
 }
 
 // MARK: Layers
-fn log_layer(req: &Request, _: &mut Context) -> Option<Response> {
-    println!("{} {}", req.method, req.url.path);
-    None
-}
+mod layers {
+    use super::*;
 
-fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
-    if req.method == Method::Options {
-        Some(
-            Response::with_header("Access-Control-Allow-Origin", "*")
-                .header("Access-Control-Allow-Methods", "GET, POST")
-                .header("Access-Control-Max-Age", "86400"),
-        )
-    } else {
+    pub(crate) fn log(req: &Request, _: &mut Context) -> Option<Response> {
+        println!("{} {}", req.method, req.url.path);
         None
     }
-}
 
-fn cors_post_layer(_: &Request, _: &mut Context, res: Response) -> Response {
-    res.header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "GET, POST")
-        .header("Access-Control-Max-Age", "86400")
+    pub(crate) fn cors_pre(req: &Request, _: &mut Context) -> Option<Response> {
+        if req.method == Method::Options {
+            Some(
+                Response::with_header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Methods", "GET, POST")
+                    .header("Access-Control-Max-Age", "86400"),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn cors_post(_: &Request, _: &mut Context, res: Response) -> Response {
+        res.header("Access-Control-Allow-Origin", "*")
+            .header("Access-Control-Allow-Methods", "GET, POST")
+            .header("Access-Control-Max-Age", "86400")
+    }
 }
 
 // MARK: Person
@@ -141,7 +150,7 @@ struct IndexQuery {
     query: Option<String>,
     #[validate(range(min = 1))]
     page: Option<i64>,
-    #[validate(range(min = 1, max = LIMIT_MAX))]
+    #[validate(range(min = 1, max = consts::LIMIT_MAX))]
     limit: Option<i64>,
 }
 
@@ -161,7 +170,7 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
     // Get or search persons
     let search_query = format!("%{}%", query.query.unwrap_or_default().replace("%", "\\%"));
     let page = query.page.unwrap_or(1);
-    let limit = query.limit.unwrap_or(LIMIT_DEFAULT);
+    let limit = query.limit.unwrap_or(consts::LIMIT_DEFAULT);
     let total = ctx
         .database
         .query::<i64>(
@@ -191,7 +200,7 @@ fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
 
 #[derive(Deserialize, Validate)]
 struct PersonCreateUpdateBody {
-    #[validate(ascii, length(min = 3, max = 25), custom(validate_name))]
+    #[validate(ascii, length(min = 3, max = 25), custom(validators::name))]
     name: String,
     #[validate(range(min = 8))]
     age_in_years: i64,
@@ -375,9 +384,9 @@ fn main() {
     };
 
     let router = Router::<Context>::with(ctx)
-        .pre_layer(log_layer)
-        .pre_layer(cors_pre_layer)
-        .post_layer(cors_post_layer)
+        .pre_layer(layers::log)
+        .pre_layer(layers::cors_pre)
+        .post_layer(layers::cors_post)
         .get("/", home)
         .get("/persons", persons_index)
         .post("/persons", persons_create)
@@ -387,8 +396,11 @@ fn main() {
         .fallback(not_found)
         .build();
 
-    println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
-        .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
+    println!(
+        "Server is listening on: http://localhost:{}/",
+        consts::HTTP_PORT
+    );
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, consts::HTTP_PORT))
+        .unwrap_or_else(|_| panic!("Can't bind to port: {}", consts::HTTP_PORT));
     http::serve(listener, move |req| router.handle(req));
 }

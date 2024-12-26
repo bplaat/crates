@@ -11,7 +11,7 @@ use core::panic;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::punctuated::Punctuated;
-use syn::{parse_macro_input, DeriveInput, Expr, Ident, Meta};
+use syn::{parse_macro_input, DeriveInput, Expr, Meta};
 
 struct Rule {
     r#type: RuleType,
@@ -28,7 +28,7 @@ enum RuleType {
     LengthMax(Expr),
     RangeMin(Expr),
     RangeMax(Expr),
-    Custom(Ident),
+    Custom(Expr),
 }
 
 /// [Validate] derive
@@ -149,9 +149,8 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                                         if let Meta::Path(path) = item {
                                             rules.push(Rule {
                                                 r#type: RuleType::Custom(
-                                                    path.get_ident()
-                                                        .expect("Invalid attribute")
-                                                        .clone(),
+                                                    syn::parse2(path.to_token_stream())
+                                                        .expect("Invalid attribute"),
                                                 ),
                                                 is_option,
                                             });
