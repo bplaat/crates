@@ -14,9 +14,7 @@ use http::{Method, Request, Response};
 // MARK: Handler
 
 /// Parsed path parameters
-pub type Path = HashMap<String, String>;
-
-type HandlerFn<T> = fn(&Request, &T, &Path) -> Response;
+type HandlerFn<T> = fn(&Request, &T) -> Response;
 type PreLayerFn<T> = fn(&Request, &mut T) -> Option<Response>;
 type PostLayerFn<T> = fn(&Request, &mut T, Response) -> Response;
 
@@ -39,7 +37,7 @@ impl<T> Handler<T> {
         }
     }
 
-    fn call(&self, req: &Request, ctx: &mut T, path: &Path) -> Response {
+    fn call(&self, req: &Request, ctx: &mut T) -> Response {
         for pre_layer in &self.pre_layers {
             if let Some(mut res) = pre_layer(req, ctx) {
                 for post_layer in &self.post_layers {
@@ -48,7 +46,7 @@ impl<T> Handler<T> {
                 return res;
             }
         }
-        let mut res = (self.handler)(req, ctx, path);
+        let mut res = (self.handler)(req, ctx);
         for post_layer in &self.post_layers {
             res = post_layer(req, ctx, res);
         }
@@ -117,7 +115,7 @@ impl<T> Route<T> {
         path_parts.next().is_none()
     }
 
-    fn match_path(&self, path: &str) -> Path {
+    fn match_path(&self, path: &str) -> HashMap<String, String> {
         let mut path_parts = path.split('/').filter(|part| !part.is_empty());
         let mut params = HashMap::new();
         for part in &self.parts {
@@ -165,7 +163,7 @@ impl<T: Clone> Router<T> {
         // Set default handlers
         if self.fallback_handler.is_none() {
             self.fallback_handler = Some(Handler::new(
-                |_, _, _| {
+                |_, _| {
                     Response::new()
                         .status(http::Status::NotFound)
                         .body("404 Not Found")
@@ -175,7 +173,7 @@ impl<T: Clone> Router<T> {
             ));
         }
         self.not_allowed_method_handler = Some(Handler::new(
-            |_, _, _| {
+            |_, _| {
                 Response::new()
                     .status(http::Status::MethodNotAllowed)
                     .body("405 Method Not Allowed")
@@ -260,14 +258,15 @@ impl<T: Clone> Router<T> {
         // Match routes
         for route in self.routes.iter().rev() {
             if route.is_match(&req.url.path) {
-                let path = route.match_path(&req.url.path);
+                let mut req = req.clone();
+                req.params = route.match_path(&req.url.path);
 
                 // Find matching route by method
                 for route in self.routes.iter().filter(|r| r.route == route.route) {
                     if !route.methods.contains(&req.method) {
                         continue;
                     }
-                    return route.handler.call(req, &mut ctx, &path);
+                    return route.handler.call(&req, &mut ctx);
                 }
 
                 // Else run not allowed method handler
@@ -275,7 +274,7 @@ impl<T: Clone> Router<T> {
                     .not_allowed_method_handler
                     .as_ref()
                     .expect("Should be some")
-                    .call(req, &mut ctx, &path);
+                    .call(&req, &mut ctx);
             }
         }
 
@@ -283,6 +282,6 @@ impl<T: Clone> Router<T> {
         self.fallback_handler
             .as_ref()
             .expect("Should be some")
-            .call(req, &mut ctx, &HashMap::new())
+            .call(req, &mut ctx)
     }
 }

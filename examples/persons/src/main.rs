@@ -10,7 +10,7 @@ use std::net::{Ipv4Addr, TcpListener};
 
 use chrono::{DateTime, Utc};
 use http::{Method, Request, Response, Status};
-use router::{Path, Router};
+use router::Router;
 use serde::Deserialize;
 use sqlite::{FromRow, FromValue};
 use uuid::Uuid;
@@ -136,11 +136,11 @@ impl From<Relation> for api::Relation {
 }
 
 // MARK: Routes
-fn home(_: &Request, _: &Context, _: &Path) -> Response {
+fn home(_: &Request, _: &Context) -> Response {
     Response::with_body(concat!("Persons v", env!("CARGO_PKG_VERSION")))
 }
 
-fn not_found(_: &Request, _: &Context, _: &Path) -> Response {
+fn not_found(_: &Request, _: &Context) -> Response {
     Response::with_status(Status::NotFound).body("404 Not found")
 }
 
@@ -154,7 +154,7 @@ struct IndexQuery {
     limit: Option<i64>,
 }
 
-fn persons_index(req: &Request, ctx: &Context, _: &Path) -> Response {
+fn persons_index(req: &Request, ctx: &Context) -> Response {
     // Parse request query
     let query = match req.url.query.as_ref() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
@@ -207,7 +207,7 @@ struct PersonCreateUpdateBody {
     relation: api::Relation,
 }
 
-fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
+fn persons_create(req: &Request, ctx: &Context) -> Response {
     // Parse and validate body
     let body = match serde_urlencoded::from_str::<PersonCreateUpdateBody>(&req.body) {
         Ok(body) => body,
@@ -237,9 +237,10 @@ fn persons_create(req: &Request, ctx: &Context, _: &Path) -> Response {
     Response::with_json(Into::<api::Person>::into(person))
 }
 
-fn get_person(ctx: &Context, path: &Path) -> Option<Person> {
+fn get_person(req: &Request, ctx: &Context) -> Option<Person> {
     // Parse person id from url
-    let person_id = match path
+    let person_id = match req
+        .params
         .get("person_id")
         .expect("Should be some")
         .parse::<Uuid>()
@@ -260,22 +261,22 @@ fn get_person(ctx: &Context, path: &Path) -> Option<Person> {
         .next()
 }
 
-fn persons_show(req: &Request, ctx: &Context, path: &Path) -> Response {
+fn persons_show(req: &Request, ctx: &Context) -> Response {
     // Get person
-    let person = match get_person(ctx, path) {
+    let person = match get_person(req, ctx) {
         Some(person) => person,
-        None => return not_found(req, ctx, path),
+        None => return not_found(req, ctx),
     };
 
     // Return person
     Response::with_json(Into::<api::Person>::into(person))
 }
 
-fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
+fn persons_update(req: &Request, ctx: &Context) -> Response {
     // Get person
-    let mut person = match get_person(ctx, path) {
+    let mut person = match get_person(req, ctx) {
         Some(person) => person,
-        None => return not_found(req, ctx, path),
+        None => return not_found(req, ctx),
     };
 
     // Parse and validate body
@@ -300,11 +301,11 @@ fn persons_update(req: &Request, ctx: &Context, path: &Path) -> Response {
     Response::with_json(Into::<api::Person>::into(person))
 }
 
-fn persons_delete(req: &Request, ctx: &Context, path: &Path) -> Response {
+fn persons_delete(req: &Request, ctx: &Context) -> Response {
     // Get person
-    let person = match get_person(ctx, path) {
+    let person = match get_person(req, ctx) {
         Some(person) => person,
-        None => return not_found(req, ctx, path),
+        None => return not_found(req, ctx),
     };
 
     // Delete person

@@ -16,6 +16,7 @@ use url::Url;
 use crate::method::Method;
 
 /// HTTP request
+#[derive(Clone)]
 pub struct Request {
     /// URL
     pub url: Url,
@@ -23,6 +24,8 @@ pub struct Request {
     pub method: Method,
     /// Headers
     pub headers: HashMap<String, String>,
+    /// Parameters
+    pub params: HashMap<String, String>,
     /// Body
     pub body: String,
     /// Client address
@@ -35,6 +38,7 @@ impl Default for Request {
             url: Url::from_str("http://localhost").expect("Should parse"),
             method: Method::Get,
             headers: HashMap::new(),
+            params: HashMap::new(),
             body: String::new(),
             client_addr: None,
         }
@@ -141,6 +145,7 @@ impl Request {
             url,
             method,
             headers,
+            params: HashMap::new(),
             body,
             client_addr,
         })

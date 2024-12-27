@@ -22,7 +22,6 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 
 ## TODO
 
--   [ ] Router: Improve handler injection
 -   [ ] sqlite+http: Add easy way to write e2e tests
 -   [ ] http: keep-alive requests
 -   [ ] http: multipart/form-data

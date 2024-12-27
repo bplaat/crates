@@ -12,6 +12,7 @@ use std::str::FromStr;
 
 // MARK: URL
 /// Url
+#[derive(Clone)]
 pub struct Url {
     /// Scheme
     pub scheme: String,
@@ -26,6 +27,7 @@ pub struct Url {
 }
 
 /// Url authority
+#[derive(Clone)]
 pub struct Authority {
     /// User info
     pub userinfo: Option<String>,
