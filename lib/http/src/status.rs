@@ -9,7 +9,7 @@ use std::fmt::{self, Display, Formatter};
 
 // MARK: Status
 /// Http status
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Status {
     /// 200 OK
     #[default]

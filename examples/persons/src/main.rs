@@ -7,6 +7,7 @@
 //! A simple persons REST API example
 
 use std::net::{Ipv4Addr, TcpListener};
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use http::{Method, Request, Response, Status};
@@ -22,6 +23,7 @@ mod api {
 
 // MARK: Consts
 mod consts {
+    pub(crate) const DATABASE_PATH: &str = "database.db";
     pub(crate) const HTTP_PORT: u16 = 8080;
     pub(crate) const LIMIT_DEFAULT: i64 = 20;
     pub(crate) const LIMIT_MAX: i64 = 50;
@@ -42,6 +44,86 @@ mod validators {
 #[derive(Clone)]
 struct Context {
     database: sqlite::Connection,
+}
+
+impl Context {
+    fn with_database(database_path: &str) -> Self {
+        let database = database_open(database_path).expect("Can't open database");
+        database_seed(&database);
+        Self { database }
+    }
+
+    #[cfg(test)]
+    fn with_test_database() -> Self {
+        let database = database_open(":memory:").expect("Can't open database");
+        Self { database }
+    }
+}
+
+// MARK: Database
+trait DatabaseHelpers {
+    fn insert_person(&self, person: Person);
+}
+impl DatabaseHelpers for sqlite::Connection {
+    fn insert_person(&self, person: Person) {
+        self.execute(
+            format!(
+                "INSERT INTO persons ({}) VALUES ({})",
+                Person::columns(),
+                Person::values()
+            ),
+            person,
+        );
+    }
+}
+
+fn database_open(path: &str) -> Result<sqlite::Connection, sqlite::ConnectionError> {
+    let database = sqlite::Connection::open(path)?;
+    database.execute(
+        "CREATE TABLE IF NOT EXISTS persons(
+            id BLOB PRIMARY KEY,
+            name TEXT NOT NULL,
+            age INTEGER NOT NULL,
+            relation INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+        )",
+        (),
+    );
+    Ok(database)
+}
+
+fn database_seed(database: &sqlite::Connection) {
+    // Insert persons
+    let persons_count = database
+        .query::<i64>("SELECT COUNT(id) FROM persons", ())
+        .next()
+        .expect("Should be some");
+    if persons_count == 0 {
+        database.insert_person(Person {
+            name: "Bastiaan".to_string(),
+            age_in_years: 20,
+            relation: Relation::Me,
+            ..Default::default()
+        });
+        database.insert_person(Person {
+            name: "Sander".to_string(),
+            age_in_years: 19,
+            relation: Relation::Brother,
+            ..Default::default()
+        });
+        database.insert_person(Person {
+            name: "Leonard".to_string(),
+            age_in_years: 16,
+            relation: Relation::Brother,
+            ..Default::default()
+        });
+        database.insert_person(Person {
+            name: "Jiska".to_string(),
+            age_in_years: 14,
+            relation: Relation::Sister,
+            ..Default::default()
+        });
+    }
 }
 
 // MARK: Layers
@@ -224,14 +306,7 @@ fn persons_create(req: &Request, ctx: &Context) -> Response {
         relation: body.relation.into(),
         ..Default::default()
     };
-    ctx.database.execute(
-        format!(
-            "INSERT INTO persons ({}) VALUES ({})",
-            Person::columns(),
-            Person::values()
-        ),
-        person.clone(),
-    );
+    ctx.database.insert_person(person.clone());
 
     // Return created person
     Response::with_json(Into::<api::Person>::into(person))
@@ -316,75 +391,9 @@ fn persons_delete(req: &Request, ctx: &Context) -> Response {
     Response::new()
 }
 
-// MARK: Database
-fn open_database() -> Result<sqlite::Connection, sqlite::ConnectionError> {
-    // Create new database
-    let database = sqlite::Connection::open("database.db")?;
-    database.execute(
-        "CREATE TABLE IF NOT EXISTS persons(
-            id BLOB PRIMARY KEY,
-            name TEXT NOT NULL,
-            age INTEGER NOT NULL,
-            relation INTEGER NOT NULL,
-            created_at INTEGER NOT NULL
-        )",
-        (),
-    );
-
-    // Insert persons
-    let persons_count = database
-        .query::<i64>("SELECT COUNT(id) FROM persons", ())
-        .next()
-        .expect("Should be some");
-    if persons_count == 0 {
-        let persons = vec![
-            Person {
-                name: "Bastiaan".to_string(),
-                age_in_years: 20,
-                relation: Relation::Me,
-                ..Default::default()
-            },
-            Person {
-                name: "Sander".to_string(),
-                age_in_years: 19,
-                relation: Relation::Brother,
-                ..Default::default()
-            },
-            Person {
-                name: "Leonard".to_string(),
-                age_in_years: 16,
-                relation: Relation::Brother,
-                ..Default::default()
-            },
-            Person {
-                name: "Jiska".to_string(),
-                age_in_years: 14,
-                relation: Relation::Sister,
-                ..Default::default()
-            },
-        ];
-        for person in persons {
-            database.execute(
-                format!(
-                    "INSERT INTO persons ({}) VALUES ({})",
-                    Person::columns(),
-                    Person::values()
-                ),
-                person,
-            );
-        }
-    }
-
-    Ok(database)
-}
-
 // MARK: Main
-fn main() {
-    let ctx = Context {
-        database: open_database().expect("Can't open database"),
-    };
-
-    let router = Router::<Context>::with(ctx)
+fn router(ctx: Context) -> Arc<Router<Context>> {
+    Router::<Context>::with(ctx)
         .pre_layer(layers::log)
         .pre_layer(layers::cors_pre)
         .post_layer(layers::cors_post)
@@ -395,8 +404,11 @@ fn main() {
         .put("/persons/:person_id", persons_update)
         .delete("/persons/:person_id", persons_delete)
         .fallback(not_found)
-        .build();
+        .build()
+}
 
+fn main() {
+    let router = router(Context::with_database(consts::DATABASE_PATH));
     println!(
         "Server is listening on: http://localhost:{}/",
         consts::HTTP_PORT
@@ -404,4 +416,166 @@ fn main() {
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, consts::HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {}", consts::HTTP_PORT));
     http::serve(listener, move |req| router.handle(req));
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_home() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        let res = router.handle(&Request::with_url("http://localhost/"));
+        assert_eq!(res.status, Status::Ok);
+        assert!(res.body.starts_with("Persons v"));
+    }
+
+    #[test]
+    fn test_cors() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        let res = router.handle(&Request::with_url("http://localhost/"));
+        assert_eq!(
+            res.headers.get("Access-Control-Allow-Origin"),
+            Some(&"*".to_string())
+        );
+    }
+
+    #[test]
+    fn test_persons_index() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Fetch /persons check if empty
+        let res = router.handle(&Request::with_url("http://localhost/persons"));
+        assert_eq!(res.status, Status::Ok);
+        let persons = serde_json::from_str::<api::PersonIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert!(persons.is_empty());
+
+        // Create person
+        let person = Person {
+            name: "Jan".to_string(),
+            age_in_years: 40,
+            relation: Relation::Me,
+            ..Default::default()
+        };
+        ctx.database.insert_person(person.clone());
+
+        // Fetch /persons check if person is there
+        let res = router.handle(&Request::with_url("http://localhost/persons"));
+        assert_eq!(res.status, Status::Ok);
+        let persons = serde_json::from_str::<api::PersonIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(persons.len(), 1);
+        assert_eq!(persons[0].name, "Jan");
+    }
+
+    #[test]
+    fn test_persons_create() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create person
+        let res = router.handle(
+            &Request::with_url("http://localhost/persons")
+                .method(Method::Post)
+                .body("name=Jan&age_in_years=40&relation=me"),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let person = serde_json::from_str::<api::Person>(&res.body).unwrap();
+        assert_eq!(person.name, "Jan");
+    }
+
+    #[test]
+    fn test_persons_show() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create person
+        let person = Person {
+            name: "Jan".to_string(),
+            age_in_years: 40,
+            relation: Relation::Me,
+            ..Default::default()
+        };
+        ctx.database.insert_person(person.clone());
+
+        // Fetch /persons/:person_id check if person is there
+        let res = router.handle(&Request::with_url(format!(
+            "http://localhost/persons/{}",
+            person.id
+        )));
+        assert_eq!(res.status, Status::Ok);
+        let person = serde_json::from_str::<api::Person>(&res.body).unwrap();
+        assert_eq!(person.name, "Jan");
+
+        // Fetch other person by random id should be 404 Not Found
+        let res = router.handle(&Request::with_url(format!(
+            "http://localhost/persons/{}",
+            Uuid::now_v7()
+        )));
+        assert_eq!(res.status, Status::NotFound);
+    }
+
+    #[test]
+    fn test_persons_update() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create person
+        let person = Person {
+            name: "Jan".to_string(),
+            age_in_years: 40,
+            relation: Relation::Me,
+            ..Default::default()
+        };
+        ctx.database.insert_person(person.clone());
+
+        // Update person
+        let res = router.handle(
+            &Request::with_url(format!("http://localhost/persons/{}", person.id))
+                .method(Method::Put)
+                .body("name=Jan&age_in_years=41&relation=me"),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let person = serde_json::from_str::<api::Person>(&res.body).unwrap();
+        assert_eq!(person.age_in_years, 41);
+    }
+
+    #[test]
+    fn test_persons_delete() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create person
+        let person = Person {
+            name: "Jan".to_string(),
+            age_in_years: 40,
+            relation: Relation::Me,
+            ..Default::default()
+        };
+        ctx.database.insert_person(person.clone());
+
+        // Delete person
+        let res = router.handle(
+            &Request::with_url(format!("http://localhost/persons/{}", person.id))
+                .method(Method::Delete),
+        );
+        assert_eq!(res.status, Status::Ok);
+
+        // Fetch /persons check if empty
+        let res = router.handle(&Request::with_url("http://localhost/persons"));
+        assert_eq!(res.status, Status::Ok);
+        let persons = serde_json::from_str::<api::PersonIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert!(persons.is_empty());
+    }
 }
