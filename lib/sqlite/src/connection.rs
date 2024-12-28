@@ -14,12 +14,12 @@ use sqlite3_sys::*;
 
 use crate::statement::{Bind, FromRow, Statement};
 
-// MARK: Raw Connection
-struct RawConnection(*mut sqlite3);
-unsafe impl Send for RawConnection {}
-unsafe impl Sync for RawConnection {}
+// MARK: Inner Connection
+struct InnerConnection(*mut sqlite3);
+unsafe impl Send for InnerConnection {}
+unsafe impl Sync for InnerConnection {}
 
-impl RawConnection {
+impl InnerConnection {
     fn open(path: &str) -> Result<Self, ConnectionError> {
         // Open database
         let mut db = ptr::null_mut();
@@ -38,7 +38,7 @@ impl RawConnection {
                 msg: format!("Failed to open database: {}", error),
             });
         }
-        let db: RawConnection = RawConnection(db);
+        let db = InnerConnection(db);
 
         // Apply some SQLite performance settings (https://briandouglas.ie/sqlite-defaults/):
         // - Set the journal mode to Write-Ahead Logging for concurrency
@@ -107,7 +107,7 @@ impl RawConnection {
     }
 }
 
-impl Drop for RawConnection {
+impl Drop for InnerConnection {
     fn drop(&mut self) {
         unsafe { sqlite3_close(self.0) };
     }
@@ -129,14 +129,14 @@ impl Display for ConnectionError {
 impl Error for ConnectionError {}
 
 // MARK: Connection
-#[derive(Clone)]
 /// A SQLite connection
-pub struct Connection(Arc<RawConnection>);
+#[derive(Clone)]
+pub struct Connection(Arc<InnerConnection>);
 
 impl Connection {
     /// Open a connection to a SQLite database
     pub fn open(path: impl AsRef<str>) -> Result<Self, ConnectionError> {
-        Ok(Connection(Arc::new(RawConnection::open(path.as_ref())?)))
+        Ok(Connection(Arc::new(InnerConnection::open(path.as_ref())?)))
     }
 
     /// Prepare a statement

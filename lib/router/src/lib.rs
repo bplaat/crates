@@ -134,9 +134,9 @@ impl<T> Route<T> {
     }
 }
 
-// MARK: Router
-/// Router
-pub struct Router<T: Clone> {
+// MARK: RouterBuilder
+/// Router builder
+pub struct RouterBuilder<T: Clone> {
     ctx: T,
     pre_layers: Vec<PreLayerFn<T>>,
     post_layers: Vec<PostLayerFn<T>>,
@@ -145,7 +145,7 @@ pub struct Router<T: Clone> {
     fallback_handler: Option<Handler<T>>,
 }
 
-impl<T: Clone> Router<T> {
+impl<T: Clone> RouterBuilder<T> {
     /// Create new router with context
     pub fn with(ctx: T) -> Self {
         Self {
@@ -156,33 +156,6 @@ impl<T: Clone> Router<T> {
             not_allowed_method_handler: None,
             fallback_handler: None,
         }
-    }
-
-    /// Complete building router
-    pub fn build(mut self) -> Arc<Self> {
-        // Set default handlers
-        if self.fallback_handler.is_none() {
-            self.fallback_handler = Some(Handler::new(
-                |_, _| {
-                    Response::new()
-                        .status(http::Status::NotFound)
-                        .body("404 Not Found")
-                },
-                self.pre_layers.clone(),
-                self.post_layers.clone(),
-            ));
-        }
-        self.not_allowed_method_handler = Some(Handler::new(
-            |_, _| {
-                Response::new()
-                    .status(http::Status::MethodNotAllowed)
-                    .body("405 Method Not Allowed")
-            },
-            self.pre_layers.clone(),
-            self.post_layers.clone(),
-        ));
-
-        Arc::new(self)
     }
 
     /// Add pre layer
@@ -251,8 +224,47 @@ impl<T: Clone> Router<T> {
         self
     }
 
-    /// Handle request
-    pub fn handle(&self, req: &Request) -> Response {
+    /// Build router
+    pub fn build(self) -> Router<T> {
+        Router(Arc::new(InnerRouter {
+            ctx: self.ctx,
+            routes: self.routes,
+            not_allowed_method_handler: self.not_allowed_method_handler.unwrap_or_else(|| {
+                Handler::new(
+                    |_, _| {
+                        Response::new()
+                            .status(http::Status::NotFound)
+                            .body("404 Not Found")
+                    },
+                    self.pre_layers.clone(),
+                    self.post_layers.clone(),
+                )
+            }),
+            fallback_handler: self.fallback_handler.unwrap_or_else(|| {
+                Handler::new(
+                    |_, _| {
+                        Response::new()
+                            .status(http::Status::MethodNotAllowed)
+                            .body("405 Method Not Allowed")
+                    },
+                    self.pre_layers.clone(),
+                    self.post_layers.clone(),
+                )
+            }),
+        }))
+    }
+}
+
+// MARK: InnerRouter
+struct InnerRouter<T: Clone> {
+    ctx: T,
+    routes: Vec<Route<T>>,
+    not_allowed_method_handler: Handler<T>,
+    fallback_handler: Handler<T>,
+}
+
+impl<T: Clone> InnerRouter<T> {
+    fn handle(&self, req: &Request) -> Response {
         let mut ctx = self.ctx.clone();
 
         // Match routes
@@ -269,19 +281,24 @@ impl<T: Clone> Router<T> {
                     return route.handler.call(&req, &mut ctx);
                 }
 
-                // Else run not allowed method handler
-                return self
-                    .not_allowed_method_handler
-                    .as_ref()
-                    .expect("Should be some")
-                    .call(&req, &mut ctx);
+                // Or run not allowed method handler
+                return self.not_allowed_method_handler.call(&req, &mut ctx);
             }
         }
 
-        // Else run fallback handler
-        self.fallback_handler
-            .as_ref()
-            .expect("Should be some")
-            .call(req, &mut ctx)
+        // Or run fallback handler
+        self.fallback_handler.call(req, &mut ctx)
+    }
+}
+
+// MARK: Router
+/// Router
+#[derive(Clone)]
+pub struct Router<T: Clone>(Arc<InnerRouter<T>>);
+
+impl<T: Clone> Router<T> {
+    /// Handle request
+    pub fn handle(&self, req: &Request) -> Response {
+        self.0.handle(req)
     }
 }

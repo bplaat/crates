@@ -7,11 +7,10 @@
 //! A simple persons REST API example
 
 use std::net::{Ipv4Addr, TcpListener};
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use http::{Method, Request, Response, Status};
-use router::Router;
+use router::{Router, RouterBuilder};
 use serde::Deserialize;
 use sqlite::{FromRow, FromValue};
 use uuid::Uuid;
@@ -392,8 +391,8 @@ fn persons_delete(req: &Request, ctx: &Context) -> Response {
 }
 
 // MARK: Main
-fn router(ctx: Context) -> Arc<Router<Context>> {
-    Router::<Context>::with(ctx)
+fn router(ctx: Context) -> Router<Context> {
+    RouterBuilder::<Context>::with(ctx)
         .pre_layer(layers::log)
         .pre_layer(layers::cors_pre)
         .post_layer(layers::cors_post)

@@ -22,7 +22,6 @@ A collection of minimal Rust crates that I created for myself mainly for buildin
 
 ## TODO
 
--   [ ] router: Hide Arc in Router
 -   [ ] http: keep-alive requests
 -   [ ] http: multipart/form-data
 -   [ ] http: Chunked transfer encoding
