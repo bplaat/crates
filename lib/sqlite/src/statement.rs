@@ -27,7 +27,7 @@ where
     T: Into<Value>,
 {
     fn bind(self, statement: &mut RawStatement) {
-        statement.bind_value(self, 0);
+        statement.bind_value(0, self);
     }
 }
 
@@ -38,7 +38,7 @@ macro_rules! impl_bind_for_tuple {
             $($t: Into<Value>,)+
         {
             fn bind(self, statement: &mut RawStatement)  {
-                $( statement.bind_value(self.$n, $n); )*
+                $( statement.bind_value($n, self.$n); )*
             }
         }
     );
@@ -103,7 +103,7 @@ impl RawStatement {
     }
 
     /// Bind a value to the statement
-    pub fn bind_value(&mut self, value: impl Into<Value>, index: i32) {
+    pub fn bind_value(&mut self, index: i32, value: impl Into<Value>) {
         let index = index + 1;
         let result = match value.into() {
             Value::Null => unsafe { sqlite3_bind_null(self.0, index) },
@@ -185,8 +185,8 @@ impl<T> Statement<T> {
     }
 
     /// Bind a value to the statement
-    pub fn bind_value(&mut self, value: impl Into<Value>, index: i32) {
-        self.0.bind_value(value, index);
+    pub fn bind_value(&mut self, index: i32, value: impl Into<Value>) {
+        self.0.bind_value(index, value);
     }
 
     /// Read a value from the statement
