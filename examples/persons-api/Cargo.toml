@@ -1,5 +1,5 @@
 [package]
-name = "example-persons"
+name = "example-persons-api"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true

@@ -85,7 +85,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
-name = "example-persons"
+name = "example-http-simple"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "serde",
+ "serde_urlencoded",
+]
+
+[[package]]
+name = "example-persons-api"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -98,15 +107,6 @@ dependencies = [
  "sqlite",
  "uuid",
  "validate",
-]
-
-[[package]]
-name = "example-simple"
-version = "0.1.0"
-dependencies = [
- "http",
- "serde",
- "serde_urlencoded",
 ]
 
 [[package]]
