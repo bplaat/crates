@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -11,18 +11,14 @@ use std::io::{Error, ErrorKind};
 // MARK: getrandom
 #[cfg(windows)]
 mod win32 {
-    pub(crate) const PROV_RSA_FULL: u32 = 1;
-    pub(crate) const CRYPT_VERIFYCONTEXT: u32 = 0xF0000000;
+    pub(crate) const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x00000002;
     extern "C" {
-        pub(crate) fn CryptAcquireContextW(
-            phProv: *mut usize,
-            szContainer: *const u16,
-            szProvider: *const u16,
-            dwProvType: u32,
-            dwFlags: u32,
+        pub(crate) fn BCryptGenRandom(
+            h_alg: *mut std::ffi::c_void,
+            pb_output: *mut u8,
+            cb_output: u32,
+            dw_flags: u32,
         ) -> i32;
-        pub(crate) fn CryptGenRandom(hProv: usize, dwLen: u32, pbBuffer: *mut u8) -> i32;
-        pub(crate) fn CryptReleaseContext(hProv: usize, dwFlags: u32) -> i32;
     }
 }
 
@@ -39,24 +35,17 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), Error> {
 
     #[cfg(windows)]
     {
-        let mut h_prov = 0;
         if unsafe {
-            win32::CryptAcquireContextW(
-                &mut h_prov,
-                std::ptr::null(),
-                std::ptr::null(),
-                win32::PROV_RSA_FULL,
-                win32::CRYPT_VERIFYCONTEXT,
+            win32::BCryptGenRandom(
+                std::ptr::null_mut(),
+                buf.as_mut_ptr(),
+                buf.len() as u32,
+                win32::BCRYPT_USE_SYSTEM_PREFERRED_RNG,
             )
         } == 0
         {
-            return Err(Error::new(ErrorKind::Other, "CryptAcquireContextW failed"));
+            return Err(Error::new(ErrorKind::Other, "BCryptGenRandom failed"));
         }
-        if unsafe { win32::CryptGenRandom(h_prov, buf.len() as u32, buf.as_mut_ptr()) } == 0 {
-            unsafe { win32::CryptReleaseContext(h_prov, 0) };
-            return Err(Error::new(ErrorKind::Other, "CryptGenRandom failed"));
-        }
-        unsafe { win32::CryptReleaseContext(h_prov, 0) };
     }
     Ok(())
 }
