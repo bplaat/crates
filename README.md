@@ -20,10 +20,13 @@ A collection of minimal Rust crates that I created for myself
 -   [uuid](lib/uuid) A minimal UUID library
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
+-   [webview](lib/webview) A simple webview library
 
 ## TODO
 
+-   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] http: keep-alive requests
 -   [ ] http: multipart/form-data
 -   [ ] http: Chunked transfer encoding
 -   [ ] openapi-generator: Add TypeScript client generation
+-   [ ] webview: Add Linux (Gtk + Webkit2Gtk) support
