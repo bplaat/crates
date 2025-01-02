@@ -10,7 +10,7 @@ use std::io::{Error, ErrorKind};
 
 // MARK: getrandom
 #[cfg(windows)]
-mod win32 {
+mod windows {
     pub(crate) const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x00000002;
     extern "C" {
         pub(crate) fn BCryptGenRandom(
@@ -36,17 +36,23 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), Error> {
     #[cfg(windows)]
     {
         if unsafe {
-            win32::BCryptGenRandom(
+            windows::BCryptGenRandom(
                 std::ptr::null_mut(),
                 buf.as_mut_ptr(),
                 buf.len() as u32,
-                win32::BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+                windows::BCRYPT_USE_SYSTEM_PREFERRED_RNG,
             )
         } == 0
         {
             return Err(Error::new(ErrorKind::Other, "BCryptGenRandom failed"));
         }
     }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        compile_error!("Unsupported platform");
+    }
+
     Ok(())
 }
 
