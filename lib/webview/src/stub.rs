@@ -15,7 +15,7 @@ impl Webview {
     }
 
     /// Start event loop
-    pub fn run(&mut self, _event_handler: fn(&mut Webview, Event)) {
+    pub fn run(&mut self, _event_handler: fn(&mut Webview, Event)) -> ! {
         todo!()
     }
 
@@ -45,7 +45,12 @@ impl Webview {
     }
 
     /// Eval JavaScript
-    pub fn eval(&mut self, _js: String) {
+    pub fn eval(&mut self, _js: impl AsRef<str>) {
+        todo!()
+    }
+
+    /// Send IPC message
+    pub fn send_ipc_message(&mut self, _message: impl AsRef<str>) {
         todo!()
     }
 }

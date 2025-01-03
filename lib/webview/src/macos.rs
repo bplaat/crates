@@ -85,13 +85,13 @@ impl Webview {
 
         // Create window
         let window = unsafe {
-            let window: Object = msg_send![msg_send![class!(NSWindow), alloc], initWithContentRect:NSRect { x: 0.0, y: 0.0, width: builder.size.0 as f64, height: builder.size.1 as f64 }
+            let window: Object = msg_send![msg_send![class!(NSWindow), alloc], initWithContentRect:NSRect { x: 0.0, y: 0.0, width: builder.size.width as f64, height: builder.size.height as f64 }
                     styleMask:NS_WINDOW_STYLE_MASK_TITLED | NS_WINDOW_STYLE_MASK_CLOSABLE | NS_WINDOW_STYLE_MASK_MINIATURIZABLE | NS_WINDOW_STYLE_MASK_RESIZABLE
                     backing:NS_BACKING_STORE_BUFFERED
                     defer:false];
             let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title).0];
             if let Some(min_size) = builder.min_size {
-                let _: () = msg_send![window, setMinSize:NSSize { width: min_size.0 as f64, height: min_size.1 as f64 }];
+                let _: () = msg_send![window, setMinSize:NSSize { width: min_size.width as f64, height: min_size.height as f64 }];
             }
 
             // Center window
@@ -133,8 +133,16 @@ impl Webview {
             let _: () = msg_send![application, setDelegate:app_delegate];
             let _: () = msg_send![window, setDelegate:app_delegate];
             let _: () = msg_send![webview, setNavigationDelegate:app_delegate];
+
             if builder.enable_ipc {
-                let _: () = msg_send![msg_send![msg_send![webview, configuration], userContentController], addScriptMessageHandler:app_delegate name:NSString::from_str("ipc").0];
+                let user_content_controller: Object =
+                    msg_send![msg_send![webview, configuration], userContentController];
+                let user_script: Object = msg_send![msg_send![class!(WKUserScript), alloc],
+                    initWithSource:NSString::from_str("window.ipc=new EventTarget();window.ipc.postMessage=message=>window.webkit.messageHandlers.ipc.postMessage(JSON.stringify(message));").0
+                    injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START
+                    forMainFrameOnly:true];
+                let _: () = msg_send![user_content_controller, addUserScript:user_script];
+                let _: () = msg_send![user_content_controller, addScriptMessageHandler:app_delegate name:NSString::from_str("ipc").0];
             }
         }
 
@@ -142,7 +150,7 @@ impl Webview {
     }
 
     /// Start event loop
-    pub fn run(&mut self, event_handler: fn(&mut Webview, Event)) {
+    pub fn run(&mut self, event_handler: fn(&mut Webview, Event)) -> ! {
         // Set event handler
         let application = unsafe { msg_send![class!(NSApplication), sharedApplication] };
         unsafe {
@@ -195,10 +203,18 @@ impl Webview {
     }
 
     /// Eval JavaScript
-    pub fn eval(&mut self, js: String) {
+    pub fn eval(&mut self, js: impl AsRef<str>) {
         unsafe {
             msg_send![self.webview, evaluateJavaScript:NSString::from_str(js).0 completionHandler:null::<*const c_void>()]
         }
+    }
+
+    /// Send IPC message
+    pub fn send_ipc_message(&mut self, message: impl AsRef<str>) {
+        self.eval(format!(
+            "window.ipc.dispatchEvent(new MessageEvent('message', {{ data: {} }}));",
+            message.as_ref()
+        ));
     }
 }
 
@@ -273,7 +289,7 @@ fn send_message(this: Object, event: Event) {
     event_handler(&mut webview, event);
 }
 
-// MARK: Cocoa defs
+// MARK: Cocoa headers
 #[repr(C)]
 struct NSSize {
     width: f64,
@@ -291,6 +307,16 @@ struct NSRect {
 const NS_APPLICATION_ACTIVATION_POLICY_REGULAR: i32 = 0;
 
 const NS_UTF8_STRING_ENCODING: i32 = 4;
+
+const NS_WINDOW_STYLE_MASK_TITLED: i32 = 1;
+const NS_WINDOW_STYLE_MASK_CLOSABLE: i32 = 2;
+const NS_WINDOW_STYLE_MASK_MINIATURIZABLE: i32 = 4;
+const NS_WINDOW_STYLE_MASK_RESIZABLE: i32 = 8;
+
+const NS_BACKING_STORE_BUFFERED: i32 = 2;
+
+const WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START: i32 = 0;
+
 #[allow(dead_code)]
 struct NSString(Object);
 impl NSString {
@@ -313,12 +339,3 @@ impl Display for NSString {
         })
     }
 }
-
-type NSWindowStyleMask = i32;
-const NS_WINDOW_STYLE_MASK_TITLED: NSWindowStyleMask = 1;
-const NS_WINDOW_STYLE_MASK_CLOSABLE: NSWindowStyleMask = 2;
-const NS_WINDOW_STYLE_MASK_MINIATURIZABLE: NSWindowStyleMask = 4;
-const NS_WINDOW_STYLE_MASK_RESIZABLE: NSWindowStyleMask = 8;
-
-type NSBackingStoreType = i32;
-const NS_BACKING_STORE_BUFFERED: NSBackingStoreType = 2;

@@ -33,10 +33,9 @@ fn main() {
             let message = IpcMessage::Hello {
                 name: "WebView".to_string(),
             };
-            webview.eval(format!(
-                "window.ipc.dispatchEvent(new MessageEvent('message', {{ data: {} }}));",
-                serde_json::to_string(&message).expect("Should serialize message")
-            ));
+            webview.send_ipc_message(
+                serde_json::to_string(&message).expect("Should serialize message"),
+            );
         }
         Event::IpcMessageReceived(message) => {
             match serde_json::from_str(&message).expect("Can't parse message") {

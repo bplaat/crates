@@ -27,12 +27,22 @@ pub enum Event {
     IpcMessageReceived(String),
 }
 
+// MARK: Size
+/// Size
+#[allow(dead_code)]
+struct Size {
+    /// Width
+    pub width: i32,
+    /// Height
+    pub height: i32,
+}
+
 // MARK: WebviewBuilder
 /// Webview builder
 pub struct WebviewBuilder {
     title: String,
-    size: (i32, i32),
-    min_size: Option<(i32, i32)>,
+    size: Size,
+    min_size: Option<Size>,
     remember_window_state: bool,
     enable_ipc: bool,
     url: Option<String>,
@@ -43,7 +53,10 @@ impl Default for WebviewBuilder {
     fn default() -> Self {
         Self {
             title: "Untitled".to_string(),
-            size: (800, 600),
+            size: Size {
+                width: 800,
+                height: 600,
+            },
             min_size: None,
             remember_window_state: false,
             enable_ipc: false,
@@ -67,13 +80,13 @@ impl WebviewBuilder {
 
     /// Set size
     pub fn size(mut self, width: i32, height: i32) -> Self {
-        self.size = (width, height);
+        self.size = Size { width, height };
         self
     }
 
     /// Set minimum size
     pub fn min_size(mut self, width: i32, height: i32) -> Self {
-        self.min_size = Some((width, height));
+        self.min_size = Some(Size { width, height });
         self
     }
 

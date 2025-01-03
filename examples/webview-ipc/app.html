@@ -42,14 +42,6 @@
         <p><button id="button">Click me!</button></p>
 
         <script>
-            // FIXME: Currently only macOS
-            window.ipc = new EventTarget();
-            window.ipc.postMessage = (message) =>
-                window.webkit.messageHandlers.ipc.postMessage(
-                    JSON.stringify(message)
-                );
-        </script>
-        <script>
             window.addEventListener("contextmenu", (event) =>
                 event.preventDefault()
             );
