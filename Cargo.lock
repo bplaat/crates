@@ -113,6 +113,7 @@ dependencies = [
 name = "example-webview-ipc"
 version = "0.1.0"
 dependencies = [
+ "minify-html",
  "serde",
  "serde_json",
  "webview",
@@ -227,6 +228,14 @@ name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+
+[[package]]
+name = "minify-html"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "regex",
+]
 
 [[package]]
 name = "num-traits"

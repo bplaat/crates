@@ -7,6 +7,7 @@ A collection of minimal Rust crates that I created for myself
 -   [base64](lib/base64) A base64 encoder and decoder
 -   [getrandom](lib/getrandom) A minimal crypto random bytes library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
+-   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [objc](lib/objc) A basic Objective-C ffi library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library

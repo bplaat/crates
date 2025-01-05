@@ -1,0 +1,13 @@
+[package]
+name = "minify-html"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+lazy_static = "1.5"
+regex = "1.11"

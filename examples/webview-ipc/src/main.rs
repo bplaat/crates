@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 use webview::{Event, WebviewBuilder};
 
-const APP_HTML: &[u8] = include_bytes!("../app.html");
+const APP_HTML: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/app.min.html"));
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
