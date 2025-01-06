@@ -23,7 +23,29 @@ A collection of minimal Rust crates that I created for myself
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
 -   [webview](lib/webview) A simple webview library
 
-## TODO
+
+## Getting Started
+
+-   Install the latest Rust toolchain with [rustup](https://rustup.rs/)
+-   Install `cargo-udeps`, `cargo-deny` and `cargo-nextest`
+
+    ```sh
+    cargo install cargo-udeps cargo-deny cargo-nextest
+    ```
+
+-   Run CI checks:
+
+    ```sh
+    make -C ci
+    ```
+
+-   Or run an example:
+
+    ```sh
+    cargo run --bin example-persons-api
+    ```
+
+## TODO items
 
 -   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] http: keep-alive requests
@@ -31,3 +53,9 @@ A collection of minimal Rust crates that I created for myself
 -   [ ] http: Chunked transfer encoding
 -   [ ] openapi-generator: Add TypeScript client generation
 -   [ ] webview: Add Linux (Gtk + Webkit2Gtk) support
+
+## License
+
+Copyright © 2024-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
+
+Licensed under the [MIT](LICENSE) license.
