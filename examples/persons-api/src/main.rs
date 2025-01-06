@@ -367,7 +367,7 @@ fn persons_update(req: &Request, ctx: &Context) -> Response {
     person.age_in_years = body.age_in_years;
     person.relation = body.relation.into();
     ctx.database.execute(
-        "UPDATE persons SET name = ?, age = ? WHERE id = ? LIMIT 1",
+        "UPDATE persons SET name = ?, age = ? WHERE id = ?",
         (person.name.clone(), person.age_in_years, person.id),
     );
 
