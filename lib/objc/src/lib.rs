@@ -30,6 +30,8 @@ extern "C" {
     pub fn objc_getClass(name: *const c_char) -> Class;
     pub fn sel_registerName(name: *const c_char) -> Sel;
     pub fn objc_msgSend(receiver: Object, sel: Sel, ...) -> *const c_void;
+    #[cfg(target_arch = "x86_64")]
+    pub fn objc_msgSend_stret(ret: *mut c_void, receiver: Object, sel: Sel, ...);
     pub fn objc_msgSendSuper(receiver: &Super, sel: Sel, ...) -> *const c_void;
 
     pub fn object_getInstanceVariable(
@@ -107,9 +109,26 @@ macro_rules! message_send_impl {
         impl<$($t),*> MessageSend for ($($t,)*) {
             #[inline(always)]
             unsafe fn invoke<R>(obj: Object, sel: Sel, ($($a,)*): Self) -> R {
-                let imp: unsafe extern fn (Object, Sel, $($t,)*) -> R =
-                    std::mem::transmute(objc_msgSend as *const c_void);
-                imp(obj, sel, $($a,)*)
+                #[cfg(target_arch = "x86_64")]
+                {
+                    if size_of::<R>() > 16 {
+                        let mut ret = std::mem::zeroed();
+                        let imp: unsafe extern fn (*mut R, Object, Sel, $($t,)*) =
+                            std::mem::transmute(objc_msgSend_stret as *const c_void);
+                        imp(&mut ret, obj, sel, $($a,)*);
+                        ret
+                    } else {
+                        let imp: unsafe extern fn (Object, Sel, $($t,)*) -> R =
+                            std::mem::transmute(objc_msgSend as *const c_void);
+                        imp(obj, sel, $($a,)*)
+                    }
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                {
+                    let imp: unsafe extern fn (Object, Sel, $($t,)*) -> R =
+                        std::mem::transmute(objc_msgSend as *const c_void);
+                    imp(obj, sel, $($a,)*)
+                }
             }
         }
     );
@@ -121,6 +140,8 @@ message_send_impl!(a: A, b: B, c: C);
 message_send_impl!(a: A, b: B, c: C, d: D);
 message_send_impl!(a: A, b: B, c: C, d: D, e: E);
 message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F);
+message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G);
+message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H);
 
 /// Send message to object
 #[macro_export]
