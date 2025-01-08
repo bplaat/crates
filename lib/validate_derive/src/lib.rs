@@ -6,11 +6,8 @@
 
 //! Validation derive macro's library
 
-use core::panic;
-
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, DeriveInput, Expr, Meta};
 
 struct Rule {
@@ -42,13 +39,15 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     for attr in input.attrs {
         if attr.path().is_ident("validate") {
             let list = attr
-                .parse_args_with(Punctuated::<_, syn::token::Comma>::parse_terminated)
+                .parse_args_with(
+                    syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated,
+                )
                 .expect("Invalid attribute");
             for item in list {
                 if let Meta::List(meta_list) = item {
                     if meta_list.path.is_ident("context") {
                         let list = meta_list
-                            .parse_args_with(Punctuated::<_, syn::token::Comma>::parse_terminated)
+                            .parse_args_with(syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated)
                             .expect("Invalid attribute");
                         if let Meta::Path(path) = &list[0] {
                             context = Some(path.get_ident().expect("Invalid attribute").clone());
@@ -68,7 +67,9 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             for attr in field.attrs.iter() {
                 if attr.path().is_ident("validate") {
                     let list = attr
-                        .parse_args_with(Punctuated::<_, syn::token::Comma>::parse_terminated)
+                        .parse_args_with(
+                            syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated,
+                        )
                         .expect("Invalid attribute");
                     for item in list {
                         match item {
@@ -97,7 +98,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                             Meta::List(meta_list) => {
                                 let list = meta_list
                                     .parse_args_with(
-                                        Punctuated::<_, syn::token::Comma>::parse_terminated,
+                                        syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated,
                                     )
                                     .expect("Invalid attribute");
                                 if meta_list.path.is_ident("length") {

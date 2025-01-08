@@ -9,6 +9,7 @@
 use std::net::{Ipv4Addr, TcpListener};
 
 use chrono::{DateTime, Utc};
+use from_enum::FromEnum;
 use http::{Method, Request, Response, Status};
 use router::{Router, RouterBuilder};
 use serde::Deserialize;
@@ -189,31 +190,12 @@ impl From<Person> for api::Person {
     }
 }
 
-#[derive(Copy, Clone, FromValue)]
+#[derive(Copy, Clone, FromEnum, FromValue)]
+#[from_enum(api::Relation)]
 enum Relation {
     Me = 0,
     Brother = 1,
     Sister = 2,
-}
-
-impl From<api::Relation> for Relation {
-    fn from(relation: api::Relation) -> Self {
-        match relation {
-            api::Relation::Me => Relation::Me,
-            api::Relation::Brother => Relation::Brother,
-            api::Relation::Sister => Relation::Sister,
-        }
-    }
-}
-
-impl From<Relation> for api::Relation {
-    fn from(relation: Relation) -> Self {
-        match relation {
-            Relation::Me => api::Relation::Me,
-            Relation::Brother => api::Relation::Brother,
-            Relation::Sister => api::Relation::Sister,
-        }
-    }
 }
 
 // MARK: Routes

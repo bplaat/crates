@@ -6,6 +6,7 @@ A collection of minimal Rust crates that I created for myself
 
 -   [base64](lib/base64) A base64 encoder and decoder
 -   [getrandom](lib/getrandom) A minimal crypto random bytes library
+-   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
 -   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [objc](lib/objc) A basic Objective-C ffi library

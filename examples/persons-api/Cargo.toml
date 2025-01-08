@@ -9,6 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+from_enum = { path = "../../lib/from_enum" }
 http = { path = "../../lib/http", features = ["json"] }
 router = { path = "../../lib/router" }
 sqlite = { path = "../../lib/sqlite", features = ["derive", "chrono", "uuid"] }

@@ -8,7 +8,6 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, DeriveInput};
 
 /// [FromRow] derive for structs
@@ -35,7 +34,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
                         if attr.path().is_ident("sqlite") {
                             let list = attr
                                 .parse_args_with(
-                                    Punctuated::<_, syn::token::Comma>::parse_terminated,
+                                    syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated,
                                 )
                                 .expect("Invalid attribute");
                             for meta in list {

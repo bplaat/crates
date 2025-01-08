@@ -98,6 +98,7 @@ name = "example-persons-api"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "from_enum",
  "http",
  "openapi-generator",
  "router",
@@ -133,6 +134,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "from_enum"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
