@@ -143,7 +143,7 @@ impl Response {
         if let Some(content_length) = res.headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidResponseError)?;
             if content_length > 0 {
-                res.body = Vec::with_capacity(content_length);
+                res.body = vec![0; content_length];
                 reader
                     .read(&mut res.body)
                     .map_err(|_| InvalidResponseError)?;

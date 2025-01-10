@@ -142,7 +142,7 @@ impl Request {
         if let Some(content_length) = headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidRequestError)?;
             if content_length > 0 {
-                let mut buffer = Vec::with_capacity(content_length);
+                let mut buffer = vec![0; content_length];
                 reader.read(&mut buffer).map_err(|_| InvalidRequestError)?;
                 body = Some(buffer);
             }
