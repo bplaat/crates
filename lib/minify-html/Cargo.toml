@@ -10,4 +10,6 @@ workspace = true
 
 [dependencies]
 lazy_static = "1.5"
-regex = "1.11"
+regex = { version = "1.11", default-features = false, features = [
+    "unicode-perl",
+] }

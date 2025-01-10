@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -41,12 +41,7 @@ impl error::Error for Error {}
 
 // MARK: Report
 /// Validation report
-#[cfg(feature = "serde")]
-#[derive(serde::Serialize)]
-pub struct Report(pub HashMap<String, Vec<String>>);
-
-/// Validation report
-#[cfg(not(feature = "serde"))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Report(pub HashMap<String, Vec<String>>);
 
 // MARK: Validate

@@ -1,15 +1,17 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
+
+use std::path::Path;
 
 use indexmap::IndexMap;
 
 use crate::openapi::Schema;
 use crate::utils::ToCapitalize;
 
-pub(crate) fn generate_schemas(schemas: IndexMap<String, Schema>, output_path: &str) {
+pub(crate) fn generate_schemas(schemas: IndexMap<String, Schema>, output_path: &Path) {
     let mut code_schemas = IndexMap::new();
 
     // Generate code for schemas
@@ -23,7 +25,7 @@ pub(crate) fn generate_schemas(schemas: IndexMap<String, Schema>, output_path: &
         code.push_str(code_schema);
     }
     std::fs::write(output_path, code)
-        .unwrap_or_else(|_| panic!("Failed to write: {}", output_path));
+        .unwrap_or_else(|_| panic!("Failed to write: {}", output_path.display()));
 }
 
 fn schema_generate_code(

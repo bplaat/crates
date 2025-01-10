@@ -21,16 +21,19 @@ lazy_static! {
 
 /// Minify the given html
 pub fn minify(html: impl AsRef<str>) -> String {
-    let mut result = html.as_ref().to_string();
-    result = RE_COMMENTS.replace_all(&result, "").to_string();
-    result = RE_WHITESPACE_BETWEEN_TAGS
-        .replace_all(&result, "><")
-        .to_string();
-    result = RE_LEADING_TRAILING_WHITESPACE
-        .replace_all(&result, "")
-        .to_string();
-    result = RE_MULTIPLE_SPACES.replace_all(&result, " ").to_string();
-    result
+    fn inner(html: &str) -> String {
+        let mut result = html.to_string();
+        result = RE_COMMENTS.replace_all(&result, "").to_string();
+        result = RE_WHITESPACE_BETWEEN_TAGS
+            .replace_all(&result, "><")
+            .to_string();
+        result = RE_LEADING_TRAILING_WHITESPACE
+            .replace_all(&result, "")
+            .to_string();
+        result = RE_MULTIPLE_SPACES.replace_all(&result, " ").to_string();
+        result
+    }
+    inner(html.as_ref())
 }
 
 /// Minify the html file at the given input path and write the minified html to the output path

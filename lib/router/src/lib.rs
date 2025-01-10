@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -171,15 +171,10 @@ impl<T: Clone> RouterBuilder<T> {
     }
 
     /// Add route
-    pub fn route(
-        mut self,
-        methods: &[Method],
-        route: impl AsRef<str>,
-        handler: HandlerFn<T>,
-    ) -> Self {
+    pub fn route(mut self, methods: &[Method], route: &str, handler: HandlerFn<T>) -> Self {
         self.routes.push(Route::new(
             methods.to_vec(),
-            route.as_ref().to_string(),
+            route.to_string(),
             Handler::new(handler, self.pre_layers.clone(), self.post_layers.clone()),
         ));
         self
@@ -189,29 +184,29 @@ impl<T: Clone> RouterBuilder<T> {
     pub fn any(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
         self.route(
             &[Method::Get, Method::Post, Method::Put, Method::Delete],
-            route,
+            route.as_ref(),
             handler,
         )
     }
 
     /// Add route for GET method
     pub fn get(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Get], route, handler)
+        self.route(&[Method::Get], route.as_ref(), handler)
     }
 
     /// Add route for POST method
     pub fn post(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Post], route, handler)
+        self.route(&[Method::Post], route.as_ref(), handler)
     }
 
     /// Add route for PUT method
     pub fn put(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Put], route, handler)
+        self.route(&[Method::Put], route.as_ref(), handler)
     }
 
     /// Add route for DELETE method
     pub fn delete(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Delete], route, handler)
+        self.route(&[Method::Delete], route.as_ref(), handler)
     }
 
     /// Set fallback handler

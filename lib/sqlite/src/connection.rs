@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -7,6 +7,7 @@
 use std::error::Error;
 use std::ffi::{c_char, CStr, CString};
 use std::fmt::{self, Display, Formatter};
+use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
 
@@ -20,10 +21,15 @@ unsafe impl Send for InnerConnection {}
 unsafe impl Sync for InnerConnection {}
 
 impl InnerConnection {
-    fn open(path: &str) -> Result<Self, ConnectionError> {
+    fn open(path: &Path) -> Result<Self, ConnectionError> {
         // Open database
         let mut db = ptr::null_mut();
-        let path = CString::new(path).expect("Can't convert &str to CString");
+        let path = CString::new(
+            path.to_str()
+                .expect("Can't convert &Path to CString")
+                .as_bytes(),
+        )
+        .expect("Can't convert &Path to CString");
         let result = unsafe {
             sqlite3_open_v2(
                 path.as_ptr(),
@@ -63,11 +69,10 @@ impl InnerConnection {
         Ok(db)
     }
 
-    fn prepare<T>(&self, query: impl AsRef<str>) -> Statement<T>
+    fn prepare<T>(&self, query: &str) -> Statement<T>
     where
         T: FromRow,
     {
-        let query = query.as_ref();
         let mut statement = ptr::null_mut();
         let result = unsafe {
             sqlite3_prepare_v2(
@@ -85,17 +90,17 @@ impl InnerConnection {
         Statement::new(statement)
     }
 
-    fn query<T>(&self, query: impl AsRef<str>, params: impl Bind) -> Statement<T>
+    fn query<T>(&self, query: &str, params: impl Bind) -> Statement<T>
     where
         T: FromRow,
     {
-        let mut statement = self.prepare::<T>(query.as_ref());
+        let mut statement = self.prepare::<T>(query);
         statement.bind(params);
         statement
     }
 
-    fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
-        self.query::<()>(query.as_ref(), params).next();
+    fn execute(&self, query: &str, params: impl Bind) {
+        self.query::<()>(query, params).next();
     }
 
     fn affected_rows(&self) -> i64 {
@@ -135,7 +140,7 @@ pub struct Connection(Arc<InnerConnection>);
 
 impl Connection {
     /// Open a connection to a SQLite database
-    pub fn open(path: impl AsRef<str>) -> Result<Self, ConnectionError> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
         Ok(Connection(Arc::new(InnerConnection::open(path.as_ref())?)))
     }
 
@@ -144,7 +149,7 @@ impl Connection {
     where
         T: FromRow,
     {
-        self.0.prepare(query)
+        self.0.prepare(query.as_ref())
     }
 
     /// Run a query
@@ -152,12 +157,12 @@ impl Connection {
     where
         T: FromRow,
     {
-        self.0.query(query, params)
+        self.0.query(query.as_ref(), params)
     }
 
     /// Execute a query
     pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
-        self.0.execute(query, params);
+        self.0.execute(query.as_ref(), params);
     }
 
     /// Get the number of affected rows
