@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Bastiaan van der Plaat
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -19,3 +19,4 @@ mod request;
 mod response;
 mod serve;
 mod status;
+mod version;

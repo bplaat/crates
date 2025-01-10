@@ -24,7 +24,6 @@ A collection of minimal Rust crates that I created for myself
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
 -   [webview](lib/webview) A simple webview library
 
-
 ## Getting Started
 
 -   Install the latest Rust toolchain with [rustup](https://rustup.rs/)
@@ -48,11 +47,8 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
--   [ ] webview: Add Windows (win32 + Webview2) support
--   [ ] http: keep-alive requests
--   [ ] http: multipart/form-data
--   [ ] http: Chunked transfer encoding
 -   [ ] openapi-generator: Add TypeScript client generation
+-   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] webview: Add Linux (Gtk + Webkit2Gtk) support
 
 ## License

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -36,14 +36,15 @@ fn handler(req: &Request) -> Response {
         struct GreetBody {
             name: String,
         }
-        let body = match serde_urlencoded::from_str::<GreetBody>(&req.body) {
-            Ok(body) => body,
-            Err(_) => {
-                return res
-                    .status(Status::BadRequest)
-                    .body("<h1>400 Bad Request</h1>");
-            }
-        };
+        let body =
+            match serde_urlencoded::from_bytes::<GreetBody>(req.body.as_deref().unwrap_or(&[])) {
+                Ok(body) => body,
+                Err(_) => {
+                    return res
+                        .status(Status::BadRequest)
+                        .body("<h1>400 Bad Request</h1>");
+                }
+            };
         return res.body(format!("<h1>Hello {}!</h1>", body.name));
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Bastiaan van der Plaat
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -272,7 +272,9 @@ struct PersonCreateUpdateBody {
 
 fn persons_create(req: &Request, ctx: &Context) -> Response {
     // Parse and validate body
-    let body = match serde_urlencoded::from_str::<PersonCreateUpdateBody>(&req.body) {
+    let body = match serde_urlencoded::from_bytes::<PersonCreateUpdateBody>(
+        req.body.as_deref().unwrap_or(&[]),
+    ) {
         Ok(body) => body,
         Err(_) => return Response::with_status(Status::BadRequest),
     };
@@ -336,7 +338,9 @@ fn persons_update(req: &Request, ctx: &Context) -> Response {
     };
 
     // Parse and validate body
-    let body = match serde_urlencoded::from_str::<PersonCreateUpdateBody>(&req.body) {
+    let body = match serde_urlencoded::from_bytes::<PersonCreateUpdateBody>(
+        req.body.as_deref().unwrap_or(&[]),
+    ) {
         Ok(body) => body,
         Err(_) => return Response::with_status(Status::BadRequest),
     };
@@ -411,7 +415,7 @@ mod test {
 
         let res = router.handle(&Request::with_url("http://localhost/"));
         assert_eq!(res.status, Status::Ok);
-        assert!(res.body.starts_with("Persons v"));
+        assert!(res.body.starts_with(b"Persons v"));
     }
 
     #[test]
@@ -434,7 +438,7 @@ mod test {
         // Fetch /persons check if empty
         let res = router.handle(&Request::with_url("http://localhost/persons"));
         assert_eq!(res.status, Status::Ok);
-        let persons = serde_json::from_str::<api::PersonIndexResponse>(&res.body)
+        let persons = serde_json::from_slice::<api::PersonIndexResponse>(&res.body)
             .unwrap()
             .data;
         assert!(persons.is_empty());
@@ -451,7 +455,7 @@ mod test {
         // Fetch /persons check if person is there
         let res = router.handle(&Request::with_url("http://localhost/persons"));
         assert_eq!(res.status, Status::Ok);
-        let persons = serde_json::from_str::<api::PersonIndexResponse>(&res.body)
+        let persons = serde_json::from_slice::<api::PersonIndexResponse>(&res.body)
             .unwrap()
             .data;
         assert_eq!(persons.len(), 1);
@@ -470,7 +474,7 @@ mod test {
                 .body("name=Jan&age_in_years=40&relation=me"),
         );
         assert_eq!(res.status, Status::Ok);
-        let person = serde_json::from_str::<api::Person>(&res.body).unwrap();
+        let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
         assert_eq!(person.name, "Jan");
     }
 
@@ -494,7 +498,7 @@ mod test {
             person.id
         )));
         assert_eq!(res.status, Status::Ok);
-        let person = serde_json::from_str::<api::Person>(&res.body).unwrap();
+        let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
         assert_eq!(person.name, "Jan");
 
         // Fetch other person by random id should be 404 Not Found
@@ -526,7 +530,7 @@ mod test {
                 .body("name=Jan&age_in_years=41&relation=me"),
         );
         assert_eq!(res.status, Status::Ok);
-        let person = serde_json::from_str::<api::Person>(&res.body).unwrap();
+        let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
         assert_eq!(person.age_in_years, 41);
     }
 
@@ -554,7 +558,7 @@ mod test {
         // Fetch /persons check if empty
         let res = router.handle(&Request::with_url("http://localhost/persons"));
         assert_eq!(res.status, Status::Ok);
-        let persons = serde_json::from_str::<api::PersonIndexResponse>(&res.body)
+        let persons = serde_json::from_slice::<api::PersonIndexResponse>(&res.body)
             .unwrap()
             .data;
         assert!(persons.is_empty());

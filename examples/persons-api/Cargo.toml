@@ -16,7 +16,7 @@ sqlite = { path = "../../lib/sqlite", features = ["derive", "chrono", "uuid"] }
 uuid = { path = "../../lib/uuid", features = ["v4", "v7", "serde"] }
 validate = { path = "../../lib/validate", features = ["derive", "serde"] }
 
-chrono = { version = "0.4.38", features = ["serde"] }
+chrono = { version = "0.4.38", default-features = false, features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.1"

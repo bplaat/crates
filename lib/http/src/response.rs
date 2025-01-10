@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Bastiaan van der Plaat
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -11,7 +11,10 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::str::{self};
 
+use crate::serve::KEEP_ALIVE_TIMEOUT;
 use crate::status::Status;
+use crate::version::Version;
+use crate::Request;
 
 /// HTTP response
 #[derive(Default)]
@@ -21,7 +24,7 @@ pub struct Response {
     /// Headers
     pub headers: HashMap<String, String>,
     /// Body
-    pub body: String,
+    pub body: Vec<u8>,
 }
 
 impl Response {
@@ -57,16 +60,16 @@ impl Response {
     }
 
     /// Create new response with body
-    pub fn with_body(body: impl AsRef<str>) -> Self {
+    pub fn with_body(body: impl Into<Vec<u8>>) -> Self {
         Self {
-            body: body.as_ref().to_string(),
+            body: body.into(),
             ..Default::default()
         }
     }
 
     /// Set body
-    pub fn body(mut self, body: impl AsRef<str>) -> Self {
-        self.body = body.as_ref().to_string();
+    pub fn body(mut self, body: impl Into<Vec<u8>>) -> Self {
+        self.body = body.into();
         self
     }
 
@@ -81,7 +84,9 @@ impl Response {
     pub fn json(mut self, value: impl serde::Serialize) -> Self {
         self.headers
             .insert("Content-Type".to_string(), "application/json".to_string());
-        self.body = serde_json::to_string(&value).expect("Can't serialize json");
+        self.body = serde_json::to_string(&value)
+            .expect("Can't serialize json")
+            .into();
         self
     }
 
@@ -138,29 +143,45 @@ impl Response {
         if let Some(content_length) = res.headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidResponseError)?;
             if content_length > 0 {
-                let mut buffer = vec![0_u8; content_length];
-                reader.read(&mut buffer).map_err(|_| InvalidResponseError)?;
-                if let Ok(text) = str::from_utf8(&buffer) {
-                    res.body.push_str(text);
-                }
+                res.body = Vec::with_capacity(content_length);
+                reader
+                    .read(&mut res.body)
+                    .map_err(|_| InvalidResponseError)?;
             }
         }
         Ok(res)
     }
 
-    pub(crate) fn write_to_stream(mut self, stream: &mut TcpStream) {
+    pub(crate) fn write_to_stream(mut self, stream: &mut TcpStream, req: &Request) {
         // Finish headers
+        #[cfg(feature = "date")]
+        self.headers.insert(
+            "Date".to_string(),
+            chrono::Utc::now().to_rfc2822().replace("+0000", "GMT"),
+        );
         self.headers
             .insert("Content-Length".to_string(), self.body.len().to_string());
-        self.headers
-            .insert("Connection".to_string(), "close".to_string());
+        if req.version == Version::Http1_1 {
+            if req.headers.get("Connection").map(|v| v.as_str()) != Some("close") {
+                self.headers
+                    .insert("Connection".to_string(), "keep-alive".to_string());
+                self.headers.insert(
+                    "Keep-Alive".to_string(),
+                    format!("timeout={}", KEEP_ALIVE_TIMEOUT.as_secs()),
+                );
+            } else {
+                self.headers
+                    .insert("Connection".to_string(), "close".to_string());
+            }
+        }
 
         // Write response
-        _ = write!(stream, "HTTP/1.1 {}\r\n", self.status);
+        _ = write!(stream, "{} {}\r\n", req.version, self.status);
         for (name, value) in &self.headers {
             _ = write!(stream, "{}: {}\r\n", name, value);
         }
-        _ = write!(stream, "\r\n{}", self.body);
+        _ = write!(stream, "\r\n");
+        _ = stream.write_all(&self.body);
     }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Bastiaan van der Plaat
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -14,10 +14,13 @@ use std::str::{self, FromStr};
 use url::Url;
 
 use crate::method::Method;
+use crate::version::Version;
 
 /// HTTP request
 #[derive(Clone)]
 pub struct Request {
+    /// HTTP version
+    pub(crate) version: Version,
     /// URL
     pub url: Url,
     /// Method
@@ -27,7 +30,7 @@ pub struct Request {
     /// Parameters
     pub params: HashMap<String, String>,
     /// Body
-    pub body: String,
+    pub body: Option<Vec<u8>>,
     /// Client address
     pub client_addr: Option<SocketAddr>,
 }
@@ -35,11 +38,12 @@ pub struct Request {
 impl Default for Request {
     fn default() -> Self {
         Self {
+            version: Version::Http1_1,
             url: Url::from_str("http://localhost").expect("Should parse"),
             method: Method::Get,
             headers: HashMap::new(),
             params: HashMap::new(),
-            body: String::new(),
+            body: None,
             client_addr: None,
         }
     }
@@ -79,8 +83,8 @@ impl Request {
     }
 
     /// Set body
-    pub fn body(mut self, body: impl AsRef<str>) -> Self {
-        self.body = body.as_ref().to_string();
+    pub fn body(mut self, body: impl Into<Vec<u8>>) -> Self {
+        self.body = Some(body.into());
         self
     }
 
@@ -92,15 +96,28 @@ impl Request {
         let mut reader = BufReader::new(stream);
 
         // Read first line
-        let (method, path) = {
+        let (method, path, version) = {
             let mut line = String::new();
             reader
                 .read_line(&mut line)
                 .map_err(|_| InvalidRequestError)?;
             let mut parts = line.split(" ");
-            let method = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
-            let path = parts.next().ok_or(InvalidRequestError)?.trim().to_string();
-            (method.parse().map_err(|_| InvalidRequestError)?, path)
+            (
+                parts
+                    .next()
+                    .ok_or(InvalidRequestError)?
+                    .trim()
+                    .parse()
+                    .map_err(|_| InvalidRequestError)?,
+                parts.next().ok_or(InvalidRequestError)?.trim().to_string(),
+                parts
+                    .next()
+                    .ok_or(InvalidRequestError)?
+                    .trim()
+                    .to_string()
+                    .parse()
+                    .map_err(|_| InvalidRequestError)?,
+            )
         };
 
         // Read headers
@@ -121,27 +138,30 @@ impl Request {
         }
 
         // Read body
-        let mut body = String::new();
+        let mut body = None;
         if let Some(content_length) = headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidRequestError)?;
             if content_length > 0 {
-                let mut buffer = vec![0_u8; content_length];
+                let mut buffer = Vec::with_capacity(content_length);
                 reader.read(&mut buffer).map_err(|_| InvalidRequestError)?;
-                if let Ok(text) = str::from_utf8(&buffer) {
-                    body = text.to_string();
-                }
+                body = Some(buffer);
             }
         }
 
         // Parse URL
-        let url = Url::from_str(&format!(
-            "http://{}{}",
-            headers.get("Host").unwrap_or(&local_addr.to_string()),
-            path
-        ))
+        let url = Url::from_str(&if version == Version::Http1_1 {
+            format!(
+                "http://{}{}",
+                headers.get("Host").ok_or(InvalidRequestError)?,
+                path
+            )
+        } else {
+            format!("http://{}{}", local_addr, path)
+        })
         .map_err(|_| InvalidRequestError)?;
 
         Ok(Request {
+            version,
             url,
             method,
             headers,
@@ -162,10 +182,19 @@ impl Request {
                 authority.host.clone()
             },
         );
-        self.headers
-            .insert("Content-Length".to_string(), self.body.len().to_string());
-        self.headers
-            .insert("Connection".to_string(), "close".to_string());
+        self.headers.insert(
+            "Content-Length".to_string(),
+            if let Some(body) = &self.body {
+                body.len()
+            } else {
+                0
+            }
+            .to_string(),
+        );
+        if self.version == Version::Http1_1 {
+            self.headers
+                .insert("Connection".to_string(), "close".to_string());
+        }
 
         // Write request
         let path = if let Some(query) = self.url.query {
@@ -177,7 +206,10 @@ impl Request {
         for (name, value) in &self.headers {
             _ = write!(stream, "{}: {}\r\n", name, value);
         }
-        _ = write!(stream, "\r\n{}", self.body);
+        _ = write!(stream, "\r\n");
+        if let Some(body) = &self.body {
+            _ = stream.write_all(body);
+        }
     }
 }
 
