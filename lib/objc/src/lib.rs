@@ -110,7 +110,7 @@ macro_rules! message_send_impl {
             #[inline(always)]
             unsafe fn invoke<R>(obj: Object, sel: Sel, ($($a,)*): Self) -> R {
                 #[cfg(target_arch = "x86_64")]
-                {
+                unsafe {
                     if size_of::<R>() > 16 {
                         let mut ret = std::mem::zeroed();
                         let imp: unsafe extern fn (*mut R, Object, Sel, $($t,)*) =
@@ -124,7 +124,7 @@ macro_rules! message_send_impl {
                     }
                 }
                 #[cfg(not(target_arch = "x86_64"))]
-                {
+                unsafe {
                     let imp: unsafe extern fn (Object, Sel, $($t,)*) -> R =
                         std::mem::transmute(objc_msgSend as *const c_void);
                     imp(obj, sel, $($a,)*)

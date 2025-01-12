@@ -1,3 +1,7 @@
+# Enable stricter unsafe code guidelines
+[build]
+rustflags = ["-Dunsafe_op_in_unsafe_fn"]
+
 # Enable optimizations for release builds for smaller binaries
 [profile.release]
 strip = true
