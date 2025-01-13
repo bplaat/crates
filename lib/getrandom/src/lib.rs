@@ -58,7 +58,7 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), Error> {
 
 // MARK: Tests
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]

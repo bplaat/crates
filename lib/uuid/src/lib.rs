@@ -162,7 +162,7 @@ impl Error for InvalidError {}
 
 // MARK: Tests
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]

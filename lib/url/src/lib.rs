@@ -123,7 +123,7 @@ impl Error for ParseError {}
 
 // MARK: Tests
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]

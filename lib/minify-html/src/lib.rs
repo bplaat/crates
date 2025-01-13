@@ -48,7 +48,7 @@ pub fn minify_file(
 
 // MARK: Tests
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
