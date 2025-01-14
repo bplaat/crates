@@ -149,8 +149,8 @@ components:
         maximum: 50
         default: 20
 
+  # MARK: Schemas
   schemas:
-    # MARK: General schemas
     Report:
       type: object
       additionalProperties:
@@ -172,10 +172,7 @@ components:
         - limit
         - total
 
-    Relation:
-      type: string
-      enum: [me, brother, sister]
-
+    # MARK: Models
     Person:
       type: object
       properties:
@@ -200,7 +197,26 @@ components:
         - relation
         - created_at
 
-    # MARK: Page schemas
+    Relation:
+      type: string
+      enum: [me, brother, sister]
+
+    # MARK: Bodies
+    PersonCreateUpdateBody:
+      type: object
+      properties:
+        name:
+          type: string
+        age_in_years:
+          type: integer
+        relation:
+          $ref: "#/components/schemas/Relation"
+      required:
+        - name
+        - age_in_years
+        - relation
+
+    # MARK: Responses
     PersonIndexResponse:
       type: object
       properties:
@@ -213,13 +229,3 @@ components:
       required:
         - pagination
         - data
-
-    PersonCreateUpdateBody:
-      type: object
-      properties:
-        name:
-          type: string
-        age_in_years:
-          type: integer
-        relation:
-          $ref: "#/components/schemas/Relation"

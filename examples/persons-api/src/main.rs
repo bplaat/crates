@@ -21,14 +21,6 @@ mod api {
     include!(concat!(env!("OUT_DIR"), "/persons_api.rs"));
 }
 
-// MARK: Consts
-mod consts {
-    pub(crate) const DATABASE_PATH: &str = "database.db";
-    pub(crate) const HTTP_PORT: u16 = 8080;
-    pub(crate) const LIMIT_DEFAULT: i64 = 20;
-    pub(crate) const LIMIT_MAX: i64 = 50;
-}
-
 // MARK: Validators
 mod validators {
     pub(crate) fn name(name: &str) -> validate::Result {
@@ -47,8 +39,8 @@ struct Context {
 }
 
 impl Context {
-    fn with_database(database_path: &str) -> Self {
-        let database = database_open(database_path).expect("Can't open database");
+    fn with_database(path: &str) -> Self {
+        let database = database_open(path).expect("Can't open database");
         database_seed(&database);
         Self { database }
     }
@@ -130,12 +122,12 @@ fn database_seed(database: &sqlite::Connection) {
 mod layers {
     use super::*;
 
-    pub(crate) fn log(req: &Request, _: &mut Context) -> Option<Response> {
+    pub(crate) fn log_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
         println!("{} {}", req.method, req.url.path);
         None
     }
 
-    pub(crate) fn cors_pre(req: &Request, _: &mut Context) -> Option<Response> {
+    pub(crate) fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
         if req.method == Method::Options {
             Some(
                 Response::with_header("Access-Control-Allow-Origin", "*")
@@ -147,7 +139,7 @@ mod layers {
         }
     }
 
-    pub(crate) fn cors_post(_: &Request, _: &mut Context, res: Response) -> Response {
+    pub(crate) fn cors_post_layer(_: &Request, _: &mut Context, res: Response) -> Response {
         res.header("Access-Control-Allow-Origin", "*")
             .header("Access-Control-Allow-Methods", "GET, POST")
             .header("Access-Control-Max-Age", "86400")
@@ -207,14 +199,25 @@ fn not_found(_: &Request, _: &Context) -> Response {
     Response::with_status(Status::NotFound).body("404 Not found")
 }
 
-#[derive(Default, Deserialize, Validate)]
+#[derive(Deserialize, Validate)]
+#[serde(default)]
 struct IndexQuery {
     #[serde(rename = "q")]
-    query: Option<String>,
+    query: String,
     #[validate(range(min = 1))]
-    page: Option<i64>,
-    #[validate(range(min = 1, max = consts::LIMIT_MAX))]
-    limit: Option<i64>,
+    page: i64,
+    #[validate(range(min = 1, max = 50))]
+    limit: i64,
+}
+
+impl Default for IndexQuery {
+    fn default() -> Self {
+        Self {
+            query: "".to_string(),
+            page: 1,
+            limit: 20,
+        }
+    }
 }
 
 fn persons_index(req: &Request, ctx: &Context) -> Response {
@@ -230,10 +233,8 @@ fn persons_index(req: &Request, ctx: &Context) -> Response {
         return Response::with_status(Status::BadRequest).json(report);
     }
 
-    // Get or search persons
-    let search_query = format!("%{}%", query.query.unwrap_or_default().replace("%", "\\%"));
-    let page = query.page.unwrap_or(1);
-    let limit = query.limit.unwrap_or(consts::LIMIT_DEFAULT);
+    // Get persons
+    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
     let total = ctx
         .database
         .query::<i64>(
@@ -249,33 +250,47 @@ fn persons_index(req: &Request, ctx: &Context) -> Response {
                 "SELECT {} FROM persons WHERE name LIKE ? LIMIT ? OFFSET ?",
                 Person::columns()
             ),
-            (search_query, limit, (page - 1) * limit),
+            (search_query, query.limit, (query.page - 1) * query.limit),
         )
         .map(Into::<api::Person>::into)
         .collect::<Vec<_>>();
 
     // Return persons
     Response::with_json(api::PersonIndexResponse {
-        pagination: api::Pagination { page, limit, total },
+        pagination: api::Pagination {
+            page: query.page,
+            limit: query.limit,
+            total,
+        },
         data: persons,
     })
 }
 
-#[derive(Deserialize, Validate)]
+#[derive(Validate)]
 struct PersonCreateUpdateBody {
     #[validate(ascii, length(min = 3, max = 25), custom(validators::name))]
     name: String,
     #[validate(range(min = 8))]
     age_in_years: i64,
-    relation: api::Relation,
+    relation: Relation,
+}
+
+impl From<api::PersonCreateUpdateBody> for PersonCreateUpdateBody {
+    fn from(body: api::PersonCreateUpdateBody) -> Self {
+        Self {
+            name: body.name,
+            age_in_years: body.age_in_years,
+            relation: body.relation.into(),
+        }
+    }
 }
 
 fn persons_create(req: &Request, ctx: &Context) -> Response {
     // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<PersonCreateUpdateBody>(
+    let body = match serde_urlencoded::from_bytes::<api::PersonCreateUpdateBody>(
         req.body.as_deref().unwrap_or(&[]),
     ) {
-        Ok(body) => body,
+        Ok(body) => Into::<PersonCreateUpdateBody>::into(body),
         Err(_) => return Response::with_status(Status::BadRequest),
     };
     if let Err(report) = body.validate() {
@@ -286,7 +301,7 @@ fn persons_create(req: &Request, ctx: &Context) -> Response {
     let person = Person {
         name: body.name,
         age_in_years: body.age_in_years,
-        relation: body.relation.into(),
+        relation: body.relation,
         ..Default::default()
     };
     ctx.database.insert_person(person.clone());
@@ -338,10 +353,10 @@ fn persons_update(req: &Request, ctx: &Context) -> Response {
     };
 
     // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<PersonCreateUpdateBody>(
+    let body = match serde_urlencoded::from_bytes::<api::PersonCreateUpdateBody>(
         req.body.as_deref().unwrap_or(&[]),
     ) {
-        Ok(body) => body,
+        Ok(body) => Into::<PersonCreateUpdateBody>::into(body),
         Err(_) => return Response::with_status(Status::BadRequest),
     };
     if let Err(report) = body.validate() {
@@ -351,7 +366,7 @@ fn persons_update(req: &Request, ctx: &Context) -> Response {
     // Update person
     person.name = body.name;
     person.age_in_years = body.age_in_years;
-    person.relation = body.relation.into();
+    person.relation = body.relation;
     ctx.database.execute(
         "UPDATE persons SET name = ?, age = ? WHERE id = ?",
         (person.name.clone(), person.age_in_years, person.id),
@@ -379,9 +394,9 @@ fn persons_delete(req: &Request, ctx: &Context) -> Response {
 // MARK: Main
 fn router(ctx: Context) -> Router<Context> {
     RouterBuilder::<Context>::with(ctx)
-        .pre_layer(layers::log)
-        .pre_layer(layers::cors_pre)
-        .post_layer(layers::cors_post)
+        .pre_layer(layers::log_pre_layer)
+        .pre_layer(layers::cors_pre_layer)
+        .post_layer(layers::cors_post_layer)
         .get("/", home)
         .get("/persons", persons_index)
         .post("/persons", persons_create)
@@ -393,13 +408,11 @@ fn router(ctx: Context) -> Router<Context> {
 }
 
 fn main() {
-    let router = router(Context::with_database(consts::DATABASE_PATH));
-    println!(
-        "Server is listening on: http://localhost:{}/",
-        consts::HTTP_PORT
-    );
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, consts::HTTP_PORT))
-        .unwrap_or_else(|_| panic!("Can't bind to port: {}", consts::HTTP_PORT));
+    let router = router(Context::with_database("database.db"));
+    const HTTP_PORT: u16 = 8080;
+    println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
+        .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
     http::serve(listener, move |req| router.handle(req));
 }
 
@@ -460,6 +473,68 @@ mod test {
             .data;
         assert_eq!(persons.len(), 1);
         assert_eq!(persons[0].name, "Jan");
+    }
+
+    #[test]
+    fn test_persons_index_search() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create multiple persons
+        ctx.database.insert_person(Person {
+            name: "Alice".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_person(Person {
+            name: "Bob".to_string(),
+            ..Default::default()
+        });
+
+        // Search for "Alice"
+        let res = router.handle(&Request::with_url("http://localhost/persons?q=Alice"));
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].name, "Alice");
+    }
+
+    #[test]
+    fn test_persons_index_pagination() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create multiple persons
+        for i in 1..=30 {
+            ctx.database.insert_person(Person {
+                name: format!("Person {}", i),
+                age_in_years: 20 + i,
+                relation: Relation::Me,
+                ..Default::default()
+            });
+        }
+
+        // Fetch /persons with limit 10 and page 1
+        let res = router.handle(&Request::with_url(
+            "http://localhost/persons?limit=10&page=1",
+        ));
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 10);
+        assert_eq!(response.pagination.page, 1);
+        assert_eq!(response.pagination.limit, 10);
+        assert_eq!(response.pagination.total, 30);
+
+        // Fetch /persons with limit 10 and page 2
+        let res = router.handle(&Request::with_url(
+            "http://localhost/persons?limit=5&page=2",
+        ));
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 5);
+        assert_eq!(response.pagination.page, 2);
+        assert_eq!(response.pagination.limit, 5);
+        assert_eq!(response.pagination.total, 30);
+        assert_eq!(response.data[0].name, "Person 6");
     }
 
     #[test]
@@ -532,6 +607,14 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
         assert_eq!(person.age_in_years, 41);
+
+        // Update person with validation errors
+        let res = router.handle(
+            &Request::with_url(format!("http://localhost/persons/{}", person.id))
+                .method(Method::Put)
+                .body("name=Bastiaan&age_in_years=41&relation=wrong"),
+        );
+        assert_eq!(res.status, Status::BadRequest);
     }
 
     #[test]
