@@ -27,5 +27,5 @@ jobs:
           components: rustfmt
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-udeps,cargo-deny,cargo-nextest
+          tool: cargo-deny,cargo-nextest
       - run: make ci
