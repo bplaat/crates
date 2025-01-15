@@ -12,11 +12,11 @@ workspace = true
 from_enum = { path = "../../lib/from_enum" }
 http = { path = "../../lib/http", features = ["json"] }
 router = { path = "../../lib/router" }
-sqlite = { path = "../../lib/sqlite", features = ["derive", "chrono", "uuid"] }
+sqlite = { path = "../../lib/sqlite", features = ["derive", "uuid", "time"] }
+time = { path = "../../lib/time", features = ["serde"] }
 uuid = { path = "../../lib/uuid", features = ["v4", "v7", "serde"] }
 validate = { path = "../../lib/validate", features = ["derive", "serde"] }
 
-chrono = { version = "0.4.38", default-features = false, features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.1"
@@ -29,6 +29,6 @@ openapi-generator = { path = "../../lib/openapi-generator" }
 sqlite = { path = "../../lib/sqlite", features = [
     "bundled",
     "derive",
-    "chrono",
     "uuid",
+    "time",
 ] }

@@ -143,7 +143,7 @@ impl serde::Serialize for Uuid {
 impl<'de> serde::Deserialize<'de> for Uuid {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
-        Uuid::from_str(&s).map_err(serde::de::Error::custom)
+        Self::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 

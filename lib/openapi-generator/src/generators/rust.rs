@@ -104,7 +104,7 @@ fn schema_generate_code(
             }
             match schema.format.as_deref() {
                 Some("uuid") => "uuid::Uuid",
-                Some("date-time") => "chrono::DateTime<chrono::Utc>",
+                Some("date-time") => "time::DateTime",
                 _ => "String",
             }
             .to_string()
