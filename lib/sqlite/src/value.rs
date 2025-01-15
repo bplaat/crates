@@ -116,45 +116,36 @@ impl TryFrom<Value> for uuid::Uuid {
     }
 }
 
-// MARK: From chrono
-#[cfg(feature = "chrono")]
-impl From<chrono::NaiveDate> for Value {
-    fn from(value: chrono::NaiveDate) -> Self {
-        Value::Integer(
-            value
-                .and_hms_opt(0, 0, 0)
-                .expect("Should create DateTime")
-                .and_utc()
-                .timestamp(),
-        )
+// MARK: From time
+#[cfg(feature = "time")]
+impl From<time::Date> for Value {
+    fn from(value: time::Date) -> Self {
+        Value::Integer(value.timestamp() as i64)
     }
 }
-#[cfg(feature = "chrono")]
-impl TryFrom<Value> for chrono::NaiveDate {
+#[cfg(feature = "time")]
+impl TryFrom<Value> for time::Date {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            #[allow(deprecated)]
-            Value::Integer(i) => Ok(chrono::NaiveDateTime::from_timestamp(i, 0).date()),
+            Value::Integer(i) => Ok(time::Date::from_timestamp(i as u64)),
             _ => Err(ValueError),
         }
     }
 }
 
-#[cfg(feature = "chrono")]
-impl From<chrono::DateTime<chrono::Utc>> for Value {
-    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
-        Value::Integer(value.timestamp())
+#[cfg(feature = "time")]
+impl From<time::DateTime> for Value {
+    fn from(value: time::DateTime) -> Self {
+        Value::Integer(value.timestamp() as i64)
     }
 }
-#[cfg(feature = "chrono")]
-impl TryFrom<Value> for chrono::DateTime<chrono::Utc> {
+#[cfg(feature = "time")]
+impl TryFrom<Value> for time::DateTime {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => {
-                Ok(chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0).ok_or(ValueError)?)
-            }
+            Value::Integer(i) => Ok(time::DateTime::from_timestamp(i as u64)),
             _ => Err(ValueError),
         }
     }
@@ -259,51 +250,44 @@ impl TryFrom<Value> for Option<uuid::Uuid> {
     }
 }
 
-// MARK: From chrono
-#[cfg(feature = "chrono")]
-impl From<Option<chrono::NaiveDate>> for Value {
-    fn from(value: Option<chrono::NaiveDate>) -> Self {
+// MARK: From time
+#[cfg(feature = "time")]
+impl From<Option<time::Date>> for Value {
+    fn from(value: Option<time::Date>) -> Self {
         match value {
-            Some(v) => Value::Integer(
-                v.and_hms_opt(0, 0, 0)
-                    .expect("Should create DateTime")
-                    .and_utc()
-                    .timestamp(),
-            ),
+            Some(v) => Value::Integer(v.timestamp() as i64),
             None => Value::Null,
         }
     }
 }
-#[cfg(feature = "chrono")]
-impl TryFrom<Value> for Option<chrono::NaiveDate> {
+#[cfg(feature = "time")]
+impl TryFrom<Value> for Option<time::Date> {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             #[allow(deprecated)]
-            Value::Integer(i) => Ok(Some(chrono::NaiveDateTime::from_timestamp(i, 0).date())),
+            Value::Integer(i) => Ok(Some(time::Date::from_timestamp(i as u64))),
             Value::Null => Ok(None),
             _ => Err(ValueError),
         }
     }
 }
 
-#[cfg(feature = "chrono")]
-impl From<Option<chrono::DateTime<chrono::Utc>>> for Value {
-    fn from(value: Option<chrono::DateTime<chrono::Utc>>) -> Self {
+#[cfg(feature = "time")]
+impl From<Option<time::DateTime>> for Value {
+    fn from(value: Option<time::DateTime>) -> Self {
         match value {
-            Some(v) => Value::Integer(v.timestamp()),
+            Some(v) => Value::Integer(v.timestamp() as i64),
             None => Value::Null,
         }
     }
 }
-#[cfg(feature = "chrono")]
-impl TryFrom<Value> for Option<chrono::DateTime<chrono::Utc>> {
+#[cfg(feature = "time")]
+impl TryFrom<Value> for Option<time::DateTime> {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(Some(
-                chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0).ok_or(ValueError)?,
-            )),
+            Value::Integer(i) => Ok(Some(time::DateTime::from_timestamp(i as u64))),
             Value::Null => Ok(None),
             _ => Err(ValueError),
         }

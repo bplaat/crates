@@ -11,6 +11,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::str::{self};
 
+use time::DateTime;
+
 use crate::serve::KEEP_ALIVE_TIMEOUT;
 use crate::status::Status;
 use crate::version::Version;
@@ -154,11 +156,8 @@ impl Response {
 
     pub(crate) fn write_to_stream(mut self, stream: &mut TcpStream, req: &Request) {
         // Finish headers
-        #[cfg(feature = "date")]
-        self.headers.insert(
-            "Date".to_string(),
-            chrono::Utc::now().to_rfc2822().replace("+0000", "GMT"),
-        );
+        self.headers
+            .insert("Date".to_string(), DateTime::now().to_rfc2822());
         self.headers
             .insert("Content-Length".to_string(), self.body.len().to_string());
         if req.version == Version::Http1_1 {
