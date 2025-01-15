@@ -5,6 +5,7 @@
  */
 
 use std::fmt::{self, Display, Formatter};
+use std::ops::Add;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
@@ -57,6 +58,14 @@ impl Date {
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Should be after unix epoch")
             .as_secs()
+    }
+}
+
+impl Add<Duration> for Date {
+    type Output = Self;
+
+    fn add(self, duration: Duration) -> Self::Output {
+        Self(self.0 + duration)
     }
 }
 
@@ -173,5 +182,12 @@ mod test {
     fn test_non_leap_year() {
         let date: Result<Date, _> = "2019-02-29".parse();
         assert!(date.is_err());
+    }
+
+    #[test]
+    fn test_add_duration() {
+        let date = Date::from_timestamp(1609459200); // 2021-01-01 00:00:00 UTC
+        let new_date = date + Duration::from_secs(86400); // Add one day
+        assert_eq!(new_date.to_string(), "2021-01-02");
     }
 }

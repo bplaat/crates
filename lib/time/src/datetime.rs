@@ -5,6 +5,7 @@
  */
 
 use std::fmt::{self, Display, Formatter};
+use std::ops::Add;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
@@ -86,6 +87,14 @@ impl DateTime {
             (timestamp % 3600) / 60,
             timestamp % 60
         )
+    }
+}
+
+impl Add<Duration> for DateTime {
+    type Output = Self;
+
+    fn add(self, duration: Duration) -> Self::Output {
+        Self(self.0 + duration)
     }
 }
 
@@ -269,5 +278,12 @@ mod test {
 
         let invalid_datetime_str = "2019-04-31T12:00:00Z"; // Invalid day in April
         assert!(invalid_datetime_str.parse::<DateTime>().is_err());
+    }
+
+    #[test]
+    fn test_add_duration() {
+        let datetime = DateTime::from_timestamp(1_000_000);
+        let new_datetime = datetime + Duration::from_secs(3600);
+        assert_eq!(new_datetime.timestamp(), 1_003_600);
     }
 }
