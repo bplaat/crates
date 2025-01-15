@@ -26,6 +26,31 @@ impl Date {
         Self(SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp))
     }
 
+    /// Create a Date from year, month and day
+    pub fn from_ymd(year: u64, month: u64, day: u64) -> Option<Self> {
+        let days_in_months = if is_leap_year(year) {
+            DAYS_IN_MONTHS_LEAP_YEAR
+        } else {
+            DAYS_IN_MONTHS
+        };
+        if !(1..=12).contains(&month)
+            || !(1..=days_in_months[(month - 1) as usize]).contains(&(day as u8))
+        {
+            return None;
+        }
+
+        let mut days_since_epoch = 0;
+        for year in 1970..year {
+            days_since_epoch += if is_leap_year(year) { 366 } else { 365 };
+        }
+        for moth in 0..(month - 1) {
+            days_since_epoch += days_in_months[moth as usize] as u64;
+        }
+        days_since_epoch += day - 1;
+
+        Some(Self::from_timestamp(days_since_epoch * 86400))
+    }
+
     /// Get the timestamp of the date and time
     pub fn timestamp(&self) -> u64 {
         self.0
@@ -55,29 +80,7 @@ impl FromStr for Date {
             .ok_or(ParseError)?
             .parse()
             .map_err(|_| ParseError)?;
-
-        let days_in_months = if is_leap_year(year) {
-            DAYS_IN_MONTHS_LEAP_YEAR
-        } else {
-            DAYS_IN_MONTHS
-        };
-        if parts.next().is_some()
-            || !(1..=12).contains(&month)
-            || !(1..=days_in_months[(month - 1) as usize]).contains(&(day as u8))
-        {
-            return Err(ParseError);
-        }
-
-        let mut days_since_epoch = 0;
-        for year in 1970..year {
-            days_since_epoch += if is_leap_year(year) { 366 } else { 365 };
-        }
-        for moth in 0..(month - 1) {
-            days_since_epoch += days_in_months[moth as usize] as u64;
-        }
-        days_since_epoch += day - 1;
-
-        Ok(Self::from_timestamp(days_since_epoch * 86400))
+        Self::from_ymd(year, month, day).ok_or(ParseError)
     }
 }
 

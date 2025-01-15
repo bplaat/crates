@@ -9,7 +9,8 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use crate::{
-    is_leap_year, ParseError, DAYS_IN_MONTHS, DAYS_IN_MONTHS_LEAP_YEAR, DAY_NAMES, MONTH_NAMES,
+    is_leap_year, Date, ParseError, DAYS_IN_MONTHS, DAYS_IN_MONTHS_LEAP_YEAR, DAY_NAMES,
+    MONTH_NAMES,
 };
 
 // MARK: DateTime
@@ -26,6 +27,20 @@ impl DateTime {
     /// Create a DateTime from a timestamp
     pub fn from_timestamp(timestamp: u64) -> Self {
         Self(SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp))
+    }
+
+    /// Create a DateTime from year, month, day, hour, minute and second
+    pub fn from_ymdhms(
+        year: u64,
+        month: u64,
+        day: u64,
+        hour: u64,
+        minute: u64,
+        second: u64,
+    ) -> Option<Self> {
+        Some(Self::from_timestamp(
+            Date::from_ymd(year, month, day)?.timestamp() + hour * 3600 + minute * 60 + second,
+        ))
     }
 
     /// Get the timestamp of the date and time
@@ -85,39 +100,7 @@ impl FromStr for DateTime {
             return Err(ParseError);
         }
 
-        let mut date_parts = date_part.split('-');
-        let year: u64 = date_parts
-            .next()
-            .ok_or(ParseError)?
-            .parse()
-            .map_err(|_| ParseError)?;
-        let month: u64 = date_parts
-            .next()
-            .ok_or(ParseError)?
-            .parse()
-            .map_err(|_| ParseError)?;
-        let day: u64 = date_parts
-            .next()
-            .ok_or(ParseError)?
-            .parse()
-            .map_err(|_| ParseError)?;
-
-        let days_in_months = if is_leap_year(year) {
-            DAYS_IN_MONTHS_LEAP_YEAR
-        } else {
-            DAYS_IN_MONTHS
-        };
-        if date_parts.next().is_some()
-            || !(1..=12).contains(&month)
-            || !(1..=days_in_months[(month - 1) as usize]).contains(&(day as u8))
-        {
-            return Err(ParseError);
-        }
-
-        if !time_part.ends_with('Z') {
-            return Err(ParseError);
-        }
-        let mut time_parts = time_part.trim_end_matches('Z').split(':');
+        let mut time_parts = time_part.strip_suffix('Z').ok_or(ParseError)?.split(':');
         let hour: u64 = time_parts
             .next()
             .ok_or(ParseError)?
@@ -137,17 +120,8 @@ impl FromStr for DateTime {
             return Err(ParseError);
         }
 
-        let mut days_since_epoch = 0;
-        for year in 1970..year {
-            days_since_epoch += if is_leap_year(year) { 366 } else { 365 };
-        }
-        for month in 0..(month - 1) {
-            days_since_epoch += days_in_months[month as usize] as u64;
-        }
-        days_since_epoch += day - 1;
-
         Ok(Self::from_timestamp(
-            days_since_epoch * 86400 + hour * 3600 + minute * 60 + second,
+            Date::from_str(date_part)?.timestamp() + hour * 3600 + minute * 60 + second,
         ))
     }
 }
