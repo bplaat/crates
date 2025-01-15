@@ -7,17 +7,18 @@
 //! A simple HTML minifier library
 
 use std::fs;
+use std::sync::LazyLock;
 
-use lazy_static::lazy_static;
 use regex::Regex;
 
-lazy_static! {
-    static ref RE_COMMENTS: Regex = Regex::new(r"<!--.*?-->").expect("Should compile");
-    static ref RE_WHITESPACE_BETWEEN_TAGS: Regex = Regex::new(r">\s+<").expect("Should compile");
-    static ref RE_LEADING_TRAILING_WHITESPACE: Regex =
-        Regex::new(r"^\s+|\s+$").expect("Should compile");
-    static ref RE_MULTIPLE_SPACES: Regex = Regex::new(r"\s{2,}").expect("Should compile");
-}
+static RE_COMMENTS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"<!--.*?-->").expect("Should compile"));
+static RE_WHITESPACE_BETWEEN_TAGS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r">\s+<").expect("Should compile"));
+static RE_LEADING_TRAILING_WHITESPACE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s+|\s+$").expect("Should compile"));
+static RE_MULTIPLE_SPACES: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s{2,}").expect("Should compile"));
 
 /// Minify the given html
 pub fn minify(html: impl AsRef<str>) -> String {

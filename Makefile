@@ -12,11 +12,11 @@ ci:
 	./meta/check_copyright.sh
 	cargo +nightly fmt -- --check
 # 	Lint
-	cargo clippy --locked --all-targets -- -D warnings
+	cargo clippy --locked --all-targets --all-features -- -D warnings
 	cargo deny check --hide-inclusion-graph
 # 	Test
-	cargo test --doc --locked
-	cargo nextest run --locked
+	cargo test --doc --all-features --locked
+	cargo nextest run --all-features --locked
 
 # Get test coverage
 .PHONY: coverage

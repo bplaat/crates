@@ -17,6 +17,7 @@
         "editor.formatOnSave": true
     },
     "rust-analyzer.rustfmt.extraArgs": ["+nightly"],
-    "rust-analyzer.check.command": "clippy"
+    "rust-analyzer.check.command": "clippy",
+    "rust-analyzer.check.extraArgs": ["--all-features"]
 }
 ```

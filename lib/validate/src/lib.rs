@@ -67,12 +67,13 @@ pub trait Validate {
 pub use validate_derive::Validate;
 
 #[cfg(feature = "email")]
-lazy_static::lazy_static! {
-    static ref EMAIL_REGEX: regex::Regex = regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$").expect("Invalid regex");
-}
+static EMAIL_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
+        .expect("Invalid regex")
+});
 
-#[cfg(feature = "email")]
 /// Validate email
+#[cfg(feature = "email")]
 pub fn is_valid_email(email: &str) -> bool {
     EMAIL_REGEX.is_match(email)
 }
@@ -82,4 +83,27 @@ pub fn is_valid_email(email: &str) -> bool {
 pub fn is_valid_url(url: &str) -> bool {
     use std::str::FromStr;
     url::Url::from_str(url).is_ok()
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_valid_email() {
+        assert!(is_valid_email("test@example.com"));
+        assert!(is_valid_email("user.name+tag+sorting@example.com"));
+        assert!(is_valid_email("user_name@example.co.uk"));
+        assert!(is_valid_email("user-name@example.org"));
+    }
+
+    #[test]
+    fn test_invalid_email() {
+        assert!(!is_valid_email("plainaddress"));
+        assert!(!is_valid_email("@missingusername.com"));
+        assert!(!is_valid_email("username@.com"));
+        assert!(!is_valid_email("username@.com."));
+        assert!(!is_valid_email("username@example..com"));
+    }
 }
