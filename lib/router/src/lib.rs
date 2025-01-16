@@ -228,8 +228,8 @@ impl<T: Clone> RouterBuilder<T> {
                 Handler::new(
                     |_, _| {
                         Response::new()
-                            .status(http::Status::NotFound)
-                            .body("404 Not Found")
+                            .status(http::Status::MethodNotAllowed)
+                            .body("405 Method Not Allowed")
                     },
                     self.pre_layers.clone(),
                     self.post_layers.clone(),
@@ -239,8 +239,8 @@ impl<T: Clone> RouterBuilder<T> {
                 Handler::new(
                     |_, _| {
                         Response::new()
-                            .status(http::Status::MethodNotAllowed)
-                            .body("405 Method Not Allowed")
+                            .status(http::Status::NotFound)
+                            .body("404 Not Found")
                     },
                     self.pre_layers.clone(),
                     self.post_layers.clone(),
@@ -270,10 +270,9 @@ impl<T: Clone> InnerRouter<T> {
 
                 // Find matching route by method
                 for route in self.routes.iter().filter(|r| r.route == route.route) {
-                    if !route.methods.contains(&req.method) {
-                        continue;
+                    if route.methods.contains(&req.method) {
+                        return route.handler.call(&req, &mut ctx);
                     }
-                    return route.handler.call(&req, &mut ctx);
                 }
 
                 // Or run not allowed method handler
@@ -295,5 +294,59 @@ impl<T: Clone> Router<T> {
     /// Handle request
     pub fn handle(&self, req: &Request) -> Response {
         self.0.handle(req)
+    }
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use http::Status;
+
+    use super::*;
+
+    fn home(_req: &Request, _ctx: &()) -> Response {
+        Response::new().status(Status::Ok).body("Hello, World!")
+    }
+
+    fn hello(req: &Request, _ctx: &()) -> Response {
+        let name = req.params.get("name").unwrap();
+        Response::new()
+            .status(Status::Ok)
+            .body(format!("Hello, {}!", name))
+    }
+
+    #[test]
+    fn test_routing() {
+        let router = RouterBuilder::with(())
+            .get("/", home)
+            .get("/hello/:name", hello)
+            .get("/hello/:name/i/:am/so/:deep", hello)
+            .build();
+
+        // Test home route
+        let res = router.handle(&Request::with_url("http://localhost/"));
+        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.body, b"Hello, World!");
+
+        // Test fallback route
+        let res = router.handle(&Request::with_url("http://localhost/unknown"));
+        assert_eq!(res.status, Status::NotFound);
+        assert_eq!(res.body, b"404 Not Found");
+
+        // Test route with params
+        let res = router.handle(&Request::with_url("http://localhost/hello/Bassie"));
+        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.body, b"Hello, Bassie!");
+
+        // Test route with multiple params
+        let res = router.handle(&Request::with_url(
+            "http://localhost/hello/Bassie/i/handle/so/much",
+        ));
+        assert_eq!(res.status, Status::Ok);
+
+        // Test wrong method
+        let res = router.handle(&Request::with_url("http://localhost/").method(Method::Options));
+        assert_eq!(res.status, Status::MethodNotAllowed);
+        assert_eq!(res.body, b"405 Method Not Allowed");
     }
 }
