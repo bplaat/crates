@@ -11,7 +11,7 @@ use webview::{Event, WebviewBuilder};
 
 const APP_HTML: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/app.min.html"));
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "type")]
 enum IpcMessage {
     #[serde(rename = "hello")]

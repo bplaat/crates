@@ -41,8 +41,34 @@ impl error::Error for Error {}
 
 // MARK: Report
 /// Validation report
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Default)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Report(pub HashMap<String, Vec<String>>);
+
+impl Report {
+    /// Create new report
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Is report empty
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Get errors for field
+    pub fn get_errors(&self, field: impl AsRef<str>) -> Option<&Vec<String>> {
+        self.0.get(field.as_ref())
+    }
+
+    /// Insert error for field
+    pub fn insert_error(&mut self, field: impl AsRef<str>, message: impl AsRef<str>) {
+        self.0
+            .entry(field.as_ref().to_string())
+            .or_default()
+            .push(message.as_ref().to_string());
+    }
+}
 
 // MARK: Validate
 /// Validate trait

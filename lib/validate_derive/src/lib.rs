@@ -186,10 +186,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                     quote! {
                         if let Some(value) = &self.#field_name {
                             if #condition {
-                                report
-                                    .entry(#field_name_string.to_string())
-                                    .or_insert_with(Vec::new)
-                                    .push(#error);
+                                report.insert_error(#field_name_string, #error);
                             }
                         }
                     }
@@ -197,10 +194,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                     quote! {
                         let value = &self.#field_name;
                         if #condition {
-                            report
-                                .entry(#field_name_string.to_string())
-                                .or_insert_with(Vec::new)
-                                .push(#error);
+                            report.insert_error(#field_name_string, #error);
                         }
                     }
                 }
@@ -243,10 +237,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                             quote! {
                                 if let Some(value) = &self.#field_name {
                                     if let Err(error) = #custom(value, context) {
-                                        report
-                                            .entry(stringify!(#field_name).to_string())
-                                            .or_insert_with(Vec::new)
-                                            .push(error.message().to_string());
+                                        report.insert_error(stringify!(#field_name), error.message());
                                     }
                                 }
                             }
@@ -254,10 +245,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                             quote! {
                                 let value = &self.#field_name;
                                 if let Err(error) = #custom(value, context) {
-                                    report
-                                        .entry(stringify!(#field_name).to_string())
-                                        .or_insert_with(Vec::new)
-                                        .push(error.message().to_string());
+                                    report.insert_error(stringify!(#field_name), error.message());
                                 }
                             }
                         }
@@ -265,10 +253,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                         quote! {
                             if let Some(value) = &self.#field_name {
                                 if let Err(error) = #custom(value) {
-                                    report
-                                        .entry(stringify!(#field_name).to_string())
-                                        .or_insert_with(Vec::new)
-                                        .push(error.message().to_string());
+                                    report.insert_error(stringify!(#field_name), error.message());
                                 }
                             }
                         }
@@ -276,10 +261,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                         quote! {
                             let value = &self.#field_name;
                             if let Err(error) = #custom(value) {
-                                report
-                                    .entry(stringify!(#field_name).to_string())
-                                    .or_insert_with(Vec::new)
-                                    .push(error.message().to_string());
+                                report.insert_error(stringify!(#field_name), error.message());
                             }
                         }
                     }
@@ -295,12 +277,12 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         impl validate::Validate for #name {
             type Context = #context_type;
             fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), validate::Report> {
-                let mut report = std::collections::HashMap::new();
+                let mut report = validate::Report::new();
                 #(#validate_fields;)*
                 if report.is_empty() {
                     Ok(())
                 } else {
-                    Err(validate::Report(report))
+                    Err(report)
                 }
             }
         }
