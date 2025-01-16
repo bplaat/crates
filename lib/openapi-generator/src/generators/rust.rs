@@ -57,7 +57,7 @@ fn schema_generate_code(
     if let Some(additional_properties) = &schema.additional_properties {
         let field_type = schema_generate_code(code_schemas, name.clone(), additional_properties);
         let code = format!(
-            "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {}(std::collections::HashMap<String, {}>);\n\n",
+            "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {}(pub std::collections::HashMap<String, {}>);\n\n",
             name,
             field_type
         );
