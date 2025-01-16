@@ -444,6 +444,27 @@ mod test {
     }
 
     #[test]
+    fn test_cors_preflight() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        let req = Request::with_url("http://localhost/").method(Method::Options);
+        let res = router.handle(&req);
+        assert_eq!(
+            res.headers.get("Access-Control-Allow-Origin"),
+            Some(&"*".to_string())
+        );
+        assert_eq!(
+            res.headers.get("Access-Control-Allow-Methods"),
+            Some(&"GET, POST".to_string())
+        );
+        assert_eq!(
+            res.headers.get("Access-Control-Max-Age"),
+            Some(&"86400".to_string())
+        );
+    }
+
+    #[test]
     fn test_persons_index() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
