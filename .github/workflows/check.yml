@@ -22,10 +22,7 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y libsqlite3-dev
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          components: rustfmt
+      - run: rustup toolchain add nightly --component rustfmt
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny,cargo-nextest
@@ -35,3 +32,4 @@ jobs:
         with:
           check_name: Rust Tests
           report_paths: target/nextest/ci/junit.xml
+          require_tests: true

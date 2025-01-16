@@ -28,9 +28,10 @@ A collection of minimal Rust crates that I created for myself
 ## Getting Started
 
 -   Install the latest Rust toolchain with [rustup](https://rustup.rs/)
--   Install `cargo-deny` and `cargo-nextest`
+-   Install nightly `rustfmt`, `cargo-deny` and `cargo-nextest`
 
     ```sh
+    rustup toolchain add nightly --component rustfmt
     cargo install cargo-deny cargo-nextest
     ```
 
