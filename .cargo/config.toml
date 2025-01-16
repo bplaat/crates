@@ -6,6 +6,6 @@ rustflags = ["-Dunsafe_op_in_unsafe_fn"]
 [profile.release]
 strip = true
 opt-level = "z"
-lto = "thin"
+lto = "fat"
 panic = "abort"
 overflow-checks = false
