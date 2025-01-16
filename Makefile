@@ -21,7 +21,7 @@ ci:
 # Get test coverage
 .PHONY: coverage
 coverage:
-	cargo llvm-cov nextest
+	cargo llvm-cov nextest --all-features --locked
 
 # Build release binaries
 TARGETS = x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
