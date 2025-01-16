@@ -1,3 +1,5 @@
+PROFILE ?= default
+
 .PHONY: all
 all: check
 
@@ -6,7 +8,6 @@ all: check
 clean:
 	cargo clean
 
-PROFILE ?= default
 .PHONY: check
 check:
 # 	Format
@@ -22,7 +23,7 @@ check:
 # Get test coverage
 .PHONY: coverage
 coverage:
-	cargo llvm-cov nextest --all-features --locked --config-file nextest.toml
+	cargo llvm-cov nextest --all-features --locked --config-file nextest.toml --profile $(PROFILE)
 
 # Build release binaries
 TARGETS = x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
