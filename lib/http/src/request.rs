@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::str::{self, FromStr};
 
 use url::Url;
@@ -32,7 +32,7 @@ pub struct Request {
     /// Body
     pub body: Option<Vec<u8>>,
     /// Client address
-    pub client_addr: Option<SocketAddr>,
+    pub client_addr: SocketAddr,
 }
 
 impl Default for Request {
@@ -44,7 +44,7 @@ impl Default for Request {
             headers: HashMap::new(),
             params: HashMap::new(),
             body: None,
-            client_addr: None,
+            client_addr: (Ipv4Addr::LOCALHOST, 0).into(),
         }
     }
 }
@@ -91,8 +91,10 @@ impl Request {
     pub(crate) fn read_from_stream(stream: &mut TcpStream) -> Result<Request, InvalidRequestError> {
         let local_addr = stream
             .local_addr()
-            .expect("Can't get tcp stream local addr");
-        let client_addr = stream.peer_addr().ok();
+            .expect("Can't get tcp stream serder addr");
+        let client_addr = stream
+            .peer_addr()
+            .expect("Can't get tcp stream client addr");
         let mut reader = BufReader::new(stream);
 
         // Read first line
