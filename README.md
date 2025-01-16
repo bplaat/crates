@@ -17,7 +17,7 @@ A collection of minimal Rust crates that I created for myself
 -   [sqlite_derive](lib/sqlite_derive) SQLite derive macro's library
 -   [sqlite3-sys](lib/sqlite3-sys) A SQLite3 sys bindings library
 -   [threadpool](lib/threadpool) A very basic thread pool library
--   [time](lib/time) A simple UTC DateTime extension of `std::time` similar to `chrono`
+-   [time](lib/time) A simple UTC DateTime library similar to `chrono`
 -   [url](lib/url) A minimal URL parser library
 -   [useragent](lib/useragent) A basic user agent parser library
 -   [uuid](lib/uuid) A minimal UUID library

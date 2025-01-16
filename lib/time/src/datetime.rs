@@ -5,87 +5,64 @@
  */
 
 use std::fmt::{self, Display, Formatter};
-use std::ops::Add;
+use std::ops::{Add, Sub};
 use std::str::FromStr;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-use crate::{
-    is_leap_year, Date, ParseError, DAYS_IN_MONTHS, DAYS_IN_MONTHS_LEAP_YEAR, DAY_NAMES,
-    MONTH_NAMES,
-};
+use crate::{now, timestamp_to_ymd, Date, ParseError, DAY_NAMES, MONTH_NAMES, SECS_IN_DAY};
 
 // MARK: DateTime
 /// A DateTime in UTC timezone
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct DateTime(SystemTime);
+pub struct DateTime(i64);
 
 impl DateTime {
     /// Create a DateTime with the current date and time
     pub fn now() -> Self {
-        Self(SystemTime::now())
+        Self(now() as i64)
     }
 
     /// Create a DateTime from a timestamp
-    pub fn from_timestamp(timestamp: u64) -> Self {
-        Self(SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp))
+    pub fn from_timestamp(timestamp: i64) -> Self {
+        Self(timestamp)
     }
 
     /// Create a DateTime from year, month, day, hour, minute and second
     pub fn from_ymdhms(
-        year: u64,
-        month: u64,
-        day: u64,
-        hour: u64,
-        minute: u64,
-        second: u64,
+        year: u32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        minute: u32,
+        second: u32,
     ) -> Option<Self> {
         Some(Self::from_timestamp(
-            Date::from_ymd(year, month, day)?.timestamp() + hour * 3600 + minute * 60 + second,
+            Date::from_ymd(year, month, day)?.timestamp()
+                + (hour as i64) * 3600
+                + (minute as i64) * 60
+                + (second as i64),
         ))
     }
 
     /// Get the timestamp of the date and time
-    pub fn timestamp(&self) -> u64 {
+    pub fn timestamp(&self) -> i64 {
         self.0
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Should be after unix epoch")
-            .as_secs()
     }
 
     /// Format to RFC 2822 string
     pub fn to_rfc2822(&self) -> String {
-        let timestamp = self.timestamp();
-        let days_since_epoch = timestamp / 86400;
-        let day_in_week = (days_since_epoch + 4) % 7; // 1970-01-01 was a Thursday
-
-        let mut year = 1970;
-        let mut day_in_year = days_since_epoch;
-        while day_in_year >= if is_leap_year(year) { 366 } else { 365 } {
-            day_in_year -= if is_leap_year(year) { 366 } else { 365 };
-            year += 1;
-        }
-
-        let days_in_months = if is_leap_year(year) {
-            DAYS_IN_MONTHS_LEAP_YEAR
-        } else {
-            DAYS_IN_MONTHS
-        };
-        let mut month = 0;
-        let mut day_in_month = day_in_year;
-        while day_in_month >= days_in_months[month] as u64 {
-            day_in_month -= days_in_months[month] as u64;
-            month += 1;
-        }
-
+        let (year, month, day) = timestamp_to_ymd(self.0);
+        let week_day = (self.0.div_euclid(SECS_IN_DAY) + 4).rem_euclid(7); // 1970-01-01 was a Thursday
+        let day_sec = self.0.rem_euclid(SECS_IN_DAY);
         format!(
             "{}, {:02} {} {} {:02}:{:02}:{:02} GMT",
-            DAY_NAMES[day_in_week as usize],
-            day_in_month + 1,
-            MONTH_NAMES[month],
+            DAY_NAMES[week_day as usize],
+            day,
+            MONTH_NAMES[month as usize - 1],
             year,
-            (timestamp % 86400) / 3600,
-            (timestamp % 3600) / 60,
-            timestamp % 60
+            day_sec / 3600,
+            (day_sec % 3600) / 60,
+            day_sec % 60
         )
     }
 }
@@ -94,7 +71,15 @@ impl Add<Duration> for DateTime {
     type Output = Self;
 
     fn add(self, duration: Duration) -> Self::Output {
-        Self(self.0 + duration)
+        Self(self.0 + duration.as_secs() as i64)
+    }
+}
+
+impl Sub<Duration> for DateTime {
+    type Output = Self;
+
+    fn sub(self, duration: Duration) -> Self::Output {
+        Self(self.0 - duration.as_secs() as i64)
     }
 }
 
@@ -110,17 +95,17 @@ impl FromStr for DateTime {
         }
 
         let mut time_parts = time_part.strip_suffix('Z').ok_or(ParseError)?.split(':');
-        let hour: u64 = time_parts
+        let hour: u32 = time_parts
             .next()
             .ok_or(ParseError)?
             .parse()
             .map_err(|_| ParseError)?;
-        let minute: u64 = time_parts
+        let minute: u32 = time_parts
             .next()
             .ok_or(ParseError)?
             .parse()
             .map_err(|_| ParseError)?;
-        let second: u64 = time_parts
+        let second: u32 = time_parts
             .next()
             .ok_or(ParseError)?
             .parse()
@@ -130,44 +115,27 @@ impl FromStr for DateTime {
         }
 
         Ok(Self::from_timestamp(
-            Date::from_str(date_part)?.timestamp() + hour * 3600 + minute * 60 + second,
+            Date::from_str(date_part)?.timestamp()
+                + (hour as i64) * 3600
+                + (minute as i64) * 60
+                + (second as i64),
         ))
     }
 }
 
 impl Display for DateTime {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let timestamp = self.timestamp();
-        let days_since_epoch = timestamp / 86400;
-
-        let mut year = 1970;
-        let mut day_in_year = days_since_epoch;
-        while day_in_year >= if is_leap_year(year) { 366 } else { 365 } {
-            day_in_year -= if is_leap_year(year) { 366 } else { 365 };
-            year += 1;
-        }
-
-        let days_in_months = if is_leap_year(year) {
-            DAYS_IN_MONTHS_LEAP_YEAR
-        } else {
-            DAYS_IN_MONTHS
-        };
-        let mut month = 0;
-        let mut day_in_month = day_in_year;
-        while day_in_month >= days_in_months[month] as u64 {
-            day_in_month -= days_in_months[month] as u64;
-            month += 1;
-        }
-
+        let (year, month, day) = timestamp_to_ymd(self.0);
+        let day_sec = self.0.rem_euclid(SECS_IN_DAY);
         write!(
             f,
             "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
             year,
-            month + 1,
-            day_in_month + 1,
-            (timestamp % 86400) / 3600,
-            (timestamp % 3600) / 60,
-            timestamp % 60
+            month,
+            day,
+            day_sec / 3600,
+            (day_sec % 3600) / 60,
+            day_sec % 60
         )
     }
 }
@@ -199,91 +167,63 @@ mod test {
     }
 
     #[test]
-    fn test_from_timestamp() {
-        let timestamp = 1_000_000;
-        let datetime = DateTime::from_timestamp(timestamp);
-        assert_eq!(datetime.timestamp(), timestamp);
-    }
-
-    #[test]
     fn test_timestamp() {
-        let datetime = DateTime::from_timestamp(1_000_000);
-        assert_eq!(datetime.timestamp(), 1_000_000);
+        let datetime = DateTime::from_timestamp(1609459345);
+        assert_eq!(datetime.timestamp(), 1609459345);
     }
 
     #[test]
     fn test_to_rfc2822() {
-        let datetime = DateTime::from_timestamp(1_000_000);
+        let datetime = DateTime::from_timestamp(1000000);
         assert_eq!(datetime.to_rfc2822(), "Mon, 12 Jan 1970 13:46:40 GMT");
-    }
-
-    #[test]
-    fn test_to_rfc2822_leap_year() {
         let datetime = DateTime::from_timestamp(1582977600);
         assert_eq!(datetime.to_rfc2822(), "Sat, 29 Feb 2020 12:00:00 GMT");
+        let datetime = DateTime::from_timestamp(-1000000);
+        assert_eq!(datetime.to_rfc2822(), "Sat, 20 Dec 1969 10:13:20 GMT");
     }
 
     #[test]
     fn test_from_str() {
         let datetime: DateTime = "2019-02-28T12:00:00Z".parse().unwrap();
         assert_eq!(datetime.timestamp(), 1551355200);
-    }
-
-    #[test]
-    fn test_from_str_leap_year() {
         let datetime: DateTime = "2020-02-29T12:00:00Z".parse().unwrap();
         assert_eq!(datetime.timestamp(), 1582977600);
+        let datetime: DateTime = "1969-12-20T10:13:20Z".parse().unwrap();
+        assert_eq!(datetime.timestamp(), -1000000);
+
+        assert!("invalid-datetime".parse::<DateTime>().is_err());
+        assert!("2020-02-29 12:00:00Z".parse::<DateTime>().is_err());
+        assert!("2020-02-29T12:00:00T".parse::<DateTime>().is_err());
+        assert!("2020-02-30T12:00:00Z".parse::<DateTime>().is_err());
+        assert!("2020-02-29T25:00:00Z".parse::<DateTime>().is_err());
+        assert!("2020-02-29T12:60:00Z".parse::<DateTime>().is_err());
+        assert!("2020-02-29T12:00:60Z".parse::<DateTime>().is_err());
+        assert!("2020-02-29T12:00:00".parse::<DateTime>().is_err());
+        assert!("2021-02-29T12:00:00Z".parse::<DateTime>().is_err());
+        assert!("2019-04-31T12:00:00Z".parse::<DateTime>().is_err());
     }
 
     #[test]
     fn test_display() {
         let datetime = DateTime::from_timestamp(1551355200);
         assert_eq!(datetime.to_string(), "2019-02-28T12:00:00Z");
-    }
-
-    #[test]
-    fn test_display_leap_year() {
         let datetime = DateTime::from_timestamp(1582977600);
         assert_eq!(datetime.to_string(), "2020-02-29T12:00:00Z");
-    }
-
-    #[test]
-    fn test_invalid_parse() {
-        let invalid_datetime_str = "invalid-datetime";
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2020-02-29 12:00:00Z"; // Missing 'T'
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2020-02-29T12:00:00T"; // Extra 'T'
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2020-02-30T12:00:00Z"; // Invalid date
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2020-02-29T25:00:00Z"; // Invalid hour
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2020-02-29T12:60:00Z"; // Invalid minute
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2020-02-29T12:00:60Z"; // Invalid second
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2020-02-29T12:00:00"; // Missing 'Z'
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2021-02-29T12:00:00Z"; // Non-leap year
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
-
-        let invalid_datetime_str = "2019-04-31T12:00:00Z"; // Invalid day in April
-        assert!(invalid_datetime_str.parse::<DateTime>().is_err());
+        let datetime = DateTime::from_timestamp(-1000000);
+        assert_eq!(datetime.to_string(), "1969-12-20T10:13:20Z");
     }
 
     #[test]
     fn test_add_duration() {
-        let datetime = DateTime::from_timestamp(1_000_000);
-        let new_datetime = datetime + Duration::from_secs(3600);
-        assert_eq!(new_datetime.timestamp(), 1_003_600);
+        let datetime = DateTime::from_timestamp(1609459200);
+        let new_datetime = datetime + Duration::from_secs(1);
+        assert_eq!(new_datetime.timestamp(), 1609459201);
+    }
+
+    #[test]
+    fn test_sub_duration() {
+        let datetime = DateTime::from_timestamp(1609459200);
+        let new_datetime = datetime - Duration::from_secs(1);
+        assert_eq!(new_datetime.timestamp(), 1609459199);
     }
 }

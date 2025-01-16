@@ -120,7 +120,7 @@ impl TryFrom<Value> for uuid::Uuid {
 #[cfg(feature = "time")]
 impl From<time::Date> for Value {
     fn from(value: time::Date) -> Self {
-        Value::Integer(value.timestamp() as i64)
+        Value::Integer(value.timestamp())
     }
 }
 #[cfg(feature = "time")]
@@ -128,7 +128,7 @@ impl TryFrom<Value> for time::Date {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(time::Date::from_timestamp(i as u64)),
+            Value::Integer(i) => Ok(time::Date::from_timestamp(i)),
             _ => Err(ValueError),
         }
     }
@@ -137,7 +137,7 @@ impl TryFrom<Value> for time::Date {
 #[cfg(feature = "time")]
 impl From<time::DateTime> for Value {
     fn from(value: time::DateTime) -> Self {
-        Value::Integer(value.timestamp() as i64)
+        Value::Integer(value.timestamp())
     }
 }
 #[cfg(feature = "time")]
@@ -145,7 +145,7 @@ impl TryFrom<Value> for time::DateTime {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(time::DateTime::from_timestamp(i as u64)),
+            Value::Integer(i) => Ok(time::DateTime::from_timestamp(i)),
             _ => Err(ValueError),
         }
     }
@@ -255,7 +255,7 @@ impl TryFrom<Value> for Option<uuid::Uuid> {
 impl From<Option<time::Date>> for Value {
     fn from(value: Option<time::Date>) -> Self {
         match value {
-            Some(v) => Value::Integer(v.timestamp() as i64),
+            Some(v) => Value::Integer(v.timestamp()),
             None => Value::Null,
         }
     }
@@ -266,7 +266,7 @@ impl TryFrom<Value> for Option<time::Date> {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             #[allow(deprecated)]
-            Value::Integer(i) => Ok(Some(time::Date::from_timestamp(i as u64))),
+            Value::Integer(i) => Ok(Some(time::Date::from_timestamp(i))),
             Value::Null => Ok(None),
             _ => Err(ValueError),
         }
@@ -277,7 +277,7 @@ impl TryFrom<Value> for Option<time::Date> {
 impl From<Option<time::DateTime>> for Value {
     fn from(value: Option<time::DateTime>) -> Self {
         match value {
-            Some(v) => Value::Integer(v.timestamp() as i64),
+            Some(v) => Value::Integer(v.timestamp()),
             None => Value::Null,
         }
     }
@@ -287,7 +287,7 @@ impl TryFrom<Value> for Option<time::DateTime> {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(Some(time::DateTime::from_timestamp(i as u64))),
+            Value::Integer(i) => Ok(Some(time::DateTime::from_timestamp(i))),
             Value::Null => Ok(None),
             _ => Err(ValueError),
         }
