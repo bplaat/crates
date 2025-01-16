@@ -1,13 +1,14 @@
 .PHONY: all
-all: ci
+all: check
 
 # Clean garbage
 .PHONY: clean
 clean:
 	cargo clean
 
-.PHONY: ci
-ci:
+PROFILE ?= default
+.PHONY: check
+check:
 # 	Format
 	./meta/check_copyright.sh
 	cargo +nightly fmt -- --check
@@ -16,12 +17,12 @@ ci:
 	cargo deny check --hide-inclusion-graph
 # 	Test
 	cargo test --doc --all-features --locked
-	cargo nextest run --all-features --locked
+	cargo nextest run --all-features --locked --config-file nextest.toml --profile $(PROFILE)
 
 # Get test coverage
 .PHONY: coverage
 coverage:
-	cargo llvm-cov nextest --all-features --locked
+	cargo llvm-cov nextest --all-features --locked --config-file nextest.toml
 
 # Build release binaries
 TARGETS = x86_64-unknown-linux-musl aarch64-unknown-linux-musl \

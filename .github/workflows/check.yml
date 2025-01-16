@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,4 +29,9 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny,cargo-nextest
-      - run: make ci
+      - run: PROFILE=ci make check
+      - uses: mikepenz/action-junit-report@v5
+        if: always()
+        with:
+          check_name: Rust Tests
+          report_paths: target/nextest/ci/junit.xml

@@ -34,10 +34,10 @@ A collection of minimal Rust crates that I created for myself
     cargo install cargo-deny cargo-nextest
     ```
 
--   Run CI checks:
+-   Run checks:
 
     ```sh
-    make -C ci
+    make -C check
     ```
 
 -   Or run an example:
