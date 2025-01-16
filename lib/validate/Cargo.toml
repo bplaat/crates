@@ -9,7 +9,6 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-url = { path = "../url", optional = true }
 validate_derive = { path = "../validate_derive", optional = true }
 
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -18,5 +17,5 @@ regex = { version = "1.11", default-features = false, optional = true }
 [features]
 derive = ["dep:validate_derive"]
 email = ["dep:regex", "validate_derive/email"]
-url = ["dep:url", "validate_derive/url"]
+url = ["dep:regex", "validate_derive/url"]
 serde = ["dep:serde"]

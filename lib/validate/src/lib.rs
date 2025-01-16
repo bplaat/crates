@@ -79,10 +79,14 @@ pub fn is_valid_email(email: &str) -> bool {
 }
 
 #[cfg(feature = "url")]
+static URL_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"(https?://[\w./?=&-]+)").expect("Invalid regex")
+});
+
 /// Validate url
+#[cfg(feature = "url")]
 pub fn is_valid_url(url: &str) -> bool {
-    use std::str::FromStr;
-    url::Url::from_str(url).is_ok()
+    URL_REGEX.is_match(url)
 }
 
 // MARK: Tests
@@ -105,5 +109,21 @@ mod test {
         assert!(!is_valid_email("username@.com"));
         assert!(!is_valid_email("username@.com."));
         assert!(!is_valid_email("username@example..com"));
+    }
+
+    #[test]
+    fn test_valid_url() {
+        assert!(is_valid_url("http://example.com"));
+        assert!(is_valid_url("https://example.com"));
+        assert!(is_valid_url("http://www.example.com"));
+        assert!(is_valid_url("https://www.example.com"));
+        assert!(is_valid_url("http://example.com/path?name=value"));
+    }
+
+    #[test]
+    fn test_invalid_url() {
+        assert!(!is_valid_url("example"));
+        assert!(!is_valid_url("example.com"));
+        assert!(!is_valid_url("http://"));
     }
 }
