@@ -36,7 +36,6 @@ struct Rule {
     os_v1_replacement: Option<String>,
     os_v2_replacement: Option<String>,
     os_v3_replacement: Option<String>,
-    os_v4_replacement: Option<String>,
 }
 
 fn string_as_regex<'de, D>(deserializer: D) -> Result<Regex, D::Error>
@@ -62,12 +61,8 @@ pub struct UserAgent {
 pub struct Client {
     /// Family
     pub family: String,
-    /// Major version
-    pub major: Option<String>,
-    /// Minor version
-    pub minor: Option<String>,
-    /// Patch version
-    pub patch: Option<String>,
+    /// Version
+    pub version: Option<String>,
 }
 
 /// Operating System
@@ -75,14 +70,8 @@ pub struct Client {
 pub struct OS {
     /// Family
     pub family: String,
-    /// Major version
-    pub major: Option<String>,
-    /// Minor version
-    pub minor: Option<String>,
-    /// Patch version
-    pub patch: Option<String>,
-    /// Patch minor version
-    pub patch_minor: Option<String>,
+    /// Version
+    pub version: Option<String>,
 }
 
 // MARK: UserAgentParser
@@ -134,17 +123,13 @@ impl UserAgentParser {
                     .or_else(|| captures.get(4).map(|m| m.as_str().to_string()));
                 return Client {
                     family,
-                    major,
-                    minor,
-                    patch,
+                    version: Self::concat_version(major, minor, patch),
                 };
             }
         }
         Client {
-            family: "Other".to_string(),
-            major: None,
-            minor: None,
-            patch: None,
+            family: "Unknown".to_string(),
+            version: None,
         }
     }
 
@@ -167,25 +152,37 @@ impl UserAgentParser {
                     .os_v3_replacement
                     .clone()
                     .or_else(|| captures.get(4).map(|m| m.as_str().to_string()));
-                let patch_minor = rule
-                    .os_v4_replacement
-                    .clone()
-                    .or_else(|| captures.get(5).map(|m| m.as_str().to_string()));
                 return OS {
                     family,
-                    major,
-                    minor,
-                    patch,
-                    patch_minor,
+                    version: Self::concat_version(major, minor, patch),
                 };
             }
         }
         OS {
-            family: "Other".to_string(),
-            major: None,
-            minor: None,
-            patch: None,
-            patch_minor: None,
+            family: "Unknown".to_string(),
+            version: None,
+        }
+    }
+
+    fn concat_version(
+        major: Option<String>,
+        minor: Option<String>,
+        patch: Option<String>,
+    ) -> Option<String> {
+        let mut version = String::new();
+        if let Some(major) = major {
+            version.push_str(&major);
+        }
+        if let Some(minor) = minor {
+            version.push_str(&format!(".{}", minor));
+        }
+        if let Some(patch) = patch {
+            version.push_str(&format!(".{}", patch));
+        }
+        if version.is_empty() {
+            None
+        } else {
+            Some(version)
         }
     }
 }
@@ -203,53 +200,38 @@ mod test {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0",
         );
         assert_eq!(ua.client.family, "Firefox");
-        assert_eq!(ua.client.major, Some("133".to_string()));
+        assert_eq!(ua.client.version, Some("133.0".to_string()));
         assert_eq!(ua.os.family, "Mac OS X");
-        assert_eq!(ua.os.major, Some("10".to_string()));
-        assert_eq!(ua.os.minor, Some("15".to_string()));
+        assert_eq!(ua.os.version, Some("10.15".to_string()));
 
         let ua = parser.parse(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             );
         assert_eq!(ua.client.family, "Chrome");
-        assert_eq!(ua.client.major, Some("91".to_string()));
-        assert_eq!(ua.client.minor, Some("0".to_string()));
-        assert_eq!(ua.client.patch, Some("4472".to_string()));
+        assert_eq!(ua.client.version, Some("91.0.4472".to_string()));
         assert_eq!(ua.os.family, "Windows");
-        assert_eq!(ua.os.major, Some("10".to_string()));
-        assert_eq!(ua.os.minor, None);
+        assert_eq!(ua.os.version, Some("10".to_string()));
 
         let ua = parser.parse(
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.1 Mobile/15E148 Safari/604.1",
             );
         assert_eq!(ua.client.family, "Mobile Safari");
-        assert_eq!(ua.client.major, Some("14".to_string()));
-        assert_eq!(ua.client.minor, Some("0".to_string()));
-        assert_eq!(ua.client.patch, Some("1".to_string()));
+        assert_eq!(ua.client.version, Some("14.0.1".to_string()));
         assert_eq!(ua.os.family, "iOS");
-        assert_eq!(ua.os.major, Some("14".to_string()));
-        assert_eq!(ua.os.minor, Some("6".to_string()));
+        assert_eq!(ua.os.version, Some("14.6".to_string()));
 
         let ua = parser.parse(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59",
             );
         assert_eq!(ua.client.family, "Edge");
-        assert_eq!(ua.client.major, Some("91".to_string()));
-        assert_eq!(ua.client.minor, Some("0".to_string()));
-        assert_eq!(ua.client.patch, Some("864".to_string()));
+        assert_eq!(ua.client.version, Some("91.0.864".to_string()));
         assert_eq!(ua.os.family, "Windows");
-        assert_eq!(ua.os.major, Some("10".to_string()));
-        assert_eq!(ua.os.minor, None);
+        assert_eq!(ua.os.version, Some("10".to_string()));
 
         let ua = parser.parse("UnknownUserAgent/1.0");
-        assert_eq!(ua.client.family, "Other");
-        assert_eq!(ua.client.major, None);
-        assert_eq!(ua.client.minor, None);
-        assert_eq!(ua.client.patch, None);
-        assert_eq!(ua.os.family, "Other");
-        assert_eq!(ua.os.major, None);
-        assert_eq!(ua.os.minor, None);
-        assert_eq!(ua.os.patch, None);
-        assert_eq!(ua.os.patch_minor, None);
+        assert_eq!(ua.client.family, "Unknown");
+        assert_eq!(ua.client.version, None);
+        assert_eq!(ua.os.family, "Unknown");
+        assert_eq!(ua.os.version, None);
     }
 }

@@ -28,7 +28,6 @@ struct Rule {
     os_v1_replacement: Option<String>,
     os_v2_replacement: Option<String>,
     os_v3_replacement: Option<String>,
-    os_v4_replacement: Option<String>,
 }
 
 // MARK: Main
