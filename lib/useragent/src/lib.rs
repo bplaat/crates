@@ -200,33 +200,33 @@ mod test {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0",
         );
         assert_eq!(ua.client.family, "Firefox");
-        assert_eq!(ua.client.version, Some("133.0".to_string()));
+        assert_eq!(ua.client.version.as_deref(), Some("133.0"));
         assert_eq!(ua.os.family, "Mac OS X");
-        assert_eq!(ua.os.version, Some("10.15".to_string()));
+        assert_eq!(ua.os.version.as_deref(), Some("10.15"));
 
         let ua = parser.parse(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             );
         assert_eq!(ua.client.family, "Chrome");
-        assert_eq!(ua.client.version, Some("91.0.4472".to_string()));
+        assert_eq!(ua.client.version.as_deref(), Some("91.0.4472"));
         assert_eq!(ua.os.family, "Windows");
-        assert_eq!(ua.os.version, Some("10".to_string()));
+        assert_eq!(ua.os.version.as_deref(), Some("10"));
 
         let ua = parser.parse(
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.1 Mobile/15E148 Safari/604.1",
             );
         assert_eq!(ua.client.family, "Mobile Safari");
-        assert_eq!(ua.client.version, Some("14.0.1".to_string()));
+        assert_eq!(ua.client.version.as_deref(), Some("14.0.1"));
         assert_eq!(ua.os.family, "iOS");
-        assert_eq!(ua.os.version, Some("14.6".to_string()));
+        assert_eq!(ua.os.version.as_deref(), Some("14.6"));
 
         let ua = parser.parse(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59",
             );
         assert_eq!(ua.client.family, "Edge");
-        assert_eq!(ua.client.version, Some("91.0.864".to_string()));
+        assert_eq!(ua.client.version.as_deref(), Some("91.0.864"));
         assert_eq!(ua.os.family, "Windows");
-        assert_eq!(ua.os.version, Some("10".to_string()));
+        assert_eq!(ua.os.version.as_deref(), Some("10"));
 
         let ua = parser.parse("UnknownUserAgent/1.0");
         assert_eq!(ua.client.family, "Unknown");

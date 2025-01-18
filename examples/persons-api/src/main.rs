@@ -438,8 +438,10 @@ mod test {
 
         let res = router.handle(&Request::with_url("http://localhost/"));
         assert_eq!(
-            res.headers.get("Access-Control-Allow-Origin"),
-            Some(&"*".to_string())
+            res.headers
+                .get("Access-Control-Allow-Origin")
+                .map(|s| s.as_str()),
+            Some("*")
         );
     }
 
@@ -451,16 +453,22 @@ mod test {
         let req = Request::with_url("http://localhost/").method(Method::Options);
         let res = router.handle(&req);
         assert_eq!(
-            res.headers.get("Access-Control-Allow-Origin"),
-            Some(&"*".to_string())
+            res.headers
+                .get("Access-Control-Allow-Origin")
+                .map(|s| s.as_str()),
+            Some("*")
         );
         assert_eq!(
-            res.headers.get("Access-Control-Allow-Methods"),
-            Some(&"GET, POST".to_string())
+            res.headers
+                .get("Access-Control-Allow-Methods")
+                .map(|s| s.as_str()),
+            Some("GET, POST")
         );
         assert_eq!(
-            res.headers.get("Access-Control-Max-Age"),
-            Some(&"86400".to_string())
+            res.headers
+                .get("Access-Control-Max-Age")
+                .map(|s| s.as_str()),
+            Some("86400")
         );
     }
 
