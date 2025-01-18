@@ -181,21 +181,21 @@ components:
           format: uuid
         name:
           type: string
-        age_in_years:
+        ageInYears:
           type: integer
         relation:
           $ref: "#/components/schemas/Relation"
-        is_adult:
+        isAdult:
           type: boolean
-        created_at:
+        createdAt:
           type: string
           format: date-time
       required:
         - id
         - name
-        - age_in_years
+        - ageInYears
         - relation
-        - created_at
+        - createdAt
 
     Relation:
       type: string
@@ -207,13 +207,13 @@ components:
       properties:
         name:
           type: string
-        age_in_years:
+        ageInYears:
           type: integer
         relation:
           $ref: "#/components/schemas/Relation"
       required:
         - name
-        - age_in_years
+        - ageInYears
         - relation
 
     # MARK: Responses

@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [build-dependencies]
-cc = { version = "1.2.3", optional = true }
+cc = { version = "1.2", optional = true }
 
 [features]
 bundled = ["dep:cc"]

@@ -567,7 +567,7 @@ mod test {
         let res = router.handle(
             &Request::with_url("http://localhost/persons")
                 .method(Method::Post)
-                .body("name=Jan&age_in_years=40&relation=me"),
+                .body("name=Jan&ageInYears=40&relation=me"),
         );
         assert_eq!(res.status, Status::Ok);
         let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
@@ -623,7 +623,7 @@ mod test {
         let res = router.handle(
             &Request::with_url(format!("http://localhost/persons/{}", person.id))
                 .method(Method::Put)
-                .body("name=Jan&age_in_years=41&relation=me"),
+                .body("name=Jan&ageInYears=41&relation=me"),
         );
         assert_eq!(res.status, Status::Ok);
         let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
@@ -633,7 +633,7 @@ mod test {
         let res = router.handle(
             &Request::with_url(format!("http://localhost/persons/{}", person.id))
                 .method(Method::Put)
-                .body("name=Bastiaan&age_in_years=41&relation=wrong"),
+                .body("name=Bastiaan&ageInYears=41&relation=wrong"),
         );
         assert_eq!(res.status, Status::BadRequest);
     }

@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::fmt::Write;
 use std::path::Path;
 
 use indexmap::IndexMap;
 
 use crate::openapi::Schema;
-use crate::utils::ToCapitalize;
+use crate::utils::ToCase;
 
 pub(crate) fn generate_schemas(schemas: IndexMap<String, Schema>, output_path: &Path) {
-    let mut code_schemas = IndexMap::new();
-
     // Generate code for schemas
+    let mut code_schemas = IndexMap::new();
     for (name, schema) in schemas {
         schema_generate_code(&mut code_schemas, name.clone(), &schema);
     }
@@ -33,21 +33,22 @@ fn schema_generate_code(
     name: String,
     schema: &Schema,
 ) -> String {
+    let name = name.to_student_case();
+
     if let Some(r#ref) = &schema.r#ref {
         let ref_parts: Vec<&str> = r#ref.split('/').collect();
         return ref_parts.last().expect("Invalid ref").to_string();
     }
 
     if let Some(r#enum) = &schema.r#enum {
-        let name = name.to_capitalize();
-        let mut code = String::new();
-        code.push_str(&format!("#[derive(Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]\npub(crate) enum {} {{\n", name));
+        let mut code = format!("#[derive(Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]\npub(crate) enum {} {{\n", name);
         for variant in r#enum {
-            code.push_str(&format!(
+            _ = writeln!(
+                code,
                 "    #[serde(rename = \"{}\")]\n    {},\n",
-                variant,
-                variant.to_capitalize()
-            ));
+                variant.to_snake_case(),
+                variant.to_student_case()
+            );
         }
         code.push_str("}\n\n");
         code_schemas.insert(name.clone(), code);
@@ -67,11 +68,10 @@ fn schema_generate_code(
 
     let r#type = schema.r#type.as_ref().expect("Schema should have type");
     if r#type == "object" {
-        let mut code = String::new();
-        code.push_str(&format!(
+        let mut code = format!(
             "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {} {{\n",
             name
-        ));
+        );
         if let Some(properties) = &schema.properties {
             for (prop_name, prop_schema) in properties {
                 let is_optional = schema
@@ -80,15 +80,24 @@ fn schema_generate_code(
                     .map(|required| !required.contains(prop_name))
                     .unwrap_or_else(|| true);
                 let mut prop_type =
-                    schema_generate_code(code_schemas, prop_name.to_string(), prop_schema);
-                let prop_name = prop_name.replace("type", "r#type");
+                    schema_generate_code(code_schemas, prop_name.clone(), prop_schema);
                 if prop_type == name {
                     prop_type = format!("Box<{}>", prop_type);
                 }
+                let prop_name = prop_name.replace("type", "r#type");
+                let field_name = prop_name.to_snake_case();
                 if is_optional {
-                    code.push_str(&format!("    #[serde(skip_serializing_if = \"Option::is_none\")]\n    pub {}: Option<{}>,\n", prop_name, prop_type));
+                    if prop_name != field_name {
+                        _= writeln!(code, "    #[serde(rename = \"{}\", skip_serializing_if = \"Option::is_none\")]", prop_name);
+                    } else {
+                        code.push_str("    #[serde(skip_serializing_if = \"Option::is_none\")]\n");
+                    }
+                    _ = writeln!(code, "    pub {}: Option<{}>,", field_name, prop_type);
                 } else {
-                    code.push_str(&format!("    pub {}: {},\n", prop_name, prop_type));
+                    if prop_name != field_name {
+                        _ = writeln!(code, "    #[serde(rename = \"{}\")]", prop_name);
+                    }
+                    _ = writeln!(code, "    pub {}: {},", field_name, prop_type);
                 }
             }
         }

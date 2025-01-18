@@ -19,7 +19,6 @@ mod stub;
 // MARK: Event
 /// Event
 #[repr(C)]
-#[derive(Debug)]
 pub enum Event {
     /// Page loaded
     PageLoaded,

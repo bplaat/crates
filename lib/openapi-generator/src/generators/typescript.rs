@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::fmt::Write;
 use std::path::Path;
 
 use indexmap::IndexMap;
 
 use crate::openapi::Schema;
-use crate::utils::ToCapitalize;
+use crate::utils::ToCase;
 
 pub(crate) fn generate_schemas(schemas: IndexMap<String, Schema>, output_path: &Path) {
-    let mut code_schemas = IndexMap::new();
-
     // Generate code for schemas
+    let mut code_schemas = IndexMap::new();
     for (name, schema) in schemas {
         schema_generate_code(&mut code_schemas, name.clone(), &schema);
     }
@@ -33,21 +33,22 @@ fn schema_generate_code(
     name: String,
     schema: &Schema,
 ) -> String {
+    let name = name.to_student_case();
+
     if let Some(r#ref) = &schema.r#ref {
         let ref_parts: Vec<&str> = r#ref.split('/').collect();
         return ref_parts.last().expect("Invalid ref").to_string();
     }
 
     if let Some(r#enum) = &schema.r#enum {
-        let name = name.to_capitalize();
-        let mut code = String::new();
-        code.push_str(&format!("export enum {} {{\n", name));
+        let mut code = format!("export enum {} {{\n", name);
         for variant in r#enum {
-            code.push_str(&format!(
-                "    {} = '{}',\n",
-                variant.to_uppercase(),
-                variant
-            ));
+            _ = writeln!(
+                code,
+                "    {} = '{}',",
+                variant.to_scream_case(),
+                variant.to_snake_case()
+            );
         }
         code.push_str("}\n\n");
         code_schemas.insert(name.clone(), code);
@@ -66,8 +67,7 @@ fn schema_generate_code(
 
     let r#type = schema.r#type.as_ref().expect("Schema should have type");
     if r#type == "object" {
-        let mut code = String::new();
-        code.push_str(&format!("export interface {} {{\n", name));
+        let mut code = format!("export interface {} {{\n", name);
         if let Some(properties) = &schema.properties {
             for (prop_name, prop_schema) in properties {
                 let is_optional = schema
@@ -78,9 +78,9 @@ fn schema_generate_code(
                 let prop_type =
                     schema_generate_code(code_schemas, prop_name.to_string(), prop_schema);
                 if is_optional {
-                    code.push_str(&format!("    {}?: {},\n", prop_name, prop_type));
+                    _ = writeln!(code, "    {}?: {},", prop_name, prop_type);
                 } else {
-                    code.push_str(&format!("    {}: {},\n", prop_name, prop_type));
+                    _ = writeln!(code, "    {}: {},", prop_name, prop_type);
                 }
             }
         }
@@ -96,8 +96,7 @@ fn schema_generate_code(
             }
             "string".to_string()
         }
-        "number" => "number".to_string(),
-        "integer" => "number".to_string(),
+        "number" | "integer" => "number".to_string(),
         "boolean" => "boolean".to_string(),
         "array" => {
             let items = schema.items.as_ref().expect("No items");

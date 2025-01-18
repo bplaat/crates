@@ -8,7 +8,6 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
 /// A SQLite value
-#[derive(Debug)]
 pub enum Value {
     /// A NULL value
     Null,
