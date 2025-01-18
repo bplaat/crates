@@ -7,6 +7,7 @@ all: check
 .PHONY: clean
 clean:
 	cargo clean
+	find . -name "*.db*" -delete
 
 .PHONY: check
 check:
