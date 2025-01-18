@@ -1,3 +1,4 @@
+# This data comes from https://github.com/ua-parser/uap-core/blob/master/regexes.yaml with device_parsers removed
 user_agent_parsers:
   #### SPECIAL CASES TOP ####
 

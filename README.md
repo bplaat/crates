@@ -19,7 +19,7 @@ A collection of minimal Rust crates that I created for myself
 -   [threadpool](lib/threadpool) A very basic thread pool library
 -   [time](lib/time) A simple UTC DateTime library similar to `chrono`
 -   [url](lib/url) A minimal URL parser library
--   [useragent](lib/useragent) A basic user agent parser library
+-   [useragent](lib/useragent) An user agent parser library
 -   [uuid](lib/uuid) A minimal UUID library
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
@@ -49,7 +49,7 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
--   [ ] openapi-generator: Add TypeScript client generation
+-   [ ] window: Split window management of from webview
 -   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] webview: Add Linux (Gtk + Webkit2Gtk) support
 

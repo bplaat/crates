@@ -7,13 +7,17 @@
 //! A simple HTTP server example
 
 use std::net::{Ipv4Addr, TcpListener};
+use std::sync::LazyLock;
 use std::thread;
 use std::time::Duration;
 
 use http::{Method, Request, Response, Status};
 use serde::Deserialize;
+use useragent::UserAgentParser;
 
 const HTTP_PORT: u16 = 8080;
+
+static USER_AGENT_PARSER: LazyLock<UserAgentParser> = LazyLock::new(UserAgentParser::new);
 
 fn handler(req: &Request) -> Response {
     let path = req.url.path.as_str();
@@ -69,6 +73,15 @@ fn handler(req: &Request) -> Response {
         return res
             .header("Content-Type", "application/json")
             .body(data_res.body);
+    }
+
+    if path == "/useragent" {
+        if let Some(user_agent) = req.headers.get("User-Agent") {
+            return res.json(USER_AGENT_PARSER.parse(user_agent));
+        }
+        return res
+            .status(Status::BadRequest)
+            .body("Can't parse user agent");
     }
 
     res.status(Status::NotFound).body("<h1>404 Not Found</h1>")

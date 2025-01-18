@@ -4,63 +4,28 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A basic user agent parser library
-//!
-//! Regexes are copied from https://github.com/ua-parser/uap-core
+//! An user agent parser library
 
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
 
-const REGEXES: &[u8] = include_bytes!("../regexes.yaml");
+// MARK: Rules
+const RULES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/rules.bin"));
 
-// MARK: UserAgent
-/// User agent
-#[derive(Debug)]
-pub struct UserAgent {
-    /// Client
-    pub client: Client,
-    /// Operating System
-    pub os: OS,
-}
-
-/// Client
-#[derive(Debug)]
-pub struct Client {
-    /// Family
-    pub family: String,
-    /// Major version
-    pub major: Option<String>,
-    /// Minor version
-    pub minor: Option<String>,
-    /// Patch version
-    pub patch: Option<String>,
-}
-
-/// Operating System
-#[derive(Debug)]
-pub struct OS {
-    /// Family
-    pub family: String,
-    /// Major version
-    pub major: Option<String>,
-    /// Minor version
-    pub minor: Option<String>,
-    /// Patch version
-    pub patch: Option<String>,
-    /// Patch minor version
-    pub patch_minor: Option<String>,
-}
-
-// MARK: UserAgentParser
-/// User agent parser
 #[derive(Deserialize)]
-pub struct UserAgentParser {
-    user_agent_parsers: Vec<Parser>,
-    os_parsers: Vec<Parser>,
+struct Rules {
+    user_agent: Vec<Rule>,
+    os: Vec<Rule>,
+}
+
+impl Rules {
+    fn parse() -> Self {
+        postcard::from_bytes(RULES).expect("Can't parse rules")
+    }
 }
 
 #[derive(Deserialize)]
-struct Parser {
+struct Rule {
     #[serde(deserialize_with = "string_as_regex")]
     regex: Regex,
     family_replacement: Option<String>,
@@ -82,9 +47,55 @@ where
     Ok(Regex::new(&str).expect("Invalid regex"))
 }
 
+// MARK: UserAgent
+/// User agent
+#[cfg_attr(feature = "serde", derive(Deserialize, serde::Serialize))]
+pub struct UserAgent {
+    /// Client
+    pub client: Client,
+    /// Operating System
+    pub os: OS,
+}
+
+/// Client
+#[cfg_attr(feature = "serde", derive(Deserialize, serde::Serialize))]
+pub struct Client {
+    /// Family
+    pub family: String,
+    /// Major version
+    pub major: Option<String>,
+    /// Minor version
+    pub minor: Option<String>,
+    /// Patch version
+    pub patch: Option<String>,
+}
+
+/// Operating System
+#[cfg_attr(feature = "serde", derive(Deserialize, serde::Serialize))]
+pub struct OS {
+    /// Family
+    pub family: String,
+    /// Major version
+    pub major: Option<String>,
+    /// Minor version
+    pub minor: Option<String>,
+    /// Patch version
+    pub patch: Option<String>,
+    /// Patch minor version
+    pub patch_minor: Option<String>,
+}
+
+// MARK: UserAgentParser
+/// User agent parser
+pub struct UserAgentParser {
+    rules: Rules,
+}
+
 impl Default for UserAgentParser {
     fn default() -> Self {
-        serde_yaml::from_slice(REGEXES).expect("Invalid regexes")
+        Self {
+            rules: Rules::parse(),
+        }
     }
 }
 
@@ -103,21 +114,21 @@ impl UserAgentParser {
     }
 
     fn parse_client(&self, user_agent: &str) -> Client {
-        for parser in &self.user_agent_parsers {
-            if let Some(captures) = parser.regex.captures(user_agent) {
-                let family = parser
+        for rule in &self.rules.user_agent {
+            if let Some(captures) = rule.regex.captures(user_agent) {
+                let family = rule
                     .family_replacement
                     .clone()
                     .unwrap_or_else(|| captures[1].to_string());
-                let major = parser
+                let major = rule
                     .v1_replacement
                     .clone()
                     .or_else(|| captures.get(2).map(|m| m.as_str().to_string()));
-                let minor = parser
+                let minor = rule
                     .v2_replacement
                     .clone()
                     .or_else(|| captures.get(3).map(|m| m.as_str().to_string()));
-                let patch = parser
+                let patch = rule
                     .v3_replacement
                     .clone()
                     .or_else(|| captures.get(4).map(|m| m.as_str().to_string()));
@@ -138,25 +149,25 @@ impl UserAgentParser {
     }
 
     fn parse_os(&self, user_agent: &str) -> OS {
-        for parser in &self.os_parsers {
-            if let Some(captures) = parser.regex.captures(user_agent) {
-                let family = parser
+        for rule in &self.rules.os {
+            if let Some(captures) = rule.regex.captures(user_agent) {
+                let family = rule
                     .os_replacement
                     .clone()
                     .unwrap_or_else(|| captures[1].to_string());
-                let major = parser
+                let major = rule
                     .os_v1_replacement
                     .clone()
                     .or_else(|| captures.get(2).map(|m| m.as_str().to_string()));
-                let minor = parser
+                let minor = rule
                     .os_v2_replacement
                     .clone()
                     .or_else(|| captures.get(3).map(|m| m.as_str().to_string()));
-                let patch = parser
+                let patch = rule
                     .os_v3_replacement
                     .clone()
                     .or_else(|| captures.get(4).map(|m| m.as_str().to_string()));
-                let patch_minor = parser
+                let patch_minor = rule
                     .os_v4_replacement
                     .clone()
                     .or_else(|| captures.get(5).map(|m| m.as_str().to_string()));
