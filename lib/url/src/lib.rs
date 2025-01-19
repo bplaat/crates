@@ -108,6 +108,29 @@ impl FromStr for Url {
     }
 }
 
+impl Display for Url {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}://", self.scheme)?;
+        if let Some(authority) = &self.authority {
+            if let Some(userinfo) = &authority.userinfo {
+                write!(f, "{}@", userinfo)?;
+            }
+            write!(f, "{}", authority.host)?;
+            if let Some(port) = authority.port {
+                write!(f, ":{}", port)?;
+            }
+        }
+        write!(f, "{}", self.path)?;
+        if let Some(query) = &self.query {
+            write!(f, "?{}", query)?;
+        }
+        if let Some(fragment) = &self.fragment {
+            write!(f, "#{}", fragment)?;
+        }
+        Ok(())
+    }
+}
+
 // MARK: ParseError
 /// Url parser error
 #[derive(Debug)]
@@ -183,6 +206,68 @@ mod test {
         ];
         for url in &invalid_urls {
             assert!(Url::from_str(url).is_err());
+        }
+    }
+
+    #[test]
+    fn test_display() {
+        let urls = [
+            ("http://example.com", "http://example.com"),
+            ("http://example.com/", "http://example.com/"),
+            ("http://example.com/path", "http://example.com/path"),
+            (
+                "http://example.com/path?query",
+                "http://example.com/path?query",
+            ),
+            (
+                "http://example.com/path#fragment",
+                "http://example.com/path#fragment",
+            ),
+            (
+                "http://example.com/path?query#fragment",
+                "http://example.com/path?query#fragment",
+            ),
+            (
+                "http://user:pass@example.com",
+                "http://user:pass@example.com",
+            ),
+            (
+                "http://user:pass@example.com/path",
+                "http://user:pass@example.com/path",
+            ),
+            (
+                "http://user:pass@example.com/path?query",
+                "http://user:pass@example.com/path?query",
+            ),
+            (
+                "http://user:pass@example.com/path#fragment",
+                "http://user:pass@example.com/path#fragment",
+            ),
+            (
+                "http://user:pass@example.com/path?query#fragment",
+                "http://user:pass@example.com/path?query#fragment",
+            ),
+            ("http://example.com:8080", "http://example.com:8080"),
+            (
+                "http://example.com:8080/path",
+                "http://example.com:8080/path",
+            ),
+            (
+                "http://example.com:8080/path?query",
+                "http://example.com:8080/path?query",
+            ),
+            (
+                "http://example.com:8080/path#fragment",
+                "http://example.com:8080/path#fragment",
+            ),
+            (
+                "http://example.com:8080/path?query#fragment",
+                "http://example.com:8080/path?query#fragment",
+            ),
+        ];
+        for (input, expected) in &urls {
+            let url = Url::from_str(input).unwrap();
+            assert_eq!(url.to_string(), *expected);
         }
     }
 }
