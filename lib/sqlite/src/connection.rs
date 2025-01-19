@@ -175,3 +175,22 @@ impl Connection {
         self.0.last_insert_row_id()
     }
 }
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_open_db_execute_queries() {
+        let connection = super::Connection::open(":memory:").unwrap();
+        connection.execute(
+            "CREATE TABLE persons (id INTEGER PRIMARY KEY, name TEXT)",
+            (),
+        );
+        connection.execute("INSERT INTO persons (name) VALUES (?)", "Alice".to_string());
+        connection.execute("INSERT INTO persons (name) VALUES (?)", "Bob".to_string());
+        let names = connection
+            .query::<String>("SELECT name FROM persons", ())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["Alice".to_string(), "Bob".to_string()]);
+    }
+}
