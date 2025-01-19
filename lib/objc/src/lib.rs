@@ -199,3 +199,28 @@ impl ClassDecl {
         self.0
     }
 }
+
+// MARK: Tests
+#[cfg(all(test, target_os = "macos"))]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_message_send() {
+        let string: Object = unsafe { msg_send![class!(NSString), string] };
+        let length: u32 = unsafe { msg_send![string, length] };
+        assert_eq!(length, 0);
+    }
+
+    #[test]
+    fn test_class_declaration() {
+        extern "C" fn test_method(_self: Object, _cmd: Sel) {}
+
+        let mut class_decl =
+            ClassDecl::new("TestClass", class!(NSObject)).expect("Failed to create class");
+        assert!(class_decl.add_ivar::<i32>("test_ivar", "i32"));
+        assert!(class_decl.add_method(sel!(testMethod), test_method as *const c_void, "v@:"));
+        let class: Class = class_decl.register();
+        assert!(!class.is_null());
+    }
+}
