@@ -8,16 +8,15 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
 use std::str::{self};
 
 use time::DateTime;
 
+use crate::enums::{Status, Version};
 use crate::serve::KEEP_ALIVE_TIMEOUT;
-use crate::status::Status;
-use crate::version::Version;
 use crate::Request;
 
+// MARK: Response
 /// HTTP response
 #[derive(Default)]
 pub struct Response {
@@ -105,7 +104,7 @@ impl Response {
         self
     }
 
-    pub(crate) fn read_from_stream(stream: &mut TcpStream) -> Result<Self, InvalidResponseError> {
+    pub(crate) fn read_from_stream(stream: &mut impl Read) -> Result<Self, InvalidResponseError> {
         let mut reader = BufReader::new(stream);
 
         // Read first line
@@ -154,7 +153,7 @@ impl Response {
         Ok(res)
     }
 
-    pub(crate) fn write_to_stream(mut self, stream: &mut TcpStream, req: &Request) {
+    pub(crate) fn write_to_stream(mut self, stream: &mut impl Write, req: &Request) {
         // Finish headers
         self.headers
             .insert("Date".to_string(), DateTime::now().to_rfc2822());
@@ -195,3 +194,95 @@ impl Display for InvalidResponseError {
 }
 
 impl Error for InvalidResponseError {}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parse_response() {
+        let response_text = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, world!";
+        let mut response_stream = response_text.as_bytes();
+        let response = Response::read_from_stream(&mut response_stream).unwrap();
+
+        assert_eq!(response.status, Status::Ok);
+        assert_eq!(response.headers.get("Content-Length").unwrap(), "13");
+        assert_eq!(response.body, b"Hello, world!");
+    }
+
+    #[test]
+    fn test_parse_response_with_headers() {
+        let response_text =
+            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nX-Custom-Header: Value\r\n\r\n";
+        let mut response_stream = response_text.as_bytes();
+        let response = Response::read_from_stream(&mut response_stream).unwrap();
+
+        assert_eq!(response.status, Status::NotFound);
+        assert_eq!(response.headers.get("Content-Length").unwrap(), "0");
+        assert_eq!(response.headers.get("X-Custom-Header").unwrap(), "Value");
+        assert!(response.body.is_empty());
+    }
+
+    #[test]
+    fn test_parse_response_invalid() {
+        let response_text = "INVALID RESPONSE";
+        let mut response_stream = response_text.as_bytes();
+        let result = Response::read_from_stream(&mut response_stream);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_response() {
+        let response = Response::with_status(Status::Ok)
+            .header("Content-Length", "13")
+            .body("Hello, world!");
+        let mut response_stream = Vec::new();
+        let request = Request {
+            version: Version::Http1_1,
+            ..Default::default()
+        };
+        response.write_to_stream(&mut response_stream, &request);
+
+        let response_text = String::from_utf8(response_stream).unwrap();
+        assert!(response_text.contains("HTTP/1.1 200 OK"));
+        assert!(response_text.contains("Content-Length: 13"));
+        assert!(response_text.contains("\r\n\r\nHello, world!"));
+    }
+
+    #[test]
+    fn test_write_response_with_headers() {
+        let response = Response::with_status(Status::NotFound)
+            .header("Content-Length", "0")
+            .header("X-Custom-Header", "Value");
+        let mut response_stream = Vec::new();
+        let request = Request {
+            version: Version::Http1_1,
+            ..Default::default()
+        };
+        response.write_to_stream(&mut response_stream, &request);
+
+        let response_text = String::from_utf8(response_stream).unwrap();
+        assert!(response_text.contains("HTTP/1.1 404 Not Found"));
+        assert!(response_text.contains("Content-Length: 0"));
+        assert!(response_text.contains("X-Custom-Header: Value"));
+        assert!(response_text.contains("\r\n\r\n"));
+    }
+
+    #[test]
+    fn test_write_response_with_json() {
+        let response = Response::with_json(serde_json::json!({"key": "value"}));
+        let mut response_stream = Vec::new();
+        let request = Request {
+            version: Version::Http1_1,
+            ..Default::default()
+        };
+        response.write_to_stream(&mut response_stream, &request);
+
+        let response_text = String::from_utf8(response_stream).unwrap();
+        assert!(response_text.contains("HTTP/1.1 200 OK"));
+        assert!(response_text.contains("Content-Type: application/json"));
+        assert!(response_text.contains("\r\n\r\n{\"key\":\"value\"}"));
+    }
+}

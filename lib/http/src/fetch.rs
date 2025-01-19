@@ -36,3 +36,16 @@ impl Display for FetchError {
 }
 
 impl Error for FetchError {}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::enums::Status;
+
+    #[test]
+    fn test_fetch() {
+        let res = fetch(Request::with_url("http://example.com/")).unwrap();
+        assert_eq!(res.status, Status::Ok);
+    }
+}

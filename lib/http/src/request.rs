@@ -8,13 +8,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::str::{self, FromStr};
 
 use url::Url;
 
-use crate::method::Method;
-use crate::version::Version;
+use crate::enums::{Method, Version};
 
 /// HTTP request
 #[derive(Clone)]
@@ -88,13 +87,10 @@ impl Request {
         self
     }
 
-    pub(crate) fn read_from_stream(stream: &mut TcpStream) -> Result<Request, InvalidRequestError> {
-        let local_addr = stream
-            .local_addr()
-            .expect("Can't get tcp stream serder addr");
-        let client_addr = stream
-            .peer_addr()
-            .expect("Can't get tcp stream client addr");
+    pub(crate) fn read_from_stream(
+        stream: &mut impl Read,
+        client_addr: SocketAddr,
+    ) -> Result<Request, InvalidRequestError> {
         let mut reader = BufReader::new(stream);
 
         // Read first line
@@ -158,7 +154,7 @@ impl Request {
                 path
             )
         } else {
-            format!("http://{}{}", local_addr, path)
+            format!("http://localhost{}", path)
         })
         .map_err(|_| InvalidRequestError)?;
 
@@ -173,7 +169,7 @@ impl Request {
         })
     }
 
-    pub(crate) fn write_to_stream(mut self, stream: &mut TcpStream) {
+    pub(crate) fn write_to_stream(mut self, stream: &mut impl Write) {
         // Finish headers
         let authority = self.url.authority.as_ref().expect("Invalid url");
         self.headers.insert(
@@ -226,3 +222,68 @@ impl Display for InvalidRequestError {
 }
 
 impl Error for InvalidRequestError {}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_read_from_stream() {
+        let raw_request = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut stream = &raw_request[..];
+        let request =
+            Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
+        assert_eq!(request.method, Method::Get);
+        assert_eq!(request.url.to_string(), "http://localhost/");
+        assert_eq!(request.version, Version::Http1_1);
+        assert_eq!(request.headers.get("Host").unwrap(), "localhost");
+    }
+
+    #[test]
+    fn test_read_from_stream_with_body() {
+        let raw_request =
+            b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 13\r\n\r\nHello, world!";
+        let mut stream = &raw_request[..];
+        let request =
+            Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
+        assert_eq!(request.method, Method::Post);
+        assert_eq!(request.url.to_string(), "http://localhost/");
+        assert_eq!(request.version, Version::Http1_1);
+        assert_eq!(request.headers.get("Host").unwrap(), "localhost");
+        assert_eq!(request.body.unwrap(), b"Hello, world!");
+    }
+
+    #[test]
+    fn test_invalid_request_error() {
+        let raw_request = b"INVALID REQUEST";
+        let mut stream = &raw_request[..];
+        let result = Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_to_stream() {
+        let request = Request::new()
+            .method(Method::Get)
+            .url(Url::from_str("http://localhost/").unwrap())
+            .header("Host", "localhost");
+
+        let mut buffer = Vec::new();
+        request.write_to_stream(&mut buffer);
+        assert!(buffer.starts_with(b"GET / HTTP/1.1\r\n"));
+    }
+
+    #[test]
+    fn test_write_to_stream_with_body() {
+        let request = Request::new()
+            .method(Method::Post)
+            .url(Url::from_str("http://localhost/").unwrap())
+            .header("Host", "localhost")
+            .body("Hello, world!");
+
+        let mut buffer = Vec::new();
+        request.write_to_stream(&mut buffer);
+        assert!(buffer.starts_with(b"POST / HTTP/1.1\r\n"));
+    }
+}

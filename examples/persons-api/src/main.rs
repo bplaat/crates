@@ -411,7 +411,7 @@ fn main() {
     let router = router(Context::with_database("database.db"));
     const HTTP_PORT: u16 = 8080;
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
     http::serve(listener, move |req| router.handle(req));
 }

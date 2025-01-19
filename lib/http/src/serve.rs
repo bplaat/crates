@@ -10,9 +10,9 @@ use std::time::Duration;
 
 use threadpool::ThreadPool;
 
+use crate::enums::Version;
 use crate::request::Request;
 use crate::response::Response;
-use crate::version::Version;
 
 const WORKER_THREADS: usize = 512;
 pub(crate) const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -47,7 +47,10 @@ where
             }
 
             // Read incoming request
-            match Request::read_from_stream(&mut stream) {
+            let client_addr = stream
+                .peer_addr()
+                .expect("Can't get tcp stream client addr");
+            match Request::read_from_stream(&mut stream, client_addr) {
                 Ok(req) => {
                     // Handle request
                     handler(&req).write_to_stream(&mut stream, &req);
@@ -67,5 +70,40 @@ where
                 }
             }
         });
+    }
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use std::net::{Ipv4Addr, TcpStream};
+    use std::thread;
+
+    use io::Read;
+
+    use super::*;
+    use crate::enums::Status;
+
+    #[test]
+    fn test_serve() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("Failed to bind address");
+        let addr = listener.local_addr().unwrap();
+
+        thread::spawn(move || {
+            serve(listener, |_req| Response::with_status(Status::Ok));
+        });
+
+        for _ in 0..10 {
+            let mut stream = TcpStream::connect(addr).expect("Failed to connect to server");
+            stream
+                .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                .expect("Failed to write to stream");
+
+            let mut response = Vec::new();
+            stream
+                .read_to_end(&mut response)
+                .expect("Failed to read from stream");
+            assert!(response.starts_with(b"HTTP/1.1 200 OK"));
+        }
     }
 }
