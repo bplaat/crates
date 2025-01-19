@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+// MARK: ToCase
 pub(crate) trait ToCase {
     fn to_student_case(&self) -> String;
     fn to_snake_case(&self) -> String;
@@ -13,8 +14,18 @@ pub(crate) trait ToCase {
 impl ToCase for str {
     fn to_student_case(&self) -> String {
         let mut student_case = String::with_capacity(self.len());
-        for (i, c) in self.chars().enumerate() {
-            student_case.push(if i == 0 { c.to_ascii_uppercase() } else { c });
+        let mut next_uppercase = true;
+        for c in self.chars() {
+            if c == '_' {
+                next_uppercase = true;
+                continue;
+            }
+            student_case.push(if next_uppercase {
+                c.to_ascii_uppercase()
+            } else {
+                c
+            });
+            next_uppercase = false;
         }
         student_case
     }
@@ -39,5 +50,34 @@ impl ToCase for str {
             scream_case.push(c.to_ascii_uppercase());
         }
         scream_case
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_student_case() {
+        assert_eq!("helloWorld".to_student_case(), "HelloWorld");
+        assert_eq!("HelloWorld".to_student_case(), "HelloWorld");
+        assert_eq!("hello_world".to_student_case(), "HelloWorld");
+        assert_eq!("".to_student_case(), "");
+    }
+
+    #[test]
+    fn test_to_snake_case() {
+        assert_eq!("helloWorld".to_snake_case(), "hello_world");
+        assert_eq!("HelloWorld".to_snake_case(), "hello_world");
+        assert_eq!("hello_world".to_snake_case(), "hello_world");
+        assert_eq!("".to_snake_case(), "");
+    }
+
+    #[test]
+    fn test_to_scream_case() {
+        assert_eq!("helloWorld".to_scream_case(), "HELLO_WORLD");
+        assert_eq!("HelloWorld".to_scream_case(), "HELLO_WORLD");
+        assert_eq!("hello_world".to_scream_case(), "HELLO_WORLD");
+        assert_eq!("".to_scream_case(), "");
     }
 }
