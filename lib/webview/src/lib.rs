@@ -20,6 +20,10 @@ pub trait Webview {
 
     /// Set title
     fn set_title(&mut self, title: impl AsRef<str>);
+    /// Get position
+    fn position(&self) -> LogicalPoint;
+    /// Get size
+    fn size(&self) -> LogicalSize;
     /// Set position
     fn set_position(&mut self, point: LogicalPoint);
     /// Set size

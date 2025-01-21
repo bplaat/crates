@@ -14,7 +14,6 @@ use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 
 #[link(name = "Cocoa", kind = "framework")]
 extern "C" {}
-
 #[link(name = "WebKit", kind = "framework")]
 extern "C" {}
 
@@ -52,6 +51,7 @@ impl Webview {
             window_did_move as *const c_void,
             "v@:",
         );
+        // FIXME: Use windowWillResize:toSize: so that maximize animation is smooth
         decl.add_method(
             sel!(windowDidResize:),
             window_did_resize as *const c_void,
@@ -205,6 +205,16 @@ impl crate::Webview for Webview {
 
     fn set_title(&mut self, title: impl AsRef<str>) {
         unsafe { msg_send![self.window, setTitle:NSString::from_str(title).0] }
+    }
+
+    fn position(&self) -> LogicalPoint {
+        let frame: NSRect = unsafe { msg_send![self.window, frame] };
+        LogicalPoint::new(frame.point.x as f32, frame.point.y as f32)
+    }
+
+    fn size(&self) -> LogicalSize {
+        let frame: NSRect = unsafe { msg_send![self.window, frame] };
+        LogicalSize::new(frame.size.width as f32, frame.size.height as f32)
     }
 
     fn set_position(&mut self, point: LogicalPoint) {

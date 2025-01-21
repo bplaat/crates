@@ -49,9 +49,8 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
--   [ ] window: Split window management of from webview
--   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] webview: Add Linux (Gtk + Webkit2Gtk) support
+-   [ ] webview: Add Windows (win32 + Webview2) support
 
 ## License
 

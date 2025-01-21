@@ -24,6 +24,14 @@ impl crate::Webview for Webview {
         todo!()
     }
 
+    fn position(&self) -> LogicalPoint {
+        todo!()
+    }
+
+    fn size(&self) -> LogicalSize {
+        todo!()
+    }
+
     fn set_position(&mut self, _point: LogicalPoint) {
         todo!()
     }
