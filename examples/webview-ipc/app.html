@@ -46,14 +46,15 @@
                 event.preventDefault()
             );
             window.ipc.addEventListener("message", (event) => {
-                const { type } = event.data;
-                if (type === "hello") {
-                    const { name } = event.data;
-                    document.getElementById("name").textContent = name;
+                const message = JSON.parse(event.data);
+                if (message.type === "hello") {
+                    document.getElementById("name").textContent = message.name;
                 }
             });
             document.getElementById("button").addEventListener("click", () => {
-                window.ipc.postMessage({ type: "hello", name: "Rust" });
+                window.ipc.postMessage(
+                    JSON.stringify({ type: "hello", name: "Rust" })
+                );
             });
         </script>
     </body>

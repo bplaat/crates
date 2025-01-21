@@ -7,7 +7,7 @@
 //! A webview ipc example
 
 use serde::{Deserialize, Serialize};
-use webview::{Event, WebviewBuilder};
+use webview::{Event, LogicalSize, Webview, WebviewBuilder};
 
 const APP_HTML: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/app.min.html"));
 
@@ -21,15 +21,21 @@ enum IpcMessage {
 fn main() {
     let mut webview = WebviewBuilder::new()
         .title("Webview IPC Example")
-        .size(1024, 768)
-        .min_size(640, 480)
+        .size(LogicalSize::new(1024.0, 768.0))
+        .min_size(LogicalSize::new(640.0, 480.0))
+        .center()
         .remember_window_state(true)
-        .enable_ipc(true)
-        .html(std::str::from_utf8(APP_HTML).expect("Not valid UTF-8"))
+        .load_html(std::str::from_utf8(APP_HTML).expect("Not valid UTF-8"))
         .build();
 
     webview.run(|webview, event| match event {
-        Event::PageLoaded => {
+        Event::WindowResized(size) => {
+            webview.set_title(format!(
+                "Webview IPC Example ({}x{})",
+                size.width, size.height
+            ));
+        }
+        Event::PageLoadFinished => {
             let message = IpcMessage::Hello {
                 name: "WebView".to_string(),
             };
@@ -44,5 +50,6 @@ fn main() {
                 }
             }
         }
+        _ => {}
     });
 }

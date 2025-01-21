@@ -6,13 +6,12 @@
 
 //! A simple webview example
 
-use webview::WebviewBuilder;
+use webview::{Webview, WebviewBuilder};
 
 fn main() {
     let mut webview = WebviewBuilder::new()
         .title("Webview Simple Example")
-        .size(1024, 768)
-        .url("https://github.com/bplaat/crates")
+        .load_url("https://github.com/bplaat/crates")
         .build();
     webview.run(|_, _| {});
 }

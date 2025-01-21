@@ -6,61 +6,68 @@
 
 //! A simple webview library
 
-#[cfg(target_os = "macos")]
-pub use macos::Webview;
-#[cfg(not(target_os = "macos"))]
-pub use stub::Webview;
+pub use event::*;
+pub use sizes::*;
 
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(not(target_os = "macos"))]
-mod stub;
+mod event;
+mod platforms;
+mod sizes;
 
-// MARK: Event
-/// Event
-#[repr(C)]
-pub enum Event {
-    /// Page loaded
-    PageLoaded,
-    /// Ipc message received
-    IpcMessageReceived(String),
+/// Webview
+pub trait Webview {
+    /// Start event loop
+    fn run(&mut self, _event_handler: fn(&mut Self, Event)) -> !;
+
+    /// Set title
+    fn set_title(&mut self, title: impl AsRef<str>);
+    /// Set position
+    fn set_position(&mut self, point: LogicalPoint);
+    /// Set size
+    fn set_size(&mut self, size: LogicalSize);
+    /// Set minimum size
+    fn set_min_size(&mut self, min_size: LogicalSize);
+    /// Set resizable
+    fn set_resizable(&mut self, resizable: bool);
+
+    /// Load URL
+    fn load_url(&mut self, url: impl AsRef<str>);
+    /// Load HTML string
+    fn load_html(&mut self, html: impl AsRef<str>);
+    /// Evaluate script
+    fn evaluate_script(&mut self, script: impl AsRef<str>);
+    /// Send IPC message
+    #[cfg(feature = "ipc")]
+    fn send_ipc_message(&mut self, message: impl AsRef<str>);
 }
 
-// MARK: Size
-/// Size
-#[allow(dead_code)]
-struct Size {
-    /// Width
-    pub width: i32,
-    /// Height
-    pub height: i32,
-}
-
-// MARK: WebviewBuilder
 /// Webview builder
 pub struct WebviewBuilder {
     title: String,
-    size: Size,
-    min_size: Option<Size>,
+    position: Option<LogicalPoint>,
+    size: LogicalSize,
+    min_size: Option<LogicalSize>,
+    resizable: bool,
     remember_window_state: bool,
-    enable_ipc: bool,
-    url: Option<String>,
-    html: Option<String>,
+    should_center: bool,
+    should_load_url: Option<String>,
+    should_load_html: Option<String>,
 }
 
 impl Default for WebviewBuilder {
     fn default() -> Self {
         Self {
             title: "Untitled".to_string(),
-            size: Size {
-                width: 800,
-                height: 600,
+            position: None,
+            size: LogicalSize {
+                width: 1024.0,
+                height: 768.0,
             },
             min_size: None,
+            resizable: true,
             remember_window_state: false,
-            enable_ipc: false,
-            url: None,
-            html: None,
+            should_center: false,
+            should_load_url: None,
+            should_load_html: None,
         }
     }
 }
@@ -77,15 +84,27 @@ impl WebviewBuilder {
         self
     }
 
+    /// Set position
+    pub fn position(mut self, position: LogicalPoint) -> Self {
+        self.position = Some(position);
+        self
+    }
+
     /// Set size
-    pub fn size(mut self, width: i32, height: i32) -> Self {
-        self.size = Size { width, height };
+    pub fn size(mut self, size: LogicalSize) -> Self {
+        self.size = size;
         self
     }
 
     /// Set minimum size
-    pub fn min_size(mut self, width: i32, height: i32) -> Self {
-        self.min_size = Some(Size { width, height });
+    pub fn min_size(mut self, min_size: LogicalSize) -> Self {
+        self.min_size = Some(min_size);
+        self
+    }
+
+    /// Set resizable
+    pub fn resizable(mut self, resizable: bool) -> Self {
+        self.resizable = resizable;
         self
     }
 
@@ -95,26 +114,26 @@ impl WebviewBuilder {
         self
     }
 
-    /// Set enable ipc
-    pub fn enable_ipc(mut self, enable_ipc: bool) -> Self {
-        self.enable_ipc = enable_ipc;
+    /// Center window
+    pub fn center(mut self) -> Self {
+        self.should_center = true;
         self
     }
 
-    /// Set URL
-    pub fn url(mut self, url: impl AsRef<str>) -> Self {
-        self.url = Some(url.as_ref().to_string());
+    /// Load URL
+    pub fn load_url(mut self, url: impl AsRef<str>) -> Self {
+        self.should_load_url = Some(url.as_ref().to_string());
         self
     }
 
-    /// Set HTML
-    pub fn html(mut self, html: impl AsRef<str>) -> Self {
-        self.html = Some(html.as_ref().to_string());
+    /// Load HTML string
+    pub fn load_html(mut self, html: impl AsRef<str>) -> Self {
+        self.should_load_html = Some(html.as_ref().to_string());
         self
     }
 
     /// Build webview
-    pub fn build(self) -> Webview {
-        Webview::new(self)
+    pub fn build(self) -> impl Webview {
+        platforms::Webview::new(self)
     }
 }

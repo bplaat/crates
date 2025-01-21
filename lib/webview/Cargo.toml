@@ -10,3 +10,6 @@ objc = { path = "../objc" }
 
 [lints]
 workspace = true
+
+[features]
+ipc = []
