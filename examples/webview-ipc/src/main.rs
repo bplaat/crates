@@ -29,12 +29,23 @@ fn main() {
         .build();
 
     webview.run(|webview, event| match event {
+        Event::WindowCreated => {
+            println!("Window created");
+        }
+        Event::WindowMoved(point) => {
+            println!("Window moved: {:?}", point);
+        }
         Event::WindowResized(size) => {
+            println!("Window resized: {}x{}", size.width, size.height);
             webview.set_title(format!(
                 "Webview IPC Example ({}x{})",
                 size.width, size.height
             ));
         }
+        Event::WindowClosed => {
+            println!("Window closed");
+        }
+
         Event::PageLoadFinished => {
             let message = IpcMessage::Hello {
                 name: "WebView".to_string(),
@@ -50,6 +61,5 @@ fn main() {
                 }
             }
         }
-        _ => {}
     });
 }

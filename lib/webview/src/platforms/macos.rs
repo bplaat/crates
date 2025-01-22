@@ -12,22 +12,11 @@ use objc::*;
 
 use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 
-#[link(name = "Cocoa", kind = "framework")]
-extern "C" {}
-#[link(name = "WebKit", kind = "framework")]
-extern "C" {}
-
 /// Webview
 pub(crate) struct Webview {
     window: Object,
     webview: Object,
     event_handler: Option<fn(&mut Webview, Event)>,
-}
-
-impl Webview {
-    fn send_event(&mut self, event: Event) {
-        self.event_handler.expect("Should be some")(self, event);
-    }
 }
 
 impl Webview {
@@ -186,6 +175,10 @@ impl Webview {
             webview,
             event_handler: None,
         }
+    }
+
+    fn send_event(&mut self, event: Event) {
+        self.event_handler.expect("Should be some")(self, event);
     }
 }
 
@@ -399,6 +392,13 @@ extern "C" fn webview_did_receive_script_message(
 }
 
 // MARK: Cocoa headers
+#[link(name = "Cocoa", kind = "framework")]
+extern "C" {
+    static NSApp: Object;
+}
+#[link(name = "WebKit", kind = "framework")]
+extern "C" {}
+
 #[repr(C)]
 struct NSPoint {
     x: f64,
@@ -428,10 +428,6 @@ const NS_BACKING_STORE_BUFFERED: i32 = 2;
 
 #[cfg(feature = "ipc")]
 const WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START: i32 = 0;
-
-extern "C" {
-    static NSApp: Object;
-}
 
 #[allow(dead_code)]
 struct NSString(Object);
