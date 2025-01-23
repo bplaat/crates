@@ -4,15 +4,34 @@
  * SPDX-License-Identifier: MIT
  */
 
-#[cfg(target_os = "linux")]
-pub(crate) use linux::*;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd"
+))]
+pub(crate) use gtk::*;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::*;
 
-#[cfg(target_os = "linux")]
-mod linux;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd"
+))]
+mod gtk;
 #[cfg(target_os = "macos")]
 mod macos;
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "macos"
+)))]
 compile_error!("Unsupported platform");
