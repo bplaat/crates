@@ -40,7 +40,6 @@ impl Webview {
             window_did_move as *const c_void,
             "v@:",
         );
-        // FIXME: Use windowWillResize:toSize: so that maximize animation is smooth
         decl.add_method(
             sel!(windowDidResize:),
             window_did_resize as *const c_void,
@@ -88,7 +87,7 @@ impl Webview {
 
         // Create window
         let window_rect = NSRect {
-            point: if let Some(position) = builder.position {
+            origin: if let Some(position) = builder.position {
                 NSPoint {
                     x: position.x as f64,
                     y: position.y as f64,
@@ -117,7 +116,7 @@ impl Webview {
                 let screen_frame: NSRect = msg_send![msg_send![window, screen], frame];
                 let window_frame: NSRect = msg_send![window, frame];
                 let centered_rect = NSRect {
-                    point: NSPoint {
+                    origin: NSPoint {
                         x: (screen_frame.size.width - window_frame.size.width) / 2.0,
                         y: (screen_frame.size.height - window_frame.size.height) / 2.0,
                     },
@@ -133,12 +132,8 @@ impl Webview {
 
         // Create webview
         let webview = unsafe {
-            let content_view: Object = msg_send![window, contentView];
-            let content_view_rect: NSRect = msg_send![content_view, frame];
-            let webview: Object =
-                msg_send![msg_send![class!(WKWebView), alloc], initWithFrame:content_view_rect];
-            let _: () = msg_send![content_view, addSubview:webview];
-
+            let webview: Object = msg_send![class!(WKWebView), new];
+            let _: () = msg_send![window, setContentView:webview];
             if let Some(url) = builder.should_load_url {
                 let url: Object = msg_send![class!(NSURL), URLWithString:NSString::from_str(url).0];
                 let request: Object = msg_send![class!(NSURLRequest), requestWithURL:url];
@@ -202,25 +197,24 @@ impl crate::Webview for Webview {
 
     fn position(&self) -> LogicalPoint {
         let frame: NSRect = unsafe { msg_send![self.window, frame] };
-        LogicalPoint::new(frame.point.x as f32, frame.point.y as f32)
+        LogicalPoint::new(frame.origin.x as f32, frame.origin.y as f32)
     }
 
     fn size(&self) -> LogicalSize {
-        let frame: NSRect = unsafe { msg_send![self.window, frame] };
+        let frame: NSRect = unsafe { msg_send![self.webview, frame] };
         LogicalSize::new(frame.size.width as f32, frame.size.height as f32)
     }
 
     fn set_position(&mut self, point: LogicalPoint) {
-        let frame: NSRect = unsafe { msg_send![self.window, frame] };
         unsafe {
-            msg_send![self.window, setFrame:NSRect { point: NSPoint { x: point.x as f64, y: point.y as f64}, size: frame.size } display:true]
+            msg_send![self.window, setFrameTopLeftPoint:NSPoint { x: point.x as f64, y: point.y as f64}]
         }
     }
 
     fn set_size(&mut self, size: LogicalSize) {
         let frame: NSRect = unsafe { msg_send![self.window, frame] };
         unsafe {
-            msg_send![self.window, setFrame:NSRect { point: frame.point, size: NSSize { width: size.width as f64, height: size.height as f64 } } display:true]
+            msg_send![self.window, setFrame:NSRect { origin: frame.origin, size: NSSize { width: size.width as f64, height: size.height as f64 } } display:true]
         }
     }
 
@@ -288,11 +282,10 @@ extern "C" fn app_did_finish_launching(this: Object, _sel: Sel, _notification: O
     _self.send_event(Event::WindowCreated);
 
     // Send window resized event
-    let content_view_rect: NSRect =
-        unsafe { msg_send![msg_send![_self.window, contentView], frame] };
+    let frame: NSRect = unsafe { msg_send![_self.webview, frame] };
     _self.send_event(Event::WindowResized(LogicalSize::new(
-        content_view_rect.size.width as f32,
-        content_view_rect.size.height as f32,
+        frame.size.width as f32,
+        frame.size.height as f32,
     )));
 }
 
@@ -312,12 +305,12 @@ extern "C" fn window_did_move(this: Object, _sel: Sel, _notification: Object) {
         &mut *(_self as *mut Webview)
     };
 
-    // Get new position
-    let window_frame: NSRect = unsafe { msg_send![_self.window, frame] };
-    let new_position = LogicalPoint::new(window_frame.point.x as f32, window_frame.point.y as f32);
-
     // Send window moved event
-    _self.send_event(Event::WindowMoved(new_position));
+    let frame: NSRect = unsafe { msg_send![_self.window, frame] };
+    _self.send_event(Event::WindowMoved(LogicalPoint::new(
+        frame.origin.x as f32,
+        frame.origin.y as f32,
+    )));
 }
 
 extern "C" fn window_did_resize(this: Object, _sel: Sel, _notification: Object) {
@@ -328,19 +321,12 @@ extern "C" fn window_did_resize(this: Object, _sel: Sel, _notification: Object) 
         &mut *(_self as *mut Webview)
     };
 
-    // Get new size
-    let content_view_rect: NSRect =
-        unsafe { msg_send![msg_send![_self.window, contentView], frame] };
-    let new_size = LogicalSize::new(
-        content_view_rect.size.width as f32,
-        content_view_rect.size.height as f32,
-    );
-
-    // Resize webview
-    let _: () = unsafe { msg_send![_self.webview, setFrame:content_view_rect] };
-
     // Send window resized event
-    _self.send_event(Event::WindowResized(new_size));
+    let frame: NSRect = unsafe { msg_send![_self.webview, frame] };
+    _self.send_event(Event::WindowResized(LogicalSize::new(
+        frame.size.width as f32,
+        frame.size.height as f32,
+    )));
 }
 
 extern "C" fn window_will_close(this: Object, _sel: Sel, _notification: Object) {
@@ -411,7 +397,7 @@ struct NSSize {
 }
 #[repr(C)]
 struct NSRect {
-    point: NSPoint,
+    origin: NSPoint,
     size: NSSize,
 }
 
