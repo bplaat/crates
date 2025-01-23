@@ -12,4 +12,6 @@ objc = { path = "../objc" }
 workspace = true
 
 [features]
+default = ["remember_window_state", "ipc"]
+remember_window_state = []
 ipc = []

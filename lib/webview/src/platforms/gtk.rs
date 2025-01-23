@@ -35,6 +35,7 @@ impl Webview {
         }
     }
 
+    #[cfg(feature = "remember_window_state")]
     fn settings_path(&self) -> String {
         format!(
             "{}/.config/{}/settings.ini",
@@ -47,6 +48,7 @@ impl Webview {
         )
     }
 
+    #[cfg(feature = "remember_window_state")]
     fn load_window_state(&mut self) {
         unsafe {
             let settings = g_key_file_new();
@@ -76,6 +78,7 @@ impl Webview {
         }
     }
 
+    #[cfg(feature = "remember_window_state")]
     fn save_window_state(&mut self) {
         let settings_path = self.settings_path();
         fs::create_dir_all(
@@ -247,6 +250,7 @@ extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
         if builder.should_center {
             gtk_window_set_position(_self.window, GTK_WIN_POS_CENTER);
         }
+        #[cfg(feature = "remember_window_state")]
         if builder.remember_window_state {
             _self.load_window_state();
         }
@@ -368,6 +372,7 @@ extern "C" fn window_on_close(
     _self: &mut Webview,
 ) -> bool {
     // Save window state
+    #[cfg(feature = "remember_window_state")]
     if _self.remember_window_state {
         _self.save_window_state();
     }

@@ -124,6 +124,7 @@ impl Webview {
                 };
                 let _: () = msg_send![window, setFrame:centered_rect display:true];
             }
+            #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
                 let _: () = msg_send![window, setFrameAutosaveName:NSString::from_str("window").0];
             }

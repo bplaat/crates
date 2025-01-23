@@ -51,6 +51,7 @@ pub struct WebviewBuilder {
     size: LogicalSize,
     min_size: Option<LogicalSize>,
     resizable: bool,
+    #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
     should_center: bool,
     should_load_url: Option<String>,
@@ -68,6 +69,7 @@ impl Default for WebviewBuilder {
             },
             min_size: None,
             resizable: true,
+            #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
             should_center: false,
             should_load_url: None,
@@ -113,6 +115,7 @@ impl WebviewBuilder {
     }
 
     /// Set remember window state
+    #[cfg(feature = "remember_window_state")]
     pub fn remember_window_state(mut self, remember_window_state: bool) -> Self {
         self.remember_window_state = remember_window_state;
         self
