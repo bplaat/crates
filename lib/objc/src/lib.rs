@@ -4,66 +4,68 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A basic Objective-C ffi library
+//! An Objective-C ffi library
 
 use std::ffi::{c_char, c_void, CString};
 
-/// Class type
-pub type Class = *const c_void;
-/// Selector type
-pub type Sel = *const c_void;
 /// Object type
-pub type Object = *const c_void;
+pub type Object = c_void;
+/// Class type
+pub type Class = c_void;
+/// Selector type
+pub type Sel = c_void;
+
 /// Super class
+// FIXME: Make a msg_send_super macro instead of exposing this struct
 #[repr(C)]
 pub struct Super {
     /// Receiver
-    pub receiver: Object,
+    pub receiver: *mut Object,
     /// Super class
-    pub superclass: Class,
+    pub superclass: *const Class,
 }
 
 #[link(name = "objc", kind = "dylib")]
 extern "C" {
     #![allow(missing_docs)]
 
-    pub fn objc_getClass(name: *const c_char) -> Class;
-    pub fn sel_registerName(name: *const c_char) -> Sel;
-    pub fn objc_msgSend(receiver: Object, sel: Sel, ...) -> *const c_void;
+    pub fn objc_getClass(name: *const c_char) -> *mut Class;
+    pub fn sel_registerName(name: *const c_char) -> *mut Sel;
+    pub fn objc_msgSend(receiver: *mut Object, sel: *const Sel, ...) -> *mut c_void;
     #[cfg(target_arch = "x86_64")]
-    pub fn objc_msgSend_stret(ret: *mut c_void, receiver: Object, sel: Sel, ...);
-    pub fn objc_msgSendSuper(receiver: &Super, sel: Sel, ...) -> *const c_void;
+    pub fn objc_msgSend_stret(ret: *mut c_void, receiver: *mut Object, sel: *const Sel, ...);
+    pub fn objc_msgSendSuper(receiver: &Super, sel: *const Sel, ...) -> *mut c_void;
 
     pub fn object_getInstanceVariable(
-        obj: Object,
+        obj: *const Object,
         name: *const c_char,
-        outValue: *mut *const c_void,
+        outValue: *mut *mut c_void,
     ) -> *const c_void;
     pub fn object_setInstanceVariable(
-        obj: Object,
+        obj: *mut Object,
         name: *const c_char,
         value: *const c_void,
     ) -> *const c_void;
 
     pub fn objc_allocateClassPair(
-        superclass: Class,
+        superclass: *const Class,
         name: *const c_char,
         extraBytes: usize,
-    ) -> Class;
+    ) -> *mut Class;
     pub fn class_addIvar(
-        class: Class,
+        class: *mut Class,
         name: *const c_char,
         size: usize,
         alignment: u8,
         types: *const c_char,
     ) -> bool;
     pub fn class_addMethod(
-        class: Class,
-        sel: Sel,
+        class: *mut Class,
+        sel: *const Sel,
         imp: *const c_void,
         types: *const c_char,
     ) -> bool;
-    pub fn objc_registerClassPair(class: Class);
+    pub fn objc_registerClassPair(class: *mut Class);
 }
 
 /// Get class by name
@@ -102,30 +104,30 @@ pub trait MessageSend {
     /// Send message
     /// # Safety
     /// This function is unsafe because it calls objc_msgSend
-    unsafe fn invoke<R>(obj: Object, sel: Sel, args: Self) -> R;
+    unsafe fn invoke<R>(obj: *mut Object, sel: *const Sel, args: Self) -> R;
 }
 macro_rules! message_send_impl {
     ($($a:ident : $t:ident),*) => (
         impl<$($t),*> MessageSend for ($($t,)*) {
             #[inline(always)]
-            unsafe fn invoke<R>(obj: Object, sel: Sel, ($($a,)*): Self) -> R {
+            unsafe fn invoke<R>(obj: *mut Object, sel: *const Sel, ($($a,)*): Self) -> R {
                 #[cfg(target_arch = "x86_64")]
                 unsafe {
                     if size_of::<R>() > 16 {
                         let mut ret = std::mem::zeroed();
-                        let imp: unsafe extern fn (*mut R, Object, Sel, $($t,)*) =
+                        let imp: unsafe extern fn (*mut R, *mut Object, *const Sel, $($t,)*) =
                             std::mem::transmute(objc_msgSend_stret as *const c_void);
                         imp(&mut ret, obj, sel, $($a,)*);
                         ret
                     } else {
-                        let imp: unsafe extern fn (Object, Sel, $($t,)*) -> R =
+                        let imp: unsafe extern fn (*mut Object, *const Sel, $($t,)*) -> R =
                             std::mem::transmute(objc_msgSend as *const c_void);
                         imp(obj, sel, $($a,)*)
                     }
                 }
                 #[cfg(not(target_arch = "x86_64"))]
                 unsafe {
-                    let imp: unsafe extern fn (Object, Sel, $($t,)*) -> R =
+                    let imp: unsafe extern fn (*mut Object, *const Sel, $($t,)*) -> R =
                         std::mem::transmute(objc_msgSend as *const c_void);
                     imp(obj, sel, $($a,)*)
                 }
@@ -156,14 +158,14 @@ macro_rules! msg_send {
 
 /// Class declaration
 #[repr(C)]
-pub struct ClassDecl(Class);
+pub struct ClassDecl(*mut Class);
 
 impl ClassDecl {
     /// Create a new class
-    pub fn new(name: &str, superclass: Class) -> Option<Self> {
+    pub fn new(name: &str, superclass: *const Class) -> Option<Self> {
         #![allow(clippy::not_unsafe_ptr_arg_deref)]
         let name = CString::new(name).expect("Can't convert to CString");
-        let class: Class = unsafe { objc_allocateClassPair(superclass, name.as_ptr(), 0) };
+        let class: *mut Class = unsafe { objc_allocateClassPair(superclass, name.as_ptr(), 0) };
         if class.is_null() {
             None
         } else {
@@ -187,14 +189,14 @@ impl ClassDecl {
     }
 
     /// Add method
-    pub fn add_method(&mut self, sel: Sel, imp: *const c_void, types: &str) -> bool {
+    pub fn add_method(&mut self, sel: *const Sel, imp: *const c_void, types: &str) -> bool {
         #![allow(clippy::not_unsafe_ptr_arg_deref)]
         let types = CString::new(types).expect("Can't convert to CString");
         unsafe { class_addMethod(self.0, sel, imp, types.as_ptr()) }
     }
 
     /// Register class
-    pub fn register(&mut self) -> Class {
+    pub fn register(&mut self) -> *mut Class {
         unsafe { objc_registerClassPair(self.0) }
         self.0
     }
@@ -207,20 +209,20 @@ mod test {
 
     #[test]
     fn test_message_send() {
-        let string: Object = unsafe { msg_send![class!(NSString), string] };
+        let string: *mut Object = unsafe { msg_send![class!(NSString), string] };
         let length: u32 = unsafe { msg_send![string, length] };
         assert_eq!(length, 0);
     }
 
     #[test]
     fn test_class_declaration() {
-        extern "C" fn test_method(_self: Object, _cmd: Sel) {}
+        extern "C" fn test_method(_self: *mut Object, _cmd: *const Sel) {}
 
         let mut class_decl =
             ClassDecl::new("TestClass", class!(NSObject)).expect("Failed to create class");
         assert!(class_decl.add_ivar::<i32>("test_ivar", "i32"));
         assert!(class_decl.add_method(sel!(testMethod), test_method as *const c_void, "v@:"));
-        let class: Class = class_decl.register();
+        let class: *mut Class = class_decl.register();
         assert!(!class.is_null());
     }
 }

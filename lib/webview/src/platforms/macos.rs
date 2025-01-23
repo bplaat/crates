@@ -6,7 +6,7 @@
 
 use std::ffi::{c_char, c_void};
 use std::fmt::{self, Display, Formatter};
-use std::ptr::null;
+use std::ptr::{null, null_mut};
 
 use objc::*;
 
@@ -14,8 +14,8 @@ use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 
 /// Webview
 pub(crate) struct Webview {
-    window: Object,
-    webview: Object,
+    window: *mut Object,
+    webview: *mut Object,
     event_handler: Option<fn(&mut Webview, Event)>,
 }
 
@@ -107,7 +107,7 @@ impl Webview {
             window_style_mask |= NS_WINDOW_STYLE_MASK_RESIZABLE;
         }
         let window = unsafe {
-            let window: Object = msg_send![msg_send![class!(NSWindow), alloc], initWithContentRect:window_rect styleMask:window_style_mask backing:NS_BACKING_STORE_BUFFERED defer:false];
+            let window: *mut Object = msg_send![msg_send![class!(NSWindow), alloc], initWithContentRect:window_rect styleMask:window_style_mask backing:NS_BACKING_STORE_BUFFERED defer:false];
             let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title).0];
             if let Some(min_size) = builder.min_size {
                 let _: () = msg_send![window, setMinSize:NSSize { width: min_size.width as f64, height: min_size.height as f64 }];
@@ -133,11 +133,12 @@ impl Webview {
 
         // Create webview
         let webview = unsafe {
-            let webview: Object = msg_send![class!(WKWebView), new];
+            let webview: *mut Object = msg_send![class!(WKWebView), new];
             let _: () = msg_send![window, setContentView:webview];
             if let Some(url) = builder.should_load_url {
-                let url: Object = msg_send![class!(NSURL), URLWithString:NSString::from_str(url).0];
-                let request: Object = msg_send![class!(NSURLRequest), requestWithURL:url];
+                let url: *mut Object =
+                    msg_send![class!(NSURL), URLWithString:NSString::from_str(url).0];
+                let request: *mut Object = msg_send![class!(NSURLRequest), requestWithURL:url];
                 let _: () = msg_send![webview, loadRequest:request];
             }
             if let Some(html) = builder.should_load_html {
@@ -148,16 +149,16 @@ impl Webview {
 
         // Create AppDelegate
         unsafe {
-            let app_delegate: Object = msg_send![class!(AppDelegate), new];
+            let app_delegate: *mut Object = msg_send![class!(AppDelegate), new];
             let _: () = msg_send![application, setDelegate:app_delegate];
             let _: () = msg_send![window, setDelegate:app_delegate];
             let _: () = msg_send![webview, setNavigationDelegate:app_delegate];
 
             #[cfg(feature = "ipc")]
             {
-                let user_content_controller: Object =
+                let user_content_controller: *mut Object =
                     msg_send![msg_send![webview, configuration], userContentController];
-                let user_script: Object = msg_send![msg_send![class!(WKUserScript), alloc],
+                let user_script: *mut Object = msg_send![msg_send![class!(WKUserScript), alloc],
                     initWithSource:NSString::from_str("window.ipc=new EventTarget();window.ipc.postMessage=message=>window.webkit.messageHandlers.ipc.postMessage(message);").0
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START
                     forMainFrameOnly:true];
@@ -182,7 +183,7 @@ impl crate::Webview for Webview {
     fn run(&mut self, event_handler: fn(&mut Webview, Event)) -> ! {
         self.event_handler = Some(event_handler);
         unsafe {
-            let delegate: Object = msg_send![NSApp, delegate];
+            let delegate: *mut Object = msg_send![NSApp, delegate];
             object_setInstanceVariable(
                 delegate,
                 c"_self".as_ptr(),
@@ -237,8 +238,9 @@ impl crate::Webview for Webview {
 
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
-            let url: Object = msg_send![class!(NSURL), URLWithString:NSString::from_str(url).0];
-            let request: Object = msg_send![class!(NSURLRequest), requestWithURL:url];
+            let url: *mut Object =
+                msg_send![class!(NSURL), URLWithString:NSString::from_str(url).0];
+            let request: *mut Object = msg_send![class!(NSURLRequest), requestWithURL:url];
             msg_send![self.webview, loadRequest:request]
         }
     }
@@ -264,10 +266,14 @@ impl crate::Webview for Webview {
     }
 }
 
-extern "C" fn app_did_finish_launching(this: Object, _sel: Sel, _notification: Object) {
+extern "C" fn app_did_finish_launching(
+    this: *mut Object,
+    _sel: *const Sel,
+    _notification: *mut Object,
+) {
     // Get self
     let _self = unsafe {
-        let mut _self = null();
+        let mut _self = null_mut();
         object_getInstanceVariable(this, c"_self".as_ptr(), &mut _self);
         &mut *(_self as *mut Webview)
     };
@@ -291,17 +297,17 @@ extern "C" fn app_did_finish_launching(this: Object, _sel: Sel, _notification: O
 }
 
 extern "C" fn app_should_terminate_after_last_window_closed(
-    _this: Object,
-    _sel: Sel,
-    _sender: Object,
+    _this: *mut Object,
+    _sel: *const Sel,
+    _sender: *mut Object,
 ) -> bool {
     true
 }
 
-extern "C" fn window_did_move(this: Object, _sel: Sel, _notification: Object) {
+extern "C" fn window_did_move(this: *mut Object, _sel: *const Sel, _notification: *mut Object) {
     // Get self
     let _self = unsafe {
-        let mut _self = null();
+        let mut _self = null_mut();
         object_getInstanceVariable(this, c"_self".as_ptr(), &mut _self);
         &mut *(_self as *mut Webview)
     };
@@ -314,10 +320,10 @@ extern "C" fn window_did_move(this: Object, _sel: Sel, _notification: Object) {
     )));
 }
 
-extern "C" fn window_did_resize(this: Object, _sel: Sel, _notification: Object) {
+extern "C" fn window_did_resize(this: *mut Object, _sel: *const Sel, _notification: *mut Object) {
     // Get self
     let _self = unsafe {
-        let mut _self = null();
+        let mut _self = null_mut();
         object_getInstanceVariable(this, c"_self".as_ptr(), &mut _self);
         &mut *(_self as *mut Webview)
     };
@@ -330,10 +336,10 @@ extern "C" fn window_did_resize(this: Object, _sel: Sel, _notification: Object) 
     )));
 }
 
-extern "C" fn window_will_close(this: Object, _sel: Sel, _notification: Object) {
+extern "C" fn window_will_close(this: *mut Object, _sel: *const Sel, _notification: *mut Object) {
     // Get self
     let _self = unsafe {
-        let mut _self = null();
+        let mut _self = null_mut();
         object_getInstanceVariable(this, c"_self".as_ptr(), &mut _self);
         &mut *(_self as *mut Webview)
     };
@@ -343,14 +349,14 @@ extern "C" fn window_will_close(this: Object, _sel: Sel, _notification: Object) 
 }
 
 extern "C" fn webview_did_finish_navigation(
-    this: Object,
-    _sel: Sel,
-    _webview: Object,
-    _navigation: Object,
+    this: *mut Object,
+    _sel: *const Sel,
+    _webview: *mut Object,
+    _navigation: *mut Object,
 ) {
     // Get self
     let _self = unsafe {
-        let mut _self = null();
+        let mut _self = null_mut();
         object_getInstanceVariable(this, c"_self".as_ptr(), &mut _self);
         &mut *(_self as *mut Webview)
     };
@@ -361,14 +367,14 @@ extern "C" fn webview_did_finish_navigation(
 
 #[cfg(feature = "ipc")]
 extern "C" fn webview_did_receive_script_message(
-    this: Object,
-    _sel: Sel,
-    _user_content_controller: Object,
-    message: Object,
+    this: *mut Object,
+    _sel: *const Sel,
+    _user_content_controller: *mut Object,
+    message: *mut Object,
 ) {
     // Get self
     let _self = unsafe {
-        let mut _self = null();
+        let mut _self = null_mut();
         object_getInstanceVariable(this, c"_self".as_ptr(), &mut _self);
         &mut *(_self as *mut Webview)
     };
@@ -381,7 +387,7 @@ extern "C" fn webview_did_receive_script_message(
 // MARK: Cocoa headers
 #[link(name = "Cocoa", kind = "framework")]
 extern "C" {
-    static NSApp: Object;
+    static NSApp: *mut Object;
 }
 #[link(name = "WebKit", kind = "framework")]
 extern "C" {}
@@ -416,8 +422,8 @@ const NS_BACKING_STORE_BUFFERED: i32 = 2;
 #[cfg(feature = "ipc")]
 const WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START: i32 = 0;
 
-#[allow(dead_code)]
-struct NSString(Object);
+struct NSString(*mut Object);
+
 impl NSString {
     fn from_str(str: impl AsRef<str>) -> Self {
         let str = str.as_ref();

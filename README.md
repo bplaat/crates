@@ -9,7 +9,7 @@ A collection of minimal Rust crates that I created for myself
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
 -   [minify-html](lib/minify-html) A simple HTML minifier library
--   [objc](lib/objc) A basic Objective-C ffi library
+-   [objc](lib/objc) An Objective-C ffi library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [router](lib/router) A simple router for HTTP library
