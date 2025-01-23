@@ -49,7 +49,7 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
--   [ ] webview: Fix fixmes
+-   [ ] webview: Support opening links in browser
 -   [ ] webview: Add Windows (win32 + Webview2) support
 
 ## License
