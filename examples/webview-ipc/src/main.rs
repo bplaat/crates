@@ -29,6 +29,7 @@ fn main() {
         .build();
 
     webview.run(|webview, event| match event {
+        // Window events
         Event::WindowCreated => {
             println!("Window created");
         }
@@ -46,7 +47,9 @@ fn main() {
             println!("Window closed");
         }
 
+        // Page events
         Event::PageLoadFinished => {
+            println!("Page load finished");
             let message = IpcMessage::Hello {
                 name: "WebView".to_string(),
             };
@@ -54,7 +57,7 @@ fn main() {
                 serde_json::to_string(&message).expect("Should serialize message"),
             );
         }
-        Event::IpcMessageReceived(message) => {
+        Event::PageMessageReceived(message) => {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::Hello { name } => {
                     println!("Hello, {}!", name);

@@ -381,7 +381,7 @@ extern "C" fn webview_did_receive_script_message(
 
     // Send ipc message received event
     let body: NSString = unsafe { msg_send![message, body] };
-    _self.send_event(Event::IpcMessageReceived(body.to_string()));
+    _self.send_event(Event::PageMessageReceived(body.to_string()));
 }
 
 // MARK: Cocoa headers

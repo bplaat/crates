@@ -404,7 +404,7 @@ extern "C" fn webview_on_message(
     let message = unsafe { webkit_javascript_result_get_js_value(_message) };
     let message = unsafe { jsc_value_to_string(message) };
     let message = unsafe { std::ffi::CStr::from_ptr(message) }.to_string_lossy();
-    _self.send_event(Event::IpcMessageReceived(message.to_string()));
+    _self.send_event(Event::PageMessageReceived(message.to_string()));
 }
 
 // MARK: GTK headers
