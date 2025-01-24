@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, c_void, CString};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::Path;
 use std::process::exit;
 use std::ptr::{null, null_mut};
@@ -258,14 +258,18 @@ extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
             _self.load_window_state();
         }
 
-        g_signal_connect_data(
-            _self.window as *mut c_void,
-            c"configure-event".as_ptr(),
-            window_on_move as *const c_void,
-            _self as *mut Webview as *const c_void,
-            null(),
-            G_CONNECT_DEFAULT,
-        );
+        let display = gdk_display_get_default();
+        let display_name = CStr::from_ptr(gdk_display_get_name(display)).to_string_lossy();
+        if !display_name.contains("wayland") {
+            g_signal_connect_data(
+                _self.window as *mut c_void,
+                c"configure-event".as_ptr(),
+                window_on_move as *const c_void,
+                _self as *mut Webview as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+        }
         g_signal_connect_data(
             _self.window as *mut c_void,
             c"size-allocate".as_ptr(),
@@ -430,7 +434,7 @@ extern "C" fn webview_on_message(
 ) {
     let message = unsafe { webkit_javascript_result_get_js_value(_message) };
     let message = unsafe { jsc_value_to_string(message) };
-    let message = unsafe { std::ffi::CStr::from_ptr(message) }.to_string_lossy();
+    let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
     _self.send_event(Event::PageMessageReceived(message.to_string()));
 }
 
@@ -507,6 +511,15 @@ extern "C" {
         argc: i32,
         argv: *const *const c_char,
     ) -> i32;
+}
+
+// GDK
+#[repr(C)]
+struct GdkDisplay(u8);
+#[link(name = "gdk-3")]
+extern "C" {
+    fn gdk_display_get_default() -> *mut GdkDisplay;
+    fn gdk_display_get_name(display: *mut GdkDisplay) -> *const c_char;
 }
 
 // GTK
