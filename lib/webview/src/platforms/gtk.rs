@@ -335,6 +335,14 @@ extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
             null(),
             G_CONNECT_DEFAULT,
         );
+        g_signal_connect_data(
+            _self.webview as *mut c_void,
+            c"decide-policy".as_ptr(),
+            webview_on_navigation_policy_decision as *const c_void,
+            _self as *mut Webview as *const c_void,
+            null(),
+            G_CONNECT_DEFAULT,
+        );
     }
 
     // Show window
@@ -397,6 +405,21 @@ extern "C" fn webview_on_load_changed(
     if event == WEBKIT_LOAD_FINISHED {
         _self.send_event(Event::PageLoadFinished)
     }
+}
+
+extern "C" fn webview_on_navigation_policy_decision(
+    _webview: *mut WebKitWebView,
+    decision: *mut WebKitNavigationPolicyDecision,
+    decision_type: i32,
+    _self: &mut Webview,
+) -> bool {
+    if decision_type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION {
+        let request = unsafe { webkit_navigation_policy_decision_get_request(decision) };
+        let uri = unsafe { webkit_uri_request_get_uri(request) };
+        unsafe { gtk_show_uri_on_window(null_mut(), uri, 0, null_mut()) };
+        return true;
+    }
+    false
 }
 
 #[cfg(feature = "ipc")]
@@ -510,13 +533,24 @@ extern "C" {
     fn gtk_window_is_maximized(window: *mut GtkWindow) -> bool;
     fn gtk_window_maximize(window: *mut GtkWindow);
     fn gtk_widget_show_all(window: *mut GtkWindow);
+    fn gtk_show_uri_on_window(
+        parent: *mut GtkWindow,
+        uri: *const c_char,
+        timestamp: u32,
+        error: *mut *mut GError,
+    );
 }
 
 // WebKitGtk
 #[repr(C)]
 struct WebKitWebView(u8);
+#[repr(C)]
+struct WebKitNavigationPolicyDecision(u8);
+#[repr(C)]
+struct WebKitURIRequest(u8);
 const WEBKIT_LOAD_STARTED: i32 = 1;
 const WEBKIT_LOAD_FINISHED: i32 = 3;
+const WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION: i32 = 1;
 #[link(name = "webkit2gtk-4.1")]
 extern "C" {
     #[cfg(not(feature = "ipc"))]
@@ -537,6 +571,10 @@ extern "C" {
         callback: *const c_void,
         user_data: *const c_void,
     );
+    fn webkit_navigation_policy_decision_get_request(
+        decision: *mut WebKitNavigationPolicyDecision,
+    ) -> *mut WebKitURIRequest;
+    fn webkit_uri_request_get_uri(request: *mut WebKitURIRequest) -> *const c_char;
 }
 
 #[repr(C)]
