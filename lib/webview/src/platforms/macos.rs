@@ -51,8 +51,18 @@ impl Webview {
             "v@:",
         );
         decl.add_method(
+            sel!(webView:didStartProvisionalNavigation:),
+            webview_did_start_provisional_navigation as *const c_void,
+            "v@:@",
+        );
+        decl.add_method(
             sel!(webView:didFinishNavigation:),
             webview_did_finish_navigation as *const c_void,
+            "v@:@",
+        );
+        decl.add_method(
+            sel!(webView:decidePolicyForNavigationAction:decisionHandler:),
+            webview_decide_policy_for_navigation_action as *const c_void,
             "v@:@",
         );
         #[cfg(feature = "ipc")]
@@ -348,6 +358,23 @@ extern "C" fn window_will_close(this: *mut Object, _sel: *const Sel, _notificati
     _self.send_event(Event::WindowClosed);
 }
 
+extern "C" fn webview_did_start_provisional_navigation(
+    this: *mut Object,
+    _sel: *const Sel,
+    _webview: *mut Object,
+    _navigation: *mut Object,
+) {
+    // Get self
+    let _self = unsafe {
+        let mut _self = null_mut();
+        object_getInstanceVariable(this, c"_self".as_ptr(), &mut _self);
+        &mut *(_self as *mut Webview)
+    };
+
+    // Send page load started event
+    _self.send_event(Event::PageLoadStarted);
+}
+
 extern "C" fn webview_did_finish_navigation(
     this: *mut Object,
     _sel: *const Sel,
@@ -363,6 +390,29 @@ extern "C" fn webview_did_finish_navigation(
 
     // Send page load finished event
     _self.send_event(Event::PageLoadFinished);
+}
+
+extern "C" fn webview_decide_policy_for_navigation_action(
+    _this: *mut Object,
+    _sel: *const Sel,
+    _webview: *mut Object,
+    navigation_action: *mut Object,
+    mut decision_handler: Block,
+) {
+    let decision_handler_invoke: extern "C" fn(*mut Block, i32) =
+        unsafe { std::mem::transmute(decision_handler.invoke) };
+    if !unsafe { msg_send![navigation_action, targetFrame] } {
+        let workspace: *mut Object = unsafe { msg_send![class!(NSWorkspace), sharedWorkspace] };
+        let request: *mut Object = unsafe { msg_send![navigation_action, request] };
+        let url: *mut Object = unsafe { msg_send![request, URL] };
+        let url_string: NSString = unsafe { msg_send![url, absoluteString] };
+        if url_string.to_string() != "about:blank" {
+            let _: () = unsafe { msg_send![workspace, openURL:url] };
+        }
+        decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_CANCEL);
+    } else {
+        decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_ALLOW);
+    }
 }
 
 #[cfg(feature = "ipc")]
@@ -418,6 +468,9 @@ const NS_WINDOW_STYLE_MASK_MINIATURIZABLE: i32 = 4;
 const NS_WINDOW_STYLE_MASK_RESIZABLE: i32 = 8;
 
 const NS_BACKING_STORE_BUFFERED: i32 = 2;
+
+const WK_NAVIGATION_ACTION_POLICY_ALLOW: i32 = 0;
+const WK_NAVIGATION_ACTION_POLICY_CANCEL: i32 = 1;
 
 #[cfg(feature = "ipc")]
 const WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START: i32 = 0;

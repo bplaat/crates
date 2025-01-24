@@ -25,6 +25,21 @@ pub struct Super {
     pub superclass: *const Class,
 }
 
+/// Block
+#[repr(C)]
+pub struct Block {
+    /// Block isa
+    pub isa: *const c_void,
+    /// Block flags
+    pub flags: i32,
+    /// Block reserved
+    pub reserved: i32,
+    /// Block invoke
+    pub invoke: *mut c_void,
+    /// Block descriptor
+    pub descriptor: *const c_void,
+}
+
 #[link(name = "objc", kind = "dylib")]
 extern "C" {
     #![allow(missing_docs)]
