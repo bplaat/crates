@@ -9,4 +9,4 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-webview = { path = "../../lib/webview" }
+webview = { path = "../../lib/webview", default-features = false }

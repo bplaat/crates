@@ -19,11 +19,13 @@ pub(crate) struct Webview {
     window: *mut GtkWindow,
     webview: *mut WebKitWebView,
     event_handler: Option<fn(&mut Webview, Event)>,
+    #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
 }
 
 impl Webview {
     pub(crate) fn new(builder: WebviewBuilder) -> Self {
+        #[cfg(feature = "remember_window_state")]
         let remember_window_state = builder.remember_window_state;
         Self {
             builder: Some(builder),
@@ -31,6 +33,7 @@ impl Webview {
             window: null_mut(),
             webview: null_mut(),
             event_handler: None,
+            #[cfg(feature = "remember_window_state")]
             remember_window_state,
         }
     }
