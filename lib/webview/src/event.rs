@@ -18,6 +18,8 @@ pub enum Event {
     /// Window closed
     WindowClosed,
 
+    /// Page load started
+    PageLoadStarted,
     /// Page load finished
     PageLoadFinished,
     /// Ipc message received

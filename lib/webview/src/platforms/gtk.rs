@@ -348,11 +348,12 @@ extern "C" fn window_on_move(
     _window: *mut GtkWindow,
     _allocation: *mut c_void,
     _self: &mut Webview,
-) {
+) -> bool {
     let mut x = 0;
     let mut y = 0;
     unsafe { gtk_window_get_position(_self.window, &mut x, &mut y) };
     _self.send_event(Event::WindowMoved(LogicalPoint::new(x as f32, y as f32)));
+    false
 }
 
 extern "C" fn window_on_resize(
@@ -390,6 +391,9 @@ extern "C" fn webview_on_load_changed(
     event: i32,
     _self: &mut Webview,
 ) {
+    if event == WEBKIT_LOAD_STARTED {
+        _self.send_event(Event::PageLoadStarted)
+    }
     if event == WEBKIT_LOAD_FINISHED {
         _self.send_event(Event::PageLoadFinished)
     }
@@ -511,6 +515,7 @@ extern "C" {
 // WebKitGtk
 #[repr(C)]
 struct WebKitWebView(u8);
+const WEBKIT_LOAD_STARTED: i32 = 1;
 const WEBKIT_LOAD_FINISHED: i32 = 3;
 #[link(name = "webkit2gtk-4.1")]
 extern "C" {

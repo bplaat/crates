@@ -48,6 +48,9 @@ fn main() {
         }
 
         // Page events
+        Event::PageLoadStarted => {
+            println!("Page load started");
+        }
         Event::PageLoadFinished => {
             println!("Page load finished");
             let message = IpcMessage::Hello {
