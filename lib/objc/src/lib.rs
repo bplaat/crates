@@ -6,6 +6,8 @@
 
 //! An Objective-C ffi library
 
+#![cfg(target_os = "macos")]
+
 use std::ffi::{c_char, c_void, CString};
 
 /// Object type
@@ -218,7 +220,6 @@ impl ClassDecl {
 }
 
 // MARK: Tests
-#[cfg(all(test, target_os = "macos"))]
 mod test {
     use super::*;
 
