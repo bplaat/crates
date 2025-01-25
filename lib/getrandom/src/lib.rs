@@ -12,6 +12,7 @@ use std::io::{Error, ErrorKind};
 #[cfg(windows)]
 mod windows {
     pub(crate) const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x00000002;
+    #[link(name = "bcrypt")]
     extern "C" {
         pub(crate) fn BCryptGenRandom(
             h_alg: *mut std::ffi::c_void,
@@ -42,7 +43,7 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), Error> {
                 buf.len() as u32,
                 windows::BCRYPT_USE_SYSTEM_PREFERRED_RNG,
             )
-        } == 0
+        } != 0
         {
             return Err(Error::new(ErrorKind::Other, "BCryptGenRandom failed"));
         }
