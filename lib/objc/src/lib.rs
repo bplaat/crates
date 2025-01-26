@@ -220,6 +220,7 @@ impl ClassDecl {
 }
 
 // MARK: Tests
+#[cfg(test)]
 mod test {
     use super::*;
 
