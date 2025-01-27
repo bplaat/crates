@@ -101,7 +101,7 @@ fn schema_generate_code(
         "array" => {
             let items = schema.items.as_ref().expect("No items");
             let item_type = schema_generate_code(code_schemas, "item".to_string(), items);
-            format!("Array<{}>", item_type)
+            format!("{}[]", item_type)
         }
         _ => panic!("Unsupported type"),
     }
