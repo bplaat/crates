@@ -4,4 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 
+pub(crate) mod c;
 pub(crate) mod java;

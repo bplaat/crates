@@ -69,11 +69,15 @@ fn index_files(dir: &str) -> Vec<String> {
 
 // MARK: Main
 enum ProjectType {
+    C,
     Java,
 }
 
 fn detect_project_type(source_files: &[String]) -> ProjectType {
     for file in source_files {
+        if file.ends_with(".c") {
+            return ProjectType::C;
+        }
         if file.ends_with(".java") {
             return ProjectType::Java;
         }
@@ -134,6 +138,9 @@ fn main() {
     let mut f = File::create(format!("{}/target/build.ninja", args.manifest_dir))
         .expect("Can't create build.ninja file");
     match project_type {
+        ProjectType::C => {
+            generators::c::generate_ninja(&mut f, &args.manifest_dir, &manifest, &source_files)
+        }
         ProjectType::Java => {
             generators::java::generate_ninja(&mut f, &args.manifest_dir, &manifest, &source_files)
         }
@@ -152,6 +159,7 @@ fn main() {
     // Run build artifact
     if args.subcommand == SubCommand::Run {
         match project_type {
+            ProjectType::C => generators::c::run(&args.manifest_dir, &manifest),
             ProjectType::Java => generators::java::run(&args.manifest_dir, &manifest),
         }
     }

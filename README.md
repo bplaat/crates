@@ -50,7 +50,7 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
--   [ ] bob: Add C/C++/Objective-C/Object-C++ project type
+-   [ ] bob: Add C++/Objective-C/Object-C++ project type
 -   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] bob: Add path dependencies like cargo, add Java library
 -   [ ] bob: Add Android project type
