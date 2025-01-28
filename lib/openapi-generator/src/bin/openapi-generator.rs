@@ -23,20 +23,14 @@ fn parse_args() -> Args {
     let mut args_iter = std::env::args().skip(1);
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
-            "-i" | "--input" => {
-                if let Some(value) = args_iter.next() {
-                    args.input = value;
-                }
-            }
-            "-o" | "--output" => {
-                if let Some(value) = args_iter.next() {
-                    args.output = value;
-                }
-            }
+            "-i" | "--input" => args.input = args_iter.next().expect("Invalid argument"),
+            "-o" | "--output" => args.output = args_iter.next().expect("Invalid argument"),
             "-g" | "--generator" => {
-                if let Some(value) = args_iter.next() {
-                    args.generator = value.parse().expect("Invalid generator");
-                }
+                args.generator = args_iter
+                    .next()
+                    .expect("Invalid argument")
+                    .parse()
+                    .expect("Invalid generator");
             }
             _ => {
                 eprintln!("Unknown argument: {}", arg);

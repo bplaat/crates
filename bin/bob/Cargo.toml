@@ -1,0 +1,15 @@
+[package]
+name = "bob"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+indexmap = "2.7"
+regex = { version = "1.11", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8.19"

@@ -5,6 +5,7 @@ A collection of minimal Rust crates that I created for myself
 ## Crates
 
 -   [base64](lib/base64) A base64 encoder and decoder
+-   [bob](bin/bob) A simple meta-build system for my projects
 -   [getrandom](lib/getrandom) A minimal crypto random bytes library
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
@@ -49,7 +50,12 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
+-   [ ] bob: Add C/C++/Objective-C/Object-C++ project type
 -   [ ] webview: Add Windows (win32 + Webview2) support
+-   [ ] bob: Add path dependencies like cargo, add Java library
+-   [ ] bob: Add Android project type
+-   [ ] bob: Add macOS bundle project type
+-   [ ] bob: Add Android library project type
 
 ## License
 

@@ -1,0 +1,158 @@
+/*
+ * Copyright (c) 2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+//! # Bassie's Obvious Builder (bob)
+//!
+//! A simple, zero-config meta-build system for my projects, it's just a ninja build file generator.
+
+use std::fs::{self, File};
+
+use crate::manifest::Manifest;
+
+mod generators;
+mod manifest;
+
+// MARK: Arguments
+struct Args {
+    manifest_dir: String,
+    subcommand: SubCommand,
+}
+
+#[derive(PartialEq, Eq)]
+enum SubCommand {
+    Clean,
+    Build,
+    Help,
+    Run,
+}
+
+fn parse_args() -> Args {
+    let mut args = Args {
+        manifest_dir: ".".to_string(),
+        subcommand: SubCommand::Help,
+    };
+    let mut args_iter = std::env::args().skip(1);
+    while let Some(arg) = args_iter.next() {
+        match arg.as_str() {
+            "clean" => args.subcommand = SubCommand::Clean,
+            "build" => args.subcommand = SubCommand::Build,
+            "run" => args.subcommand = SubCommand::Run,
+            "help" => args.subcommand = SubCommand::Help,
+            "-C" => args.manifest_dir = args_iter.next().expect("Invalid argument"),
+            _ => {
+                eprintln!("Unknown argument: {}", arg);
+                std::process::exit(1);
+            }
+        }
+    }
+    args
+}
+
+// MARK: Utils
+fn index_files(dir: &str) -> Vec<String> {
+    let mut files = Vec::new();
+    let entries = fs::read_dir(dir).expect("Can't read directory");
+    for entry in entries {
+        let entry = entry.expect("Can't read directory entry");
+        let path = entry.path();
+        if path.is_dir() {
+            files.extend(index_files(&path.to_string_lossy()));
+        } else {
+            files.push(path.to_string_lossy().to_string());
+        }
+    }
+    files
+}
+
+// MARK: Main
+enum ProjectType {
+    Java,
+}
+
+fn detect_project_type(source_files: &[String]) -> ProjectType {
+    for file in source_files {
+        if file.ends_with(".java") {
+            return ProjectType::Java;
+        }
+    }
+    panic!("Can't determine project type");
+}
+
+fn main() {
+    let args = parse_args();
+
+    if args.subcommand == SubCommand::Help {
+        println!("Usage: bob [SUBCOMMAND] [OPTIONS]");
+        println!();
+        println!("Options:");
+        println!("  -C <dir>    Change to directory <dir> before doing anything");
+        println!();
+        println!("Subcommands:");
+        println!("  clean       Remove build artifacts");
+        println!("  build       Build the project");
+        println!("  run         Run the build artifact after building");
+        println!("  help        Print this help message");
+        return;
+    }
+
+    // Read manifest
+    let manifest: Manifest = toml::from_str(
+        &fs::read_to_string(format!("{}/bob.toml", args.manifest_dir))
+            .expect("Can't read bob.toml file"),
+    )
+    .expect("Can't parse bob.toml file");
+
+    // Clean build artifacts
+    if args.subcommand == SubCommand::Clean {
+        fs::remove_dir_all(format!("{}/target", args.manifest_dir))
+            .expect("Can't remove target directory");
+        return;
+    }
+
+    // Create target/ directory
+    fs::create_dir_all(format!("{}/target", args.manifest_dir))
+        .expect("Can't create target directory");
+
+    // Index source files
+    let source_dir = format!("{}/src/", args.manifest_dir);
+    let source_files: Vec<String> = index_files(&source_dir)
+        .into_iter()
+        .map(|file| {
+            file.strip_prefix(&source_dir)
+                .expect("Should be some")
+                .to_string()
+        })
+        .collect();
+
+    // Determine project type
+    let project_type = detect_project_type(&source_files);
+
+    // Generate ninja file
+    let mut f = File::create(format!("{}/target/build.ninja", args.manifest_dir))
+        .expect("Can't create build.ninja file");
+    match project_type {
+        ProjectType::Java => {
+            generators::java::generate_ninja(&mut f, &args.manifest_dir, &manifest, &source_files)
+        }
+    };
+
+    // Run ninja
+    let status = std::process::Command::new("ninja")
+        .arg("-C")
+        .arg(format!("{}/target", args.manifest_dir))
+        .status()
+        .expect("Failed to execute ninja");
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    // Run build artifact
+    if args.subcommand == SubCommand::Run {
+        match project_type {
+            ProjectType::Java => generators::java::run(&args.manifest_dir, &manifest),
+        }
+    }
+}
