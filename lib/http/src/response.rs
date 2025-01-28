@@ -271,6 +271,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "json")]
     fn test_write_response_with_json() {
         let response = Response::with_json(serde_json::json!({"key": "value"}));
         let mut response_stream = Vec::new();

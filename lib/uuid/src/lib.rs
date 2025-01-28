@@ -217,6 +217,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "v4")]
     fn test_generate_v4() {
         let uuid = Uuid::new_v4();
         let bytes = uuid.into_bytes();
@@ -226,6 +227,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "v7")]
     fn test_generate_v7() {
         let uuid = Uuid::now_v7();
         let bytes = uuid.into_bytes();
@@ -235,6 +237,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn test_serde_serialization() {
         let uuid = Uuid::nil();
         let serialized = serde_json::to_string(&uuid).unwrap();
@@ -242,6 +245,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn test_serde_deserialization() {
         let data = "\"a0b1c2d3-e4f5-6789-9a0b-cdef01234567\"";
         let uuid: Uuid = serde_json::from_str(data).unwrap();
@@ -255,6 +259,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn test_serde_invalid_deserialization() {
         let data = "\"invalid-uuid-string\"";
         let result: Result<Uuid, _> = serde_json::from_str(data);

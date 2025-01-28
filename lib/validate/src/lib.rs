@@ -121,6 +121,7 @@ mod test {
     use super::*;
 
     #[test]
+    #[cfg(feature = "email")]
     fn test_valid_email() {
         assert!(is_valid_email("test@example.com"));
         assert!(is_valid_email("user.name+tag+sorting@example.com"));
@@ -129,6 +130,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "email")]
     fn test_invalid_email() {
         assert!(!is_valid_email("plainaddress"));
         assert!(!is_valid_email("@missingusername.com"));
@@ -138,6 +140,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "url")]
     fn test_valid_url() {
         assert!(is_valid_url("http://example.com"));
         assert!(is_valid_url("https://example.com"));
@@ -147,6 +150,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "url")]
     fn test_invalid_url() {
         assert!(!is_valid_url("example"));
         assert!(!is_valid_url("example.com"));
