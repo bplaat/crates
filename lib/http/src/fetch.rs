@@ -40,12 +40,44 @@ impl Error for FetchError {}
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use std::io::Write;
+    use std::net::{Ipv4Addr, TcpListener};
+    use std::thread;
+
     use super::*;
     use crate::enums::Status;
 
     #[test]
-    fn test_fetch() {
-        let res = fetch(Request::with_url("http://example.com/")).unwrap();
+    fn test_fetch_http1_0() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let server_addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .write_all(b"HTTP/1.0 200 OK\r\nContent-Length: 4\r\n\r\ntest")
+                .unwrap();
+        });
+
+        let res = fetch(Request::with_url(format!("http://{}/", server_addr))).unwrap();
         assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.body, "test".as_bytes());
+    }
+
+    #[test]
+    fn test_fetch_http1_1() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let server_addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: closed\r\n\r\ntest",
+                )
+                .unwrap();
+        });
+
+        let res = fetch(Request::with_url(format!("http://{}/", server_addr))).unwrap();
+        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.body, "test".as_bytes());
     }
 }
