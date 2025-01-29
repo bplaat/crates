@@ -16,6 +16,7 @@ pub(crate) fn generate_ninja(
 ) {
     // Build objects
     _ = writeln!(f, "objects_dir = $target_dir/objects");
+    _ = writeln!(f, "cflags = -Wall -Wextra -Wpedantic -Werror");
     let mut object_files = Vec::new();
 
     // Build C objects
@@ -26,11 +27,9 @@ pub(crate) fn generate_ninja(
         .collect::<Vec<String>>();
     if !c_source_files.is_empty() {
         _ = writeln!(f, "# Build C objects");
-        _ = writeln!(f, "objects_dir = $target_dir/objects");
-        _ = writeln!(f, "cflags = -Wall -Wextra -Wpedantic -Werror --std=c11\n");
         _ = writeln!(
         f,
-        "rule cc\n  command = gcc -c $cflags -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = cc $in\n"
+        "rule cc\n  command = gcc -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = cc $in\n"
     );
         for source_file in &c_source_files {
             let object_file = format!("$objects_dir/{}", source_file.replace(".c", ".o"));
@@ -49,11 +48,7 @@ pub(crate) fn generate_ninja(
         _ = writeln!(f, "\n# Build C++ objects");
         _ = writeln!(
             f,
-            "cxxflags = -Wall -Wextra -Wpedantic -Werror --std=c++17\n"
-        );
-        _ = writeln!(
-            f,
-            "rule cxx\n  command = g++ -c $cxxflags -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = cxx $in\n"
+            "rule cxx\n  command = g++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = cxx $in\n"
         );
         for source_file in &cpp_source_files {
             let object_file = format!("$objects_dir/{}", source_file.replace(".cpp", ".o"));
@@ -62,9 +57,55 @@ pub(crate) fn generate_ninja(
         }
     }
 
+    // Build Objective-C objects
+    let m_source_files = source_files
+        .iter()
+        .filter(|source_file| source_file.ends_with(".m"))
+        .cloned()
+        .collect::<Vec<String>>();
+    if !m_source_files.is_empty() {
+        _ = writeln!(f, "\n# Build Objective-C objects");
+        _ = writeln!(
+            f,
+            "rule objc\n  command = gcc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = objc $in\n"
+        );
+        for source_file in &m_source_files {
+            let object_file = format!("$objects_dir/{}", source_file.replace(".m", ".o"));
+            _ = writeln!(f, "build {}: objc $source_dir/{}", object_file, source_file);
+            object_files.push(object_file);
+        }
+    }
+
+    // Build Objective-C++ objects
+    let mm_source_files = source_files
+        .iter()
+        .filter(|source_file| source_file.ends_with(".mm"))
+        .cloned()
+        .collect::<Vec<String>>();
+    if !mm_source_files.is_empty() {
+        _ = writeln!(f, "\n# Build Objective-C++ objects");
+        _ = writeln!(
+            f,
+            "rule objcxx\n  command = g++ -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = objcxx $in\n"
+        );
+        for source_file in &mm_source_files {
+            let object_file = format!("$objects_dir/{}", source_file.replace(".mm", ".o"));
+            _ = writeln!(
+                f,
+                "build {}: objcxx $source_dir/{}",
+                object_file, source_file
+            );
+            object_files.push(object_file);
+        }
+    }
+
     // Link executable
     _ = writeln!(f, "\n# Link executable");
-    _ = writeln!(f, "ldflags =\n");
+    if !m_source_files.is_empty() || !mm_source_files.is_empty() {
+        _ = writeln!(f, "ldflags = -framework Foundation\n");
+    } else {
+        _ = writeln!(f, "ldflags =\n");
+    }
     _ = writeln!(
         f,
         "rule ld\n  command = {} $ldflags $in -o $out\n  description = ld $out\n",

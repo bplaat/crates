@@ -76,7 +76,11 @@ enum ProjectType {
 
 fn detect_project_type(source_files: &[String]) -> ProjectType {
     for file in source_files {
-        if file.ends_with(".c") || file.ends_with(".cpp") {
+        if file.ends_with(".c")
+            || file.ends_with(".cpp")
+            || file.ends_with(".m")
+            || file.ends_with(".mm")
+        {
             return ProjectType::Native;
         }
         if file.ends_with(".java") {

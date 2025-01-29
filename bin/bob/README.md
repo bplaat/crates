@@ -6,7 +6,7 @@ A simple meta-build system for my projects because I like working of Cargo to mu
 
 ## Supported project types
 
--   Native (.c, .cpp)
+-   Native (.c, .cpp, .m, .mm)
 -   Java (.java)
 
 ### Supported package types
