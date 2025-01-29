@@ -9,6 +9,7 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub(crate) struct Manifest {
     pub package: Package,
+    pub build: Option<Build>,
 }
 
 #[derive(Deserialize)]
@@ -20,8 +21,20 @@ pub(crate) struct Package {
 }
 
 #[derive(Deserialize)]
+pub(crate) struct Build {
+    pub cflags: Option<String>,
+    pub ldflags: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub(crate) struct PackageMetadata {
+    pub bundle: Option<BundleMetadata>,
     pub jar: Option<JarMetadata>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct BundleMetadata {
+    pub copyright: String,
 }
 
 #[derive(Deserialize)]

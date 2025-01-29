@@ -50,11 +50,9 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
--   [ ] bob: Add C++/Objective-C/Object-C++ project type
+-   [ ] bob: Add Android project type
 -   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] bob: Add path dependencies like cargo, add Java library
--   [ ] bob: Add Android project type
--   [ ] bob: Add macOS bundle project type
 -   [ ] bob: Add Android library project type
 
 ## License

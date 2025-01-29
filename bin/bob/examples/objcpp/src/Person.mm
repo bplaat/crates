@@ -4,5 +4,5 @@
 Person::Person(const char *name) : m_name(name) {}
 
 void Person::greet() {
-    NSLog(@"Hello, %s!\n", m_name);
+    NSLog(@"Hello %s!\n", m_name);
 }

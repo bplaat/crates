@@ -1,0 +1,10 @@
+[package]
+name = "Alert"
+identifier = "com.example.Alert"
+version = "0.1.0"
+
+[build]
+ldflags = "-framework Cocoa"
+
+[package.metadata.bundle]
+copyright = "Copyright © 2025 Bastiaan van der Plaat"
