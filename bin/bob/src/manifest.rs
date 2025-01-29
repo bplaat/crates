@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![allow(dead_code)] // FIXME: Remove this line
-
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -27,6 +25,15 @@ pub(crate) struct PackageMetadata {
 }
 
 #[derive(Deserialize)]
+#[serde(default)]
 pub(crate) struct JarMetadata {
     pub main_class: String,
+}
+
+impl Default for JarMetadata {
+    fn default() -> Self {
+        Self {
+            main_class: "Main".to_string(),
+        }
+    }
 }

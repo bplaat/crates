@@ -10,6 +10,8 @@ workspace = true
 
 [dependencies]
 indexmap = "2.7"
-regex = { version = "1.11", default-features = false }
+regex = { version = "1.11", default-features = false, features = [
+    "unicode-perl",
+] }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8.19"
