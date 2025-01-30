@@ -19,9 +19,26 @@ mod manifest;
 mod rules;
 
 // MARK: Arguments
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Profile {
+    Debug,
+    Release,
+}
+
 struct Args {
     manifest_dir: String,
     subcommand: SubCommand,
+    profile: Profile,
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        Args {
+            manifest_dir: ".".to_string(),
+            subcommand: SubCommand::Help,
+            profile: Profile::Debug,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq)]
@@ -33,10 +50,7 @@ enum SubCommand {
 }
 
 fn parse_args() -> Args {
-    let mut args = Args {
-        manifest_dir: ".".to_string(),
-        subcommand: SubCommand::Help,
-    };
+    let mut args = Args::default();
     let mut args_iter = std::env::args().skip(1);
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
@@ -45,6 +59,7 @@ fn parse_args() -> Args {
             "run" => args.subcommand = SubCommand::Run,
             "help" => args.subcommand = SubCommand::Help,
             "-C" => args.manifest_dir = args_iter.next().expect("Invalid argument"),
+            "-r" | "--release" => args.profile = Profile::Release,
             _ => {
                 eprintln!("Unknown argument: {}", arg);
                 std::process::exit(1);
@@ -74,6 +89,7 @@ fn index_files(dir: &str) -> Vec<String> {
 pub(crate) struct Project {
     manifest_dir: String,
     manifest: Manifest,
+    profile: Profile,
     source_files: Vec<String>,
 }
 
@@ -127,6 +143,7 @@ fn main() {
     let project = Project {
         manifest_dir: args.manifest_dir.clone(),
         manifest,
+        profile: args.profile,
         source_files: source_files.clone(),
     };
     let generated_rules = generate_ninja_file(&project);

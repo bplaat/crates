@@ -11,7 +11,7 @@ use std::process::{self, Command};
 
 use indexmap::IndexMap;
 
-use crate::Project;
+use crate::{Profile, Project};
 
 pub(crate) fn generate_java(f: &mut impl Write, project: &Project) {
     let modules = find_modules(&project.source_files);
@@ -41,7 +41,12 @@ pub(crate) fn generate_java(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "classes_dir = $target_dir/classes\n");
     _ = writeln!(
         f,
-        "rule javac\n  command = javac -Xlint -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = javac $in\n"
+        "rule javac\n  command = javac -Xlint {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = javac $in\n",
+        if project.profile == Profile::Release {
+            "-g:none"
+        } else {
+            ""
+        }
     );
     for (module, source_files) in &modules {
         _ = write!(
@@ -146,9 +151,8 @@ fn find_modules(source_files: &[String]) -> IndexMap<String, Vec<String>> {
 }
 
 fn find_main_class(project: &Project) -> Option<String> {
-    let re =
-        regex::Regex::new(r"public\s+static\s+void\s+main\s*\(\s*String\s*\[\s*\]\s*args\s*\)")
-            .expect("Failed to compile regex");
+    let re = regex::Regex::new(r"(public\s+)?static\s+void\s+main\s*\(")
+        .expect("Failed to compile regex");
     for source_file in &project.source_files {
         let source_path = format!("{}/src/{}", project.manifest_dir, source_file);
         let contents = std::fs::read_to_string(&source_path)

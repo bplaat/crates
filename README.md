@@ -50,12 +50,15 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
--   [ ] bob: Add debug/release profiles
--   [ ] bob: Add test profile cunit, JUnit
+-   [ ] bob: Add test profile
+    -   Add cunit support
+    -   Add JUnit support
 -   [ ] bob: Add Android project type
 -   [ ] webview: Add Windows (win32 + Webview2) support
--   [ ] bob: Add path dependencies like cargo, add Java library
--   [ ] bob: Add Android library project type
+-   [ ] bob: Add path dependencies like cargo
+    -   Add Java library
+    -   Add Android library
+    -   Add static .ar library
 
 ## License
 

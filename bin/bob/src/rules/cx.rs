@@ -8,11 +8,19 @@ use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 
-use crate::Project;
+use crate::{Profile, Project};
 
 fn generate_common(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "objects_dir = $target_dir/objects");
-    _ = write!(f, "cflags = -Wall -Wextra -Wpedantic -Werror");
+    _ = write!(
+        f,
+        "cflags = {} -Wall -Wextra -Wpedantic -Werror",
+        if project.profile == Profile::Release {
+            "-Os"
+        } else {
+            "-g"
+        }
+    );
     if let Some(build) = &project.manifest.build {
         if let Some(cflags) = &build.cflags {
             _ = write!(f, " {}", cflags);
@@ -150,8 +158,18 @@ pub(crate) fn generate_ld(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "ldflags = {}\n", ldflags);
     _ = writeln!(
         f,
-        "rule ld\n  command = {} $ldflags $in -o $out\n  description = ld $out\n",
-        if contains_cpp { "g++" } else { "gcc" }
+        "rule ld\n  command = {} {} $ldflags $in -o $out{}\n  description = ld $out\n",
+        if contains_cpp { "g++" } else { "gcc" },
+        if project.profile == Profile::Release {
+            "-Os"
+        } else {
+            "-g"
+        },
+        if project.profile == Profile::Release {
+            " && strip $out"
+        } else {
+            ""
+        }
     );
     #[cfg(windows)]
     let executable_file = "$target_dir/$name.exe";
