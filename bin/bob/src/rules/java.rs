@@ -11,22 +11,16 @@ use std::process::{self, Command};
 
 use indexmap::IndexMap;
 
-use crate::Manifest;
+use crate::Project;
 
-pub(crate) fn generate_ninja(
-    f: &mut impl Write,
-    manifest_dir: &str,
-    manifest: &Manifest,
-    source_files: &[String],
-) {
-    let source_dir = format!("{}/src", manifest_dir);
+pub(crate) fn generate_java(f: &mut impl Write, project: &Project) {
+    let modules = find_modules(&project.source_files);
 
-    // Index Java modules and module dependencies
-    let modules = find_modules(source_files);
+    // Find module dependencies
     let mut module_deps = HashMap::new();
     for (module, files) in &modules {
         for file in files {
-            let source_file = format!("{}/{}", source_dir, file);
+            let source_file = format!("{}/src/{}", project.manifest_dir, file);
             let contents = std::fs::read_to_string(&source_file)
                 .unwrap_or_else(|_| panic!("Can't read file: {}", source_file));
             for other_module in modules.keys() {
@@ -43,7 +37,6 @@ pub(crate) fn generate_ninja(
         }
     }
 
-    // Build Java modules
     _ = writeln!(f, "\n# Build Java modules");
     _ = writeln!(f, "classes_dir = $target_dir/classes\n");
     _ = writeln!(
@@ -74,63 +67,67 @@ pub(crate) fn generate_ninja(
         }
         _ = writeln!(f, "\n  stamp = $classes_dir/{}/.stamp", module);
     }
-
-    // Link jar
-    if let Some(jar_metadata) = &manifest
-        .package
-        .metadata
-        .as_ref()
-        .and_then(|m| m.jar.as_ref())
-    {
-        _ = writeln!(f, "\n# Link jar");
-        _ = writeln!(f, "main_class = {}\n", jar_metadata.main_class);
-        _ = writeln!(
-            f,
-            "rule jar\n  command = jar cfe $out $main_class -C $in .\n  description = jar $out\n"
-        );
-        _ = writeln!(
-            f,
-            "build $classes_dir: phony {}",
-            modules
-                .keys()
-                .map(|module| format!("$classes_dir/{}/.stamp", module))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-        _ = writeln!(
-            f,
-            "build $target_dir/${{name}}-$version.jar: jar $classes_dir",
-        );
-    }
 }
 
-pub(crate) fn run(manifest_dir: &str, manifest: &Manifest, source_files: &[String]) {
-    let mut cmd = &mut Command::new("java");
-    if manifest
+pub(crate) fn generate_jar(f: &mut impl Write, project: &Project) {
+    let modules = find_modules(&project.source_files);
+    let jar_metadata = &project
+        .manifest
         .package
         .metadata
         .as_ref()
         .and_then(|m| m.jar.as_ref())
-        .is_some()
-    {
-        cmd = cmd.arg("-jar").arg(format!(
-            "{}/target/{}-{}.jar",
-            manifest_dir, manifest.package.name, manifest.package.version
-        ));
-    } else {
-        cmd = cmd
-            .arg("-cp")
-            .arg(format!("{}/target/classes", manifest_dir));
-        if let Some(main_class) = find_main_class(manifest_dir, source_files) {
-            cmd = cmd.arg(main_class);
+        .expect("Should be some");
+
+    _ = writeln!(f, "\n# Link jar");
+    _ = writeln!(
+        f,
+        "main_class = {}\n",
+        if let Some(main_class) = &jar_metadata.main_class {
+            main_class.clone()
         } else {
-            panic!("Can't find main class");
+            find_main_class(project).expect("Can't find main class")
         }
-    }
-    let status = cmd.status().expect("Failed to execute java");
-    if !status.success() {
-        process::exit(status.code().unwrap_or(1));
-    }
+    );
+    _ = writeln!(
+        f,
+        "rule jar\n  command = jar cfe $out $main_class -C $in .\n  description = jar $out\n"
+    );
+    _ = writeln!(
+        f,
+        "build $classes_dir: phony {}",
+        modules
+            .keys()
+            .map(|module| format!("$classes_dir/{}/.stamp", module))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    _ = writeln!(
+        f,
+        "build $target_dir/${{name}}-$version.jar: jar $classes_dir",
+    );
+}
+
+pub(crate) fn run_java(project: &Project) {
+    let status = Command::new("java")
+        .arg("-cp")
+        .arg(format!("{}/target/classes", project.manifest_dir))
+        .arg(find_main_class(project).expect("Can't find main class"))
+        .status()
+        .expect("Failed to execute java");
+    process::exit(status.code().unwrap_or(1));
+}
+
+pub(crate) fn run_jar(project: &Project) {
+    let status = Command::new("java")
+        .arg("-jar")
+        .arg(format!(
+            "{}/target/{}-{}.jar",
+            project.manifest_dir, project.manifest.package.name, project.manifest.package.version
+        ))
+        .status()
+        .expect("Failed to execute java");
+    process::exit(status.code().unwrap_or(1));
 }
 
 fn find_modules(source_files: &[String]) -> IndexMap<String, Vec<String>> {
@@ -148,12 +145,12 @@ fn find_modules(source_files: &[String]) -> IndexMap<String, Vec<String>> {
     modules
 }
 
-fn find_main_class(manifest_dir: &str, source_files: &[String]) -> Option<String> {
+fn find_main_class(project: &Project) -> Option<String> {
     let re =
         regex::Regex::new(r"public\s+static\s+void\s+main\s*\(\s*String\s*\[\s*\]\s*args\s*\)")
             .expect("Failed to compile regex");
-    for source_file in source_files {
-        let source_path = format!("{}/src/{}", manifest_dir, source_file);
+    for source_file in &project.source_files {
+        let source_path = format!("{}/src/{}", project.manifest_dir, source_file);
         let contents = std::fs::read_to_string(&source_path)
             .unwrap_or_else(|_| panic!("Can't read file: {}", source_path));
         if re.is_match(&contents) {

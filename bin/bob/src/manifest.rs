@@ -38,15 +38,6 @@ pub(crate) struct BundleMetadata {
 }
 
 #[derive(Deserialize)]
-#[serde(default)]
 pub(crate) struct JarMetadata {
-    pub main_class: String,
-}
-
-impl Default for JarMetadata {
-    fn default() -> Self {
-        Self {
-            main_class: "Main".to_string(),
-        }
-    }
+    pub main_class: Option<String>,
 }
