@@ -1,4 +1,4 @@
-<img align="right" src="docs/bob-the-builder.jpg" width="200" alt="Bob the Builder">
+<img align="right" src="docs/bob-the-builder.jpg" width="50%" alt="Bob the Builder">
 
 # Bassie's Obvious Builder (bob)
 
