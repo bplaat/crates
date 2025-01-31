@@ -118,6 +118,7 @@ pub fn is_valid_url(url: &str) -> bool {
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    #[cfg(any(feature = "email", feature = "url"))]
     use super::*;
 
     #[test]
