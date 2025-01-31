@@ -10,7 +10,7 @@
 
 use std::fs::{self};
 use std::io::Write;
-use std::process::Command;
+use std::process::{exit, Command};
 
 use args::Profile;
 use rules::Rule;
@@ -88,10 +88,15 @@ fn main() {
 
     // Read manifest
     let manifest: Manifest = toml::from_str(
-        &fs::read_to_string(format!("{}/bob.toml", args.manifest_dir))
-            .expect("Can't read bob.toml file"),
+        &fs::read_to_string(format!("{}/bob.toml", args.manifest_dir)).unwrap_or_else(|err| {
+            eprintln!("Can't read bob.toml file: {}", err);
+            exit(1);
+        }),
     )
-    .expect("Can't parse bob.toml file");
+    .unwrap_or_else(|err| {
+        eprintln!("Can't parse bob.toml file: {}", err);
+        exit(1);
+    });
 
     // Clean build artifacts
     if args.subcommand == SubCommand::Clean {
@@ -127,7 +132,7 @@ fn main() {
         .status()
         .expect("Failed to execute ninja");
     if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+        exit(status.code().unwrap_or(1));
     }
 
     // Run build artifact
@@ -145,7 +150,7 @@ fn main() {
         if generated_rules.contains(&Rule::Java) {
             rules::java::run_java(&project);
         }
-        panic!("No build artifact to run");
+        eprintln!("No build artifact to run");
     }
 
     // Run unit tests
@@ -154,7 +159,7 @@ fn main() {
             rules::cx::run_tests(&project);
         }
 
-        panic!("No test artifact to run");
+        eprintln!("No test artifact to run");
     }
 }
 

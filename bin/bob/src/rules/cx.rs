@@ -7,7 +7,7 @@
 use std::fmt::Write as _;
 use std::fs;
 use std::io::Write;
-use std::process::Command;
+use std::process::{exit, Command};
 
 use indexmap::IndexMap;
 use regex::Regex;
@@ -264,7 +264,7 @@ pub(crate) fn run_ld(project: &Project) {
     )
     .status()
     .expect("Failed to execute executable");
-    std::process::exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1));
 }
 
 pub(crate) fn run_tests(project: &Project) {
@@ -282,7 +282,7 @@ pub(crate) fn run_tests(project: &Project) {
     )
     .status()
     .expect("Failed to execute executable");
-    std::process::exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1));
 }
 
 pub(crate) fn run_bundle(project: &Project) {
@@ -293,7 +293,7 @@ pub(crate) fn run_bundle(project: &Project) {
         ))
         .status()
         .expect("Failed to execute executable");
-    std::process::exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1));
 }
 
 fn pkg_config_cflags(package: &str) -> String {
@@ -307,10 +307,11 @@ fn pkg_config_cflags(package: &str) -> String {
             .expect("Invalid UTF-8 sequence")
             .replace('\n', " ")
     } else {
-        panic!(
+        eprintln!(
             "pkg-config failed with error: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+        exit(1);
     }
 }
 
@@ -325,19 +326,20 @@ fn pkg_config_libs(package: &str) -> String {
             .expect("Invalid UTF-8 sequence")
             .replace('\n', " ")
     } else {
-        panic!(
+        eprintln!(
             "pkg-config failed with error: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+        exit(1);
     }
 }
 
 fn index_test_function(project: &Project) -> IndexMap<String, Vec<String>> {
     let mut test_functions = IndexMap::new();
-    let re = Regex::new(r"void\s+(test_[^\(]+)").expect("Invalid regex");
+    let re = Regex::new(r"void\s+(test_[^\(]+)").expect("Can't compile regex");
     for source_file in &project.source_files {
         let contents = fs::read_to_string(format!("{}/src/{}", project.manifest_dir, source_file))
-            .expect("Read file failed");
+            .unwrap_or_else(|_| panic!("Can't read source file: {}", source_file));
         let mut functions = Vec::new();
         for cap in re.captures_iter(&contents) {
             functions.push(cap[1].to_string());
@@ -444,7 +446,10 @@ fn generate_info_plist(project: &Project, bundle: &BundleMetadata) {
             .package
             .identifier
             .as_ref()
-            .expect("Identifier is required")
+            .unwrap_or_else(|| {
+                eprintln!("Identifier is required");
+                exit(1);
+            })
     );
     _ = writeln!(s, r#"    <key>CFBundleVersion</key>"#);
     _ = writeln!(

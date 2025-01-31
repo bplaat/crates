@@ -6,7 +6,7 @@
 
 use std::io::Write;
 use std::path::Path;
-use std::process::{self, Command};
+use std::process::{exit, Command};
 
 use indexmap::IndexMap;
 
@@ -77,7 +77,10 @@ pub(crate) fn generate_jar(f: &mut impl Write, project: &Project) {
         if let Some(main_class) = &jar_metadata.main_class {
             main_class.clone()
         } else {
-            find_main_class(project).expect("Can't find main class")
+            find_main_class(project).unwrap_or_else(|| {
+                eprintln!("Can't find main class");
+                exit(1);
+            })
         }
     );
     _ = writeln!(
@@ -103,10 +106,13 @@ pub(crate) fn run_java(project: &Project) {
     let status = Command::new("java")
         .arg("-cp")
         .arg(format!("{}/target/classes", project.manifest_dir))
-        .arg(find_main_class(project).expect("Can't find main class"))
+        .arg(find_main_class(project).unwrap_or_else(|| {
+            eprintln!("Can't find main class");
+            exit(1);
+        }))
         .status()
         .expect("Failed to execute java");
-    process::exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1));
 }
 
 pub(crate) fn run_jar(project: &Project) {
@@ -121,7 +127,7 @@ pub(crate) fn run_jar(project: &Project) {
         ))
         .status()
         .expect("Failed to execute java");
-    process::exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1));
 }
 
 fn find_modules(source_files: &[String]) -> IndexMap<String, Vec<String>> {
