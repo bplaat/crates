@@ -213,9 +213,6 @@ fn generate_ninja_file(project: &Project) -> Vec<Rule> {
             needed_rules.push(Rule::Objcpp);
         }
         if file.ends_with(".java") && !needed_rules.contains(&Rule::Java) {
-            if project.is_test && !needed_rules.contains(&Rule::C) {
-                needed_rules.push(Rule::C);
-            }
             needed_rules.push(Rule::Java);
         }
     }
