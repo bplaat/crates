@@ -10,6 +10,7 @@
 
 use std::fs::{self};
 use std::io::Write;
+use std::process::Command;
 
 use args::Profile;
 use rules::Rule;
@@ -24,7 +25,6 @@ mod rules;
 mod utils;
 
 // MARK: Subcommands
-
 fn subcommand_clean(args: &Args) {
     let target_dir = format!("{}/target", args.manifest_dir);
     if fs::metadata(&target_dir).is_err() {
@@ -57,6 +57,12 @@ fn subcommand_help() {
     println!("  build            Build the project");
     println!("  help             Print this help message");
     println!("  run              Run the build artifact after building");
+    println!("  test             Run the unit tests");
+    println!("  version          Print the version number");
+}
+
+fn subcommand_version() {
+    println!("bob v{}", env!("CARGO_PKG_VERSION"));
 }
 
 // MARK: Main
@@ -64,6 +70,7 @@ pub(crate) struct Project {
     manifest_dir: String,
     manifest: Manifest,
     profile: Profile,
+    is_test: bool,
     source_files: Vec<String>,
 }
 
@@ -72,6 +79,10 @@ fn main() {
 
     if args.subcommand == SubCommand::Help {
         subcommand_help();
+        return;
+    }
+    if args.subcommand == SubCommand::Version {
+        subcommand_version();
         return;
     }
 
@@ -104,12 +115,13 @@ fn main() {
         manifest_dir: args.manifest_dir.clone(),
         manifest,
         profile: args.profile,
+        is_test: args.subcommand == SubCommand::Test,
         source_files: source_files.clone(),
     };
     let generated_rules = generate_ninja_file(&project);
 
     // Run ninja
-    let status = std::process::Command::new("ninja")
+    let status = Command::new("ninja")
         .arg("-C")
         .arg(format!("{}/target", args.manifest_dir))
         .status()
@@ -134,6 +146,15 @@ fn main() {
             rules::java::run_java(&project);
         }
         panic!("No build artifact to run");
+    }
+
+    // Run unit tests
+    if args.subcommand == SubCommand::Test {
+        if generated_rules.contains(&Rule::Ld) {
+            rules::cx::run_tests(&project);
+        }
+
+        panic!("No test artifact to run");
     }
 }
 
@@ -169,26 +190,38 @@ fn generate_ninja_file(project: &Project) -> Vec<Rule> {
             needed_rules.push(Rule::C);
         }
         if file.ends_with(".cpp") && !needed_rules.contains(&Rule::Cpp) {
+            if project.is_test && !needed_rules.contains(&Rule::C) {
+                needed_rules.push(Rule::C);
+            }
             needed_rules.push(Rule::Cpp);
         }
         if file.ends_with(".m") && !needed_rules.contains(&Rule::Objc) {
+            if project.is_test && !needed_rules.contains(&Rule::C) {
+                needed_rules.push(Rule::C);
+            }
             needed_rules.push(Rule::Objc);
         }
         if file.ends_with(".mm") && !needed_rules.contains(&Rule::Objcpp) {
+            if project.is_test && !needed_rules.contains(&Rule::C) {
+                needed_rules.push(Rule::C);
+            }
             needed_rules.push(Rule::Objcpp);
         }
         if file.ends_with(".java") && !needed_rules.contains(&Rule::Java) {
+            if project.is_test && !needed_rules.contains(&Rule::C) {
+                needed_rules.push(Rule::C);
+            }
             needed_rules.push(Rule::Java);
         }
     }
     for file in &project.source_files {
-        if (file.ends_with(".c")
+        if file.ends_with(".c")
             || file.ends_with(".cpp")
             || file.ends_with(".m")
-            || file.ends_with(".mm"))
-            && !needed_rules.contains(&Rule::Ld)
+            || file.ends_with(".mm")
         {
             needed_rules.push(Rule::Ld);
+            break;
         }
     }
     if let Some(metadata) = project.manifest.package.metadata.as_ref() {

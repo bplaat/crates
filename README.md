@@ -50,7 +50,6 @@ A collection of minimal Rust crates and tools that I created for myself
 
 ## TODO items
 
--   [ ] bob: Add test profile cunit support
 -   [ ] bob: Add Android project type
 -   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] bob: Add path dependencies like cargo

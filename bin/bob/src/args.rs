@@ -43,6 +43,8 @@ pub(crate) enum SubCommand {
     Build,
     Help,
     Run,
+    Test,
+    Version,
 }
 
 pub(crate) fn parse_args() -> Args {
@@ -52,8 +54,10 @@ pub(crate) fn parse_args() -> Args {
         match arg.as_str() {
             "c" | "clean" => args.subcommand = SubCommand::Clean,
             "b" | "build" => args.subcommand = SubCommand::Build,
+            "h" | "help" | "-h" | "--help" => args.subcommand = SubCommand::Help,
             "r" | "run" => args.subcommand = SubCommand::Run,
-            "help" => args.subcommand = SubCommand::Help,
+            "t" | "test" => args.subcommand = SubCommand::Test,
+            "v" | "version" | "-v" | "--version" => args.subcommand = SubCommand::Version,
             "-C" => args.manifest_dir = args_iter.next().expect("Invalid argument"),
             "-r" | "--release" => args.profile = Profile::Release,
             _ => {
