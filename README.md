@@ -39,7 +39,7 @@ A collection of minimal Rust crates that I created for myself
 -   Run checks:
 
     ```sh
-    make -C check
+    ./meta.sh check
     ```
 
 -   Or run an example:
