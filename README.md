@@ -1,6 +1,6 @@
 # Bassie's Rust crates
 
-A collection of minimal Rust crates that I created for myself
+A collection of minimal Rust crates and tools that I created for myself
 
 ## Crates
 
@@ -50,15 +50,14 @@ A collection of minimal Rust crates that I created for myself
 
 ## TODO items
 
--   [ ] bob: Add test profile
-    -   Add cunit support
-    -   Add JUnit support
+-   [ ] bob: Add test profile cunit support
 -   [ ] bob: Add Android project type
 -   [ ] webview: Add Windows (win32 + Webview2) support
 -   [ ] bob: Add path dependencies like cargo
     -   Add Java library
     -   Add Android library
     -   Add static .ar library
+    -   Add Java testing JUnit support
 
 ## License
 

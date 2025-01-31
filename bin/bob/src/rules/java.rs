@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::process::{self, Command};
@@ -15,38 +14,25 @@ use crate::{Profile, Project};
 
 pub(crate) fn generate_java(f: &mut impl Write, project: &Project) {
     let modules = find_modules(&project.source_files);
+    let module_dependencies = find_dependencies(project, &modules);
 
-    // Find module dependencies
-    let mut module_deps = HashMap::new();
-    for (module, files) in &modules {
-        for file in files {
-            let source_file = format!("{}/src/{}", project.manifest_dir, file);
-            let contents = std::fs::read_to_string(&source_file)
-                .unwrap_or_else(|_| panic!("Can't read file: {}", source_file));
-            for other_module in modules.keys() {
-                let re =
-                    regex::Regex::new(&format!(r"import {}.\w+;", other_module.replace("/", ".")))
-                        .expect("Failed to compile regex");
-                if re.is_match(&contents) {
-                    module_deps
-                        .entry(module.clone())
-                        .or_insert_with(Vec::new)
-                        .push(other_module.clone());
-                }
-            }
+    let mut javac_flags = "-Xlint".to_string();
+    if project.profile == Profile::Release {
+        javac_flags.push_str(" -g:none");
+    }
+    if let Some(build) = &project.manifest.build {
+        if let Some(flags) = &build.javac_flags {
+            javac_flags.push(' ');
+            javac_flags.push_str(flags);
         }
     }
 
     _ = writeln!(f, "\n# Build Java modules");
-    _ = writeln!(f, "classes_dir = $target_dir/classes\n");
+    _ = writeln!(f, "classes_dir = $target_dir/$profile/classes\n");
     _ = writeln!(
         f,
-        "rule javac\n  command = javac -Xlint {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = javac $in\n",
-        if project.profile == Profile::Release {
-            "-g:none"
-        } else {
-            ""
-        }
+        "rule javac\n  command = javac {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = javac $in\n",
+         javac_flags
     );
     for (module, source_files) in &modules {
         _ = write!(
@@ -59,7 +45,7 @@ pub(crate) fn generate_java(f: &mut impl Write, project: &Project) {
                 .collect::<Vec<_>>()
                 .join(" ")
         );
-        if let Some(dependencies) = module_deps.get(module) {
+        if let Some(dependencies) = module_dependencies.get(module) {
             _ = write!(
                 f,
                 " | {}",
@@ -109,7 +95,7 @@ pub(crate) fn generate_jar(f: &mut impl Write, project: &Project) {
     );
     _ = writeln!(
         f,
-        "build $target_dir/${{name}}-$version.jar: jar $classes_dir",
+        "build $target_dir/$profile/${{name}}-$version.jar: jar $classes_dir",
     );
 }
 
@@ -127,8 +113,11 @@ pub(crate) fn run_jar(project: &Project) {
     let status = Command::new("java")
         .arg("-jar")
         .arg(format!(
-            "{}/target/{}-{}.jar",
-            project.manifest_dir, project.manifest.package.name, project.manifest.package.version
+            "{}/target/{}/{}-{}.jar",
+            project.manifest_dir,
+            project.profile,
+            project.manifest.package.name,
+            project.manifest.package.version
         ))
         .status()
         .expect("Failed to execute java");
@@ -148,6 +137,32 @@ fn find_modules(source_files: &[String]) -> IndexMap<String, Vec<String>> {
         }
     }
     modules
+}
+
+fn find_dependencies(
+    project: &Project,
+    modules: &IndexMap<String, Vec<String>>,
+) -> IndexMap<String, Vec<String>> {
+    let mut module_deps = IndexMap::new();
+    for (module, files) in modules {
+        for file in files {
+            let source_file = format!("{}/src/{}", project.manifest_dir, file);
+            let contents = std::fs::read_to_string(&source_file)
+                .unwrap_or_else(|_| panic!("Can't read file: {}", source_file));
+            for other_module in modules.keys() {
+                let re =
+                    regex::Regex::new(&format!(r"import {}.\w+;", other_module.replace("/", ".")))
+                        .expect("Failed to compile regex");
+                if re.is_match(&contents) {
+                    module_deps
+                        .entry(module.clone())
+                        .or_insert_with(Vec::new)
+                        .push(other_module.clone());
+                }
+            }
+        }
+    }
+    module_deps
 }
 
 fn find_main_class(project: &Project) -> Option<String> {

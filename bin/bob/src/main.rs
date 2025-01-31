@@ -6,83 +6,57 @@
 
 //! # Bassie's Obvious Builder (bob)
 //!
-//! A simple, zero-config meta-build system for my projects, it's just a ninja build file generator.
+//! A simple meta-build system for my projects, because I like the simplicity of Cargo. But meh it's just a ninja build file generator.
 
-use std::fs::{self, File};
+use std::fs::{self};
 use std::io::Write;
 
+use args::Profile;
 use rules::Rule;
+use utils::{create_file_with_dirs, format_bytes, index_files};
 
+use crate::args::{parse_args, Args, SubCommand};
 use crate::manifest::Manifest;
 
+mod args;
 mod manifest;
 mod rules;
+mod utils;
 
-// MARK: Arguments
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Profile {
-    Debug,
-    Release,
-}
+// MARK: Subcommands
 
-struct Args {
-    manifest_dir: String,
-    subcommand: SubCommand,
-    profile: Profile,
-}
-
-impl Default for Args {
-    fn default() -> Self {
-        Args {
-            manifest_dir: ".".to_string(),
-            subcommand: SubCommand::Help,
-            profile: Profile::Debug,
-        }
+fn subcommand_clean(args: &Args) {
+    let target_dir = format!("{}/target", args.manifest_dir);
+    if fs::metadata(&target_dir).is_err() {
+        println!("Removed 0 files");
+        return;
     }
+
+    let files = index_files(&target_dir);
+    let total_size: u64 = files
+        .iter()
+        .map(|file| fs::metadata(file).expect("Can't read file metadata").len())
+        .sum();
+    println!(
+        "Removed {} files, {} total",
+        files.len(),
+        format_bytes(total_size)
+    );
+    fs::remove_dir_all(&target_dir).expect("Can't remove target directory");
 }
 
-#[derive(PartialEq, Eq)]
-enum SubCommand {
-    Clean,
-    Build,
-    Help,
-    Run,
-}
-
-fn parse_args() -> Args {
-    let mut args = Args::default();
-    let mut args_iter = std::env::args().skip(1);
-    while let Some(arg) = args_iter.next() {
-        match arg.as_str() {
-            "clean" => args.subcommand = SubCommand::Clean,
-            "build" => args.subcommand = SubCommand::Build,
-            "run" => args.subcommand = SubCommand::Run,
-            "help" => args.subcommand = SubCommand::Help,
-            "-C" => args.manifest_dir = args_iter.next().expect("Invalid argument"),
-            "-r" | "--release" => args.profile = Profile::Release,
-            _ => {
-                eprintln!("Unknown argument: {}", arg);
-                std::process::exit(1);
-            }
-        }
-    }
-    args
-}
-
-// MARK: Utils
-fn index_files(dir: &str) -> Vec<String> {
-    let mut files = Vec::new();
-    let entries = fs::read_dir(dir).expect("Can't read directory");
-    for entry in entries {
-        let entry = entry.expect("Can't read directory entry");
-        let path = entry.path();
-        if path.is_dir() {
-            files.extend(index_files(&path.to_string_lossy()));
-        } else {
-            files.push(path.to_string_lossy().to_string());
-        }
-    }
-    files
+fn subcommand_help() {
+    println!("Usage: bob [SUBCOMMAND] [OPTIONS]");
+    println!();
+    println!("Options:");
+    println!("  -C <dir>         Change to directory <dir> before doing anything");
+    println!("  -r, --release    Build artifacts in release mode");
+    println!();
+    println!("Subcommands:");
+    println!("  clean            Remove build artifacts");
+    println!("  build            Build the project");
+    println!("  help             Print this help message");
+    println!("  run              Run the build artifact after building");
 }
 
 // MARK: Main
@@ -97,16 +71,7 @@ fn main() {
     let args = parse_args();
 
     if args.subcommand == SubCommand::Help {
-        println!("Usage: bob [SUBCOMMAND] [OPTIONS]");
-        println!();
-        println!("Options:");
-        println!("  -C <dir>    Change to directory <dir> before doing anything");
-        println!();
-        println!("Subcommands:");
-        println!("  clean       Remove build artifacts");
-        println!("  build       Build the project");
-        println!("  run         Run the build artifact after building");
-        println!("  help        Print this help message");
+        subcommand_help();
         return;
     }
 
@@ -119,14 +84,9 @@ fn main() {
 
     // Clean build artifacts
     if args.subcommand == SubCommand::Clean {
-        fs::remove_dir_all(format!("{}/target", args.manifest_dir))
-            .expect("Can't remove target directory");
+        subcommand_clean(&args);
         return;
     }
-
-    // Create target/ directory
-    fs::create_dir_all(format!("{}/target", args.manifest_dir))
-        .expect("Can't create target directory");
 
     // Index source files
     let source_dir = format!("{}/src/", args.manifest_dir);
@@ -179,7 +139,7 @@ fn main() {
 
 fn generate_ninja_file(project: &Project) -> Vec<Rule> {
     // Generate ninja file
-    let mut f = File::create(format!("{}/target/build.ninja", project.manifest_dir))
+    let mut f = create_file_with_dirs(format!("{}/target/build.ninja", project.manifest_dir))
         .expect("Can't create build.ninja file");
 
     // Base variables
@@ -189,6 +149,7 @@ fn generate_ninja_file(project: &Project) -> Vec<Rule> {
         _ = writeln!(f, "identifier = {}", identifier);
     }
     _ = writeln!(f, "version = {}", project.manifest.package.version);
+    _ = writeln!(f, "profile = {}", project.profile);
     _ = writeln!(f, "manifest_dir = ..");
     _ = writeln!(f, "source_dir = $manifest_dir/src");
     _ = writeln!(f, "target_dir = $manifest_dir/target");
@@ -196,6 +157,14 @@ fn generate_ninja_file(project: &Project) -> Vec<Rule> {
     // Determine needed rules
     let mut needed_rules = Vec::new();
     for file in &project.source_files {
+        if (file.ends_with(".c")
+            || file.ends_with(".cpp")
+            || file.ends_with(".m")
+            || file.ends_with(".mm"))
+            && !needed_rules.contains(&Rule::CxCommon)
+        {
+            needed_rules.push(Rule::CxCommon);
+        }
         if file.ends_with(".c") && !needed_rules.contains(&Rule::C) {
             needed_rules.push(Rule::C);
         }
@@ -234,6 +203,7 @@ fn generate_ninja_file(project: &Project) -> Vec<Rule> {
     // Generate rules
     for rule in &needed_rules {
         match rule {
+            Rule::CxCommon => rules::cx::generate_cx_common(&mut f, project),
             Rule::C => rules::cx::generate_c(&mut f, project),
             Rule::Cpp => rules::cx::generate_cpp(&mut f, project),
             Rule::Objc => rules::cx::generate_objc(&mut f, project),

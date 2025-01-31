@@ -24,6 +24,7 @@ pub(crate) struct Package {
 pub(crate) struct Build {
     pub cflags: Option<String>,
     pub ldflags: Option<String>,
+    pub javac_flags: Option<String>,
 }
 
 #[derive(Deserialize)]

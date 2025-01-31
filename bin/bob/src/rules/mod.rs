@@ -9,6 +9,7 @@ pub(crate) mod java;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Rule {
+    CxCommon,
     C,
     Cpp,
     Objc,

@@ -2,11 +2,11 @@
 
 # Bassie's Obvious Builder (bob)
 
-A simple meta-build system for my projects because I like working of Cargo to much, meh it's just a ninja build file generator.
+A simple meta-build system for my projects, because I like the simplicity of Cargo. But meh it's just a ninja build file generator.
 
 ## Supported project types
 
--   Native (.c, .cpp, .m, .mm)
+-   GCC languages (.c, .cpp, .m, .mm)
 -   Java (.java)
 
 ### Supported package types
