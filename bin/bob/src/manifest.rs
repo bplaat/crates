@@ -35,6 +35,7 @@ pub(crate) struct PackageMetadata {
 
 #[derive(Deserialize)]
 pub(crate) struct BundleMetadata {
+    pub iconset: Option<String>,
     pub copyright: String,
 }
 

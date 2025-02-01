@@ -52,6 +52,7 @@ A collection of minimal Rust crates and tools that I created for myself
 
 -   [ ] bob: Add Android project type
 -   [ ] webview: Add Windows (win32 + Webview2) support
+-   [ ] bob: Build universal multi target binaries with macOS bundle package
 -   [ ] bob: Add path dependencies like cargo
     -   Add Java library
     -   Add Android library

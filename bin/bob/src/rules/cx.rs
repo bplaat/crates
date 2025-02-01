@@ -6,14 +6,16 @@
 
 use std::fmt::Write as _;
 use std::fs;
-use std::io::Write;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::process::{exit, Command};
 
 use indexmap::IndexMap;
 use regex::Regex;
 
 use crate::manifest::BundleMetadata;
-use crate::{create_file_with_dirs, Profile, Project};
+use crate::{create_file_with_dirs, index_files, Profile, Project};
 
 pub(crate) fn generate_cx_common(f: &mut impl Write, project: &Project) {
     if project.is_test {
@@ -133,8 +135,8 @@ pub(crate) fn generate_ld(f: &mut impl Write, project: &Project) {
             object_files.push(format!(
                 "$objects_dir/{}",
                 source_file
-                    .replace(".m", ".o")
                     .replace(".mm", ".o")
+                    .replace(".m", ".o")
                     .replace(".cpp", ".o")
                     .replace(".c", ".o")
             ));
@@ -226,14 +228,82 @@ pub(crate) fn generate_bundle(f: &mut impl Write, project: &Project) {
         .expect("Should be some");
 
     // Write Info.plist
-    generate_info_plist(project, bundle);
+    let info_plist_file = format!("{}/Info.plist", project.manifest_dir);
+    let extra_keys = if fs::metadata(&info_plist_file).is_ok() {
+        let mut file_contents = String::new();
+        let mut file = File::open(&info_plist_file).expect("Can't open Info.plist");
+        file.read_to_string(&mut file_contents)
+            .expect("Failed to read Info.plist");
+        let re = Regex::new(r"<dict>([\s\S]*?)<\/dict>").expect("Can't compile regex");
+        if let Some(captures) = re.captures(&file_contents) {
+            Some(
+                captures
+                    .get(1)
+                    .map_or("", |m| m.as_str())
+                    .trim()
+                    .to_string(),
+            )
+        } else {
+            eprintln!("Invalid Info.plist file place extra keys inside the <dict> tag");
+            exit(1);
+        }
+    } else {
+        None
+    };
+    generate_info_plist(project, bundle, extra_keys.as_deref());
 
-    // Copy Info.plist and executable
+    // Rules
     _ = writeln!(f, "\n# Build macOS bundle");
     _ = writeln!(
         f,
-        "rule cp\n  command = cp $in $out\n  description = cp $in\n"
+        "rule cp\n  command = cp $in $out\n  description = cp $in"
     );
+    if bundle.iconset.is_some() {
+        _ = writeln!(
+            f,
+            "rule iconutil\n  command = iconutil -c icns $in -o $out\n  description = iconutil $in"
+        );
+    }
+
+    // Copy Info.plist and resources
+    _ = writeln!(
+        f,
+        "\nbuild $target_dir/$profile/$name.app/Contents/Info.plist: cp $target_dir/$profile/src_gen/Info.plist"
+    );
+    let resources_dir = format!("{}/Resources/", project.manifest_dir);
+    if fs::metadata(&resources_dir).is_ok() {
+        let resource_files = index_files(&resources_dir)
+            .into_iter()
+            .map(|file| {
+                file.strip_prefix(&resources_dir)
+                    .expect("Should be some")
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        for resource_file in &resource_files {
+            _ = writeln!(
+                f,
+                "build $target_dir/$profile/$name.app/Contents/Resources/{}: cp $manifest_dir/Resources/{}",
+                resource_file, resource_file
+            );
+        }
+    }
+
+    // Compile iconset
+    if let Some(iconset) = &bundle.iconset {
+        _ = writeln!(
+            f,
+            "build $target_dir/$profile/$name.app/Contents/Resources/{}.icns: iconutil $manifest_dir/{}",
+            PathBuf::from(iconset)
+                .file_stem()
+                .expect("Invalid iconset path")
+                .to_str()
+                .expect("Invalid UTF-8 sequence"),
+            iconset
+        );
+    }
+
+    // Copy executable
     #[cfg(windows)]
     let executable_file = "$target_dir/$profile/$name.exe";
     #[cfg(not(windows))]
@@ -242,10 +312,6 @@ pub(crate) fn generate_bundle(f: &mut impl Write, project: &Project) {
         f,
         "build $target_dir/$profile/$name.app/Contents/MacOS/$name: cp {}",
         executable_file
-    );
-    _ = writeln!(
-        f,
-        "build $target_dir/$profile/$name.app/Contents/Info.plist: cp $target_dir/$profile/src_gen/Info.plist"
     );
 }
 
@@ -286,13 +352,15 @@ pub(crate) fn run_tests(project: &Project) {
 }
 
 pub(crate) fn run_bundle(project: &Project) {
-    let status = Command::new("open")
-        .arg(format!(
-            "{}/target/{}/{}.app",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ))
-        .status()
-        .expect("Failed to execute executable");
+    let status = Command::new(format!(
+        "{}/target/{}/{}.app/Contents/MacOS/{}",
+        project.manifest_dir,
+        project.profile,
+        project.manifest.package.name,
+        project.manifest.package.name
+    ))
+    .status()
+    .expect("Failed to execute executable");
     exit(status.code().unwrap_or(1));
 }
 
@@ -413,7 +481,7 @@ fn generate_test_main(project: &Project) {
     f.write_all(s.as_bytes()).expect("Write test_main.c failed");
 }
 
-fn generate_info_plist(project: &Project, bundle: &BundleMetadata) {
+fn generate_info_plist(project: &Project, bundle: &BundleMetadata, extra_keys: Option<&str>) {
     let mut s = String::new();
     _ = writeln!(s, "<!-- This file is generated by bob, do not edit! -->");
     _ = writeln!(s, r#"<?xml version="1.0" encoding="UTF-8"?>"#);
@@ -473,6 +541,9 @@ fn generate_info_plist(project: &Project, bundle: &BundleMetadata) {
     _ = writeln!(s, r#"    <string>11.0</string>"#,);
     _ = writeln!(s, r#"    <key>NSHumanReadableCopyright</key>"#);
     _ = writeln!(s, r#"    <string>{}</string>"#, bundle.copyright);
+    if let Some(extra_keys) = extra_keys {
+        _ = writeln!(s, "    {}", extra_keys);
+    }
     _ = writeln!(s, r#"</dict>"#);
     _ = writeln!(s, r#"</plist>"#);
 
