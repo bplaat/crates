@@ -8,14 +8,7 @@ repository.workspace = true
 rust-version = "1.65"
 description = "A simple user agent parser library based on the uap-core regexes"
 categories = ["parser-implementations", "web-programming"]
-keywords = [
-    "useragent",
-    "user-agent",
-    "useragent-parser",
-    "user-agent-parser",
-    "uap",
-    "uap-core",
-]
+keywords = ["useragent", "user-agent", "user-agent-parser", "uap", "uap-core"]
 homepage = "https://github.com/bplaat/crates/tree/master/lib/simple-useragent"
 
 [lints]
