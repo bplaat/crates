@@ -13,8 +13,8 @@ fn main() {
     let ua = parser.parse(
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:134.0) Gecko/20100101 Firefox/134.0",
     );
-    assert_eq!(ua.client.family, "Firefox");
-    assert_eq!(ua.client.version, Some("134.0".to_string()));
-    assert_eq!(ua.os.family, "Mac OS X");
-    assert_eq!(ua.os.version, Some("10.15".to_string()));
+    println!("Client Family: {}", ua.client.family);
+    println!("Client Version: {:?}", ua.client.version);
+    println!("OS Family: {}", ua.os.family);
+    println!("OS Version: {:?}", ua.os.version);
 }
