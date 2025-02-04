@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple user agent parser library based on the uap-core regexes
+#![doc = include_str!("../README.md")]
 
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
