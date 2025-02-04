@@ -77,20 +77,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "example-webview-ipc"
+name = "example-tiny-webview-ipc"
 version = "0.1.0"
 dependencies = [
  "minify-html",
  "serde",
  "serde_json",
- "webview",
+ "tiny-webview",
 ]
 
 [[package]]
-name = "example-webview-simple"
+name = "example-tiny-webview-simple"
 version = "0.1.0"
 dependencies = [
- "webview",
+ "tiny-webview",
 ]
 
 [[package]]
@@ -378,6 +378,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tiny-webview"
+version = "0.1.0"
+dependencies = [
+ "objc",
+]
+
+[[package]]
 name = "toml"
 version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -462,13 +469,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "webview"
-version = "0.1.0"
-dependencies = [
- "objc",
 ]
 
 [[package]]

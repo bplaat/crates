@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A webview ipc example
+//! A tiny webview ipc example
 
 use serde::{Deserialize, Serialize};
-use webview::{Event, LogicalSize, Webview, WebviewBuilder};
+use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
 
-const APP_HTML: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/app.min.html"));
+const APP_HTML: &[u8] = include_bytes!("../app.html");
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type")]

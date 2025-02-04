@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple webview example
+//! A simple tiny webview example
 
-use webview::{Webview, WebviewBuilder};
+use tiny_webview::{Webview, WebviewBuilder};
 
 fn main() {
     let mut webview = WebviewBuilder::new()
