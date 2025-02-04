@@ -31,7 +31,7 @@ pub(crate) fn generate_java(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "classes_dir = $target_dir/$profile/classes\n");
     _ = writeln!(
         f,
-        "rule javac\n  command = javac {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = javac $in\n",
+        "rule javac\n  command = javac {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = Compiling $in\n",
          javac_flags
     );
     for (module, source_files) in &modules {
@@ -85,7 +85,7 @@ pub(crate) fn generate_jar(f: &mut impl Write, project: &Project) {
     );
     _ = writeln!(
         f,
-        "rule jar\n  command = jar cfe $out $main_class -C $in .\n  description = jar $out\n"
+        "rule jar\n  command = jar cfe $out $main_class -C $in .\n  description = Packaging $out\n"
     );
     _ = writeln!(
         f,

@@ -52,7 +52,7 @@ pub(crate) fn generate_c(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "\n# Build C objects");
     _ = writeln!(
         f,
-        "rule cc\n  command = gcc -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = cc $in\n"
+        "rule cc\n  command = gcc -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
     );
     for source_file in &c_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".c", ".o"));
@@ -76,7 +76,7 @@ pub(crate) fn generate_cpp(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "\n# Build C++ objects");
     _ = writeln!(
             f,
-            "rule cpp\n  command = g++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = cpp $in\n"
+            "rule cpp\n  command = g++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
         );
     for source_file in &cpp_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".cpp", ".o"));
@@ -94,7 +94,7 @@ pub(crate) fn generate_objc(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "\n# Build Objective-C objects");
     _ = writeln!(
             f,
-            "rule objc\n  command = gcc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = objc $in\n"
+            "rule objc\n  command = gcc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
         );
     for source_file in &m_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".m", ".o"));
@@ -112,7 +112,7 @@ pub(crate) fn generate_objcpp(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "\n# Build Objective-C++ objects");
     _ = writeln!(
             f,
-            "rule objcpp\n  command = g++ -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = objcpp $in\n"
+            "rule objcpp\n  command = g++ -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
         );
     for source_file in &mm_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".mm", ".o"));
@@ -187,7 +187,7 @@ pub(crate) fn generate_ld(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "ldflags ={}\n", ldflags);
     _ = writeln!(
         f,
-        "rule ld\n  command = {} {} $ldflags $in -o $out{}\n  description = ld $out\n",
+        "rule ld\n  command = {} {} $ldflags $in -o $out{}\n  description = Linking $out\n",
         if contains_cpp { "g++" } else { "gcc" },
         match project.profile {
             Profile::Release => "-Os",
@@ -256,12 +256,12 @@ pub(crate) fn generate_bundle(f: &mut impl Write, project: &Project) {
     _ = writeln!(f, "\n# Build macOS bundle");
     _ = writeln!(
         f,
-        "rule cp\n  command = cp $in $out\n  description = cp $in"
+        "rule cp\n  command = cp $in $out\n  description = Copying $in"
     );
     if bundle.iconset.is_some() {
         _ = writeln!(
             f,
-            "rule iconutil\n  command = iconutil -c icns $in -o $out\n  description = iconutil $in"
+            "rule iconutil\n  command = iconutil -c icns $in -o $out\n  description = Converting $in"
         );
     }
 
