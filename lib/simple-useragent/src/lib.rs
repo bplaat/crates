@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! An user agent parser library
+//! A simple user agent parser library based on the uap-core regexes
 
 use regex::Regex;
 use serde::{Deserialize, Deserializer};

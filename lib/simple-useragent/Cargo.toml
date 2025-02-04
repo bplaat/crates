@@ -4,6 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+description = "A simple user agent parser library based on the uap-core regexes"
+categories = ["parser-implementations"]
+keywords = ["useragent", "user-agent", "uap", "uap-core"]
+homepage = "https://github.com/bplaat/crates/tree/master/lib/simple-useragent"
+repository = "https://github.com/bplaat/crates"
+readme = "README.md"
 
 [lints]
 workspace = true

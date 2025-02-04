@@ -14,17 +14,17 @@ A collection of minimal Rust crates and tools that I created for myself
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [router](lib/router) A simple router for HTTP library
+-   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes
 -   [sqlite](lib/sqlite) A SQLite Rust library
 -   [sqlite_derive](lib/sqlite_derive) SQLite derive macro's library
 -   [sqlite3-sys](lib/sqlite3-sys) A SQLite3 sys bindings library
 -   [threadpool](lib/threadpool) A very basic thread pool library
 -   [time](lib/time) A simple UTC DateTime library similar to `chrono`
+-   [tiny-webview](lib/tiny-webview) A simple webview library
 -   [url](lib/url) A minimal URL parser library
--   [useragent](lib/useragent) An user agent parser library
 -   [uuid](lib/uuid) A minimal UUID library
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
--   [webview](lib/webview) A simple webview library
 
 ## Getting Started
 
