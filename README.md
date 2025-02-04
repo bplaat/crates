@@ -1,6 +1,6 @@
 # Bassie's Rust crates
 
-A collection of minimal Rust crates and tools that I created for myself
+A collection of minimal Rust crates and tools that I created for myself and others
 
 ## Crates
 
