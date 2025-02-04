@@ -14,7 +14,7 @@ A collection of minimal Rust crates and tools that I created for myself
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [router](lib/router) A simple router for HTTP library
--   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes
+-   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
 -   [sqlite](lib/sqlite) A SQLite Rust library
 -   [sqlite_derive](lib/sqlite_derive) SQLite derive macro's library
 -   [sqlite3-sys](lib/sqlite3-sys) A SQLite3 sys bindings library
