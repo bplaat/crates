@@ -6,7 +6,7 @@
 
 //! An example of the user agent parser
 
-use useragent::UserAgentParser;
+use simple_useragent::UserAgentParser;
 
 fn main() {
     let parser = UserAgentParser::new();

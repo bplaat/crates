@@ -56,7 +56,7 @@ dependencies = [
  "http",
  "serde",
  "serde_urlencoded",
- "useragent",
+ "simple-useragent",
 ]
 
 [[package]]
@@ -330,6 +330,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
+name = "simple-useragent"
+version = "0.1.0"
+dependencies = [
+ "postcard",
+ "regex",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "sqlite"
 version = "0.1.0"
 dependencies = [
@@ -433,16 +443,6 @@ checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 [[package]]
 name = "url"
 version = "0.1.0"
-
-[[package]]
-name = "useragent"
-version = "0.1.0"
-dependencies = [
- "postcard",
- "regex",
- "serde",
- "serde_yaml",
-]
 
 [[package]]
 name = "uuid"

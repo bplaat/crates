@@ -10,7 +10,7 @@ workspace = true
 
 [dependencies]
 http = { path = "../../lib/http", features = ["json"] }
-useragent = { path = "../../lib/useragent", features = ["serde"] }
+simple-useragent = { path = "../../lib/simple-useragent", features = ["serde"] }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_urlencoded = "0.7.1"

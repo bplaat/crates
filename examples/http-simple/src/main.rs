@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use http::{Method, Request, Response, Status};
 use serde::Deserialize;
-use useragent::UserAgentParser;
+use simple_useragent::UserAgentParser;
 
 const HTTP_PORT: u16 = 8080;
 
