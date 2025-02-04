@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! # Bassie's Obvious Builder (bob)
-//!
-//! A simple meta-build system for my projects, because I like the simplicity of Cargo. But meh it's just a ninja build file generator.
+#![doc = include_str!("../README.md")]
 
 use std::fs::{self};
 use std::io::Write;

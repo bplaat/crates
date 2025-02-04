@@ -45,3 +45,9 @@ A simple meta-build system for my projects, because I like the simplicity of Car
     ```sh
     bob run
     ```
+
+## License
+
+Copyright © 2024-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
+
+Licensed under the [MIT](../../LICENSE) license.
