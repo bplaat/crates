@@ -1,4 +1,4 @@
-# Rust SQLite
+# Bassie SQLight crate
 
 A simple and minimal Rust SQLite library with an ergonomic API
 
