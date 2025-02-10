@@ -112,9 +112,9 @@ pub(crate) struct OsRule {{
     pub(crate) os_v3_replacement: Option<&'static str>,
 }}
 
-pub(crate) const USER_AGENT_RULES: [UserAgentRule; {}] = [{}];
+pub(crate) static USER_AGENT_RULES: [UserAgentRule; {}] = [{}];
 
-pub(crate) const OS_RULES: [OsRule; {}] = [{}];
+pub(crate) static OS_RULES: [OsRule; {}] = [{}];
 ",
         user_agent_parsers.len(),
         user_agent_parsers.join(",\n"),
