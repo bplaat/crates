@@ -88,7 +88,6 @@ dependencies = [
 name = "from_enum"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]
@@ -329,7 +328,6 @@ dependencies = [
 name = "sqlite_derive"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]
@@ -435,7 +433,6 @@ dependencies = [
 name = "validate_derive"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]
