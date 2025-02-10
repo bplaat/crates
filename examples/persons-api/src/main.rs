@@ -41,14 +41,17 @@ struct Context {
 impl Context {
     fn with_database(path: &str) -> Self {
         let database = database_open(path).expect("Can't open database");
+        database.enable_wal_logging();
+        database.apply_various_performance_settings();
         database_seed(&database);
         Self { database }
     }
 
     #[cfg(test)]
     fn with_test_database() -> Self {
-        let database = database_open(":memory:").expect("Can't open database");
-        Self { database }
+        Self {
+            database: database_open(":memory:").expect("Can't open database"),
+        }
     }
 }
 

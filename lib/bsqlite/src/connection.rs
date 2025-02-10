@@ -44,29 +44,7 @@ impl InnerConnection {
                 msg: format!("Failed to open database: {}", error),
             });
         }
-        let db = InnerConnection(db);
-
-        // Apply some SQLite performance settings (https://briandouglas.ie/sqlite-defaults/):
-        // - Set the journal mode to Write-Ahead Logging for concurrency
-        db.execute("PRAGMA journal_mode = WAL", ());
-        // - Set synchronous mode to NORMAL for performance and data safety balance
-        db.execute("PRAGMA synchronous = NORMAL", ());
-        // - Set busy timeout to 5 seconds to avoid "database is locked" errors
-        db.execute("PRAGMA busy_timeout = 5000", ());
-        // - Set cache size to 20MB for faster data access
-        db.execute("PRAGMA cache_size = 20000", ());
-        // - Enable foreign key constraint enforcement
-        db.execute("PRAGMA foreign_keys = ON", ());
-        // - Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
-        db.execute("PRAGMA auto_vacuum = INCREMENTAL", ());
-        // - Store temporary tables and data in memory for better performance
-        db.execute("PRAGMA temp_store = MEMORY", ());
-        // - Set the mmap_size to 2GB for faster read/write access using memory-mapped I/O
-        db.execute("PRAGMA mmap_size = 2147483648", ());
-        // - Set the page size to 8KB for balanced memory usage and performance
-        db.execute("PRAGMA page_size = 8192", ());
-
-        Ok(db)
+        Ok(InnerConnection(db))
     }
 
     fn prepare<T>(&self, query: &str) -> Statement<T>
@@ -142,6 +120,32 @@ impl Connection {
     /// Open a connection to a SQLite database
     pub fn open(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
         Ok(Connection(Arc::new(InnerConnection::open(path.as_ref())?)))
+    }
+
+    /// Set the journal mode to Write-Ahead Logging for better concurrency throughput
+    pub fn enable_wal_logging(&self) {
+        self.execute("PRAGMA journal_mode = WAL", ());
+    }
+
+    /// Apply various performance settings to the database
+    pub fn apply_various_performance_settings(&self) {
+        // Apply some SQLite performance settings (https://briandouglas.ie/sqlite-defaults/)
+        // - Set synchronous mode to NORMAL for performance and data safety balance
+        self.execute("PRAGMA synchronous = NORMAL", ());
+        // - Set busy timeout to 5 seconds to avoid "database is locked" errors
+        self.execute("PRAGMA busy_timeout = 5000", ());
+        // - Set cache size to 20MB for faster data access
+        self.execute("PRAGMA cache_size = 20000", ());
+        // - Enable foreign key constraint enforcement
+        self.execute("PRAGMA foreign_keys = ON", ());
+        // - Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
+        self.execute("PRAGMA auto_vacuum = INCREMENTAL", ());
+        // - Store temporary tables and data in memory for better performance
+        self.execute("PRAGMA temp_store = MEMORY", ());
+        // - Set the mmap_size to 2GB for faster read/write access using memory-mapped I/O
+        self.execute("PRAGMA mmap_size = 2147483648", ());
+        // - Set the page size to 8KB for balanced memory usage and performance
+        self.execute("PRAGMA page_size = 8192", ());
     }
 
     /// Prepare a statement
