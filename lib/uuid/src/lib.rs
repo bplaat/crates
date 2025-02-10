@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2023-2024 Bastiaan van der Plaat
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-//! A minimal UUID library
+//! A minimal version of the [uuid](https://crates.io/crates/uuid) crate
 
 #![forbid(unsafe_code)]
 

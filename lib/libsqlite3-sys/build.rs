@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A SQLite3 sys bindings library
+//! A minimal version of the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate for the [sqlite](lib/sqlite) crate.
 
 fn main() {
     // Link to the system SQLite library

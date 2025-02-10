@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A minimal crypto random bytes library
+//! A minimal version of the [getrandom](https://crates.io/crates/getrandom) crate
 
 use std::io::{Error, ErrorKind};
 
