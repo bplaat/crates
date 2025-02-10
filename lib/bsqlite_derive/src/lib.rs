@@ -1,11 +1,10 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-//! SQLite derive macro's library
-
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
 use proc_macro::TokenStream;

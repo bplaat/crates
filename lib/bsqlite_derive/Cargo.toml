@@ -4,6 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+rust-version = "1.65"
+description = "The derive macro's for the bsqlite crate"
+categories = ["database", "web-programming"]
+keywords = ["sql", "sqlite", "database", "bsqlite"]
+homepage = "https://github.com/bplaat/crates/tree/master/lib/bsqlite_derive"
 
 [lints]
 workspace = true
