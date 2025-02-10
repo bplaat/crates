@@ -9,10 +9,6 @@ use std::fmt::{self, Display, Formatter};
 
 use crate::pbkdf2_hmac_sha256;
 
-// Unsafe! but it makes tests significantly faster
-#[cfg(test)]
-const ITERATIONS: u32 = 1;
-#[cfg(not(test))]
 const ITERATIONS: u32 = 100_000;
 
 /// Hash password using PBKDF2-HMAC-SHA256 returns string in PHC standard (https://github.com/P-H-C/phc-string-format/blob/master/phc-sf-spec.md)
