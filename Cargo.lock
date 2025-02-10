@@ -7,10 +7,14 @@ name = "base64"
 version = "0.1.0"
 
 [[package]]
+name = "berde"
+version = "0.1.0"
+
+[[package]]
 name = "bob"
 version = "0.1.0"
 dependencies = [
- "indexmap",
+ "indexmap 2.7.1",
  "regex",
  "serde",
  "toml",
@@ -88,7 +92,6 @@ dependencies = [
 name = "from_enum"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]
@@ -112,6 +115,13 @@ dependencies = [
  "threadpool",
  "time",
  "url",
+]
+
+[[package]]
+name = "indexmap"
+version = "0.1.0"
+dependencies = [
+ "berde",
 ]
 
 [[package]]
@@ -152,7 +162,7 @@ version = "0.1.0"
 name = "openapi-generator"
 version = "0.1.0"
 dependencies = [
- "indexmap",
+ "indexmap 2.7.1",
  "serde",
  "serde_yaml",
 ]
@@ -286,7 +296,7 @@ version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
 dependencies = [
- "indexmap",
+ "indexmap 2.7.1",
  "itoa",
  "ryu",
  "serde",
@@ -329,7 +339,6 @@ dependencies = [
 name = "sqlite_derive"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]
@@ -390,7 +399,7 @@ version = "0.22.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02a8b472d1a3d7c18e2d61a489aee3453fd9031c33e4f55bd533f4a7adca1bee"
 dependencies = [
- "indexmap",
+ "indexmap 2.7.1",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -435,7 +444,6 @@ dependencies = [
 name = "validate_derive"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]
