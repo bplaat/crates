@@ -1,6 +1,6 @@
 [package]
 name = "libsqlite3-sys"
-version = "0.1.0"
+version = "0.31.0+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

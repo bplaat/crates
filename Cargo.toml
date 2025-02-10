@@ -15,3 +15,6 @@ missing_docs = "deny"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
+
+[patch.crates-io]
+libsqlite3-sys = { path = "lib/libsqlite3-sys" }
