@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -27,7 +27,7 @@ pub const SQLITE_BLOB: i32 = 4;
 pub const SQLITE_NULL: i32 = 5;
 
 pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
-    Some(unsafe { std::mem::transmute::<isize, unsafe extern "C" fn(*mut c_void)>(-1_isize) })
+    Some(unsafe { std::mem::transmute::<isize, unsafe extern "C" fn(*mut c_void)>(-1) })
 }
 
 extern "C" {

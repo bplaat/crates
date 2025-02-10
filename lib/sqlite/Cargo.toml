@@ -10,12 +10,12 @@ workspace = true
 
 [dependencies]
 sqlite_derive = { path = "../sqlite_derive", optional = true }
-sqlite3-sys = { path = "../sqlite3-sys" }
+libsqlite3-sys = { path = "../libsqlite3-sys" }
 time = { path = "../time", optional = true }
 uuid = { path = "../uuid", optional = true }
 
 [features]
-bundled = ["sqlite3-sys/bundled"]
+bundled = ["libsqlite3-sys/bundled"]
 derive = ["dep:sqlite_derive"]
 time = ["dep:time"]
 uuid = ["dep:uuid"]

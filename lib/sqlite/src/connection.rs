@@ -11,7 +11,7 @@ use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
 
-use sqlite3_sys::*;
+use libsqlite3_sys::*;
 
 use crate::{Bind, FromRow, Statement};
 
