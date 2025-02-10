@@ -8,12 +8,12 @@
 
 use std::net::{Ipv4Addr, TcpListener};
 
+use bsqlite::{Connection, ConnectionError, FromRow, FromValue};
 use chrono::{DateTime, Utc};
 use from_enum::FromEnum;
 use http::{Method, Request, Response, Status};
 use router::{Router, RouterBuilder};
 use serde::Deserialize;
-use sqlite::{FromRow, FromValue};
 use uuid::Uuid;
 use validate::Validate;
 
@@ -35,7 +35,7 @@ mod validators {
 // MARK: Context
 #[derive(Clone)]
 struct Context {
-    database: sqlite::Connection,
+    database: Connection,
 }
 
 impl Context {
@@ -56,7 +56,7 @@ impl Context {
 trait DatabaseHelpers {
     fn insert_person(&self, person: Person);
 }
-impl DatabaseHelpers for sqlite::Connection {
+impl DatabaseHelpers for Connection {
     fn insert_person(&self, person: Person) {
         self.execute(
             format!(
@@ -69,8 +69,8 @@ impl DatabaseHelpers for sqlite::Connection {
     }
 }
 
-fn database_open(path: &str) -> Result<sqlite::Connection, sqlite::ConnectionError> {
-    let database = sqlite::Connection::open(path)?;
+fn database_open(path: &str) -> Result<Connection, ConnectionError> {
+    let database = Connection::open(path)?;
     database.execute(
         "CREATE TABLE IF NOT EXISTS persons(
             id BLOB PRIMARY KEY,
@@ -84,7 +84,7 @@ fn database_open(path: &str) -> Result<sqlite::Connection, sqlite::ConnectionErr
     Ok(database)
 }
 
-fn database_seed(database: &sqlite::Connection) {
+fn database_seed(database: &Connection) {
     // Insert persons
     if database.query_some::<i64>("SELECT COUNT(id) FROM persons", ()) == 0 {
         database.insert_person(Person {

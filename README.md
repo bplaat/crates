@@ -5,22 +5,21 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 ## Crates
 
 -   [base64](lib/base64) A base64 encoder and decoder
+-   [bsqlite](lib/bsqlite) A simple Rust SQLite library with derive macro's
+-   [bsqlite_derive](lib/bsqlite_derive) SQLite derive macro's library
 -   [bob](bin/bob) A simple meta-build system for my projects
 -   [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 -   [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
--   [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate for the [sqlite](lib/sqlite) crate
+-   [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 -   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [objc](lib/objc) An Objective-C ffi library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [router](lib/router) A simple router for HTTP library
 -   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
--   [sqlite](lib/sqlite) A simple Rust SQLite library with derive macro's
--   [sqlite_derive](lib/sqlite_derive) SQLite derive macro's library
 -   [threadpool](lib/threadpool) A very basic thread pool library
--   [time](lib/time) A simple UTC DateTime library similar to `chrono`
 -   [tiny-webview](lib/tiny-webview) A simple webview library
 -   [url](lib/url) A minimal URL parser library
 -   [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate

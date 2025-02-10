@@ -107,13 +107,13 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
                 #values
             }
         }
-        impl sqlite::Bind for #name {
-            fn bind(self, statement: &mut sqlite::RawStatement) {
+        impl bsqlite::Bind for #name {
+            fn bind(self, statement: &mut bsqlite::RawStatement) {
                 #( #binds; )*
             }
         }
-        impl sqlite::FromRow for #name {
-            fn from_row(statement: &mut sqlite::RawStatement) -> Self {
+        impl bsqlite::FromRow for #name {
+            fn from_row(statement: &mut bsqlite::RawStatement) -> Self {
                 Self {
                     #( #from_rows, )*
                     #from_rows_default
@@ -143,7 +143,7 @@ pub fn from_value_derive(input: TokenStream) -> TokenStream {
             panic!("Enum variants must have discriminants");
         };
         quote! {
-            sqlite::Value::Integer(#discriminant) => Ok(#name::#variant_name),
+            bsqlite::Value::Integer(#discriminant) => Ok(#name::#variant_name),
         }
     });
 
@@ -155,24 +155,24 @@ pub fn from_value_derive(input: TokenStream) -> TokenStream {
             panic!("Enum variants must have discriminants");
         };
         quote! {
-            #name::#variant_name => sqlite::Value::Integer(#discriminant),
+            #name::#variant_name => bsqlite::Value::Integer(#discriminant),
         }
     });
 
     TokenStream::from(quote! {
-        impl From<#name> for sqlite::Value {
+        impl From<#name> for bsqlite::Value {
             fn from(value: #name) -> Self {
                 match value {
                     #( #to_impls )*
                 }
             }
         }
-        impl TryFrom<sqlite::Value> for #name {
-            type Error = sqlite::ValueError;
-            fn try_from(value: sqlite::Value) -> Result<Self, Self::Error> {
+        impl TryFrom<bsqlite::Value> for #name {
+            type Error = bsqlite::ValueError;
+            fn try_from(value: bsqlite::Value) -> Result<Self, Self::Error> {
                 match value {
                     #( #from_impls )*
-                    _ => Err(sqlite::ValueError),
+                    _ => Err(bsqlite::ValueError),
                 }
             }
         }

@@ -19,4 +19,4 @@ mod statement;
 mod value;
 
 #[cfg(feature = "derive")]
-pub use sqlite_derive::{FromRow, FromValue};
+pub use bsqlite_derive::{FromRow, FromValue};

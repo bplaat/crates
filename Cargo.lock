@@ -17,6 +17,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "bsqlite"
+version = "0.1.0"
+dependencies = [
+ "bsqlite_derive",
+ "chrono",
+ "libsqlite3-sys",
+ "uuid",
+]
+
+[[package]]
+name = "bsqlite_derive"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -52,6 +70,7 @@ dependencies = [
 name = "example-persons-api"
 version = "0.1.0"
 dependencies = [
+ "bsqlite",
  "chrono",
  "from_enum",
  "http",
@@ -60,7 +79,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "sqlite",
  "uuid",
  "validate",
 ]
@@ -319,24 +337,6 @@ dependencies = [
  "regex",
  "serde",
  "serde_yaml",
-]
-
-[[package]]
-name = "sqlite"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "libsqlite3-sys",
- "sqlite_derive",
- "uuid",
-]
-
-[[package]]
-name = "sqlite_derive"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn",
 ]
 
 [[package]]
