@@ -23,8 +23,8 @@ mod windows {
     }
 }
 
-/// Get crypto random bytes
-pub fn getrandom(buf: &mut [u8]) -> Result<(), Error> {
+/// Fill buffer with crypto random bytes
+pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
     #[cfg(unix)]
     {
         use std::io::Read;
@@ -65,10 +65,10 @@ mod test {
     #[test]
     fn test_randomness() {
         let mut buf1 = [0u8; 32];
-        getrandom(&mut buf1).unwrap();
+        fill(&mut buf1).unwrap();
 
         let mut buf2 = [0u8; 32];
-        getrandom(&mut buf2).unwrap();
+        fill(&mut buf2).unwrap();
 
         assert_ne!(buf1, buf2);
     }

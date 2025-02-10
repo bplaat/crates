@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-getrandom = { path = "../getrandom", optional = true }
+getrandom = { version = "0.3.0", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]

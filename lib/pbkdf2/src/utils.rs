@@ -14,7 +14,7 @@ const ITERATIONS: u32 = 100_000;
 /// Hash password using PBKDF2-HMAC-SHA256 returns string in PHC standard (https://github.com/P-H-C/phc-string-format/blob/master/phc-sf-spec.md)
 pub fn password_hash(password: &str) -> String {
     let mut salt = [0u8; 16];
-    getrandom::getrandom(&mut salt).expect("Can't get random bytes");
+    getrandom::fill(&mut salt).expect("Can't get random bytes");
     let hashed_password = pbkdf2_hmac_sha256(password.as_bytes(), &salt, ITERATIONS, 32);
     format!(
         "$pbkdf2-sha256$t={}${}${}",

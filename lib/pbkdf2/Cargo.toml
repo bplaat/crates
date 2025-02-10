@@ -10,4 +10,4 @@ workspace = true
 
 [dependencies]
 base64 = { path = "../base64" }
-getrandom = { path = "../getrandom" }
+getrandom = "0.3.0"
