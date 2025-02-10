@@ -6,6 +6,8 @@
 
 //! A very basic thread pool library
 
+#![forbid(unsafe_code)]
+
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 

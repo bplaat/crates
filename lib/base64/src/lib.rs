@@ -6,6 +6,8 @@
 
 //! A base64 encoder and decoder
 
+#![forbid(unsafe_code)]
+
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 

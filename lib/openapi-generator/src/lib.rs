@@ -6,6 +6,8 @@
 
 //! OpenAPI Generator
 
+#![forbid(unsafe_code)]
+
 use std::path::Path;
 use std::str::FromStr;
 

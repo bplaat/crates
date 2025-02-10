@@ -6,6 +6,8 @@
 
 //! A minimal UUID library
 
+#![forbid(unsafe_code)]
+
 use std::error::Error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::str::FromStr;

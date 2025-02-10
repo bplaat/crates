@@ -6,6 +6,8 @@
 
 //! A simple UTC DateTime library similar to `chrono`
 
+#![forbid(unsafe_code)]
+
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::time::SystemTime;

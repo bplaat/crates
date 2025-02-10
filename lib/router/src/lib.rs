@@ -6,6 +6,8 @@
 
 //! A simple router for HTTP library
 
+#![forbid(unsafe_code)]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

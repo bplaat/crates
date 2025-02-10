@@ -6,6 +6,8 @@
 
 //! A minimal URL parser library
 
+#![forbid(unsafe_code)]
+
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;

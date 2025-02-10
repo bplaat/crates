@@ -6,6 +6,8 @@
 
 //! A unsecure PBKDF2-HMAC-SHA256 password hashing library
 
+#![forbid(unsafe_code)]
+
 pub use crate::sha256::Sha256;
 pub use crate::utils::{password_hash, password_verify, PasswordHashDecodeError};
 

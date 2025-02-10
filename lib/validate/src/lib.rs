@@ -6,6 +6,8 @@
 
 //! A simple struct validation library
 
+#![forbid(unsafe_code)]
+
 use std::collections::HashMap;
 use std::error;
 use std::fmt::{self, Display, Formatter};

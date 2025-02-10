@@ -6,6 +6,8 @@
 
 //! OpenAPI Generator cli
 
+#![forbid(unsafe_code)]
+
 use openapi_generator::{generate_schemas, Generator};
 
 struct Args {

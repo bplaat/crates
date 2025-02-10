@@ -6,6 +6,8 @@
 
 //! A simple HTML minifier library
 
+#![forbid(unsafe_code)]
+
 use std::fs;
 use std::sync::LazyLock;
 

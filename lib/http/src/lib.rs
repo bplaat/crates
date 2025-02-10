@@ -6,6 +6,8 @@
 
 //! A simple HTTP/1.1 server/client library
 
+#![forbid(unsafe_code)]
+
 pub use crate::enums::{Method, Status};
 pub use crate::fetch::fetch;
 pub use crate::request::Request;
