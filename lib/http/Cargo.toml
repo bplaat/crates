@@ -10,11 +10,15 @@ workspace = true
 
 [dependencies]
 threadpool = { path = "../threadpool" }
-time = { path = "../time" }
+chrono = { version = "0.4", default-features = false, features = [
+    "now",
+], optional = true }
 url = { path = "../url" }
 
 serde = { version = "1.0", optional = true }
 serde_json = { version = "1.0", optional = true }
 
 [features]
+default = ["date"]
+date = ["dep:chrono"]
 json = ["dep:serde", "dep:serde_json"]

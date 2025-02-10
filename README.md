@@ -6,10 +6,11 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 -   [base64](lib/base64) A base64 encoder and decoder
 -   [bob](bin/bob) A simple meta-build system for my projects
--   [getrandom](lib/getrandom) A minimal version of the [getrandom](https://crates.io/crates/getrandom) crate
+-   [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
+-   [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
--   [libsqlite3-sys](lib/libsqlite3-sys) A minimal version of the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate for the [sqlite](lib/sqlite) crate
+-   [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate for the [sqlite](lib/sqlite) crate
 -   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [objc](lib/objc) An Objective-C ffi library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
@@ -22,7 +23,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [time](lib/time) A simple UTC DateTime library similar to `chrono`
 -   [tiny-webview](lib/tiny-webview) A simple webview library
 -   [url](lib/url) A minimal URL parser library
--   [uuid](lib/uuid) A minimal version of the [uuid](https://crates.io/crates/uuid) crate
+-   [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
 

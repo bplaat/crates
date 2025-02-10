@@ -18,6 +18,7 @@ unwrap_used = "deny"
 
 # Patch some popular crates with my minimal alternatives
 [patch.crates-io]
+chrono = { path = "lib/chrono" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 uuid = { path = "lib/uuid" }

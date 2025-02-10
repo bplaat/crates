@@ -8,12 +8,12 @@
 
 use std::net::{Ipv4Addr, TcpListener};
 
+use chrono::{DateTime, Utc};
 use from_enum::FromEnum;
 use http::{Method, Request, Response, Status};
 use router::{Router, RouterBuilder};
 use serde::Deserialize;
 use sqlite::{FromRow, FromValue};
-use time::DateTime;
 use uuid::Uuid;
 use validate::Validate;
 
@@ -150,7 +150,7 @@ struct Person {
     #[sqlite(rename = "age")]
     age_in_years: i64,
     relation: Relation,
-    created_at: DateTime,
+    created_at: DateTime<Utc>,
 }
 
 impl Default for Person {
@@ -160,7 +160,7 @@ impl Default for Person {
             name: String::default(),
             age_in_years: 0,
             relation: Relation::Me,
-            created_at: DateTime::now(),
+            created_at: Utc::now(),
         }
     }
 }

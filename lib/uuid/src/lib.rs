@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A minimal version of the [uuid](https://crates.io/crates/uuid) crate
+//! A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 
 #![forbid(unsafe_code)]
 

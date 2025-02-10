@@ -26,6 +26,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono"
+version = "0.4.0+patch"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -45,6 +52,7 @@ dependencies = [
 name = "example-persons-api"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "from_enum",
  "http",
  "openapi-generator",
@@ -53,7 +61,6 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sqlite",
- "time",
  "uuid",
  "validate",
 ]
@@ -106,10 +113,10 @@ checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 name = "http"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "threadpool",
- "time",
  "url",
 ]
 
@@ -318,9 +325,9 @@ dependencies = [
 name = "sqlite"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "libsqlite3-sys",
  "sqlite_derive",
- "time",
  "uuid",
 ]
 
@@ -346,13 +353,6 @@ dependencies = [
 [[package]]
 name = "threadpool"
 version = "0.1.0"
-
-[[package]]
-name = "time"
-version = "0.1.0"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "tiny-webview"

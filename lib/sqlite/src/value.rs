@@ -214,77 +214,96 @@ impl TryFrom<Value> for Option<uuid::Uuid> {
 }
 
 // MARK: From time
-#[cfg(feature = "time")]
-impl From<time::Date> for Value {
-    fn from(value: time::Date) -> Self {
-        Value::Integer(value.timestamp())
+#[cfg(feature = "chrono")]
+impl From<chrono::NaiveDate> for Value {
+    fn from(value: chrono::NaiveDate) -> Self {
+        Value::Integer(
+            value
+                .and_hms_opt(0, 0, 0)
+                .expect("Should be some")
+                .and_utc()
+                .timestamp(),
+        )
     }
 }
-#[cfg(feature = "time")]
-impl TryFrom<Value> for time::Date {
+#[cfg(feature = "chrono")]
+impl TryFrom<Value> for chrono::NaiveDate {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(time::Date::from_timestamp(i)),
+            Value::Integer(i) => Ok(chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0)
+                .expect("Should be some")
+                .naive_utc()
+                .date()),
             _ => Err(ValueError),
         }
     }
 }
 
-#[cfg(feature = "time")]
-impl From<time::DateTime> for Value {
-    fn from(value: time::DateTime) -> Self {
+#[cfg(feature = "chrono")]
+impl From<chrono::DateTime<chrono::Utc>> for Value {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
         Value::Integer(value.timestamp())
     }
 }
-#[cfg(feature = "time")]
-impl TryFrom<Value> for time::DateTime {
+#[cfg(feature = "chrono")]
+impl TryFrom<Value> for chrono::DateTime<chrono::Utc> {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(time::DateTime::from_timestamp(i)),
+            Value::Integer(i) => Ok(Self::from_timestamp(i, 0).expect("Should be some")),
             _ => Err(ValueError),
         }
     }
 }
 
-#[cfg(feature = "time")]
-impl From<Option<time::Date>> for Value {
-    fn from(value: Option<time::Date>) -> Self {
+#[cfg(feature = "chrono")]
+impl From<Option<chrono::NaiveDate>> for Value {
+    fn from(value: Option<chrono::NaiveDate>) -> Self {
         match value {
-            Some(v) => Value::Integer(v.timestamp()),
+            Some(v) => Value::Integer(
+                v.and_hms_opt(0, 0, 0)
+                    .expect("Should be some")
+                    .and_utc()
+                    .timestamp(),
+            ),
             None => Value::Null,
         }
     }
 }
-#[cfg(feature = "time")]
-impl TryFrom<Value> for Option<time::Date> {
+#[cfg(feature = "chrono")]
+impl TryFrom<Value> for Option<chrono::NaiveDate> {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
             #[allow(deprecated)]
-            Value::Integer(i) => Ok(Some(time::Date::from_timestamp(i))),
+            Value::Integer(i) => Ok(Some(
+                chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0)
+                    .expect("Should be some")
+                    .naive_utc()
+                    .date(),
+            )),
             Value::Null => Ok(None),
             _ => Err(ValueError),
         }
     }
 }
 
-#[cfg(feature = "time")]
-impl From<Option<time::DateTime>> for Value {
-    fn from(value: Option<time::DateTime>) -> Self {
+#[cfg(feature = "chrono")]
+impl From<Option<chrono::DateTime<chrono::Utc>>> for Value {
+    fn from(value: Option<chrono::DateTime<chrono::Utc>>) -> Self {
         match value {
             Some(v) => Value::Integer(v.timestamp()),
             None => Value::Null,
         }
     }
 }
-#[cfg(feature = "time")]
-impl TryFrom<Value> for Option<time::DateTime> {
+#[cfg(feature = "chrono")]
+impl TryFrom<Value> for Option<chrono::DateTime<chrono::Utc>> {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(Some(time::DateTime::from_timestamp(i))),
+            Value::Integer(i) => Ok(chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0)),
             Value::Null => Ok(None),
             _ => Err(ValueError),
         }

@@ -10,8 +10,6 @@ use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::{self};
 
-use time::DateTime;
-
 use crate::enums::{Status, Version};
 use crate::serve::KEEP_ALIVE_TIMEOUT;
 use crate::Request;
@@ -155,8 +153,9 @@ impl Response {
 
     pub(crate) fn write_to_stream(mut self, stream: &mut impl Write, req: &Request) {
         // Finish headers
+        #[cfg(feature = "date")]
         self.headers
-            .insert("Date".to_string(), DateTime::now().to_rfc2822());
+            .insert("Date".to_string(), chrono::Utc::now().to_rfc2822());
         self.headers
             .insert("Content-Length".to_string(), self.body.len().to_string());
         if req.version == Version::Http1_1 {

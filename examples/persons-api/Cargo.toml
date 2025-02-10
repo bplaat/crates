@@ -12,8 +12,8 @@ workspace = true
 from_enum = { path = "../../lib/from_enum" }
 http = { path = "../../lib/http", features = ["json"] }
 router = { path = "../../lib/router" }
-sqlite = { path = "../../lib/sqlite", features = ["derive", "uuid", "time"] }
-time = { path = "../../lib/time", features = ["serde"] }
+sqlite = { path = "../../lib/sqlite", features = ["derive", "uuid", "chrono"] }
+chrono = { version = "0.4", default-features = false, features = ["serde"] }
 uuid = { version = "1.0", features = ["v7", "serde"] }
 validate = { path = "../../lib/validate", features = ["derive", "serde"] }
 
@@ -30,5 +30,5 @@ sqlite = { path = "../../lib/sqlite", features = [
     "bundled",
     "derive",
     "uuid",
-    "time",
+    "chrono",
 ] }
