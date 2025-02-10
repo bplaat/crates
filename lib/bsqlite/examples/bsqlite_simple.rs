@@ -1,12 +1,11 @@
-# Rust SQLite
+/*
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
-A simple and minimal Rust SQLite library with an ergonomic API
+//! A simple example that connects, creates a table, inserts rows, and reads them back.
 
-## Example
-
-A simple example that connects, creates a table, inserts rows, and reads them back:
-
-```rs
 fn main() {
     // Connect to in SQLite database
     let db = bsqlite::Connection::open("database.db").expect("Can't open database");
@@ -39,21 +38,3 @@ fn main() {
         println!("Hello {}, you are {} years old!", name, age);
     }
 }
-```
-
-## Design goals
-
--   Connect and execute queries on a SQLite database
--   Have a generic `Value` enum type to represent SQLite values
--   Bind and read `Value` types to and from sqlite statements
--   Have `Bind` and `FromRow` derive macros to convert between Rust types and SQLite values
-
-## Documentation
-
-See the [documentation](https://docs.rs/bsqlite) for more information.
-
-## License
-
-Copyright © 2024-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
-
-Licensed under the [MIT](../../LICENSE) license.

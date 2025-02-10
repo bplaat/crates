@@ -199,19 +199,22 @@ mod test {
     fn test_open_db_execute_queries() {
         let db = Connection::open(":memory:").unwrap();
         db.execute(
-            "CREATE TABLE persons (id INTEGER PRIMARY KEY, name TEXT) STRICT",
+            "CREATE TABLE persons (id INTEGER PRIMARY KEY, name TEXT, age INTEGER) STRICT",
             (),
         );
         db.execute(
-            "INSERT INTO persons (name) VALUES (?), (?)",
-            ("Alice".to_string(), "Bob".to_string()),
+            "INSERT INTO persons (name, age) VALUES (?, ?), (?, ?)",
+            ("Alice".to_string(), 30, "Bob".to_string(), 40),
         );
 
         let total = db.query_some::<i64>("SELECT COUNT(id) FROM persons", ());
         assert_eq!(total, 2);
         let names = db
-            .query::<(String,)>("SELECT name FROM persons", ())
+            .query::<(String, i64)>("SELECT name, age FROM persons", ())
             .collect::<Vec<_>>();
-        assert_eq!(names, vec![("Alice".to_string(),), ("Bob".to_string(),)]);
+        assert_eq!(
+            names,
+            vec![("Alice".to_string(), 30), ("Bob".to_string(), 40)]
+        );
     }
 }

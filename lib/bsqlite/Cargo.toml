@@ -4,12 +4,18 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+rust-version = "1.65"
+description = "A simple and minimal Rust SQLite library with an ergonomic API"
+categories = ["database", "web-programming"]
+keywords = ["sql", "sqlite", "database", "bsqlite"]
+homepage = "https://github.com/bplaat/crates/tree/master/lib/bsqlite"
 
 [lints]
 workspace = true
 
 [dependencies]
-bsqlite_derive = { path = "../bsqlite_derive", optional = true }
+bsqlite_derive = { version = "0.1", optional = true }
 libsqlite3-sys = "0.31.0"
 chrono = { version = "0.4", default-features = false, optional = true }
 uuid = { version = "1.0", optional = true }

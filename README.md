@@ -5,8 +5,8 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 ## Crates
 
 -   [base64](lib/base64) A base64 encoder and decoder
--   [bsqlite](lib/bsqlite) A simple Rust SQLite library with derive macro's
--   [bsqlite_derive](lib/bsqlite_derive) SQLite derive macro's library
+-   [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
+-   [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
 -   [bob](bin/bob) A simple meta-build system for my projects
 -   [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 -   [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
