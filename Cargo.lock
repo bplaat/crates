@@ -413,7 +413,7 @@ version = "0.1.0"
 
 [[package]]
 name = "uuid"
-version = "0.1.0"
+version = "1.0.0+patch"
 dependencies = [
  "getrandom",
  "serde",

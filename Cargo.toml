@@ -16,5 +16,7 @@ missing_docs = "deny"
 [workspace.lints.clippy]
 unwrap_used = "deny"
 
+# Patch some popular crates with my minimal alternatives
 [patch.crates-io]
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
+uuid = { path = "lib/uuid" }
