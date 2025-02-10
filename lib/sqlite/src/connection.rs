@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use sqlite3_sys::*;
 
-use crate::statement::{Bind, FromRow, Statement};
+use crate::{Bind, FromRow, Statement};
 
 // MARK: Inner Connection
 struct InnerConnection(*mut sqlite3);
@@ -78,7 +78,7 @@ impl InnerConnection {
             sqlite3_prepare_v2(
                 self.0,
                 query.as_ptr() as *const c_char,
-                query.as_bytes().len() as i32,
+                query.len() as i32,
                 &mut statement,
                 ptr::null_mut(),
             )
@@ -103,8 +103,8 @@ impl InnerConnection {
         self.query::<()>(query, params).next();
     }
 
-    fn affected_rows(&self) -> i64 {
-        unsafe { sqlite3_changes64(self.0) }
+    fn affected_rows(&self) -> i32 {
+        unsafe { sqlite3_changes(self.0) }
     }
 
     fn last_insert_row_id(&self) -> i64 {
@@ -160,13 +160,23 @@ impl Connection {
         self.0.query(query.as_ref(), params)
     }
 
+    /// Run a query, read and expect the first row
+    pub fn query_some<T>(&self, query: impl AsRef<str>, params: impl Bind) -> T
+    where
+        T: FromRow,
+    {
+        self.query::<T>(query, params)
+            .next()
+            .expect("Should be some")
+    }
+
     /// Execute a query
     pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
         self.0.execute(query.as_ref(), params);
     }
 
     /// Get the number of affected rows
-    pub fn affected_rows(&self) -> i64 {
+    pub fn affected_rows(&self) -> i32 {
         self.0.affected_rows()
     }
 
@@ -179,18 +189,25 @@ impl Connection {
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use super::*;
+
     #[test]
     fn test_open_db_execute_queries() {
-        let connection = super::Connection::open(":memory:").unwrap();
-        connection.execute(
-            "CREATE TABLE persons (id INTEGER PRIMARY KEY, name TEXT)",
+        let db = Connection::open(":memory:").unwrap();
+        db.execute(
+            "CREATE TABLE persons (id INTEGER PRIMARY KEY, name TEXT) STRICT",
             (),
         );
-        connection.execute("INSERT INTO persons (name) VALUES (?)", "Alice".to_string());
-        connection.execute("INSERT INTO persons (name) VALUES (?)", "Bob".to_string());
-        let names = connection
-            .query::<String>("SELECT name FROM persons", ())
+        db.execute(
+            "INSERT INTO persons (name) VALUES (?), (?)",
+            ("Alice".to_string(), "Bob".to_string()),
+        );
+
+        let total = db.query_some::<i64>("SELECT COUNT(id) FROM persons", ());
+        assert_eq!(total, 2);
+        let names = db
+            .query::<(String,)>("SELECT name FROM persons", ())
             .collect::<Vec<_>>();
-        assert_eq!(names, vec!["Alice".to_string(), "Bob".to_string()]);
+        assert_eq!(names, vec![("Alice".to_string(),), ("Bob".to_string(),)]);
     }
 }

@@ -15,7 +15,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [router](lib/router) A simple router for HTTP library
 -   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
--   [sqlite](lib/sqlite) A SQLite Rust library
+-   [sqlite](lib/sqlite) A simple Rust SQLite library with derive macro's
 -   [sqlite_derive](lib/sqlite_derive) SQLite derive macro's library
 -   [sqlite3-sys](lib/sqlite3-sys) A SQLite3 sys bindings library
 -   [threadpool](lib/threadpool) A very basic thread pool library
@@ -50,6 +50,8 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ## TODO items
 
+-   [ ] berde: Add serialize json,urlencode,yaml,toml
+-   [ ] berde: Add deserialize json,urlencode,yaml,toml
 -   [ ] bob: Add Android project type
 -   [ ] tiny-webview: Add Windows (win32 + Webview2) support
 -   [ ] bob: Build universal multi target binaries with macOS bundle package

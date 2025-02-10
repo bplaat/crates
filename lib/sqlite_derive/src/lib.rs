@@ -78,7 +78,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
 
     let binds = fields.iter().enumerate().map(|(index, (field, _))| {
         let ident = field.ident.as_ref().expect("Invalid field");
-        quote! { statement.bind_value(#index as i32, self.#ident) }
+        quote! { statement.bind_value(#index as i32, self.#ident.into()) }
     });
 
     let from_rows = fields

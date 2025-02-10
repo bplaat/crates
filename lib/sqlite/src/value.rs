@@ -97,59 +97,6 @@ impl TryFrom<Value> for Vec<u8> {
     }
 }
 
-// MARK: From Uuid
-#[cfg(feature = "uuid")]
-impl From<uuid::Uuid> for Value {
-    fn from(value: uuid::Uuid) -> Self {
-        Value::Blob(value.into_bytes().to_vec())
-    }
-}
-#[cfg(feature = "uuid")]
-impl TryFrom<Value> for uuid::Uuid {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Blob(v) => Ok(uuid::Uuid::from_slice(&v).map_err(|_| ValueError)?),
-            _ => Err(ValueError),
-        }
-    }
-}
-
-// MARK: From time
-#[cfg(feature = "time")]
-impl From<time::Date> for Value {
-    fn from(value: time::Date) -> Self {
-        Value::Integer(value.timestamp())
-    }
-}
-#[cfg(feature = "time")]
-impl TryFrom<Value> for time::Date {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(i) => Ok(time::Date::from_timestamp(i)),
-            _ => Err(ValueError),
-        }
-    }
-}
-
-#[cfg(feature = "time")]
-impl From<time::DateTime> for Value {
-    fn from(value: time::DateTime) -> Self {
-        Value::Integer(value.timestamp())
-    }
-}
-#[cfg(feature = "time")]
-impl TryFrom<Value> for time::DateTime {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(i) => Ok(time::DateTime::from_timestamp(i)),
-            _ => Err(ValueError),
-        }
-    }
-}
-
 // MARK: From Option<T>
 impl From<Option<i64>> for Value {
     fn from(value: Option<i64>) -> Self {
@@ -227,7 +174,24 @@ impl TryFrom<Value> for Option<Vec<u8>> {
     }
 }
 
-// MARK: From Option<Uuid>
+// MARK: From Uuid
+#[cfg(feature = "uuid")]
+impl From<uuid::Uuid> for Value {
+    fn from(value: uuid::Uuid) -> Self {
+        Value::Blob(value.into_bytes().to_vec())
+    }
+}
+#[cfg(feature = "uuid")]
+impl TryFrom<Value> for uuid::Uuid {
+    type Error = ValueError;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Blob(v) => Ok(uuid::Uuid::from_slice(&v).map_err(|_| ValueError)?),
+            _ => Err(ValueError),
+        }
+    }
+}
+
 #[cfg(feature = "uuid")]
 impl From<Option<uuid::Uuid>> for Value {
     fn from(value: Option<uuid::Uuid>) -> Self {
@@ -250,6 +214,40 @@ impl TryFrom<Value> for Option<uuid::Uuid> {
 }
 
 // MARK: From time
+#[cfg(feature = "time")]
+impl From<time::Date> for Value {
+    fn from(value: time::Date) -> Self {
+        Value::Integer(value.timestamp())
+    }
+}
+#[cfg(feature = "time")]
+impl TryFrom<Value> for time::Date {
+    type Error = ValueError;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Integer(i) => Ok(time::Date::from_timestamp(i)),
+            _ => Err(ValueError),
+        }
+    }
+}
+
+#[cfg(feature = "time")]
+impl From<time::DateTime> for Value {
+    fn from(value: time::DateTime) -> Self {
+        Value::Integer(value.timestamp())
+    }
+}
+#[cfg(feature = "time")]
+impl TryFrom<Value> for time::DateTime {
+    type Error = ValueError;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Integer(i) => Ok(time::DateTime::from_timestamp(i)),
+            _ => Err(ValueError),
+        }
+    }
+}
+
 #[cfg(feature = "time")]
 impl From<Option<time::Date>> for Value {
     fn from(value: Option<time::Date>) -> Self {

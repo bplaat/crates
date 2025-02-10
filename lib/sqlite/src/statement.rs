@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -9,79 +9,7 @@ use std::marker::PhantomData;
 
 use sqlite3_sys::*;
 
-use crate::value::Value;
-
-// MARK: Bind
-/// A trait for binding values to a statement
-pub trait Bind {
-    /// Bind values to a statement
-    fn bind(self, statement: &mut RawStatement);
-}
-
-impl Bind for () {
-    fn bind(self, _statement: &mut RawStatement) {}
-}
-
-impl<T> Bind for T
-where
-    T: Into<Value>,
-{
-    fn bind(self, statement: &mut RawStatement) {
-        statement.bind_value(0, self);
-    }
-}
-
-macro_rules! impl_bind_for_tuple {
-    ($($n:tt: $t:ident),*) => (
-        impl<$($t,)*> Bind for ($($t,)*)
-        where
-            $($t: Into<Value>,)+
-        {
-            fn bind(self, statement: &mut RawStatement)  {
-                $( statement.bind_value($n, self.$n); )*
-            }
-        }
-    );
-}
-impl_bind_for_tuple!(0: A);
-impl_bind_for_tuple!(0: A, 1: B);
-impl_bind_for_tuple!(0: A, 1: B, 2: C);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J, 10: K);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J, 10: K, 11: L);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J, 10: K, 11: L, 12: M);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J, 10: K, 11: L, 12: M, 13: N);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J, 10: K, 11: L, 12: M, 13: N, 14: O);
-impl_bind_for_tuple!(0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J, 10: K, 11: L, 12: M, 13: N, 14: O, 15: P);
-
-// MARK: FromRow
-/// A trait for converting read values from a statement to a row
-pub trait FromRow: Sized {
-    /// Convert read values from a statement to a row
-    fn from_row(statement: &mut RawStatement) -> Self;
-}
-
-impl FromRow for () {
-    fn from_row(_statement: &mut RawStatement) -> Self {}
-}
-
-impl<T> FromRow for T
-where
-    T: TryFrom<Value>,
-{
-    fn from_row(statement: &mut RawStatement) -> Self {
-        match T::try_from(statement.read_value(0)) {
-            Ok(value) => value,
-            Err(_) => panic!("Can't convert Value"),
-        }
-    }
-}
+use crate::{Bind, FromRow, Value};
 
 // MARK: Raw Statement
 /// Raw SQLite statement without type information
@@ -103,9 +31,9 @@ impl RawStatement {
     }
 
     /// Bind a value to the statement
-    pub fn bind_value(&mut self, index: i32, value: impl Into<Value>) {
+    pub fn bind_value(&mut self, index: i32, value: Value) {
         let index = index + 1;
-        let result = match value.into() {
+        let result = match value {
             Value::Null => unsafe { sqlite3_bind_null(self.0, index) },
             Value::Integer(i) => unsafe { sqlite3_bind_int64(self.0, index, i) },
             Value::Real(f) => unsafe { sqlite3_bind_double(self.0, index, f) },
@@ -114,8 +42,8 @@ impl RawStatement {
                     self.0,
                     index,
                     s.as_ptr() as *const c_char,
-                    s.as_bytes().len() as i32,
-                    SQLITE_TRANSIENT,
+                    s.len() as i32,
+                    SQLITE_TRANSIENT(),
                 )
             },
             Value::Blob(b) => unsafe {
@@ -124,7 +52,7 @@ impl RawStatement {
                     index,
                     b.as_ptr() as *const c_void,
                     b.len() as i32,
-                    SQLITE_TRANSIENT,
+                    SQLITE_TRANSIENT(),
                 )
             },
         };
@@ -143,9 +71,9 @@ impl RawStatement {
             SQLITE_FLOAT => Value::Real(unsafe { sqlite3_column_double(self.0, index) }),
             SQLITE_TEXT => {
                 let text = unsafe { sqlite3_column_text(self.0, index) };
-                let text: String = unsafe { CStr::from_ptr(text as *const c_char) }
+                let text = unsafe { CStr::from_ptr(text as *const c_char) }
                     .to_string_lossy()
-                    .into_owned();
+                    .to_string();
                 Value::Text(text)
             }
             SQLITE_BLOB => {
@@ -154,7 +82,7 @@ impl RawStatement {
                 let slice = unsafe { std::slice::from_raw_parts(blob as *const u8, len as usize) };
                 Value::Blob(slice.to_vec())
             }
-            r#type => panic!("Can't read unknown value type from statement: {}", r#type),
+            r#type => unreachable!("Unknown column type: {}", r#type),
         }
     }
 }
@@ -186,7 +114,7 @@ impl<T> Statement<T> {
 
     /// Bind a value to the statement
     pub fn bind_value(&mut self, index: i32, value: impl Into<Value>) {
-        self.0.bind_value(index, value);
+        self.0.bind_value(index, value.into());
     }
 
     /// Read a value from the statement

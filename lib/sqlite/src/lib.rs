@@ -1,16 +1,20 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-//! A SQLite Rust library
+#![doc = include_str!("../README.md")]
 
+pub use crate::bind::Bind;
 pub use crate::connection::{Connection, ConnectionError};
-pub use crate::statement::{Bind, FromRow, RawStatement, Statement};
+pub use crate::from_row::FromRow;
+pub use crate::statement::{RawStatement, Statement};
 pub use crate::value::{Value, ValueError};
 
+mod bind;
 mod connection;
+mod from_row;
 mod statement;
 mod value;
 

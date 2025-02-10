@@ -78,7 +78,7 @@ fn database_open(path: &str) -> Result<sqlite::Connection, sqlite::ConnectionErr
             age INTEGER NOT NULL,
             relation INTEGER NOT NULL,
             created_at INTEGER NOT NULL
-        )",
+        ) STRICT",
         (),
     );
     Ok(database)
@@ -86,11 +86,7 @@ fn database_open(path: &str) -> Result<sqlite::Connection, sqlite::ConnectionErr
 
 fn database_seed(database: &sqlite::Connection) {
     // Insert persons
-    let persons_count = database
-        .query::<i64>("SELECT COUNT(id) FROM persons", ())
-        .next()
-        .expect("Should be some");
-    if persons_count == 0 {
+    if database.query_some::<i64>("SELECT COUNT(id) FROM persons", ()) == 0 {
         database.insert_person(Person {
             name: "Bastiaan".to_string(),
             age_in_years: 20,
@@ -235,14 +231,10 @@ fn persons_index(req: &Request, ctx: &Context) -> Response {
 
     // Get persons
     let search_query = format!("%{}%", query.query.replace("%", "\\%"));
-    let total = ctx
-        .database
-        .query::<i64>(
-            "SELECT COUNT(id) FROM persons WHERE name LIKE ?",
-            search_query.clone(),
-        )
-        .next()
-        .expect("Should be some");
+    let total = ctx.database.query_some::<i64>(
+        "SELECT COUNT(id) FROM persons WHERE name LIKE ?",
+        search_query.clone(),
+    );
     let persons = ctx
         .database
         .query::<Person>(
