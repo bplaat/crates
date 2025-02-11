@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 _Placeholder_
 
+## [0.1.2] - 2025-02-11
+
+### Fixed
+
+-   Use `static` instead of `const` for regex codegen to avoid inlining.
+
 ## [0.1.1] - 2025-02-04
 
 ### Changed
@@ -25,6 +31,7 @@ _Placeholder_
 
 _Initial release_
 
-[Unreleased]: https://github.com/bplaat/crates/compare/simple-useragent%2Fv0.1.1...HEAD
+[Unreleased]: https://github.com/bplaat/crates/compare/simple-useragent%2Fv0.1.2...HEAD
+[0.1.2]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.2
 [0.1.1]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.1
 [0.1.0]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.0
