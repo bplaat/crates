@@ -4,9 +4,24 @@ A simple and minimal Rust SQLite library with an ergonomic API
 
 ## Example
 
-A simple example that connects, creates a table, inserts rows, and reads them back:
+A example that inserts and reads rows from and too structs:
 
 ```rs
+use bsqlite::{Connection, FromRow};
+
+#[derive(FromRow)]
+struct NewPerson {
+    name: String,
+    age: i64,
+}
+
+#[derive(Debug, FromRow)]
+struct Person {
+    id: i64,
+    name: String,
+    age: i64,
+}
+
 fn main() {
     // Connect and create table
     let db = Connection::open_memory().expect("Can't open database");
@@ -19,17 +34,35 @@ fn main() {
         (),
     );
 
-    // Insert row
-    db.execute(
-        "INSERT INTO persons (name, age) VALUES (?, ?)",
-        ("Bastiaan".to_string(), 22),
-    );
+    // Insert a rows
+    let persons = [
+        NewPerson {
+            name: "Alice".to_string(),
+            age: 30,
+        },
+        NewPerson {
+            name: "Bob".to_string(),
+            age: 40,
+        },
+    ];
+    for person in persons {
+        db.execute(
+            format!(
+                "INSERT INTO persons ({}) VALUES ({})",
+                NewPerson::columns(),
+                NewPerson::values()
+            ),
+            person,
+        );
+    }
 
-    // Read row back
-    let row = db
-        .query::<(String, i64)>("SELECT name, age FROM persons", ())
-        .next();
-    println!("{:?}", row); // -> ("Bastiaan", 22)
+    // Read rows back
+    let persons = db
+        .query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())
+        .collect::<Vec<_>>();
+    for person in &persons {
+        println!("{:?}", person); // -> Person { id: 1, name: "Alice", age: 30 }
+    }
 }
 ```
 
