@@ -57,9 +57,13 @@ impl RawStatement {
             },
         };
         if result != SQLITE_OK {
+            let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0)) }.to_string_lossy();
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0))) }
                 .to_string_lossy();
-            panic!("Can't bind value to statement: {}", error);
+            panic!(
+                "bsqlite: Can't bind value to statement!\n  Query: {}\n  Error: {}",
+                query, error
+            );
         }
     }
 
@@ -136,9 +140,13 @@ where
         } else if result == SQLITE_DONE {
             None
         } else {
+            let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0 .0)) }.to_string_lossy();
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0 .0))) }
                 .to_string_lossy();
-            panic!("Can't step statement: {}", error);
+            panic!(
+                "bsqlite: Can't step statement!\n  Query: {}\n  Error: {}",
+                query, error
+            );
         }
     }
 }

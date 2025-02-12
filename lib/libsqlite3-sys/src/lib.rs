@@ -52,6 +52,7 @@ extern "C" {
 
     // sqlite3_stmt
     pub fn sqlite3_db_handle(pStmt: *mut sqlite3_stmt) -> *mut sqlite3;
+    pub fn sqlite3_sql(pStmt: *mut sqlite3_stmt) -> *const c_char;
     pub fn sqlite3_step(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_reset(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_finalize(pStmt: *mut sqlite3_stmt) -> c_int;

@@ -8,7 +8,7 @@
 
 use std::net::{Ipv4Addr, TcpListener};
 
-use bsqlite::{Connection, ConnectionError, FromRow, FromValue};
+use bsqlite::{Connection, FromRow, FromValue};
 use chrono::{DateTime, Utc};
 use from_enum::FromEnum;
 use http::{Method, Request, Response, Status};
@@ -40,18 +40,19 @@ struct Context {
 
 impl Context {
     fn with_database(path: &str) -> Self {
-        let database = database_open(path).expect("Can't open database");
+        let database = Connection::open(path).expect("Can't open database");
         database.enable_wal_logging();
         database.apply_various_performance_settings();
+        database_create_tables(&database);
         database_seed(&database);
         Self { database }
     }
 
     #[cfg(test)]
     fn with_test_database() -> Self {
-        Self {
-            database: database_open(":memory:").expect("Can't open database"),
-        }
+        let database = Connection::open_memory().expect("Can't open database");
+        database_create_tables(&database);
+        Self { database }
     }
 }
 
@@ -72,8 +73,7 @@ impl DatabaseHelpers for Connection {
     }
 }
 
-fn database_open(path: &str) -> Result<Connection, ConnectionError> {
-    let database = Connection::open(path)?;
+fn database_create_tables(database: &Connection) {
     database.execute(
         "CREATE TABLE IF NOT EXISTS persons(
             id BLOB PRIMARY KEY,
@@ -84,7 +84,6 @@ fn database_open(path: &str) -> Result<Connection, ConnectionError> {
         ) STRICT",
         (),
     );
-    Ok(database)
 }
 
 fn database_seed(database: &Connection) {

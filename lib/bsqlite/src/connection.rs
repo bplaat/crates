@@ -63,7 +63,10 @@ impl InnerConnection {
         };
         if result != SQLITE_OK {
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(self.0)) }.to_string_lossy();
-            panic!("Failed to prepare statement: {}", error);
+            panic!(
+                "bsqlite: Failed to prepare SQL statement!\n  Query: {}\n  Error: {}",
+                query, error
+            );
         }
         Statement::new(statement)
     }
@@ -120,6 +123,11 @@ impl Connection {
     /// Open a connection to a SQLite database
     pub fn open(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
         Ok(Connection(Arc::new(InnerConnection::open(path.as_ref())?)))
+    }
+
+    /// Open a memory database
+    pub fn open_memory() -> Result<Self, ConnectionError> {
+        Self::open(":memory:")
     }
 
     /// Set the journal mode to Write-Ahead Logging for better concurrency throughput
@@ -197,9 +205,9 @@ mod test {
 
     #[test]
     fn test_open_db_execute_queries() {
-        let db = Connection::open(":memory:").unwrap();
+        let db = Connection::open_memory().unwrap();
         db.execute(
-            "CREATE TABLE persons (id INTEGER PRIMARY KEY, name TEXT, age INTEGER) STRICT",
+            "CREATE TABLE persons (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER) STRICT",
             (),
         );
         db.execute(
