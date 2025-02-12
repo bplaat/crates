@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A very basic thread pool library
+//! A minimal replacement for the [threadpool](https://crates.io/crates/threadpool
 
 #![forbid(unsafe_code)]
 

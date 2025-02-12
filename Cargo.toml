@@ -22,4 +22,5 @@ bsqlite_derive = { path = "lib/bsqlite_derive" }
 chrono = { path = "lib/chrono" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
+threadpool = { path = "lib/threadpool" }
 uuid = { path = "lib/uuid" }
