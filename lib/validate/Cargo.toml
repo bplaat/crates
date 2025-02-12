@@ -15,6 +15,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 regex = { version = "1.11", default-features = false, optional = true }
 
 [features]
+default = ["derive"]
 derive = ["dep:validate_derive"]
 email = ["dep:regex", "validate_derive/email"]
 url = ["dep:regex", "validate_derive/url"]

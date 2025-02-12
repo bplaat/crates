@@ -10,6 +10,7 @@ _Placeholder_
 
 ### Changed
 
+-   Make the `derive` feature default.
 -   Improved error message they now also include the query string.
 
 ### Added

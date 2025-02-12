@@ -12,14 +12,10 @@ workspace = true
 from_enum = { path = "../../lib/from_enum" }
 http = { path = "../../lib/http", features = ["json"] }
 router = { path = "../../lib/router" }
-bsqlite = { path = "../../lib/bsqlite", features = [
-    "derive",
-    "uuid",
-    "chrono",
-] }
+bsqlite = { path = "../../lib/bsqlite", features = ["uuid", "chrono"] }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 uuid = { version = "1.0", features = ["v7", "serde"] }
-validate = { path = "../../lib/validate", features = ["derive", "serde"] }
+validate = { path = "../../lib/validate", features = ["serde"] }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -32,7 +28,6 @@ openapi-generator = { path = "../../lib/openapi-generator" }
 [target.'cfg(any(target_env = "musl", windows))'.dependencies]
 bsqlite = { path = "../../lib/bsqlite", features = [
     "bundled",
-    "derive",
     "uuid",
     "chrono",
 ] }
