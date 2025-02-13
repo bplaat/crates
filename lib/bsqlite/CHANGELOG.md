@@ -10,7 +10,7 @@ _Placeholder_
 
 ### Changed
 
--   Examples use `formatcp!()` macro to const format the query string.
+-   Examples use `formatcp!()` macro for const formatting of the query string.
 
 ### Added
 
