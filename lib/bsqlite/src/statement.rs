@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::marker::PhantomData;
 
 use libsqlite3_sys::*;
@@ -30,7 +30,7 @@ impl RawStatement {
         params.bind(self);
     }
 
-    /// Bind a value to the statement
+    /// Bind value to the statement
     pub fn bind_value(&mut self, index: i32, value: Value) {
         let index = index + 1;
         let result = match value {
@@ -65,6 +65,16 @@ impl RawStatement {
                 query, error
             );
         }
+    }
+
+    /// Bind named value to the statement
+    pub fn bind_named_value(&mut self, name: &str, value: Value) {
+        let c_name = CString::new(name).expect("Can't convert to CString");
+        let index = unsafe { sqlite3_bind_parameter_index(self.0, c_name.as_ptr()) };
+        if index == 0 {
+            panic!("bsqlite: Can't find named parameter: {}", name);
+        }
+        self.bind_value(index - 1, value);
     }
 
     /// Read a value from the statement
@@ -116,9 +126,14 @@ impl<T> Statement<T> {
         self.0.bind(params);
     }
 
-    /// Bind a value to the statement
+    /// Bind value to the statement
     pub fn bind_value(&mut self, index: i32, value: impl Into<Value>) {
         self.0.bind_value(index, value.into());
+    }
+
+    /// Bind named value to the statement
+    pub fn bind_named_value(&mut self, name: &str, value: impl Into<Value>) {
+        self.0.bind_named_value(name, value.into());
     }
 
     /// Read a value from the statement

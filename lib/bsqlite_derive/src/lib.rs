@@ -21,7 +21,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
     let (fields, has_skipped) = match input.data {
         syn::Data::Struct(data) => {
             let fields_len = data.fields.len();
-            let fields: Vec<_> = data
+            let fields = data
                 .fields
                 .into_iter()
                 .filter_map(|field| {
@@ -62,7 +62,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
                     }
                     Some((field, field_name))
                 })
-                .collect();
+                .collect::<Vec<_>>();
             let has_skipped = fields.len() != fields_len;
             (fields, has_skipped)
         }
@@ -99,10 +99,10 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         impl #name {
-            pub fn columns() -> &'static str {
+            pub const fn columns() -> &'static str {
                 #columns
             }
-            pub fn values() -> &'static str {
+            pub const fn values() -> &'static str {
                 #values
             }
         }

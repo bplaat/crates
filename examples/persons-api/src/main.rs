@@ -8,8 +8,9 @@
 
 use std::net::{Ipv4Addr, TcpListener};
 
-use bsqlite::{Connection, FromRow, FromValue};
+use bsqlite::{execute_args, query_args, Connection, FromRow, FromValue};
 use chrono::{DateTime, Utc};
+use const_format::formatcp;
 use from_enum::FromEnum;
 use http::{Method, Request, Response, Status};
 use router::{Router, RouterBuilder};
@@ -63,7 +64,7 @@ trait DatabaseHelpers {
 impl DatabaseHelpers for Connection {
     fn insert_person(&self, person: Person) {
         self.execute(
-            format!(
+            formatcp!(
                 "INSERT INTO persons ({}) VALUES ({})",
                 Person::columns(),
                 Person::values()
@@ -237,17 +238,21 @@ fn persons_index(req: &Request, ctx: &Context) -> Response {
         "SELECT COUNT(id) FROM persons WHERE name LIKE ?",
         search_query.clone(),
     );
-    let persons = ctx
-        .database
-        .query::<Person>(
-            format!(
-                "SELECT {} FROM persons WHERE name LIKE ? LIMIT ? OFFSET ?",
-                Person::columns()
-            ),
-            (search_query, query.limit, (query.page - 1) * query.limit),
-        )
-        .map(Into::<api::Person>::into)
-        .collect::<Vec<_>>();
+    let persons = query_args!(
+        Person,
+        ctx.database,
+        formatcp!(
+            "SELECT {} FROM persons WHERE name LIKE :search_query LIMIT :limit OFFSET :offset",
+            Person::columns()
+        ),
+        Args {
+            search_query: search_query,
+            limit: query.limit,
+            offset: (query.page - 1) * query.limit
+        }
+    )
+    .map(Into::<api::Person>::into)
+    .collect::<Vec<_>>();
 
     // Return persons
     Response::with_json(api::PersonIndexResponse {
@@ -319,7 +324,7 @@ fn get_person(req: &Request, ctx: &Context) -> Option<Person> {
     // Get person
     ctx.database
         .query::<Person>(
-            format!(
+            formatcp!(
                 "SELECT {} FROM persons WHERE id = ? LIMIT 1",
                 Person::columns()
             ),
@@ -361,9 +366,15 @@ fn persons_update(req: &Request, ctx: &Context) -> Response {
     person.name = body.name;
     person.age_in_years = body.age_in_years;
     person.relation = body.relation;
-    ctx.database.execute(
-        "UPDATE persons SET name = ?, age = ? WHERE id = ?",
-        (person.name.clone(), person.age_in_years, person.id),
+    execute_args!(
+        ctx.database,
+        "UPDATE persons SET name = :name, age = :age, relation = :relation WHERE id = :id",
+        Args {
+            id: person.id,
+            name: person.name.clone(),
+            age: person.age_in_years,
+            relation: person.relation
+        }
     );
 
     // Return updated person

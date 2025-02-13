@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A example that inserts and reads rows with tuples with a raw binded parameters.
+//! A example that inserts and reads rows with tuples with a raw name binded parameters.
 
 use bsqlite::Connection;
 
@@ -21,14 +21,14 @@ fn main() {
     );
 
     // Insert a rows by preparing a statement and raw binding values
-    let mut stat = db.prepare::<()>("INSERT INTO persons (name, age) VALUES (?, ?)");
-    stat.bind_value(0, "Alice".to_string());
-    stat.bind_value(1, 30);
+    let mut stat = db.prepare::<()>("INSERT INTO persons (name, age) VALUES (:name, :age)");
+    stat.bind_named_value(":name", "Alice".to_string());
+    stat.bind_named_value(":age", 30);
     stat.next(); // Execute the statement
     stat.reset(); // Reset to rebind values
 
-    stat.bind_value(0, "Bob".to_string());
-    stat.bind_value(1, 40);
+    stat.bind_named_value(":name", "Bob".to_string());
+    stat.bind_named_value(":age", 40);
     stat.next();
 
     // Read rows

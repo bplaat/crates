@@ -24,12 +24,8 @@ impl InnerConnection {
     fn open(path: &Path) -> Result<Self, ConnectionError> {
         // Open database
         let mut db = ptr::null_mut();
-        let path = CString::new(
-            path.to_str()
-                .expect("Can't convert &Path to CString")
-                .as_bytes(),
-        )
-        .expect("Can't convert &Path to CString");
+        let path = CString::new(path.to_str().expect("Can't convert to CString").as_bytes())
+            .expect("Can't convert to CString");
         let result = unsafe {
             sqlite3_open_v2(
                 path.as_ptr(),
@@ -198,6 +194,32 @@ impl Connection {
     }
 }
 
+// MARK: Macros
+
+/// Run a query with named arguments
+#[macro_export]
+macro_rules! query_args {
+    ($t:tt, $db:expr, $query:expr, Args { $($key:ident : $value:expr),* $(,)? } $(,)?) => {{
+        let mut stat = $db.prepare::<$t>($query);
+        $(
+            stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value));
+        )*
+        stat
+    }};
+}
+
+/// Execute a query with named arguments
+#[macro_export]
+macro_rules! execute_args {
+    ($db:expr, $query:expr, Args { $($key:ident : $value:expr),* $(,)? } $(,)?) => {{
+        let mut stat = $db.prepare::<()>($query);
+        $(
+            stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value));
+        )*
+        stat.next();
+    }};
+}
+
 // MARK: Tests
 #[cfg(test)]
 mod test {
@@ -211,8 +233,16 @@ mod test {
             (),
         );
         db.execute(
-            "INSERT INTO persons (name, age) VALUES (?, ?), (?, ?)",
-            ("Alice".to_string(), 30, "Bob".to_string(), 40),
+            "INSERT INTO persons (name, age) VALUES (?, ?)",
+            ("Alice".to_string(), 30),
+        );
+        execute_args!(
+            db,
+            "INSERT INTO persons (name, age) VALUES (:name, :age)",
+            Args {
+                name: "Bob".to_string(),
+                age: 40,
+            },
         );
 
         let total = db.query_some::<i64>("SELECT COUNT(id) FROM persons", ());

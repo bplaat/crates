@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 _Placeholder_
 
+## [0.1.2] - 2025-02-13
+
+### Changed
+
+-   Examples use `formatcp!()` macro to const format the query string.
+
+### Added
+
+-   Add `Statement::bind_named()` function to bind named parameters to a statement.
+-   Add `query_args!()` and `execute_args!()` macros to bind with struct named parameters to a query or execute statement.
+-   Add more examples about the added features.
+
 ## [0.1.1] - 2025-02-12
 
 ### Changed
@@ -22,6 +34,7 @@ _Placeholder_
 
 _Initial release_
 
-[Unreleased]: https://github.com/bplaat/crates/compare/bsqlite%2Fv0.1.1...HEAD
+[Unreleased]: https://github.com/bplaat/crates/compare/bsqlite%2Fv0.1.2...HEAD
+[0.1.2]: https://github.com/bplaat/crates/releases/tag/bsqlite%2Fv0.1.2
 [0.1.1]: https://github.com/bplaat/crates/releases/tag/bsqlite%2Fv0.1.1
 [0.1.0]: https://github.com/bplaat/crates/releases/tag/bsqlite%2Fv0.1.0

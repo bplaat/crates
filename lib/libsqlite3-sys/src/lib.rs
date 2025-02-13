@@ -56,6 +56,7 @@ extern "C" {
     pub fn sqlite3_step(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_reset(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_finalize(pStmt: *mut sqlite3_stmt) -> c_int;
+    pub fn sqlite3_bind_parameter_index(pStmt: *mut sqlite3_stmt, zName: *const c_char) -> c_int;
     pub fn sqlite3_bind_null(pStmt: *mut sqlite3_stmt, i: c_int) -> c_int;
     pub fn sqlite3_bind_int64(pStmt: *mut sqlite3_stmt, i: c_int, value: i64) -> c_int;
     pub fn sqlite3_bind_double(pStmt: *mut sqlite3_stmt, i: c_int, value: f64) -> c_int;
