@@ -9,12 +9,12 @@
 #![forbid(unsafe_code)]
 
 use std::error::Error;
-use std::fmt::{self, Display, Formatter, Write};
+use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::str::FromStr;
 
 // MARK: Uuid
 /// UUID
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Uuid([u8; 16]);
 
 impl Uuid {
@@ -92,6 +92,14 @@ impl FromStr for Uuid {
             n += 1;
         }
         Ok(Uuid(bytes))
+    }
+}
+
+impl Debug for Uuid {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("Uuid(")?;
+        Display::fmt(self, f)?;
+        f.write_str(")")
     }
 }
 

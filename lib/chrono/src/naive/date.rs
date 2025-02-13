@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Add, Sub};
 use std::str::FromStr;
 use std::time::Duration;
@@ -114,6 +114,14 @@ impl Display for NaiveDate {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let (year, month, day) = timestamp_to_ymd(self.0);
         write!(f, "{:04}-{:02}-{:02}", year, month, day)
+    }
+}
+
+impl Debug for NaiveDate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("NaiveDate(")?;
+        Display::fmt(self, f)?;
+        f.write_str(")")
     }
 }
 

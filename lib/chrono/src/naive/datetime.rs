@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Add, Sub};
 use std::str::FromStr;
 use std::time::Duration;
@@ -107,6 +107,14 @@ impl Display for NaiveDateTime {
             (day_sec % 3600) / 60,
             day_sec % 60
         )
+    }
+}
+
+impl Debug for NaiveDateTime {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("NaiveDate(")?;
+        Display::fmt(self, f)?;
+        f.write_str(")")
     }
 }
 
