@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -16,12 +16,18 @@ struct Args {
     output: String,
 }
 
+impl Default for Args {
+    fn default() -> Self {
+        Self {
+            input: "openapi.yaml".to_string(),
+            generator: Generator::Rust,
+            output: "api.rs".to_string(),
+        }
+    }
+}
+
 fn parse_args() -> Args {
-    let mut args = Args {
-        input: "openapi.yaml".to_string(),
-        generator: Generator::Rust,
-        output: "api.rs".to_string(),
-    };
+    let mut args = Args::default();
     let mut args_iter = std::env::args().skip(1);
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {

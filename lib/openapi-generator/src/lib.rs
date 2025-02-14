@@ -12,7 +12,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 mod generators;
-pub mod openapi;
+pub(crate) mod openapi;
 mod utils;
 
 /// Generator type
@@ -37,7 +37,7 @@ impl FromStr for Generator {
 /// Generate schemas for build.rs
 pub fn generate_schemas_build(spec_path: impl AsRef<Path>, output_path: impl AsRef<Path>) {
     generate_schemas(spec_path.as_ref(), Generator::Rust, output_path.as_ref());
-    println!("cargo::rerun-if-changed=build.rs");
+    println!("cargo::rerun-if-changed={}", spec_path.as_ref().display());
 }
 
 /// Generate schemas
