@@ -67,19 +67,6 @@ impl InnerConnection {
         Statement::new(statement)
     }
 
-    fn query<T>(&self, query: &str, params: impl Bind) -> Statement<T>
-    where
-        T: FromRow,
-    {
-        let mut statement = self.prepare::<T>(query);
-        statement.bind(params);
-        statement
-    }
-
-    fn execute(&self, query: &str, params: impl Bind) {
-        self.query::<()>(query, params).next();
-    }
-
     fn affected_rows(&self) -> i32 {
         unsafe { sqlite3_changes(self.0) }
     }
@@ -165,7 +152,9 @@ impl Connection {
     where
         T: FromRow,
     {
-        self.0.query(query.as_ref(), params)
+        let mut statement = self.prepare::<T>(query);
+        statement.bind(params);
+        statement
     }
 
     /// Run a query, read and expect the first row
@@ -180,7 +169,7 @@ impl Connection {
 
     /// Execute a query
     pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
-        self.0.execute(query.as_ref(), params);
+        self.query::<()>(query, params).next();
     }
 
     /// Get the number of affected rows
