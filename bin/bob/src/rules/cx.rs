@@ -17,7 +17,7 @@ use regex::Regex;
 use crate::manifest::BundleMetadata;
 use crate::{create_file_with_dirs, index_files, Profile, Project};
 
-pub(crate) fn generate_cx_common(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_cx_common(f: &mut dyn Write, project: &Project) {
     if project.is_test {
         generate_test_main(project);
     }
@@ -42,7 +42,7 @@ pub(crate) fn generate_cx_common(f: &mut impl Write, project: &Project) {
     _ = writeln!(f);
 }
 
-pub(crate) fn generate_c(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_c(f: &mut dyn Write, project: &Project) {
     let c_source_files = project
         .source_files
         .iter()
@@ -66,7 +66,7 @@ pub(crate) fn generate_c(f: &mut impl Write, project: &Project) {
     }
 }
 
-pub(crate) fn generate_cpp(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_cpp(f: &mut dyn Write, project: &Project) {
     let cpp_source_files = project
         .source_files
         .iter()
@@ -84,7 +84,7 @@ pub(crate) fn generate_cpp(f: &mut impl Write, project: &Project) {
     }
 }
 
-pub(crate) fn generate_objc(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_objc(f: &mut dyn Write, project: &Project) {
     let m_source_files = project
         .source_files
         .iter()
@@ -102,7 +102,7 @@ pub(crate) fn generate_objc(f: &mut impl Write, project: &Project) {
     }
 }
 
-pub(crate) fn generate_objcpp(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_objcpp(f: &mut dyn Write, project: &Project) {
     let mm_source_files = project
         .source_files
         .iter()
@@ -124,7 +124,7 @@ pub(crate) fn generate_objcpp(f: &mut impl Write, project: &Project) {
     }
 }
 
-pub(crate) fn generate_ld(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_ld(f: &mut dyn Write, project: &Project) {
     let mut object_files = Vec::new();
     let mut contains_cpp = false;
     let mut contains_objc = false;
@@ -218,7 +218,7 @@ pub(crate) fn generate_ld(f: &mut impl Write, project: &Project) {
     );
 }
 
-pub(crate) fn generate_bundle(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_bundle(f: &mut dyn Write, project: &Project) {
     let bundle = &project
         .manifest
         .package

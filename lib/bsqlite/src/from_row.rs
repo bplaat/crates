@@ -16,10 +16,7 @@ impl FromRow for () {
     fn from_row(_statement: &mut RawStatement) -> Self {}
 }
 
-impl<T> FromRow for T
-where
-    T: TryFrom<Value>,
-{
+impl<T: TryFrom<Value>> FromRow for T {
     fn from_row(statement: &mut RawStatement) -> Self {
         match T::try_from(statement.read_value(0)) {
             Ok(value) => value,

@@ -43,10 +43,7 @@ impl InnerConnection {
         Ok(InnerConnection(db))
     }
 
-    fn prepare<T>(&self, query: &str) -> Statement<T>
-    where
-        T: FromRow,
-    {
+    fn prepare<T: FromRow>(&self, query: &str) -> Statement<T> {
         let mut statement = ptr::null_mut();
         let result = unsafe {
             sqlite3_prepare_v2(
@@ -140,36 +137,27 @@ impl Connection {
     }
 
     /// Prepare a statement
-    pub fn prepare<T>(&self, query: impl AsRef<str>) -> Statement<T>
-    where
-        T: FromRow,
-    {
+    pub fn prepare<T: FromRow>(&self, query: impl AsRef<str>) -> Statement<T> {
         self.0.prepare(query.as_ref())
     }
 
     /// Run a query
-    pub fn query<T>(&self, query: impl AsRef<str>, params: impl Bind) -> Statement<T>
-    where
-        T: FromRow,
-    {
-        let mut statement = self.prepare::<T>(query);
+    pub fn query<T: FromRow>(&self, query: impl AsRef<str>, params: impl Bind) -> Statement<T> {
+        let mut statement = self.prepare::<T>(query.as_ref());
         statement.bind(params);
         statement
     }
 
     /// Run a query, read and expect the first row
-    pub fn query_some<T>(&self, query: impl AsRef<str>, params: impl Bind) -> T
-    where
-        T: FromRow,
-    {
-        self.query::<T>(query, params)
+    pub fn query_some<T: FromRow>(&self, query: impl AsRef<str>, params: impl Bind) -> T {
+        self.query::<T>(query.as_ref(), params)
             .next()
             .expect("Should be some")
     }
 
     /// Execute a query
     pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
-        self.query::<()>(query, params).next();
+        self.query::<()>(query.as_ref(), params).next();
     }
 
     /// Get the number of affected rows

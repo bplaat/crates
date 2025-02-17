@@ -85,8 +85,8 @@ impl WebviewBuilder {
     }
 
     /// Set title
-    pub fn title(mut self, title: impl AsRef<str>) -> Self {
-        self.title = title.as_ref().to_string();
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = title.into();
         self
     }
 
@@ -128,14 +128,14 @@ impl WebviewBuilder {
     }
 
     /// Load URL
-    pub fn load_url(mut self, url: impl AsRef<str>) -> Self {
-        self.should_load_url = Some(url.as_ref().to_string());
+    pub fn load_url(mut self, url: impl Into<String>) -> Self {
+        self.should_load_url = Some(url.into());
         self
     }
 
     /// Load HTML string
-    pub fn load_html(mut self, html: impl AsRef<str>) -> Self {
-        self.should_load_html = Some(html.as_ref().to_string());
+    pub fn load_html(mut self, html: impl Into<String>) -> Self {
+        self.should_load_html = Some(html.into());
         self
     }
 

@@ -173,42 +173,42 @@ impl<T: Clone> RouterBuilder<T> {
     }
 
     /// Add route
-    pub fn route(mut self, methods: &[Method], route: &str, handler: HandlerFn<T>) -> Self {
+    pub fn route(mut self, methods: &[Method], route: String, handler: HandlerFn<T>) -> Self {
         self.routes.push(Route::new(
             methods.to_vec(),
-            route.to_string(),
+            route,
             Handler::new(handler, self.pre_layers.clone(), self.post_layers.clone()),
         ));
         self
     }
 
     /// Add route for any method
-    pub fn any(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
+    pub fn any(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
         self.route(
             &[Method::Get, Method::Post, Method::Put, Method::Delete],
-            route.as_ref(),
+            route.into(),
             handler,
         )
     }
 
     /// Add route for GET method
-    pub fn get(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Get], route.as_ref(), handler)
+    pub fn get(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Get], route.into(), handler)
     }
 
     /// Add route for POST method
-    pub fn post(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Post], route.as_ref(), handler)
+    pub fn post(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Post], route.into(), handler)
     }
 
     /// Add route for PUT method
-    pub fn put(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Put], route.as_ref(), handler)
+    pub fn put(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Put], route.into(), handler)
     }
 
     /// Add route for DELETE method
-    pub fn delete(self, route: impl AsRef<str>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Delete], route.as_ref(), handler)
+    pub fn delete(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Delete], route.into(), handler)
     }
 
     /// Set fallback handler

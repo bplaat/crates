@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::str::{self};
 
 use crate::enums::{Status, Version};
 use crate::serve::KEEP_ALIVE_TIMEOUT;
@@ -47,14 +46,13 @@ impl Response {
     }
 
     /// Create new response with header
-    pub fn with_header(name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
-        Self::default().header(name, value)
+    pub fn with_header(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::default().header(name.into(), value.into())
     }
 
     /// Set header
-    pub fn header(mut self, name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
-        self.headers
-            .insert(name.as_ref().to_string(), value.as_ref().to_string());
+    pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(name.into(), value.into());
         self
     }
 
@@ -90,19 +88,18 @@ impl Response {
     }
 
     /// Create new response with redirect header
-    pub fn with_redirect(location: impl AsRef<str>) -> Self {
-        Self::default().redirect(location)
+    pub fn with_redirect(location: impl Into<String>) -> Self {
+        Self::default().redirect(location.into())
     }
 
     /// Set redirect header
-    pub fn redirect(mut self, location: impl AsRef<str>) -> Self {
+    pub fn redirect(mut self, location: impl Into<String>) -> Self {
         self.status = Status::TemporaryRedirect;
-        self.headers
-            .insert("Location".to_string(), location.as_ref().to_string());
+        self.headers.insert("Location".to_string(), location.into());
         self
     }
 
-    pub(crate) fn read_from_stream(stream: &mut impl Read) -> Result<Self, InvalidResponseError> {
+    pub(crate) fn read_from_stream(stream: &mut dyn Read) -> Result<Self, InvalidResponseError> {
         let mut reader = BufReader::new(stream);
 
         // Read first line
@@ -151,7 +148,7 @@ impl Response {
         Ok(res)
     }
 
-    pub(crate) fn write_to_stream(mut self, stream: &mut impl Write, req: &Request) {
+    pub(crate) fn write_to_stream(mut self, stream: &mut dyn Write, req: &Request) {
         // Finish headers
         #[cfg(feature = "date")]
         self.headers

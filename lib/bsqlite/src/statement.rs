@@ -142,10 +142,7 @@ impl<T> Statement<T> {
     }
 }
 
-impl<T> Iterator for Statement<T>
-where
-    T: FromRow,
-{
+impl<T: FromRow> Iterator for Statement<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {

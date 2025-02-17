@@ -12,7 +12,7 @@ use indexmap::IndexMap;
 
 use crate::{Profile, Project};
 
-pub(crate) fn generate_java(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_java(f: &mut dyn Write, project: &Project) {
     let modules = find_modules(&project.source_files);
     let module_dependencies = find_dependencies(project, &modules);
 
@@ -60,7 +60,7 @@ pub(crate) fn generate_java(f: &mut impl Write, project: &Project) {
     }
 }
 
-pub(crate) fn generate_jar(f: &mut impl Write, project: &Project) {
+pub(crate) fn generate_jar(f: &mut dyn Write, project: &Project) {
     let modules = find_modules(&project.source_files);
     let jar_metadata = &project
         .manifest

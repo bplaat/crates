@@ -75,9 +75,8 @@ impl Request {
     }
 
     /// Set header
-    pub fn header(mut self, name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
-        self.headers
-            .insert(name.as_ref().to_string(), value.as_ref().to_string());
+    pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(name.into(), value.into());
         self
     }
 
@@ -88,7 +87,7 @@ impl Request {
     }
 
     pub(crate) fn read_from_stream(
-        stream: &mut impl Read,
+        stream: &mut dyn Read,
         client_addr: SocketAddr,
     ) -> Result<Request, InvalidRequestError> {
         let mut reader = BufReader::new(stream);
@@ -169,7 +168,7 @@ impl Request {
         })
     }
 
-    pub(crate) fn write_to_stream(mut self, stream: &mut impl Write) {
+    pub(crate) fn write_to_stream(mut self, stream: &mut dyn Write) {
         // Finish headers
         let authority = self.url.authority.as_ref().expect("Invalid url");
         self.headers.insert(

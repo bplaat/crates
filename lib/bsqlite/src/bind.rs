@@ -16,10 +16,7 @@ impl Bind for () {
     fn bind(self, _statement: &mut RawStatement) {}
 }
 
-impl<T> Bind for T
-where
-    T: Into<Value>,
-{
+impl<T: Into<Value>> Bind for T {
     fn bind(self, statement: &mut RawStatement) {
         statement.bind_value(0, self.into());
     }

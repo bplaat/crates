@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 use std::fs;
+use std::path::Path;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -23,8 +24,8 @@ static RE_MULTIPLE_SPACES: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\s{2,}").expect("Should compile"));
 
 /// Minify the given html
-pub fn minify(html: impl AsRef<str>) -> String {
-    fn inner(html: &str) -> String {
+pub fn minify(html: impl Into<String>) -> String {
+    fn inner(html: String) -> String {
         let mut result = html.to_string();
         result = RE_COMMENTS.replace_all(&result, "").to_string();
         result = RE_WHITESPACE_BETWEEN_TAGS
@@ -36,13 +37,13 @@ pub fn minify(html: impl AsRef<str>) -> String {
         result = RE_MULTIPLE_SPACES.replace_all(&result, " ").to_string();
         result
     }
-    inner(html.as_ref())
+    inner(html.into())
 }
 
 /// Minify the html file at the given input path and write the minified html to the output path
 pub fn minify_file(
-    input_path: impl AsRef<str>,
-    output_path: impl AsRef<str>,
+    input_path: impl AsRef<Path>,
+    output_path: impl AsRef<Path>,
 ) -> std::io::Result<()> {
     let html = fs::read_to_string(input_path.as_ref())?;
     fs::write(output_path.as_ref(), minify(&html))?;

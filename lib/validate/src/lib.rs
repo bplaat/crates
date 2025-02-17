@@ -23,9 +23,9 @@ pub struct Error {
 }
 impl Error {
     /// Create validate error
-    pub fn new(message: impl AsRef<str>) -> Self {
+    pub fn new(message: impl Into<String>) -> Self {
         Self {
-            message: message.as_ref().to_string(),
+            message: message.into(),
         }
     }
 
@@ -64,11 +64,8 @@ impl Report {
     }
 
     /// Insert error for field
-    pub fn insert_error(&mut self, field: impl AsRef<str>, message: impl AsRef<str>) {
-        self.0
-            .entry(field.as_ref().to_string())
-            .or_default()
-            .push(message.as_ref().to_string());
+    pub fn insert_error(&mut self, field: impl Into<String>, message: impl Into<String>) {
+        self.0.entry(field.into()).or_default().push(message.into());
     }
 }
 
@@ -76,13 +73,10 @@ impl Report {
 /// Validate trait
 pub trait Validate {
     /// Validate context
-    type Context;
+    type Context: Default;
 
     /// Validate self
-    fn validate(&self) -> std::result::Result<(), Report>
-    where
-        Self::Context: Default,
-    {
+    fn validate(&self) -> std::result::Result<(), Report> {
         let ctx = Self::Context::default();
         self.validate_with(&ctx)
     }
