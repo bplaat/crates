@@ -142,12 +142,44 @@ impl Response {
         }
 
         // Read body
+        if let Some(transfer_encoding) = res.headers.get("Transfer-Encoding") {
+            if transfer_encoding == "chunked" {
+                let mut body = Vec::new();
+                loop {
+                    // Read chunk size
+                    let mut size_line = String::new();
+                    reader
+                        .read_line(&mut size_line)
+                        .map_err(|_| InvalidResponseError)?;
+                    let size = usize::from_str_radix(size_line.trim(), 16)
+                        .map_err(|_| InvalidResponseError)?;
+                    if size == 0 {
+                        break;
+                    }
+
+                    // Read chunk
+                    let mut chunk = vec![0; size];
+                    reader
+                        .read_exact(&mut chunk)
+                        .map_err(|_| InvalidResponseError)?;
+                    body.extend_from_slice(&chunk);
+
+                    // Read the trailing \r\n after each chunk
+                    let mut crlf = [0; 2];
+                    reader
+                        .read_exact(&mut crlf)
+                        .map_err(|_| InvalidResponseError)?;
+                }
+                res.body = body;
+                return Ok(res);
+            }
+        }
         if let Some(content_length) = res.headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidResponseError)?;
             if content_length > 0 {
                 res.body = vec![0; content_length];
                 reader
-                    .read(&mut res.body)
+                    .read_exact(&mut res.body)
                     .map_err(|_| InvalidResponseError)?;
             }
         }
@@ -233,6 +265,20 @@ mod test {
         let result = Response::read_from_stream(&mut response_stream);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_response_chunked_encoding() {
+        let response_text = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nBast\r\n4\r\niaan\r\n0\r\n\r\n";
+        let mut response_stream = response_text.as_bytes();
+        let response = Response::read_from_stream(&mut response_stream).unwrap();
+
+        assert_eq!(response.status, Status::Ok);
+        assert_eq!(
+            response.headers.get("Transfer-Encoding").unwrap(),
+            "chunked"
+        );
+        assert_eq!(response.body, b"Bastiaan");
     }
 
     #[test]
