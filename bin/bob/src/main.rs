@@ -5,6 +5,7 @@
  */
 
 #![doc = include_str!("../README.md")]
+#![forbid(unsafe_code)]
 
 use std::fs::{self};
 use std::io::Write;
@@ -44,19 +45,21 @@ fn subcommand_clean(args: &Args) {
 }
 
 fn subcommand_help() {
-    println!("Usage: bob [SUBCOMMAND] [OPTIONS]");
-    println!();
-    println!("Options:");
-    println!("  -C <dir>         Change to directory <dir> before doing anything");
-    println!("  -r, --release    Build artifacts in release mode");
-    println!();
-    println!("Subcommands:");
-    println!("  clean            Remove build artifacts");
-    println!("  build            Build the project");
-    println!("  help             Print this help message");
-    println!("  run              Run the build artifact after building");
-    println!("  test             Run the unit tests");
-    println!("  version          Print the version number");
+    println!(
+        r"Usage: bob [SUBCOMMAND] [OPTIONS]
+
+Options:
+  -C <dir>         Change to directory <dir> before doing anything
+  -r, --release    Build artifacts in release mode
+
+Subcommands:
+  clean            Remove build artifacts
+  build            Build the project
+  help             Print this help message
+  run              Run the build artifact after building
+  test             Run the unit tests
+  version          Print the version number"
+    );
 }
 
 fn subcommand_version() {
