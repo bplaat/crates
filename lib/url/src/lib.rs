@@ -146,6 +146,20 @@ impl Display for ParseError {
 
 impl Error for ParseError {}
 
+// MARK: Percent Encode
+/// Percent encode a string
+pub fn percent_encode(input: &str) -> String {
+    let mut output = String::new();
+    for c in input.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '~' {
+            output.push(c);
+        } else {
+            output.push_str(&format!("%{:02X}", c as u8));
+        }
+    }
+    output
+}
+
 // MARK: Tests
 #[cfg(test)]
 mod test {
@@ -271,5 +285,14 @@ mod test {
             let url = Url::from_str(input).unwrap();
             assert_eq!(url.to_string(), *expected);
         }
+    }
+
+    #[test]
+    fn test_precent_encode() {
+        assert_eq!(percent_encode("hello world"), "hello%20world");
+        assert_eq!(percent_encode("foo@bar.com"), "foo%40bar.com");
+        assert_eq!(percent_encode("100%"), "100%25");
+        assert_eq!(percent_encode(" "), "%20");
+        assert_eq!(percent_encode("~"), "~");
     }
 }
