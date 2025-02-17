@@ -14,7 +14,7 @@ use args::Profile;
 use rules::Rule;
 use utils::{create_file_with_dirs, format_bytes, index_files};
 
-use crate::args::{parse_args, Args, SubCommand};
+use crate::args::{parse_args, Args, Subcommand};
 use crate::manifest::Manifest;
 
 mod args;
@@ -75,11 +75,11 @@ pub(crate) struct Project {
 fn main() {
     let args = parse_args();
 
-    if args.subcommand == SubCommand::Help {
+    if args.subcommand == Subcommand::Help {
         subcommand_help();
         return;
     }
-    if args.subcommand == SubCommand::Version {
+    if args.subcommand == Subcommand::Version {
         subcommand_version();
         return;
     }
@@ -97,7 +97,7 @@ fn main() {
     });
 
     // Clean build artifacts
-    if args.subcommand == SubCommand::Clean {
+    if args.subcommand == Subcommand::Clean {
         subcommand_clean(&args);
         return;
     }
@@ -118,7 +118,7 @@ fn main() {
         manifest_dir: args.manifest_dir.clone(),
         manifest,
         profile: args.profile,
-        is_test: args.subcommand == SubCommand::Test,
+        is_test: args.subcommand == Subcommand::Test,
         source_files: source_files.clone(),
     };
     let generated_rules = generate_ninja_file(&project);
@@ -134,7 +134,7 @@ fn main() {
     }
 
     // Run build artifact
-    if args.subcommand == SubCommand::Run {
+    if args.subcommand == Subcommand::Run {
         if generated_rules.contains(&Rule::Bundle) {
             rules::cx::run_bundle(&project);
         }
@@ -152,7 +152,7 @@ fn main() {
     }
 
     // Run unit tests
-    if args.subcommand == SubCommand::Test {
+    if args.subcommand == Subcommand::Test {
         if generated_rules.contains(&Rule::Ld) {
             rules::cx::run_tests(&project);
         }
