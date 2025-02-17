@@ -99,6 +99,12 @@ impl Response {
         self
     }
 
+    /// Parse json out of body
+    #[cfg(feature = "json")]
+    pub fn into_json<T: serde::de::DeserializeOwned>(self) -> Result<T, serde_json::Error> {
+        serde_json::from_slice(&self.body)
+    }
+
     pub(crate) fn read_from_stream(stream: &mut dyn Read) -> Result<Self, InvalidResponseError> {
         let mut reader = BufReader::new(stream);
 
@@ -227,6 +233,24 @@ mod test {
         let result = Response::read_from_stream(&mut response_stream);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_parse_response_with_json() {
+        let response_text = "HTTP/1.1 200 OK\r\nContent-Length: 15\r\nContent-Type: application/json\r\n\r\n{\"key\":\"value\"}";
+        let mut response_stream = response_text.as_bytes();
+        let response = Response::read_from_stream(&mut response_stream).unwrap();
+
+        assert_eq!(response.status, Status::Ok);
+        assert_eq!(
+            response.headers.get("Content-Type").unwrap(),
+            "application/json"
+        );
+        assert_eq!(response.body, b"{\"key\":\"value\"}");
+
+        let json_value: serde_json::Value = response.into_json().unwrap();
+        assert_eq!(json_value["key"], "value");
     }
 
     #[test]
