@@ -58,8 +58,6 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ## TODO items
 
--   [ ] berde: Add serialize json,urlencode,yaml,toml
--   [ ] berde: Add deserialize json,urlencode,yaml,toml
 -   [ ] tiny-webview: Add Windows (win32 + Webview2) support
 -   [ ] tiny-webview: Copy subset of objc bindings to make crate standalone
 -   [ ] bob: Add Android project type
