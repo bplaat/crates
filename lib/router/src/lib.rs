@@ -229,8 +229,7 @@ impl<T: Clone> RouterBuilder<T> {
             not_allowed_method_handler: self.not_allowed_method_handler.unwrap_or_else(|| {
                 Handler::new(
                     |_, _| {
-                        Response::new()
-                            .status(http::Status::MethodNotAllowed)
+                        Response::with_status(http::Status::MethodNotAllowed)
                             .body("405 Method Not Allowed")
                     },
                     self.pre_layers.clone(),
@@ -239,11 +238,7 @@ impl<T: Clone> RouterBuilder<T> {
             }),
             fallback_handler: self.fallback_handler.unwrap_or_else(|| {
                 Handler::new(
-                    |_, _| {
-                        Response::new()
-                            .status(http::Status::NotFound)
-                            .body("404 Not Found")
-                    },
+                    |_, _| Response::with_status(http::Status::NotFound).body("404 Not Found"),
                     self.pre_layers.clone(),
                     self.post_layers.clone(),
                 )
@@ -307,14 +302,12 @@ mod test {
     use super::*;
 
     fn home(_req: &Request, _ctx: &()) -> Response {
-        Response::new().status(Status::Ok).body("Hello, World!")
+        Response::with_status(Status::Ok).body("Hello, World!")
     }
 
     fn hello(req: &Request, _ctx: &()) -> Response {
         let name = req.params.get("name").unwrap();
-        Response::new()
-            .status(Status::Ok)
-            .body(format!("Hello, {}!", name))
+        Response::with_status(Status::Ok).body(format!("Hello, {}!", name))
     }
 
     #[test]
