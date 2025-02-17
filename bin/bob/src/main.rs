@@ -85,7 +85,7 @@ fn main() {
     }
 
     // Read manifest
-    let manifest: Manifest = toml::from_str(
+    let manifest: Manifest = basic_toml::from_str(
         &fs::read_to_string(format!("{}/bob.toml", args.manifest_dir)).unwrap_or_else(|err| {
             eprintln!("Can't read bob.toml file: {}", err);
             exit(1);
