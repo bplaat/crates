@@ -125,7 +125,7 @@ impl Request {
             reader
                 .read_line(&mut line)
                 .map_err(|_| InvalidRequestError)?;
-            let mut parts = line.split(" ");
+            let mut parts = line.split(' ');
             (
                 parts
                     .next()
@@ -154,7 +154,7 @@ impl Request {
             if line == "\r\n" {
                 break;
             }
-            let split = line.find(":").ok_or(InvalidRequestError)?;
+            let split = line.find(':').ok_or(InvalidRequestError)?;
             headers.insert(
                 line[0..split].trim().to_string(),
                 line[split + 1..].trim().to_string(),

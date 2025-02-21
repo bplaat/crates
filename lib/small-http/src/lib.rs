@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple and small HTTP/1.1 server/client library
-
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
 pub use crate::enums::{Method, Status};

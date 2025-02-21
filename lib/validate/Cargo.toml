@@ -17,6 +17,6 @@ regex = { version = "1.11", default-features = false, optional = true }
 [features]
 default = ["derive"]
 derive = ["dep:validate_derive"]
-email = ["dep:regex", "validate_derive/email"]
-url = ["dep:regex", "validate_derive/url"]
+email = ["dep:regex", "validate_derive?/email"]
+url = ["dep:regex", "validate_derive?/url"]
 serde = ["dep:serde"]

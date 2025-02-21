@@ -352,6 +352,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "threadpool",
  "url",
 ]

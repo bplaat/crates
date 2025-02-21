@@ -134,7 +134,7 @@ impl Response {
             if line == "\r\n" {
                 break;
             }
-            let split = line.find(":").ok_or(InvalidResponseError)?;
+            let split = line.find(':').ok_or(InvalidResponseError)?;
             res.headers.insert(
                 line[0..split].trim().to_string(),
                 line[split + 1..].trim().to_string(),
