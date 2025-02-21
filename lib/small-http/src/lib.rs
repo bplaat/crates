@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple HTTP/1.1 server/client library
+//! A simple and small HTTP/1.1 server/client library
 
 #![forbid(unsafe_code)]
 

@@ -9,12 +9,12 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
 -   [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
 -   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
+-   [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library
 
 ### Normal
 
 -   [bob](bin/bob) A simple meta-build system for my projects
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
--   [http](lib/http) A simple HTTP/1.1 server/client library
 -   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [objc](lib/objc) An Objective-C ffi library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator

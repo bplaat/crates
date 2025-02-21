@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use http::{Method, Request, Response};
+use small_http::{Method, Request, Response, Status};
 
 // MARK: Handler
 
@@ -263,7 +263,7 @@ impl<T: Clone> RouterBuilder<T> {
             not_allowed_method_handler: self.not_allowed_method_handler.unwrap_or_else(|| {
                 Handler::new(
                     |_, _| {
-                        Response::with_status(http::Status::MethodNotAllowed)
+                        Response::with_status(Status::MethodNotAllowed)
                             .body("405 Method Not Allowed")
                     },
                     self.pre_layers.clone(),
@@ -272,7 +272,7 @@ impl<T: Clone> RouterBuilder<T> {
             }),
             fallback_handler: self.fallback_handler.unwrap_or_else(|| {
                 Handler::new(
-                    |_, _| Response::with_status(http::Status::NotFound).body("404 Not Found"),
+                    |_, _| Response::with_status(Status::NotFound).body("404 Not Found"),
                     self.pre_layers.clone(),
                     self.post_layers.clone(),
                 )
@@ -332,7 +332,7 @@ impl<T: Clone> RouterWith<T> {
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use http::Status;
+    use small_http::Status;
 
     use super::*;
 

@@ -92,10 +92,10 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 name = "example-http-simple"
 version = "0.1.0"
 dependencies = [
- "http",
  "serde",
  "serde_urlencoded",
  "simple-useragent",
+ "small-http",
 ]
 
 [[package]]
@@ -106,12 +106,12 @@ dependencies = [
  "chrono",
  "const_format",
  "from_enum",
- "http",
  "openapi-generator",
  "router",
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "small-http",
  "uuid",
  "validate",
 ]
@@ -159,17 +159,6 @@ name = "hashbrown"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
-
-[[package]]
-name = "http"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "threadpool",
- "url",
-]
 
 [[package]]
 name = "indexmap"
@@ -282,7 +271,7 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 name = "router"
 version = "0.1.0"
 dependencies = [
- "http",
+ "small-http",
 ]
 
 [[package]]
@@ -361,6 +350,17 @@ dependencies = [
  "regex",
  "serde",
  "serde_yaml",
+]
+
+[[package]]
+name = "small-http"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "threadpool",
+ "url",
 ]
 
 [[package]]

@@ -11,9 +11,9 @@ use std::sync::LazyLock;
 use std::thread;
 use std::time::Duration;
 
-use http::{Method, Request, Response, Status};
 use serde::Deserialize;
 use simple_useragent::UserAgentParser;
+use small_http::{Method, Request, Response, Status};
 
 const HTTP_PORT: u16 = 8080;
 
@@ -89,5 +89,5 @@ fn main() {
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
-    http::serve(listener, handler);
+    small_http::serve(listener, handler);
 }

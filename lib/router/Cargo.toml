@@ -9,4 +9,4 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-http = { path = "../http" }
+small-http = { path = "../small-http" }

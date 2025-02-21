@@ -12,9 +12,9 @@ use bsqlite::{execute_args, query_args, Connection, FromRow, FromValue};
 use chrono::{DateTime, Utc};
 use const_format::formatcp;
 use from_enum::FromEnum;
-use http::{Method, Request, Response, Status};
 use router::{RouterBuilder, RouterWith};
 use serde::Deserialize;
+use small_http::{Method, Request, Response, Status};
 use uuid::Uuid;
 use validate::Validate;
 
@@ -418,7 +418,7 @@ fn main() {
     println!("Server is listening on: http://localhost:{}/", HTTP_PORT);
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {}", HTTP_PORT));
-    http::serve(listener, move |req| router.handle(req));
+    small_http::serve(listener, move |req| router.handle(req));
 }
 
 // MARK: Tests
