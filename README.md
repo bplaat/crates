@@ -9,7 +9,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
 -   [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
 -   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
--   [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library
+-   [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library **([crates.io](https://crates.io/crates/small-http))**
 -   [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library
 
 ### Normal
