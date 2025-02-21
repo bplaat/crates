@@ -73,10 +73,13 @@ impl Report {
 /// Validate trait
 pub trait Validate {
     /// Validate context
-    type Context: Default;
+    type Context;
 
     /// Validate self
-    fn validate(&self) -> std::result::Result<(), Report> {
+    fn validate(&self) -> std::result::Result<(), Report>
+    where
+        Self::Context: Default,
+    {
         let ctx = Self::Context::default();
         self.validate_with(&ctx)
     }
