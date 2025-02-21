@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "anyhow"
+version = "1.0.95"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -195,6 +201,31 @@ name = "minify-html"
 version = "0.1.0"
 dependencies = [
  "regex",
+]
+
+[[package]]
+name = "mp4ameta"
+version = "0.11.0"
+source = "git+https://github.com/saecki/mp4ameta#3bc756c050ae2eeed85a72af45f97a93e0456370"
+dependencies = [
+ "mp4ameta_proc",
+]
+
+[[package]]
+name = "mp4ameta_proc"
+version = "0.6.0"
+source = "git+https://github.com/saecki/mp4ameta#3bc756c050ae2eeed85a72af45f97a93e0456370"
+
+[[package]]
+name = "music-dl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mp4ameta",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "small-http",
 ]
 
 [[package]]

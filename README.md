@@ -12,9 +12,13 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library **([crates.io](https://crates.io/crates/small-http))**
 -   [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library **([crates.io](https://crates.io/crates/small-router))**
 
-### Normal
+### Tools
 
 -   [bob](bin/bob) A simple meta-build system for my projects
+-   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
+
+### Libraries
+
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [objc](lib/objc) An Objective-C ffi library
