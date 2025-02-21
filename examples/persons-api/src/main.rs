@@ -14,7 +14,7 @@ use const_format::formatcp;
 use from_enum::FromEnum;
 use serde::Deserialize;
 use small_http::{Method, Request, Response, Status};
-use small_router::{RouterBuilder, RouterWith};
+use small_router::{Router, RouterBuilder};
 use uuid::Uuid;
 use validate::Validate;
 
@@ -397,7 +397,7 @@ fn persons_delete(req: &Request, ctx: &Context) -> Response {
 }
 
 // MARK: Main
-fn router(ctx: Context) -> RouterWith<Context> {
+fn router(ctx: Context) -> Router<Context> {
     RouterBuilder::<Context>::with(ctx)
         .pre_layer(layers::log_pre_layer)
         .pre_layer(layers::cors_pre_layer)

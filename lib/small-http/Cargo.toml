@@ -7,7 +7,12 @@ authors.workspace = true
 repository.workspace = true
 rust-version = "1.65"
 description = "A simple and small sync HTTP/1.1 server/client library"
-categories = ["network-programming", "web-programming"]
+categories = [
+    "network-programming",
+    "web-programming",
+    "web-programming::http-client",
+    "web-programming::http-server",
+]
 keywords = ["http", "http-server", "http-client", "rest-api"]
 homepage = "https://github.com/bplaat/crates/tree/master/lib/small-http"
 

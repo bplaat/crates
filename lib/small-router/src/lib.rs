@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple and small router for the small-http library
-
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
 use std::collections::HashMap;
@@ -256,8 +255,8 @@ impl<T: Clone> RouterBuilder<T> {
     }
 
     /// Build router
-    pub fn build(self) -> RouterWith<T> {
-        RouterWith(Arc::new(InnerRouter {
+    pub fn build(self) -> Router<T> {
+        Router(Arc::new(InnerRouter {
             ctx: self.ctx,
             routes: self.routes,
             not_allowed_method_handler: self.not_allowed_method_handler.unwrap_or_else(|| {
@@ -320,9 +319,9 @@ impl<T: Clone> InnerRouter<T> {
 // MARK: Router
 /// Router
 #[derive(Clone)]
-pub struct RouterWith<T: Clone>(Arc<InnerRouter<T>>);
+pub struct Router<T: Clone>(Arc<InnerRouter<T>>);
 
-impl<T: Clone> RouterWith<T> {
+impl<T: Clone> Router<T> {
     /// Handle request
     pub fn handle(&self, req: &Request) -> Response {
         self.0.handle(req)
