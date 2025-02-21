@@ -7,6 +7,9 @@
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
+use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64_NO_PAD;
+use base64::Engine as _;
+
 use crate::pbkdf2_hmac_sha256;
 
 const ITERATIONS: u32 = 100_000;
@@ -19,8 +22,8 @@ pub fn password_hash(password: &str) -> String {
     format!(
         "$pbkdf2-sha256$t={}${}${}",
         ITERATIONS,
-        base64::encode(&salt, true),
-        base64::encode(&hashed_password, true)
+        BASE64_NO_PAD.encode(salt),
+        BASE64_NO_PAD.encode(&hashed_password)
     )
 }
 
@@ -33,8 +36,12 @@ pub fn password_verify(password: &str, hash: &str) -> Result<bool, PasswordHashD
         .ok_or(PasswordHashDecodeError)?
         .parse::<u32>()
         .map_err(|_| PasswordHashDecodeError)?;
-    let salt = base64::decode(parts[3]).map_err(|_| PasswordHashDecodeError)?;
-    let stored_hash = base64::decode(parts[4]).map_err(|_| PasswordHashDecodeError)?;
+    let salt = BASE64_NO_PAD
+        .decode(parts[3])
+        .map_err(|_| PasswordHashDecodeError)?;
+    let stored_hash = BASE64_NO_PAD
+        .decode(parts[4])
+        .map_err(|_| PasswordHashDecodeError)?;
     let computed_hash = pbkdf2_hmac_sha256(password.as_bytes(), &salt, iterations, 32);
     Ok(stored_hash == computed_hash)
 }

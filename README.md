@@ -12,7 +12,6 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ### Normal
 
--   [base64](lib/base64) A base64 encoder and decoder
 -   [bob](bin/bob) A simple meta-build system for my projects
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [http](lib/http) A simple HTTP/1.1 server/client library
@@ -22,7 +21,6 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [router](lib/router) A simple router for HTTP library
 -   [tiny-webview](lib/tiny-webview) A simple webview library
--   [url](lib/url) A minimal URL parser library
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
 
@@ -32,6 +30,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
 -   [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 -   [threadpool](lib/threadpool) A minimal replacement for the [threadpool](https://crates.io/crates/threadpool) crate
+-   [url](lib/url) A minimal replacement for the [uuid](https://crates.io/crates/url) crate
 -   [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 
 ## Getting Started

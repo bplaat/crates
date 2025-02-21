@@ -9,13 +9,11 @@
 #![forbid(unsafe_code)]
 
 pub use crate::enums::{Method, Status};
-pub use crate::fetch::fetch;
-pub use crate::request::Request;
+pub use crate::request::{HeaderMap, Request};
 pub use crate::response::Response;
 pub use crate::serve::serve;
 
 mod enums;
-mod fetch;
 mod request;
 mod response;
 mod serve;

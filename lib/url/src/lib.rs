@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-//! A minimal URL parser library
+//! A minimal replacement for the [uuid](https://crates.io/crates/url) crate
 
 #![forbid(unsafe_code)]
 
@@ -16,27 +16,57 @@ use std::str::FromStr;
 /// Url
 #[derive(Clone)]
 pub struct Url {
-    /// Scheme
-    pub scheme: String,
-    /// Authority
-    pub authority: Option<Authority>,
-    /// Path
-    pub path: String,
-    /// Query
-    pub query: Option<String>,
-    /// Fragment
-    pub fragment: Option<String>,
+    scheme: String,
+    authority: Option<Authority>,
+    path: String,
+    query: Option<String>,
+    fragment: Option<String>,
 }
 
-/// Url authority
 #[derive(Clone)]
-pub struct Authority {
-    /// User info
-    pub userinfo: Option<String>,
-    /// Host
-    pub host: String,
-    /// Port
-    pub port: Option<u16>,
+struct Authority {
+    userinfo: Option<String>,
+    host: String,
+    port: Option<u16>,
+}
+
+impl Url {
+    /// Get the URL scheme
+    pub fn scheme(&self) -> &str {
+        &self.scheme
+    }
+
+    /// Get the URL authority
+    pub fn userinfo(&self) -> Option<&str> {
+        self.authority
+            .as_ref()
+            .and_then(|auth| auth.userinfo.as_deref())
+    }
+
+    /// Get the URL host
+    pub fn host(&self) -> Option<&str> {
+        self.authority.as_ref().map(|auth| auth.host.as_str())
+    }
+
+    /// Get the URL port
+    pub fn port(&self) -> Option<u16> {
+        self.authority.as_ref().and_then(|auth| auth.port)
+    }
+
+    /// Get the URL path
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// Get the URL query
+    pub fn query(&self) -> Option<&str> {
+        self.query.as_deref()
+    }
+
+    /// Get the URL fragment
+    pub fn fragment(&self) -> Option<&str> {
+        self.fragment.as_deref()
+    }
 }
 
 impl FromStr for Url {

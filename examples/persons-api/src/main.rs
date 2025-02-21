@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 use const_format::formatcp;
 use from_enum::FromEnum;
 use http::{Method, Request, Response, Status};
-use router::{Router, RouterBuilder};
+use router::{RouterBuilder, RouterWith};
 use serde::Deserialize;
 use uuid::Uuid;
 use validate::Validate;
@@ -122,7 +122,7 @@ mod layers {
     use super::*;
 
     pub(crate) fn log_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
-        println!("{} {}", req.method, req.url.path);
+        println!("{} {}", req.method, req.url.path());
         None
     }
 
@@ -221,7 +221,7 @@ impl Default for IndexQuery {
 
 fn persons_index(req: &Request, ctx: &Context) -> Response {
     // Parse request query
-    let query = match req.url.query.as_ref() {
+    let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
             Err(_) => return Response::with_status(Status::BadRequest),
@@ -397,7 +397,7 @@ fn persons_delete(req: &Request, ctx: &Context) -> Response {
 }
 
 // MARK: Main
-fn router(ctx: Context) -> Router<Context> {
+fn router(ctx: Context) -> RouterWith<Context> {
     RouterBuilder::<Context>::with(ctx)
         .pre_layer(layers::log_pre_layer)
         .pre_layer(layers::cors_pre_layer)

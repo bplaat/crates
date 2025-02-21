@@ -8,12 +8,39 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::str::{self, FromStr};
 
 use url::Url;
 
 use crate::enums::{Method, Version};
+use crate::Response;
+
+/// Mark: Headers
+#[derive(Default, Clone)]
+pub struct HeaderMap(Vec<(String, String)>);
+
+impl HeaderMap {
+    /// Create new HeaderMap
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get header value
+    pub fn get(&self, name: &str) -> Option<&String> {
+        self.0.iter().find(|(n, _)| n == name).map(|(_, v)| v)
+    }
+
+    /// Iterate over headers
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.0.iter().map(|(n, v)| (n, v))
+    }
+
+    /// Insert header
+    pub fn insert(&mut self, name: String, value: String) {
+        self.0.push((name, value));
+    }
+}
 
 /// HTTP request
 #[derive(Clone)]
@@ -25,7 +52,7 @@ pub struct Request {
     /// Method
     pub method: Method,
     /// Headers
-    pub headers: HashMap<String, String>,
+    pub headers: HeaderMap,
     /// Parameters
     pub params: HashMap<String, String>,
     /// Body
@@ -40,7 +67,7 @@ impl Default for Request {
             version: Version::Http1_1,
             url: Url::from_str("http://localhost").expect("Should parse"),
             method: Method::Get,
-            headers: HashMap::new(),
+            headers: HeaderMap::new(),
             params: HashMap::new(),
             body: None,
             client_addr: (Ipv4Addr::LOCALHOST, 0).into(),
@@ -118,7 +145,7 @@ impl Request {
         };
 
         // Read headers
-        let mut headers = HashMap::new();
+        let mut headers = HeaderMap::new();
         loop {
             let mut line = String::new();
             reader
@@ -170,13 +197,13 @@ impl Request {
 
     pub(crate) fn write_to_stream(mut self, stream: &mut dyn Write) {
         // Finish headers
-        let authority = self.url.authority.as_ref().expect("Invalid url");
+        let host = self.url.host().expect("No host in URL");
         self.headers.insert(
             "Host".to_string(),
-            if let Some(port) = authority.port {
-                format!("{}:{}", authority.host, port)
+            if let Some(port) = self.url.port() {
+                format!("{}:{}", &host, port)
             } else {
-                authority.host.clone()
+                host.to_string()
             },
         );
         self.headers.insert(
@@ -194,19 +221,32 @@ impl Request {
         }
 
         // Write request
-        let path = if let Some(query) = self.url.query {
-            format!("{}?{}", self.url.path, query)
+        let path = self.url.path();
+        let path = if let Some(query) = self.url.query() {
+            format!("{}?{}", &path, query)
         } else {
-            self.url.path
+            path.to_string()
         };
         _ = write!(stream, "{} {} HTTP/1.1\r\n", self.method, path);
-        for (name, value) in &self.headers {
+        for (name, value) in self.headers.iter() {
             _ = write!(stream, "{}: {}\r\n", name, value);
         }
         _ = write!(stream, "\r\n");
         if let Some(body) = &self.body {
             _ = stream.write_all(body);
         }
+    }
+
+    /// Fetch request with http client
+    pub fn fetch(self) -> Result<Response, FetchError> {
+        let mut stream = TcpStream::connect(format!(
+            "{}:{}",
+            self.url.host().expect("No host in URL"),
+            self.url.port().unwrap_or(80)
+        ))
+        .map_err(|_| FetchError)?;
+        self.write_to_stream(&mut stream);
+        Response::read_from_stream(&mut stream).map_err(|_| FetchError)
     }
 }
 
@@ -222,10 +262,27 @@ impl Display for InvalidRequestError {
 
 impl Error for InvalidRequestError {}
 
+// MARK: FetchError
+#[derive(Debug)]
+pub struct FetchError;
+
+impl Display for FetchError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Fetch error")
+    }
+}
+
+impl Error for FetchError {}
+
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use std::io::Write;
+    use std::net::{Ipv4Addr, TcpListener};
+    use std::thread;
+
     use super::*;
+    use crate::enums::Status;
 
     #[test]
     fn test_read_from_stream() {
@@ -284,5 +341,43 @@ mod test {
         let mut buffer = Vec::new();
         request.write_to_stream(&mut buffer);
         assert!(buffer.starts_with(b"POST / HTTP/1.1\r\n"));
+    }
+
+    #[test]
+    fn test_fetch_http1_0() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let server_addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .write_all(b"HTTP/1.0 200 OK\r\nContent-Length: 4\r\n\r\ntest")
+                .unwrap();
+        });
+
+        let res = Request::with_url(format!("http://{}/", server_addr))
+            .fetch()
+            .unwrap();
+        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.body, "test".as_bytes());
+    }
+
+    #[test]
+    fn test_fetch_http1_1() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let server_addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: closed\r\n\r\ntest",
+                )
+                .unwrap();
+        });
+
+        let res = Request::with_url(format!("http://{}/", server_addr))
+            .fetch()
+            .unwrap();
+        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.body, "test".as_bytes());
     }
 }

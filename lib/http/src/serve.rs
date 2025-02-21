@@ -6,6 +6,7 @@
 
 use std::io::{self, Write};
 use std::net::TcpListener;
+use std::thread;
 use std::time::Duration;
 
 use threadpool::ThreadPool;
@@ -14,7 +15,7 @@ use crate::enums::Version;
 use crate::request::Request;
 use crate::response::Response;
 
-const WORKER_THREADS: usize = 512;
+const WORK_THREAD_PER_CORE: usize = 64;
 pub(crate) const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Start HTTP server
@@ -22,7 +23,13 @@ pub fn serve<F>(listener: TcpListener, handler: F)
 where
     F: Fn(&Request) -> Response + Clone + Send + 'static,
 {
-    let pool = ThreadPool::new(WORKER_THREADS);
+    // Create thread pool with workers
+    let num_cores = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let pool = ThreadPool::new(num_cores * WORK_THREAD_PER_CORE);
+
+    // Listen for incoming tcp clients
     for mut stream in listener.incoming().flatten() {
         stream
             .set_read_timeout(Some(KEEP_ALIVE_TIMEOUT))

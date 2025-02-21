@@ -185,15 +185,29 @@ impl<T: Clone> RouterBuilder<T> {
     /// Add route for any method
     pub fn any(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
         self.route(
-            &[Method::Get, Method::Post, Method::Put, Method::Delete],
+            &[
+                Method::Get,
+                Method::Head,
+                Method::Post,
+                Method::Put,
+                Method::Delete,
+                Method::Connect,
+                Method::Options,
+                Method::Trace,
+                Method::Patch,
+            ],
             route.into(),
             handler,
         )
     }
-
     /// Add route for GET method
     pub fn get(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
         self.route(&[Method::Get], route.into(), handler)
+    }
+
+    /// Add route for HEAD method
+    pub fn head(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Head], route.into(), handler)
     }
 
     /// Add route for POST method
@@ -211,6 +225,26 @@ impl<T: Clone> RouterBuilder<T> {
         self.route(&[Method::Delete], route.into(), handler)
     }
 
+    /// Add route for CONNECT method
+    pub fn connect(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Connect], route.into(), handler)
+    }
+
+    /// Add route for OPTIONS method
+    pub fn options(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Options], route.into(), handler)
+    }
+
+    /// Add route for TRACE method
+    pub fn trace(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Trace], route.into(), handler)
+    }
+
+    /// Add route for PATCH method
+    pub fn patch(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+        self.route(&[Method::Patch], route.into(), handler)
+    }
+
     /// Set fallback handler
     pub fn fallback(mut self, handler: HandlerFn<T>) -> Self {
         self.fallback_handler = Some(Handler::new(
@@ -222,8 +256,8 @@ impl<T: Clone> RouterBuilder<T> {
     }
 
     /// Build router
-    pub fn build(self) -> Router<T> {
-        Router(Arc::new(InnerRouter {
+    pub fn build(self) -> RouterWith<T> {
+        RouterWith(Arc::new(InnerRouter {
             ctx: self.ctx,
             routes: self.routes,
             not_allowed_method_handler: self.not_allowed_method_handler.unwrap_or_else(|| {
@@ -260,10 +294,11 @@ impl<T: Clone> InnerRouter<T> {
         let mut ctx = self.ctx.clone();
 
         // Match routes
+        let path = req.url.path();
         for route in self.routes.iter().rev() {
-            if route.is_match(&req.url.path) {
+            if route.is_match(path) {
                 let mut req = req.clone();
-                req.params = route.match_path(&req.url.path);
+                req.params = route.match_path(path);
 
                 // Find matching route by method
                 for route in self.routes.iter().filter(|r| r.route == route.route) {
@@ -285,9 +320,9 @@ impl<T: Clone> InnerRouter<T> {
 // MARK: Router
 /// Router
 #[derive(Clone)]
-pub struct Router<T: Clone>(Arc<InnerRouter<T>>);
+pub struct RouterWith<T: Clone>(Arc<InnerRouter<T>>);
 
-impl<T: Clone> Router<T> {
+impl<T: Clone> RouterWith<T> {
     /// Handle request
     pub fn handle(&self, req: &Request) -> Response {
         self.0.handle(req)

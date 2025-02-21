@@ -25,7 +25,7 @@ struct GreetBody {
 }
 
 fn handler(req: &Request) -> Response {
-    let path = req.url.path.as_str();
+    let path = req.url.path();
     println!("{} {}", req.method, path);
 
     if path == "/" {
@@ -62,7 +62,7 @@ fn handler(req: &Request) -> Response {
     }
 
     if path == "/ipinfo" {
-        let data_res = match http::fetch(Request::with_url("http://ipinfo.io/json")) {
+        let data_res = match Request::with_url("http://ipinfo.io/json").fetch() {
             Ok(res) => res,
             Err(_) => {
                 return Response::with_header("Content-Type", "text/html")

@@ -9,5 +9,5 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-base64 = { path = "../base64" }
+base64 = "0.22"
 getrandom = "0.3.0"

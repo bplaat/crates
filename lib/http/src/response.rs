@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 
 use crate::enums::{Status, Version};
+use crate::request::HeaderMap;
 use crate::serve::KEEP_ALIVE_TIMEOUT;
 use crate::Request;
 
@@ -20,7 +20,7 @@ pub struct Response {
     /// Status
     pub status: Status,
     /// Headers
-    pub headers: HashMap<String, String>,
+    pub headers: HeaderMap,
     /// Body
     pub body: Vec<u8>,
 }
@@ -177,7 +177,7 @@ impl Response {
 
         // Write response
         _ = write!(stream, "{} {}\r\n", req.version, self.status);
-        for (name, value) in &self.headers {
+        for (name, value) in self.headers.iter() {
             _ = write!(stream, "{}: {}\r\n", name, value);
         }
         _ = write!(stream, "\r\n");
