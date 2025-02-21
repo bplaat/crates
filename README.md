@@ -10,6 +10,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
 -   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
 -   [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library
+-   [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library
 
 ### Normal
 
@@ -19,7 +20,6 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [objc](lib/objc) An Objective-C ffi library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
--   [router](lib/router) A simple router for HTTP library
 -   [tiny-webview](lib/tiny-webview) A simple webview library
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library

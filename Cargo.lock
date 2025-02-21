@@ -107,11 +107,11 @@ dependencies = [
  "const_format",
  "from_enum",
  "openapi-generator",
- "router",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "small-http",
+ "small-router",
  "uuid",
  "validate",
 ]
@@ -268,13 +268,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
-name = "router"
-version = "0.1.0"
-dependencies = [
- "small-http",
-]
-
-[[package]]
 name = "ryu"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -361,6 +354,13 @@ dependencies = [
  "serde_json",
  "threadpool",
  "url",
+]
+
+[[package]]
+name = "small-router"
+version = "0.1.0"
+dependencies = [
+ "small-http",
 ]
 
 [[package]]

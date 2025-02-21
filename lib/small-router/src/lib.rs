@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple router for HTTP library
+//! A simple and small router for the small-http library
 
 #![forbid(unsafe_code)]
 

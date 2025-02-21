@@ -10,10 +10,10 @@ workspace = true
 
 [dependencies]
 from_enum = { path = "../../lib/from_enum" }
-router = { path = "../../lib/router" }
 bsqlite = { path = "../../lib/bsqlite", features = ["uuid", "chrono"] }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 small-http = { path = "../../lib/small-http", features = ["json"] }
+small-router = { path = "../../lib/small-router" }
 uuid = { version = "1.0", features = ["v7", "serde"] }
 validate = { path = "../../lib/validate", features = ["serde"] }
 
