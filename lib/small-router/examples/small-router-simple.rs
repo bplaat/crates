@@ -15,8 +15,11 @@ fn home(_req: &Request, _ctx: &()) -> Response {
     Response::with_body("Home")
 }
 
-fn about(_req: &Request, _ctx: &()) -> Response {
-    Response::with_body("About")
+fn hello(_req: &Request, _ctx: &()) -> Response {
+    Response::with_body(format!(
+        "Hello, {}!",
+        _req.params.get("name").unwrap_or(&"World".to_string())
+    ))
 }
 
 fn not_found(_req: &Request, _ctx: &()) -> Response {
@@ -26,7 +29,7 @@ fn not_found(_req: &Request, _ctx: &()) -> Response {
 fn main() {
     let router = RouterBuilder::with(())
         .get("/", home)
-        .get("/about", about)
+        .get("/hello/:name", hello)
         .fallback(not_found)
         .build();
 
