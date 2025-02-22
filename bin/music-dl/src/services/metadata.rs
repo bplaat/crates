@@ -13,6 +13,7 @@ use crate::structs::deezer::{Album, AlbumList, AlbumSmall, ArtistList, ArtistSma
 const USER_AGENT: &str =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:135.0) Gecko/20100101 Firefox/135.0";
 
+#[derive(Clone, Copy)]
 pub(crate) struct MetadataService;
 
 impl MetadataService {

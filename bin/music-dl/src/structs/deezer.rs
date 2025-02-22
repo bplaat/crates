@@ -30,7 +30,7 @@ pub(crate) struct AlbumSmall {
     pub(crate) r#type: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub(crate) struct Album {
     pub(crate) id: i64,
     pub(crate) title: String,
@@ -57,7 +57,7 @@ pub(crate) struct ArtistList {
     pub(crate) total: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub(crate) struct ArtistSmall {
     pub(crate) id: i64,
     pub(crate) name: String,
@@ -77,12 +77,12 @@ pub(crate) struct Artist {
 }
 
 // Genre
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub(crate) struct GenreList {
     pub(crate) data: Vec<Genre>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub(crate) struct Genre {
     pub(crate) id: i64,
     pub(crate) name: String,
@@ -90,12 +90,12 @@ pub(crate) struct Genre {
 }
 
 // Track
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub(crate) struct TrackList {
     pub(crate) data: Vec<TrackSmall>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub(crate) struct TrackSmall {
     pub(crate) id: i64,
     pub(crate) title: String,
