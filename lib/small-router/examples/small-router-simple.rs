@@ -27,7 +27,7 @@ fn not_found(_req: &Request, _ctx: &()) -> Response {
 }
 
 fn main() {
-    let router = RouterBuilder::with(())
+    let router = RouterBuilder::new()
         .get("/", home)
         .get("/hello/:name", hello)
         .fallback(not_found)

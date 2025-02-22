@@ -146,6 +146,19 @@ pub struct RouterBuilder<T: Clone> {
     fallback_handler: Option<Handler<T>>,
 }
 
+impl Default for RouterBuilder<()> {
+    fn default() -> Self {
+        Self::with(())
+    }
+}
+
+impl RouterBuilder<()> {
+    /// Create new router
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 impl<T: Clone> RouterBuilder<T> {
     /// Create new router with context
     pub fn with(ctx: T) -> Self {
@@ -346,7 +359,7 @@ mod test {
 
     #[test]
     fn test_routing() {
-        let router = RouterBuilder::with(())
+        let router = RouterBuilder::new()
             .get("/", home)
             .get("/hello/:name", hello)
             .get("/hello/:name/i/:am/so/:deep", hello)

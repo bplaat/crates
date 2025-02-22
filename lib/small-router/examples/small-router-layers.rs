@@ -11,12 +11,7 @@ use std::net::{Ipv4Addr, TcpListener};
 use small_http::{Method, Request, Response, Status};
 use small_router::RouterBuilder;
 
-#[derive(Clone)]
-struct Context {
-    data: String,
-}
-
-fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
+fn cors_pre_layer(req: &Request, _: &mut ()) -> Option<Response> {
     if req.method == Method::Options {
         Some(
             Response::with_header("Access-Control-Allow-Origin", "*")
@@ -28,31 +23,26 @@ fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
     }
 }
 
-fn cors_post_layer(_: &Request, _: &mut Context, res: Response) -> Response {
+fn cors_post_layer(_: &Request, _: &mut (), res: Response) -> Response {
     res.header("Access-Control-Allow-Origin", "*")
         .header("Access-Control-Allow-Methods", "GET, POST")
         .header("Access-Control-Max-Age", "86400")
 }
 
-fn home(_req: &Request, ctx: &Context) -> Response {
-    println!("{}", ctx.data);
+fn home(_req: &Request, _ctx: &()) -> Response {
     Response::with_body("Home")
 }
 
-fn about(_req: &Request, ctx: &Context) -> Response {
-    println!("{}", ctx.data);
+fn about(_req: &Request, _ctx: &()) -> Response {
     Response::with_body("About")
 }
 
-fn not_found(_req: &Request, _ctx: &Context) -> Response {
+fn not_found(_req: &Request, _ctx: &()) -> Response {
     Response::with_status(Status::NotFound).body("404 Not Found")
 }
 
 fn main() {
-    let ctx = Context {
-        data: "Data".to_string(),
-    };
-    let router = RouterBuilder::with(ctx)
+    let router = RouterBuilder::new()
         .pre_layer(cors_pre_layer)
         .post_layer(cors_post_layer)
         .get("/", home)
