@@ -4,18 +4,13 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ## Crates
 
-### Published
+### Published libraries
 
 -   [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
 -   [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
 -   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
 -   [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library **([crates.io](https://crates.io/crates/small-http))**
 -   [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library **([crates.io](https://crates.io/crates/small-router))**
-
-### Tools
-
--   [bob](bin/bob) A simple meta-build system for my projects
--   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 
 ### Libraries
 
@@ -28,7 +23,12 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
 
-### Replacements
+### Tools
+
+-   [bob](bin/bob) A simple meta-build system for my projects
+-   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
+
+### Replacement libraries
 
 -   [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 -   [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
@@ -61,6 +61,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ## TODO items
 
+-   [ ] small-http: Add client connection pool
 -   [ ] tiny-webview: Add Windows (win32 + Webview2) support
 -   [ ] tiny-webview: Copy subset of objc bindings to make crate standalone
 -   [ ] bob: Add Android project type

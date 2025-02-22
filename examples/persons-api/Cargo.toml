@@ -11,16 +11,19 @@ workspace = true
 [dependencies]
 from_enum = { path = "../../lib/from_enum" }
 bsqlite = { path = "../../lib/bsqlite", features = ["uuid", "chrono"] }
-chrono = { version = "0.4", default-features = false, features = ["serde"] }
 small-http = { path = "../../lib/small-http", features = ["json"] }
 small-router = { path = "../../lib/small-router" }
-uuid = { version = "1.0", features = ["v7", "serde"] }
 validate = { path = "../../lib/validate", features = ["serde"] }
 
+chrono = { version = "0.4", default-features = false, features = [
+    "now",
+    "serde",
+] }
+const_format = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.1"
-const_format = "0.2"
+uuid = { version = "1.0", features = ["v7", "serde"] }
 
 [build-dependencies]
 openapi-generator = { path = "../../lib/openapi-generator" }
