@@ -15,6 +15,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 ### Libraries
 
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
+-   [js](lib/js) A WIP JavaScript interpreter
 -   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [objc](lib/objc) An Objective-C ffi library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator

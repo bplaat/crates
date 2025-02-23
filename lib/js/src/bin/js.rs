@@ -1,12 +1,15 @@
-use std::env;
-use std::io;
-use std::io::Write;
+/*
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
-mod context;
-mod interpreter;
-mod lexer;
-mod parser;
-use crate::context::Context;
+#![doc = include_str!("../../README.md")]
+
+use std::io::Write;
+use std::{env, io};
+
+use js::Context;
 
 fn repl(verbose: bool) {
     println!("BassieCalc");
@@ -53,7 +56,7 @@ fn main() {
     }
 
     // Start repl
-    if text == "" {
+    if text.is_empty() {
         repl(verbose);
         return;
     }

@@ -1,8 +1,14 @@
+/*
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #[derive(Debug)]
-pub enum Token {
+pub(crate) enum Token {
     Number(i64),
     Variable(String),
-    EOF,
+    Eof,
     LParen,
     RParen,
     Comma,
@@ -16,7 +22,7 @@ pub enum Token {
     Mod,
 }
 
-pub fn lexer(text: &str) -> Result<Vec<Token>, String> {
+pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = vec![];
 
     let mut chars = text.chars().peekable();
@@ -25,15 +31,15 @@ pub fn lexer(text: &str) -> Result<Vec<Token>, String> {
             continue;
         }
 
-        if char.is_digit(10) {
+        if char.is_ascii_digit() {
             let mut number = String::from(char);
             while let Some(char) = chars.peek() {
-                if !char.is_digit(10) {
+                if !char.is_ascii_digit() {
                     break;
                 }
-                number.push(chars.next().unwrap());
+                number.push(chars.next().expect("Invalid number"));
             }
-            tokens.push(Token::Number(number.parse().unwrap()));
+            tokens.push(Token::Number(number.parse().expect("Invalid number")));
             continue;
         }
 
@@ -43,7 +49,7 @@ pub fn lexer(text: &str) -> Result<Vec<Token>, String> {
                 if !char.is_alphanumeric() {
                     break;
                 }
-                variable.push(chars.next().unwrap());
+                variable.push(chars.next().expect("Invalid variable"));
             }
             tokens.push(Token::Variable(variable));
             continue;
@@ -78,10 +84,12 @@ pub fn lexer(text: &str) -> Result<Vec<Token>, String> {
             continue;
         }
         if char == '*' {
-            if *chars.peek().unwrap() == '*' {
-                chars.next();
-                tokens.push(Token::Exp);
-                continue;
+            if let Some(c) = chars.peek() {
+                if *c == '*' {
+                    chars.next();
+                    tokens.push(Token::Exp);
+                    continue;
+                }
             }
             tokens.push(Token::Mul);
             continue;
@@ -98,6 +106,6 @@ pub fn lexer(text: &str) -> Result<Vec<Token>, String> {
         return Err(format!("Lexer: unknown character: {}", char));
     }
 
-    tokens.push(Token::EOF);
+    tokens.push(Token::Eof);
     Ok(tokens)
 }

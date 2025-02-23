@@ -1,8 +1,14 @@
+/*
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use crate::lexer::Token;
 
 #[derive(Debug)]
-pub enum Node {
-    Nodes(Vec<Box<Node>>),
+pub(crate) enum Node {
+    Nodes(Vec<Node>),
     Number(i64),
     Variable(String),
     Neg(Box<Node>),
@@ -15,20 +21,20 @@ pub enum Node {
     Mod(Box<Node>, Box<Node>),
 }
 
-pub struct Parser<'a> {
+pub(crate) struct Parser<'a> {
     tokens: &'a Vec<Token>,
     position: usize,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: &'a Vec<Token>) -> Self {
+    pub(crate) fn new(tokens: &'a Vec<Token>) -> Self {
         Parser {
-            tokens: tokens,
+            tokens,
             position: 0,
         }
     }
 
-    pub fn node(&mut self) -> Result<Box<Node>, String> {
+    pub(crate) fn node(&mut self) -> Result<Node, String> {
         self.nodes()
     }
 
@@ -44,7 +50,7 @@ impl<'a> Parser<'a> {
         self.position += 1;
     }
 
-    fn nodes(&mut self) -> Result<Box<Node>, String> {
+    fn nodes(&mut self) -> Result<Node, String> {
         let mut nodes = vec![];
         loop {
             nodes.push(self.assign()?);
@@ -60,34 +66,31 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(Box::new(Node::Nodes(nodes)))
+        Ok(Node::Nodes(nodes))
     }
 
-    fn assign(&mut self) -> Result<Box<Node>, String> {
+    fn assign(&mut self) -> Result<Node, String> {
         match self.peek_next() {
-            Some(token) => match token {
-                Token::Assign => {
-                    let lhs = self.add()?;
-                    self.next();
-                    Ok(Box::new(Node::Assign(lhs, self.assign()?)))
-                }
-                _ => self.add(),
-            },
-            None => self.add(),
+            Some(Token::Assign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::Assign(Box::new(lhs), Box::new(self.assign()?)))
+            }
+            _ => self.add(),
         }
     }
 
-    fn add(&mut self) -> Result<Box<Node>, String> {
+    fn add(&mut self) -> Result<Node, String> {
         let mut node = self.mul()?;
         loop {
             match self.peek() {
                 Token::Add => {
                     self.next();
-                    node = Box::new(Node::Add(node, self.mul()?));
+                    node = Node::Add(Box::new(node), Box::new(self.mul()?));
                 }
                 Token::Sub => {
                     self.next();
-                    node = Box::new(Node::Sub(node, self.mul()?));
+                    node = Node::Sub(Box::new(node), Box::new(self.mul()?));
                 }
                 _ => {
                     break;
@@ -97,25 +100,25 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn mul(&mut self) -> Result<Box<Node>, String> {
+    fn mul(&mut self) -> Result<Node, String> {
         let mut node = self.unary()?;
         loop {
             match self.peek() {
                 Token::Mul => {
                     self.next();
-                    node = Box::new(Node::Mul(node, self.unary()?));
+                    node = Node::Mul(Box::new(node), Box::new(self.unary()?));
                 }
                 Token::Exp => {
                     self.next();
-                    node = Box::new(Node::Exp(node, self.unary()?));
+                    node = Node::Exp(Box::new(node), Box::new(self.unary()?));
                 }
                 Token::Div => {
                     self.next();
-                    node = Box::new(Node::Div(node, self.unary()?));
+                    node = Node::Div(Box::new(node), Box::new(self.unary()?));
                 }
                 Token::Mod => {
                     self.next();
-                    node = Box::new(Node::Mod(node, self.unary()?));
+                    node = Node::Mod(Box::new(node), Box::new(self.unary()?));
                 }
                 _ => {
                     break;
@@ -125,7 +128,7 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn unary(&mut self) -> Result<Box<Node>, String> {
+    fn unary(&mut self) -> Result<Node, String> {
         match self.peek() {
             Token::Add => {
                 self.next();
@@ -133,13 +136,13 @@ impl<'a> Parser<'a> {
             }
             Token::Sub => {
                 self.next();
-                Ok(Box::new(Node::Neg(self.unary()?)))
+                Ok(Node::Neg(Box::new(self.unary()?)))
             }
             _ => self.primary(),
         }
     }
 
-    fn primary(&mut self) -> Result<Box<Node>, String> {
+    fn primary(&mut self) -> Result<Node, String> {
         match self.peek() {
             Token::LParen => {
                 self.next();
@@ -148,12 +151,12 @@ impl<'a> Parser<'a> {
                 Ok(node)
             }
             Token::Number(number) => {
-                let node = Box::new(Node::Number(*number));
+                let node = Node::Number(*number);
                 self.next();
                 Ok(node)
             }
             Token::Variable(variable) => {
-                let node = Box::new(Node::Variable(variable.clone()));
+                let node = Node::Variable(variable.clone());
                 self.next();
                 Ok(node)
             }

@@ -1,17 +1,24 @@
-use crate::parser::Node;
+/*
+ * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use std::collections::HashMap;
 
-pub struct Interpreter<'a> {
+use crate::parser::Node;
+
+pub(crate) struct Interpreter<'a> {
     env: &'a mut HashMap<String, i64>,
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(env: &'a mut HashMap<String, i64>) -> Self {
+    pub(crate) fn new(env: &'a mut HashMap<String, i64>) -> Self {
         Interpreter { env }
     }
 
-    pub fn eval(&mut self, node: Box<Node>) -> Result<i64, String> {
-        match *node {
+    pub(crate) fn eval(&mut self, node: &Node) -> Result<i64, String> {
+        match node {
             Node::Nodes(nodes) => {
                 let mut result = 0;
                 for node in nodes {
@@ -19,16 +26,16 @@ impl<'a> Interpreter<'a> {
                 }
                 Ok(result)
             }
-            Node::Number(number) => Ok(number),
-            Node::Variable(variable) => match self.env.get(&variable) {
+            Node::Number(number) => Ok(*number),
+            Node::Variable(variable) => match self.env.get(variable) {
                 Some(value) => Ok(*value),
                 None => Err(format!("Interpreter: variable {} doesn't exists", variable)),
             },
             Node::Assign(lhs, rhs) => {
                 let result = self.eval(rhs)?;
-                match *lhs {
+                match lhs.as_ref() {
                     Node::Variable(variable) => {
-                        self.env.insert(variable, result);
+                        self.env.insert(variable.to_string(), result);
                     }
                     _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
                 }
