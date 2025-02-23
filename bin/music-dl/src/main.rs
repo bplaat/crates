@@ -11,7 +11,7 @@ use std::io::BufRead;
 use std::process::exit;
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use args::{Args, Subcommand};
 use services::metadata::MetadataService;
 use structs::deezer::{Album, Track};
@@ -26,7 +26,7 @@ mod services;
 mod structs;
 mod utils;
 
-const DOWNLOAD_THREAD_COUNT: usize = 8;
+const DOWNLOAD_THREAD_COUNT: usize = 16;
 const TRACK_DURATION_SLACK: i64 = 5;
 
 // MARK: Subcommands
@@ -111,7 +111,7 @@ fn download_track(
     track_index: usize,
 ) -> Result<()> {
     // Search correct YouTube video
-    let search_queries = vec![
+    let search_queries = [
         format!("{} - {}", album.contributors[0].name, track.title),
         format!(
             "{} - {} - {}",
@@ -203,7 +203,8 @@ fn download_track(
             }
         }
     }
-    bail!("No video found for track");
+    // FIXME: No video found for track
+    Ok(())
 }
 
 fn subcommand_list(args: &Args) -> Result<()> {
