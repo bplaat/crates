@@ -14,10 +14,10 @@ use small_router::RouterBuilder;
 fn home(_req: &Request, _ctx: &()) -> Response {
     Response::with_body("Home")
 }
-fn hello(_req: &Request, _ctx: &()) -> Response {
+fn hello(req: &Request, _ctx: &()) -> Response {
     Response::with_body(format!(
         "Hello, {}!",
-        _req.params.get("name").unwrap_or(&"World".to_string())
+        req.params.get("name").unwrap_or(&"World".to_string())
     ))
 }
 fn not_found(_req: &Request, _ctx: &()) -> Response {
@@ -38,8 +38,6 @@ fn main() {
 ```
 
 See the [examples](examples/) for many more examples.
-
-## Important: reduce `url` dependencies
 
 ## Documentation
 

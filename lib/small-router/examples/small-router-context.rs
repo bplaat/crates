@@ -4,25 +4,36 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple small-router example with context
+//! A simple small-router example with context (shared data)
 
 use std::net::{Ipv4Addr, TcpListener};
+use std::sync::{Arc, RwLock};
 
 use small_http::{Request, Response, Status};
 use small_router::RouterBuilder;
 
 #[derive(Clone)]
 struct Context {
-    data: String,
+    shared_data: Arc<RwLock<String>>,
 }
 
 fn home(_req: &Request, ctx: &Context) -> Response {
-    println!("{}", ctx.data);
+    ctx.shared_data
+        .write()
+        .expect("Can't lock")
+        .push_str(" World");
+    println!("{}", ctx.shared_data.read().expect("Can't lock"));
+
     Response::with_body("Home")
 }
 
 fn about(_req: &Request, ctx: &Context) -> Response {
-    println!("{}", ctx.data);
+    ctx.shared_data
+        .write()
+        .expect("Can't lock")
+        .push_str(" About");
+    println!("{}", ctx.shared_data.read().expect("Can't lock"));
+
     Response::with_body("About")
 }
 
@@ -32,7 +43,7 @@ fn not_found(_req: &Request, _ctx: &Context) -> Response {
 
 fn main() {
     let ctx = Context {
-        data: "Data".to_string(),
+        shared_data: Arc::new(RwLock::new("Hello".to_string())),
     };
     let router = RouterBuilder::with(ctx)
         .get("/", home)

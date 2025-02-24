@@ -11,11 +11,12 @@ use std::net::{Ipv4Addr, TcpListener};
 use small_http::{Method, Request, Response, Status};
 use small_router::RouterBuilder;
 
+/// Pre-layer that processes CORS requests
 fn cors_pre_layer(req: &Request, _: &mut ()) -> Option<Response> {
     if req.method == Method::Options {
         Some(
             Response::with_header("Access-Control-Allow-Origin", "*")
-                .header("Access-Control-Allow-Methods", "GET, POST")
+                .header("Access-Control-Allow-Methods", "GET")
                 .header("Access-Control-Max-Age", "86400"),
         )
     } else {
@@ -23,9 +24,10 @@ fn cors_pre_layer(req: &Request, _: &mut ()) -> Option<Response> {
     }
 }
 
+/// Post-layer that processes CORS requests
 fn cors_post_layer(_: &Request, _: &mut (), res: Response) -> Response {
     res.header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "GET, POST")
+        .header("Access-Control-Allow-Methods", "GET")
         .header("Access-Control-Max-Age", "86400")
 }
 
