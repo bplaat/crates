@@ -8,6 +8,10 @@ _Placeholder_
 
 ## [0.1.1] - 2025-02-24
 
+### Added
+
+-   Added `Router::new` method to create a new router without context
+
 ### Changed
 
 -   Improved examples
