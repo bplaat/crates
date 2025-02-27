@@ -9,7 +9,7 @@
 #![forbid(unsafe_code)]
 
 pub use crate::sha256::Sha256;
-pub use crate::utils::{password_hash, password_verify, PasswordHashDecodeError};
+pub use crate::utils::{PasswordHashDecodeError, password_hash, password_verify};
 
 mod sha256;
 mod utils;

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_void};
 use std::path::Path;
 use std::process::exit;
 use std::ptr::{null, null_mut};
@@ -442,7 +442,7 @@ extern "C" fn webview_on_message(
 // GObject
 const G_CONNECT_DEFAULT: i32 = 0;
 #[link(name = "gobject-2.0")]
-extern "C" {
+unsafe extern "C" {
     fn g_signal_connect_data(
         instance: *mut c_void,
         detailed_signal: *const c_char,
@@ -459,7 +459,7 @@ struct GError(u8);
 #[repr(C)]
 struct GKeyFile(u8);
 #[link(name = "glib-2.0")]
-extern "C" {
+unsafe extern "C" {
     fn g_error_free(error: *mut GError);
     fn g_key_file_new() -> *mut GKeyFile;
     fn g_key_file_load_from_file(
@@ -505,7 +505,7 @@ extern "C" {
 struct GApplication(u8);
 const G_APPLICATION_DEFAULT_FLAGS: i32 = 0;
 #[link(name = "gio-2.0")]
-extern "C" {
+unsafe extern "C" {
     fn g_application_run(
         application: *mut GApplication,
         argc: i32,
@@ -517,7 +517,7 @@ extern "C" {
 #[repr(C)]
 struct GdkDisplay(u8);
 #[link(name = "gdk-3")]
-extern "C" {
+unsafe extern "C" {
     fn gdk_display_get_default() -> *mut GdkDisplay;
     fn gdk_display_get_name(display: *mut GdkDisplay) -> *const c_char;
 }
@@ -531,7 +531,7 @@ struct GtkWidget(u8);
 struct GtkWindow(u8);
 const GTK_WIN_POS_CENTER: i32 = 1;
 #[link(name = "gtk-3")]
-extern "C" {
+unsafe extern "C" {
     fn gtk_application_new(application_id: *const c_char, flags: i32) -> *mut GtkApplication;
     fn gtk_application_window_new(app: *mut GtkApplication) -> *mut GtkWindow;
     fn gtk_widget_set_size_request(widget: *mut GtkWidget, width: i32, height: i32);
@@ -565,7 +565,7 @@ const WEBKIT_LOAD_STARTED: i32 = 1;
 const WEBKIT_LOAD_FINISHED: i32 = 3;
 const WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION: i32 = 1;
 #[link(name = "webkit2gtk-4.1")]
-extern "C" {
+unsafe extern "C" {
     #[cfg(not(feature = "ipc"))]
     fn webkit_web_view_new() -> *mut GtkWidget;
     fn webkit_web_view_load_uri(web_view: *mut WebKitWebView, uri: *const c_char);
@@ -598,7 +598,7 @@ struct WebKitUserScript(u8);
 struct WebKitJavascriptResult(u8);
 const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
 const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
-extern "C" {
+unsafe extern "C" {
     fn webkit_user_content_manager_new() -> *mut WebKitUserContentManager;
     fn webkit_user_script_new(
         source: *const c_char,
@@ -622,6 +622,6 @@ extern "C" {
 }
 
 #[link(name = "javascriptcoregtk-4.1")]
-extern "C" {
+unsafe extern "C" {
     fn jsc_value_to_string(value: *mut c_void) -> *const c_char;
 }

@@ -8,7 +8,7 @@
 
 #![forbid(unsafe_code)]
 
-use openapi_generator::{generate_schemas, Generator};
+use openapi_generator::{Generator, generate_schemas};
 
 struct Args {
     input: String,

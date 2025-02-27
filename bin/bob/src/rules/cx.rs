@@ -9,13 +9,13 @@ use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 
 use indexmap::IndexMap;
 use regex::Regex;
 
 use crate::manifest::BundleMetadata;
-use crate::{create_file_with_dirs, index_files, Profile, Project};
+use crate::{Profile, Project, create_file_with_dirs, index_files};
 
 pub(crate) fn generate_cx_common(f: &mut dyn Write, project: &Project) {
     if project.is_test {
@@ -75,9 +75,9 @@ pub(crate) fn generate_cpp(f: &mut dyn Write, project: &Project) {
         .collect::<Vec<String>>();
     _ = writeln!(f, "\n# Build C++ objects");
     _ = writeln!(
-            f,
-            "rule cpp\n  command = g++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
-        );
+        f,
+        "rule cpp\n  command = g++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+    );
     for source_file in &cpp_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".cpp", ".o"));
         _ = writeln!(f, "build {}: cpp $source_dir/{}", object_file, source_file);
@@ -93,9 +93,9 @@ pub(crate) fn generate_objc(f: &mut dyn Write, project: &Project) {
         .collect::<Vec<String>>();
     _ = writeln!(f, "\n# Build Objective-C objects");
     _ = writeln!(
-            f,
-            "rule objc\n  command = gcc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
-        );
+        f,
+        "rule objc\n  command = gcc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+    );
     for source_file in &m_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".m", ".o"));
         _ = writeln!(f, "build {}: objc $source_dir/{}", object_file, source_file);
@@ -111,9 +111,9 @@ pub(crate) fn generate_objcpp(f: &mut dyn Write, project: &Project) {
         .collect::<Vec<String>>();
     _ = writeln!(f, "\n# Build Objective-C++ objects");
     _ = writeln!(
-            f,
-            "rule objcpp\n  command = g++ -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
-        );
+        f,
+        "rule objcpp\n  command = g++ -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+    );
     for source_file in &mm_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".mm", ".o"));
         _ = writeln!(

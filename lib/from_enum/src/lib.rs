@@ -10,7 +10,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Meta};
+use syn::{DeriveInput, Meta, parse_macro_input};
 
 /// [FromEnum] derive
 #[proc_macro_derive(FromEnum, attributes(from_enum))]

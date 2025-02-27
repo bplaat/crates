@@ -13,7 +13,7 @@ use std::io::{Error, ErrorKind};
 mod windows {
     pub(crate) const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x00000002;
     #[link(name = "bcrypt")]
-    extern "C" {
+    unsafe extern "C" {
         pub(crate) fn BCryptGenRandom(
             h_alg: *mut std::ffi::c_void,
             pb_output: *mut u8,

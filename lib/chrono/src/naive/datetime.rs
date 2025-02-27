@@ -9,7 +9,7 @@ use std::ops::{Add, Sub};
 use std::str::FromStr;
 use std::time::Duration;
 
-use crate::utils::{timestamp_to_ymd, SECS_IN_DAY};
+use crate::utils::{SECS_IN_DAY, timestamp_to_ymd};
 use crate::{DateTime, NaiveDate, ParseError, Utc};
 
 // MARK: NaiveDateTime

@@ -9,13 +9,13 @@
 
 use std::fs::{self};
 use std::io::Write;
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 
 use args::Profile;
 use rules::Rule;
 use utils::{create_file_with_dirs, format_bytes, index_files};
 
-use crate::args::{parse_args, Args, Subcommand};
+use crate::args::{Args, Subcommand, parse_args};
 use crate::manifest::Manifest;
 
 mod args;

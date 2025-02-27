@@ -8,7 +8,7 @@
 
 use std::net::{Ipv4Addr, TcpListener};
 
-use bsqlite::{execute_args, query_args, Connection, FromRow, FromValue};
+use bsqlite::{Connection, FromRow, FromValue, execute_args, query_args};
 use chrono::{DateTime, Utc};
 use const_format::formatcp;
 use from_enum::FromEnum;

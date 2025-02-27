@@ -8,7 +8,7 @@
 
 #![cfg(target_os = "macos")]
 
-use std::ffi::{c_char, c_void, CString};
+use std::ffi::{CString, c_char, c_void};
 
 /// Object type
 pub type Object = c_void;
@@ -43,7 +43,7 @@ pub struct Block {
 }
 
 #[link(name = "objc", kind = "dylib")]
-extern "C" {
+unsafe extern "C" {
     #![allow(missing_docs)]
 
     pub fn objc_getClass(name: *const c_char) -> *mut Class;

@@ -30,7 +30,7 @@ pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
     Some(unsafe { std::mem::transmute::<isize, unsafe extern "C" fn(*mut c_void)>(-1) })
 }
 
-extern "C" {
+unsafe extern "C" {
     // sqlite3
     pub fn sqlite3_open_v2(
         filename: *const c_char,

@@ -1,7 +1,7 @@
 [package]
 name = "bsqlite"
 version = "0.1.2"
-edition.workspace = true
+edition = "2021"
 license.workspace = true
 authors.workspace = true
 repository.workspace = true

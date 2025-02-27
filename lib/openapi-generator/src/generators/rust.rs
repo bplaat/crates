@@ -41,7 +41,10 @@ fn schema_generate_code(
     }
 
     if let Some(r#enum) = &schema.r#enum {
-        let mut code = format!("#[derive(Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]\npub(crate) enum {} {{\n", name);
+        let mut code = format!(
+            "#[derive(Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]\npub(crate) enum {} {{\n",
+            name
+        );
         for variant in r#enum {
             _ = writeln!(
                 code,
@@ -59,8 +62,7 @@ fn schema_generate_code(
         let field_type = schema_generate_code(code_schemas, name.clone(), additional_properties);
         let code = format!(
             "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {}(pub std::collections::HashMap<String, {}>);\n\n",
-            name,
-            field_type
+            name, field_type
         );
         code_schemas.insert(name.clone(), code);
         return name;
@@ -88,7 +90,11 @@ fn schema_generate_code(
                 let field_name = prop_name.to_snake_case();
                 if is_optional {
                     if prop_name != field_name {
-                        _= writeln!(code, "    #[serde(rename = \"{}\", skip_serializing_if = \"Option::is_none\")]", prop_name);
+                        _ = writeln!(
+                            code,
+                            "    #[serde(rename = \"{}\", skip_serializing_if = \"Option::is_none\")]",
+                            prop_name
+                        );
                     } else {
                         code.push_str("    #[serde(skip_serializing_if = \"Option::is_none\")]\n");
                     }

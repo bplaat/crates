@@ -436,11 +436,11 @@ extern "C" fn webview_did_receive_script_message(
 
 // MARK: Cocoa headers
 #[link(name = "Cocoa", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     static NSApp: *mut Object;
 }
 #[link(name = "WebKit", kind = "framework")]
-extern "C" {}
+unsafe extern "C" {}
 
 #[repr(C)]
 struct NSPoint {

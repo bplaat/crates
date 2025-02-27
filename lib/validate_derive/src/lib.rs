@@ -9,8 +9,8 @@
 #![forbid(unsafe_code)]
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{parse_macro_input, DeriveInput, Expr, Meta};
+use quote::{ToTokens, quote};
+use syn::{DeriveInput, Expr, Meta, parse_macro_input};
 
 struct Rule {
     r#type: RuleType,

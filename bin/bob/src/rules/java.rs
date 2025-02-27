@@ -6,7 +6,7 @@
 
 use std::io::Write;
 use std::path::Path;
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 
 use indexmap::IndexMap;
 
@@ -32,7 +32,7 @@ pub(crate) fn generate_java(f: &mut dyn Write, project: &Project) {
     _ = writeln!(
         f,
         "rule javac\n  command = javac {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = Compiling $in\n",
-         javac_flags
+        javac_flags
     );
     for (module, source_files) in &modules {
         _ = write!(

@@ -8,7 +8,7 @@
 
 #![forbid(unsafe_code)]
 
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 

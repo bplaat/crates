@@ -7,8 +7,8 @@
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
-use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64_NO_PAD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64_NO_PAD;
 
 use crate::pbkdf2_hmac_sha256;
 
