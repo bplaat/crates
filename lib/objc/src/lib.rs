@@ -132,19 +132,19 @@ macro_rules! message_send_impl {
                 unsafe {
                     if size_of::<R>() > 16 {
                         let mut ret = std::mem::zeroed();
-                        let imp: unsafe extern fn (*mut R, *mut Object, *const Sel, $($t,)*) =
+                        let imp: unsafe extern "C" fn (*mut R, *mut Object, *const Sel, $($t,)*) =
                             std::mem::transmute(objc_msgSend_stret as *const c_void);
                         imp(&mut ret, obj, sel, $($a,)*);
                         ret
                     } else {
-                        let imp: unsafe extern fn (*mut Object, *const Sel, $($t,)*) -> R =
+                        let imp: unsafe extern "C" fn (*mut Object, *const Sel, $($t,)*) -> R =
                             std::mem::transmute(objc_msgSend as *const c_void);
                         imp(obj, sel, $($a,)*)
                     }
                 }
                 #[cfg(not(target_arch = "x86_64"))]
                 unsafe {
-                    let imp: unsafe extern fn (*mut Object, *const Sel, $($t,)*) -> R =
+                    let imp: unsafe extern "C" fn (*mut Object, *const Sel, $($t,)*) -> R =
                         std::mem::transmute(objc_msgSend as *const c_void);
                     imp(obj, sel, $($a,)*)
                 }
