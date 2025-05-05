@@ -395,7 +395,7 @@ extern "C" fn webview_did_finish_navigation(
 extern "C" fn webview_decide_policy_for_navigation_action(
     _this: *mut Object,
     _sel: *const Sel,
-    _webview: *mut Object,
+    webview: *mut Object,
     navigation_action: *mut Object,
     mut decision_handler: Block,
 ) {
@@ -406,7 +406,11 @@ extern "C" fn webview_decide_policy_for_navigation_action(
         let request: *mut Object = unsafe { msg_send![navigation_action, request] };
         let url: *mut Object = unsafe { msg_send![request, URL] };
         let url_string: NSString = unsafe { msg_send![url, absoluteString] };
-        if url_string.to_string() != "about:blank" {
+        let current_url: *mut Object = unsafe { msg_send![webview, URL] };
+        let current_url_string: NSString = unsafe { msg_send![current_url, absoluteString] };
+        if url_string.to_string() != "about:blank"
+            && url_string.to_string() != current_url_string.to_string()
+        {
             let _: () = unsafe { msg_send![workspace, openURL:url] };
         }
         decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_CANCEL);
