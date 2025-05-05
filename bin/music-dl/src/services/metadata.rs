@@ -22,7 +22,7 @@ impl MetadataService {
     }
 
     pub(crate) fn search_album(&self, query: &str) -> Result<Vec<AlbumSmall>> {
-        Ok(Request::with_url(format!(
+        Ok(Request::get(format!(
             "http://api.deezer.com/search/album?q={}",
             utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC)
         ))
@@ -33,7 +33,7 @@ impl MetadataService {
     }
 
     pub(crate) fn seach_artist(&self, query: &str) -> Result<Vec<ArtistSmall>> {
-        Ok(Request::with_url(format!(
+        Ok(Request::get(format!(
             "http://api.deezer.com/search/artist?q={}",
             utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC)
         ))
@@ -45,7 +45,7 @@ impl MetadataService {
 
     pub(crate) fn get_artist_albums(&self, artist_id: i64) -> Result<Vec<AlbumSmall>> {
         Ok(
-            Request::with_url(format!("http://api.deezer.com/artist/{}/albums", artist_id))
+            Request::get(format!("http://api.deezer.com/artist/{}/albums", artist_id))
                 .header("User-Agent", USER_AGENT)
                 .fetch()?
                 .into_json::<AlbumList>()?
@@ -55,7 +55,7 @@ impl MetadataService {
 
     pub(crate) fn get_album(&self, album_id: i64) -> Result<Album> {
         Ok(
-            Request::with_url(format!("http://api.deezer.com/album/{}", album_id))
+            Request::get(format!("http://api.deezer.com/album/{}", album_id))
                 .header("User-Agent", USER_AGENT)
                 .fetch()?
                 .into_json::<Album>()?,
@@ -64,7 +64,7 @@ impl MetadataService {
 
     pub(crate) fn get_track(&self, track_id: i64) -> Result<Track> {
         Ok(
-            Request::with_url(format!("http://api.deezer.com/track/{}", track_id))
+            Request::get(format!("http://api.deezer.com/track/{}", track_id))
                 .header("User-Agent", USER_AGENT)
                 .fetch()?
                 .into_json::<Track>()?,
@@ -72,7 +72,7 @@ impl MetadataService {
     }
 
     pub(crate) fn download(&self, cover_url: &str) -> Result<Vec<u8>> {
-        Ok(Request::with_url(cover_url)
+        Ok(Request::get(cover_url)
             .header("User-Agent", USER_AGENT)
             .fetch()?
             .body)

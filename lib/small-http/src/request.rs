@@ -81,12 +81,74 @@ impl Request {
         Self::default()
     }
 
+    /// Create new request with method
+    pub fn with_method(method: Method) -> Self {
+        Self {
+            method,
+            ..Self::default()
+        }
+    }
+
     /// Create new request with URL
     pub fn with_url(url: impl AsRef<str>) -> Self {
         Self {
             url: url.as_ref().parse().expect("Invalid url"),
             ..Self::default()
         }
+    }
+
+    /// Create new request with specific method and URL
+    fn with_method_and_url(method: Method, url: impl AsRef<str>) -> Self {
+        Self {
+            method,
+            url: url.as_ref().parse().expect("Invalid url"),
+            ..Self::default()
+        }
+    }
+
+    /// Create new GET request with URL
+    pub fn get(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Get, url)
+    }
+
+    /// Create new HEAD request with URL
+    pub fn head(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Head, url)
+    }
+
+    /// Create new POST request with URL
+    pub fn post(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Post, url)
+    }
+
+    /// Create new PUT request with URL
+    pub fn put(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Put, url)
+    }
+
+    /// Create new DELETE request with URL
+    pub fn delete(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Delete, url)
+    }
+
+    /// Create new CONNECT request with URL
+    pub fn connect(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Connect, url)
+    }
+
+    /// Create new OPTIONS request with URL
+    pub fn options(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Options, url)
+    }
+
+    /// Create new TRACE request with URL
+    pub fn trace(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Trace, url)
+    }
+
+    /// Create new PATCH request with URL
+    pub fn patch(url: impl AsRef<str>) -> Self {
+        Self::with_method_and_url(Method::Patch, url)
     }
 
     /// Set URL
@@ -320,10 +382,7 @@ mod test {
 
     #[test]
     fn test_write_to_stream() {
-        let request = Request::new()
-            .method(Method::Get)
-            .url(Url::from_str("http://localhost/").unwrap())
-            .header("Host", "localhost");
+        let request = Request::get("http://localhost/").header("Host", "localhost");
 
         let mut buffer = Vec::new();
         request.write_to_stream(&mut buffer);
@@ -332,9 +391,7 @@ mod test {
 
     #[test]
     fn test_write_to_stream_with_body() {
-        let request = Request::new()
-            .method(Method::Post)
-            .url(Url::from_str("http://localhost/").unwrap())
+        let request = Request::post("http://localhost/")
             .header("Host", "localhost")
             .body("Hello, world!");
 
@@ -354,7 +411,7 @@ mod test {
                 .unwrap();
         });
 
-        let res = Request::with_url(format!("http://{}/", server_addr))
+        let res = Request::get(format!("http://{}/", server_addr))
             .fetch()
             .unwrap();
         assert_eq!(res.status, Status::Ok);
@@ -374,7 +431,7 @@ mod test {
                 .unwrap();
         });
 
-        let res = Request::with_url(format!("http://{}/", server_addr))
+        let res = Request::get(format!("http://{}/", server_addr))
             .fetch()
             .unwrap();
         assert_eq!(res.status, Status::Ok);

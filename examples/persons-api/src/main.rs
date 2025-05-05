@@ -431,7 +431,7 @@ mod test {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
-        let res = router.handle(&Request::with_url("http://localhost/"));
+        let res = router.handle(&Request::get("http://localhost/"));
         assert_eq!(res.status, Status::Ok);
         assert!(res.body.starts_with(b"Persons v"));
     }
@@ -441,7 +441,7 @@ mod test {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
-        let res = router.handle(&Request::with_url("http://localhost/"));
+        let res = router.handle(&Request::get("http://localhost/"));
         assert_eq!(
             res.headers
                 .get("Access-Control-Allow-Origin")
@@ -455,7 +455,7 @@ mod test {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
-        let req = Request::with_url("http://localhost/").method(Method::Options);
+        let req = Request::options("http://localhost/");
         let res = router.handle(&req);
         assert_eq!(
             res.headers
@@ -483,7 +483,7 @@ mod test {
         let router = router(ctx.clone());
 
         // Fetch /persons check if empty
-        let res = router.handle(&Request::with_url("http://localhost/persons"));
+        let res = router.handle(&Request::get("http://localhost/persons"));
         assert_eq!(res.status, Status::Ok);
         let persons = serde_json::from_slice::<api::PersonIndexResponse>(&res.body)
             .unwrap()
@@ -500,7 +500,7 @@ mod test {
         ctx.database.insert_person(person.clone());
 
         // Fetch /persons check if person is there
-        let res = router.handle(&Request::with_url("http://localhost/persons"));
+        let res = router.handle(&Request::get("http://localhost/persons"));
         assert_eq!(res.status, Status::Ok);
         let persons = serde_json::from_slice::<api::PersonIndexResponse>(&res.body)
             .unwrap()
@@ -525,7 +525,7 @@ mod test {
         });
 
         // Search for "Alice"
-        let res = router.handle(&Request::with_url("http://localhost/persons?q=Alice"));
+        let res = router.handle(&Request::get("http://localhost/persons?q=Alice"));
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
@@ -548,9 +548,7 @@ mod test {
         }
 
         // Fetch /persons with limit 10 and page 1
-        let res = router.handle(&Request::with_url(
-            "http://localhost/persons?limit=10&page=1",
-        ));
+        let res = router.handle(&Request::get("http://localhost/persons?limit=10&page=1"));
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 10);
@@ -559,9 +557,7 @@ mod test {
         assert_eq!(response.pagination.total, 30);
 
         // Fetch /persons with limit 10 and page 2
-        let res = router.handle(&Request::with_url(
-            "http://localhost/persons?limit=5&page=2",
-        ));
+        let res = router.handle(&Request::get("http://localhost/persons?limit=5&page=2"));
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 5);
@@ -578,9 +574,7 @@ mod test {
 
         // Create person
         let res = router.handle(
-            &Request::with_url("http://localhost/persons")
-                .method(Method::Post)
-                .body("name=Jan&ageInYears=40&relation=me"),
+            &Request::post("http://localhost/persons").body("name=Jan&ageInYears=40&relation=me"),
         );
         assert_eq!(res.status, Status::Ok);
         let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
@@ -602,7 +596,7 @@ mod test {
         ctx.database.insert_person(person.clone());
 
         // Fetch /persons/:person_id check if person is there
-        let res = router.handle(&Request::with_url(format!(
+        let res = router.handle(&Request::get(format!(
             "http://localhost/persons/{}",
             person.id
         )));
@@ -611,7 +605,7 @@ mod test {
         assert_eq!(person.name, "Jan");
 
         // Fetch other person by random id should be 404 Not Found
-        let res = router.handle(&Request::with_url(format!(
+        let res = router.handle(&Request::get(format!(
             "http://localhost/persons/{}",
             Uuid::now_v7()
         )));
@@ -634,8 +628,7 @@ mod test {
 
         // Update person
         let res = router.handle(
-            &Request::with_url(format!("http://localhost/persons/{}", person.id))
-                .method(Method::Put)
+            &Request::put(format!("http://localhost/persons/{}", person.id))
                 .body("name=Jan&ageInYears=41&relation=me"),
         );
         assert_eq!(res.status, Status::Ok);
@@ -644,8 +637,7 @@ mod test {
 
         // Update person with validation errors
         let res = router.handle(
-            &Request::with_url(format!("http://localhost/persons/{}", person.id))
-                .method(Method::Put)
+            &Request::put(format!("http://localhost/persons/{}", person.id))
                 .body("name=Bastiaan&ageInYears=41&relation=wrong"),
         );
         assert_eq!(res.status, Status::BadRequest);
@@ -666,14 +658,14 @@ mod test {
         ctx.database.insert_person(person.clone());
 
         // Delete person
-        let res = router.handle(
-            &Request::with_url(format!("http://localhost/persons/{}", person.id))
-                .method(Method::Delete),
-        );
+        let res = router.handle(&Request::delete(format!(
+            "http://localhost/persons/{}",
+            person.id
+        )));
         assert_eq!(res.status, Status::Ok);
 
         // Fetch /persons check if empty
-        let res = router.handle(&Request::with_url("http://localhost/persons"));
+        let res = router.handle(&Request::get("http://localhost/persons"));
         assert_eq!(res.status, Status::Ok);
         let persons = serde_json::from_slice::<api::PersonIndexResponse>(&res.body)
             .unwrap()

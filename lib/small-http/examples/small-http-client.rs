@@ -15,7 +15,7 @@ struct IpInfo {
 }
 
 fn main() {
-    let res = Request::with_url("http://ipinfo.io/json")
+    let res = Request::get("http://ipinfo.io/json")
         .fetch()
         .expect("Can't fetch");
     println!("{}", String::from_utf8_lossy(&res.body));

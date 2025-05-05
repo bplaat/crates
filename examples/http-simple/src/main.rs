@@ -62,7 +62,7 @@ fn handler(req: &Request) -> Response {
     }
 
     if path == "/ipinfo" {
-        let data_res = match Request::with_url("http://ipinfo.io/json").fetch() {
+        let data_res = match Request::get("http://ipinfo.io/json").fetch() {
             Ok(res) => res,
             Err(_) => {
                 return Response::with_header("Content-Type", "text/html")

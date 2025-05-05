@@ -366,28 +366,28 @@ mod test {
             .build();
 
         // Test home route
-        let res = router.handle(&Request::with_url("http://localhost/"));
+        let res = router.handle(&Request::get("http://localhost/"));
         assert_eq!(res.status, Status::Ok);
         assert_eq!(res.body, b"Hello, World!");
 
         // Test fallback route
-        let res = router.handle(&Request::with_url("http://localhost/unknown"));
+        let res = router.handle(&Request::get("http://localhost/unknown"));
         assert_eq!(res.status, Status::NotFound);
         assert_eq!(res.body, b"404 Not Found");
 
         // Test route with params
-        let res = router.handle(&Request::with_url("http://localhost/hello/Bassie"));
+        let res = router.handle(&Request::get("http://localhost/hello/Bassie"));
         assert_eq!(res.status, Status::Ok);
         assert_eq!(res.body, b"Hello, Bassie!");
 
         // Test route with multiple params
-        let res = router.handle(&Request::with_url(
+        let res = router.handle(&Request::get(
             "http://localhost/hello/Bassie/i/handle/so/much",
         ));
         assert_eq!(res.status, Status::Ok);
 
         // Test wrong method
-        let res = router.handle(&Request::with_url("http://localhost/").method(Method::Options));
+        let res = router.handle(&Request::options("http://localhost/"));
         assert_eq!(res.status, Status::MethodNotAllowed);
         assert_eq!(res.body, b"405 Method Not Allowed");
     }
