@@ -8,11 +8,13 @@
 #![forbid(unsafe_code)]
 
 pub use crate::enums::{Method, Status};
-pub use crate::request::{HeaderMap, Request};
+pub use crate::header_map::HeaderMap;
+pub use crate::request::Request;
 pub use crate::response::Response;
 pub use crate::serve::serve;
 
 mod enums;
+mod header_map;
 mod request;
 mod response;
 mod serve;

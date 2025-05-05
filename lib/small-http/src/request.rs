@@ -14,33 +14,8 @@ use std::str::{self, FromStr};
 use url::Url;
 
 use crate::enums::{Method, Version};
+use crate::header_map::HeaderMap;
 use crate::Response;
-
-/// Mark: Headers
-#[derive(Default, Clone)]
-pub struct HeaderMap(Vec<(String, String)>);
-
-impl HeaderMap {
-    /// Create new HeaderMap
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Get header value
-    pub fn get(&self, name: &str) -> Option<&String> {
-        self.0.iter().find(|(n, _)| n == name).map(|(_, v)| v)
-    }
-
-    /// Iterate over headers
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
-        self.0.iter().map(|(n, v)| (n, v))
-    }
-
-    /// Insert header
-    pub fn insert(&mut self, name: String, value: String) {
-        self.0.push((name, value));
-    }
-}
 
 /// HTTP request
 #[derive(Clone)]
