@@ -14,6 +14,8 @@
 pub(crate) use gtk::*;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::*;
+#[cfg(windows)]
+pub(crate) use windows::*;
 
 #[cfg(any(
     target_os = "linux",
@@ -25,6 +27,8 @@ pub(crate) use macos::*;
 mod gtk;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(windows)]
+mod windows;
 
 #[cfg(not(any(
     target_os = "linux",
@@ -32,6 +36,7 @@ mod macos;
     target_os = "dragonfly",
     target_os = "openbsd",
     target_os = "netbsd",
-    target_os = "macos"
+    target_os = "macos",
+    windows
 )))]
 compile_error!("Unsupported platform");
