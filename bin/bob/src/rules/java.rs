@@ -29,11 +29,24 @@ pub(crate) fn generate_java(f: &mut dyn Write, project: &Project) {
 
     _ = writeln!(f, "\n# Build Java modules");
     _ = writeln!(f, "classes_dir = $target_dir/$profile/classes\n");
-    _ = writeln!(
-        f,
-        "rule javac\n  command = javac {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = Compiling $in\n",
-        javac_flags
-    );
+
+    #[cfg(windows)]
+    {
+        _ = writeln!(
+            f,
+            "rule javac\n  command = cmd.exe /c javac {} -cp $classes_dir $in -d $classes_dir && echo.> $stamp\n  description = Compiling $in\n",
+            javac_flags
+        );
+    }
+    #[cfg(not(windows))]
+    {
+        _ = writeln!(
+            f,
+            "rule javac\n  command = javac {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = Compiling $in\n",
+            javac_flags
+        );
+    }
+
     for (module, source_files) in &modules {
         _ = write!(
             f,
@@ -156,9 +169,11 @@ fn find_dependencies(
             let contents = std::fs::read_to_string(&source_file)
                 .unwrap_or_else(|_| panic!("Can't read file: {}", source_file));
             for other_module in modules.keys() {
-                let re =
-                    regex::Regex::new(&format!(r"import {}.\w+;", other_module.replace("/", ".")))
-                        .expect("Failed to compile regex");
+                let re = regex::Regex::new(&format!(
+                    r"import {}.\w+;",
+                    other_module.replace("/", ".").replace("\\", ".")
+                ))
+                .expect("Failed to compile regex");
                 if re.is_match(&contents) {
                     module_deps
                         .entry(module.clone())
@@ -179,7 +194,12 @@ fn find_main_class(project: &Project) -> Option<String> {
         let contents = std::fs::read_to_string(&source_path)
             .unwrap_or_else(|_| panic!("Can't read file: {}", source_path));
         if re.is_match(&contents) {
-            return Some(source_file.trim_end_matches(".java").replace("/", "."));
+            return Some(
+                source_file
+                    .trim_end_matches(".java")
+                    .replace("/", ".")
+                    .replace("\\", "."),
+            );
         }
     }
     None
