@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::env;
 use std::process::exit;
 
 use anyhow::Result;
@@ -52,10 +51,10 @@ pub(crate) fn get_album_ids(metadata_service: &MetadataService, args: &Args) -> 
 pub(crate) fn user_music_dir() -> String {
     #[cfg(unix)]
     {
-        env::var("XDG_MUSIC_DIR").unwrap_or_else(|_| {
+        std::env::var("XDG_MUSIC_DIR").unwrap_or_else(|_| {
             format!(
                 "{}/Music",
-                env::var("HOME").expect("Can't read #HOME env variable")
+                std::env::var("HOME").expect("Can't read #HOME env variable")
             )
         })
     }
@@ -63,43 +62,58 @@ pub(crate) fn user_music_dir() -> String {
     #[cfg(windows)]
     {
         #[link(name = "shell32")]
-        extern "system" {
+        unsafe extern "C" {
             fn SHGetKnownFolderPath(
-                rfid: *const GUID,
+                rfid: *const Guid,
                 dwFlags: u32,
-                hToken: *const c_void,
+                hToken: *const std::ffi::c_void,
                 ppszPath: *mut *mut u16,
             ) -> i32;
         }
 
+        #[link(name = "ole32")]
+        unsafe extern "C" {
+            fn CoTaskMemFree(pv: *mut std::ffi::c_void);
+        }
+
+        const KF_FLAG_DEFAULT: u32 = 0x00000000;
+
         #[repr(C)]
-        struct GUID {
+        struct Guid {
             data1: u32,
             data2: u16,
             data3: u16,
             data4: [u8; 8],
         }
-        const FOLDERID_MUSIC: GUID = GUID {
+        const FOLDERID_MUSIC: Guid = Guid {
             data1: 0x4BD8D571,
             data2: 0x6D19,
             data3: 0x48D3,
-            data4: [0xBE, 0x97, 0x42, 0x22, 0xC3, 0xE3, 0xD1, 0x97],
+            data4: [0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43],
         };
 
-        let mut path_ptr: *mut u16 = ptr::null_mut();
-        let result =
-            unsafe { SHGetKnownFolderPath(&FOLDERID_MUSIC, 0, ptr::null(), &mut path_ptr) };
+        let mut path_ptr: *mut u16 = std::ptr::null_mut();
+        let result = unsafe {
+            SHGetKnownFolderPath(
+                &FOLDERID_MUSIC,
+                KF_FLAG_DEFAULT,
+                std::ptr::null(),
+                &mut path_ptr,
+            )
+        };
         if result != 0 {
             panic!("Failed to get known folder path");
         }
 
-        let len = unsafe { (0..).take_while(|&i| *path_ptr.offset(i) != 0).count() };
-        let path: Vec<u16> = unsafe { Vec::from_raw_parts(path_ptr, len, len) };
-        let os_string = OsString::from_wide(&path);
-        os_string.to_string_lossy().into_owned()
+        let len = (0..)
+            .take_while(|&i| unsafe { *path_ptr.add(i) } != 0)
+            .count();
+        let path = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(path_ptr, len) });
+        unsafe { CoTaskMemFree(path_ptr as *mut std::ffi::c_void) };
+        path
     }
 
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     compile_error!("Unsupported platform");
 }
 
