@@ -41,11 +41,17 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 ## Getting Started
 
 -   Install the latest Rust toolchain with [rustup](https://rustup.rs/)
--   Install nightly `rustfmt`, `cargo-deny` and `cargo-nextest`:
+-   Install the Rust nightly `rustfmt`:
 
     ```sh
     rustup toolchain add nightly --component rustfmt
-    cargo install cargo-deny cargo-nextest
+    ```
+
+-   Install `cargo-binstall` for [your platform](https://github.com/cargo-bins/cargo-binstall#quickly)
+-   Install the `cargo-deny` and `cargo-nextest` tools:
+
+    ```sh
+    cargo binstall cargo-deny cargo-nextest
     ```
 
 -   Run checks:
