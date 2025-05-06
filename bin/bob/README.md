@@ -6,7 +6,7 @@ A simple meta-build system for my projects, because I like the simplicity of Car
 
 ## Supported project types
 
--   GCC languages (.c, .cpp, .m, .mm)
+-   Clang/GCC languages (.c, .cpp, .m, .mm)
 -   Java (.java)
 
 ### Supported package types

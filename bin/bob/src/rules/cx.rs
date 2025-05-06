@@ -40,6 +40,27 @@ pub(crate) fn generate_cx_common(f: &mut dyn Write, project: &Project) {
         }
     }
     _ = writeln!(f);
+
+    // Use Clang on macOS and Windows
+    #[cfg(target_os = "macos")]
+    {
+        _ = writeln!(f, "cc = clang");
+        _ = writeln!(f, "cxx = clang++");
+        _ = writeln!(f, "strip = strip");
+    }
+    #[cfg(windows)]
+    {
+        _ = writeln!(f, "cc = clang");
+        _ = writeln!(f, "cxx = clang++");
+        _ = writeln!(f, "strip = llvm-strip");
+    }
+    // Use GCC on Linux and other Unix-like systems
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        _ = writeln!(f, "cc = gcc");
+        _ = writeln!(f, "cxx = g++");
+        _ = writeln!(f, "strip = strip");
+    }
 }
 
 pub(crate) fn generate_c(f: &mut dyn Write, project: &Project) {
@@ -52,7 +73,7 @@ pub(crate) fn generate_c(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Build C objects");
     _ = writeln!(
         f,
-        "rule cc\n  command = gcc -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+        "rule cc\n  command = $cc -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
     );
     for source_file in &c_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".c", ".o"));
@@ -76,7 +97,7 @@ pub(crate) fn generate_cpp(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Build C++ objects");
     _ = writeln!(
         f,
-        "rule cpp\n  command = g++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+        "rule cpp\n  command = $cxx -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
     );
     for source_file in &cpp_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".cpp", ".o"));
@@ -94,7 +115,7 @@ pub(crate) fn generate_objc(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Build Objective-C objects");
     _ = writeln!(
         f,
-        "rule objc\n  command = gcc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+        "rule objc\n  command = $cc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
     );
     for source_file in &m_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".m", ".o"));
@@ -112,7 +133,7 @@ pub(crate) fn generate_objcpp(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Build Objective-C++ objects");
     _ = writeln!(
         f,
-        "rule objcpp\n  command = g++ -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+        "rule objcpp\n  command = $cxx -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
     );
     for source_file in &mm_source_files {
         let object_file = format!("$objects_dir/{}", source_file.replace(".mm", ".o"));
@@ -168,6 +189,8 @@ pub(crate) fn generate_ld(f: &mut dyn Write, project: &Project) {
     let mut ldflags = "".to_string();
     if project.profile == Profile::Release {
         ldflags.push_str(" -Os");
+    } else {
+        ldflags.push_str(" -g");
     }
     if contains_objc {
         ldflags.push_str(" -framework Foundation");
@@ -185,16 +208,17 @@ pub(crate) fn generate_ld(f: &mut dyn Write, project: &Project) {
 
     _ = writeln!(f, "\n# Link executable");
     _ = writeln!(f, "ldflags ={}\n", ldflags);
+    #[cfg(windows)]
+    let shell = "cmd.exe /c";
+    #[cfg(not(windows))]
+    let shell = "";
     _ = writeln!(
         f,
         "rule ld\n  command = {} {} $ldflags $in -o $out{}\n  description = Linking $out\n",
-        if contains_cpp { "g++" } else { "gcc" },
+        shell,
+        if contains_cpp { "$cxx" } else { "$cc" },
         match project.profile {
-            Profile::Release => "-Os",
-            _ => "-g",
-        },
-        match project.profile {
-            Profile::Release => " && strip $out",
+            Profile::Release => " && $strip $out",
             _ => "",
         }
     );
