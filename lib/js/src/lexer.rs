@@ -23,7 +23,7 @@ pub(crate) enum Token {
 }
 
 pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
-    let mut tokens: Vec<Token> = vec![];
+    let mut tokens = Vec::new();
 
     let mut chars = text.chars().peekable();
     while let Some(char) = chars.next() {

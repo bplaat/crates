@@ -7,16 +7,15 @@
 use std::io::{self, Write};
 use std::net::TcpListener;
 use std::thread;
-use std::time::Duration;
 
 use threadpool::ThreadPool;
 
 use crate::enums::Version;
 use crate::request::Request;
 use crate::response::Response;
+use crate::KEEP_ALIVE_TIMEOUT;
 
 const WORK_THREAD_PER_CORE: usize = 64;
-pub(crate) const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Start HTTP server
 pub fn serve<F>(listener: TcpListener, handler: F)

@@ -15,8 +15,10 @@ use url::Url;
 
 use crate::enums::{Method, Version};
 use crate::header_map::HeaderMap;
-use crate::Response;
+use crate::response::Response;
+use crate::KEEP_ALIVE_TIMEOUT;
 
+// MARK: Request
 /// HTTP request
 #[derive(Clone)]
 pub struct Request {
@@ -232,7 +234,7 @@ impl Request {
         })
     }
 
-    pub(crate) fn write_to_stream(mut self, stream: &mut dyn Write) {
+    pub(crate) fn write_to_stream(mut self, stream: &mut dyn Write, keep_alive: bool) {
         // Finish headers
         let host = self.url.host().expect("No host in URL");
         self.headers.insert(
@@ -253,8 +255,17 @@ impl Request {
             .to_string(),
         );
         if self.version == Version::Http1_1 {
-            self.headers
-                .insert("Connection".to_string(), "close".to_string());
+            if keep_alive {
+                self.headers
+                    .insert("Connection".to_string(), "keep-alive".to_string());
+                self.headers.insert(
+                    "Keep-Alive".to_string(),
+                    format!("timeout={}", KEEP_ALIVE_TIMEOUT.as_secs()),
+                );
+            } else {
+                self.headers
+                    .insert("Connection".to_string(), "close".to_string());
+            }
         }
 
         // Write request
@@ -282,7 +293,7 @@ impl Request {
             self.url.port().unwrap_or(80)
         ))
         .map_err(|_| FetchError)?;
-        self.write_to_stream(&mut stream);
+        self.write_to_stream(&mut stream, false);
         Response::read_from_stream(&mut stream).map_err(|_| FetchError)
     }
 }
@@ -360,7 +371,7 @@ mod test {
         let request = Request::get("http://localhost/").header("Host", "localhost");
 
         let mut buffer = Vec::new();
-        request.write_to_stream(&mut buffer);
+        request.write_to_stream(&mut buffer, false);
         assert!(buffer.starts_with(b"GET / HTTP/1.1\r\n"));
     }
 
@@ -371,7 +382,7 @@ mod test {
             .body("Hello, world!");
 
         let mut buffer = Vec::new();
-        request.write_to_stream(&mut buffer);
+        request.write_to_stream(&mut buffer, false);
         assert!(buffer.starts_with(b"POST / HTTP/1.1\r\n"));
     }
 

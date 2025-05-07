@@ -10,8 +10,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 
 use crate::enums::{Status, Version};
 use crate::header_map::HeaderMap;
-use crate::serve::KEEP_ALIVE_TIMEOUT;
-use crate::Request;
+use crate::request::Request;
+use crate::KEEP_ALIVE_TIMEOUT;
 
 // MARK: Response
 /// HTTP response

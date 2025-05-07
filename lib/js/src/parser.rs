@@ -51,7 +51,7 @@ impl<'a> Parser<'a> {
     }
 
     fn nodes(&mut self) -> Result<Node, String> {
-        let mut nodes = vec![];
+        let mut nodes = Vec::new();
         loop {
             nodes.push(self.assign()?);
             match self.peek() {
