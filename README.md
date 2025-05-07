@@ -68,7 +68,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ## TODO items
 
--   [ ] small-http: Add client connection pool
+-   [ ] small-http: WebSockets support
 -   [ ] tiny-webview: Add Windows (win32 + Webview2) support
 -   [ ] tiny-webview: Copy subset of objc bindings to make crate standalone
 -   [ ] bob: Add Android project type
