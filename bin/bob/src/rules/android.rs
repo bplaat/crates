@@ -11,8 +11,6 @@ use std::{env, fs};
 use crate::rules::java;
 use crate::{Profile, Project, index_files};
 
-// FIXME: Add dummy key generation: keytool -genkey -keystore keystore.jks -storetype JKS -keyalg RSA -keysize 4096 -validity 7120 -alias android -storepass android -keypass android
-
 // MARK: Rules
 pub(crate) fn generate_android_vars(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Android variables");
@@ -154,6 +152,40 @@ pub(crate) fn generate_android_apk(f: &mut dyn Write, project: &Project) {
         .as_ref()
         .and_then(|m| m.android.clone())
         .unwrap_or_default();
+
+    // Generate dummy keystore if it doesn't exist
+    let keystore_path = format!(
+        "{}/{}",
+        project.manifest_dir, android_metadata.keystore_file
+    );
+    if fs::metadata(&keystore_path).is_err() {
+        println!("Android signing keystore not found, generating dummy one...");
+        let status = Command::new("keytool")
+            .arg("-genkey")
+            .arg("-keystore")
+            .arg(&keystore_path)
+            .arg("-storetype")
+            .arg("JKS")
+            .arg("-keyalg")
+            .arg("RSA")
+            .arg("-keysize")
+            .arg("4096")
+            .arg("-validity")
+            .arg("7120")
+            .arg("-alias")
+            .arg("android")
+            .arg("-storepass")
+            .arg("android")
+            .arg("-keypass")
+            .arg("android")
+            .arg("-dname")
+            .arg("CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, S=Unknown, C=Unknown")
+            .status()
+            .expect("Failed to execute keytool");
+        if !status.success() {
+            exit(status.code().unwrap_or(1));
+        }
+    }
 
     _ = writeln!(f, "\n# Build Android apk");
     _ = writeln!(
