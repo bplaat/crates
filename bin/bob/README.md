@@ -8,11 +8,13 @@ A simple meta-build system for my projects, because I like the simplicity of Car
 
 -   Clang/GCC languages (.c, .cpp, .m, .mm)
 -   Java (.java)
+-   Android (.java, .xml)
 
 ### Supported package types
 
 -   Java Jar (.jar)
 -   macOS bundle (.app)
+-   Android APK (.apk)
 
 ## Getting Started
 
@@ -22,7 +24,7 @@ A simple meta-build system for my projects, because I like the simplicity of Car
     cargo install --git https://github.com/bplaat/crates bob
     ```
 
--   Create a `bob.toml` file in your project root
+-   Create a `bob.toml` file in your project root:
 
     ```toml
     [project]
@@ -30,7 +32,7 @@ A simple meta-build system for my projects, because I like the simplicity of Car
     version = "0.1.0"
     ```
 
--   Create source files in `src` directory, for example a `main.c`
+-   Create source files in the `src` directory, for example `main.c`:
 
     ```c
     #include <stdio.h>
@@ -40,7 +42,7 @@ A simple meta-build system for my projects, because I like the simplicity of Car
     }
     ```
 
--   Then run `bob` to build and run the project
+-   Then run `bob` to build and run the project:
 
     ```sh
     bob run
@@ -48,6 +50,6 @@ A simple meta-build system for my projects, because I like the simplicity of Car
 
 ## License
 
-Copyright © 2024-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
+Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
 
 Licensed under the [MIT](../../LICENSE) license.
