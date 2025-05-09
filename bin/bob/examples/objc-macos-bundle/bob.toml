@@ -5,6 +5,8 @@ version = "0.1.0"
 
 [build]
 ldflags = "-framework Cocoa"
+targets = ["x86_64-apple-darwin", "aarch64-apple-darwin"]
+lipo = true
 
 [package.metadata.bundle]
 copyright = "Copyright © 2025 Bastiaan van der Plaat"

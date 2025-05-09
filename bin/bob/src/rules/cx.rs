@@ -17,234 +17,299 @@ use crate::manifest::BundleMetadata;
 use crate::utils::{resolve_source_file_path, write_file_when_different};
 use crate::{Profile, Project, index_files};
 
-pub(crate) fn generate_cx_vars(f: &mut dyn Write, project: &mut Project) {
-    if project.is_test {
-        generate_test_main(project);
-    }
+pub(crate) struct CxGenerator {
+    pub(crate) generate_rules: bool,
+}
 
-    _ = writeln!(f, "\n# Cx variables");
-    _ = writeln!(f, "objects_dir = $target_dir/$profile/objects");
-
-    // Cflags
-    _ = write!(
-        f,
-        "cflags = {} -Wall -Wextra -Wpedantic -Werror",
-        match project.profile {
-            Profile::Debug => "-g -DDEBUG".to_string(),
-            Profile::Release => "-Os -DRELEASE".to_string(),
-        }
-    );
-    if project.is_test {
-        _ = write!(f, " -DTEST {}", pkg_config_cflags("cunit"));
-    }
-    if let Some(build) = &project.manifest.build {
-        if let Some(cflags) = &build.cflags {
-            _ = write!(f, " {}", cflags);
+impl Default for CxGenerator {
+    fn default() -> Self {
+        Self {
+            generate_rules: true,
         }
     }
-    _ = writeln!(f);
+}
 
-    // Ldflags
-    _ = write!(f, "ldflags =");
-    if project.profile == Profile::Release {
-        _ = write!(f, " -Os");
-    } else {
-        _ = write!(f, " -g");
+impl CxGenerator {
+    pub(crate) fn new() -> Self {
+        Self::default()
     }
-    if project
-        .source_files
-        .iter()
-        .any(|p| p.ends_with(".m") || p.ends_with(".mm"))
-    {
-        _ = write!(f, " -framework Foundation");
-    }
-    if project.is_test {
-        _ = write!(f, " {}", pkg_config_libs("cunit"));
-    }
-    if let Some(build) = &project.manifest.build {
-        if let Some(extra_ldflags) = &build.ldflags {
-            _ = write!(f, " {}", extra_ldflags);
+
+    pub(crate) fn generate_cx_vars(
+        &self,
+        f: &mut dyn Write,
+        project: &mut Project,
+        target: Option<&str>,
+    ) {
+        if project.is_test {
+            generate_test_main(project);
+        }
+
+        _ = writeln!(f, "\n# Cx variables");
+        if let Some(target) = target {
+            _ = writeln!(f, "target = {}", target);
+            _ = writeln!(f, "objects_dir = $target_dir/$profile/$target/objects");
+        } else {
+            _ = writeln!(f, "objects_dir = $target_dir/$profile/objects");
+        }
+
+        // Cflags
+        _ = write!(
+            f,
+            "cflags = {} -Wall -Wextra -Wpedantic -Werror",
+            match project.profile {
+                Profile::Debug => "-g -DDEBUG".to_string(),
+                Profile::Release => "-Os -DRELEASE".to_string(),
+            }
+        );
+        if project.is_test {
+            _ = write!(f, " -DTEST {}", pkg_config_cflags("cunit"));
+        }
+        if let Some(build) = &project.manifest.build {
+            if let Some(cflags) = &build.cflags {
+                _ = write!(f, " {}", cflags);
+            }
+        }
+        _ = writeln!(f);
+
+        // Ldflags
+        _ = write!(f, "ldflags =");
+        if project.profile == Profile::Release {
+            _ = write!(f, " -Os");
+        } else {
+            _ = write!(f, " -g");
+        }
+        if project
+            .source_files
+            .iter()
+            .any(|p| p.ends_with(".m") || p.ends_with(".mm"))
+        {
+            _ = write!(f, " -framework Foundation");
+        }
+        if project.is_test {
+            _ = write!(f, " {}", pkg_config_libs("cunit"));
+        }
+        if let Some(build) = &project.manifest.build {
+            if let Some(extra_ldflags) = &build.ldflags {
+                _ = write!(f, " {}", extra_ldflags);
+            }
+        }
+        _ = writeln!(f);
+
+        // Use Clang on macOS and Windows
+        #[cfg(any(target_os = "macos", windows))]
+        {
+            _ = write!(f, "cc = clang");
+            if let Some(build) = &project.manifest.build {
+                if build.target.is_some() {
+                    _ = write!(f, " -target $target");
+                }
+            }
+            _ = write!(f, "\ncxx = clang++");
+            if let Some(build) = &project.manifest.build {
+                if build.target.is_some() {
+                    _ = write!(f, " -target $target");
+                }
+            }
+        }
+        #[cfg(target_os = "macos")]
+        {
+            _ = writeln!(f, "\nstrip = strip");
+        }
+        #[cfg(windows)]
+        {
+            _ = writeln!(f, "strip = llvm-strip");
+        }
+
+        // Use GCC on Linux and other Unix-like systems
+        #[cfg(not(any(target_os = "macos", windows)))]
+        {
+            _ = writeln!(f, "cc = gcc");
+            _ = writeln!(f, "cxx = g++");
+            _ = writeln!(f, "strip = strip");
+            if let Some(build) = &project.manifest.build {
+                if let Some(target) = &build.target {
+                    todo!("FIXME: Target is currently not supported with gcc toolchains");
+                }
+            }
         }
     }
-    _ = writeln!(f);
 
-    // Use Clang on macOS and Windows
-    #[cfg(target_os = "macos")]
-    {
-        _ = writeln!(f, "cc = clang");
-        _ = writeln!(f, "cxx = clang++");
-        _ = writeln!(f, "strip = strip");
-    }
-    #[cfg(windows)]
-    {
-        _ = writeln!(f, "cc = clang");
-        _ = writeln!(f, "cxx = clang++");
-        _ = writeln!(f, "strip = llvm-strip");
-    }
-    // Use GCC on Linux and other Unix-like systems
-    #[cfg(not(any(target_os = "macos", windows)))]
-    {
-        _ = writeln!(f, "cc = gcc");
-        _ = writeln!(f, "cxx = g++");
-        _ = writeln!(f, "strip = strip");
-    }
-}
-
-pub(crate) fn generate_c(f: &mut dyn Write, project: &Project) {
-    let c_source_files = project
-        .source_files
-        .iter()
-        .filter(|source_file| source_file.ends_with(".c"))
-        .cloned()
-        .collect::<Vec<String>>();
-    _ = writeln!(f, "\n# Compile C objects");
-    _ = writeln!(
-        f,
-        "rule cc\n  command = $cc -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
-    );
-    for source_file in &c_source_files {
-        let object_file = source_file
-            .replace("$source_dir/", "$objects_dir/")
-            .replace("$source_gen_dir/", "$objects_dir/")
-            .replace(".c", ".o");
-        _ = writeln!(f, "build {}: cc {}", object_file, source_file);
-    }
-}
-
-pub(crate) fn generate_cpp(f: &mut dyn Write, project: &Project) {
-    let cpp_source_files = project
-        .source_files
-        .iter()
-        .filter(|source_file| source_file.ends_with(".cpp"))
-        .cloned()
-        .collect::<Vec<String>>();
-    _ = writeln!(f, "\n# Compile C++ objects");
-    _ = writeln!(
-        f,
-        "rule cpp\n  command = $cxx -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
-    );
-    for source_file in &cpp_source_files {
-        let object_file = source_file
-            .replace("$source_dir/", "$objects_dir/")
-            .replace("$source_gen_dir/", "$objects_dir/")
-            .replace(".cpp", ".o");
-        _ = writeln!(f, "build {}: cpp {}", object_file, source_file);
-    }
-}
-
-pub(crate) fn generate_objc(f: &mut dyn Write, project: &Project) {
-    let m_source_files = project
-        .source_files
-        .iter()
-        .filter(|source_file| source_file.ends_with(".m"))
-        .cloned()
-        .collect::<Vec<String>>();
-    _ = writeln!(f, "\n# Compile Objective-C objects");
-    _ = writeln!(
-        f,
-        "rule objc\n  command = $cc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
-    );
-    for source_file in &m_source_files {
-        let object_file = source_file
-            .replace("$source_dir/", "$objects_dir/")
-            .replace("$source_gen_dir/", "$objects_dir/")
-            .replace(".m", ".o");
-        _ = writeln!(f, "build {}: objc {}", object_file, source_file);
-    }
-}
-
-pub(crate) fn generate_objcpp(f: &mut dyn Write, project: &Project) {
-    let mm_source_files = project
-        .source_files
-        .iter()
-        .filter(|source_file| source_file.ends_with(".mm"))
-        .cloned()
-        .collect::<Vec<String>>();
-    _ = writeln!(f, "\n# Compile Objective-C++ objects");
-    _ = writeln!(
-        f,
-        "rule objcpp\n  command = $cxx -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
-    );
-    for source_file in &mm_source_files {
-        let object_file = source_file
-            .replace("$source_dir/", "$objects_dir/")
-            .replace("$source_gen_dir/", "$objects_dir/")
-            .replace(".mm", ".o");
-        _ = writeln!(f, "build {}: objcpp {}", object_file, source_file);
-    }
-}
-
-pub(crate) fn generate_ld(f: &mut dyn Write, project: &Project) {
-    let mut object_files = Vec::new();
-    let mut contains_cpp = false;
-    if project.is_test {
-        let test_functions = find_test_function(project);
-        for source_file in test_functions.keys() {
-            object_files.push(
-                source_file
-                    .replace("$source_dir/", "$objects_dir/")
-                    .replace("$source_gen_dir/", "$objects_dir/")
-                    .replace(".mm", ".o")
-                    .replace(".m", ".o")
-                    .replace(".cpp", ".o")
-                    .replace(".c", ".o"),
+    pub(crate) fn generate_c(&self, f: &mut dyn Write, project: &Project) {
+        let c_source_files = project
+            .source_files
+            .iter()
+            .filter(|source_file| source_file.ends_with(".c"))
+            .cloned()
+            .collect::<Vec<String>>();
+        _ = writeln!(f, "\n# Compile C objects");
+        if self.generate_rules {
+            _ = writeln!(
+                f,
+                "rule cc\n  command = $cc -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
             );
         }
-    } else {
-        for source_file in &project.source_files {
-            let source_file = source_file
+        for source_file in &c_source_files {
+            let object_file = source_file
                 .replace("$source_dir/", "$objects_dir/")
-                .replace("$source_gen_dir/", "$objects_dir/");
-            if source_file.ends_with(".c") {
-                object_files.push(source_file.replace(".c", ".o"));
-            }
-            if source_file.ends_with(".cpp") {
-                object_files.push(source_file.replace(".cpp", ".o"));
-                contains_cpp = true;
-            }
-            if source_file.ends_with(".m") {
-                object_files.push(source_file.replace(".m", ".o"));
-            }
-            if source_file.ends_with(".mm") {
-                object_files.push(source_file.replace(".mm", ".o"));
-                contains_cpp = true;
-            }
+                .replace("$source_gen_dir/", "$objects_dir/")
+                .replace(".c", ".o");
+            _ = writeln!(f, "build {}: cc {}", object_file, source_file);
         }
     }
 
-    _ = writeln!(f, "\n# Link executable");
-    #[cfg(windows)]
-    let shell = "cmd.exe /c";
-    #[cfg(not(windows))]
-    let shell = "";
-    _ = writeln!(
-        f,
-        "rule ld\n  command = {} {} $ldflags $in -o $out{}\n  description = Linking $out\n",
-        shell,
-        if contains_cpp { "$cxx" } else { "$cc" },
-        match project.profile {
-            Profile::Release => " && $strip $out",
-            _ => "",
+    pub(crate) fn generate_cpp(&self, f: &mut dyn Write, project: &Project) {
+        let cpp_source_files = project
+            .source_files
+            .iter()
+            .filter(|source_file| source_file.ends_with(".cpp"))
+            .cloned()
+            .collect::<Vec<String>>();
+        _ = writeln!(f, "\n# Compile C++ objects");
+        if self.generate_rules {
+            _ = writeln!(
+                f,
+                "rule cpp\n  command = $cxx -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+            );
         }
-    );
-    #[cfg(windows)]
-    let executable_file = if project.is_test {
-        "$target_dir/$profile/test_$name.exe"
-    } else {
-        "$target_dir/$profile/$name.exe"
-    };
-    #[cfg(not(windows))]
-    let executable_file = if project.is_test {
-        "$target_dir/$profile/test_$name"
-    } else {
-        "$target_dir/$profile/$name"
-    };
-    _ = writeln!(
-        f,
-        "build {}: ld {}",
-        executable_file,
-        object_files.join(" ")
-    );
+        for source_file in &cpp_source_files {
+            let object_file = source_file
+                .replace("$source_dir/", "$objects_dir/")
+                .replace("$source_gen_dir/", "$objects_dir/")
+                .replace(".cpp", ".o");
+            _ = writeln!(f, "build {}: cpp {}", object_file, source_file);
+        }
+    }
+
+    pub(crate) fn generate_objc(&self, f: &mut dyn Write, project: &Project) {
+        let m_source_files = project
+            .source_files
+            .iter()
+            .filter(|source_file| source_file.ends_with(".m"))
+            .cloned()
+            .collect::<Vec<String>>();
+        _ = writeln!(f, "\n# Compile Objective-C objects");
+        if self.generate_rules {
+            _ = writeln!(
+                f,
+                "rule objc\n  command = $cc -x objective-c -c $cflags --std=c11 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+            );
+        }
+        for source_file in &m_source_files {
+            let object_file = source_file
+                .replace("$source_dir/", "$objects_dir/")
+                .replace("$source_gen_dir/", "$objects_dir/")
+                .replace(".m", ".o");
+            _ = writeln!(f, "build {}: objc {}", object_file, source_file);
+        }
+    }
+
+    pub(crate) fn generate_objcpp(&self, f: &mut dyn Write, project: &Project) {
+        let mm_source_files = project
+            .source_files
+            .iter()
+            .filter(|source_file| source_file.ends_with(".mm"))
+            .cloned()
+            .collect::<Vec<String>>();
+        _ = writeln!(f, "\n# Compile Objective-C++ objects");
+        if self.generate_rules {
+            _ = writeln!(
+                f,
+                "rule objcpp\n  command = $cxx -x objective-c++ -c $cflags --std=c++17 -MD -MF $out.d $in -o $out\n  depfile = $out.d\n  description = Compiling $in\n"
+            );
+        }
+        for source_file in &mm_source_files {
+            let object_file = source_file
+                .replace("$source_dir/", "$objects_dir/")
+                .replace("$source_gen_dir/", "$objects_dir/")
+                .replace(".mm", ".o");
+            _ = writeln!(f, "build {}: objcpp {}", object_file, source_file);
+        }
+    }
+
+    pub(crate) fn generate_ld(&self, f: &mut dyn Write, project: &Project) {
+        let mut object_files = Vec::new();
+        let mut contains_cpp = false;
+        if project.is_test {
+            let test_functions = find_test_function(project);
+            for source_file in test_functions.keys() {
+                object_files.push(
+                    source_file
+                        .replace("$source_dir/", "$objects_dir/")
+                        .replace("$source_gen_dir/", "$objects_dir/")
+                        .replace(".mm", ".o")
+                        .replace(".m", ".o")
+                        .replace(".cpp", ".o")
+                        .replace(".c", ".o"),
+                );
+            }
+        } else {
+            for source_file in &project.source_files {
+                let source_file = source_file
+                    .replace("$source_dir/", "$objects_dir/")
+                    .replace("$source_gen_dir/", "$objects_dir/");
+                if source_file.ends_with(".c") {
+                    object_files.push(source_file.replace(".c", ".o"));
+                }
+                if source_file.ends_with(".cpp") {
+                    object_files.push(source_file.replace(".cpp", ".o"));
+                    contains_cpp = true;
+                }
+                if source_file.ends_with(".m") {
+                    object_files.push(source_file.replace(".m", ".o"));
+                }
+                if source_file.ends_with(".mm") {
+                    object_files.push(source_file.replace(".mm", ".o"));
+                    contains_cpp = true;
+                }
+            }
+        }
+
+        _ = writeln!(f, "\n# Link executable");
+        if self.generate_rules {
+            #[cfg(windows)]
+            let shell = "cmd.exe /c";
+            #[cfg(not(windows))]
+            let shell = "";
+            _ = writeln!(
+                f,
+                "rule ld\n  command = {}{} $ldflags $in -o $out{}\n  description = Linking $out\n",
+                shell,
+                if contains_cpp { "$cxx" } else { "$cc" },
+                match project.profile {
+                    Profile::Release => " && $strip $out",
+                    _ => "",
+                }
+            );
+        }
+
+        let executable_dir: &'static str = if let Some(build) = &project.manifest.build {
+            if build.target.is_some() {
+                "$target_dir/$profile/$target"
+            } else {
+                "$target_dir/$profile"
+            }
+        } else {
+            "$target_dir/$profile"
+        };
+        #[cfg(windows)]
+        let executable_file = if project.is_test {
+            format!("{}/test_$name.exe", executable_dir)
+        } else {
+            format!("{}/$name.exe", executable_dir)
+        };
+        #[cfg(not(windows))]
+        let executable_file = if project.is_test {
+            format!("{}/test_$name", executable_dir)
+        } else {
+            format!("{}/$name", executable_dir)
+        };
+        _ = writeln!(
+            f,
+            "build {}: ld {}",
+            executable_file,
+            object_files.join(" ")
+        );
+    }
 }
 
 pub(crate) fn generate_bundle(f: &mut dyn Write, project: &Project) {
@@ -339,38 +404,40 @@ pub(crate) fn generate_bundle(f: &mut dyn Write, project: &Project) {
 }
 
 pub(crate) fn run_ld(project: &Project) {
-    let status = Command::new(
-        #[cfg(windows)]
-        format!(
-            "{}/target/{}/{}.exe",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ),
-        #[cfg(not(windows))]
-        format!(
-            "{}/target/{}/{}",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ),
-    )
-    .status()
-    .expect("Failed to execute executable");
+    let mut executable_path = format!("{}/target/{}", project.manifest_dir, project.profile);
+    // if let Some(build) = &project.manifest.build {
+    //     if let Some(target) = &build.target {
+    //         executable_path = format!("{}/{}", executable_path, target);
+    //     }
+    // }
+    executable_path = format!("{}/{}", executable_path, project.manifest.package.name);
+    #[cfg(windows)]
+    {
+        executable_path = format!("{}.exe", executable_path);
+    }
+
+    let status = Command::new(executable_path)
+        .status()
+        .expect("Failed to execute executable");
     exit(status.code().unwrap_or(1));
 }
 
 pub(crate) fn run_tests(project: &Project) {
-    let status = Command::new(
-        #[cfg(windows)]
-        format!(
-            "{}/target/{}/test_{}.exe",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ),
-        #[cfg(not(windows))]
-        format!(
-            "{}/target/{}/test_{}",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ),
-    )
-    .status()
-    .expect("Failed to execute executable");
+    let mut executable_path = format!("{}/target/{}", project.manifest_dir, project.profile);
+    // if let Some(build) = &project.manifest.build {
+    //     if let Some(target) = &build.target {
+    //         executable_path = format!("{}/{}", executable_path, target);
+    //     }
+    // }
+    executable_path = format!("{}/test_{}", executable_path, project.manifest.package.name);
+    #[cfg(windows)]
+    {
+        executable_path = format!("{}.exe", executable_path);
+    }
+
+    let status = Command::new(executable_path)
+        .status()
+        .expect("Failed to execute executable");
     exit(status.code().unwrap_or(1));
 }
 

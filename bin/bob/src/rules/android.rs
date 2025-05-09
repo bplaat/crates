@@ -149,9 +149,8 @@ pub(crate) fn generate_android_apk(f: &mut dyn Write, project: &Project) {
         .manifest
         .package
         .metadata
-        .as_ref()
-        .and_then(|m| m.android.clone())
-        .unwrap_or_default();
+        .android
+        .unwrap_or_default()
 
     // Generate dummy keystore if it doesn't exist
     let keystore_path = format!(

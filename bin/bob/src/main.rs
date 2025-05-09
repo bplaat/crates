@@ -181,14 +181,35 @@ fn generate_ninja_file(project: &mut Project) -> Vec<Rule> {
 
     // Generate rules
     let needed_rules = determine_needed_rules(project);
+
+    let targets = if let Some(build) = &project.manifest.build {
+        if let Some(target) = &build.target {
+            target.iter().map(|t| Some(t.clone())).collect::<Vec<_>>()
+        } else {
+            vec![None]
+        }
+    } else {
+        vec![None]
+    };
+
+    let mut cx_generator = rules::cx::CxGenerator::new();
+    for target in targets {
+        for rule in &needed_rules {
+            match rule {
+                Rule::CxVars => cx_generator.generate_cx_vars(&mut f, project, target.as_deref()),
+                Rule::C => cx_generator.generate_c(&mut f, project),
+                Rule::Cpp => cx_generator.generate_cpp(&mut f, project),
+                Rule::Objc => cx_generator.generate_objc(&mut f, project),
+                Rule::Objcpp => cx_generator.generate_objcpp(&mut f, project),
+                Rule::Ld => cx_generator.generate_ld(&mut f, project),
+                _ => {}
+            }
+        }
+        cx_generator.generate_rules = false;
+    }
+
     for rule in &needed_rules {
         match rule {
-            Rule::CxVars => rules::cx::generate_cx_vars(&mut f, project),
-            Rule::C => rules::cx::generate_c(&mut f, project),
-            Rule::Cpp => rules::cx::generate_cpp(&mut f, project),
-            Rule::Objc => rules::cx::generate_objc(&mut f, project),
-            Rule::Objcpp => rules::cx::generate_objcpp(&mut f, project),
-            Rule::Ld => rules::cx::generate_ld(&mut f, project),
             Rule::Bundle => rules::cx::generate_bundle(&mut f, project),
             Rule::JavaVars => rules::java::generate_java_vars(&mut f, project),
             Rule::Java => rules::java::generate_java(&mut f, project),
@@ -197,6 +218,7 @@ fn generate_ninja_file(project: &mut Project) -> Vec<Rule> {
             Rule::AndroidRes => rules::android::generate_android_res(&mut f, project),
             Rule::AndroidDex => rules::android::generate_android_dex(&mut f, project),
             Rule::AndroidApk => rules::android::generate_android_apk(&mut f, project),
+            _ => {}
         };
     }
     needed_rules

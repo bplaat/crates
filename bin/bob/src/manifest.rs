@@ -9,7 +9,8 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub(crate) struct Manifest {
     pub package: Package,
-    pub build: Option<Build>,
+    #[serde(default)]
+    pub build: Build,
 }
 
 #[derive(Deserialize)]
@@ -17,18 +18,35 @@ pub(crate) struct Package {
     pub name: String,
     pub identifier: Option<String>,
     pub version: String,
-    pub metadata: Option<PackageMetadata>,
+    #[serde(default)]
+    pub metadata: PackageMetadata,
 }
 
 #[derive(Deserialize)]
 pub(crate) struct Build {
-    pub cflags: Option<String>,
-    pub ldflags: Option<String>,
-    pub javac_flags: Option<String>,
-    pub javac_classpath: Option<String>,
+    pub cflags: String,
+    pub ldflags: String,
+    pub target: Option<String>,
+    pub targets: Vec<String>,
+    pub lipo: bool,
+    pub javac_flags: String,
+    pub classpath: Option<String>,
+}
+impl Default for Build {
+    fn default() -> Self {
+        Self {
+            cflags: String::new(),
+            ldflags: String::new(),
+            target: None,
+            targets: Vec::new(),
+            lipo: false,
+            javac_flags: String::new(),
+            classpath: None,
+        }
+    }
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub(crate) struct PackageMetadata {
     pub bundle: Option<BundleMetadata>,
     pub jar: Option<JarMetadata>,
@@ -57,7 +75,6 @@ pub(crate) struct AndroidMetadata {
     pub keystore_password: String,
     pub key_password: String,
 }
-
 impl Default for AndroidMetadata {
     fn default() -> Self {
         Self {

@@ -35,7 +35,7 @@ pub(crate) fn generate_java_vars(f: &mut dyn Write, project: &Project) {
     // Javac classpath
     _ = write!(f, "classpath = $classes_dir");
     if let Some(build) = &project.manifest.build {
-        if let Some(classpath) = &build.javac_classpath {
+        if let Some(classpath) = &build.classpath {
             _ = write!(f, " {}", classpath);
         }
     }
