@@ -1,4 +1,5 @@
 .vscode/
 target/
 *.db*
+*.jks
 .DS_Store

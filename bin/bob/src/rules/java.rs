@@ -4,46 +4,83 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::fs;
 use std::io::Write;
-use std::path::Path;
 use std::process::{Command, exit};
 
 use indexmap::IndexMap;
 
+use crate::utils::resolve_source_file_path;
 use crate::{Profile, Project};
+
+// MARK: Rules
+pub(crate) fn generate_java_vars(f: &mut dyn Write, project: &Project) {
+    _ = writeln!(f, "\n# Java variables");
+    _ = writeln!(f, "classes_dir = $target_dir/$profile/classes");
+
+    // Javac flags
+    _ = write!(f, "javac_flags = -Xlint");
+    if project.profile == Profile::Release {
+        _ = write!(f, " -g:none");
+    } else {
+        _ = write!(f, " -g");
+    }
+    if let Some(build) = &project.manifest.build {
+        if let Some(flags) = &build.javac_flags {
+            _ = write!(f, " {}", flags);
+        }
+    }
+    _ = writeln!(f);
+
+    // Javac classpath
+    _ = write!(f, "classpath = $classes_dir");
+    if let Some(build) = &project.manifest.build {
+        if let Some(classpath) = &build.javac_classpath {
+            _ = write!(f, " {}", classpath);
+        }
+    }
+    _ = writeln!(f);
+
+    // Main class
+    if let Some(jar_metadata) = project
+        .manifest
+        .package
+        .metadata
+        .as_ref()
+        .and_then(|m| m.jar.as_ref())
+    {
+        _ = writeln!(
+            f,
+            "main_class = {}",
+            if let Some(main_class) = &jar_metadata.main_class {
+                main_class.clone()
+            } else {
+                find_main_class(project).unwrap_or_else(|| {
+                    eprintln!("Can't find main class");
+                    exit(1);
+                })
+            }
+        );
+    }
+}
 
 pub(crate) fn generate_java(f: &mut dyn Write, project: &Project) {
     let modules = find_modules(&project.source_files);
     let module_dependencies = find_dependencies(project, &modules);
 
-    let mut javac_flags = "-Xlint".to_string();
-    if project.profile == Profile::Release {
-        javac_flags.push_str(" -g:none");
-    }
-    if let Some(build) = &project.manifest.build {
-        if let Some(flags) = &build.javac_flags {
-            javac_flags.push(' ');
-            javac_flags.push_str(flags);
-        }
-    }
-
-    _ = writeln!(f, "\n# Build Java modules");
-    _ = writeln!(f, "classes_dir = $target_dir/$profile/classes\n");
-
+    _ = writeln!(f, "\n# Compile Java modules");
     #[cfg(windows)]
     {
         _ = writeln!(
             f,
-            "rule javac\n  command = cmd.exe /c javac {} -cp $classes_dir $in -d $classes_dir && echo.> $stamp\n  description = Compiling $in\n",
-            javac_flags
+            "rule javac\n  command = cmd.exe /c javac $javac_flags -cp $classpath $in -d $classes_dir && echo.> $stamp\n  description = Compiling $in\n"
         );
     }
     #[cfg(not(windows))]
     {
         _ = writeln!(
             f,
-            "rule javac\n  command = javac {} -cp $classes_dir $in -d $classes_dir && touch $stamp\n  description = Compiling $in\n",
-            javac_flags
+            "rule javac\n  command = javac $javac_flags -cp $classpath $in -d $classes_dir && touch $stamp\n  description = Compiling $in\n"
         );
     }
 
@@ -51,12 +88,8 @@ pub(crate) fn generate_java(f: &mut dyn Write, project: &Project) {
         _ = write!(
             f,
             "build $classes_dir/{}/.stamp: javac {}",
-            module,
-            source_files
-                .iter()
-                .map(|source_file| format!("$source_dir/{}", source_file))
-                .collect::<Vec<_>>()
-                .join(" ")
+            module.replace('.', "/"),
+            source_files.join(" ")
         );
         if let Some(dependencies) = module_dependencies.get(module) {
             _ = write!(
@@ -64,57 +97,39 @@ pub(crate) fn generate_java(f: &mut dyn Write, project: &Project) {
                 " | {}",
                 dependencies
                     .iter()
-                    .map(|source_file| format!("$classes_dir/{}/.stamp", source_file))
+                    .map(|module| format!("$classes_dir/{}/.stamp", module.replace('.', "/")))
                     .collect::<Vec<_>>()
                     .join(" ")
             );
         }
-        _ = writeln!(f, "\n  stamp = $classes_dir/{}/.stamp", module);
+        _ = writeln!(
+            f,
+            "\n  stamp = $classes_dir/{}/.stamp",
+            module.replace('.', "/")
+        );
     }
 }
 
-pub(crate) fn generate_jar(f: &mut dyn Write, project: &Project) {
+pub(crate) fn generate_java_jar(f: &mut dyn Write, project: &Project) {
     let modules = find_modules(&project.source_files);
-    let jar_metadata = &project
-        .manifest
-        .package
-        .metadata
-        .as_ref()
-        .and_then(|m| m.jar.as_ref())
-        .expect("Should be some");
 
     _ = writeln!(f, "\n# Link jar");
     _ = writeln!(
         f,
-        "main_class = {}\n",
-        if let Some(main_class) = &jar_metadata.main_class {
-            main_class.clone()
-        } else {
-            find_main_class(project).unwrap_or_else(|| {
-                eprintln!("Can't find main class");
-                exit(1);
-            })
-        }
+        "rule jar\n  command = jar cfe $out $main_class -C $classes_dir .\n  description = Packaging $out\n"
     );
     _ = writeln!(
         f,
-        "rule jar\n  command = jar cfe $out $main_class -C $in .\n  description = Packaging $out\n"
-    );
-    _ = writeln!(
-        f,
-        "build $classes_dir: phony {}",
+        "build $target_dir/$profile/${{name}}-$version.jar: jar {}",
         modules
             .keys()
-            .map(|module| format!("$classes_dir/{}/.stamp", module))
+            .map(|module| format!("$classes_dir/{}/.stamp", module.replace('.', "/")))
             .collect::<Vec<_>>()
-            .join(" ")
-    );
-    _ = writeln!(
-        f,
-        "build $target_dir/$profile/${{name}}-$version.jar: jar $classes_dir",
+            .join(" "),
     );
 }
 
+// MARK: Runners
 pub(crate) fn run_java(project: &Project) {
     let status = Command::new("java")
         .arg("-cp")
@@ -128,7 +143,7 @@ pub(crate) fn run_java(project: &Project) {
     exit(status.code().unwrap_or(1));
 }
 
-pub(crate) fn run_jar(project: &Project) {
+pub(crate) fn run_java_jar(project: &Project) {
     let status = Command::new("java")
         .arg("-jar")
         .arg(format!(
@@ -143,16 +158,16 @@ pub(crate) fn run_jar(project: &Project) {
     exit(status.code().unwrap_or(1));
 }
 
-fn find_modules(source_files: &[String]) -> IndexMap<String, Vec<String>> {
+// MARK: Utils
+pub(crate) fn find_modules(source_files: &[String]) -> IndexMap<String, Vec<String>> {
     let mut modules = IndexMap::new();
-    for file in source_files {
-        if let Some(parent) = Path::new(file).parent() {
-            if let Some(parent_str) = parent.to_str() {
-                modules
-                    .entry(parent_str.to_string())
-                    .or_insert_with(Vec::new)
-                    .push(file.clone());
-            }
+    for source_file in source_files {
+        if source_file.ends_with(".java") {
+            let parts = source_file.split('/').collect::<Vec<&str>>();
+            modules
+                .entry(parts[1..parts.len() - 1].join("."))
+                .or_insert_with(Vec::new)
+                .push(source_file.clone());
         }
     }
     modules
@@ -163,22 +178,19 @@ fn find_dependencies(
     modules: &IndexMap<String, Vec<String>>,
 ) -> IndexMap<String, Vec<String>> {
     let mut module_deps = IndexMap::new();
-    for (module, files) in modules {
-        for file in files {
-            let source_file = format!("{}/src/{}", project.manifest_dir, file);
-            let contents = std::fs::read_to_string(&source_file)
-                .unwrap_or_else(|_| panic!("Can't read file: {}", source_file));
-            for other_module in modules.keys() {
-                let re = regex::Regex::new(&format!(
-                    r"import {}.\w+;",
-                    other_module.replace("/", ".").replace("\\", ".")
-                ))
-                .expect("Failed to compile regex");
-                if re.is_match(&contents) {
-                    module_deps
-                        .entry(module.clone())
-                        .or_insert_with(Vec::new)
-                        .push(other_module.clone());
+    for (module, source_files) in modules {
+        for source_file in source_files {
+            if let Ok(contents) = fs::read_to_string(resolve_source_file_path(source_file, project))
+            {
+                for other_module in modules.keys() {
+                    let re = regex::Regex::new(&format!(r"import {}.\w+;", other_module))
+                        .expect("Failed to compile regex");
+                    if re.is_match(&contents) {
+                        module_deps
+                            .entry(module.clone())
+                            .or_insert_with(Vec::new)
+                            .push(other_module.clone());
+                    }
                 }
             }
         }
@@ -190,16 +202,15 @@ fn find_main_class(project: &Project) -> Option<String> {
     let re = regex::Regex::new(r"(public\s+)?static\s+void\s+main\s*\(")
         .expect("Failed to compile regex");
     for source_file in &project.source_files {
-        let source_path = format!("{}/src/{}", project.manifest_dir, source_file);
-        let contents = std::fs::read_to_string(&source_path)
-            .unwrap_or_else(|_| panic!("Can't read file: {}", source_path));
-        if re.is_match(&contents) {
-            return Some(
-                source_file
-                    .trim_end_matches(".java")
-                    .replace("/", ".")
-                    .replace("\\", "."),
-            );
+        if let Ok(contents) = fs::read_to_string(resolve_source_file_path(source_file, project)) {
+            if re.is_match(&contents) {
+                return Some(
+                    source_file
+                        .trim_start_matches("$source_dir/")
+                        .trim_end_matches(".java")
+                        .replace(['/', '\\'], "."),
+                );
+            }
         }
     }
     None
