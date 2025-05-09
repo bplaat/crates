@@ -71,7 +71,6 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [ ] small-http: WebSockets support
 -   [ ] tiny-webview: Add Windows (win32 + Webview2) support
 -   [ ] tiny-webview: Copy subset of objc bindings to make crate standalone
--   [ ] bob: Add Android project type
 -   [ ] bob: Build universal multi target binaries with macOS bundle package
 -   [ ] bob: Add path dependencies like cargo
     -   Add Java library
