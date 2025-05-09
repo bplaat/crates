@@ -9,7 +9,7 @@ use std::process::{Command, exit};
 use std::{env, fs};
 
 use crate::rules::java;
-use crate::{Profile, Project};
+use crate::{Profile, Project, index_files};
 
 // FIXME: Add dummy key generation: keytool -genkey -keystore keystore.jks -storetype JKS -keyalg RSA -keysize 4096 -validity 7120 -alias android -storepass android -keypass android
 
@@ -61,33 +61,58 @@ pub(crate) fn generate_android_res(f: &mut dyn Write, project: &mut Project) {
         });
 
     _ = writeln!(f, "\n# Compile Android resources");
-    // FIXME: Compile every resources in separate build steps
     _ = writeln!(
         f,
-        "rule aapt2_compile\n  command = mkdir -p $target_dir/$profile/res && $build_tools_path/aapt2 compile --no-crunch --dir $in -o $out\n  description = Compiling $in\n"
+        "rule aapt2_compile\n  command = $build_tools_path/aapt2 compile --no-crunch $in -o $target_dir/$profile/res\n  description = Compiling $in"
     );
+    let assets_dir = format!("{}/assets", project.manifest_dir);
     _ = writeln!(
         f,
-        "rule aapt2_link\n  command = $build_tools_path/aapt2 link $target_dir/$profile/res/*.flat {}--manifest $manifest_dir/AndroidManifest.xml \
+        "rule aapt2_link\n  command = $build_tools_path/aapt2 link $target_dir/$profile/res/*.flat {} --manifest $manifest_dir/AndroidManifest.xml \
         --java $target_dir/$profile/src-gen --version-name $version --version-code {} --min-sdk-version $min_sdk_version --target-sdk-version $target_sdk_version \
         -I $platform_jar -o $target_dir/$profile/${{name}}-unaligned.apk\n  description = Linking $in\n",
-        if fs::metadata(format!("{}/assets", project.manifest_dir)).is_ok() {
-            "-A $manifest_dir/assets "
+        if fs::metadata(&assets_dir).is_ok() {
+            "-A $manifest_dir/assets"
         } else {
             ""
         },
         parse_version_to_code(&project.manifest.package.version)
     );
-    _ = writeln!(
-        f,
-        "build $target_dir/$profile/res: aapt2_compile $manifest_dir/res",
-    );
+
+    let mut compiled_res_files = Vec::new();
+    let res_dir = format!("{}/res/", project.manifest_dir);
+    for res_file in index_files(&res_dir) {
+        let mut compiled_res_file = format!(
+            "$target_dir/$profile/res/{}.flat",
+            res_file.trim_start_matches(&res_dir).replace('/', "_")
+        );
+        if compiled_res_file.contains("/values") {
+            compiled_res_file = compiled_res_file.replace(".xml", ".arsc");
+        }
+        _ = writeln!(
+            f,
+            "build {}: aapt2_compile {}",
+            &compiled_res_file,
+            res_file.replace(&res_dir, "$manifest_dir/res/")
+        );
+        compiled_res_files.push(compiled_res_file);
+    }
 
     let r_java_path = format!("$source_gen_dir/{}/R.java", identifier.replace('.', "/"));
     _ = writeln!(
         f,
-        "build $target_dir/$profile/${{name}}-unaligned.apk.0 {}: aapt2_link $target_dir/$profile/res",
-        r_java_path
+        "build $target_dir/$profile/${{name}}-unaligned.apk {}: aapt2_link {} {}",
+        r_java_path,
+        compiled_res_files.join(" "),
+        if fs::metadata(&assets_dir).is_ok() {
+            index_files(&assets_dir)
+                .iter()
+                .map(|p| p.replace(&assets_dir, "$manifest_dir/assets"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        } else {
+            "".to_string()
+        }
     );
     project.source_files.push(r_java_path);
 }
@@ -98,7 +123,7 @@ pub(crate) fn generate_android_dex(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Compile Android dex");
     _ = writeln!(
         f,
-        "rule d8\n  command = $build_tools_path/d8 {} --lib $platform_jar --min-api $min_sdk_version --output $target_dir/$profile {}\n  description = Compiling $out\n",
+        "rule d8\n  command = $build_tools_path/d8 {} --lib $platform_jar --min-api $min_sdk_version --output $target_dir/$profile {} && zip -j $target_dir/$profile/${{name}}-unaligned.apk $target_dir/$profile/classes.dex > /dev/null\n  description = Compiling $out\n",
         if project.profile == Profile::Release {
             "--release"
         } else {
@@ -133,10 +158,6 @@ pub(crate) fn generate_android_apk(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Build Android apk");
     _ = writeln!(
         f,
-        "rule zipcp\n  command = zip -j $out $in > /dev/null\n  description = Copying $in"
-    );
-    _ = writeln!(
-        f,
         "rule zipalign\n  command = $build_tools_path/zipalign -f -p 4 $in $out\n  description = Aligning $out"
     );
     _ = writeln!(
@@ -155,11 +176,7 @@ pub(crate) fn generate_android_apk(f: &mut dyn Write, project: &Project) {
 
     _ = writeln!(
         f,
-        "build $target_dir/$profile/${{name}}-unaligned.apk: zipcp $target_dir/$profile/classes.dex | $target_dir/$profile/${{name}}-unaligned.apk.0"
-    );
-    _ = writeln!(
-        f,
-        "build $target_dir/$profile/${{name}}-unsigned.apk: zipalign $target_dir/$profile/${{name}}-unaligned.apk"
+        "build $target_dir/$profile/${{name}}-unsigned.apk: zipalign $target_dir/$profile/${{name}}-unaligned.apk | $target_dir/$profile/classes.dex"
     );
     _ = writeln!(
         f,
@@ -203,7 +220,7 @@ pub(crate) fn run_android_apk(project: &Project) {
         .status()
         .expect("Failed to execute adb");
     if !status.success() {
-        return;
+        exit(status.code().unwrap_or(1));
     }
 
     let status = Command::new(&adb_path)
