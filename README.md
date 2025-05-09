@@ -73,10 +73,8 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [ ] tiny-webview: Copy subset of objc bindings to make crate standalone
 -   [ ] bob: Build universal multi target binaries with macOS bundle package
 -   [ ] bob: Add path dependencies like cargo
-    -   Add Java library
-    -   Add Android library
+    -   Add Java / Android library
     -   Add static .ar library
-    -   Add Java testing JUnit support
 
 ## License
 
