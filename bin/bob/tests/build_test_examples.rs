@@ -14,7 +14,7 @@ fn test_build_test_examples() {
     let examples_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/examples");
     let bob_bin = concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/bob");
 
-    // Build examples
+    // Rebuild examples
     for entry in fs::read_dir(examples_dir).expect("Failed to read examples directory") {
         let entry = entry.expect("Failed to read directory entry");
         if entry.path().is_dir() {
@@ -22,6 +22,12 @@ fn test_build_test_examples() {
             if entry.file_name().to_string_lossy().starts_with("objc") {
                 continue;
             }
+
+            Command::new(bob_bin)
+                .arg("clean")
+                .current_dir(entry.path())
+                .output()
+                .expect("Failed to execute bob clean command");
 
             let output = Command::new(bob_bin)
                 .arg("build")
