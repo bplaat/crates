@@ -48,6 +48,36 @@ A simple meta-build system for my projects, because I like the simplicity of Car
     bob run
     ```
 
+## Creating simple unit tests (in C/C++)
+
+-   You can create unit tests inline in your C code, for example if you have this function:
+
+    ```c
+    int add(int a, int b) {
+        return a + b;
+    }
+    ```
+
+-   You can create a unit test for it like this:
+
+    ```c
+    #ifdef TEST
+    #include <CUnit/Basic.h>
+    void test_add(void) {
+        CU_ASSERT_EQUAL(add(3, 4), 7);
+        CU_ASSERT_EQUAL(add(-5, 6), 1);
+    }
+    #endif
+    ```
+
+-   Then run `bob` to build and run the tests:
+
+    ```sh
+    bob test
+    ```
+
+-   This will also print the CUnit test report
+
 ## License
 
 Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
