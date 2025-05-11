@@ -61,7 +61,7 @@ pub(crate) fn generate_android_res(f: &mut dyn Write, project: &mut Project) {
     _ = writeln!(f, "\n# Compile Android resources");
     _ = writeln!(
         f,
-        "rule aapt2_compile\n  command = $build_tools_path/aapt2 compile --no-crunch $in -o $target_dir/$profile/res\n  description = Compiling $in"
+        "rule aapt2_compile\n  command = $build_tools_path/aapt2 compile --no-crunch $in -o $target_dir/$profile/res\n  description = Compiling $in\n"
     );
     let assets_dir = format!("{}/assets", project.manifest_dir);
     _ = writeln!(
@@ -190,7 +190,7 @@ pub(crate) fn generate_android_apk(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Build Android apk");
     _ = writeln!(
         f,
-        "rule zipalign\n  command = $build_tools_path/zipalign -f -p 4 $in $out\n  description = Aligning $out"
+        "rule zipalign\n  command = $build_tools_path/zipalign -f -p 4 $in $out\n  description = Aligning $out\n"
     );
     _ = writeln!(
         f,

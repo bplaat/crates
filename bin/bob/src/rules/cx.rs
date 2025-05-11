@@ -213,38 +213,49 @@ pub(crate) fn generate_ld(f: &mut dyn Write, project: &Project) {
     }
 
     _ = writeln!(f, "\n# Link executable");
-    #[cfg(windows)]
-    let shell = "cmd.exe /c";
-    #[cfg(not(windows))]
-    let shell = "";
     _ = writeln!(
         f,
-        "rule ld\n  command = {} {} $ldflags $in -o $out{}\n  description = Linking $out\n",
-        shell,
+        "rule ld\n  command = {} $ldflags $in -o $out\n  description = Linking $out\n",
         if contains_cpp { "$cxx" } else { "$cc" },
-        match project.profile {
-            Profile::Release => " && $strip $out",
-            _ => "",
-        }
     );
+    if project.profile == Profile::Release {
+        _ = writeln!(
+            f,
+            "rule strip\n  command = $strip $in -o $out\n  description = Stripping $out\n",
+        );
+    }
+
+    let executable_file = if project.is_test {
+        "$target_dir/$profile/test_${name}"
+    } else {
+        "$target_dir/$profile/${name}"
+    };
     #[cfg(windows)]
-    let executable_file = if project.is_test {
-        "$target_dir/$profile/test_$name.exe"
-    } else {
-        "$target_dir/$profile/$name.exe"
-    };
+    let ext = ".exe";
     #[cfg(not(windows))]
-    let executable_file = if project.is_test {
-        "$target_dir/$profile/test_$name"
+    let ext = "";
+    if project.profile == Profile::Release {
+        _ = writeln!(
+            f,
+            "build {}-unstripped{}: ld {}",
+            executable_file,
+            ext,
+            object_files.join(" ")
+        );
+        _ = writeln!(
+            f,
+            "build {}{}: strip {}-unstripped{}",
+            executable_file, ext, executable_file, ext
+        );
     } else {
-        "$target_dir/$profile/$name"
-    };
-    _ = writeln!(
-        f,
-        "build {}: ld {}",
-        executable_file,
-        object_files.join(" ")
-    );
+        _ = writeln!(
+            f,
+            "build {}{}: ld {}",
+            executable_file,
+            ext,
+            object_files.join(" ")
+        );
+    }
 }
 
 pub(crate) fn generate_bundle(f: &mut dyn Write, project: &Project) {
@@ -282,12 +293,12 @@ pub(crate) fn generate_bundle(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "\n# Build macOS bundle");
     _ = writeln!(
         f,
-        "rule cp\n  command = cp $in $out\n  description = Copying $in"
+        "rule cp\n  command = cp $in $out\n  description = Copying $in\n"
     );
     if bundle.iconset.is_some() {
         _ = writeln!(
             f,
-            "rule iconutil\n  command = iconutil -c icns $in -o $out\n  description = Converting $in"
+            "rule iconutil\n  command = iconutil -c icns $in -o $out\n  description = Converting $in\n"
         );
     }
 
@@ -339,36 +350,28 @@ pub(crate) fn generate_bundle(f: &mut dyn Write, project: &Project) {
 }
 
 pub(crate) fn run_ld(project: &Project) {
-    let status = Command::new(
-        #[cfg(windows)]
-        format!(
-            "{}/target/{}/{}.exe",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ),
-        #[cfg(not(windows))]
-        format!(
-            "{}/target/{}/{}",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ),
-    )
+    #[cfg(windows)]
+    let ext = ".exe";
+    #[cfg(not(windows))]
+    let ext = "";
+    let status = Command::new(format!(
+        "{}/target/{}/{}{}",
+        project.manifest_dir, project.profile, project.manifest.package.name, ext
+    ))
     .status()
     .expect("Failed to execute executable");
     exit(status.code().unwrap_or(1));
 }
 
 pub(crate) fn run_tests(project: &Project) {
-    let status = Command::new(
-        #[cfg(windows)]
-        format!(
-            "{}/target/{}/test_{}.exe",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ),
-        #[cfg(not(windows))]
-        format!(
-            "{}/target/{}/test_{}",
-            project.manifest_dir, project.profile, project.manifest.package.name
-        ),
-    )
+    #[cfg(windows)]
+    let ext = ".exe";
+    #[cfg(not(windows))]
+    let ext = "";
+    let status = Command::new(format!(
+        "{}/target/{}/test_{}{}",
+        project.manifest_dir, project.profile, project.manifest.package.name, ext
+    ))
     .status()
     .expect("Failed to execute executable");
     exit(status.code().unwrap_or(1));
