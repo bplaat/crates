@@ -37,12 +37,7 @@ pub(crate) fn generate_cx_vars(f: &mut dyn Write, project: &mut Project) {
     if project.is_test {
         _ = write!(f, " -DTEST {}", pkg_config_cflags("cunit"));
     }
-    if let Some(build) = &project.manifest.build {
-        if let Some(cflags) = &build.cflags {
-            _ = write!(f, " {}", cflags);
-        }
-    }
-    _ = writeln!(f);
+    _ = writeln!(f, " {}", project.manifest.build.cflags);
 
     // Ldflags
     _ = write!(f, "ldflags =");
@@ -61,12 +56,7 @@ pub(crate) fn generate_cx_vars(f: &mut dyn Write, project: &mut Project) {
     if project.is_test {
         _ = write!(f, " {}", pkg_config_libs("cunit"));
     }
-    if let Some(build) = &project.manifest.build {
-        if let Some(extra_ldflags) = &build.ldflags {
-            _ = write!(f, " {}", extra_ldflags);
-        }
-    }
-    _ = writeln!(f);
+    _ = writeln!(f, " {}", project.manifest.build.ldflags);
 
     // Use Clang on macOS and Windows
     #[cfg(target_os = "macos")]
@@ -263,8 +253,8 @@ pub(crate) fn generate_bundle(f: &mut dyn Write, project: &Project) {
         .manifest
         .package
         .metadata
+        .bundle
         .as_ref()
-        .and_then(|m| m.bundle.as_ref())
         .expect("Should be some");
 
     // Write Info.plist

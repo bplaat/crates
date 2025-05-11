@@ -6,42 +6,48 @@
 
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
+#[serde(default)]
 pub(crate) struct Manifest {
     pub package: Package,
-    pub build: Option<Build>,
+    pub build: Build,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
+#[serde(default)]
 pub(crate) struct Package {
     pub name: String,
     pub identifier: Option<String>,
     pub version: String,
-    pub metadata: Option<PackageMetadata>,
+    pub metadata: PackageMetadata,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
+#[serde(default)]
 pub(crate) struct Build {
-    pub cflags: Option<String>,
-    pub ldflags: Option<String>,
-    pub javac_flags: Option<String>,
-    pub javac_classpath: Option<String>,
+    pub cflags: String,
+    pub ldflags: String,
+    pub javac_flags: String,
+    pub classpath: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
+#[serde(default)]
 pub(crate) struct PackageMetadata {
     pub bundle: Option<BundleMetadata>,
     pub jar: Option<JarMetadata>,
     pub android: Option<AndroidMetadata>,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
+#[serde(default)]
 pub(crate) struct BundleMetadata {
     pub iconset: Option<String>,
     pub copyright: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
+#[serde(default)]
 pub(crate) struct JarMetadata {
     pub main_class: Option<String>,
 }

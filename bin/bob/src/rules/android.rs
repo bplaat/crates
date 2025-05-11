@@ -13,16 +13,18 @@ use crate::{Profile, Project, index_files};
 
 // MARK: Rules
 pub(crate) fn generate_android_vars(f: &mut dyn Write, project: &Project) {
-    _ = writeln!(f, "\n# Android variables");
-
     let android_metadata = project
         .manifest
         .package
         .metadata
+        .android
         .as_ref()
-        .and_then(|m| m.android.clone())
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            eprintln!("Android metadata is required");
+            exit(1);
+        });
 
+    _ = writeln!(f, "\n# Android variables");
     _ = writeln!(f, "min_sdk_version = {}", android_metadata.min_sdk_version);
     _ = writeln!(
         f,
@@ -149,9 +151,12 @@ pub(crate) fn generate_android_apk(f: &mut dyn Write, project: &Project) {
         .manifest
         .package
         .metadata
+        .android
         .as_ref()
-        .and_then(|m| m.android.clone())
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            eprintln!("Android metadata is required");
+            exit(1);
+        });
 
     // Generate dummy keystore if it doesn't exist
     let keystore_path = format!(
@@ -231,9 +236,12 @@ pub(crate) fn run_android_apk(project: &Project) {
         .manifest
         .package
         .metadata
+        .android
         .as_ref()
-        .and_then(|m| m.android.clone())
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            eprintln!("Android metadata is required");
+            exit(1);
+        });
 
     let adb_path = format!(
         "{}/platform-tools/adb",

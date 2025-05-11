@@ -19,36 +19,25 @@ pub(crate) fn generate_java_vars(f: &mut dyn Write, project: &Project) {
     _ = writeln!(f, "classes_dir = $target_dir/$profile/classes");
 
     // Javac flags
-    _ = write!(f, "javac_flags = -Xlint");
-    if project.profile == Profile::Release {
-        _ = write!(f, " -g:none");
-    } else {
-        _ = write!(f, " -g");
-    }
-    if let Some(build) = &project.manifest.build {
-        if let Some(flags) = &build.javac_flags {
-            _ = write!(f, " {}", flags);
-        }
-    }
-    _ = writeln!(f);
+    _ = writeln!(
+        f,
+        "javac_flags = -Xlint {} {}",
+        if project.profile == Profile::Release {
+            "-g:none"
+        } else {
+            "-g"
+        },
+        &project.manifest.build.javac_flags
+    );
 
     // Javac classpath
     _ = write!(f, "classpath = $classes_dir");
-    if let Some(build) = &project.manifest.build {
-        if let Some(classpath) = &build.javac_classpath {
-            _ = write!(f, " {}", classpath);
-        }
+    if !project.manifest.build.classpath.is_empty() {
+        _ = write!(f, " {}", project.manifest.build.classpath.join(":"));
     }
-    _ = writeln!(f);
 
     // Main class
-    if let Some(jar_metadata) = project
-        .manifest
-        .package
-        .metadata
-        .as_ref()
-        .and_then(|m| m.jar.as_ref())
-    {
+    if let Some(jar_metadata) = project.manifest.package.metadata.jar.as_ref() {
         _ = writeln!(
             f,
             "main_class = {}",

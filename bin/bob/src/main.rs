@@ -250,13 +250,11 @@ fn determine_needed_rules(project: &Project) -> Vec<Rule> {
         }
         rules.push(Rule::Ld);
     }
-    if let Some(metadata) = project.manifest.package.metadata.as_ref() {
-        if metadata.bundle.is_some() {
-            rules.push(Rule::Bundle);
-        }
-        if metadata.jar.is_some() {
-            rules.push(Rule::JavaJar);
-        }
+    if project.manifest.package.metadata.bundle.is_some() {
+        rules.push(Rule::Bundle);
+    }
+    if project.manifest.package.metadata.jar.is_some() {
+        rules.push(Rule::JavaJar);
     }
     if rules.contains(&Rule::AndroidVars) {
         rules.push(Rule::AndroidDex);

@@ -2,3 +2,5 @@
 name = "hello"
 identifier = "com.example.hello"
 version = "0.1.0"
+
+[package.metadata.android]
