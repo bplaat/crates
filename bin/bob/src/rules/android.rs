@@ -283,5 +283,5 @@ fn parse_version_to_code(version: &str) -> u32 {
     if version_parts.len() != 3 {
         panic!("Version must be in semver format");
     }
-    version_parts[0] * 10_000 + version_parts[1] * 100 + version_parts[2]
+    version_parts[0] * 1_000_000 + version_parts[1] * 1_000 + version_parts[2]
 }
