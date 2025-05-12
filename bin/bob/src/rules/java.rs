@@ -81,15 +81,10 @@ pub(crate) fn generate_java(f: &mut dyn Write, project: &Project) {
             source_files.join(" ")
         );
         if let Some(dependencies) = module_dependencies.get(module) {
-            _ = write!(
-                f,
-                " | {}",
-                dependencies
-                    .iter()
-                    .map(|module| format!("$classes_dir/{}/.stamp", module.replace('.', "/")))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            );
+            _ = write!(f, " |");
+            for dependency in dependencies {
+                _ = write!(f, " $classes_dir/{}/.stamp", dependency.replace('.', "/"));
+            }
         }
         _ = writeln!(
             f,
@@ -172,13 +167,21 @@ fn find_dependencies(
             if let Ok(contents) = fs::read_to_string(resolve_source_file_path(source_file, project))
             {
                 for other_module in modules.keys() {
+                    if other_module == module {
+                        continue;
+                    }
                     let re = regex::Regex::new(&format!(r"import {}.\w+;", other_module))
                         .expect("Failed to compile regex");
-                    if re.is_match(&contents) {
-                        module_deps
+                    if re.is_match(&contents)
+                        && !module_deps
                             .entry(module.clone())
                             .or_insert_with(Vec::new)
-                            .push(other_module.clone());
+                            .iter()
+                            .any(|m| m == other_module)
+                    {
+                        if let Some(deps) = module_deps.get_mut(module) {
+                            deps.push(other_module.clone());
+                        }
                     }
                 }
             }
