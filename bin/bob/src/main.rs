@@ -105,6 +105,11 @@ fn main() {
         return;
     }
 
+    // Rebuild artifacts
+    if args.subcommand == Subcommand::Rebuild {
+        subcommand_clean(&args);
+    }
+
     // Index source files
     let source_dir = format!("{}/src", args.manifest_dir);
     let source_files: Vec<String> = index_files(&source_dir)
