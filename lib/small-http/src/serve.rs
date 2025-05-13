@@ -23,10 +23,8 @@ where
     F: Fn(&Request) -> Response + Clone + Send + 'static,
 {
     // Create thread pool with workers
-    let num_cores = thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
-    let pool = ThreadPool::new(num_cores * WORK_THREAD_PER_CORE);
+    let num_threads = thread::available_parallelism().map_or(1, |n| n.get());
+    let pool = ThreadPool::new(num_threads * WORK_THREAD_PER_CORE);
 
     // Listen for incoming tcp clients
     for mut stream in listener.incoming().flatten() {
