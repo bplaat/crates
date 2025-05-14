@@ -66,18 +66,6 @@ A collection of minimal Rust crates and tools that I created for myself and othe
     cargo run --bin example-persons-api
     ```
 
-## TODO items
-
--   [ ] small-http: WebSockets support
--   [ ] tiny-webview: Add Windows (win32 + Webview2) support
--   [ ] tiny-webview: Copy subset of objc bindings to make crate standalone
--   [ ] bob: Build universal multi target binaries with macOS bundle package
--   [ ] bob: Add path dependencies like cargo
-    -   Add Java library
-    -   Add Android library
-    -   Add static .ar library
-    -   Add Java testing JUnit support
-
 ## License
 
 Copyright © 2023-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
