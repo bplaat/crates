@@ -6,7 +6,7 @@
 
 //! A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
 
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 
 // MARK: getrandom
 #[cfg(windows)]
@@ -29,9 +29,9 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
     {
         use std::io::Read;
         let mut file = std::fs::File::open("/dev/urandom")
-            .map_err(|_| Error::new(ErrorKind::Other, "Can't open /dev/urandom"))?;
+            .map_err(|_| Error::other("Can't open /dev/urandom"))?;
         file.read_exact(buf)
-            .map_err(|_| Error::new(ErrorKind::Other, "Can't read from /dev/urandom"))?;
+            .map_err(|_| Error::other("Can't read from /dev/urandom"))?;
     }
 
     #[cfg(windows)]
