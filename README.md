@@ -26,7 +26,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ### Tools
 
--   [bob](bin/bob) A simple meta-build system for my projects
+-   [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
 -   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 
 ### Replacement libraries

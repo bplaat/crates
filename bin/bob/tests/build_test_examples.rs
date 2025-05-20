@@ -23,14 +23,8 @@ fn test_build_test_examples() {
                 continue;
             }
 
-            Command::new(bob_bin)
-                .arg("clean")
-                .current_dir(entry.path())
-                .output()
-                .expect("Failed to execute bob clean command");
-
             let output = Command::new(bob_bin)
-                .arg("build")
+                .arg("rebuild")
                 .current_dir(entry.path())
                 .output()
                 .expect("Failed to execute bob build command");

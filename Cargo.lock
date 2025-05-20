@@ -31,6 +31,7 @@ dependencies = [
  "indexmap",
  "regex",
  "serde",
+ "threadpool",
 ]
 
 [[package]]

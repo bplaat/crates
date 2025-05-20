@@ -6,7 +6,7 @@
     android:gravity="center"
     android:padding="16dp">
 
-    <TextView android:text="Hello World!"
+    <TextView android:id="@+id/label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="24sp"
