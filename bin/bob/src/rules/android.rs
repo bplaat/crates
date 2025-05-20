@@ -165,8 +165,8 @@ pub(crate) fn generate_android_apk(f: &mut dyn Write, project: &Project) {
     );
     if fs::metadata(&keystore_path).is_err() {
         println!("Android signing keystore not found, generating dummy one...");
-        let status = Command::new("keytool")
-            .arg("-genkey")
+        let mut cmd = Command::new("keytool");
+        cmd.arg("-genkey")
             .arg("-keystore")
             .arg(&keystore_path)
             .arg("-storetype")
@@ -176,13 +176,15 @@ pub(crate) fn generate_android_apk(f: &mut dyn Write, project: &Project) {
             .arg("-keysize")
             .arg("4096")
             .arg("-validity")
-            .arg("7120")
-            .arg("-alias")
-            .arg("android")
+            .arg("7120");
+        if !android_metadata.key_alias.is_empty() {
+            cmd.arg("-alias").arg(&android_metadata.key_alias);
+        }
+        let status = cmd
             .arg("-storepass")
-            .arg("android")
+            .arg(&android_metadata.keystore_password)
             .arg("-keypass")
-            .arg("android")
+            .arg(&android_metadata.key_password)
             .arg("-dname")
             .arg("CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, S=Unknown, C=Unknown")
             .status()
