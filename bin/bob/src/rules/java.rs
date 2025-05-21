@@ -21,7 +21,7 @@ pub(crate) fn generate_java_vars(f: &mut dyn Write, project: &Project) {
     // Javac flags
     _ = writeln!(
         f,
-        "javac_flags = -Xlint {} {}",
+        "javac_flags = -Xlint -Werror {} {}",
         if project.profile == Profile::Release {
             "-g:none"
         } else {
