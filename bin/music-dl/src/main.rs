@@ -6,7 +6,7 @@
 
 #![doc = include_str!("../README.md")]
 
-use std::fs;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio, exit};
 use std::thread::sleep;
@@ -15,16 +15,18 @@ use std::time::Duration;
 use anyhow::Result;
 use threadpool::ThreadPool;
 
-use crate::args::{Args, Subcommand, parse_args};
+use crate::args::{Args, Format, Subcommand, parse_args};
 use crate::services::metadata::MetadataService;
 use crate::structs::deezer::{Album, Track};
 use crate::structs::youtube::Video;
 use crate::utils::{escape_path, get_album_ids};
+use crate::vorbiscomment;
 
 mod args;
 mod services;
 mod structs;
 mod utils;
+mod vorbiscomment;
 
 const DOWNLOAD_THREAD_COUNT: usize = 16;
 const TRACK_DURATION_SLACK: i64 = 5;
@@ -88,6 +90,7 @@ fn download_album(
         let album = album.clone();
         let album_folder = album_folder.clone();
         let album_cover = album_cover.clone();
+        let format = args.format;
         pool.execute(move || {
             let _ = download_track(
                 album,
@@ -96,6 +99,7 @@ fn download_album(
                 album_nb_disks,
                 track,
                 index,
+                format,
             );
         });
     }
@@ -109,6 +113,7 @@ fn download_track(
     album_nb_disks: i64,
     track: Track,
     track_index: usize,
+    format: Format,
 ) -> Result<()> {
     // Search correct YouTube video
     let search_queries = [
@@ -141,19 +146,29 @@ fn download_track(
                 search_process.kill()?;
 
                 // Download video
+                let extension = match format {
+                    Format::Mp4Aac => "m4a",
+                    Format::OggOpus => "ogg",
+                };
                 let path = format!(
-                    "{}/{} - {} - {:0track_index_width$} - {}.m4a",
+                    "{}/{} - {} - {:0track_index_width$} - {}.{}",
                     album_folder,
                     escape_path(&album.contributors[0].name),
                     escape_path(&album.title),
                     track_index + 1,
                     escape_path(&track.title),
+                    extension,
                     track_index_width = (album.nb_tracks as f64).log10().ceil() as usize
                 );
-                let mut download_process = Command::new("yt-dlp")
-                    .arg("--newline")
-                    .arg("-f")
-                    .arg("bestaudio[ext=m4a]")
+                let mut download_command = Command::new("yt-dlp");
+                download_command.arg("-f").arg(match format {
+                    Format::Mp4Aac => "bestaudio[ext=m4a]",
+                    Format::OggOpus => "bestaudio[acodec=opus]",
+                });
+                if format == Format::OggOpus {
+                    download_command.arg("--remux-video").arg("ogg");
+                }
+                let mut download_process = download_command
                     .arg(format!("https://www.youtube.com/watch?v={}", video.id))
                     .arg("-o")
                     .arg(&path)
@@ -164,41 +179,64 @@ fn download_track(
 
                 // Update metadata
                 println!("Updating metadata {}...", path);
-                let mut tag = mp4ameta::Tag::default();
-                tag.set_title(&track.title);
-                for artist in album.contributors.iter() {
-                    tag.add_artist(artist.name.as_str());
-                }
-                for artist in track.contributors.iter() {
-                    if album
-                        .contributors
-                        .iter()
-                        .any(|album_artist| album_artist.id == artist.id)
-                    {
-                        continue;
+                match format {
+                    Format::Mp4Aac => {
+                        let mut tag = mp4ameta::Tag::default();
+                        tag.set_title(&track.title);
+                        for artist in album.contributors.iter() {
+                            tag.add_artist(artist.name.as_str());
+                        }
+                        for artist in track.contributors.iter() {
+                            if album
+                                .contributors
+                                .iter()
+                                .any(|album_artist| album_artist.id == artist.id)
+                            {
+                                continue;
+                            }
+                            tag.add_artist(artist.name.as_str());
+                        }
+                        tag.set_album(&album.title);
+                        for artist in album.contributors.iter() {
+                            tag.add_album_artist(artist.name.as_str());
+                        }
+                        for genre in album.genres.data.iter() {
+                            tag.add_genre(genre.name.as_str());
+                        }
+                        tag.set_track(track.track_position as u16, album.nb_tracks as u16);
+                        tag.set_disc(track.disk_number as u16, album_nb_disks as u16);
+                        tag.set_year(
+                            album
+                                .release_date
+                                .split('-')
+                                .next()
+                                .expect("Can't parse track release year"),
+                        );
+                        tag.set_bpm(track.bpm as u16);
+                        tag.set_artwork(mp4ameta::Img::jpeg(album_cover));
+                        tag.write_to_path(path)?;
                     }
-                    tag.add_artist(artist.name.as_str());
-                }
-                tag.set_album(&album.title);
-                for artist in album.contributors.iter() {
-                    tag.add_album_artist(artist.name.as_str());
-                }
-                for genre in album.genres.data.iter() {
-                    tag.add_genre(genre.name.as_str());
-                }
-                tag.set_track((track_index + 1) as u16, album.nb_tracks as u16);
-                tag.set_disc(track.disk_number as u16, album_nb_disks as u16);
-                tag.set_year(
-                    album
-                        .release_date
-                        .split('-')
-                        .next()
-                        .expect("Can't parse track release year"),
-                );
-                tag.set_bpm(track.bpm as u16);
-                tag.set_artwork(mp4ameta::Img::jpeg(album_cover));
-                tag.write_to_path(path)?;
+                    Format::OggOpus => {
+                        // Rename extension back from .ogg to .opus
+                        let new_path = path.replace(".ogg", ".opus");
 
+                        let mut f_in = File::open(path).expect("Can't open file");
+
+                        let mut new_comment = CommentHeader::new();
+                        new_comment.set_vendor("Ogg");
+                        new_comment.add_tag_single("artist", "Some Guy");
+                        new_comment.add_tag_single("artist", "Another Dude");
+                        new_comment.add_tag_single("album", "Greatest Hits");
+                        new_comment.add_tag_single("tracknumber", "3");
+                        new_comment.add_tag_single("title", "A very good song");
+                        new_comment.add_tag_single("date", "1997");
+
+                        let mut f_out = replace_comment_header(f_in, &new_comment)?;
+
+                        let mut f_out_disk = File::create(new_path)?;
+                        std::io::copy(&mut f_out, &mut f_out_disk)?;
+                    }
+                }
                 return Ok(());
             }
         }

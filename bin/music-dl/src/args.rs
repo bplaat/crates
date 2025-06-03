@@ -17,6 +17,12 @@ pub(crate) enum Subcommand {
     Version,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Format {
+    Mp4Aac,
+    OggOpus,
+}
+
 pub(crate) struct Args {
     pub(crate) subcommand: Subcommand,
     pub(crate) query: String,
@@ -25,6 +31,7 @@ pub(crate) struct Args {
     pub(crate) is_artist: bool,
     pub(crate) with_singles: bool,
     pub(crate) with_cover: bool,
+    pub(crate) format: Format,
 }
 
 impl Default for Args {
@@ -37,6 +44,7 @@ impl Default for Args {
             is_artist: false,
             with_singles: false,
             with_cover: false,
+            format: Format::Mp4Aac,
         }
     }
 }
@@ -55,6 +63,17 @@ pub(crate) fn parse_args() -> Args {
             "-a" | "--artist" => args.is_artist = true,
             "-s" | "--with-singles" => args.with_singles = true,
             "-c" | "--with-cover" => args.with_cover = true,
+            "-f" | "--format" => {
+                let format_arg = args_iter.next().expect("Invalid argument");
+                args.format = match format_arg.as_str() {
+                    "mp4" | "m4a" | "aac" => Format::Mp4Aac,
+                    "ogg" | "opus" => Format::OggOpus,
+                    _ => {
+                        eprintln!("Unknown format: {}", format_arg);
+                        exit(1);
+                    }
+                };
+            }
             _ => {
                 if args.query.is_empty() {
                     args.query = arg;
