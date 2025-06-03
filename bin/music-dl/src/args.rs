@@ -5,6 +5,7 @@
  */
 
 use std::env;
+use std::process::exit;
 
 use crate::utils::user_music_dir;
 
@@ -59,7 +60,7 @@ pub(crate) fn parse_args() -> Args {
                     args.query = arg;
                 } else {
                     eprintln!("Unknown argument: {}", arg);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }

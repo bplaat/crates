@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::env;
 use std::fmt::{self, Display, Formatter};
+use std::process::exit;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Subcommand {
@@ -50,7 +52,7 @@ impl Default for Args {
 
 pub(crate) fn parse_args() -> Args {
     let mut args = Args::default();
-    let mut args_iter = std::env::args().skip(1);
+    let mut args_iter = env::args().skip(1);
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
             "c" | "clean" => args.subcommand = Subcommand::Clean,
@@ -64,7 +66,7 @@ pub(crate) fn parse_args() -> Args {
             "-r" | "--release" => args.profile = Profile::Release,
             _ => {
                 eprintln!("Unknown argument: {}", arg);
-                std::process::exit(1);
+                exit(1);
             }
         }
     }

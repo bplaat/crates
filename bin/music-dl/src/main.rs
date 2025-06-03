@@ -6,19 +6,20 @@
 
 #![doc = include_str!("../README.md")]
 
-use std::io::BufRead;
-use std::process::exit;
+use std::fs;
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio, exit};
+use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::Result;
-use args::{Args, Subcommand};
-use services::metadata::MetadataService;
-use structs::deezer::{Album, Track};
-use structs::youtube::Video;
 use threadpool::ThreadPool;
-use utils::{escape_path, get_album_ids};
 
-use crate::args::parse_args;
+use crate::args::{Args, Subcommand, parse_args};
+use crate::services::metadata::MetadataService;
+use crate::structs::deezer::{Album, Track};
+use crate::structs::youtube::Video;
+use crate::utils::{escape_path, get_album_ids};
 
 mod args;
 mod services;
@@ -66,7 +67,7 @@ fn download_album(
         escape_path(&album.title)
     );
     if args.with_cover {
-        std::fs::write(format!("{}/cover.jpg", album_folder), &album_cover)?;
+        fs::write(format!("{}/cover.jpg", album_folder), &album_cover)?;
     }
 
     // Calculate total number of disks
@@ -120,17 +121,17 @@ fn download_track(
     ];
     for search_query in search_queries {
         println!("Searching {}...", search_query);
-        let mut search_process = std::process::Command::new("yt-dlp")
+        let mut search_process = Command::new("yt-dlp")
             .arg("--dump-json")
             .arg(format!("ytsearch25:{}", search_query))
-            .stdout(std::process::Stdio::piped())
+            .stdout(Stdio::piped())
             .spawn()?;
 
         let stdout = search_process
             .stdout
             .as_mut()
             .expect("Can't read from yt-dlp process");
-        let reader = std::io::BufReader::new(stdout);
+        let reader = BufReader::new(stdout);
         for line in reader.lines() {
             let video = serde_json::from_str::<Video>(&line?)?;
 
@@ -141,22 +142,22 @@ fn download_track(
 
                 // Download video
                 let path = format!(
-                    "{}/{} - {} - {:0width$} - {}.m4a",
+                    "{}/{} - {} - {:0track_index_width$} - {}.m4a",
                     album_folder,
                     escape_path(&album.contributors[0].name),
                     escape_path(&album.title),
                     track_index + 1,
                     escape_path(&track.title),
-                    width = (album.nb_tracks as f64).log10().ceil() as usize
+                    track_index_width = (album.nb_tracks as f64).log10().ceil() as usize
                 );
-                let mut download_process = std::process::Command::new("yt-dlp")
+                let mut download_process = Command::new("yt-dlp")
                     .arg("--newline")
                     .arg("-f")
                     .arg("bestaudio[ext=m4a]")
                     .arg(format!("https://www.youtube.com/watch?v={}", video.id))
                     .arg("-o")
                     .arg(&path)
-                    .stdout(std::process::Stdio::piped())
+                    .stdout(Stdio::piped())
                     .spawn()?;
                 println!("Downloading {}...", path);
                 download_process.wait()?;
@@ -253,7 +254,7 @@ fn subcommand_list(args: &Args) -> Result<()> {
         println!();
 
         // Sleep for 0.5s to avoid Deezer rate limiting
-        std::thread::sleep(Duration::from_millis(500));
+        sleep(Duration::from_millis(500));
     }
     Ok(())
 }
@@ -263,7 +264,7 @@ fn subcommand_help() {
         r"Usage: music-dl [SUBCOMMAND] [OPTIONS]
 
 Options:
-  -o <dir>            Change to output directory
+  -o <dir>            Change output directory
   -i, --id            Query is a Deezer ID
   -a, --artist        Query is an artist name
   -s, --with-singles  Include singles of artist
