@@ -1,0 +1,23 @@
+{
+    "type": "module",
+    "name": "bassielight",
+    "version": "0.1.0",
+    "description": "A DMX512 lights controller compatible with the Launchpad Mini",
+    "license": "MIT",
+    "author": "Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>",
+    "main": "src/index.js",
+    "scripts": {
+        "start": "node src/index.js",
+        "lint": "eslint --ignore-path .gitignore ."
+    },
+    "dependencies": {
+        "midi": "^2.0.0",
+        "usb": "^2.11.0",
+        "ws": "^8.14.2"
+    },
+    "devDependencies": {
+        "eslint": "^8.52.0",
+        "eslint-config-prettier": "^8.8.0",
+        "prettier": "^2.8.7"
+    }
+}
