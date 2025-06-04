@@ -14,7 +14,7 @@ use std::str::FromStr;
 
 // MARK: URL
 /// Url
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Url {
     scheme: String,
     authority: Option<Authority>,
@@ -23,7 +23,7 @@ pub struct Url {
     fragment: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Authority {
     userinfo: Option<String>,
     host: String,
@@ -31,6 +31,11 @@ struct Authority {
 }
 
 impl Url {
+    /// Parse a new URL from a string
+    pub fn parse(s: &str) -> Result<Self, ParseError> {
+        Self::from_str(s)
+    }
+
     /// Get the URL scheme
     pub fn scheme(&self) -> &str {
         &self.scheme
@@ -45,6 +50,11 @@ impl Url {
 
     /// Get the URL host
     pub fn host(&self) -> Option<&str> {
+        self.authority.as_ref().map(|auth| auth.host.as_str())
+    }
+
+    /// Get the URL domain
+    pub fn domain(&self) -> Option<&str> {
         self.authority.as_ref().map(|auth| auth.host.as_str())
     }
 

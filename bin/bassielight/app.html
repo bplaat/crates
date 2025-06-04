@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>BassieLight</title>
+        <style>
+            :root {
+                font-family: system-ui, -apple-system, BlinkMacSystemFont,
+                    "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans",
+                    "Helvetica Neue", sans-serif;
+                font-size: 16px;
+                line-height: 1.5;
+
+                font-synthesis: none;
+                text-rendering: optimizeLegibility;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+
+                cursor: default;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+
+            body {
+                background-color: #222;
+                color: #fff;
+            }
+
+            a {
+                color: inherit;
+            }
+
+            button {
+                width: 50px;
+                height: 50px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1 style="margin-top: 0">BassieLight v0.1.0 (Rust rewrite)</h1>
+        <p>
+            <i>This is a early prototype, more features are coming soon...</i>
+        </p>
+
+        <h2>Color</h2>
+        <p id="color-buttons"></p>
+
+        <h2>Toggle colors</h2>
+        <p id="toggle-color-buttons"></p>
+
+        <h2>Toggle speeds</h2>
+        <p id="toggle-speed-buttons"></p>
+
+        <h2>Strobe speeds</h2>
+        <p id="strobe-speed-buttons"></p>
+
+        <p>Made by <a href="https://bplaat.nl">Bastiaan van der Plaat</a></p>
+
+        <script>
+            const COLORS = [
+                0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff,
+                0x00ffff, 0xffffff,
+            ];
+            const SPEEDS = [null, 22, 50, 100, 200, 250, 500, 750, 1000];
+
+            function send(type, data) {
+                window.ipc.postMessage(JSON.stringify({ type, ...data }));
+            }
+
+            const colorButtons = document.getElementById("color-buttons");
+            for (let color of COLORS) {
+                const colorButton = document.createElement("button");
+                colorButton.style.backgroundColor = `#${color
+                    .toString(16)
+                    .padStart(6, "0")}`;
+                colorButton.addEventListener("click", () => {
+                    send("setColor", { color });
+                });
+                colorButtons.appendChild(colorButton);
+            }
+
+            const toggleColorButtons = document.getElementById(
+                "toggle-color-buttons"
+            );
+            for (let color of COLORS) {
+                const toggleColorButton = document.createElement("button");
+                toggleColorButton.style.backgroundColor = `#${color
+                    .toString(16)
+                    .padStart(6, "0")}`;
+                toggleColorButton.addEventListener("click", () => {
+                    send("setToggleColor", { color });
+                });
+                toggleColorButtons.appendChild(toggleColorButton);
+            }
+
+            const toggleSpeedButtons = document.getElementById(
+                "toggle-speed-buttons"
+            );
+            for (let speed of SPEEDS) {
+                const toggleSpeedButton = document.createElement("button");
+                toggleSpeedButton.textContent =
+                    speed == null ? "Off" : `${speed}ms`;
+                toggleSpeedButton.addEventListener("click", () => {
+                    send("setToggleSpeed", { speed });
+                });
+                toggleSpeedButtons.appendChild(toggleSpeedButton);
+            }
+
+            const strobeSpeedButtons = document.getElementById(
+                "strobe-speed-buttons"
+            );
+            for (let speed of SPEEDS) {
+                const strobeSpeedButton = document.createElement("button");
+                strobeSpeedButton.textContent =
+                    speed == null ? "Off" : `${speed}ms`;
+                strobeSpeedButton.addEventListener("click", () => {
+                    send("setStrobeSpeed", { speed });
+                });
+                strobeSpeedButtons.appendChild(strobeSpeedButton);
+            }
+        </script>
+    </body>
+</html>
