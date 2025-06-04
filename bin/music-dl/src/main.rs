@@ -186,7 +186,7 @@ fn download_track(
                 for genre in album.genres.data.iter() {
                     tag.add_genre(genre.name.as_str());
                 }
-                tag.set_track((track_index + 1) as u16, album.nb_tracks as u16);
+                tag.set_track(track.track_position as u16, album.nb_tracks as u16);
                 tag.set_disc(track.disk_number as u16, album_nb_disks as u16);
                 tag.set_year(
                     album
@@ -220,6 +220,16 @@ fn subcommand_list(args: &Args) -> Result<()> {
     // List albums
     for album_id in album_ids {
         let album = metadata_service.get_album(album_id)?;
+        let mut tracks = Vec::new();
+        let mut album_is_multi_disk = false;
+        for track in &album.tracks.data {
+            let track = metadata_service.get_track(track.id)?;
+            if track.disk_number > 1 {
+                album_is_multi_disk = true;
+            }
+            tracks.push(track);
+        }
+
         println!(
             "# {} by {}\n",
             album.title,
@@ -235,11 +245,19 @@ fn subcommand_list(args: &Args) -> Result<()> {
             album.release_date, album.nb_tracks
         );
 
-        for (index, track) in album.tracks.data.iter().enumerate() {
-            let track = metadata_service.get_track(track.id)?;
+        let mut last_disk_number = 0;
+        for track in &tracks {
+            if album_is_multi_disk && track.disk_number != last_disk_number {
+                println!(
+                    "{}## Disk {}\n",
+                    if track.disk_number != 1 { "\n" } else { "" },
+                    track.disk_number
+                );
+                last_disk_number = track.disk_number;
+            }
             println!(
                 "{}. {} ({}:{:02}) by {}",
-                index + 1,
+                track.track_position,
                 track.title,
                 track.duration / 60,
                 track.duration % 60,
