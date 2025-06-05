@@ -59,16 +59,21 @@ fn download_album(
     let album = metadata_service.get_album(album_id)?;
 
     // Download album cover
-    let album_cover = metadata_service.download(&album.cover_xl)?;
     let album_folder = format!(
         "{}/{}/{}",
         args.output_dir,
         escape_path(&album.contributors[0].name),
         escape_path(&album.title)
     );
-    if args.with_cover {
-        fs::write(format!("{}/cover.jpg", album_folder), &album_cover)?;
-    }
+    let album_cover = if let Some(album_cover_xl) = &album.cover_xl {
+        let album_cover = metadata_service.download(album_cover_xl)?;
+        if args.with_cover {
+            fs::write(format!("{}/cover.jpg", album_folder), &album_cover)?;
+        }
+        Some(album_cover)
+    } else {
+        None
+    };
 
     // Calculate total number of disks
     let mut tracks = Vec::new();
@@ -105,7 +110,7 @@ fn download_album(
 fn download_track(
     album: Album,
     album_folder: String,
-    album_cover: Vec<u8>,
+    album_cover: Option<Vec<u8>>,
     album_nb_disks: i64,
     track: Track,
     track_index: usize,
@@ -196,7 +201,9 @@ fn download_track(
                         .expect("Can't parse track release year"),
                 );
                 tag.set_bpm(track.bpm as u16);
-                tag.set_artwork(mp4ameta::Img::jpeg(album_cover));
+                if let Some(album_cover) = album_cover {
+                    tag.set_artwork(mp4ameta::Img::jpeg(album_cover));
+                }
                 tag.write_to_path(path)?;
 
                 return Ok(());
