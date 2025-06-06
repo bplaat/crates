@@ -45,7 +45,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
             )
         } != 0
         {
-            return Err(Error::new(ErrorKind::Other, "BCryptGenRandom failed"));
+            return Err(Error::other("BCryptGenRandom failed"));
         }
     }
 
