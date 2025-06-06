@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
 
-const APP_HTML: &[u8] = include_bytes!("../app.html");
+const APP_HTML: &str = include_str!("../app.html");
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type")]
@@ -25,7 +25,7 @@ fn main() {
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state(true)
-        .load_html(std::str::from_utf8(APP_HTML).expect("Not valid UTF-8"))
+        .load_html(APP_HTML)
         .build();
 
     webview.run(|webview, event| match event {
