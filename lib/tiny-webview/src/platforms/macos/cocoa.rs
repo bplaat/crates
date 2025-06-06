@@ -17,20 +17,20 @@ unsafe extern "C" {
 
 #[repr(C)]
 pub(crate) struct NSPoint {
-    pub(crate) x: f64,
-    pub(crate) y: f64,
+    pub x: f64,
+    pub y: f64,
 }
 
 #[repr(C)]
 pub(crate) struct NSSize {
-    pub(crate) width: f64,
-    pub(crate) height: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 #[repr(C)]
 pub(crate) struct NSRect {
-    pub(crate) origin: NSPoint,
-    pub(crate) size: NSSize,
+    pub origin: NSPoint,
+    pub size: NSSize,
 }
 
 pub(crate) const NS_APPLICATION_ACTIVATION_POLICY_REGULAR: i32 = 0;

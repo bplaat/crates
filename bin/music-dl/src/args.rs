@@ -18,13 +18,13 @@ pub(crate) enum Subcommand {
 }
 
 pub(crate) struct Args {
-    pub(crate) subcommand: Subcommand,
-    pub(crate) query: String,
-    pub(crate) output_dir: String,
-    pub(crate) is_id: bool,
-    pub(crate) is_artist: bool,
-    pub(crate) with_singles: bool,
-    pub(crate) with_cover: bool,
+    pub subcommand: Subcommand,
+    pub query: String,
+    pub output_dir: String,
+    pub is_id: bool,
+    pub is_artist: bool,
+    pub with_singles: bool,
+    pub with_cover: bool,
 }
 
 impl Default for Args {

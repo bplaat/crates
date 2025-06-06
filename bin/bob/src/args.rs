@@ -35,9 +35,9 @@ impl Display for Profile {
 }
 
 pub(crate) struct Args {
-    pub(crate) subcommand: Subcommand,
-    pub(crate) manifest_dir: String,
-    pub(crate) profile: Profile,
+    pub subcommand: Subcommand,
+    pub manifest_dir: String,
+    pub profile: Profile,
 }
 
 impl Default for Args {

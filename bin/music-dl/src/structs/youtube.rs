@@ -8,6 +8,6 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub(crate) struct Video {
-    pub(crate) id: String,
-    pub(crate) duration: i64,
+    pub id: String,
+    pub duration: i64,
 }
