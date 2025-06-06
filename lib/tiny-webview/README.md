@@ -1,6 +1,6 @@
 # Tiny Webview Rust library
 
-A cross-platform webview library for Rust, that uses zero dependencies and is designed to be small and efficient.
+A cross-platform webview library for Rust, that uses zero dependencies and is designed to be small and portable.
 
 ## Getting Started
 

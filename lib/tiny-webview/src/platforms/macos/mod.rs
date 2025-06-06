@@ -4,13 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, c_void};
-use std::fmt::{self, Display, Formatter};
+use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 
-use objc::*;
+use self::cocoa::*;
+use self::objc::*;
+use self::webkit::*;
+use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder, class, msg_send, sel};
 
-use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
+mod cocoa;
+mod objc;
+mod webkit;
 
 /// Webview
 pub(crate) struct Webview {
@@ -438,68 +442,4 @@ extern "C" fn webview_did_receive_script_message(
     // Send ipc message received event
     let body: NSString = unsafe { msg_send![message, body] };
     _self.send_event(Event::PageMessageReceived(body.to_string()));
-}
-
-// MARK: Cocoa headers
-#[link(name = "Cocoa", kind = "framework")]
-unsafe extern "C" {
-    static NSApp: *mut Object;
-}
-#[link(name = "WebKit", kind = "framework")]
-unsafe extern "C" {}
-
-#[repr(C)]
-struct NSPoint {
-    x: f64,
-    y: f64,
-}
-#[repr(C)]
-struct NSSize {
-    width: f64,
-    height: f64,
-}
-#[repr(C)]
-struct NSRect {
-    origin: NSPoint,
-    size: NSSize,
-}
-
-const NS_APPLICATION_ACTIVATION_POLICY_REGULAR: i32 = 0;
-
-const NS_UTF8_STRING_ENCODING: i32 = 4;
-
-const NS_WINDOW_STYLE_MASK_TITLED: i32 = 1;
-const NS_WINDOW_STYLE_MASK_CLOSABLE: i32 = 2;
-const NS_WINDOW_STYLE_MASK_MINIATURIZABLE: i32 = 4;
-const NS_WINDOW_STYLE_MASK_RESIZABLE: i32 = 8;
-
-const NS_BACKING_STORE_BUFFERED: i32 = 2;
-
-const WK_NAVIGATION_ACTION_POLICY_ALLOW: i32 = 0;
-const WK_NAVIGATION_ACTION_POLICY_CANCEL: i32 = 1;
-
-#[cfg(feature = "ipc")]
-const WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START: i32 = 0;
-
-struct NSString(*mut Object);
-
-impl NSString {
-    fn from_str(str: impl AsRef<str>) -> Self {
-        let str = str.as_ref();
-        unsafe {
-            msg_send![
-                msg_send![msg_send![class!(NSString), alloc], initWithBytes:str.as_ptr() length:str.len() encoding:NS_UTF8_STRING_ENCODING],
-                autorelease
-            ]
-        }
-    }
-}
-impl Display for NSString {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", unsafe {
-            let bytes: *const c_char = msg_send![self.0, UTF8String];
-            let len: usize = msg_send![self.0, lengthOfBytesUsingEncoding:NS_UTF8_STRING_ENCODING];
-            String::from_utf8_lossy(std::slice::from_raw_parts(bytes as *const u8, len as usize))
-        })
-    }
 }

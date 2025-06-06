@@ -487,13 +487,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "example-tiny-webview-simple"
-version = "0.1.0"
-dependencies = [
- "tiny-webview",
-]
-
-[[package]]
 name = "field-offset"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2201,9 +2194,6 @@ dependencies = [
 [[package]]
 name = "tiny-webview"
 version = "0.1.0"
-dependencies = [
- "objc",
-]
 
 [[package]]
 name = "toml"
