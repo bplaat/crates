@@ -73,8 +73,15 @@ impl Webview {
         );
         decl.register();
 
+        // Create AppDelegate instance
+        let app_delegate: *mut Object = unsafe { msg_send![class!(AppDelegate), new] };
+
         // Get application
-        let application = unsafe { msg_send![class!(NSApplication), sharedApplication] };
+        let application = unsafe {
+            let application = msg_send![class!(NSApplication), sharedApplication];
+            let _: () = msg_send![application, setDelegate:app_delegate];
+            application
+        };
 
         // Create menu
         unsafe {
@@ -138,6 +145,7 @@ impl Webview {
             if builder.remember_window_state {
                 let _: () = msg_send![window, setFrameAutosaveName:NSString::from_str("window").0];
             }
+            let _: () = msg_send![window, setDelegate:app_delegate];
             window
         };
 
@@ -154,27 +162,21 @@ impl Webview {
             if let Some(html) = builder.should_load_html {
                 let _: () = msg_send![webview, loadHTMLString:NSString::from_str(html).0 baseURL:null::<c_void>()];
             }
+            let _: () = msg_send![webview, setNavigationDelegate:app_delegate];
             webview
         };
 
-        // Create AppDelegate
+        // Create ipc handler
+        #[cfg(feature = "ipc")]
         unsafe {
-            let app_delegate: *mut Object = msg_send![class!(AppDelegate), new];
-            let _: () = msg_send![application, setDelegate:app_delegate];
-            let _: () = msg_send![window, setDelegate:app_delegate];
-            let _: () = msg_send![webview, setNavigationDelegate:app_delegate];
-
-            #[cfg(feature = "ipc")]
-            {
-                let user_content_controller: *mut Object =
-                    msg_send![msg_send![webview, configuration], userContentController];
-                let user_script: *mut Object = msg_send![msg_send![class!(WKUserScript), alloc],
+            let user_content_controller: *mut Object =
+                msg_send![msg_send![webview, configuration], userContentController];
+            let user_script: *mut Object = msg_send![msg_send![class!(WKUserScript), alloc],
                     initWithSource:NSString::from_str("window.ipc=new EventTarget();window.ipc.postMessage=message=>window.webkit.messageHandlers.ipc.postMessage(message);").0
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START
                     forMainFrameOnly:true];
-                let _: () = msg_send![user_content_controller, addUserScript:user_script];
-                let _: () = msg_send![user_content_controller, addScriptMessageHandler:app_delegate name:NSString::from_str("ipc").0];
-            }
+            let _: () = msg_send![user_content_controller, addUserScript:user_script];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:app_delegate name:NSString::from_str("ipc").0];
         }
 
         Self {
