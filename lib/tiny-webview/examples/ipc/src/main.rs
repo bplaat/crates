@@ -54,7 +54,7 @@ fn main() {
         Event::PageLoadFinished => {
             println!("Page load finished");
             let message = IpcMessage::Hello {
-                name: "WebView".to_string(),
+                name: "Webview".to_string(),
             };
             webview.send_ipc_message(
                 serde_json::to_string(&message).expect("Should serialize message"),
