@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
 
-const APP_HTML: &str = include_str!("../app.html");
+const APP_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/app.min.html"));
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type")]
