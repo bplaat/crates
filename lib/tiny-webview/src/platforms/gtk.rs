@@ -561,9 +561,17 @@ struct WebKitWebView(u8);
 struct WebKitNavigationPolicyDecision(u8);
 #[repr(C)]
 struct WebKitURIRequest(u8);
+#[repr(C)]
+struct WebKitUserContentManager(u8);
+#[repr(C)]
+struct WebKitUserScript(u8);
+#[repr(C)]
+struct WebKitJavascriptResult(u8);
 const WEBKIT_LOAD_STARTED: i32 = 1;
 const WEBKIT_LOAD_FINISHED: i32 = 3;
 const WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION: i32 = 1;
+const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
+const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
 #[link(name = "webkit2gtk-4.1")]
 unsafe extern "C" {
     #[cfg(not(feature = "ipc"))]
@@ -588,17 +596,6 @@ unsafe extern "C" {
         decision: *mut WebKitNavigationPolicyDecision,
     ) -> *mut WebKitURIRequest;
     fn webkit_uri_request_get_uri(request: *mut WebKitURIRequest) -> *const c_char;
-}
-
-#[repr(C)]
-struct WebKitUserContentManager(u8);
-#[repr(C)]
-struct WebKitUserScript(u8);
-#[repr(C)]
-struct WebKitJavascriptResult(u8);
-const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
-const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
-unsafe extern "C" {
     fn webkit_user_content_manager_new() -> *mut WebKitUserContentManager;
     fn webkit_user_script_new(
         source: *const c_char,
