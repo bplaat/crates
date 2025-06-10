@@ -12,6 +12,8 @@ FROM alpine
 
 WORKDIR /app
 
+RUN apk add --no-cache git
+
 COPY --from=builder /src/target/release/webhook-puller ./webhook-puller
 
 ENTRYPOINT ["./webhook-puller"]
