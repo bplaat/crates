@@ -405,23 +405,25 @@ extern "C" fn webview_decide_policy_for_navigation_action(
     navigation_action: *mut Object,
     mut decision_handler: Block,
 ) {
-    let decision_handler_invoke: extern "C" fn(*mut Block, i32) =
-        unsafe { std::mem::transmute(decision_handler.invoke) };
-    if !unsafe { msg_send![navigation_action, targetFrame] } {
-        let workspace: *mut Object = unsafe { msg_send![class!(NSWorkspace), sharedWorkspace] };
-        let request: *mut Object = unsafe { msg_send![navigation_action, request] };
-        let url: *mut Object = unsafe { msg_send![request, URL] };
-        let url_string: NSString = unsafe { msg_send![url, absoluteString] };
-        let current_url: *mut Object = unsafe { msg_send![webview, URL] };
-        let current_url_string: NSString = unsafe { msg_send![current_url, absoluteString] };
-        if url_string.to_string() != "about:blank"
-            && url_string.to_string() != current_url_string.to_string()
-        {
-            let _: () = unsafe { msg_send![workspace, openURL:url] };
+    unsafe {
+        let decision_handler_invoke: extern "C" fn(*mut Block, i32) =
+            std::mem::transmute(decision_handler.invoke);
+        if !{ msg_send![navigation_action, targetFrame] } {
+            let request: *mut Object = msg_send![navigation_action, request];
+            let url: *mut Object = msg_send![request, URL];
+            let url_string: NSString = msg_send![url, absoluteString];
+            let current_url: *mut Object = msg_send![webview, URL];
+            let current_url_string: NSString = msg_send![current_url, absoluteString];
+            if url_string.to_string() != "about:blank"
+                && url_string.to_string() != current_url_string.to_string()
+            {
+                let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+                let _: () = msg_send![workspace, openURL:url];
+            }
+            decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_CANCEL);
+        } else {
+            decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_ALLOW);
         }
-        decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_CANCEL);
-    } else {
-        decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_ALLOW);
     }
 }
 
