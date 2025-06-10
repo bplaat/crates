@@ -37,7 +37,7 @@ pub struct Block {
     /// Block reserved
     pub reserved: i32,
     /// Block invoke
-    pub invoke: *mut c_void,
+    pub invoke: extern "C" fn(),
     /// Block descriptor
     pub descriptor: *const c_void,
 }

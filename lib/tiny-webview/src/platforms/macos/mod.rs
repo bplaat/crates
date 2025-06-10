@@ -403,7 +403,7 @@ extern "C" fn webview_decide_policy_for_navigation_action(
     _sel: *const Sel,
     webview: *mut Object,
     navigation_action: *mut Object,
-    mut decision_handler: Block,
+    decision_handler: &mut Block,
 ) {
     unsafe {
         let decision_handler_invoke: extern "C" fn(*mut Block, i32) =
@@ -420,9 +420,9 @@ extern "C" fn webview_decide_policy_for_navigation_action(
                 let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
                 let _: () = msg_send![workspace, openURL:url];
             }
-            decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_CANCEL);
+            decision_handler_invoke(decision_handler, WK_NAVIGATION_ACTION_POLICY_CANCEL);
         } else {
-            decision_handler_invoke(&mut decision_handler, WK_NAVIGATION_ACTION_POLICY_ALLOW);
+            decision_handler_invoke(decision_handler, WK_NAVIGATION_ACTION_POLICY_ALLOW);
         }
     }
 }
