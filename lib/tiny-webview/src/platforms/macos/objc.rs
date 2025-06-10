@@ -26,7 +26,7 @@ pub(crate) struct Block {
     /// Block reserved
     pub reserved: i32,
     /// Block invoke
-    pub invoke: *mut c_void,
+    pub invoke: extern "C" fn(),
     /// Block descriptor
     pub descriptor: *const c_void,
 }
@@ -39,7 +39,7 @@ unsafe extern "C" {
     pub(crate) fn sel_registerName(name: *const c_char) -> *mut Sel;
     pub(crate) fn objc_msgSend(receiver: *mut Object, sel: *const Sel, ...) -> *mut c_void;
     #[cfg(target_arch = "x86_64")]
-    pub fn objc_msgSend_stret(ret: *mut c_void, receiver: *mut Object, sel: *const Sel, ...);
+    pub(crate) fn objc_msgSend_stret(ret: *mut c_void, receiver: *mut Object, sel: *const Sel, ...);
 
     pub(crate) fn object_getInstanceVariable(
         obj: *const Object,
