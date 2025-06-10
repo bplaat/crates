@@ -7,15 +7,14 @@
 #![doc = include_str!("../README.md")]
 #![allow(non_upper_case_globals)]
 
-use std::thread::sleep;
+use std::thread::{self, sleep};
 use std::time::{Duration, SystemTime};
 
 use rusb::{Context, Device, UsbContext};
 use serde::{Deserialize, Serialize};
-use tao::event::{Event, StartCause, WindowEvent};
-use tao::event_loop::{ControlFlow, EventLoop};
-use tao::window::WindowBuilder;
-use wry::WebViewBuilder;
+use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
+
+const APP_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/app.min.html"));
 
 const DMX_LENGTH: usize = 512;
 const DMX_FPS: u64 = 44;
@@ -45,18 +44,24 @@ static mut x_strobe_speed: Option<Duration> = None;
 static mut x_is_strobe: bool = false;
 
 fn main() {
-    let event_loop = EventLoop::new();
+    let mut webview = WebviewBuilder::new()
+        .title("BassieLight")
+        .size(LogicalSize::new(1024.0, 768.0))
+        .min_size(LogicalSize::new(640.0, 480.0))
+        .center()
+        .remember_window_state(true)
+        .load_html(APP_HTML)
+        .build();
 
-    let window = WindowBuilder::new()
-        .with_title("BassieLight")
-        .with_inner_size(tao::dpi::LogicalSize::new(1024.0, 768.0))
-        .build(&event_loop)
-        .expect("Failed to create window");
-
-    let _webview = WebViewBuilder::new()
-        .with_html(include_str!("../app.html"))
-        .with_ipc_handler(|req| {
-            match serde_json::from_str(req.body()).expect("Can't parse message") {
+    webview.run(|_, event| match event {
+        Event::PageLoadFinished => {
+            thread::spawn(move || {
+                let device = find_udmx_device().expect("Can't find uDMX device");
+                dmx_thread(device);
+            });
+        }
+        Event::PageMessageReceived(message) => {
+            match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::SetColor { color } => unsafe {
                     x_color = color;
                 },
@@ -72,27 +77,8 @@ fn main() {
                     x_is_strobe = speed.is_some();
                 },
             }
-        })
-        .build(&window)
-        .expect("Failed to create webview");
-
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
-        match event {
-            Event::NewEvents(StartCause::Init) => {
-                std::thread::spawn(move || {
-                    let device = find_udmx_device().expect("Can't find uDMX device");
-                    dmx_thread(device);
-                });
-            }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                *control_flow = ControlFlow::Exit;
-            }
-            _ => (),
         }
+        _ => {}
     });
 }
 
