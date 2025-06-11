@@ -68,29 +68,33 @@ fn main() {
         }
         println!("Event: {}", event);
 
-        // Sleep for 10 seconds
-        thread::sleep(Duration::from_secs(10));
+        // Spawn git task thread
+        let service_path = service.path.clone();
+        thread::spawn(move || {
+            // Sleep for 10 seconds
+            thread::sleep(Duration::from_secs(10));
 
-        // Run git commands
-        println!("Running git fetch origin in: {}", service.path);
-        Command::new("git")
-            .arg("fetch")
-            .arg("origin")
-            .current_dir(&service.path)
-            .output()
-            .unwrap_or_else(|_| panic!("Failed to run git pull in: {}", service.path));
+            // Run git commands
+            println!("Running git fetch origin in: {}", service_path);
+            Command::new("git")
+                .arg("fetch")
+                .arg("origin")
+                .current_dir(&service_path)
+                .output()
+                .unwrap_or_else(|_| panic!("Failed to run git pull in: {}", service_path));
 
-        println!(
-            "Running git reset --hard origin/master in: {}",
-            service.path
-        );
-        Command::new("git")
-            .arg("reset")
-            .arg("--hard")
-            .arg("origin/master")
-            .current_dir(&service.path)
-            .output()
-            .unwrap_or_else(|_| panic!("Failed to run git reset in: {}", service.path));
+            println!(
+                "Running git reset --hard origin/master in: {}",
+                service_path
+            );
+            Command::new("git")
+                .arg("reset")
+                .arg("--hard")
+                .arg("origin/master")
+                .current_dir(&service_path)
+                .output()
+                .unwrap_or_else(|_| panic!("Failed to run git reset in: {}", service_path));
+        });
 
         Response::with_status(Status::Ok)
     };
