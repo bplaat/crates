@@ -12,7 +12,7 @@ use std::net::{Ipv4Addr, TcpListener};
 use std::process::Command;
 
 use serde::Deserialize;
-use small_http::{Request, Response, Status};
+use small_http::{Method, Request, Response, Status};
 
 // MARK: Config
 #[derive(Clone, Deserialize)]
@@ -21,14 +21,9 @@ struct Config {
 }
 
 #[derive(Clone, Deserialize)]
+#[allow(dead_code)]
 struct Service {
     path: String,
-    secret: String,
-}
-
-// MARK: Main
-#[derive(Deserialize)]
-struct WebhookBody {
     secret: String,
 }
 
@@ -41,12 +36,16 @@ fn main() {
         let path = req.url.path();
         println!("{} {}", req.method, path);
 
+        // Check if method is POST
+        if req.method != Method::Post {
+            return Response::with_status(Status::MethodNotAllowed);
+        }
+
         // Get host
         let host = match req.headers.get("X-Forwarded-Host") {
-            Some(host) => host,
-            None => return Response::with_status(Status::BadRequest),
+            Some(host) => host.as_str(),
+            None => req.url.host().unwrap_or("localhost"),
         };
-
         println!("Host: {}", host);
 
         // Get service
@@ -55,18 +54,18 @@ fn main() {
             None => return Response::with_status(Status::NotFound),
         };
 
-        // Get body
-        let body =
-            match serde_urlencoded::from_bytes::<WebhookBody>(req.body.as_deref().unwrap_or(&[])) {
-                Ok(body) => body,
-                Err(_) => return Response::with_status(Status::BadRequest),
-            };
+        // FIXME: Validate secret
 
-        // Check secret
-        if body.secret != service.secret {
-            println!("Secret wrong: {}", body.secret);
-            return Response::with_status(Status::Forbidden);
+        // Get X-GitHub-Event
+        let event = match req.headers.get("X-GitHub-Event") {
+            Some(event) => event,
+            None => "push",
+        };
+        if event != "push" {
+            println!("Ignoring event: {}", event);
+            return Response::with_status(Status::Ok);
         }
+        println!("Event: {}", event);
 
         // Run git pull in service path
         println!("Running git pull in: {}", service.path);
