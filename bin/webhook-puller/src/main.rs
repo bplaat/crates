@@ -71,13 +71,27 @@ fn main() {
         // Sleep for 10 seconds
         thread::sleep(Duration::from_secs(10));
 
-        // Run git pull in service path
-        println!("Running git pull in: {}", service.path);
+        // Run git commands
+        println!("Running git fetch origin in: {}", service.path);
         Command::new("git")
-            .arg("pull")
+            .arg("fetch")
+            .arg("origin")
             .current_dir(&service.path)
             .output()
             .unwrap_or_else(|_| panic!("Failed to run git pull in: {}", service.path));
+
+        println!(
+            "Running git reset --hard origin/master in: {}",
+            service.path
+        );
+        Command::new("git")
+            .arg("reset")
+            .arg("--hard")
+            .arg("origin/master")
+            .current_dir(&service.path)
+            .output()
+            .unwrap_or_else(|_| panic!("Failed to run git reset in: {}", service.path));
+
         Response::with_status(Status::Ok)
     };
 
