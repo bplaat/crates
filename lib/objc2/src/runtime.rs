@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! An Objective-C ffi library
+//! A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
 
 #![cfg(target_os = "macos")]
 
