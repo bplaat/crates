@@ -7,9 +7,10 @@
 #![doc = include_str!("../README.md")]
 
 use std::collections::HashMap;
-use std::env;
 use std::net::{Ipv4Addr, TcpListener};
 use std::process::Command;
+use std::time::Duration;
+use std::{env, thread};
 
 use serde::Deserialize;
 use small_http::{Method, Request, Response, Status};
@@ -66,6 +67,9 @@ fn main() {
             return Response::with_status(Status::Ok);
         }
         println!("Event: {}", event);
+
+        // Sleep for 10 seconds
+        thread::sleep(Duration::from_secs(10));
 
         // Run git pull in service path
         println!("Running git pull in: {}", service.path);
