@@ -71,11 +71,11 @@ fn main() {
         // Spawn git task thread
         let service_path = service.path.clone();
         thread::spawn(move || {
-            // Sleep for 10 seconds
-            thread::sleep(Duration::from_secs(10));
+            // Sleep for 0 seconds
+            thread::sleep(Duration::from_secs(60));
 
             // Run git commands
-            println!("Running git fetch origin in: {}", service_path);
+            println!("Running `git fetch` origin in: {}", service_path);
             Command::new("git")
                 .arg("fetch")
                 .arg("origin")
@@ -84,7 +84,7 @@ fn main() {
                 .unwrap_or_else(|_| panic!("Failed to run git pull in: {}", service_path));
 
             println!(
-                "Running git reset --hard origin/master in: {}",
+                "Running `git reset --hard origin/master` in: {}",
                 service_path
             );
             Command::new("git")

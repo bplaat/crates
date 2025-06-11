@@ -14,7 +14,8 @@ WORKDIR /app
 
 RUN apt-get update && \
     apt-get install -y git && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    git config --global safe.directory '*'
 
 COPY --from=builder /src/target/release/webhook-puller ./webhook-puller
 
