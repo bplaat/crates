@@ -8,21 +8,6 @@
 
 use std::io::Error;
 
-// MARK: getrandom
-#[cfg(windows)]
-mod windows {
-    pub(crate) const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x00000002;
-    #[link(name = "bcrypt")]
-    unsafe extern "C" {
-        pub(crate) fn BCryptGenRandom(
-            h_alg: *mut std::ffi::c_void,
-            pb_output: *mut u8,
-            cb_output: u32,
-            dw_flags: u32,
-        ) -> i32;
-    }
-}
-
 /// Fill buffer with crypto random bytes
 pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
     #[cfg(unix)]
@@ -36,12 +21,23 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
 
     #[cfg(windows)]
     {
+        const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x00000002;
+        #[link(name = "bcrypt")]
+        unsafe extern "C" {
+            fn BCryptGenRandom(
+                h_alg: *mut std::ffi::c_void,
+                pb_output: *mut u8,
+                cb_output: u32,
+                dw_flags: u32,
+            ) -> i32;
+        }
+
         if unsafe {
-            windows::BCryptGenRandom(
+            BCryptGenRandom(
                 std::ptr::null_mut(),
                 buf.as_mut_ptr(),
                 buf.len() as u32,
-                windows::BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+                BCRYPT_USE_SYSTEM_PREFERRED_RNG,
             )
         } != 0
         {

@@ -61,6 +61,14 @@ pub(crate) fn user_music_dir() -> String {
 
     #[cfg(windows)]
     {
+        const KF_FLAG_DEFAULT: u32 = 0x00000000;
+        #[repr(C)]
+        struct Guid {
+            data1: u32,
+            data2: u16,
+            data3: u16,
+            data4: [u8; 8],
+        }
         #[link(name = "shell32")]
         unsafe extern "C" {
             fn SHGetKnownFolderPath(
@@ -70,28 +78,17 @@ pub(crate) fn user_music_dir() -> String {
                 ppszPath: *mut *mut u16,
             ) -> i32;
         }
-
         #[link(name = "ole32")]
         unsafe extern "C" {
             fn CoTaskMemFree(pv: *mut std::ffi::c_void);
         }
 
-        const KF_FLAG_DEFAULT: u32 = 0x00000000;
-
-        #[repr(C)]
-        struct Guid {
-            data1: u32,
-            data2: u16,
-            data3: u16,
-            data4: [u8; 8],
-        }
         const FOLDERID_MUSIC: Guid = Guid {
             data1: 0x4BD8D571,
             data2: 0x6D19,
             data3: 0x48D3,
             data4: [0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43],
         };
-
         let mut path_ptr: *mut u16 = std::ptr::null_mut();
         let result = unsafe {
             SHGetKnownFolderPath(
