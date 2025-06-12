@@ -94,7 +94,7 @@ fn download_album(
         let album_folder = album_folder.clone();
         let album_cover = album_cover.clone();
         pool.execute(move || {
-            let _ = download_track(
+            _ = download_track(
                 album,
                 album_folder,
                 album_cover,

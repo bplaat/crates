@@ -8,7 +8,6 @@
 // FIXME: Add high dpi support
 // FIXME: Add remember window position and size
 // FIXME: Add forced dark theme support
-// FIXME: Add 32-bit target support
 
 #![allow(clippy::upper_case_acronyms)]
 
@@ -16,6 +15,14 @@ use std::ffi::{CString, c_char, c_void};
 use std::mem;
 use std::process::exit;
 use std::ptr::null_mut;
+use std::sync::mpsc;
+
+use webview2_com::Microsoft::Web::WebView2::Win32::CreateCoreWebView2Environment;
+use webview2_com::{
+    CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
+};
+use windows::Win32::Foundation::{HWND, RECT};
+use windows::core::w;
 
 use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 
@@ -46,7 +53,7 @@ impl crate::Webview for Webview {
         let wndclass = WNDCLASSEXA {
             cb_size: size_of::<WNDCLASSEXA>() as u32,
             style: 0,
-            lpfn_wnd_proc: wndproc,
+            lpfn_wnd_proc: window_proc,
             cb_cls_extra: 0,
             cb_wnd_extra: 0,
             h_instance: instance,
@@ -84,7 +91,7 @@ impl crate::Webview for Webview {
                 instance,
                 null_mut(),
             );
-            SetWindowLongPtrA(window, GWL_USERDATA, self as *mut Webview as isize);
+            SetWindowLong(window, GWL_USERDATA, self as *mut Webview as isize);
 
             // Center the window on the screen
             if builder.position.is_none() || builder.should_center {
@@ -108,6 +115,64 @@ impl crate::Webview for Webview {
             ShowWindow(window, SW_SHOWDEFAULT);
             UpdateWindow(window);
             window
+        };
+
+        // Create Webview2
+        let environment = {
+            let (tx, rx) = mpsc::channel();
+
+            CreateCoreWebView2EnvironmentCompletedHandler::wait_for_async_operation(
+                Box::new(|environmentcreatedhandler| unsafe {
+                    CreateCoreWebView2Environment(&environmentcreatedhandler)
+                        .map_err(webview2_com::Error::WindowsError)
+                }),
+                Box::new(move |error_code, environment| {
+                    error_code?;
+                    tx.send(environment.expect("WebView2 environment"))
+                        .expect("send over mpsc channel");
+                    Ok(())
+                }),
+            )
+            .expect("Failed to create WebView2 environment");
+
+            rx.recv().expect("Failed to receive WebView2 environment")
+        };
+
+        let controller = {
+            let (tx, rx) = mpsc::channel();
+
+            let window = HWND(self.window);
+            CreateCoreWebView2ControllerCompletedHandler::wait_for_async_operation(
+                Box::new(move |handler| unsafe {
+                    environment
+                        .CreateCoreWebView2Controller(window, &handler)
+                        .map_err(webview2_com::Error::WindowsError)
+                }),
+                Box::new(move |error_code, controller| {
+                    error_code?;
+                    tx.send(controller.expect("WebView2 controller"))
+                        .expect("send over mpsc channel");
+                    Ok(())
+                }),
+            )
+            .expect("Failed to create WebView2 controller");
+
+            rx.recv().expect("Failed to receive WebView2 cont roller")
+        };
+
+        unsafe {
+            let mut rect = RECT::default();
+            GetClientRect(self.window, &mut rect);
+            _ = controller.SetBounds(rect);
+            _ = controller.SetIsVisible(true);
+
+            let webview = controller.CoreWebView2().expect("adfa");
+
+            if let Some(url) = &builder.should_load_url {
+                let mut v = url.encode_utf16().collect::<Vec<_>>();
+                v.push(0);
+                _ = webview.Navigate(v.as_ptr());
+            }
         };
 
         // Start event loop
@@ -175,8 +240,8 @@ impl crate::Webview for Webview {
 
     fn set_resizable(&mut self, resizable: bool) {
         unsafe {
-            let style = GetWindowLongPtrA(self.window, GWL_STYLE) as u32;
-            SetWindowLongPtrA(
+            let style = GetWindowLong(self.window, GWL_STYLE) as u32;
+            SetWindowLong(
                 self.window,
                 GWL_STYLE,
                 if resizable {
@@ -198,9 +263,9 @@ impl crate::Webview for Webview {
     fn send_ipc_message(&mut self, _message: impl AsRef<str>) {}
 }
 
-extern "C" fn wndproc(hwnd: *mut c_void, msg: u32, w_param: usize, l_param: isize) -> isize {
+extern "C" fn window_proc(hwnd: *mut c_void, msg: u32, w_param: usize, l_param: isize) -> isize {
     let _self = unsafe {
-        let ptr = GetWindowLongPtrA(hwnd, GWL_USERDATA) as *mut Webview;
+        let ptr = GetWindowLong(hwnd, GWL_USERDATA) as *mut Webview;
         if ptr.is_null() {
             return DefWindowProcA(hwnd, msg, w_param, l_param);
         }
@@ -250,14 +315,14 @@ struct POINT {
     y: i32,
 }
 
-#[repr(C)]
-#[derive(Default)]
-struct RECT {
-    left: i32,
-    top: i32,
-    right: i32,
-    bottom: i32,
-}
+// #[repr(C)]
+// #[derive(Default)]
+// struct RECT {
+//     left: i32,
+//     top: i32,
+//     right: i32,
+//     bottom: i32,
+// }
 
 #[repr(C)]
 struct MINMAXINFO {
@@ -317,6 +382,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn DefWindowProcA(h_wnd: *mut c_void, msg: u32, w_param: usize, l_param: isize) -> isize;
     fn DispatchMessageA(lp_msg: *const MSG) -> i32;
+    fn GetClientRect(h_wnd: *mut c_void, lp_rect: *mut RECT) -> i32;
     fn GetMessageA(
         lp_msg: *mut MSG,
         h_wnd: *mut c_void,
@@ -324,12 +390,18 @@ unsafe extern "C" {
         w_msg_filter_max: u32,
     ) -> i32;
     fn GetSystemMetrics(n_index: i32) -> i32;
+    #[cfg(target_pointer_width = "32")]
+    fn GetWindowLongA(h_wnd: *mut c_void, n_index: i32) -> i32;
+    #[cfg(target_pointer_width = "64")]
     fn GetWindowLongPtrA(h_wnd: *mut c_void, n_index: i32) -> isize;
     fn GetWindowRect(h_wnd: *mut c_void, lp_rect: *mut RECT) -> i32;
     fn LoadCursorA(h_instance: *mut c_void, lp_cursor_name: *const c_char) -> *mut c_void;
     fn LoadIconA(h_instance: *mut c_void, lp_icon_name: *const c_char) -> *mut c_void;
     fn PostQuitMessage(code: i32);
     fn RegisterClassExA(lpwcx: *const WNDCLASSEXA) -> u16;
+    #[cfg(target_pointer_width = "32")]
+    fn SetWindowLongA(h_wnd: *mut c_void, n_index: i32, dw_new_long: i32) -> i32;
+    #[cfg(target_pointer_width = "64")]
     fn SetWindowLongPtrA(h_wnd: *mut c_void, n_index: i32, dw_new_long: isize) -> isize;
     fn SetWindowPos(
         h_wnd: *mut c_void,
@@ -344,4 +416,26 @@ unsafe extern "C" {
     fn ShowWindow(h_wnd: *mut c_void, n_cmd_show: i32) -> i32;
     fn TranslateMessage(lp_msg: *const MSG) -> i32;
     fn UpdateWindow(h_wnd: *mut c_void) -> i32;
+}
+
+#[allow(non_snake_case)]
+#[cfg(target_pointer_width = "32")]
+unsafe fn GetWindowLong(window: *mut c_void, index: i32) -> isize {
+    GetWindowLongA(window, index) as _
+}
+#[allow(non_snake_case)]
+#[cfg(target_pointer_width = "64")]
+unsafe fn GetWindowLong(window: *mut c_void, index: i32) -> isize {
+    unsafe { GetWindowLongPtrA(window, index) }
+}
+
+#[allow(non_snake_case)]
+#[cfg(target_pointer_width = "32")]
+unsafe fn SetWindowLong(window: *mut c_void, index: i32, value: isize) -> isize {
+    SetWindowLongA(window, index, value as _) as _
+}
+#[allow(non_snake_case)]
+#[cfg(target_pointer_width = "64")]
+unsafe fn SetWindowLong(window: *mut c_void, index: i32, value: isize) -> isize {
+    unsafe { SetWindowLongPtrA(window, index, value) }
 }
