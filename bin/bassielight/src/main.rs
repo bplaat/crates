@@ -5,6 +5,7 @@
  */
 
 #![doc = include_str!("../README.md")]
+#![windows_subsystem = "windows"]
 #![allow(non_upper_case_globals)]
 
 use std::thread::{self, sleep};

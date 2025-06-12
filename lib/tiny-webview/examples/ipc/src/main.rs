@@ -6,6 +6,8 @@
 
 //! A tiny webview ipc example
 
+#![windows_subsystem = "windows"]
+
 use serde::{Deserialize, Serialize};
 use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
 
