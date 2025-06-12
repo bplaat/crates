@@ -27,6 +27,7 @@ fn main() {
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state(true)
+        .force_dark_mode(true)
         .load_html(APP_HTML)
         .build();
 

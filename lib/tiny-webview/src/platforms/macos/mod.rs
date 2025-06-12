@@ -123,6 +123,11 @@ impl Webview {
             let window: *mut Object = msg_send![class!(NSWindow), alloc];
             let window: *mut Object = msg_send![window, initWithContentRect:window_rect, styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:false];
             let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title)];
+            if builder.should_force_dark_mode {
+                let appearance: *mut Object =
+                    msg_send![class!(NSAppearance), appearanceNamed:NSAppearanceNameDarkAqua];
+                let _: () = msg_send![window, setAppearance:appearance];
+            }
             if let Some(min_size) = builder.min_size {
                 let _: () = msg_send![window, setMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
             }

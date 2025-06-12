@@ -235,6 +235,19 @@ impl crate::Webview for Webview {
 extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
     let builder = _self.builder.take().expect("Should be some");
 
+    // Force dark mode if enabled
+    if builder.should_force_dark_mode {
+        unsafe {
+            let settings = gtk_settings_get_default();
+            g_object_set(
+                settings as *mut c_void,
+                c"gtk-application-prefer-dark-theme".as_ptr(),
+                1 as *const c_void,
+                null::<c_void>(),
+            );
+        }
+    }
+
     // Create window
     unsafe {
         _self.window = gtk_application_window_new(app as *mut GtkApplication);

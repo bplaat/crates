@@ -53,6 +53,7 @@ pub struct WebviewBuilder {
     resizable: bool,
     #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
+    should_force_dark_mode: bool,
     should_center: bool,
     should_load_url: Option<String>,
     should_load_html: Option<String>,
@@ -71,6 +72,7 @@ impl Default for WebviewBuilder {
             resizable: true,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
+            should_force_dark_mode: false,
             should_center: false,
             should_load_url: None,
             should_load_html: None,
@@ -118,6 +120,12 @@ impl WebviewBuilder {
     #[cfg(feature = "remember_window_state")]
     pub fn remember_window_state(mut self, remember_window_state: bool) -> Self {
         self.remember_window_state = remember_window_state;
+        self
+    }
+
+    /// Force dark mode
+    pub fn force_dark_mode(mut self, force_dark_mode: bool) -> Self {
+        self.should_force_dark_mode = force_dark_mode;
         self
     }
 

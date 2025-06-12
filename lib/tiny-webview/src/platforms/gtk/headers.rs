@@ -10,6 +10,7 @@ use std::ffi::{c_char, c_void};
 pub(crate) const G_CONNECT_DEFAULT: i32 = 0;
 #[link(name = "gobject-2.0")]
 unsafe extern "C" {
+    pub(crate) fn g_object_set(instance: *mut c_void, first_property_name: *const c_char, ...);
     pub(crate) fn g_signal_connect_data(
         instance: *mut c_void,
         detailed_signal: *const c_char,
@@ -96,6 +97,8 @@ pub(crate) struct GtkApplication(u8);
 pub(crate) struct GtkWidget(u8);
 #[repr(C)]
 pub(crate) struct GtkWindow(u8);
+#[repr(C)]
+pub(crate) struct GtkSettings(u8);
 pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
 #[link(name = "gtk-3")]
 unsafe extern "C" {
@@ -122,6 +125,7 @@ unsafe extern "C" {
         timestamp: u32,
         error: *mut *mut GError,
     );
+    pub(crate) fn gtk_settings_get_default() -> *mut GtkSettings;
 }
 
 // MARK: WebKitGtk
