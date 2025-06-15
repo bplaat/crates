@@ -1,5 +1,8 @@
 .vscode/
 target/
+node_modules/
+dist/
 *.db*
 *.jks
 .DS_Store
+todos.json

@@ -1,3 +1,8 @@
+<!--
+    Copyright (c) 2025 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -6,9 +11,8 @@
         <title>BassieLight</title>
         <style>
             :root {
-                font-family: system-ui, -apple-system, BlinkMacSystemFont,
-                    "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans",
-                    "Helvetica Neue", sans-serif;
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+                    'Open Sans', 'Helvetica Neue', sans-serif;
                 font-size: 16px;
                 line-height: 1.5;
 
@@ -58,64 +62,49 @@
         <p>Made by <a href="https://bplaat.nl">Bastiaan van der Plaat</a></p>
 
         <script>
-            const COLORS = [
-                0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff,
-                0x00ffff, 0xffffff,
-            ];
+            const COLORS = [0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff];
             const SPEEDS = [null, 22, 50, 100, 200, 250, 500, 750, 1000];
 
             function send(type, data) {
                 window.ipc.postMessage(JSON.stringify({ type, ...data }));
             }
 
-            const colorButtons = document.getElementById("color-buttons");
+            const colorButtons = document.getElementById('color-buttons');
             for (let color of COLORS) {
-                const colorButton = document.createElement("button");
-                colorButton.style.backgroundColor = `#${color
-                    .toString(16)
-                    .padStart(6, "0")}`;
-                colorButton.addEventListener("click", () => {
-                    send("setColor", { color });
+                const colorButton = document.createElement('button');
+                colorButton.style.backgroundColor = `#${color.toString(16).padStart(6, '0')}`;
+                colorButton.addEventListener('click', () => {
+                    send('setColor', { color });
                 });
                 colorButtons.appendChild(colorButton);
             }
 
-            const toggleColorButtons = document.getElementById(
-                "toggle-color-buttons"
-            );
+            const toggleColorButtons = document.getElementById('toggle-color-buttons');
             for (let color of COLORS) {
-                const toggleColorButton = document.createElement("button");
-                toggleColorButton.style.backgroundColor = `#${color
-                    .toString(16)
-                    .padStart(6, "0")}`;
-                toggleColorButton.addEventListener("click", () => {
-                    send("setToggleColor", { color });
+                const toggleColorButton = document.createElement('button');
+                toggleColorButton.style.backgroundColor = `#${color.toString(16).padStart(6, '0')}`;
+                toggleColorButton.addEventListener('click', () => {
+                    send('setToggleColor', { color });
                 });
                 toggleColorButtons.appendChild(toggleColorButton);
             }
 
-            const toggleSpeedButtons = document.getElementById(
-                "toggle-speed-buttons"
-            );
+            const toggleSpeedButtons = document.getElementById('toggle-speed-buttons');
             for (let speed of SPEEDS) {
-                const toggleSpeedButton = document.createElement("button");
-                toggleSpeedButton.textContent =
-                    speed == null ? "Off" : `${speed}ms`;
-                toggleSpeedButton.addEventListener("click", () => {
-                    send("setToggleSpeed", { speed });
+                const toggleSpeedButton = document.createElement('button');
+                toggleSpeedButton.textContent = speed == null ? 'Off' : `${speed}ms`;
+                toggleSpeedButton.addEventListener('click', () => {
+                    send('setToggleSpeed', { speed });
                 });
                 toggleSpeedButtons.appendChild(toggleSpeedButton);
             }
 
-            const strobeSpeedButtons = document.getElementById(
-                "strobe-speed-buttons"
-            );
+            const strobeSpeedButtons = document.getElementById('strobe-speed-buttons');
             for (let speed of SPEEDS) {
-                const strobeSpeedButton = document.createElement("button");
-                strobeSpeedButton.textContent =
-                    speed == null ? "Off" : `${speed}ms`;
-                strobeSpeedButton.addEventListener("click", () => {
-                    send("setStrobeSpeed", { speed });
+                const strobeSpeedButton = document.createElement('button');
+                strobeSpeedButton.textContent = speed == null ? 'Off' : `${speed}ms`;
+                strobeSpeedButton.addEventListener('click', () => {
+                    send('setStrobeSpeed', { speed });
                 });
                 strobeSpeedButtons.appendChild(strobeSpeedButton);
             }

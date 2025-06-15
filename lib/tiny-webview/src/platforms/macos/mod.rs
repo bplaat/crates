@@ -160,7 +160,7 @@ impl Webview {
                 let url: *mut Object =
                     msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
                 let request: *mut Object = msg_send![class!(NSURLRequest), requestWithURL:url];
-                let _: () = msg_send![webview, loadRequest:request];
+                let _: *mut Object = msg_send![webview, loadRequest:request];
             }
             if let Some(html) = builder.should_load_html {
                 let _: *mut Object = msg_send![webview, loadHTMLString:NSString::from_str(html), baseURL:null::<Object>()];
