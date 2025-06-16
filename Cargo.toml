@@ -16,13 +16,18 @@ missing_docs = "deny"
 [workspace.lints.clippy]
 unwrap_used = "deny"
 
-# Patch some popular crates with my minimal alternatives
 [patch.crates-io]
+# Path published libraries with local versions
+bsqlite = { path = "lib/bsqlite" }
 bsqlite_derive = { path = "lib/bsqlite_derive" }
+simple-useragent = { path = "lib/simple-useragent" }
+small-http = { path = "lib/small-http" }
+small-router = { path = "lib/small-router" }
+
+# Patch some popular crates with my minimal alternatives
 chrono = { path = "lib/chrono" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
-small-http = { path = "lib/small-http" }
 rust-embed = { path = "lib/rust-embed" }
 threadpool = { path = "lib/threadpool" }
 url = { path = "lib/url" }

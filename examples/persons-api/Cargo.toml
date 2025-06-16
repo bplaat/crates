@@ -10,9 +10,9 @@ workspace = true
 
 [dependencies]
 from_enum = { path = "../../lib/from_enum" }
-bsqlite = { path = "../../lib/bsqlite", features = ["uuid", "chrono"] }
-small-http = { path = "../../lib/small-http", features = ["json"] }
-small-router = { path = "../../lib/small-router" }
+bsqlite = { version = "0.1.2", features = ["uuid", "chrono"] }
+small-http = { version = "0.1.0", features = ["json"] }
+small-router = { version = "0.1.1" }
 validate = { path = "../../lib/validate", features = ["serde"] }
 
 chrono = { version = "0.4", default-features = false, features = [
@@ -30,8 +30,4 @@ openapi-generator = { path = "../../lib/openapi-generator" }
 
 # Bundle sqlite3 on platforms that don't have it
 [target.'cfg(any(target_env = "musl", windows))'.dependencies]
-bsqlite = { path = "../../lib/bsqlite", features = [
-    "bundled",
-    "uuid",
-    "chrono",
-] }
+bsqlite = { version = "0.1.2", features = ["bundled", "uuid", "chrono"] }
