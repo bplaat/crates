@@ -153,10 +153,9 @@ impl WebviewBuilder {
         // Spawn a local http server
         let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .unwrap_or_else(|_| panic!("Can't start local http server"));
-        let port = listener
+        let local_addr = listener
             .local_addr()
-            .expect("Can't start local http server")
-            .port();
+            .expect("Can't start local http server");
         std::thread::spawn(move || {
             small_http::serve_single_threaded(listener, |req| {
                 let path = match req.url.path().trim_start_matches('/') {
@@ -173,7 +172,7 @@ impl WebviewBuilder {
                 }
             });
         });
-        self.should_load_url = Some(format!("http://localhost:{}", port));
+        self.should_load_url = Some(format!("http://{}/", local_addr));
         self
     }
 

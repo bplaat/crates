@@ -7,11 +7,10 @@
 #![forbid(unsafe_code)]
 #![doc = include_str!("../README.md")]
 
-use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio, exit};
-use std::thread::sleep;
 use std::time::Duration;
+use std::{fs, thread};
 
 use anyhow::Result;
 use threadpool::ThreadPool;
@@ -280,7 +279,7 @@ fn subcommand_list(args: &Args) -> Result<()> {
         println!();
 
         // Sleep for 0.5s to avoid Deezer rate limiting
-        sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(500));
     }
     Ok(())
 }

@@ -395,6 +395,7 @@ mod test {
             stream
                 .write_all(b"HTTP/1.0 200 OK\r\nContent-Length: 4\r\n\r\ntest")
                 .unwrap();
+            stream.flush().unwrap();
         });
 
         let res = Request::get(format!("http://{}/", server_addr))
@@ -415,6 +416,7 @@ mod test {
                     b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: closed\r\n\r\ntest",
                 )
                 .unwrap();
+            stream.flush().unwrap();
         });
 
         let res = Request::get(format!("http://{}/", server_addr))
