@@ -46,6 +46,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 ## Getting Started
 
 -   Install the latest Rust toolchain with [rustup](https://rustup.rs/)
+-   Install [Node.js](https://nodejs.org/)
 -   Install the Rust nightly `rustfmt`:
 
     ```sh
@@ -58,8 +59,6 @@ A collection of minimal Rust crates and tools that I created for myself and othe
     ```sh
     cargo binstall cargo-deny cargo-nextest
     ```
-
--   Install [Node.js](https://nodejs.org/)
 
 -   Run checks:
 
