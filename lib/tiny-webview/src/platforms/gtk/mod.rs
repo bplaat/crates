@@ -43,9 +43,15 @@ impl Webview {
 
     #[cfg(feature = "remember_window_state")]
     fn settings_path(&self) -> String {
+        let config_dir = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
+            format!(
+                "{}/.config",
+                env::var("HOME").expect("Can't read $HOME env variable")
+            )
+        });
         format!(
-            "{}/.config/{}/settings.ini",
-            env::var("HOME").expect("Can't read HOME env var"),
+            "{}/{}/settings.ini",
+            config_dir,
             env::current_exe()
                 .expect("Can't get current process name")
                 .file_name()

@@ -11,9 +11,14 @@ use std::process::Command;
 use std::{env, fs};
 
 fn main() {
+    #[cfg(windows)]
+    const NPM: &str = "npm.cmd";
+    #[cfg(not(windows))]
+    const NPM: &str = "npm";
+
     // Install npm packages
     if !Path::new("web/node_modules").exists() {
-        Command::new("npm")
+        Command::new(NPM)
             .arg("install")
             .current_dir("web")
             .output()
@@ -34,21 +39,36 @@ fn main() {
     println!("cargo:rerun-if-changed=web/index.html");
     print_rerun_if_changed(Path::new("web/src"));
 
-    Command::new("npm")
+    Command::new(NPM)
         .arg("run")
         .arg("build")
         .current_dir("web")
         .output()
         .expect("Failed to run npm run build");
 
-    // Copy all files in web/dist to OUT_DIR
-    Command::new("cp")
-        .arg("-rf")
-        .arg("web/dist")
-        .arg(format!(
-            "{}/web",
-            env::var("OUT_DIR").expect("$OUT_DIR not set")
-        ))
-        .output()
+    // Copy all files from web/dist to OUT_DIR
+    let out_dir = env::var("OUT_DIR").expect("$OUT_DIR not set");
+    let dest_path = Path::new(&out_dir).join("web");
+    if dest_path.exists() {
+        fs::remove_dir_all(&dest_path).expect("Failed to remove old web dir");
+    }
+    fs::create_dir_all(&dest_path).expect("Failed to create web dir");
+
+    // Recursively copy directory
+    fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+        fs::create_dir_all(dst)?;
+        for entry in fs::read_dir(src)? {
+            let entry = entry?;
+            let ty = entry.file_type()?;
+            let dst_path = dst.join(entry.file_name());
+            if ty.is_dir() {
+                copy_dir_all(&entry.path(), &dst_path)?;
+            } else {
+                fs::copy(entry.path(), dst_path)?;
+            }
+        }
+        Ok(())
+    }
+    copy_dir_all(Path::new("web/dist"), &dest_path)
         .expect("Failed to copy web/dist files to $OUT_DIR");
 }

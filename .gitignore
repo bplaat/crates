@@ -5,4 +5,3 @@ dist/
 *.db*
 *.jks
 .DS_Store
-todos.json

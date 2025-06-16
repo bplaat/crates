@@ -34,6 +34,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 ### Replacement libraries
 
 -   [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
+-   [dirs](lib/dirs) A minimal replacement for the [dirs](https://crates.io/crates/dirs) crate
 -   [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
 -   [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 -   [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
@@ -57,6 +58,8 @@ A collection of minimal Rust crates and tools that I created for myself and othe
     ```sh
     cargo binstall cargo-deny cargo-nextest
     ```
+
+-   Install [Node.js](https://nodejs.org/)
 
 -   Run checks:
 

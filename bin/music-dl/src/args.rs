@@ -7,8 +7,6 @@
 use std::env;
 use std::process::exit;
 
-use crate::utils::user_music_dir;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Subcommand {
     Download,
@@ -32,7 +30,10 @@ impl Default for Args {
         Self {
             subcommand: Subcommand::Help,
             query: String::new(),
-            output_dir: user_music_dir(),
+            output_dir: dirs::audio_dir()
+                .expect("Can't user music directory")
+                .display()
+                .to_string(),
             is_id: false,
             is_artist: false,
             with_singles: false,

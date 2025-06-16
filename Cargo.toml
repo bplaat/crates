@@ -26,6 +26,7 @@ small-router = { path = "lib/small-router" }
 
 # Patch some popular crates with my minimal alternatives
 chrono = { path = "lib/chrono" }
+dirs = { path = "lib/dirs" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 rust-embed = { path = "lib/rust-embed" }

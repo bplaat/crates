@@ -12,6 +12,7 @@ workspace = true
 small-http = { version = "0.1.0", features = ["json"] }
 
 anyhow = "1.0"
+dirs = "6.0"
 mp4ameta = "0.13"
 percent-encoding = "2.3"
 serde = { version = "1.0", features = ["derive"] }

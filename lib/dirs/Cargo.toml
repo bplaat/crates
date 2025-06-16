@@ -1,0 +1,9 @@
+[package]
+name = "dirs"
+version = "6.0.0+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true

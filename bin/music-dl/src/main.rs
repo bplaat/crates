@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#![forbid(unsafe_code)]
 #![doc = include_str!("../README.md")]
 
 use std::fs;

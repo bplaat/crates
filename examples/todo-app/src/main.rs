@@ -6,9 +6,10 @@
 
 //! A Todo GUI example
 
+#![forbid(unsafe_code)]
 #![windows_subsystem = "windows"]
 
-use std::fs;
+use std::{env, fs};
 
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -49,10 +50,20 @@ fn main() {
         .build();
 
     webview.run(|webview, event| {
+        let todos_config_path = format!(
+            "{}/{}/{}",
+            dirs::config_dir().expect("Can't get config dir").display(),
+            env!("CARGO_PKG_NAME"),
+            "todos.json"
+        );
+        if let Some(parent) = std::path::Path::new(&todos_config_path).parent() {
+            fs::create_dir_all(parent).expect("Can't create config directory");
+        }
+
         if let Event::PageMessageReceived(message) = event {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::GetTodos => {
-                    let todos: Vec<Todo> = fs::read_to_string("todos.json")
+                    let todos: Vec<Todo> = fs::read_to_string(todos_config_path)
                         .ok()
                         .and_then(|data| serde_json::from_str(&data).ok())
                         .unwrap_or_default();
@@ -63,7 +74,7 @@ fn main() {
                 }
                 IpcMessage::UpdateTodos { todos } => {
                     fs::write(
-                        "todos.json",
+                        todos_config_path,
                         serde_json::to_string(&todos).expect("Failed to serialize todos"),
                     )
                     .expect("Failed to write todos to file");
