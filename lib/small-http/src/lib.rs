@@ -14,7 +14,9 @@ pub use crate::enums::{Method, Status};
 pub use crate::header_map::HeaderMap;
 pub use crate::request::Request;
 pub use crate::response::Response;
+#[cfg(feature = "multi-threaded")]
 pub use crate::serve::serve;
+pub use crate::serve::serve_single_threaded;
 
 mod client;
 mod enums;

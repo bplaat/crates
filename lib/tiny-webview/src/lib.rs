@@ -158,7 +158,7 @@ impl WebviewBuilder {
             .expect("Can't start local http server")
             .port();
         std::thread::spawn(move || {
-            small_http::serve(listener, |req| {
+            small_http::serve_single_threaded(listener, |req| {
                 let path = match req.url.path().trim_start_matches('/') {
                     "" => "index.html".to_string(),
                     other => other.to_string(),

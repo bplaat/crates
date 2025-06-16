@@ -186,7 +186,12 @@ impl Response {
         Ok(res)
     }
 
-    pub(crate) fn write_to_stream(mut self, stream: &mut dyn Write, req: &Request) {
+    pub(crate) fn write_to_stream(
+        mut self,
+        stream: &mut dyn Write,
+        req: &Request,
+        keep_alive: bool,
+    ) {
         // Finish headers
         #[cfg(feature = "date")]
         self.headers
@@ -194,7 +199,7 @@ impl Response {
         self.headers
             .insert("Content-Length".to_string(), self.body.len().to_string());
         if req.version == Version::Http1_1 {
-            if req.headers.get("Connection").map(|v| v.as_str()) != Some("close") {
+            if keep_alive && req.headers.get("Connection").map(|v| v.as_str()) != Some("close") {
                 self.headers
                     .insert("Connection".to_string(), "keep-alive".to_string());
                 self.headers.insert(
@@ -309,7 +314,7 @@ mod test {
             version: Version::Http1_1,
             ..Default::default()
         };
-        response.write_to_stream(&mut response_stream, &request);
+        response.write_to_stream(&mut response_stream, &request, true);
 
         let response_text = String::from_utf8(response_stream).unwrap();
         assert!(response_text.contains("HTTP/1.1 200 OK"));
@@ -327,7 +332,7 @@ mod test {
             version: Version::Http1_1,
             ..Default::default()
         };
-        response.write_to_stream(&mut response_stream, &request);
+        response.write_to_stream(&mut response_stream, &request, true);
 
         let response_text = String::from_utf8(response_stream).unwrap();
         assert!(response_text.contains("HTTP/1.1 404 Not Found"));
@@ -345,7 +350,7 @@ mod test {
             version: Version::Http1_1,
             ..Default::default()
         };
-        response.write_to_stream(&mut response_stream, &request);
+        response.write_to_stream(&mut response_stream, &request, true);
 
         let response_text = String::from_utf8(response_stream).unwrap();
         assert!(response_text.contains("HTTP/1.1 200 OK"));
