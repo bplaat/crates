@@ -32,9 +32,6 @@ body {
 input[type='text'],
 button {
     padding: 0.5rem;
-}
-
-input[type='text'] {
     margin-right: 0.5rem;
 }
 

@@ -23,29 +23,41 @@ export function App() {
             window.ipc.removeEventListener('message', messageListener);
         };
     }, []);
-
     useEffect(() => {
         window.ipc.postMessage(JSON.stringify({ type: 'update-todos', todos }));
     }, [todos]);
 
-    function addTodo(e) {
+    const addTodo = (e) => {
         e.preventDefault();
         if (input.trim() === '') return;
         setTodos([...todos, { id: crypto.randomUUID(), text: input, completed: false }]);
         setInput('');
-    }
-
-    function toggleTodo(index) {
+    };
+    const completeTodo = (index) => {
         setTodos(todos.map((todo, i) => (i === index ? { ...todo, completed: !todo.completed } : todo)));
-    }
+    };
+    const removeCompleted = (e) => {
+        e.preventDefault();
+        setTodos(todos.filter((todo) => !todo.completed));
+    };
 
     return (
         <div>
             <h1>Todo App</h1>
-            <form onSubmit={addTodo}>
-                <input type="text" value={input} onInput={(e) => setInput(e.target.value)} placeholder="Add a todo" />
-                <button type="submit">Add</button>
-            </form>
+            <p>
+                <form onSubmit={addTodo}>
+                    <input
+                        type="text"
+                        value={input}
+                        onInput={(e) => setInput(e.target.value)}
+                        placeholder="Add a todo"
+                    />
+                    <button type="submit">Add</button>
+                    <button onClick={removeCompleted} disabled={todos.length === 0}>
+                        Clear done
+                    </button>
+                </form>
+            </p>
 
             {todos.length === 0 ? (
                 <p>
@@ -54,8 +66,8 @@ export function App() {
             ) : (
                 <ul>
                     {todos.map((todo, i) => (
-                        <li key={i} className={todo.completed ? 'is-completed' : ''} onClick={() => toggleTodo(i)}>
-                            <input type="checkbox" checked={todo.completed} onChange={() => toggleTodo(i)} />
+                        <li key={i} className={todo.completed ? 'is-completed' : ''} onClick={() => completeTodo(i)}>
+                            <input type="checkbox" checked={todo.completed} onChange={() => completeTodo(i)} />
                             {todo.text}
                         </li>
                     ))}
