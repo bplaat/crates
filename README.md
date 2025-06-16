@@ -57,20 +57,23 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   Install the `cargo-deny` and `cargo-nextest` tools:
 
     ```sh
-    cargo binstall cargo-deny cargo-nextest
+    cargo binstall -y cargo-deny cargo-nextest
     ```
 
--   Run checks:
+-   Run checks, or run an example:
 
     ```sh
     ./meta.sh check
-    ```
-
--   Or run an example:
-
-    ```sh
     cargo run --bin example-persons-api
     cargo run --bin example-todo-app
+    ```
+
+-   For coverage reports, install the `llvm-tools` and `cargo-llvm-cov` tool:
+
+    ```sh
+    rustup component add llvm-tools-preview
+    cargo binstall -y cargo-llvm-cov
+    ./meta.sh coverage
     ```
 
 ## License
