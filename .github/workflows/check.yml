@@ -21,10 +21,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install extra Rust tooling
+      - name: Install Debian packages
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlite3-dev libgtk-3-dev libwebkit2gtk-4.1-dev
+      - uses: actions/cache@v4
+        id: cache-rust-toolchain
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+          key: linux-x86_64-rust-toolchain
+      - name: Install extra Rust tooling
+        if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
+        run: |
           rustup toolchain add nightly --component rustfmt
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y cargo-deny cargo-nextest
@@ -34,7 +44,15 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache-rust-toolchain
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+          key: macos-aarch64-rust-toolchain
       - name: Install extra Rust tooling
+        if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
         run: |
           rustup toolchain add nightly --component rustfmt
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
@@ -45,7 +63,15 @@ jobs:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache-rust-toolchain
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+          key: windows-x86_64-rust-toolchain
       - name: Install extra Rust tooling
+        if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
         run: |
           rustup toolchain add nightly --component rustfmt
           iex (iwr "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.ps1").Content
