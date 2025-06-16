@@ -14,7 +14,7 @@ paths:
       tags: [Misc]
       summary: Home route
       responses:
-        "200":
+        '200':
           description: Name and version of the API
           content:
             text/plain:
@@ -27,16 +27,16 @@ paths:
       tags: [Persons]
       summary: Get all persons
       parameters:
-        - $ref: "#/components/parameters/Query"
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/Limit"
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
       responses:
-        "200":
+        '200':
           description: A list of persons
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PersonIndexResponse"
+                $ref: '#/components/schemas/PersonIndexResponse'
     post:
       tags: [Persons]
       summary: Create a new person
@@ -45,71 +45,71 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Person"
+              $ref: '#/components/schemas/Person'
       responses:
-        "200":
+        '200':
           description: Person created
           content:
             application/x-www-form-urlencoded:
               schema:
-                $ref: "#/components/schemas/PersonCreateUpdateBody"
-        "400":
+                $ref: '#/components/schemas/PersonCreateUpdateBody'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Report"
+                $ref: '#/components/schemas/Report'
 
   /persons/{id}:
     get:
       tags: [Persons]
       summary: Get a person by ID
       parameters:
-        - $ref: "#/components/parameters/Id"
+        - $ref: '#/components/parameters/Id'
       responses:
-        "200":
+        '200':
           description: A single person
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Person"
-        "404":
+                $ref: '#/components/schemas/Person'
+        '404':
           description: Person not found
     put:
       tags: [Persons]
       summary: Update a person by ID
       parameters:
-        - $ref: "#/components/parameters/Id"
+        - $ref: '#/components/parameters/Id'
       requestBody:
         required: true
         content:
           application/x-www-form-urlencoded:
             schema:
-              $ref: "#/components/schemas/PersonCreateUpdateBody"
+              $ref: '#/components/schemas/PersonCreateUpdateBody'
       responses:
-        "200":
+        '200':
           description: Person updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Person"
-        "400":
+                $ref: '#/components/schemas/Person'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Report"
-        "404":
+                $ref: '#/components/schemas/Report'
+        '404':
           description: Person not found
     delete:
       tags: [Persons]
       summary: Delete a person by ID
       parameters:
-        - $ref: "#/components/parameters/Id"
+        - $ref: '#/components/parameters/Id'
       responses:
-        "200":
+        '200':
           description: Person deleted
-        "404":
+        '404':
           description: Person not found
 
 components:
@@ -184,7 +184,7 @@ components:
         ageInYears:
           type: integer
         relation:
-          $ref: "#/components/schemas/Relation"
+          $ref: '#/components/schemas/Relation'
         isAdult:
           type: boolean
         createdAt:
@@ -210,7 +210,7 @@ components:
         ageInYears:
           type: integer
         relation:
-          $ref: "#/components/schemas/Relation"
+          $ref: '#/components/schemas/Relation'
       required:
         - name
         - ageInYears
@@ -221,11 +221,11 @@ components:
       type: object
       properties:
         pagination:
-          $ref: "#/components/schemas/Pagination"
+          $ref: '#/components/schemas/Pagination'
         data:
           type: array
           items:
-            $ref: "#/components/schemas/Person"
+            $ref: '#/components/schemas/Person'
       required:
         - pagination
         - data
