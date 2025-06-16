@@ -149,7 +149,7 @@ impl WebviewBuilder {
 
     /// Load rust-embed folder
     #[cfg(feature = "rust-embed")]
-    pub fn load_rust_embed<A: rust_embed::RustEmbed>(mut self, _assets: &A) -> Self {
+    pub fn load_rust_embed<A: rust_embed::RustEmbed>(mut self) -> Self {
         // Spawn a local http server
         let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .unwrap_or_else(|_| panic!("Can't start local http server"));

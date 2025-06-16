@@ -45,7 +45,7 @@ fn main() {
         .center()
         .remember_window_state(true)
         .force_dark_mode(true)
-        .load_rust_embed(&WebAssets)
+        .load_rust_embed::<WebAssets>()
         .build();
 
     webview.run(|webview, event| {
