@@ -1,0 +1,15 @@
+[package]
+name = "rust-embed"
+version = "8.7.0+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rust-embed-impl = { path = "../rust-embed-impl" }
+
+[features]
+interpolate-folder-path = ["rust-embed-impl/interpolate-folder-path"]

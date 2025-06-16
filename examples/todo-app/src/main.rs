@@ -44,9 +44,6 @@ fn mime_guess(path: &str) -> &'static str {
         Some("html") => "text/html",
         Some("js") => "application/javascript",
         Some("css") => "text/css",
-        Some("json") => "application/json",
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
         _ => "application/octet-stream",
     }
 }

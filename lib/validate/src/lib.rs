@@ -12,6 +12,9 @@ use std::collections::HashMap;
 use std::error;
 use std::fmt::{self, Display, Formatter};
 
+#[cfg(feature = "derive")]
+pub use validate_derive::Validate;
+
 // MARK: Error
 /// Validate result
 pub type Result = std::result::Result<(), Error>;
@@ -87,9 +90,6 @@ pub trait Validate {
     /// Validate self with context
     fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), Report>;
 }
-
-#[cfg(feature = "derive")]
-pub use validate_derive::Validate;
 
 #[cfg(feature = "email")]
 static EMAIL_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
