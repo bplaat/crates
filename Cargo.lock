@@ -153,6 +153,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "example-todo-app"
+version = "0.1.0"
+dependencies = [
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "tiny-webview",
+ "uuid",
+]
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -511,17 +522,6 @@ dependencies = [
  "objc2",
  "rust-embed",
  "small-http",
-]
-
-[[package]]
-name = "todo-app"
-version = "0.1.0"
-dependencies = [
- "rust-embed",
- "serde",
- "serde_json",
- "tiny-webview",
- "uuid",
 ]
 
 [[package]]

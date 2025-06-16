@@ -29,6 +29,7 @@ chrono = { path = "lib/chrono" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 rust-embed = { path = "lib/rust-embed" }
+rust-embed-impl = { path = "lib/rust-embed-impl" }
 threadpool = { path = "lib/threadpool" }
 url = { path = "lib/url" }
 uuid = { path = "lib/uuid" }

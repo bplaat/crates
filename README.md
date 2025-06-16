@@ -68,6 +68,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
     ```sh
     cargo run --bin example-persons-api
+    cargo run --bin example-todo-app
     ```
 
 ## License
