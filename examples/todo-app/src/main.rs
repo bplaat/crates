@@ -39,15 +39,6 @@ enum IpcMessage {
 #[folder = "$OUT_DIR/web"]
 struct WebAssets;
 
-fn mime_guess(path: &str) -> &'static str {
-    match path.rsplit('.').next() {
-        Some("html") => "text/html",
-        Some("js") => "application/javascript",
-        Some("css") => "text/css",
-        _ => "application/octet-stream",
-    }
-}
-
 fn main() {
     // Spawn a local http server
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
@@ -65,7 +56,10 @@ fn main() {
                 path.to_string()
             };
             if let Some(asset) = WebAssets::get(&path) {
-                Response::with_header("Content-Type", mime_guess(&path)).body(asset.data)
+                let mime = mime_guess::from_path(&path)
+                    .first_or_octet_stream()
+                    .to_string();
+                Response::with_header("Content-Type", mime).body(asset.data)
             } else {
                 Response::with_status(Status::NotFound).body(b"404 Not Found".to_vec())
             }
