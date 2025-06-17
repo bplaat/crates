@@ -27,8 +27,8 @@ dependencies = [
 name = "bassielight"
 version = "0.1.0"
 dependencies = [
- "minify-html",
  "rusb",
+ "rust-embed",
  "serde",
  "serde_json",
  "tiny-webview",
