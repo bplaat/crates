@@ -30,7 +30,7 @@ pub(crate) mod windows {
     }
     const KF_FLAG_DEFAULT: u32 = 0x00000000;
     #[link(name = "shell32")]
-    unsafe extern "C" {
+    unsafe extern "system" {
         fn SHGetKnownFolderPath(
             rfid: *const Guid,
             dwFlags: u32,
@@ -39,7 +39,7 @@ pub(crate) mod windows {
         ) -> i32;
     }
     #[link(name = "ole32")]
-    unsafe extern "C" {
+    unsafe extern "system" {
         fn CoTaskMemFree(pv: *mut std::ffi::c_void);
     }
 

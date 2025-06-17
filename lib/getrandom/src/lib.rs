@@ -23,7 +23,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
     {
         const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x00000002;
         #[link(name = "bcrypt")]
-        unsafe extern "C" {
+        unsafe extern "system" {
             fn BCryptGenRandom(
                 h_alg: *mut std::ffi::c_void,
                 pb_output: *mut u8,

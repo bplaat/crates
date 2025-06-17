@@ -357,7 +357,7 @@ unsafe extern "system" fn window_proc(
 #[allow(non_snake_case)]
 #[cfg(target_pointer_width = "32")]
 unsafe fn GetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX) -> isize {
-    unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowLongA(hwnd, index) }
+    (unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowLongA(hwnd, index) }) as isize
 }
 #[allow(non_snake_case)]
 #[cfg(target_pointer_width = "64")]
@@ -368,7 +368,8 @@ unsafe fn GetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX) -> isize {
 #[allow(non_snake_case)]
 #[cfg(target_pointer_width = "32")]
 unsafe fn SetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX, value: isize) -> isize {
-    unsafe { windows::Win32::UI::WindowsAndMessaging::SetWindowLongA(hwnd, index, value) }
+    (unsafe { windows::Win32::UI::WindowsAndMessaging::SetWindowLongA(hwnd, index, value as i32) })
+        as isize
 }
 #[allow(non_snake_case)]
 #[cfg(target_pointer_width = "64")]
