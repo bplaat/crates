@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple webview library
+#![doc = include_str!("../README.md")]
 
 pub use event::*;
 pub use sizes::*;
