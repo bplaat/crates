@@ -17,7 +17,6 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [js](lib/js) A WIP JavaScript interpreter
 -   [minify-html](lib/minify-html) A simple HTML minifier library
--   [objc](lib/objc) An Objective-C ffi library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [tiny-webview](lib/tiny-webview) A cross-platform webview library for Rust with minimal dependencies
