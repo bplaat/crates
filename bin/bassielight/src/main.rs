@@ -12,10 +12,13 @@ use std::thread::{self, sleep};
 use std::time::{Duration, SystemTime};
 
 use rusb::{Context, Device, UsbContext};
+use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
 
-const APP_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/app.min.html"));
+#[derive(Embed)]
+#[folder = "$OUT_DIR/web"]
+struct WebAssets;
 
 const DMX_LENGTH: usize = 512;
 const DMX_FPS: u64 = 44;
@@ -51,7 +54,7 @@ fn main() {
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state(true)
-        .load_html(APP_HTML)
+        .load_rust_embed::<WebAssets>()
         .build();
 
     webview.run(|_, event| match event {
