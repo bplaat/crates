@@ -79,13 +79,14 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     let to_const_name = |path: &str| {
         let mut file_path = path
             .strip_prefix(&folder_path)
-            .expect("Should be relative path");
-        if file_path.starts_with(['/', '\\']) {
-            file_path = &file_path[1..];
+            .expect("Should be relative path")
+            .replace("\\", "/");
+        if file_path.starts_with('/') {
+            file_path = file_path[1..].to_string();
         }
         let const_name = format!(
             "_rust_embed_{}",
-            file_path.to_lowercase().replace(['/', '\\', '.', '-'], "_")
+            file_path.to_lowercase().replace(['/', '.', '-'], "_")
         );
         let const_ident = syn::Ident::new(&const_name, proc_macro2::Span::call_site());
         (file_path.to_string(), const_ident)
