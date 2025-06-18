@@ -27,6 +27,7 @@ dependencies = [
 name = "bassielight"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "rusb",
  "rust-embed",
  "serde",
