@@ -14,3 +14,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tiny-webview = { path = "../../lib/tiny-webview", features = ["rust-embed"] }
 rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }
+
+[build-dependencies]
+winres = "0.1.12"

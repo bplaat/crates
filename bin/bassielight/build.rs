@@ -65,4 +65,13 @@ fn main() {
     }
     copy_dir_all(std::path::Path::new("web/dist"), &dest_path)
         .expect("Failed to copy web/dist files to $OUT_DIR");
+
+    // Compile Windows resources
+    if cfg!(target_os = "windows") {
+        let mut res = winres::WindowsResource::new();
+        res.set_icon("meta/windows/icon.ico")
+            .set_manifest_file("meta/windows/manifest.xml")
+            .set("LegalCopyright", "Copyright © 2025 Bastiaan van der Plaat");
+        res.compile().expect("Failed to compile Windows resources.");
+    }
 }
