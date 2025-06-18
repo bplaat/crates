@@ -228,14 +228,6 @@ impl crate::Webview for Webview {
             )
         }
     }
-
-    #[cfg(feature = "ipc")]
-    fn send_ipc_message(&mut self, message: impl AsRef<str>) {
-        self.evaluate_script(format!(
-            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{}`}}));",
-            message.as_ref()
-        ));
-    }
 }
 
 extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {

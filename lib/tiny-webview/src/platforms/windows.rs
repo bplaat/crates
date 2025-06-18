@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-// FIXME: Add WebView2 IPC support
 // FIXME: Add remember window position and size
 
 #![allow(clippy::upper_case_acronyms)]
@@ -213,8 +212,8 @@ impl crate::Webview for Webview {
                 _ = controller.SetBounds(rect);
 
                 let webview = controller.CoreWebView2().expect("Should be some");
-
                 let _self = self as *mut Webview;
+
                 _ = webview.add_NavigationStarting(
                     &NavigationStartingEventHandler::create(Box::new(move |_sender, _args| {
                         let _self = &mut *_self;
@@ -231,7 +230,6 @@ impl crate::Webview for Webview {
                     })),
                     null_mut(),
                 );
-
                 _ = webview.add_NewWindowRequested(
                     &NewWindowRequestedEventHandler::create(Box::new(|_sender, args| {
                         let args = args.expect("Should be some");
@@ -243,6 +241,37 @@ impl crate::Webview for Webview {
                     })),
                     null_mut(),
                 );
+
+                #[cfg(feature = "ipc")]
+                {
+                    _ = webview.AddScriptToExecuteOnDocumentCreated(
+                        w!("window.ipc=new EventTarget();window.ipc.postMessage=message=>window.chrome.webview.postMessage(message);"),
+                        &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_sender, _args| {
+                            Ok(())
+                        })));
+                    _ = webview.add_WebMessageReceived(
+                        &webview2_com::WebMessageReceivedEventHandler::create(Box::new(
+                            move |_sender, args| {
+                                let _self = &mut *_self;
+                                let args = args.expect("Should be some");
+                                let mut message = PWSTR::default();
+                                _ = args.TryGetWebMessageAsString(&mut message);
+
+                                // Convert PWSTR to String
+                                let mut len = 0;
+                                while *message.0.add(len) != 0 {
+                                    len += 1;
+                                }
+                                let message = String::from_utf16_lossy(std::slice::from_raw_parts(
+                                    message.0, len,
+                                ));
+                                _self.send_event(Event::PageMessageReceived(message));
+                                Ok(())
+                            },
+                        )),
+                        null_mut(),
+                    );
+                }
             }
         };
         if let Some(url) = &builder.should_load_url {
@@ -360,9 +389,6 @@ impl crate::Webview for Webview {
             }
         }
     }
-
-    #[cfg(feature = "ipc")]
-    fn send_ipc_message(&mut self, _message: impl AsRef<str>) {}
 }
 
 unsafe extern "system" fn window_proc(

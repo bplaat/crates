@@ -271,14 +271,6 @@ impl crate::Webview for Webview {
             msg_send![self.webview, evaluateJavaScript:NSString::from_str(script), completionHandler:null::<Object>()]
         }
     }
-
-    #[cfg(feature = "ipc")]
-    fn send_ipc_message(&mut self, message: impl AsRef<str>) {
-        self.evaluate_script(format!(
-            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{}`}}));",
-            message.as_ref()
-        ));
-    }
 }
 
 extern "C" fn app_did_finish_launching(this: *mut Object, _sel: Sel, _notification: *mut Object) {

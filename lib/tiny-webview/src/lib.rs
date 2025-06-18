@@ -39,9 +39,15 @@ pub trait Webview {
     fn load_html(&mut self, html: impl AsRef<str>);
     /// Evaluate script
     fn evaluate_script(&mut self, script: impl AsRef<str>);
+
     /// Send IPC message
     #[cfg(feature = "ipc")]
-    fn send_ipc_message(&mut self, message: impl AsRef<str>);
+    fn send_ipc_message(&mut self, message: impl AsRef<str>) {
+        self.evaluate_script(format!(
+            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{}`}}));",
+            message.as_ref()
+        ));
+    }
 }
 
 /// Webview builder
