@@ -209,28 +209,27 @@ impl crate::Webview for Webview {
                 );
             }
 
-            #[cfg(feature = "remember_window_state")]
-            if builder.remember_window_state {
-                let window_placement_path = format!("{}/window.bin", Self::userdata_folder());
-                if let Ok(mut file) = File::open(window_placement_path) {
-                    let size =
-                        size_of::<windows::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT>();
-                    let mut buffer = vec![0u8; size];
-                    if file.read_exact(&mut buffer).is_ok() {
-                        let window_placement = std::ptr::read(buffer.as_ptr() as *const _);
-                        _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPlacement(
-                            hwnd,
-                            &window_placement,
-                        );
+            if cfg!(feature = "remember_window_state") {
+                if builder.remember_window_state {
+                    let window_placement_path = format!("{}/window.bin", Self::userdata_folder());
+                    if let Ok(mut file) = File::open(window_placement_path) {
+                        let size =
+                            size_of::<windows::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT>();
+                        let mut buffer = vec![0u8; size];
+                        if file.read_exact(&mut buffer).is_ok() {
+                            let window_placement = std::ptr::read(buffer.as_ptr() as *const _);
+                            _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPlacement(
+                                hwnd,
+                                &window_placement,
+                            );
+                        }
+                    } else {
+                        _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
                     }
                 } else {
                     _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
                 }
             } else {
-                _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
-            }
-            #[cfg(not(feature = "remember_window_state"))]
-            {
                 _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
             }
             _ = UpdateWindow(hwnd);
@@ -313,8 +312,7 @@ impl crate::Webview for Webview {
                 null_mut(),
             );
 
-            #[cfg(feature = "ipc")]
-            {
+            if cfg!(feature = "ipc") {
                 _ = webview.AddScriptToExecuteOnDocumentCreated(
                     w!("window.ipc = new EventTarget();\
                         window.ipc.postMessage = message => window.chrome.webview.postMessage(`ipc${typeof message !== 'string' ? JSON.stringify(message) : message}`);\

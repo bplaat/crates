@@ -304,8 +304,7 @@ extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
 
     // Create webview
     unsafe {
-        #[cfg(feature = "ipc")]
-        {
+        if cfg!(feature = "ipc") {
             let user_content_controller = webkit_user_content_manager_new();
             let user_script = webkit_user_script_new(
                 c"window.ipc = new EventTarget();\
@@ -343,8 +342,7 @@ extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
             );
             _self.webview = webkit_web_view_new_with_user_content_manager(user_content_controller);
         }
-        #[cfg(not(feature = "ipc"))]
-        {
+        if cfg!(not(feature = "ipc")) {
             _self.webview = webkit_web_view_new();
         }
         gtk_container_add(

@@ -59,21 +59,17 @@ pub(crate) fn generate_cx_vars(f: &mut dyn Write, project: &mut Project) {
     _ = writeln!(f, " {}", project.manifest.build.ldflags);
 
     // Use Clang on macOS and Windows
-    #[cfg(target_os = "macos")]
-    {
+    if cfg!(target_os = "macos") {
         _ = writeln!(f, "cc = clang");
         _ = writeln!(f, "cxx = clang++");
         _ = writeln!(f, "strip = strip");
-    }
-    #[cfg(windows)]
-    {
+    } else if cfg!(windows) {
         _ = writeln!(f, "cc = clang");
         _ = writeln!(f, "cxx = clang++");
         _ = writeln!(f, "strip = llvm-strip");
     }
     // Use GCC on Linux and other Unix-like systems
-    #[cfg(not(any(target_os = "macos", windows)))]
-    {
+    else {
         _ = writeln!(f, "cc = gcc");
         _ = writeln!(f, "cxx = g++");
         _ = writeln!(f, "strip = strip");

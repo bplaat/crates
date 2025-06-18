@@ -58,15 +58,12 @@ pub(crate) fn generate_java(f: &mut dyn Write, project: &Project) {
     let module_dependencies = find_dependencies(project, &modules);
 
     _ = writeln!(f, "\n# Compile Java modules");
-    #[cfg(windows)]
-    {
+    if cfg!(windows) {
         _ = writeln!(
             f,
             "rule javac\n  command = cmd.exe /c javac $javac_flags -cp $classpath $in -d $classes_dir && echo.> $stamp\n  description = Compiling $in\n"
         );
-    }
-    #[cfg(not(windows))]
-    {
+    } else {
         _ = writeln!(
             f,
             "rule javac\n  command = javac $javac_flags -cp $classpath $in -d $classes_dir && touch $stamp\n  description = Compiling $in\n"
