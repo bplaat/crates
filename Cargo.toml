@@ -29,6 +29,7 @@ chrono = { path = "lib/chrono" }
 dirs = { path = "lib/dirs" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
+mime_guess = { path = "lib/mime_guess" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 threadpool = { path = "lib/threadpool" }
