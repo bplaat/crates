@@ -20,14 +20,7 @@ export function App() {
     const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useState(SPEEDS[0]);
 
     return (
-        <div className="container">
-            <h1>
-                BassieLight <span style={{ fontSize: '1rem', color: '#aaa' }}>v0.1.0</span>
-            </h1>
-            <p>
-                <i>This is an early prototype, more features are coming soon...</i>
-            </p>
-
+        <>
             <h2>Color</h2>
             <div className="button-grid">
                 {COLORS.map((color) => (
@@ -89,10 +82,6 @@ export function App() {
                     </button>
                 ))}
             </div>
-
-            <p className="footer">
-                Made by <a href="https://bplaat.nl">Bastiaan van der Plaat</a>
-            </p>
-        </div>
+        </>
     );
 }
