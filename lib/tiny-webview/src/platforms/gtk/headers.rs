@@ -148,7 +148,7 @@ pub(crate) const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
 pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
 #[link(name = "webkit2gtk-4.1")]
 unsafe extern "C" {
-    pub(crate) fn webkit_web_view_new() -> *mut GtkWidget;
+    pub(crate) fn webkit_web_view_new() -> *mut WebKitWebView;
     pub(crate) fn webkit_web_view_load_uri(web_view: *mut WebKitWebView, uri: *const c_char);
     pub(crate) fn webkit_web_view_load_html(
         web_view: *mut WebKitWebView,
