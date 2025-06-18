@@ -38,13 +38,16 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GWL_USERDATA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect, MINMAXINFO, MSG,
     PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWDEFAULT, SW_SHOWNORMAL,
     SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, SetWindowTextA,
-    ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_LONG_PTR_INDEX,
-    WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE,
-    WM_SIZE, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+    ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE,
+    WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WNDCLASSEXA,
+    WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
 };
 use windows::core::{BOOL, HSTRING, PCSTR, PWSTR, w};
 
+use self::utils::*;
 use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
+
+mod utils;
 
 /// Webview
 pub(crate) struct Webview {
@@ -296,7 +299,9 @@ impl crate::Webview for Webview {
             #[cfg(feature = "ipc")]
             {
                 _ = webview.AddScriptToExecuteOnDocumentCreated(
-                    w!("window.ipc=new EventTarget();window.ipc.postMessage=message=>window.chrome.webview.postMessage(message);"),
+                    w!("window.ipc = new EventTarget();\
+                        window.ipc.postMessage = message => window.chrome.webview.postMessage(`ipc${typeof message !== 'string' ? JSON.stringify(message) : message}`);\
+                        console.log = message => window.chrome.webview.postMessage(`console${typeof message !== 'string' ? JSON.stringify(message) : message}`);"),
                     &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_sender, _args| {
                         Ok(())
                     })));
@@ -307,9 +312,14 @@ impl crate::Webview for Webview {
                             let args = args.expect("Should be some");
                             let mut message = PWSTR::default();
                             _ = args.TryGetWebMessageAsString(&mut message);
-                            _self.send_event(Event::PageMessageReceived(convert_pwstr_to_string(
-                                message,
-                            )));
+                            let message = convert_pwstr_to_string(message);
+                            if message.starts_with("ipc") {
+                                let message = message.trim_start_matches("ipc");
+                                _self.send_event(Event::PageMessageReceived(message.to_string()));
+                            } else if message.starts_with("console") {
+                                let message = message.trim_start_matches("console");
+                                println!("{}", message);
+                            }
                             Ok(())
                         },
                     )),
@@ -553,35 +563,3 @@ unsafe extern "system" fn window_proc(
 // Also link to advapi32.dll for WebView2
 #[link(name = "advapi32")]
 unsafe extern "C" {}
-
-// MARK: Utils
-fn convert_pwstr_to_string(pwstr: PWSTR) -> String {
-    let mut len = 0;
-    while unsafe { *pwstr.0.add(len) } != 0 {
-        len += 1;
-    }
-    String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(pwstr.0, len) })
-}
-
-#[allow(non_snake_case)]
-#[cfg(target_pointer_width = "32")]
-unsafe fn GetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX) -> isize {
-    (unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowLongA(hwnd, index) }) as isize
-}
-#[allow(non_snake_case)]
-#[cfg(target_pointer_width = "64")]
-unsafe fn GetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX) -> isize {
-    unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrA(hwnd, index) }
-}
-
-#[allow(non_snake_case)]
-#[cfg(target_pointer_width = "32")]
-unsafe fn SetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX, value: isize) -> isize {
-    (unsafe { windows::Win32::UI::WindowsAndMessaging::SetWindowLongA(hwnd, index, value as i32) })
-        as isize
-}
-#[allow(non_snake_case)]
-#[cfg(target_pointer_width = "64")]
-unsafe fn SetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX, value: isize) -> isize {
-    unsafe { windows::Win32::UI::WindowsAndMessaging::SetWindowLongPtrA(hwnd, index, value) }
-}

@@ -308,7 +308,9 @@ extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
         {
             let user_content_controller = webkit_user_content_manager_new();
             let user_script = webkit_user_script_new(
-                c"window.ipc=new EventTarget();window.ipc.postMessage=message=>window.webkit.messageHandlers.ipc.postMessage(message);".as_ptr(),
+                c"window.ipc = new EventTarget();\
+                        window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);\
+                        console.log = message => window.webkit.messageHandlers.console.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);".as_ptr(),
                 WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
                 WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
                 null(),
@@ -317,8 +319,16 @@ extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
             webkit_user_content_manager_add_script(user_content_controller, user_script);
             g_signal_connect_data(
                 user_content_controller as *mut c_void,
-                c"script-message-received".as_ptr(),
-                webview_on_message as *const c_void,
+                c"script-message-received::ipc".as_ptr(),
+                webview_on_message_ipc as *const c_void,
+                _self as *mut Webview as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                user_content_controller as *mut c_void,
+                c"script-message-received::console".as_ptr(),
+                webview_on_message_console as *const c_void,
                 _self as *mut Webview as *const c_void,
                 null(),
                 G_CONNECT_DEFAULT,
@@ -326,6 +336,10 @@ extern "C" fn app_on_activate(app: *mut GApplication, _self: &mut Webview) {
             webkit_user_content_manager_register_script_message_handler(
                 user_content_controller,
                 c"ipc".as_ptr(),
+            );
+            webkit_user_content_manager_register_script_message_handler(
+                user_content_controller,
+                c"console".as_ptr(),
             );
             _self.webview = webkit_web_view_new_with_user_content_manager(user_content_controller);
         }
@@ -441,7 +455,7 @@ extern "C" fn webview_on_navigation_policy_decision(
 }
 
 #[cfg(feature = "ipc")]
-extern "C" fn webview_on_message(
+extern "C" fn webview_on_message_ipc(
     _manager: *mut WebKitUserContentManager,
     _message: *mut WebKitJavascriptResult,
     _self: &mut Webview,
@@ -450,4 +464,16 @@ extern "C" fn webview_on_message(
     let message = unsafe { jsc_value_to_string(message) };
     let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
     _self.send_event(Event::PageMessageReceived(message.to_string()));
+}
+
+#[cfg(feature = "ipc")]
+extern "C" fn webview_on_message_console(
+    _manager: *mut WebKitUserContentManager,
+    _message: *mut WebKitJavascriptResult,
+    _self: &mut Webview,
+) {
+    let message = unsafe { webkit_javascript_result_get_js_value(_message) };
+    let message = unsafe { jsc_value_to_string(message) };
+    let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
+    println!("{}", message);
 }

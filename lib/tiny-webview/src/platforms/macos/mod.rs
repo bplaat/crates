@@ -177,11 +177,14 @@ impl Webview {
                 msg_send![webview_configuration, userContentController];
             let user_script: *mut Object = msg_send![class!(WKUserScript), alloc];
             let user_script: *mut Object = msg_send![user_script,
-                    initWithSource:NSString::from_str("window.ipc=new EventTarget();window.ipc.postMessage=message=>window.webkit.messageHandlers.ipc.postMessage(message);"),
+                    initWithSource:NSString::from_str("window.ipc = new EventTarget();\
+                        window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);\
+                        console.log = message => window.webkit.messageHandlers.console.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);"),
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
                     forMainFrameOnly:true];
             let _: () = msg_send![user_content_controller, addUserScript:user_script];
             let _: () = msg_send![user_content_controller, addScriptMessageHandler:app_delegate, name:NSString::from_str("ipc")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:app_delegate, name:NSString::from_str("console")];
         }
 
         Self {
@@ -400,7 +403,16 @@ extern "C" fn webview_did_receive_script_message(
     #[allow(deprecated)]
     let _self = unsafe { &mut *(*(*this).get_ivar::<*mut c_void>(IVAR_SELF) as *mut Webview) };
 
-    // Send ipc message received event
+    let name: NSString = unsafe { msg_send![message, name] };
+    let name = name.to_string();
     let body: NSString = unsafe { msg_send![message, body] };
-    _self.send_event(Event::PageMessageReceived(body.to_string()));
+    let body = body.to_string();
+
+    if name == "ipc" {
+        // Send ipc message received event
+        _self.send_event(Event::PageMessageReceived(body));
+    } else if name == "console" {
+        // Print console message
+        println!("{}", body);
+    }
 }

@@ -5,6 +5,7 @@
  */
 
 export function send(type, data = {}) {
+    console.log(`Send ${type}`);
     window.ipc.postMessage(JSON.stringify({ type, ...data }));
 }
 
@@ -12,6 +13,7 @@ export function request(type, data = {}) {
     return new Promise((resolve) => {
         const messageListener = (event) => {
             const { type: receivedType, ...data } = JSON.parse(event.data);
+            console.log(`Recv ${receivedType}`);
             if (receivedType === `${type}-response`) {
                 window.ipc.removeEventListener('message', messageListener);
                 resolve(data);
