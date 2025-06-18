@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-// FIXME: Add webview2 events support and open external links in browser
 // FIXME: Add WebView2 IPC support
 // FIXME: Add remember window position and size
 
@@ -21,6 +20,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
+    NavigationCompletedEventHandler, NavigationStartingEventHandler,
+    NewWindowRequestedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
@@ -30,16 +31,17 @@ use windows::Win32::UI::HiDpi::{
     AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem,
     SetProcessDpiAwarenessContext,
 };
+use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, GWL_STYLE,
     GWL_USERDATA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect, MINMAXINFO, MSG,
-    PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWDEFAULT, SWP_NOACTIVATE,
-    SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, SetWindowTextA, ShowWindow,
-    TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_LONG_PTR_INDEX,
+    PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWDEFAULT, SW_SHOWNORMAL,
+    SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, SetWindowTextA,
+    ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_LONG_PTR_INDEX,
     WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE,
     WM_SIZE, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
 };
-use windows::core::{BOOL, HSTRING, PCSTR};
+use windows::core::{BOOL, HSTRING, PCSTR, PWSTR, w};
 
 use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 
@@ -209,6 +211,38 @@ impl crate::Webview for Webview {
                 let mut rect = RECT::default();
                 _ = GetClientRect(self.hwnd, &mut rect);
                 _ = controller.SetBounds(rect);
+
+                let webview = controller.CoreWebView2().expect("Should be some");
+
+                let _self = self as *mut Webview;
+                _ = webview.add_NavigationStarting(
+                    &NavigationStartingEventHandler::create(Box::new(move |_sender, _args| {
+                        let _self = &mut *_self;
+                        _self.send_event(Event::PageLoadStarted);
+                        Ok(())
+                    })),
+                    null_mut(),
+                );
+                _ = webview.add_NavigationCompleted(
+                    &NavigationCompletedEventHandler::create(Box::new(move |_sender, _args| {
+                        let _self = &mut *_self;
+                        _self.send_event(Event::PageLoadFinished);
+                        Ok(())
+                    })),
+                    null_mut(),
+                );
+
+                _ = webview.add_NewWindowRequested(
+                    &NewWindowRequestedEventHandler::create(Box::new(|_sender, args| {
+                        let args = args.expect("Should be some");
+                        _ = args.SetHandled(true);
+                        let mut uri = PWSTR::default();
+                        _ = args.Uri(&mut uri);
+                        _ = ShellExecuteW(None, w!("open"), uri, None, None, SW_SHOWNORMAL);
+                        Ok(())
+                    })),
+                    null_mut(),
+                );
             }
         };
         if let Some(url) = &builder.should_load_url {
@@ -328,9 +362,7 @@ impl crate::Webview for Webview {
     }
 
     #[cfg(feature = "ipc")]
-    fn send_ipc_message(&mut self, _message: impl AsRef<str>) {
-        todo!()
-    }
+    fn send_ipc_message(&mut self, _message: impl AsRef<str>) {}
 }
 
 unsafe extern "system" fn window_proc(
