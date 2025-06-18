@@ -16,6 +16,11 @@ missing_docs = "deny"
 [workspace.lints.clippy]
 unwrap_used = "deny"
 
+[profile.release]
+opt-level = "z"
+lto = "fat"
+strip = true
+
 [patch.crates-io]
 # Path published libraries with local versions
 bsqlite = { path = "lib/bsqlite" }
