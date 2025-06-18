@@ -9,13 +9,13 @@
 #![allow(clippy::upper_case_acronyms)]
 
 use std::ffi::CString;
-use std::mem;
 use std::process::exit;
 use std::ptr::null_mut;
 use std::sync::mpsc;
+use std::{env, mem};
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    CreateCoreWebView2Environment, ICoreWebView2Controller,
+    CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
@@ -30,7 +30,9 @@ use windows::Win32::UI::HiDpi::{
     AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem,
     SetProcessDpiAwarenessContext,
 };
-use windows::Win32::UI::Shell::ShellExecuteW;
+use windows::Win32::UI::Shell::{
+    FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath, ShellExecuteW,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, GWL_STYLE,
     GWL_USERDATA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect, MINMAXINFO, MSG,
@@ -166,119 +168,128 @@ impl crate::Webview for Webview {
         };
 
         // Create Webview2
-        let environment = {
-            // FIXME: Clean up
-            let (tx, rx) = mpsc::channel();
-            CreateCoreWebView2EnvironmentCompletedHandler::wait_for_async_operation(
-                Box::new(|environmentcreatedhandler| unsafe {
-                    CreateCoreWebView2Environment(&environmentcreatedhandler)
-                        .map_err(webview2_com::Error::WindowsError)
-                }),
-                Box::new(move |error_code, environment| {
-                    error_code?;
-                    tx.send(environment.expect("WebView2 environment"))
-                        .expect("send over mpsc channel");
-                    Ok(())
-                }),
-            )
-            .expect("Failed to create WebView2 environment");
-            rx.recv().expect("Failed to receive WebView2 environment")
-        };
-
-        self.controller = Some({
-            // FIXME: Clean up
-            let hwnd = self.hwnd;
-            let (tx, rx) = mpsc::channel();
-            CreateCoreWebView2ControllerCompletedHandler::wait_for_async_operation(
-                Box::new(move |handler| unsafe {
-                    environment
-                        .CreateCoreWebView2Controller(hwnd, &handler)
-                        .map_err(webview2_com::Error::WindowsError)
-                }),
-                Box::new(move |error_code, controller| {
-                    error_code?;
-                    tx.send(controller.expect("WebView2 controller"))
-                        .expect("send over mpsc channel");
-                    Ok(())
-                }),
-            )
-            .expect("Failed to create WebView2 controller");
-            rx.recv().expect("Failed to receive WebView2 cont roller")
-        });
         unsafe {
-            if let Some(controller) = &self.controller {
-                let mut rect = RECT::default();
-                _ = GetClientRect(self.hwnd, &mut rect);
-                _ = controller.SetBounds(rect);
+            let _self = self as *mut Webview;
+            let appdata_path = convert_pwstr_to_string(
+                SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
+                    .expect("Should be some"),
+            );
+            let userdata_folder = format!(
+                "{}/{}",
+                appdata_path,
+                env::current_exe()
+                    .expect("Can't get current process name")
+                    .file_name()
+                    .expect("Can't get current process name")
+                    .to_string_lossy()
+                    .strip_suffix(".exe")
+                    .expect("Should strip .exe")
+            );
 
-                let webview = controller.CoreWebView2().expect("Should be some");
-                let _self = self as *mut Webview;
-
-                _ = webview.add_NavigationStarting(
-                    &NavigationStartingEventHandler::create(Box::new(move |_sender, _args| {
-                        let _self = &mut *_self;
-                        _self.send_event(Event::PageLoadStarted);
-                        Ok(())
-                    })),
-                    null_mut(),
-                );
-                _ = webview.add_NavigationCompleted(
-                    &NavigationCompletedEventHandler::create(Box::new(move |_sender, _args| {
-                        let _self = &mut *_self;
-                        _self.send_event(Event::PageLoadFinished);
-                        Ok(())
-                    })),
-                    null_mut(),
-                );
-                _ = webview.add_NewWindowRequested(
-                    &NewWindowRequestedEventHandler::create(Box::new(|_sender, args| {
-                        let args = args.expect("Should be some");
-                        _ = args.SetHandled(true);
-                        let mut uri = PWSTR::default();
-                        _ = args.Uri(&mut uri);
-                        _ = ShellExecuteW(None, w!("open"), uri, None, None, SW_SHOWNORMAL);
-                        Ok(())
-                    })),
-                    null_mut(),
-                );
-
-                #[cfg(feature = "ipc")]
-                {
-                    _ = webview.AddScriptToExecuteOnDocumentCreated(
-                        w!("window.ipc=new EventTarget();window.ipc.postMessage=message=>window.chrome.webview.postMessage(message);"),
-                        &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_sender, _args| {
+            let environment = {
+                let (tx, rx) = mpsc::channel();
+                _ = CreateCoreWebView2EnvironmentWithOptions(
+                    PWSTR::default(),
+                    &HSTRING::from(userdata_folder),
+                    None,
+                    &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(
+                        move |error_code, environment| {
+                            if let Err(e) = error_code {
+                                panic!("Failed to create WebView2 environment: {:?}", e);
+                            }
+                            tx.send(environment.expect("Should be some"))
+                                .expect("Should send environment");
                             Ok(())
-                        })));
-                    _ = webview.add_WebMessageReceived(
-                        &webview2_com::WebMessageReceivedEventHandler::create(Box::new(
-                            move |_sender, args| {
-                                let _self = &mut *_self;
-                                let args = args.expect("Should be some");
-                                let mut message = PWSTR::default();
-                                _ = args.TryGetWebMessageAsString(&mut message);
+                        },
+                    )),
+                );
+                rx.recv().expect("Should receive environment")
+            };
 
-                                // Convert PWSTR to String
-                                let mut len = 0;
-                                while *message.0.add(len) != 0 {
-                                    len += 1;
-                                }
-                                let message = String::from_utf16_lossy(std::slice::from_raw_parts(
-                                    message.0, len,
-                                ));
-                                _self.send_event(Event::PageMessageReceived(message));
-                                Ok(())
-                            },
-                        )),
-                        null_mut(),
-                    );
-                }
+            let controller = {
+                let (tx, rx) = mpsc::channel();
+                let hwnd = self.hwnd;
+                CreateCoreWebView2ControllerCompletedHandler::wait_for_async_operation(
+                    Box::new(move |handler| {
+                        _ = environment.CreateCoreWebView2Controller(hwnd, &handler);
+                        Ok(())
+                    }),
+                    Box::new(move |error_code, controller| {
+                        error_code?;
+                        tx.send(controller.expect("WebView2 controller"))
+                            .expect("Should send controller");
+                        Ok(())
+                    }),
+                )
+                .expect("Failed to create WebView2 controller");
+                rx.recv().expect("Should receive controller")
+            };
+
+            let mut rect = RECT::default();
+            _ = GetClientRect(self.hwnd, &mut rect);
+            _ = controller.SetBounds(rect);
+
+            let webview = controller.CoreWebView2().expect("Should be some");
+
+            _ = webview.add_NavigationStarting(
+                &NavigationStartingEventHandler::create(Box::new(move |_sender, _args| {
+                    let _self = &mut *_self;
+                    _self.send_event(Event::PageLoadStarted);
+                    Ok(())
+                })),
+                null_mut(),
+            );
+            _ = webview.add_NavigationCompleted(
+                &NavigationCompletedEventHandler::create(Box::new(move |_sender, _args| {
+                    let _self = &mut *_self;
+                    _self.send_event(Event::PageLoadFinished);
+                    Ok(())
+                })),
+                null_mut(),
+            );
+            _ = webview.add_NewWindowRequested(
+                &NewWindowRequestedEventHandler::create(Box::new(|_sender, args| {
+                    let args = args.expect("Should be some");
+                    _ = args.SetHandled(true);
+                    let mut uri = PWSTR::default();
+                    _ = args.Uri(&mut uri);
+                    _ = ShellExecuteW(None, w!("open"), uri, None, None, SW_SHOWNORMAL);
+                    Ok(())
+                })),
+                null_mut(),
+            );
+
+            #[cfg(feature = "ipc")]
+            {
+                _ = webview.AddScriptToExecuteOnDocumentCreated(
+                    w!("window.ipc=new EventTarget();window.ipc.postMessage=message=>window.chrome.webview.postMessage(message);"),
+                    &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_sender, _args| {
+                        Ok(())
+                    })));
+                _ = webview.add_WebMessageReceived(
+                    &webview2_com::WebMessageReceivedEventHandler::create(Box::new(
+                        move |_sender, args| {
+                            let _self = &mut *_self;
+                            let args = args.expect("Should be some");
+                            let mut message = PWSTR::default();
+                            _ = args.TryGetWebMessageAsString(&mut message);
+                            _self.send_event(Event::PageMessageReceived(convert_pwstr_to_string(
+                                message,
+                            )));
+                            Ok(())
+                        },
+                    )),
+                    null_mut(),
+                );
             }
-        };
-        if let Some(url) = &builder.should_load_url {
-            self.load_url(url);
-        }
-        if let Some(html) = &builder.should_load_html {
-            self.load_html(html);
+
+            self.controller = Some(controller);
+            if let Some(url) = &builder.should_load_url {
+                self.load_url(url);
+            }
+            if let Some(html) = &builder.should_load_html {
+                self.load_html(html);
+            }
         }
 
         // Start event loop
@@ -480,7 +491,15 @@ unsafe extern "system" fn window_proc(
     }
 }
 
-// Utils
+// MARK: Utils
+fn convert_pwstr_to_string(pwstr: PWSTR) -> String {
+    let mut len = 0;
+    while unsafe { *pwstr.0.add(len) } != 0 {
+        len += 1;
+    }
+    String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(pwstr.0, len) })
+}
+
 #[allow(non_snake_case)]
 #[cfg(target_pointer_width = "32")]
 unsafe fn GetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX) -> isize {
