@@ -95,6 +95,25 @@ impl crate::Webview for Webview {
         };
         unsafe { RegisterClassExA(&wndclass) };
 
+        // Get app data folder
+        let userdata_folder = unsafe {
+            let appdata_path = convert_pwstr_to_string(
+                SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
+                    .expect("Should be some"),
+            );
+            format!(
+                "{}/{}",
+                appdata_path,
+                env::current_exe()
+                    .expect("Can't get current process name")
+                    .file_name()
+                    .expect("Can't get current process name")
+                    .to_string_lossy()
+                    .strip_suffix(".exe")
+                    .expect("Should strip .exe")
+            )
+        };
+
         // Create window
         self.hwnd = unsafe {
             let style = if builder.resizable {
@@ -170,22 +189,6 @@ impl crate::Webview for Webview {
         // Create Webview2
         unsafe {
             let _self = self as *mut Webview;
-            let appdata_path = convert_pwstr_to_string(
-                SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
-                    .expect("Should be some"),
-            );
-            let userdata_folder = format!(
-                "{}/{}",
-                appdata_path,
-                env::current_exe()
-                    .expect("Can't get current process name")
-                    .file_name()
-                    .expect("Can't get current process name")
-                    .to_string_lossy()
-                    .strip_suffix(".exe")
-                    .expect("Should strip .exe")
-            );
-
             let environment = {
                 let (tx, rx) = mpsc::channel();
                 _ = CreateCoreWebView2EnvironmentWithOptions(
@@ -490,6 +493,10 @@ unsafe extern "system" fn window_proc(
         _ => unsafe { DefWindowProcA(hwnd, msg, w_param, l_param) },
     }
 }
+
+// Also link to advapi32.dll for WebView2
+#[link(name = "advapi32")]
+unsafe extern "C" {}
 
 // MARK: Utils
 fn convert_pwstr_to_string(pwstr: PWSTR) -> String {
