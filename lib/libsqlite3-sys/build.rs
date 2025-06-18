@@ -8,13 +8,15 @@
 
 fn main() {
     // Compile and link the SQLite library from source
-    if cfg!(feature = "bundled") {
+    #[cfg(feature = "bundled")]
+    {
         cc::Build::new()
             .file("sqlite3/sqlite3.c")
             .compile("sqlite3");
     }
     // Or link to the system SQLite library
-    else {
+    #[cfg(not(feature = "bundled"))]
+    {
         println!("cargo:rustc-link-lib=sqlite3");
     }
 }
