@@ -22,25 +22,25 @@ use webview2_com::{
     NavigationCompletedEventHandler, NavigationStartingEventHandler,
     NewWindowRequestedEventHandler,
 };
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, MAX_PATH, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
 use windows::Win32::Graphics::Gdi::UpdateWindow;
-use windows::Win32::System::LibraryLoader::GetModuleHandleA;
+use windows::Win32::System::LibraryLoader::{GetModuleFileNameA, GetModuleHandleA};
 use windows::Win32::UI::HiDpi::{
     AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem,
     SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::Shell::{
-    FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath, ShellExecuteW,
+    ExtractIconExA, FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath, ShellExecuteW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, GWL_STYLE,
-    GWL_USERDATA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect, MINMAXINFO, MSG,
-    PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWDEFAULT, SW_SHOWNORMAL,
-    SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, SetWindowTextA,
-    ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE,
-    WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WNDCLASSEXA,
-    WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+    GWL_USERDATA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect, HICON, MINMAXINFO,
+    MSG, PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWDEFAULT,
+    SW_SHOWNORMAL, SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+    SetWindowTextA, ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE,
+    WM_SIZE, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
 };
 use windows::core::{BOOL, HSTRING, PCSTR, PWSTR, w};
 
@@ -113,13 +113,30 @@ impl crate::Webview for Webview {
         _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
         self.dpi = unsafe { GetDpiForSystem() };
 
-        // Register window class
+        // Get executable icons
         let instance = unsafe { GetModuleHandleA(None) }.expect("Can't get module handle");
+        let mut module_path = [0u8; MAX_PATH as usize];
+        _ = unsafe { GetModuleFileNameA(instance.into(), &mut module_path) };
+        let mut large_icon = HICON::default();
+        let mut small_icon = HICON::default();
+        unsafe {
+            ExtractIconExA(
+                PCSTR::from_raw(module_path.as_ptr()),
+                0,
+                Some(&mut large_icon),
+                Some(&mut small_icon),
+                1,
+            );
+        }
+
+        // Register window class
         let wndclass = WNDCLASSEXA {
             cbSize: size_of::<WNDCLASSEXA>() as u32,
             lpfnWndProc: Some(window_proc),
             hInstance: instance.into(),
+            hIcon: large_icon,
             lpszClassName: PCSTR(c"window".as_ptr() as _),
+            hIconSm: small_icon,
             ..Default::default()
         };
         unsafe { RegisterClassExA(&wndclass) };
