@@ -68,6 +68,8 @@ fn main() {
 
     // Generate resources for macOS
     if cfg!(target_os = "macos") {
+        let target_dir = "../../target"; // FIXME: Find way to not hardcode this path
+
         // Create icon.icns
         std::process::Command::new("iconutil")
             .args([
@@ -75,7 +77,7 @@ fn main() {
                 "icns",
                 "meta/macos/icon.iconset",
                 "-o",
-                &format!("{}/icon.icns", out_dir),
+                &format!("{}/icon.icns", target_dir),
             ])
             .output()
             .expect("Failed to create icon.icns");
@@ -89,9 +91,9 @@ fn main() {
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleName</key>
-	<string>{}</string>
+	<string>BassieLight</string>
 	<key>CFBundleDisplayName</key>
-	<string>{}</string>
+	<string>BassieLight</string>
 	<key>CFBundleIdentifier</key>
 	<string>nl.bplaat.BassieLight</string>
 	<key>CFBundleVersion</key>
@@ -99,7 +101,7 @@ fn main() {
 	<key>CFBundleShortVersionString</key>
 	<string>{}</string>
 	<key>CFBundleExecutable</key>
-	<string>{}</string>
+	<string>BassieLight</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>11.0</string>
 	<key>CFBundleIconFile</key>
@@ -108,13 +110,10 @@ fn main() {
 	<string>Copyright © 2025 Bastiaan van der Plaat</string>
 </dict>
 </plist>"#,
-            env!("CARGO_PKG_NAME"),
-            env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
-            env!("CARGO_PKG_VERSION"),
-            env!("CARGO_PKG_NAME")
+            env!("CARGO_PKG_VERSION")
         );
-        std::fs::write(format!("{}/Info.plist", out_dir), info_plist)
+        std::fs::write(format!("{}/Info.plist", target_dir), info_plist)
             .expect("Failed to write Info.plist");
     }
 

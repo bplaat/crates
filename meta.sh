@@ -41,11 +41,22 @@ function coverage() {
 }
 
 function release() {
-    targets=("x86_64-unknown-linux-musl" "aarch64-unknown-linux-musl" "x86_64-apple-darwin" "aarch64-apple-darwin" "x86_64-pc-windows-gnu")
-    for target in "${targets[@]}"; do
-        cargo zigbuild --release --target "$target"
-    done
-    rm .intentionally-empty-file.o
+    # FIXME: Find way to do this better
+    release_bassielight_macos
+}
+
+function release_bassielight_macos() {
+    bundle_dir="target/BassieLight.app/Contents"
+    mkdir -p $bundle_dir/MacOS $bundle_dir/Resources
+    cargo build --release --bin "bassielight" --target x86_64-apple-darwin
+    strip target/x86_64-apple-darwin/release/bassielight
+    cargo build --release --bin "bassielight" --target aarch64-apple-darwin
+    strip target/aarch64-apple-darwin/release/bassielight
+    lipo target/x86_64-apple-darwin/release/bassielight target/aarch64-apple-darwin/release/bassielight \
+        -create -output $bundle_dir/MacOS/BassieLight
+    cp target/icon.icns $bundle_dir/Resources
+    cp target/Info.plist $bundle_dir
+    cd target && rm -f BassieLight.zip && zip -r BassieLight.zip BassieLight.app && cd ..
 }
 
 case "${1:-check}" in
