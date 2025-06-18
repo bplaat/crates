@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+// FIXME: Add webview2 events support and open external links in browser
 // FIXME: Add WebView2 IPC support
-// FIXME: Add high dpi support
 // FIXME: Add remember window position and size
 
 #![allow(clippy::upper_case_acronyms)]
@@ -26,13 +26,18 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
 use windows::Win32::Graphics::Gdi::UpdateWindow;
 use windows::Win32::System::LibraryLoader::GetModuleHandleA;
+use windows::Win32::UI::HiDpi::{
+    AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem,
+    SetProcessDpiAwarenessContext,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DispatchMessageA, GWL_STYLE, GWL_USERDATA,
-    GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect, MINMAXINFO, MSG, PostQuitMessage,
-    RegisterClassExA, SM_CXSCREEN, SW_SHOWDEFAULT, SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE,
-    SWP_NOZORDER, SetWindowPos, SetWindowTextA, ShowWindow, TranslateMessage,
-    WINDOW_LONG_PTR_INDEX, WINDOW_STYLE, WM_DESTROY, WM_GETMINMAXINFO, WM_SIZE, WNDCLASSEXA,
-    WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+    CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, GWL_STYLE,
+    GWL_USERDATA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect, MINMAXINFO, MSG,
+    PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWDEFAULT, SWP_NOACTIVATE,
+    SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, SetWindowTextA, ShowWindow,
+    TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_LONG_PTR_INDEX,
+    WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE,
+    WM_SIZE, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
 };
 use windows::core::{BOOL, HSTRING, PCSTR};
 
@@ -42,8 +47,10 @@ use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 pub(crate) struct Webview {
     builder: Option<WebviewBuilder>,
     hwnd: HWND,
-    controller: Option<ICoreWebView2Controller>,
+    dpi: u32,
     min_size: Option<LogicalSize>,
+    controller: Option<ICoreWebView2Controller>,
+    event_handler: Option<fn(&mut Webview, Event)>,
 }
 
 impl Webview {
@@ -52,15 +59,27 @@ impl Webview {
         Self {
             builder: Some(builder),
             hwnd: HWND(null_mut()),
-            controller: None,
+            dpi: USER_DEFAULT_SCREEN_DPI,
             min_size,
+            controller: None,
+            event_handler: None,
         }
+    }
+
+    fn send_event(&mut self, event: Event) {
+        self.event_handler.expect("Should be some")(self, event);
     }
 }
 
 impl crate::Webview for Webview {
-    fn run(&mut self, _event_handler: fn(&mut Webview, Event)) -> ! {
+    fn run(&mut self, event_handler: fn(&mut Webview, Event)) -> ! {
+        self.event_handler = Some(event_handler);
+
         let builder = self.builder.take().expect("Should be some");
+
+        // Enable PerMonitorV2 high DPI awareness
+        _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+        self.dpi = unsafe { GetDpiForSystem() };
 
         // Register window class
         let instance = unsafe { GetModuleHandleA(None) }.expect("Can't get module handle");
@@ -74,31 +93,56 @@ impl crate::Webview for Webview {
         unsafe { RegisterClassExA(&wndclass) };
 
         // Create window
-        // FIXME: Use single AdjustWindowRectExForDpi to calc window rect
         self.hwnd = unsafe {
-            let title = CString::new(builder.title).expect("Can't convert to CString");
+            let style = if builder.resizable {
+                WS_OVERLAPPEDWINDOW
+            } else {
+                WS_OVERLAPPEDWINDOW & !WS_THICKFRAME
+            };
 
+            // Calculate window rect based on size and position
+            let mut x = 0;
+            let mut y = 0;
+            let width =
+                (builder.size.width as i32 * self.dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+            let height =
+                (builder.size.height as i32 * self.dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+            if let Some(position) = builder.position {
+                x = position.x as i32;
+                y = position.y as i32;
+            }
+            if builder.should_center {
+                let screen_width = GetSystemMetrics(SM_CXSCREEN);
+                let screen_height = GetSystemMetrics(SM_CYSCREEN);
+                x = (screen_width - width) / 2;
+                y = (screen_height - height) / 2;
+            }
+            let mut rect = RECT {
+                left: x,
+                top: y,
+                right: x + width,
+                bottom: y + height,
+            };
+            _ = AdjustWindowRectExForDpi(&mut rect, style, false, WINDOW_EX_STYLE(0), self.dpi);
+
+            let title = CString::new(builder.title).expect("Can't convert to CString");
             let hwnd = CreateWindowExA(
-                Default::default(),
+                WINDOW_EX_STYLE(0),
                 wndclass.lpszClassName,
                 PCSTR(title.as_ptr() as _),
-                if builder.resizable {
-                    WS_OVERLAPPEDWINDOW
-                } else {
-                    WS_OVERLAPPEDWINDOW & !WS_THICKFRAME
-                },
-                if let Some(pos) = builder.position {
-                    pos.x as i32
+                style,
+                if builder.position.is_some() || builder.should_center {
+                    rect.left
                 } else {
                     CW_USEDEFAULT
                 },
-                if let Some(pos) = builder.position {
-                    pos.y as i32
+                if builder.position.is_some() || builder.should_center {
+                    rect.top
                 } else {
                     CW_USEDEFAULT
                 },
-                builder.size.width as i32,
-                builder.size.height as i32,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
                 None,
                 None,
                 Some(instance.into()),
@@ -106,7 +150,6 @@ impl crate::Webview for Webview {
             )
             .expect("Can't create window");
             SetWindowLong(hwnd, GWL_USERDATA, self as *mut Webview as isize);
-
             if builder.should_force_dark_mode {
                 let enabled: BOOL = true.into();
                 _ = DwmSetWindowAttribute(
@@ -116,27 +159,6 @@ impl crate::Webview for Webview {
                     size_of::<BOOL>() as u32,
                 );
             }
-
-            // Center the window on the screen
-            if builder.position.is_none() || builder.should_center {
-                let mut rect = RECT::default();
-                _ = GetWindowRect(hwnd, &mut rect);
-                let screen_width = GetSystemMetrics(SM_CXSCREEN);
-                let screen_height =
-                    GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CYSCREEN);
-                let x = (screen_width - (rect.right - rect.left)) / 2;
-                let y = (screen_height - (rect.bottom - rect.top)) / 2;
-                _ = SetWindowPos(
-                    hwnd,
-                    None,
-                    x,
-                    y,
-                    0,
-                    0,
-                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
-                );
-            }
-
             _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
             _ = UpdateWindow(hwnd);
             hwnd
@@ -144,8 +166,8 @@ impl crate::Webview for Webview {
 
         // Create Webview2
         let environment = {
+            // FIXME: Clean up
             let (tx, rx) = mpsc::channel();
-
             CreateCoreWebView2EnvironmentCompletedHandler::wait_for_async_operation(
                 Box::new(|environmentcreatedhandler| unsafe {
                     CreateCoreWebView2Environment(&environmentcreatedhandler)
@@ -159,15 +181,13 @@ impl crate::Webview for Webview {
                 }),
             )
             .expect("Failed to create WebView2 environment");
-
             rx.recv().expect("Failed to receive WebView2 environment")
         };
 
         self.controller = Some({
-            let (tx, rx) = mpsc::channel();
-
             // FIXME: Clean up
             let hwnd = self.hwnd;
+            let (tx, rx) = mpsc::channel();
             CreateCoreWebView2ControllerCompletedHandler::wait_for_async_operation(
                 Box::new(move |handler| unsafe {
                     environment
@@ -182,10 +202,8 @@ impl crate::Webview for Webview {
                 }),
             )
             .expect("Failed to create WebView2 controller");
-
             rx.recv().expect("Failed to receive WebView2 cont roller")
         });
-
         unsafe {
             if let Some(controller) = &self.controller {
                 let mut rect = RECT::default();
@@ -202,7 +220,7 @@ impl crate::Webview for Webview {
 
         // Start event loop
         unsafe {
-            let mut msg: MSG = mem::zeroed();
+            let mut msg = MSG::default();
             while GetMessageA(&mut msg, None, 0, 0).into() {
                 _ = TranslateMessage(&msg);
                 DispatchMessageA(&msg);
@@ -219,15 +237,18 @@ impl crate::Webview for Webview {
     fn position(&self) -> LogicalPoint {
         let mut rect = RECT::default();
         _ = unsafe { GetWindowRect(self.hwnd, &mut rect) };
-        LogicalPoint::new(rect.left as f32, rect.top as f32)
+        LogicalPoint::new(
+            (rect.left * USER_DEFAULT_SCREEN_DPI as i32 / self.dpi as i32) as f32,
+            (rect.top * USER_DEFAULT_SCREEN_DPI as i32 / self.dpi as i32) as f32,
+        )
     }
 
     fn size(&self) -> LogicalSize {
         let mut rect = RECT::default();
         _ = unsafe { GetWindowRect(self.hwnd, &mut rect) };
         LogicalSize::new(
-            (rect.right - rect.left) as f32,
-            (rect.bottom - rect.top) as f32,
+            ((rect.right - rect.left) * USER_DEFAULT_SCREEN_DPI as i32 / self.dpi as i32) as f32,
+            ((rect.bottom - rect.top) * USER_DEFAULT_SCREEN_DPI as i32 / self.dpi as i32) as f32,
         )
     }
 
@@ -236,8 +257,8 @@ impl crate::Webview for Webview {
             SetWindowPos(
                 self.hwnd,
                 None,
-                point.x as i32,
-                point.y as i32,
+                point.x as i32 * self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
+                point.y as i32 * self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
                 0,
                 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
@@ -245,15 +266,15 @@ impl crate::Webview for Webview {
         };
     }
 
-    fn set_size(&mut self, _size: LogicalSize) {
+    fn set_size(&mut self, size: LogicalSize) {
         _ = unsafe {
             SetWindowPos(
                 self.hwnd,
                 None,
                 0,
                 0,
-                _size.width as i32,
-                _size.height as i32,
+                size.width as i32 * self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
+                size.height as i32 * self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
                 SWP_NOREPOSITION | SWP_NOZORDER | SWP_NOACTIVATE,
             )
         };
@@ -326,24 +347,71 @@ unsafe extern "system" fn window_proc(
         &mut *ptr
     };
     match msg {
+        WM_CREATE => {
+            _self.send_event(Event::WindowCreated);
+            LRESULT(0)
+        }
+        WM_MOVE => {
+            let x = l_param.0 as u16 as i32;
+            let y = (l_param.0 >> 16) as u16 as i32;
+            _self.send_event(Event::WindowMoved(LogicalPoint::new(
+                (x * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
+                (y * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
+            )));
+            LRESULT(0)
+        }
         WM_SIZE => {
-            unsafe {
-                if let Some(controller) = &_self.controller {
-                    let mut rect = RECT::default();
-                    _ = GetClientRect(hwnd, &mut rect);
-                    _ = controller.SetBounds(rect);
-                }
+            let width = (l_param.0 as u16) as i32;
+            let height = ((l_param.0 >> 16) as u16) as i32;
+            _self.send_event(Event::WindowResized(LogicalSize::new(
+                (width * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
+                (height * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
+            )));
+            if let Some(controller) = &_self.controller {
+                _ = unsafe {
+                    controller.SetBounds(RECT {
+                        left: 0,
+                        top: 0,
+                        right: width,
+                        bottom: height,
+                    })
+                };
             }
+            LRESULT(0)
+        }
+        WM_DPICHANGED => {
+            _self.dpi = (w_param.0 >> 16) as u32;
+            let window_rect = unsafe { &*(l_param.0 as *const RECT) };
+            _ = unsafe {
+                SetWindowPos(
+                    hwnd,
+                    None,
+                    window_rect.left,
+                    window_rect.top,
+                    window_rect.right - window_rect.left,
+                    window_rect.bottom - window_rect.top,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                )
+            };
             LRESULT(0)
         }
         WM_GETMINMAXINFO => {
             unsafe {
                 if let Some(min_size) = _self.min_size {
+                    let min_width =
+                        min_size.width as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
+                    let min_height =
+                        min_size.height as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
                     let minmax_info: *mut MINMAXINFO = mem::transmute(l_param);
-                    (*minmax_info).ptMinTrackSize.x = min_size.width as i32;
-                    (*minmax_info).ptMinTrackSize.y = min_size.height as i32;
+                    (*minmax_info).ptMinTrackSize.x = min_width;
+                    (*minmax_info).ptMinTrackSize.y = min_height;
                 }
             }
+            LRESULT(0)
+        }
+        WM_CLOSE => {
+            _self.send_event(Event::WindowClosed);
+            _ = unsafe { DestroyWindow(hwnd) };
             LRESULT(0)
         }
         WM_DESTROY => {
@@ -354,6 +422,7 @@ unsafe extern "system" fn window_proc(
     }
 }
 
+// Utils
 #[allow(non_snake_case)]
 #[cfg(target_pointer_width = "32")]
 unsafe fn GetWindowLong(hwnd: HWND, index: WINDOW_LONG_PTR_INDEX) -> isize {
