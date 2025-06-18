@@ -66,8 +66,60 @@ fn main() {
     copy_dir_all(std::path::Path::new("web/dist"), &dest_path)
         .expect("Failed to copy web/dist files to $OUT_DIR");
 
+    // Generate resources for macOS
+    if cfg!(target_os = "macos") {
+        // Create icon.icns
+        std::process::Command::new("iconutil")
+            .args([
+                "-c",
+                "icns",
+                "meta/macos/icon.iconset",
+                "-o",
+                &format!("{}/icon.icns", out_dir),
+            ])
+            .output()
+            .expect("Failed to create icon.icns");
+
+        // Generate Info.plist
+        let info_plist = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleName</key>
+	<string>{}</string>
+	<key>CFBundleDisplayName</key>
+	<string>{}</string>
+	<key>CFBundleIdentifier</key>
+	<string>nl.bplaat.BassieLight</string>
+	<key>CFBundleVersion</key>
+	<string>{}</string>
+	<key>CFBundleShortVersionString</key>
+	<string>{}</string>
+	<key>CFBundleExecutable</key>
+	<string>{}</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>CFBundleIconFile</key>
+	<string>icon</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2025 Bastiaan van der Plaat</string>
+</dict>
+</plist>"#,
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION"),
+            env!("CARGO_PKG_VERSION"),
+            env!("CARGO_PKG_NAME")
+        );
+        std::fs::write(format!("{}/Info.plist", out_dir), info_plist)
+            .expect("Failed to write Info.plist");
+    }
+
     // Compile Windows resources
-    if cfg!(target_os = "windows") {
+    if cfg!(windows) {
         let mut res = winres::WindowsResource::new();
         res.set_icon("meta/windows/icon.ico")
             .set_manifest_file("meta/windows/manifest.xml")
