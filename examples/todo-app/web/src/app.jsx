@@ -5,26 +5,18 @@
  */
 
 import { useState, useEffect } from 'preact/hooks';
+import { request, send } from './ipc.js';
 
 export function App() {
     const [todos, setTodos] = useState([]);
     const [input, setInput] = useState('');
 
-    useEffect(() => {
-        window.ipc.postMessage(JSON.stringify({ type: 'get-todos' }));
-        const messageListener = (event) => {
-            const message = JSON.parse(event.data);
-            if (message.type === 'get-todos-response') {
-                setTodos(message.todos);
-            }
-        };
-        window.ipc.addEventListener('message', messageListener);
-        return () => {
-            window.ipc.removeEventListener('message', messageListener);
-        };
+    useEffect(async () => {
+        const { todos } = await request('get-todos');
+        setTodos(todos);
     }, []);
     useEffect(() => {
-        window.ipc.postMessage(JSON.stringify({ type: 'update-todos', todos }));
+        send('update-todos', { todos });
     }, [todos]);
 
     const addTodo = (e) => {
@@ -44,20 +36,13 @@ export function App() {
     return (
         <div>
             <h1>Todo App</h1>
-            <p>
-                <form onSubmit={addTodo}>
-                    <input
-                        type="text"
-                        value={input}
-                        onInput={(e) => setInput(e.target.value)}
-                        placeholder="Add a todo"
-                    />
-                    <button type="submit">Add</button>
-                    <button onClick={removeCompleted} disabled={todos.length === 0}>
-                        Clear done
-                    </button>
-                </form>
-            </p>
+            <form onSubmit={addTodo}>
+                <input type="text" value={input} onInput={(e) => setInput(e.target.value)} placeholder="Add a todo" />
+                <button type="submit">Add</button>
+                <button onClick={removeCompleted} disabled={todos.length === 0}>
+                    Clear done
+                </button>
+            </form>
 
             {todos.length === 0 ? (
                 <p>
