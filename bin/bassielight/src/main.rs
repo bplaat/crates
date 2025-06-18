@@ -40,8 +40,11 @@ fn main() {
         Event::PageLoadFinished => {
             thread::spawn(move || {
                 let config = config::load_config("config.json").expect("Can't load config.json");
-                let device = usb::find_udmx_device().expect("Can't find uDMX device");
-                dmx::dmx_thread(device, config);
+                if let Some(device) = usb::find_udmx_device() {
+                    dmx::dmx_thread(device, config);
+                } else {
+                    eprintln!("No uDMX device found");
+                }
             });
         }
         Event::PageMessageReceived(message) => {
