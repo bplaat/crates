@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-// FIXME: Add remember window position and size
-
 #![allow(clippy::upper_case_acronyms)]
 
 use std::ffi::CString;
+use std::fs::File;
+use std::io::Read;
 use std::process::exit;
 use std::ptr::null_mut;
 use std::sync::mpsc;
@@ -52,6 +52,8 @@ pub(crate) struct Webview {
     hwnd: HWND,
     dpi: u32,
     min_size: Option<LogicalSize>,
+    #[cfg(feature = "remember_window_state")]
+    remember_window_state: bool,
     controller: Option<ICoreWebView2Controller>,
     event_handler: Option<fn(&mut Webview, Event)>,
 }
@@ -59,13 +61,37 @@ pub(crate) struct Webview {
 impl Webview {
     pub(crate) fn new(builder: WebviewBuilder) -> Self {
         let min_size = builder.min_size;
+        #[cfg(feature = "remember_window_state")]
+        let remember_window_state = builder.remember_window_state;
         Self {
             builder: Some(builder),
             hwnd: HWND(null_mut()),
             dpi: USER_DEFAULT_SCREEN_DPI,
             min_size,
+            #[cfg(feature = "remember_window_state")]
+            remember_window_state,
             controller: None,
             event_handler: None,
+        }
+    }
+
+    fn userdata_folder() -> String {
+        unsafe {
+            let appdata_path = convert_pwstr_to_string(
+                SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
+                    .expect("Should be some"),
+            );
+            format!(
+                "{}/{}",
+                appdata_path,
+                env::current_exe()
+                    .expect("Can't get current process name")
+                    .file_name()
+                    .expect("Can't get current process name")
+                    .to_string_lossy()
+                    .strip_suffix(".exe")
+                    .expect("Should strip .exe")
+            )
         }
     }
 
@@ -94,25 +120,6 @@ impl crate::Webview for Webview {
             ..Default::default()
         };
         unsafe { RegisterClassExA(&wndclass) };
-
-        // Get app data folder
-        let userdata_folder = unsafe {
-            let appdata_path = convert_pwstr_to_string(
-                SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
-                    .expect("Should be some"),
-            );
-            format!(
-                "{}/{}",
-                appdata_path,
-                env::current_exe()
-                    .expect("Can't get current process name")
-                    .file_name()
-                    .expect("Can't get current process name")
-                    .to_string_lossy()
-                    .strip_suffix(".exe")
-                    .expect("Should strip .exe")
-            )
-        };
 
         // Create window
         self.hwnd = unsafe {
@@ -181,7 +188,31 @@ impl crate::Webview for Webview {
                     size_of::<BOOL>() as u32,
                 );
             }
-            _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
+
+            #[cfg(feature = "remember_window_state")]
+            if builder.remember_window_state {
+                let window_placement_path = format!("{}/window.bin", Self::userdata_folder());
+                if let Ok(mut file) = File::open(window_placement_path) {
+                    let size =
+                        size_of::<windows::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT>();
+                    let mut buffer = vec![0u8; size];
+                    if file.read_exact(&mut buffer).is_ok() {
+                        let window_placement = std::ptr::read(buffer.as_ptr() as *const _);
+                        _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPlacement(
+                            hwnd,
+                            &window_placement,
+                        );
+                    }
+                } else {
+                    _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
+                }
+            } else {
+                _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
+            }
+            #[cfg(not(feature = "remember_window_state"))]
+            {
+                _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
+            }
             _ = UpdateWindow(hwnd);
             hwnd
         };
@@ -193,7 +224,7 @@ impl crate::Webview for Webview {
                 let (tx, rx) = mpsc::channel();
                 _ = CreateCoreWebView2EnvironmentWithOptions(
                     PWSTR::default(),
-                    &HSTRING::from(userdata_folder),
+                    &HSTRING::from(Self::userdata_folder()),
                     None,
                     &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(
                         move |error_code, environment| {
@@ -482,6 +513,31 @@ unsafe extern "system" fn window_proc(
             LRESULT(0)
         }
         WM_CLOSE => {
+            #[cfg(feature = "remember_window_state")]
+            if _self.remember_window_state {
+                unsafe {
+                    use std::io::Write;
+                    let mut window_placement = Default::default();
+                    _ = windows::Win32::UI::WindowsAndMessaging::GetWindowPlacement(
+                        hwnd,
+                        &mut window_placement,
+                    );
+                    let window_placement_path =
+                        format!("{}/window.bin", Webview::userdata_folder());
+                    if let Ok(mut file) = std::fs::OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(window_placement_path)
+                    {
+                        _ = file.write_all(std::slice::from_raw_parts(
+                            &window_placement as *const _ as *const u8,
+                            size_of::<windows::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT>(),
+                        ));
+                    }
+                }
+            }
+
             _self.send_event(Event::WindowClosed);
             _ = unsafe { DestroyWindow(hwnd) };
             LRESULT(0)
