@@ -69,11 +69,15 @@ pub(crate) fn detect_android(bobje: &Bobje) -> bool {
 pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Executor) {
     let vars = AndroidVars::new(bobje);
 
-    // aapt2_compile tasks
     let res_dir = format!(
         "{}/{}",
         bobje.manifest_dir, vars.android_metadata.resources_dir
     );
+    if !Path::new(&res_dir).exists() {
+        return;
+    }
+
+    // aapt2_compile tasks
     let compiled_res_dir = format!(
         "{}/{}/res/{}",
         bobje.target_dir,
@@ -165,6 +169,9 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                         .replace('.', "/")
                 );
                 let res_dir = format!("{}/{}", bobje.manifest_dir, android_metadata.resources_dir);
+                if !Path::new(&res_dir).exists() {
+                    return;
+                }
                 for res_file in index_files(&res_dir) {
                     let mut compiled_res_file = format!(
                         "{}/{}.flat",
