@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::collections::HashMap;
+
 use serde::Deserialize;
 
 #[derive(Default, Deserialize)]
@@ -11,6 +13,7 @@ use serde::Deserialize;
 pub(crate) struct Manifest {
     pub package: Package,
     pub build: Build,
+    pub dependencies: HashMap<String, Dependency>,
 }
 
 #[derive(Default, Deserialize)]
@@ -20,6 +23,11 @@ pub(crate) struct Package {
     pub identifier: Option<String>,
     pub version: String,
     pub metadata: PackageMetadata,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Dependency {
+    pub path: String,
 }
 
 #[derive(Default, Deserialize)]

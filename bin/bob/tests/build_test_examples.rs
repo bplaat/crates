@@ -20,8 +20,11 @@ fn test_build_test_examples() {
     for entry in fs::read_dir(examples_dir).expect("Failed to read examples directory") {
         let entry = entry.expect("Failed to read directory entry");
         if entry.path().is_dir() {
-            let project_name = entry.file_name().to_string_lossy().to_string();
-            if cfg!(not(target_os = "macos")) && project_name.starts_with("objc") {
+            let dir_name = entry.file_name().to_string_lossy().to_string();
+            if dir_name == "lib" {
+                continue;
+            }
+            if cfg!(not(target_os = "macos")) && dir_name.starts_with("objc") {
                 continue;
             }
 
@@ -47,8 +50,8 @@ fn test_build_test_examples() {
     for entry in fs::read_dir(examples_dir).expect("Failed to read examples directory") {
         let entry = entry.expect("Failed to read directory entry");
         if entry.path().is_dir() {
-            let project_name = entry.file_name().to_string_lossy().to_string();
-            if !(project_name.starts_with("c") || project_name.starts_with("cpp")) {
+            let dir_name = entry.file_name().to_string_lossy().to_string();
+            if dir_name != "lib" && !(dir_name.starts_with("c") || dir_name.starts_with("cpp")) {
                 continue;
             }
 

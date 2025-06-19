@@ -3,3 +3,6 @@ name = "hello"
 version = "0.1.0"
 
 [package.metadata.jar]
+
+[dependencies]
+animals = { path = "../lib/java-lib" }
