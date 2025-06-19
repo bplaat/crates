@@ -12,7 +12,7 @@ use crate::executor::Executor;
 use crate::manifest::AndroidMetadata;
 use crate::tasks::java::find_modules;
 use crate::utils::index_files;
-use crate::{Profile, Project};
+use crate::{Bobje, Profile};
 
 // MARK: Android vars
 struct AndroidVars {
@@ -24,8 +24,8 @@ struct AndroidVars {
 }
 
 impl AndroidVars {
-    fn new(project: &Project) -> Self {
-        let identifier = project
+    fn new(bobje: &Bobje) -> Self {
+        let identifier = bobje
             .manifest
             .package
             .identifier
@@ -34,7 +34,7 @@ impl AndroidVars {
                 eprintln!("Identifier is required");
                 exit(1);
             });
-        let android_metadata = project
+        let android_metadata = bobje
             .manifest
             .package
             .metadata
@@ -69,9 +69,9 @@ pub(crate) fn detect_android() -> bool {
 }
 
 // MARK: Android resources
-pub(crate) fn generate_android_res_tasks(project: &mut Project, executor: &mut Executor) {
-    let vars = AndroidVars::new(project);
-    let compiled_res_dir = format!("{}/{}/res", project.target_dir, project.profile);
+pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Executor) {
+    let vars = AndroidVars::new(bobje);
+    let compiled_res_dir = format!("{}/{}/res", bobje.target_dir, bobje.profile);
 
     // aapt2_compile tasks
     let mut link_inputs = Vec::new();
@@ -106,8 +106,8 @@ pub(crate) fn generate_android_res_tasks(project: &mut Project, executor: &mut E
     }
     let r_java_path = format!(
         "{}/{}/src-gen/{}/R.java",
-        project.target_dir,
-        project.profile,
+        bobje.target_dir,
+        bobje.profile,
         vars.identifier.replace('.', "/")
     );
     let mut link_command = vec![
@@ -123,11 +123,11 @@ pub(crate) fn generate_android_res_tasks(project: &mut Project, executor: &mut E
         "--manifest".to_string(),
         "AndroidManifest.xml".to_string(),
         "--java".to_string(),
-        format!("{}/{}/src-gen", project.target_dir, project.profile),
+        format!("{}/{}/src-gen", bobje.target_dir, bobje.profile),
         "--version-name".to_string(),
-        project.manifest.package.version.clone(),
+        bobje.manifest.package.version.clone(),
         "--version-code".to_string(),
-        parse_version_to_code(&project.manifest.package.version).to_string(),
+        parse_version_to_code(&bobje.manifest.package.version).to_string(),
         "--min-sdk-version".to_string(),
         vars.android_metadata.min_sdk_version.to_string(),
         "--target-sdk-version".to_string(),
@@ -137,7 +137,7 @@ pub(crate) fn generate_android_res_tasks(project: &mut Project, executor: &mut E
         "-o".to_string(),
         format!(
             "{}/{}/{}-unaligned.apk",
-            project.target_dir, project.profile, project.manifest.package.name
+            bobje.target_dir, bobje.profile, bobje.manifest.package.name
         ),
     ]);
     executor.add_task_cmd(
@@ -146,29 +146,29 @@ pub(crate) fn generate_android_res_tasks(project: &mut Project, executor: &mut E
         vec![
             format!(
                 "{}/{}/{}-unaligned.apk",
-                project.target_dir, project.profile, project.manifest.package.name
+                bobje.target_dir, bobje.profile, bobje.manifest.package.name
             ),
             r_java_path.clone(),
         ],
     );
 
     // Add R.java to source files
-    project.source_files.push(r_java_path);
+    bobje.source_files.push(r_java_path);
 
     // Add platform to classpath
-    project.manifest.build.classpath.push(vars.platform_jar);
+    bobje.manifest.build.classpath.push(vars.platform_jar);
 }
 
 // MARK: Android classes.dex
-pub(crate) fn generate_android_dex_tasks(project: &Project, executor: &mut Executor) {
-    let vars = AndroidVars::new(project);
-    let classes_dir = format!("{}/{}/classes", project.target_dir, project.profile);
-    let modules = find_modules(&project.source_files);
+pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor) {
+    let vars = AndroidVars::new(bobje);
+    let classes_dir = format!("{}/{}/classes", bobje.target_dir, bobje.profile);
+    let modules = find_modules(bobje);
 
     // Compile classes.dex with d8 task
     let mut d8_command = vec![
         format!("{}/d8", vars.build_tools_path),
-        if project.profile == Profile::Release {
+        if bobje.profile == Profile::Release {
             "--release"
         } else {
             "--debug"
@@ -176,7 +176,7 @@ pub(crate) fn generate_android_dex_tasks(project: &Project, executor: &mut Execu
         .to_string(),
         format!("--lib {}", vars.platform_jar),
         format!("--min-api {}", vars.android_metadata.min_sdk_version),
-        format!("--output {}/{}/", project.target_dir, project.profile),
+        format!("--output {}/{}/", bobje.target_dir, bobje.profile),
     ];
     for module in modules.keys() {
         d8_command.push(format!(
@@ -189,9 +189,9 @@ pub(crate) fn generate_android_dex_tasks(project: &Project, executor: &mut Execu
         format!(
             "{} && cd {}/{} && zip {}-unaligned.apk classes.dex",
             d8_command.join(" "),
-            project.target_dir,
-            project.profile,
-            project.manifest.package.name
+            bobje.target_dir,
+            bobje.profile,
+            bobje.manifest.package.name
         ),
         modules
             .keys()
@@ -199,14 +199,14 @@ pub(crate) fn generate_android_dex_tasks(project: &Project, executor: &mut Execu
             .collect(),
         vec![format!(
             "{}/{}/classes.dex",
-            project.target_dir, project.profile
+            bobje.target_dir, bobje.profile
         )],
     );
 }
 
 // MARK: Android APK
-pub(crate) fn generate_android_final_apk_tasks(project: &Project, executor: &mut Executor) {
-    let vars = AndroidVars::new(project);
+pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Executor) {
+    let vars = AndroidVars::new(bobje);
 
     // Generate dummy keystore if it doesn't exist
     if fs::metadata(&vars.android_metadata.keystore_file).is_err() {
@@ -243,11 +243,11 @@ pub(crate) fn generate_android_final_apk_tasks(project: &Project, executor: &mut
     // zipalign
     let unaligned_apk = format!(
         "{}/{}/{}-unaligned.apk",
-        project.target_dir, project.profile, project.manifest.package.name
+        bobje.target_dir, bobje.profile, bobje.manifest.package.name
     );
     let unsigned_apk = format!(
         "{}/{}/{}-unsigned.apk",
-        project.target_dir, project.profile, project.manifest.package.name
+        bobje.target_dir, bobje.profile, bobje.manifest.package.name
     );
     executor.add_task_cmd(
         format!(
@@ -256,7 +256,7 @@ pub(crate) fn generate_android_final_apk_tasks(project: &Project, executor: &mut
         ),
         vec![
             unaligned_apk.clone(),
-            format!("{}/{}/classes.dex", project.target_dir, project.profile),
+            format!("{}/{}/classes.dex", bobje.target_dir, bobje.profile),
         ],
         vec![unsigned_apk.clone()],
     );
@@ -264,10 +264,10 @@ pub(crate) fn generate_android_final_apk_tasks(project: &Project, executor: &mut
     // apksigner
     let signed_apk = format!(
         "{}/{}/{}-{}.apk",
-        project.target_dir,
-        project.profile,
-        project.manifest.package.name,
-        project.manifest.package.version
+        bobje.target_dir,
+        bobje.profile,
+        bobje.manifest.package.name,
+        bobje.manifest.package.version
     );
     let mut apksigner_cmd = format!(
         "{}/apksigner sign --min-sdk-version {} --v4-signing-enabled false --ks {} ",
@@ -295,8 +295,8 @@ pub(crate) fn generate_android_final_apk_tasks(project: &Project, executor: &mut
     );
 }
 
-pub(crate) fn run_android_apk(project: &Project) {
-    let vars = AndroidVars::new(project);
+pub(crate) fn run_android_apk(bobje: &Bobje) {
+    let vars = AndroidVars::new(bobje);
     let adb_path = format!("{}/adb", vars.platform_tools_path);
 
     let status = Command::new(&adb_path)
@@ -304,10 +304,10 @@ pub(crate) fn run_android_apk(project: &Project) {
         .arg("-r")
         .arg(format!(
             "{}/{}/{}-{}.apk",
-            project.target_dir,
-            project.profile,
-            project.manifest.package.name,
-            project.manifest.package.version
+            bobje.target_dir,
+            bobje.profile,
+            bobje.manifest.package.name,
+            bobje.manifest.package.version
         ))
         .status()
         .expect("Failed to execute adb");

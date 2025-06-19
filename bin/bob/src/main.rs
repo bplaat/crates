@@ -7,11 +7,12 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::exit;
 use std::{env, fs};
 
-use crate::args::{Profile, Subcommand, parse_args};
+use crate::args::{Args, Profile, Subcommand, parse_args};
 use crate::executor::Executor;
 use crate::manifest::Manifest;
 use crate::tasks::android::{
@@ -19,9 +20,9 @@ use crate::tasks::android::{
     generate_android_res_tasks, run_android_apk,
 };
 use crate::tasks::cx::{
-    detect_bundle, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp,
-    generate_bundle_tasks, generate_c_tasks, generate_cpp_tasks, generate_ld_tasks,
-    generate_objc_tasks, generate_objcpp_tasks, generate_test_main, run_bundle, run_ld,
+    copy_cx_headers, detect_bundle, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp,
+    generate_bundle_tasks, generate_c_tasks, generate_cpp_tasks, generate_cx_test_main,
+    generate_ld_tasks, generate_objc_tasks, generate_objcpp_tasks, run_bundle, run_ld,
     run_ld_tests,
 };
 use crate::tasks::java::{
@@ -81,15 +82,106 @@ fn subcommand_version() {
     println!("bob v{}", env!("CARGO_PKG_VERSION"));
 }
 
-// MARK: Main
-pub(crate) struct Project {
-    target_dir: String,
-    manifest: Manifest,
-    profile: Profile,
-    is_test: bool,
-    source_files: Vec<String>,
+// MARK: Bobje
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum BobjeType {
+    Binary,
+    Library,
 }
 
+#[allow(unused)]
+pub(crate) struct Bobje {
+    target_dir: String,
+    profile: Profile,
+    is_test: bool,
+    // ...
+    r#type: BobjeType,
+    manifest: Manifest,
+    source_files: Vec<String>,
+    dependencies: HashMap<String, Bobje>,
+}
+
+impl Bobje {
+    fn new(args: &Args, executor: &mut Executor, path: &str, r#type: BobjeType) -> Self {
+        // Read manifest
+        let manifest_path = format!("{}/bob.toml", path);
+        let manifest: Manifest =
+            basic_toml::from_str(&fs::read_to_string(&manifest_path).unwrap_or_else(|err| {
+                eprintln!("Can't read {} file: {}", manifest_path, err);
+                exit(1);
+            }))
+            .unwrap_or_else(|err| {
+                eprintln!("Can't parse {} file: {}", manifest_path, err);
+                exit(1);
+            });
+
+        // Build dependencies
+        let mut dependencies = HashMap::new();
+        for dep in manifest.dependencies.values() {
+            let dep_bobje = Bobje::new(
+                args,
+                executor,
+                &format!("{}/{}", path, dep.path),
+                BobjeType::Library,
+            );
+            dependencies.insert(dep_bobje.manifest.package.name.clone(), dep_bobje);
+        }
+
+        // Generate tasks
+        let mut bobje = Self {
+            target_dir: args.target_dir.clone(),
+            profile: args.profile,
+            is_test: args.subcommand == Subcommand::Test,
+            // ...
+            r#type,
+            manifest,
+            source_files: index_files(&format!("{}/src/", path)),
+            dependencies,
+        };
+
+        // FIXME: Fix bug where test corrupts target directory
+        if r#type == BobjeType::Binary && detect_cx(&bobje) && bobje.is_test {
+            generate_cx_test_main(&mut bobje);
+        }
+        if detect_cx(&bobje) {
+            copy_cx_headers(&bobje, executor);
+        }
+        if detect_c(&bobje) {
+            generate_c_tasks(&bobje, executor);
+        }
+        if detect_cpp(&bobje) {
+            generate_cpp_tasks(&bobje, executor);
+        }
+        if detect_objc(&bobje) {
+            generate_objc_tasks(&bobje, executor);
+        }
+        if detect_objcpp(&bobje) {
+            generate_objcpp_tasks(&bobje, executor);
+        }
+        if r#type == BobjeType::Binary && detect_android() {
+            generate_android_res_tasks(&mut bobje, executor);
+        }
+        if detect_java(&bobje) {
+            generate_javac_tasks(&bobje, executor);
+        }
+        if r#type == BobjeType::Binary && detect_android() {
+            generate_android_dex_tasks(&bobje, executor);
+            generate_android_final_apk_tasks(&bobje, executor);
+        }
+        if r#type == BobjeType::Binary && detect_cx(&bobje) {
+            generate_ld_tasks(&bobje, executor);
+        }
+        if r#type == BobjeType::Binary && detect_jar(&bobje) {
+            generate_jar_tasks(&bobje, executor);
+        }
+        if r#type == BobjeType::Binary && detect_bundle(&bobje) {
+            generate_bundle_tasks(&bobje, executor);
+        }
+        bobje
+    }
+}
+
+// MARK: Main
 fn main() {
     let args = parse_args();
 
@@ -108,23 +200,17 @@ fn main() {
         exit(1);
     }
 
-    // Read manifest
-    let manifest: Manifest =
-        basic_toml::from_str(&fs::read_to_string("bob.toml").unwrap_or_else(|err| {
-            eprintln!("Can't read bob.toml file: {}", err);
-            exit(1);
-        }))
-        .unwrap_or_else(|err| {
-            eprintln!("Can't parse bob.toml file: {}", err);
-            exit(1);
-        });
+    // Check if bob.toml exists
+    if !Path::new("bob.toml").exists() {
+        eprintln!("Can't find bob.toml file");
+        exit(1);
+    }
 
     // Clean build artifacts
     if args.subcommand == Subcommand::Clean {
         subcommand_clean(&args.target_dir);
         return;
     }
-
     // Rebuild artifacts
     if args.subcommand == Subcommand::Rebuild {
         subcommand_clean(&args.target_dir);
@@ -135,77 +221,35 @@ fn main() {
         fs::create_dir(&args.target_dir).expect("Failed to create target directory");
     }
 
-    // Generate tasks
-    let mut project = Project {
-        manifest,
-        target_dir: args.target_dir,
-        profile: args.profile,
-        is_test: args.subcommand == Subcommand::Test,
-        source_files: index_files("src/"),
-    };
-
+    // Build main bobje
     let mut executor = Executor::new();
-    // FIXME: Fix bug where test corrupts target directory
-    if detect_cx(&project) && project.is_test {
-        generate_test_main(&mut project);
-    }
-    if detect_c(&project) {
-        generate_c_tasks(&project, &mut executor);
-    }
-    if detect_cpp(&project) {
-        generate_cpp_tasks(&project, &mut executor);
-    }
-    if detect_objc(&project) {
-        generate_objc_tasks(&project, &mut executor);
-    }
-    if detect_objcpp(&project) {
-        generate_objcpp_tasks(&project, &mut executor);
-    }
-    if detect_android() {
-        generate_android_res_tasks(&mut project, &mut executor);
-    }
-    if detect_java(&project) {
-        generate_javac_tasks(&project, &mut executor);
-    }
-    if detect_android() {
-        generate_android_dex_tasks(&project, &mut executor);
-        generate_android_final_apk_tasks(&project, &mut executor);
-    }
-    if detect_cx(&project) {
-        generate_ld_tasks(&project, &mut executor);
-    }
-    if detect_jar(&project) {
-        generate_jar_tasks(&project, &mut executor);
-    }
-    if detect_bundle(&project) {
-        generate_bundle_tasks(&project, &mut executor);
-    }
-    executor.execute(&format!("{}/bob.log", &project.target_dir));
+    let bobje = Bobje::new(&args, &mut executor, ".", BobjeType::Binary);
+    executor.execute(&format!("{}/bob.log", &args.target_dir));
 
     // Run build artifact
     if args.subcommand == Subcommand::Run {
-        if detect_bundle(&project) {
-            run_bundle(&project);
+        if detect_bundle(&bobje) {
+            run_bundle(&bobje);
         }
-        if detect_jar(&project) {
-            run_jar(&project);
+        if detect_jar(&bobje) {
+            run_jar(&bobje);
         }
         if detect_android() {
-            run_android_apk(&project);
+            run_android_apk(&bobje);
         }
-        if detect_cx(&project) {
-            run_ld(&project);
+        if detect_cx(&bobje) {
+            run_ld(&bobje);
         }
-        if detect_java(&project) {
-            run_java_class(&project);
+        if detect_java(&bobje) {
+            run_java_class(&bobje);
         }
         eprintln!("No build artifact to run");
     }
 
     // Run unit tests
     if args.subcommand == Subcommand::Test {
-        if detect_cx(&project) {
-            run_ld_tests(&project);
+        if detect_cx(&bobje) {
+            run_ld_tests(&bobje);
         }
         eprintln!("No test artifact to run");
     }
