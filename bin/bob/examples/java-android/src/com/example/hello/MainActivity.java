@@ -6,6 +6,7 @@ import android.widget.TextView;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import com.example.popup.Popup;
 
 public class MainActivity extends Activity {
     @Override
@@ -20,5 +21,8 @@ public class MainActivity extends Activity {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        // Show popup
+        new Popup(this, "Hello Android library!").show();
     }
 }
