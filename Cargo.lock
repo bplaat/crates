@@ -50,7 +50,6 @@ name = "bob"
 version = "0.1.0"
 dependencies = [
  "basic-toml",
- "indexmap",
  "regex",
  "serde",
  "threadpool",

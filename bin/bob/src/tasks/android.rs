@@ -178,11 +178,11 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
         format!("--min-api {}", vars.android_metadata.min_sdk_version),
         format!("--output {}/{}/", bobje.target_dir, bobje.profile),
     ];
-    for module in modules.keys() {
+    for module in &modules {
         d8_command.push(format!(
             "{}/{}/*.class",
             classes_dir,
-            module.replace('.', "/")
+            module.name.replace('.', "/")
         ));
     }
     executor.add_task_cmd(
@@ -194,8 +194,8 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
             bobje.manifest.package.name
         ),
         modules
-            .keys()
-            .map(|module| format!("{}/{}", classes_dir, module.replace('.', "/")))
+            .iter()
+            .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
             .collect(),
         vec![format!(
             "{}/{}/classes.dex",
