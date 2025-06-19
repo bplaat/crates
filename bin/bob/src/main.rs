@@ -89,7 +89,6 @@ pub(crate) enum BobjeType {
     Library,
 }
 
-#[allow(unused)]
 pub(crate) struct Bobje {
     target_dir: String,
     profile: Profile,
@@ -168,7 +167,7 @@ impl Bobje {
             generate_android_dex_tasks(&bobje, executor);
             generate_android_final_apk_tasks(&bobje, executor);
         }
-        if r#type == BobjeType::Binary && detect_cx(&bobje) {
+        if detect_cx(&bobje) {
             generate_ld_tasks(&bobje, executor);
         }
         if r#type == BobjeType::Binary && detect_jar(&bobje) {
