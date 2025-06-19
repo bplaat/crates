@@ -325,7 +325,7 @@ pub(crate) fn generate_bundle_tasks(project: &Project, executor: &mut Executor) 
                 contents_dir,
                 resource_file
                     .trim_start_matches(&bundle_metadata.resources_dir)
-                    .trim_start_matches('/')
+                    .trim_start_matches(['/', '\\'])
             );
             executor.add_task_cp(resource_file.to_string(), dest.clone());
             bundle_files.push(dest);
@@ -528,7 +528,7 @@ pub(crate) fn generate_test_main(project: &mut Project) {
                 .trim_end_matches(".cpp")
                 .trim_end_matches(".m")
                 .trim_end_matches(".mm")
-                .replace(['/'], "_")
+                .replace(['/', '\\'], "_")
         );
         _ = writeln!(
             s,
