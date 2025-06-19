@@ -6,7 +6,7 @@
 
 #![allow(dead_code)]
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // Album
 #[derive(Deserialize)]
@@ -16,7 +16,7 @@ pub(crate) struct AlbumList {
     pub total: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub(crate) struct AlbumSmall {
     pub id: i64,
     pub title: String,
@@ -30,7 +30,7 @@ pub(crate) struct AlbumSmall {
     pub r#type: String,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Deserialize)]
 pub(crate) struct Album {
     pub id: i64,
     pub title: String,
@@ -57,15 +57,8 @@ pub(crate) struct ArtistList {
     pub total: i64,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct ArtistSmall {
-    pub id: i64,
-    pub name: String,
-    pub r#type: String,
-}
-
-#[derive(Deserialize)]
-pub(crate) struct Artist {
     pub id: i64,
     pub name: String,
     pub picture: String,
@@ -90,12 +83,12 @@ pub(crate) struct Genre {
 }
 
 // Track
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Deserialize)]
 pub(crate) struct TrackList {
     pub data: Vec<TrackSmall>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Clone, Deserialize)]
 pub(crate) struct TrackSmall {
     pub id: i64,
     pub title: String,

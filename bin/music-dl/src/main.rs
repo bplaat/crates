@@ -19,10 +19,12 @@ use crate::args::{Args, Subcommand, parse_args};
 use crate::services::metadata::MetadataService;
 use crate::structs::deezer::{Album, Track};
 use crate::structs::youtube::Video;
+use crate::subcommands::gui::subcommmand_gui;
 
 mod args;
 mod services;
 mod structs;
+mod subcommands;
 
 const DOWNLOAD_THREAD_COUNT: usize = 16;
 const TRACK_DURATION_SLACK: i64 = 5;
@@ -64,7 +66,7 @@ fn download_album(
         escape_path(&album.title)
     );
     let album_cover = if let Some(album_cover_xl) = &album.cover_xl {
-        let album_cover = metadata_service.download(album_cover_xl)?;
+        let album_cover = metadata_service.download_cover(album_cover_xl)?;
         if args.with_cover {
             fs::write(format!("{}/cover.jpg", album_folder), &album_cover)?;
         }
@@ -311,7 +313,7 @@ fn get_album_ids(metadata_service: &MetadataService, args: &Args) -> Result<Vec<
         let artist_id = if args.is_id {
             args.query.parse()?
         } else {
-            let artists = metadata_service.seach_artist(&args.query)?;
+            let artists = metadata_service.search_artists(&args.query)?;
             if artists.is_empty() {
                 eprintln!("No artist found");
                 exit(1);
@@ -335,7 +337,7 @@ fn get_album_ids(metadata_service: &MetadataService, args: &Args) -> Result<Vec<
     } else if args.is_id {
         vec![args.query.parse()?]
     } else {
-        let albums = metadata_service.search_album(&args.query)?;
+        let albums = metadata_service.search_albums(&args.query)?;
         if albums.is_empty() {
             eprintln!("No album found");
             exit(1);
@@ -352,6 +354,7 @@ fn escape_path(path: &str) -> String {
 fn main() -> Result<()> {
     let args = parse_args();
     match args.subcommand {
+        Subcommand::Gui => subcommmand_gui(),
         Subcommand::Download => subcommand_download(&args)?,
         Subcommand::List => subcommand_list(&args)?,
         Subcommand::Help => subcommand_help(),

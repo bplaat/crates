@@ -9,6 +9,7 @@ use std::process::exit;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Subcommand {
+    Gui,
     Download,
     List,
     Help,
@@ -28,7 +29,7 @@ pub(crate) struct Args {
 impl Default for Args {
     fn default() -> Self {
         Self {
-            subcommand: Subcommand::Help,
+            subcommand: Subcommand::Gui,
             query: String::new(),
             output_dir: dirs::audio_dir()
                 .expect("Can't user music directory")

@@ -21,7 +21,7 @@ impl MetadataService {
         Self
     }
 
-    pub(crate) fn search_album(&self, query: &str) -> Result<Vec<AlbumSmall>> {
+    pub(crate) fn search_albums(&self, query: &str) -> Result<Vec<AlbumSmall>> {
         Ok(Request::get(format!(
             "http://api.deezer.com/search/album?q={}",
             utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC)
@@ -32,7 +32,7 @@ impl MetadataService {
         .data)
     }
 
-    pub(crate) fn seach_artist(&self, query: &str) -> Result<Vec<ArtistSmall>> {
+    pub(crate) fn search_artists(&self, query: &str) -> Result<Vec<ArtistSmall>> {
         Ok(Request::get(format!(
             "http://api.deezer.com/search/artist?q={}",
             utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC)
@@ -73,7 +73,7 @@ impl MetadataService {
         )
     }
 
-    pub(crate) fn download(&self, cover_url: &str) -> Result<Vec<u8>> {
+    pub(crate) fn download_cover(&self, cover_url: &str) -> Result<Vec<u8>> {
         Ok(Request::get(cover_url)
             .header("User-Agent", USER_AGENT)
             .fetch()?

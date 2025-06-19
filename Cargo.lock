@@ -285,10 +285,12 @@ dependencies = [
  "dirs",
  "mp4ameta",
  "percent-encoding",
+ "rust-embed",
  "serde",
  "serde_json",
  "small-http",
  "threadpool",
+ "tiny-webview",
 ]
 
 [[package]]
