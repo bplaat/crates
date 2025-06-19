@@ -4,7 +4,6 @@ set -e
 function clean() {
     cargo clean
     find . -name "*.db*" -delete
-    find . -name "*.jks" -delete
     find . -type d -name "target" -exec rm -rf {} +
     find . -type d -name "node_modules" -exec rm -rf {} +
     find . -type d -name "dist" -exec rm -rf {} +
