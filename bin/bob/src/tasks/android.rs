@@ -31,7 +31,7 @@ impl AndroidVars {
             .identifier
             .as_ref()
             .unwrap_or_else(|| {
-                eprintln!("Identifier is required");
+                eprintln!("Manifest package identifier is required");
                 exit(1);
             });
         let android_metadata = bobje
@@ -39,11 +39,8 @@ impl AndroidVars {
             .package
             .metadata
             .android
-            .as_ref()
-            .unwrap_or_else(|| {
-                eprintln!("Android metadata is required");
-                exit(1);
-            });
+            .clone()
+            .unwrap_or_default();
         let android_home = env::var("ANDROID_HOME").expect("$ANDROID_HOME env var must be set");
         let platform_jar = format!(
             "{}/platforms/android-{}/android.jar",
@@ -64,23 +61,31 @@ impl AndroidVars {
     }
 }
 
-pub(crate) fn detect_android() -> bool {
-    Path::new("AndroidManifest.xml").exists()
+pub(crate) fn detect_android(bobje: &Bobje) -> bool {
+    Path::new(&format!("{}/AndroidManifest.xml", bobje.manifest_dir)).exists()
 }
 
 // MARK: Android resources
 pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Executor) {
     let vars = AndroidVars::new(bobje);
-    let compiled_res_dir = format!("{}/{}/res", bobje.target_dir, bobje.profile);
 
     // aapt2_compile tasks
-    let mut link_inputs = Vec::new();
-    for res_file in index_files(&vars.android_metadata.resources_dir) {
+    let res_dir = format!(
+        "{}/{}",
+        bobje.manifest_dir, vars.android_metadata.resources_dir
+    );
+    let compiled_res_dir = format!(
+        "{}/{}/res/{}",
+        bobje.target_dir,
+        bobje.profile,
+        vars.identifier.replace('.', "/")
+    );
+    for res_file in index_files(&res_dir) {
         let mut compiled_res_file = format!(
             "{}/{}.flat",
             compiled_res_dir,
             res_file
-                .trim_start_matches(&vars.android_metadata.resources_dir)
+                .trim_start_matches(&res_dir)
                 .trim_start_matches(['/', '\\'])
                 .replace(['/', '\\'], "_")
         );
@@ -95,67 +100,160 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
             vec![res_file],
             vec![compiled_res_file.clone()],
         );
-        link_inputs.push(compiled_res_file);
     }
 
     // aapt2_link task
-    if fs::metadata(&vars.android_metadata.assets_dir).is_ok() {
-        for asset in index_files(&vars.android_metadata.assets_dir) {
-            link_inputs.push(asset.clone());
-        }
-    }
     let r_java_path = format!(
         "{}/{}/src-gen/{}/R.java",
         bobje.target_dir,
         bobje.profile,
         vars.identifier.replace('.', "/")
     );
-    let mut link_command = vec![
-        format!("{}/aapt2", vars.build_tools_path),
-        "link".to_string(),
-        format!("{}/*.flat", compiled_res_dir),
-    ];
-    if fs::metadata(&vars.android_metadata.assets_dir).is_ok() {
-        link_command.push("-A".to_string());
-        link_command.push(vars.android_metadata.assets_dir.clone());
-    }
-    link_command.extend(vec![
-        "--manifest".to_string(),
-        "AndroidManifest.xml".to_string(),
-        "--java".to_string(),
-        format!("{}/{}/src-gen", bobje.target_dir, bobje.profile),
-        "--version-name".to_string(),
-        bobje.manifest.package.version.clone(),
-        "--version-code".to_string(),
-        parse_version_to_code(&bobje.manifest.package.version).to_string(),
-        "--min-sdk-version".to_string(),
-        vars.android_metadata.min_sdk_version.to_string(),
-        "--target-sdk-version".to_string(),
-        vars.android_metadata.target_sdk_version.to_string(),
-        "-I".to_string(),
-        vars.platform_jar.clone(),
-        "-o".to_string(),
-        format!(
+    bobje.source_files.push(r_java_path.clone());
+
+    if bobje.r#type == crate::BobjeType::Binary {
+        let dest = format!(
             "{}/{}/{}-unaligned.apk",
             bobje.target_dir, bobje.profile, bobje.manifest.package.name
-        ),
-    ]);
-    executor.add_task_cmd(
-        link_command.join(" "),
-        link_inputs,
-        vec![
-            format!(
-                "{}/{}/{}-unaligned.apk",
-                bobje.target_dir, bobje.profile, bobje.manifest.package.name
-            ),
-            r_java_path.clone(),
-        ],
-    );
+        );
 
-    // Add R.java to source files
-    bobje.source_files.push(r_java_path);
+        let mut link_inputs = Vec::new();
+        let mut link_command = vec![
+            format!("{}/aapt2", vars.build_tools_path),
+            "link".to_string(),
+        ];
+        fn add_bobje_resources(
+            bobje: &Bobje,
+            link_command: &mut Vec<String>,
+            link_inputs: &mut Vec<String>,
+        ) {
+            for dependency_bobje in bobje.dependencies.values() {
+                add_bobje_resources(dependency_bobje, link_command, link_inputs);
+            }
+            if detect_android(bobje) {
+                let android_metadata = bobje
+                    .manifest
+                    .package
+                    .metadata
+                    .android
+                    .clone()
+                    .unwrap_or_default();
 
-    // Add platform to classpath
+                // Add assets
+                let assets_dir = format!("{}/{}", bobje.manifest_dir, android_metadata.assets_dir);
+                if fs::metadata(&assets_dir).is_ok() {
+                    for asset in index_files(&assets_dir) {
+                        link_inputs.push(asset.clone());
+                    }
+                }
+                if fs::metadata(&assets_dir).is_ok() {
+                    link_command.push("-A".to_string());
+                    link_command.push(assets_dir.clone());
+                }
+
+                // Add compiled resources
+                let compiled_res_dir = format!(
+                    "{}/{}/res/{}",
+                    bobje.target_dir,
+                    bobje.profile,
+                    bobje
+                        .manifest
+                        .package
+                        .identifier
+                        .as_ref()
+                        .expect("Should be some")
+                        .replace('.', "/")
+                );
+                let res_dir = format!("{}/{}", bobje.manifest_dir, android_metadata.resources_dir);
+                for res_file in index_files(&res_dir) {
+                    let mut compiled_res_file = format!(
+                        "{}/{}.flat",
+                        compiled_res_dir,
+                        res_file
+                            .trim_start_matches(&res_dir)
+                            .trim_start_matches(['/', '\\'])
+                            .replace(['/', '\\'], "_")
+                    );
+                    if compiled_res_file.contains("/values") {
+                        compiled_res_file = compiled_res_file.replace(".xml", ".arsc");
+                    }
+                    link_inputs.push(compiled_res_file);
+                }
+                link_command.push(format!("{}/*.flat", compiled_res_dir));
+            }
+        }
+        add_bobje_resources(bobje, &mut link_command, &mut link_inputs);
+
+        link_command.extend(vec![
+            "--manifest".to_string(),
+            format!("{}/AndroidManifest.xml", bobje.manifest_dir),
+            "--java".to_string(),
+            format!("{}/{}/src-gen", bobje.target_dir, bobje.profile),
+            "--version-name".to_string(),
+            bobje.manifest.package.version.clone(),
+            "--version-code".to_string(),
+            parse_version_to_code(&bobje.manifest.package.version).to_string(),
+            "--min-sdk-version".to_string(),
+            vars.android_metadata.min_sdk_version.to_string(),
+            "--target-sdk-version".to_string(),
+            vars.android_metadata.target_sdk_version.to_string(),
+            "-I".to_string(),
+            vars.platform_jar.clone(),
+            "-o".to_string(),
+            dest.to_string(),
+        ]);
+        executor.add_task_cmd(
+            link_command.join(" "),
+            link_inputs,
+            vec![dest, r_java_path.clone()],
+        );
+
+        // Copy this bobje's R.java to every dependency R.java
+        for dependency_bobje in bobje.dependencies.values() {
+            if detect_android(dependency_bobje) {
+                let src_r_java = format!(
+                    "{}/{}/src-gen/{}/R.java",
+                    dependency_bobje.target_dir,
+                    dependency_bobje.profile,
+                    dependency_bobje
+                        .manifest
+                        .package
+                        .identifier
+                        .as_ref()
+                        .expect("Should be some")
+                        .replace('.', "/")
+                );
+                executor.add_task_cmd(
+                    format!(
+                        "cp {} {} && sed -i{} 's/package {};/package {};/g' {}",
+                        r_java_path,
+                        src_r_java,
+                        if cfg!(target_os = "macos") { " ''" } else { "" },
+                        bobje
+                            .manifest
+                            .package
+                            .identifier
+                            .as_ref()
+                            .expect("Should be some"),
+                        dependency_bobje
+                            .manifest
+                            .package
+                            .identifier
+                            .as_ref()
+                            .expect("Should be some"),
+                        src_r_java
+                    ),
+                    vec![r_java_path.clone()],
+                    vec![src_r_java],
+                );
+            }
+        }
+    }
+}
+
+// MARK: Link classpath
+pub(crate) fn link_android_classpath(bobje: &mut Bobje) {
+    let vars = AndroidVars::new(bobje);
     bobje.manifest.build.classpath.push(vars.platform_jar);
 }
 

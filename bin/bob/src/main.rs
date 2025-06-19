@@ -17,7 +17,7 @@ use crate::executor::Executor;
 use crate::manifest::Manifest;
 use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
-    generate_android_res_tasks, run_android_apk,
+    generate_android_res_tasks, link_android_classpath, run_android_apk,
 };
 use crate::tasks::cx::{
     copy_cx_headers, detect_bundle, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp,
@@ -95,15 +95,16 @@ pub(crate) struct Bobje {
     is_test: bool,
     // ...
     r#type: BobjeType,
+    manifest_dir: String,
     manifest: Manifest,
     source_files: Vec<String>,
     dependencies: HashMap<String, Bobje>,
 }
 
 impl Bobje {
-    fn new(args: &Args, executor: &mut Executor, path: &str, r#type: BobjeType) -> Self {
+    fn new(args: &Args, manifest_dir: &str, r#type: BobjeType, executor: &mut Executor) -> Self {
         // Read manifest
-        let manifest_path = format!("{}/bob.toml", path);
+        let manifest_path = format!("{}/bob.toml", manifest_dir);
         let manifest: Manifest =
             basic_toml::from_str(&fs::read_to_string(&manifest_path).unwrap_or_else(|err| {
                 eprintln!("Can't read {} file: {}", manifest_path, err);
@@ -119,9 +120,9 @@ impl Bobje {
         for dep in manifest.dependencies.values() {
             let dep_bobje = Bobje::new(
                 args,
-                executor,
-                &format!("{}/{}", path, dep.path),
+                &format!("{}/{}", manifest_dir, dep.path),
                 BobjeType::Library,
+                executor,
             );
             dependencies.insert(dep_bobje.manifest.package.name.clone(), dep_bobje);
         }
@@ -133,8 +134,9 @@ impl Bobje {
             is_test: args.subcommand == Subcommand::Test,
             // ...
             r#type,
+            manifest_dir: manifest_dir.to_string(),
             manifest,
-            source_files: index_files(&format!("{}/src/", path)),
+            source_files: index_files(&format!("{}/src/", manifest_dir)),
             dependencies,
         };
 
@@ -157,18 +159,21 @@ impl Bobje {
         if detect_objcpp(&bobje) {
             generate_objcpp_tasks(&bobje, executor);
         }
-        if r#type == BobjeType::Binary && detect_android() {
+        if detect_android(&bobje) {
             generate_android_res_tasks(&mut bobje, executor);
         }
         if detect_java(&bobje) {
+            if detect_android(&bobje) {
+                link_android_classpath(&mut bobje);
+            }
             generate_javac_tasks(&bobje, executor);
-        }
-        if r#type == BobjeType::Binary && detect_android() {
-            generate_android_dex_tasks(&bobje, executor);
-            generate_android_final_apk_tasks(&bobje, executor);
         }
         if detect_cx(&bobje) {
             generate_ld_tasks(&bobje, executor);
+        }
+        if r#type == BobjeType::Binary && detect_android(&bobje) {
+            generate_android_dex_tasks(&bobje, executor);
+            generate_android_final_apk_tasks(&bobje, executor);
         }
         if r#type == BobjeType::Binary && detect_jar(&bobje) {
             generate_jar_tasks(&bobje, executor);
@@ -222,7 +227,7 @@ fn main() {
 
     // Build main bobje
     let mut executor = Executor::new();
-    let bobje = Bobje::new(&args, &mut executor, ".", BobjeType::Binary);
+    let bobje = Bobje::new(&args, ".", BobjeType::Binary, &mut executor);
     executor.execute(&format!("{}/bob.log", &args.target_dir));
 
     // Run build artifact
@@ -233,7 +238,7 @@ fn main() {
         if detect_jar(&bobje) {
             run_jar(&bobje);
         }
-        if detect_android() {
+        if detect_android(&bobje) {
             run_android_apk(&bobje);
         }
         if detect_cx(&bobje) {
