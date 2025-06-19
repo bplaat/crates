@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::collections::HashMap;
 use std::fs;
 use std::process::{Command, exit};
-
-use indexmap::IndexMap;
 
 use crate::Bobje;
 use crate::args::Profile;
@@ -49,11 +48,15 @@ pub(crate) fn generate_javac_tasks(bobje: &Bobje, executor: &mut Executor) {
         }
     );
 
-    for (module, source_files) in &modules {
-        let mut inputs = source_files.clone();
-        if let Some(dependencies) = module_deps.get(module) {
-            for dependency in dependencies {
-                inputs.push(format!("{}/{}", classes_dir, dependency.replace('.', "/")));
+    for module in &modules {
+        let mut inputs = module.source_files.clone();
+        if let Some(dependencies) = module_deps.get(&module.name) {
+            for dependency_module in dependencies {
+                inputs.push(format!(
+                    "{}/{}",
+                    classes_dir,
+                    dependency_module.name.replace('.', "/")
+                ));
             }
         }
         executor.add_task_cmd(
@@ -62,10 +65,10 @@ pub(crate) fn generate_javac_tasks(bobje: &Bobje, executor: &mut Executor) {
                 javac_flags,
                 classpath,
                 classes_dir,
-                source_files.join(" ")
+                module.source_files.join(" ")
             ),
             inputs,
-            vec![format!("{}/{}", classes_dir, module.replace('.', "/"))],
+            vec![format!("{}/{}", classes_dir, module.name.replace('.', "/"))],
         );
     }
 }
@@ -116,8 +119,8 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
     executor.add_task_cmd(
         format!("jar cfe {} {} -C {} .", jar_file, main_class, classes_dir),
         modules
-            .keys()
-            .map(|module| format!("{}/{}", classes_dir, module.replace('.', "/")))
+            .iter()
+            .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
             .collect::<Vec<_>>(),
         vec![jar_file],
     );
@@ -156,50 +159,51 @@ fn get_module_name(source_file: &str) -> String {
         .to_string()
 }
 
-pub(crate) fn find_modules(bobje: &Bobje) -> IndexMap<String, Vec<String>> {
-    let mut modules = IndexMap::new();
+#[derive(Clone)]
+pub(crate) struct Module {
+    pub name: String,
+    pub source_files: Vec<String>,
+}
+
+pub(crate) fn find_modules(bobje: &Bobje) -> Vec<Module> {
+    let mut modules = Vec::new();
     for dependency_bobje in bobje.dependencies.values() {
-        let other_modules = find_modules(dependency_bobje);
-        for (module, source_files) in other_modules {
-            modules
-                .entry(module)
-                .or_insert_with(Vec::new)
-                .extend(source_files);
+        for module in find_modules(dependency_bobje) {
+            modules.push(module);
         }
     }
-
     for source_file in &bobje.source_files {
         if source_file.ends_with(".java") {
-            modules
-                .entry(get_module_name(source_file))
-                .or_insert_with(Vec::new)
-                .push(source_file.clone());
+            let module_name = get_module_name(source_file);
+            if let Some(module) = modules.iter_mut().find(|m| m.name == module_name) {
+                module.source_files.push(source_file.to_string());
+            } else {
+                modules.push(Module {
+                    name: module_name.clone(),
+                    source_files: vec![source_file.to_string()],
+                });
+            }
         }
     }
     modules
 }
 
-fn find_dependencies(modules: &IndexMap<String, Vec<String>>) -> IndexMap<String, Vec<String>> {
-    let mut module_deps = IndexMap::new();
-    for (module, source_files) in modules {
-        for source_file in source_files {
+fn find_dependencies(modules: &Vec<Module>) -> HashMap<String, Vec<Module>> {
+    let mut module_deps = HashMap::new();
+    for module in modules {
+        for source_file in &module.source_files {
             if let Ok(contents) = fs::read_to_string(source_file) {
-                for other_module in modules.keys() {
-                    if other_module == module {
+                for other_module in modules {
+                    if other_module.name == module.name {
                         continue;
                     }
-                    let re = regex::Regex::new(&format!(r"import {}.\w+;", other_module))
+                    let re = regex::Regex::new(&format!(r"import {}.\w+;", other_module.name))
                         .expect("Failed to compile regex");
-                    if re.is_match(&contents)
-                        && !module_deps
-                            .entry(module.clone())
+                    if re.is_match(&contents) {
+                        module_deps
+                            .entry(module.name.clone())
                             .or_insert_with(Vec::new)
-                            .iter()
-                            .any(|m| m == other_module)
-                    {
-                        if let Some(deps) = module_deps.get_mut(module) {
-                            deps.push(other_module.clone());
-                        }
+                            .push(other_module.clone());
                     }
                 }
             }
