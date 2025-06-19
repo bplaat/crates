@@ -39,19 +39,33 @@ pub(crate) struct PackageMetadata {
     pub android: Option<AndroidMetadata>,
 }
 
-#[derive(Default, Deserialize)]
+// MARK: Bundle
+#[derive(Deserialize)]
 #[serde(default)]
 pub(crate) struct BundleMetadata {
+    pub resources_dir: String,
     pub iconset: Option<String>,
     pub copyright: Option<String>,
 }
 
+impl Default for BundleMetadata {
+    fn default() -> Self {
+        Self {
+            resources_dir: "res".to_string(),
+            iconset: None,
+            copyright: None,
+        }
+    }
+}
+
+// MARK: Jar
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub(crate) struct JarMetadata {
     pub main_class: Option<String>,
 }
 
+// MARK: Android
 #[derive(Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct AndroidMetadata {
@@ -62,6 +76,8 @@ pub(crate) struct AndroidMetadata {
     pub key_alias: String,
     pub keystore_password: String,
     pub key_password: String,
+    pub resources_dir: String,
+    pub assets_dir: String,
 }
 
 impl Default for AndroidMetadata {
@@ -74,6 +90,8 @@ impl Default for AndroidMetadata {
             key_alias: "android".to_string(),
             keystore_password: "android".to_string(),
             key_password: "android".to_string(),
+            resources_dir: "res".to_string(),
+            assets_dir: "assets".to_string(),
         }
     }
 }

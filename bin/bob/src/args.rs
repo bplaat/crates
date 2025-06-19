@@ -37,6 +37,7 @@ impl Display for Profile {
 pub(crate) struct Args {
     pub subcommand: Subcommand,
     pub manifest_dir: String,
+    pub target_dir: String,
     pub profile: Profile,
 }
 
@@ -45,6 +46,7 @@ impl Default for Args {
         Args {
             subcommand: Subcommand::Help,
             manifest_dir: ".".to_string(),
+            target_dir: "target".to_string(),
             profile: Profile::Debug,
         }
     }
@@ -62,7 +64,12 @@ pub(crate) fn parse_args() -> Args {
             "rb" | "rebuild" => args.subcommand = Subcommand::Rebuild,
             "t" | "test" => args.subcommand = Subcommand::Test,
             "v" | "version" | "-v" | "--version" => args.subcommand = Subcommand::Version,
-            "-C" => args.manifest_dir = args_iter.next().expect("Invalid argument"),
+            "-C" | "--manifest-dir" => {
+                args.manifest_dir = args_iter.next().expect("Invalid argument")
+            }
+            "-T" | "--target-dir" => {
+                args.target_dir = args_iter.next().expect("Invalid argument");
+            }
             "-r" | "--release" => args.profile = Profile::Release,
             _ => {
                 eprintln!("Unknown argument: {}", arg);

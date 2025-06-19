@@ -7,9 +7,8 @@
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::process::exit;
 use std::{fs, io};
-
-use crate::Project;
 
 pub(crate) fn format_bytes(bytes: u64) -> String {
     const KIB: u64 = 1024;
@@ -24,18 +23,6 @@ pub(crate) fn format_bytes(bytes: u64) -> String {
     } else {
         format!("{} bytes", bytes)
     }
-}
-
-pub(crate) fn resolve_source_file_path(source_file: &str, project: &Project) -> String {
-    source_file
-        .replace("$source_dir", &format!("{}/src", project.manifest_dir))
-        .replace(
-            "$source_gen_dir",
-            &format!(
-                "{}/target/{}/src-gen",
-                project.manifest_dir, project.profile
-            ),
-        )
 }
 
 pub(crate) fn create_file_and_parent_dirs(path: impl AsRef<Path>) -> io::Result<File> {
@@ -59,10 +46,19 @@ pub(crate) fn write_file_when_different(path: &str, contents: &str) -> io::Resul
 
 pub(crate) fn index_files(dir: &str) -> Vec<String> {
     let mut files = Vec::new();
-    let entries = fs::read_dir(dir).expect("Can't read directory");
+    let entries = fs::read_dir(dir).unwrap_or_else(|_| {
+        eprintln!("Can't read directory: {}", dir);
+        exit(1);
+    });
     for entry in entries {
-        let entry = entry.expect("Can't read directory entry");
+        let entry = entry.unwrap_or_else(|_| {
+            eprintln!("Can't read directory: {}", dir);
+            exit(1);
+        });
         let path = entry.path();
+        if path.file_name().is_some_and(|name| name == ".DS_Store") {
+            continue;
+        }
         if path.is_dir() {
             files.extend(index_files(&path.to_string_lossy()));
         } else {

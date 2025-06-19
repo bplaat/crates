@@ -53,6 +53,8 @@ dependencies = [
  "indexmap",
  "regex",
  "serde",
+ "threadpool",
+ "uuid",
 ]
 
 [[package]]
