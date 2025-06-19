@@ -30,11 +30,13 @@ small-http = { path = "lib/small-http" }
 small-router = { path = "lib/small-router" }
 
 # Patch some popular crates with my minimal alternatives
+block2 = { path = "lib/block2" }
 chrono = { path = "lib/chrono" }
 dirs = { path = "lib/dirs" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 mime_guess = { path = "lib/mime_guess" }
+objc2 = { path = "lib/objc2" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 threadpool = { path = "lib/threadpool" }
