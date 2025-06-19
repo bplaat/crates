@@ -1,6 +1,4 @@
 #!/bin/bash
-
-PROFILE=${PROFILE:-default}
 set -e
 
 function clean() {
@@ -34,11 +32,11 @@ function check() {
     cargo deny check --hide-inclusion-graph
     # Test
     cargo test --doc --all-features --locked
-    cargo nextest run --all-features --locked --config-file nextest.toml --profile "$PROFILE"
+    cargo nextest run --all-features --locked --no-fail-fast --retries 2
 }
 
 function coverage() {
-    cargo llvm-cov nextest --all-features --locked --config-file nextest.toml --profile "$PROFILE"
+    cargo llvm-cov nextest --all-features --locked --no-fail-fast --retries 2
 }
 
 function release() {
