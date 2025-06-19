@@ -38,8 +38,14 @@ impl TaskAction {
             TaskAction::Command(command) => {
                 println!("{}", command);
                 let status = if cfg!(windows) {
-                    let parts = command.split(' ').collect::<Vec<_>>();
-                    Command::new(parts[0]).args(&parts[1..]).status()
+                    if command.contains("&&") {
+                        let mut parts = command.split(' ').collect::<Vec<_>>();
+                        parts.insert(0, "/c");
+                        Command::new("cmd").args(parts).status()
+                    } else {
+                        let parts = command.split(' ').collect::<Vec<_>>();
+                        Command::new(parts[0]).args(&parts[1..]).status()
+                    }
                 } else {
                     Command::new("sh").arg("-c").arg(command).status()
                 }
