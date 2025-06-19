@@ -23,6 +23,7 @@ struct CxVars {
     ldflags: String,
     cc: String,
     cxx: String,
+    ar: String,
     strip: String,
 }
 
@@ -71,25 +72,33 @@ impl CxVars {
 
         // Use Clang on macOS and Windows, GCC elsewhere
         #[cfg(target_os = "macos")]
-        let (cc, cxx, strip) = (
+        let (cc, cxx, ar, strip) = (
             "clang".to_string(),
             "clang++".to_string(),
+            "ar".to_string(),
             "strip".to_string(),
         );
         #[cfg(windows)]
-        let (cc, cxx, strip) = (
+        let (cc, cxx, ar, strip) = (
             "clang".to_string(),
             "clang++".to_string(),
+            "llvm-ar".to_string(),
             "llvm-strip".to_string(),
         );
         #[cfg(not(any(target_os = "macos", windows)))]
-        let (cc, cxx, strip) = ("gcc".to_string(), "g++".to_string(), "strip".to_string());
+        let (cc, cxx, ar, strip) = (
+            "gcc".to_string(),
+            "g++".to_string(),
+            "ar".to_string(),
+            "strip".to_string(),
+        );
 
         Self {
             cflags,
             ldflags,
             cc,
             cxx,
+            ar,
             strip,
         }
     }
@@ -224,82 +233,111 @@ pub(crate) fn detect_cx(bobje: &Bobje) -> bool {
 pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     let vars = CxVars::new(bobje);
 
-    let mut object_files = Vec::new();
+    // Gather inputs
+    let mut inputs = Vec::new();
     let mut contains_cpp = false;
     if bobje.is_test {
         let test_functions = find_test_function(bobje);
         for source_file in test_functions.keys() {
-            object_files.push(get_object_path(bobje, source_file));
+            inputs.push(get_object_path(bobje, source_file));
         }
     } else {
-        fn add_source_files(
-            bobje: &Bobje,
-            object_files: &mut Vec<String>,
-            contains_cpp: &mut bool,
-        ) {
+        for source_file in &bobje.source_files {
+            if source_file.ends_with(".c")
+                || source_file.ends_with(".cpp")
+                || source_file.ends_with(".m")
+                || source_file.ends_with(".mm")
+            {
+                inputs.push(get_object_path(bobje, source_file));
+            }
+            if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
+                contains_cpp = true;
+            }
+        }
+
+        // Add dependencies
+        fn add_dependency_inputs(bobje: &Bobje, inputs: &mut Vec<String>, contains_cpp: &mut bool) {
             for dependency_bobje in bobje.dependencies.values() {
-                add_source_files(dependency_bobje, object_files, contains_cpp);
+                add_dependency_inputs(dependency_bobje, inputs, contains_cpp);
             }
             for source_file in &bobje.source_files {
-                if source_file.ends_with(".c")
-                    || source_file.ends_with(".cpp")
-                    || source_file.ends_with(".m")
-                    || source_file.ends_with(".mm")
-                {
-                    object_files.push(get_object_path(bobje, source_file));
-                }
                 if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
                     *contains_cpp = true;
                 }
             }
+            inputs.push(format!(
+                "{}/{}/lib{}.a",
+                bobje.target_dir, bobje.profile, bobje.manifest.package.name
+            ));
         }
-        add_source_files(bobje, &mut object_files, &mut contains_cpp);
+        for dependency_bobje in bobje.dependencies.values() {
+            add_dependency_inputs(dependency_bobje, &mut inputs, &mut contains_cpp);
+        }
     }
 
-    let executable_file = if bobje.is_test {
-        format!(
-            "{}/{}/test_{}",
+    if bobje.r#type == crate::BobjeType::Library {
+        let static_library_file = format!(
+            "{}/{}/lib{}.a",
             bobje.target_dir, bobje.profile, bobje.manifest.package.name
-        )
-    } else {
-        format!(
-            "{}/{}/{}",
-            bobje.target_dir, bobje.profile, bobje.manifest.package.name
-        )
-    };
-    let ext = if cfg!(windows) { ".exe" } else { "" };
-    if bobje.profile == Profile::Release {
-        let unstripped_path = format!("{}-unstripped{}", executable_file, ext);
-        let stripped_path = format!("{}{}", executable_file, ext);
+        );
         executor.add_task_cmd(
             format!(
-                "{} {} {} -o {}",
-                if contains_cpp { vars.cxx } else { vars.cc },
-                vars.ldflags,
-                object_files.join(" "),
-                unstripped_path,
+                "{} rc {} {}",
+                vars.ar,
+                static_library_file,
+                inputs.join(" "),
             ),
-            object_files.clone(),
-            vec![unstripped_path.clone()],
+            inputs.clone(),
+            vec![static_library_file.clone()],
         );
-        executor.add_task_cmd(
-            format!("{} {} -o {}", vars.strip, unstripped_path, stripped_path),
-            vec![unstripped_path.clone()],
-            vec![stripped_path.clone()],
-        );
-    } else {
-        let out_path = format!("{}{}", executable_file, ext);
-        executor.add_task_cmd(
+    }
+
+    if bobje.r#type == crate::BobjeType::Binary {
+        let executable_file = if bobje.is_test {
             format!(
-                "{} {} {} -o {}",
-                if contains_cpp { vars.cxx } else { vars.cc },
-                vars.ldflags,
-                object_files.join(" "),
-                out_path,
-            ),
-            object_files.clone(),
-            vec![out_path.clone()],
-        );
+                "{}/{}/test_{}",
+                bobje.target_dir, bobje.profile, bobje.manifest.package.name
+            )
+        } else {
+            format!(
+                "{}/{}/{}",
+                bobje.target_dir, bobje.profile, bobje.manifest.package.name
+            )
+        };
+        let ext = if cfg!(windows) { ".exe" } else { "" };
+        if bobje.profile == Profile::Release {
+            let unstripped_path = format!("{}-unstripped{}", executable_file, ext);
+            let stripped_path = format!("{}{}", executable_file, ext);
+            executor.add_task_cmd(
+                format!(
+                    "{} {} {} -o {}",
+                    if contains_cpp { vars.cxx } else { vars.cc },
+                    vars.ldflags,
+                    inputs.join(" "),
+                    unstripped_path,
+                ),
+                inputs.clone(),
+                vec![unstripped_path.clone()],
+            );
+            executor.add_task_cmd(
+                format!("{} {} -o {}", vars.strip, unstripped_path, stripped_path),
+                vec![unstripped_path.clone()],
+                vec![stripped_path.clone()],
+            );
+        } else {
+            let out_path = format!("{}{}", executable_file, ext);
+            executor.add_task_cmd(
+                format!(
+                    "{} {} {} -o {}",
+                    if contains_cpp { vars.cxx } else { vars.cc },
+                    vars.ldflags,
+                    inputs.join(" "),
+                    out_path,
+                ),
+                inputs.clone(),
+                vec![out_path.clone()],
+            );
+        }
     }
 }
 
