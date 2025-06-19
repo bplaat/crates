@@ -304,12 +304,19 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
 
 // MARK: Android APK
 pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Executor) {
-    let vars = AndroidVars::new(bobje);
+    let mut vars = AndroidVars::new(bobje);
 
     // Generate dummy keystore if it doesn't exist
-    if fs::metadata(&vars.android_metadata.keystore_file).is_err() {
+    let target_keystore = format!(
+        "{}/{}",
+        bobje.target_dir, vars.android_metadata.keystore_file
+    );
+    if fs::metadata(&vars.android_metadata.keystore_file).is_err()
+        && fs::metadata(&target_keystore).is_err()
+    {
         println!("Android signing keystore not found, generating dummy one...");
         let mut cmd = Command::new("keytool");
+        vars.android_metadata.keystore_file = target_keystore;
         cmd.arg("-genkey")
             .arg("-keystore")
             .arg(&vars.android_metadata.keystore_file)
