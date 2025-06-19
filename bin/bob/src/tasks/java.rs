@@ -151,7 +151,7 @@ pub(crate) fn find_modules(source_files: &[String]) -> IndexMap<String, Vec<Stri
                 .nth(1)
                 .or_else(|| source_file.split("src-gen/").nth(1))
                 .expect("Should be some")
-                .split('/')
+                .split(['/', '\\'])
                 .collect::<Vec<_>>();
             modules
                 .entry(parts[0..parts.len() - 1].join("."))

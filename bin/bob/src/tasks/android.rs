@@ -81,8 +81,8 @@ pub(crate) fn generate_android_res_tasks(project: &mut Project, executor: &mut E
             compiled_res_dir,
             res_file
                 .trim_start_matches(&vars.android_metadata.resources_dir)
-                .trim_start_matches('/')
-                .replace('/', "_")
+                .trim_start_matches(['/', '\\'])
+                .replace(['/', '\\'], "_")
         );
         if compiled_res_file.contains("/values") {
             compiled_res_file = compiled_res_file.replace(".xml", ".arsc");
