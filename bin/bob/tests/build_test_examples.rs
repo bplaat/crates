@@ -20,19 +20,13 @@ fn test_build_test_examples() {
     for entry in fs::read_dir(examples_dir).expect("Failed to read examples directory") {
         let entry = entry.expect("Failed to read directory entry");
         if entry.path().is_dir() {
-            #[cfg(not(target_os = "macos"))]
-            if entry.file_name().to_string_lossy().starts_with("objc") {
+            let project_name = entry.file_name().to_string_lossy().to_string();
+            if cfg!(not(target_os = "macos")) && project_name.starts_with("objc") {
                 continue;
             }
 
-            Command::new(bob_bin)
-                .arg("clean")
-                .current_dir(entry.path())
-                .output()
-                .expect("Failed to execute bob clean command");
-
             let output = Command::new(bob_bin)
-                .arg("build")
+                .arg("rebuild")
                 .current_dir(entry.path())
                 .output()
                 .expect("Failed to execute bob build command");
@@ -54,7 +48,7 @@ fn test_build_test_examples() {
         let entry = entry.expect("Failed to read directory entry");
         if entry.path().is_dir() {
             let project_name = entry.file_name().to_string_lossy().to_string();
-            if project_name.starts_with("objc") || project_name.starts_with("java") {
+            if !(project_name.starts_with("c") || project_name.starts_with("cpp")) {
                 continue;
             }
 

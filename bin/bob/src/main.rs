@@ -7,31 +7,44 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
-use std::fs;
-use std::io::Write;
-use std::process::{Command, exit};
+use std::path::Path;
+use std::process::exit;
+use std::{env, fs};
 
-use args::Profile;
-use rules::Rule;
-use utils::{create_file_and_parent_dirs, format_bytes, index_files};
-
-use crate::args::{Args, Subcommand, parse_args};
+use crate::args::{Profile, Subcommand, parse_args};
+use crate::executor::Executor;
 use crate::manifest::Manifest;
+use crate::tasks::android::{
+    detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
+    generate_android_res_tasks, run_android_apk,
+};
+use crate::tasks::cx::{
+    detect_bundle, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp,
+    generate_bundle_tasks, generate_c_tasks, generate_cpp_tasks, generate_ld_tasks,
+    generate_objc_tasks, generate_objcpp_tasks, generate_test_main, run_bundle, run_ld,
+    run_ld_tests,
+};
+use crate::tasks::java::{
+    detect_jar, detect_java, generate_jar_tasks, generate_javac_tasks, run_jar, run_java_class,
+};
+use crate::utils::{format_bytes, index_files};
 
 mod args;
+mod executor;
+mod log;
 mod manifest;
-mod rules;
+mod sha1;
+mod tasks;
 mod utils;
 
 // MARK: Subcommands
-fn subcommand_clean(args: &Args) {
-    let target_dir = format!("{}/target", args.manifest_dir);
-    if fs::metadata(&target_dir).is_err() {
+fn subcommand_clean(target_dir: &str) {
+    if !Path::new(target_dir).exists() {
         println!("Removed 0 files");
         return;
     }
 
-    let files = index_files(&target_dir);
+    let files = index_files(target_dir);
     let total_size: u64 = files
         .iter()
         .map(|file| fs::metadata(file).expect("Can't read file metadata").len())
@@ -41,7 +54,7 @@ fn subcommand_clean(args: &Args) {
         files.len(),
         format_bytes(total_size)
     );
-    fs::remove_dir_all(&target_dir).expect("Can't remove target directory");
+    fs::remove_dir_all(target_dir).expect("Can't remove target directory");
 }
 
 fn subcommand_help() {
@@ -49,16 +62,18 @@ fn subcommand_help() {
         r"Usage: bob [SUBCOMMAND] [OPTIONS]
 
 Options:
-  -C <dir>         Change to directory <dir> before doing anything
-  -r, --release    Build artifacts in release mode
+  -C <dir>, --manifest-dir    Change to directory <dir> before doing anything
+  -T <dir>, --target-dir      Write artifacts to directory <dir>
+  -r, --release               Build artifacts in release mode
 
 Subcommands:
-  clean            Remove build artifacts
-  build            Build the project
-  help             Print this help message
-  run              Run the build artifact after building
-  test             Run the unit tests
-  version          Print the version number"
+  clean                       Remove build artifacts
+  build                       Build the project
+  help                        Print this help message
+  rebuild                     Clean and build the project
+  run                         Run the build artifact after building
+  test                        Run the unit tests
+  version                     Print the version number"
     );
 }
 
@@ -68,7 +83,7 @@ fn subcommand_version() {
 
 // MARK: Main
 pub(crate) struct Project {
-    manifest_dir: String,
+    target_dir: String,
     manifest: Manifest,
     profile: Profile,
     is_test: bool,
@@ -87,183 +102,111 @@ fn main() {
         return;
     }
 
+    // Change working directory to manifest_dir
+    if env::set_current_dir(&args.manifest_dir).is_err() {
+        eprintln!("Can't change directory to: {}", args.manifest_dir);
+        exit(1);
+    }
+
     // Read manifest
-    let manifest: Manifest = basic_toml::from_str(
-        &fs::read_to_string(format!("{}/bob.toml", args.manifest_dir)).unwrap_or_else(|err| {
+    let manifest: Manifest =
+        basic_toml::from_str(&fs::read_to_string("bob.toml").unwrap_or_else(|err| {
             eprintln!("Can't read bob.toml file: {}", err);
             exit(1);
-        }),
-    )
-    .unwrap_or_else(|err| {
-        eprintln!("Can't parse bob.toml file: {}", err);
-        exit(1);
-    });
+        }))
+        .unwrap_or_else(|err| {
+            eprintln!("Can't parse bob.toml file: {}", err);
+            exit(1);
+        });
 
     // Clean build artifacts
     if args.subcommand == Subcommand::Clean {
-        subcommand_clean(&args);
+        subcommand_clean(&args.target_dir);
         return;
     }
 
     // Rebuild artifacts
     if args.subcommand == Subcommand::Rebuild {
-        subcommand_clean(&args);
+        subcommand_clean(&args.target_dir);
     }
 
-    // Index source files
-    let source_dir = format!("{}/src", args.manifest_dir);
-    let source_files: Vec<String> = index_files(&source_dir)
-        .into_iter()
-        .map(|file| file.replace(&source_dir, "$source_dir"))
-        .collect();
+    // Check target directory
+    if !Path::new(&args.target_dir).exists() {
+        fs::create_dir(&args.target_dir).expect("Failed to create target directory");
+    }
 
-    // Generate ninja file
+    // Generate tasks
     let mut project = Project {
-        manifest_dir: args.manifest_dir.clone(),
         manifest,
+        target_dir: args.target_dir,
         profile: args.profile,
         is_test: args.subcommand == Subcommand::Test,
-        source_files: source_files.clone(),
+        source_files: index_files("src/"),
     };
-    let generated_rules = generate_ninja_file(&mut project);
 
-    // Run ninja
-    let status = Command::new("ninja")
-        .arg("-C")
-        .arg(format!("{}/target", args.manifest_dir))
-        .status()
-        .expect("Failed to execute ninja");
-    if !status.success() {
-        exit(status.code().unwrap_or(1));
+    let mut executor = Executor::new();
+    // FIXME: Fix bug where test corrupts target directory
+    if detect_cx(&project) && project.is_test {
+        generate_test_main(&mut project);
     }
+    if detect_c(&project) {
+        generate_c_tasks(&project, &mut executor);
+    }
+    if detect_cpp(&project) {
+        generate_cpp_tasks(&project, &mut executor);
+    }
+    if detect_objc(&project) {
+        generate_objc_tasks(&project, &mut executor);
+    }
+    if detect_objcpp(&project) {
+        generate_objcpp_tasks(&project, &mut executor);
+    }
+    if detect_android() {
+        generate_android_res_tasks(&mut project, &mut executor);
+    }
+    if detect_java(&project) {
+        generate_javac_tasks(&project, &mut executor);
+    }
+    if detect_android() {
+        generate_android_dex_tasks(&project, &mut executor);
+        generate_android_final_apk_tasks(&project, &mut executor);
+    }
+    if detect_cx(&project) {
+        generate_ld_tasks(&project, &mut executor);
+    }
+    if detect_jar(&project) {
+        generate_jar_tasks(&project, &mut executor);
+    }
+    if detect_bundle(&project) {
+        generate_bundle_tasks(&project, &mut executor);
+    }
+    executor.execute(&format!("{}/bob.log", &project.target_dir));
 
     // Run build artifact
     if args.subcommand == Subcommand::Run {
-        if generated_rules.contains(&Rule::Bundle) {
-            rules::cx::run_bundle(&project);
+        if detect_bundle(&project) {
+            run_bundle(&project);
         }
-        if generated_rules.contains(&Rule::Ld) {
-            rules::cx::run_ld(&project);
+        if detect_jar(&project) {
+            run_jar(&project);
         }
-        if generated_rules.contains(&Rule::AndroidApk) {
-            rules::android::run_android_apk(&project);
+        if detect_android() {
+            run_android_apk(&project);
         }
-        if generated_rules.contains(&Rule::JavaJar) {
-            rules::java::run_java_jar(&project);
+        if detect_cx(&project) {
+            run_ld(&project);
         }
-        if generated_rules.contains(&Rule::Java) {
-            rules::java::run_java(&project);
+        if detect_java(&project) {
+            run_java_class(&project);
         }
         eprintln!("No build artifact to run");
     }
 
     // Run unit tests
     if args.subcommand == Subcommand::Test {
-        if generated_rules.contains(&Rule::Ld) {
-            rules::cx::run_tests(&project);
+        if detect_cx(&project) {
+            run_ld_tests(&project);
         }
         eprintln!("No test artifact to run");
     }
-}
-
-fn generate_ninja_file(project: &mut Project) -> Vec<Rule> {
-    // Generate ninja file
-    let mut f = create_file_and_parent_dirs(format!("{}/target/build.ninja", project.manifest_dir))
-        .expect("Can't create build.ninja file");
-
-    // Project base variables
-    _ = writeln!(f, "# This file is generated by bob, do not edit!");
-    _ = writeln!(f, "name = {}", project.manifest.package.name);
-    if let Some(identifier) = &project.manifest.package.identifier {
-        _ = writeln!(f, "identifier = {}", identifier);
-    }
-    _ = writeln!(f, "version = {}", project.manifest.package.version);
-    _ = writeln!(f, "profile = {}", project.profile);
-    _ = writeln!(f, "manifest_dir = ..");
-    _ = writeln!(f, "source_dir = $manifest_dir/src");
-    _ = writeln!(f, "target_dir = $manifest_dir/target");
-    _ = writeln!(f, "source_gen_dir = $target_dir/$profile/src-gen");
-
-    // Generate rules
-    let needed_rules = determine_needed_rules(project);
-    for rule in &needed_rules {
-        match rule {
-            Rule::CxVars => rules::cx::generate_cx_vars(&mut f, project),
-            Rule::C => rules::cx::generate_c(&mut f, project),
-            Rule::Cpp => rules::cx::generate_cpp(&mut f, project),
-            Rule::Objc => rules::cx::generate_objc(&mut f, project),
-            Rule::Objcpp => rules::cx::generate_objcpp(&mut f, project),
-            Rule::Ld => rules::cx::generate_ld(&mut f, project),
-            Rule::Bundle => rules::cx::generate_bundle(&mut f, project),
-            Rule::JavaVars => rules::java::generate_java_vars(&mut f, project),
-            Rule::Java => rules::java::generate_java(&mut f, project),
-            Rule::JavaJar => rules::java::generate_java_jar(&mut f, project),
-            Rule::AndroidVars => rules::android::generate_android_vars(&mut f, project),
-            Rule::AndroidRes => rules::android::generate_android_res(&mut f, project),
-            Rule::AndroidDex => rules::android::generate_android_dex(&mut f, project),
-            Rule::AndroidApk => rules::android::generate_android_apk(&mut f, project),
-        };
-    }
-    needed_rules
-}
-
-fn determine_needed_rules(project: &Project) -> Vec<Rule> {
-    let mut rules = Vec::new();
-
-    // Variable rules
-    for file in &project.source_files {
-        if (file.ends_with(".c")
-            || file.ends_with(".cpp")
-            || file.ends_with(".m")
-            || file.ends_with(".mm"))
-            && !rules.contains(&Rule::CxVars)
-        {
-            rules.push(Rule::CxVars);
-        }
-        if file.ends_with(".java") && !rules.contains(&Rule::JavaVars) {
-            rules.push(Rule::JavaVars);
-        }
-    }
-    if fs::metadata(format!("{}/AndroidManifest.xml", project.manifest_dir)).is_ok() {
-        rules.push(Rule::AndroidVars);
-        rules.push(Rule::AndroidRes);
-    }
-
-    // Compile rules
-    for file in &project.source_files {
-        if file.ends_with(".c") && !rules.contains(&Rule::C) {
-            rules.push(Rule::C);
-        }
-        if file.ends_with(".cpp") && !rules.contains(&Rule::Cpp) {
-            rules.push(Rule::Cpp);
-        }
-        if file.ends_with(".m") && !rules.contains(&Rule::Objc) {
-            rules.push(Rule::Objc);
-        }
-        if file.ends_with(".mm") && !rules.contains(&Rule::Objcpp) {
-            rules.push(Rule::Objcpp);
-        }
-        if file.ends_with(".java") && !rules.contains(&Rule::Java) {
-            rules.push(Rule::Java);
-        }
-    }
-
-    // Link & package rules
-    if rules.contains(&Rule::CxVars) {
-        if project.is_test && !rules.contains(&Rule::C) {
-            rules.push(Rule::C);
-        }
-        rules.push(Rule::Ld);
-    }
-    if project.manifest.package.metadata.bundle.is_some() {
-        rules.push(Rule::Bundle);
-    }
-    if project.manifest.package.metadata.jar.is_some() {
-        rules.push(Rule::JavaJar);
-    }
-    if rules.contains(&Rule::AndroidVars) {
-        rules.push(Rule::AndroidDex);
-        rules.push(Rule::AndroidApk);
-    }
-    rules
 }

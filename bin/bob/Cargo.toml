@@ -9,9 +9,11 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+basic-toml = "0.1.9"
 indexmap = "2.7"
 regex = { version = "1.11", default-features = false, features = [
     "unicode-perl",
 ] }
 serde = { version = "1.0", features = ["derive"] }
-basic-toml = "0.1.9"
+threadpool = "1.8"
+uuid = { version = "1.0", features = ["v4"] }

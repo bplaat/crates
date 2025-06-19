@@ -26,7 +26,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 ### Tools
 
 -   [bassielight](bin/bassielight) A simple lights controller with GUI
--   [bob](bin/bob) A simple meta-build system for my projects
+-   [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
 -   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 -   [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook
 
