@@ -19,11 +19,11 @@ use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
     generate_android_res_tasks, link_android_classpath, run_android_apk,
 };
+use crate::tasks::bundle::{detect_bundle, generate_bundle_tasks, run_bundle};
 use crate::tasks::cx::{
-    copy_cx_headers, detect_bundle, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp,
-    generate_bundle_tasks, generate_c_tasks, generate_cpp_tasks, generate_cx_test_main,
-    generate_ld_tasks, generate_objc_tasks, generate_objcpp_tasks, run_bundle, run_ld,
-    run_ld_tests,
+    copy_cx_headers, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp, generate_c_tasks,
+    generate_cpp_tasks, generate_cx_test_main, generate_ld_tasks, generate_objc_tasks,
+    generate_objcpp_tasks, run_ld, run_ld_tests,
 };
 use crate::tasks::java::{
     detect_jar, detect_java, generate_jar_tasks, generate_javac_tasks, run_jar, run_java_class,

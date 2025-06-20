@@ -5,5 +5,6 @@
  */
 
 pub(crate) mod android;
+pub(crate) mod bundle;
 pub(crate) mod cx;
 pub(crate) mod java;
