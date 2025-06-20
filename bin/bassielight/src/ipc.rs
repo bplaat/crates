@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::dmx::Mode;
+
 #[allow(clippy::enum_variant_names)]
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type")]
@@ -18,4 +20,6 @@ pub(crate) enum IpcMessage {
     SetToggleSpeed { speed: Option<u64> },
     #[serde(rename = "setStrobeSpeed")]
     SetStrobeSpeed { speed: Option<u64> },
+    #[serde(rename = "setMode")]
+    SetMode { mode: Mode },
 }

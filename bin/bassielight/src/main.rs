@@ -63,6 +63,9 @@ fn main() {
                     dmx::x_strobe_speed = speed.map(Duration::from_millis);
                     dmx::x_is_strobe = speed.is_some();
                 },
+                IpcMessage::SetMode { mode } => unsafe {
+                    dmx::x_mode = mode;
+                },
             }
         }
         _ => {}
