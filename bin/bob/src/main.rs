@@ -12,7 +12,7 @@ use std::path::Path;
 use std::process::exit;
 use std::{env, fs};
 
-use crate::args::{Args, Profile, Subcommand, parse_args};
+use crate::args::{Args, Profile, Subcommand, parse_args, subcommand_help};
 use crate::executor::Executor;
 use crate::manifest::Manifest;
 use crate::tasks::android::{
@@ -60,26 +60,6 @@ fn subcommand_clean(target_dir: &str, print: bool) {
         );
     }
     fs::remove_dir_all(target_dir).expect("Can't remove target directory");
-}
-
-fn subcommand_help() {
-    println!(
-        r"Usage: bob [SUBCOMMAND] [OPTIONS]
-
-Options:
-  -C <dir>, --manifest-dir    Change to directory <dir> before doing anything
-  -T <dir>, --target-dir      Write artifacts to directory <dir>
-  -r, --release               Build artifacts in release mode
-
-Subcommands:
-  clean                       Remove build artifacts
-  build                       Build the project
-  help                        Print this help message
-  rebuild                     Clean and build the project
-  run                         Run the build artifact after building
-  test                        Run the unit tests
-  version                     Print the version number"
-    );
 }
 
 fn subcommand_version() {
@@ -236,7 +216,11 @@ fn main() {
     // Build main bobje
     let mut executor = Executor::new();
     let bobje = Bobje::new(&args, ".", BobjeType::Binary, &mut executor);
-    executor.execute(&format!("{}/bob.log", &args.target_dir), args.verbose);
+    executor.execute(
+        &format!("{}/bob.log", &args.target_dir),
+        args.verbose,
+        args.thread_count,
+    );
 
     // Run build artifact
     if args.subcommand == Subcommand::Run {

@@ -283,10 +283,12 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
         format!("--min-api {}", vars.android_metadata.min_sdk_version),
         format!("--output {}/{}/", bobje.target_dir, bobje.profile),
     ];
+    let mut inputs = Vec::new();
     for module in &modules {
         let classes = format!("{}/{}/*.class", classes_dir, module.name.replace('.', "/"));
         if !d8_command.contains(&classes) {
             d8_command.push(classes);
+            inputs.push(format!("{}/{}", classes_dir, module.name.replace('.', "/")));
         }
     }
     executor.add_task_cmd(
@@ -297,10 +299,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
             bobje.profile,
             bobje.manifest.package.name
         ),
-        modules
-            .iter()
-            .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
-            .collect(),
+        inputs,
         vec![format!(
             "{}/{}/classes.dex",
             bobje.target_dir, bobje.profile

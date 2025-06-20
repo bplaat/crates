@@ -52,11 +52,14 @@ pub(crate) fn generate_javac_tasks(bobje: &Bobje, executor: &mut Executor) {
         let mut inputs = module.source_files.clone();
         if let Some(dependencies) = module_deps.get(&module.name) {
             for dependency_module in dependencies {
-                inputs.push(format!(
+                let classes_module_dir = format!(
                     "{}/{}",
                     classes_dir,
                     dependency_module.name.replace('.', "/")
-                ));
+                );
+                if !inputs.contains(&classes_module_dir) {
+                    inputs.push(classes_module_dir);
+                }
             }
         }
         executor.add_task_cmd(

@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::env;
 use std::fmt::{self, Display, Formatter};
 use std::process::exit;
+use std::{env, thread};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Subcommand {
@@ -40,6 +40,7 @@ pub(crate) struct Args {
     pub target_dir: String,
     pub profile: Profile,
     pub verbose: bool,
+    pub thread_count: usize,
 }
 
 impl Default for Args {
@@ -50,6 +51,7 @@ impl Default for Args {
             target_dir: "target".to_string(),
             profile: Profile::Debug,
             verbose: false,
+            thread_count: thread::available_parallelism().map_or(1, |n| n.get()),
         }
     }
 }
@@ -66,7 +68,6 @@ pub(crate) fn parse_args() -> Args {
             "rebuild" => args.subcommand = Subcommand::Rebuild,
             "test" => args.subcommand = Subcommand::Test,
             "version" | "--version" => args.subcommand = Subcommand::Version,
-            "-v" | "--verbose" => args.verbose = true,
             "-C" | "--manifest-dir" => {
                 args.manifest_dir = args_iter.next().expect("Invalid argument")
             }
@@ -74,6 +75,14 @@ pub(crate) fn parse_args() -> Args {
                 args.target_dir = args_iter.next().expect("Invalid argument");
             }
             "-r" | "--release" => args.profile = Profile::Release,
+            "-v" | "--verbose" => args.verbose = true,
+            "--single-threaded" => args.thread_count = 1,
+            "--thread-count" => {
+                args.thread_count = args_iter
+                    .next()
+                    .and_then(|s| s.parse().ok())
+                    .expect("Invalid argument")
+            }
             _ => {
                 eprintln!("Unknown argument: {}", arg);
                 exit(1);
@@ -81,4 +90,27 @@ pub(crate) fn parse_args() -> Args {
         }
     }
     args
+}
+
+pub(crate) fn subcommand_help() {
+    println!(
+        r"Usage: bob [SUBCOMMAND] [OPTIONS]
+
+Options:
+  -C <dir>, --manifest-dir    Change to directory <dir> before doing anything
+  -T <dir>, --target-dir      Write artifacts to directory <dir>
+  -r, --release               Build artifacts in release mode
+  -v, --verbose               Print verbose output
+  --single-threaded           Run tasks in a single thread
+  --thread-count <count>      Use <count> threads for building (default: number of available cores)
+
+Subcommands:
+  clean                       Remove build artifacts
+  build                       Build the project
+  help                        Print this help message
+  rebuild                     Clean and build the project
+  run                         Run the build artifact after building
+  test                        Run the unit tests
+  version                     Print the version number"
+    );
 }

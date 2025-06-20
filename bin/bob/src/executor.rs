@@ -64,7 +64,8 @@ impl TaskAction {
                     exit(1)
                 });
                 if !status.success() {
-                    panic!("Command failed: {}", command);
+                    eprintln!("Command failed: {}", command);
+                    exit(1);
                 }
             }
         }
@@ -116,12 +117,14 @@ impl Executor {
         inputs: Vec<String>,
         outputs: Vec<String>,
     ) {
-        self.tasks.push(Task {
-            id: Uuid::new_v4(),
-            action,
-            inputs,
-            outputs,
-        });
+        if !self.tasks.iter().any(|task| task.outputs == outputs) {
+            self.tasks.push(Task {
+                id: Uuid::new_v4(),
+                action,
+                inputs,
+                outputs,
+            });
+        }
     }
 
     pub(crate) fn add_task_phony(&mut self, inputs: Vec<String>, outputs: Vec<String>) {
@@ -134,11 +137,11 @@ impl Executor {
 
     pub(crate) fn add_task_cmd(
         &mut self,
-        action: String,
+        command: String,
         inputs: Vec<String>,
         outputs: Vec<String>,
     ) {
-        self.add_task(TaskAction::Command(action), inputs, outputs);
+        self.add_task(TaskAction::Command(command), inputs, outputs);
     }
 
     pub(crate) fn add_task_cp(&mut self, src: String, dst: String) {
@@ -149,14 +152,13 @@ impl Executor {
         );
     }
 
-    pub(crate) fn execute(&self, log_path: &str, verbose: bool) {
+    pub(crate) fn execute(&self, log_path: &str, verbose: bool, thread_count: usize) {
         if verbose {
             println!("{:#?}", self.tasks);
         }
 
         let log = Log::new(log_path);
-        let num_threads = thread::available_parallelism().map_or(1, |n| n.get());
-        let pool = ThreadPool::new(num_threads);
+        let pool = ThreadPool::new(thread_count);
         let task_counter = AtomicUsize::new(1);
         self.execute_task(
             self.tasks.last().expect("No tasks provided"),
@@ -230,7 +232,7 @@ impl Executor {
             for input in &task.inputs {
                 // Get input modified time
                 let metadata = fs::metadata(input).unwrap_or_else(|_| {
-                    eprintln!("Can't open input file: {}", input);
+                    eprintln!("{:?}\nCan't open input file: {}", task, input);
                     exit(1)
                 });
                 let modified_time = metadata
@@ -275,8 +277,17 @@ impl Executor {
                 }
             }
 
-            // Execute command if inputs have changed
-            if inputs_changed {
+            // Check if outputs are missing
+            let mut outputs_missing = false;
+            for output in &task.outputs {
+                if !Path::new(output).exists() {
+                    outputs_missing = true;
+                    break;
+                }
+            }
+
+            // Execute command if inputs have changed or outputs are missing
+            if inputs_changed || outputs_missing {
                 // Create output directories
                 for output in &task.outputs {
                     if let Some(parent) = Path::new(output).parent() {
