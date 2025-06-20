@@ -25,8 +25,14 @@ pub(crate) enum TaskAction {
     Command(String),
 }
 
+static FIRST_LINE: Mutex<bool> = Mutex::new(true);
+
 impl TaskAction {
     fn execute(&self, current_task: usize, total_tasks: usize) {
+        let mut first_line_mutex = FIRST_LINE.lock().expect("Could not lock mutex");
+        let first_line = *first_line_mutex;
+        *first_line_mutex = false;
+
         let mut line = format!("[{}/{}] ", current_task, total_tasks);
         match self {
             TaskAction::Phony(dest) => {
@@ -68,8 +74,11 @@ impl TaskAction {
                 .expect("Can't get terminal size")
                 .0
                 .0 as usize;
+            if !first_line {
+                print!("\x1B[1A\x1B[2K");
+            }
             println!(
-                "\x1B[1A\x1B[2K{}",
+                "{}",
                 if line.len() > term_width {
                     format!("{}...", &line[..term_width - 3])
                 } else {
@@ -143,9 +152,6 @@ impl Executor {
     pub(crate) fn execute(&self, log_path: &str, print_tasks: bool) {
         if print_tasks {
             println!("{:#?}", self.tasks);
-        }
-        if env::var("NO_COLOR").is_err() && env::var("CI").is_err() {
-            println!();
         }
 
         let log = Log::new(log_path);
