@@ -291,7 +291,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
     }
     executor.add_task_cmd(
         format!(
-            "{} && cd {}/{} && zip {}-unaligned.apk classes.dex",
+            "{} && cd {}/{} && zip {}-unaligned.apk classes.dex > /dev/null",
             d8_command.join(" "),
             bobje.target_dir,
             bobje.profile,
@@ -320,7 +320,6 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
     if fs::metadata(&vars.android_metadata.keystore_file).is_err()
         && fs::metadata(&target_keystore).is_err()
     {
-        println!("Android signing keystore not found, generating dummy one...");
         let mut cmd = Command::new("keytool");
         vars.android_metadata.keystore_file = target_keystore;
         cmd.arg("-genkey")

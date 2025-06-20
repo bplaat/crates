@@ -6,9 +6,10 @@
 
 use std::path::Path;
 use std::process::{Command, exit};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-use std::{fs, thread};
+use std::{env, fs, thread};
 
 use threadpool::ThreadPool;
 use uuid::Uuid;
@@ -19,24 +20,27 @@ use crate::sha1::sha1;
 // MARK: Task
 #[derive(Debug, Clone)]
 pub(crate) enum TaskAction {
-    Phony,
+    Phony(String),
     Copy(String, String),
     Command(String),
 }
 
 impl TaskAction {
-    fn execute(&self) {
+    fn execute(&self, current_task: usize, total_tasks: usize) {
+        let mut line = format!("[{}/{}] ", current_task, total_tasks);
         match self {
-            TaskAction::Phony => {}
+            TaskAction::Phony(dest) => {
+                line += dest;
+            }
             TaskAction::Copy(src, dst) => {
-                println!("cp {} {}", src, dst);
+                line += &format!("cp {} {}", src, dst);
                 fs::copy(src, dst).unwrap_or_else(|_| {
                     eprintln!("Failed to copy {} to {}", src, dst);
                     exit(1)
                 });
             }
             TaskAction::Command(command) => {
-                println!("{}", command);
+                line += command;
                 let status = if cfg!(windows) {
                     if command.contains("&&") {
                         let mut parts = command.split(' ').collect::<Vec<_>>();
@@ -57,6 +61,23 @@ impl TaskAction {
                     panic!("Command failed: {}", command);
                 }
             }
+        }
+
+        if env::var("NO_COLOR").is_err() || env::var("CI").is_ok() {
+            let term_width = terminal_size::terminal_size()
+                .expect("Can't get terminal size")
+                .0
+                .0 as usize;
+            println!(
+                "\x1B[1A\x1B[2K{}",
+                if line.len() > term_width {
+                    format!("{}...", &line[..term_width - 3])
+                } else {
+                    line.to_string()
+                }
+            );
+        } else {
+            println!("{}", line);
         }
     }
 }
@@ -95,7 +116,11 @@ impl Executor {
     }
 
     pub(crate) fn add_task_phony(&mut self, inputs: Vec<String>, outputs: Vec<String>) {
-        self.add_task(TaskAction::Phony, inputs, outputs);
+        self.add_task(
+            TaskAction::Phony(outputs.first().expect("Should have one output").clone()),
+            inputs,
+            outputs,
+        );
     }
 
     pub(crate) fn add_task_cmd(
@@ -119,16 +144,21 @@ impl Executor {
         if print_tasks {
             println!("{:#?}", self.tasks);
         }
+        if env::var("NO_COLOR").is_err() || env::var("CI").is_ok() {
+            println!();
+        }
 
         let log = Log::new(log_path);
         let num_threads = thread::available_parallelism().map_or(1, |n| n.get());
         let pool = ThreadPool::new(num_threads);
+        let task_counter = AtomicUsize::new(1);
         self.execute_task(
             self.tasks.last().expect("No tasks provided"),
             &pool,
             Arc::new(Mutex::new(Vec::new())),
             Arc::new(Mutex::new(Vec::new())),
             Arc::new(Mutex::new(log)),
+            Arc::new(task_counter),
         );
         pool.join();
     }
@@ -140,6 +170,7 @@ impl Executor {
         scheduled_task_ids: Arc<Mutex<Vec<Uuid>>>,
         done_task_ids: Arc<Mutex<Vec<Uuid>>>,
         log: Arc<Mutex<Log>>,
+        task_counter: Arc<AtomicUsize>,
     ) {
         // Check if task is already scheduled
         {
@@ -162,11 +193,14 @@ impl Executor {
                         scheduled_task_ids.clone(),
                         done_task_ids.clone(),
                         log.clone(),
+                        task_counter.clone(),
                     );
                 }
             }
         }
 
+        let total_tasks = self.tasks.len();
+        let current_task = task_counter.fetch_add(1, Ordering::SeqCst);
         let task = task.clone();
         pool.execute(move || {
             // Wait for dependencies to finish
@@ -244,7 +278,7 @@ impl Executor {
                 }
 
                 // Execute command
-                task.action.execute();
+                task.action.execute(current_task, total_tasks);
 
                 // Update log entries of output dirs
                 {
