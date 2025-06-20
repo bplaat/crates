@@ -1,0 +1,9 @@
+[package]
+name = "enable-ansi-support"
+version = "0.2.1+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
