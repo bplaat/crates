@@ -284,11 +284,10 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
         format!("--output {}/{}/", bobje.target_dir, bobje.profile),
     ];
     for module in &modules {
-        d8_command.push(format!(
-            "{}/{}/*.class",
-            classes_dir,
-            module.name.replace('.', "/")
-        ));
+        let classes = format!("{}/{}/*.class", classes_dir, module.name.replace('.', "/"));
+        if !d8_command.contains(&classes) {
+            d8_command.push(classes);
+        }
     }
     executor.add_task_cmd(
         format!(
