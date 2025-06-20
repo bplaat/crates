@@ -28,7 +28,7 @@ pub(crate) enum TaskAction {
 static FIRST_LINE: Mutex<bool> = Mutex::new(true);
 
 impl TaskAction {
-    fn execute(&self, current_task: usize, total_tasks: usize) {
+    fn execute(&self, current_task: usize, total_tasks: usize, pretty_print: bool) {
         let mut first_line_mutex = FIRST_LINE.lock().expect("Could not lock mutex");
         let first_line = *first_line_mutex;
         *first_line_mutex = false;
@@ -69,7 +69,7 @@ impl TaskAction {
             }
         }
 
-        if env::var("NO_COLOR").is_err() && env::var("CI").is_err() {
+        if pretty_print {
             let term_width = terminal_size::terminal_size()
                 .expect("Can't get terminal size")
                 .0
@@ -149,8 +149,8 @@ impl Executor {
         );
     }
 
-    pub(crate) fn execute(&self, log_path: &str, print_tasks: bool) {
-        if print_tasks {
+    pub(crate) fn execute(&self, log_path: &str, verbose: bool) {
+        if verbose {
             println!("{:#?}", self.tasks);
         }
 
@@ -165,10 +165,12 @@ impl Executor {
             Arc::new(Mutex::new(Vec::new())),
             Arc::new(Mutex::new(log)),
             Arc::new(task_counter),
+            !verbose && env::var("NO_COLOR").is_err() && env::var("CI").is_err(),
         );
         pool.join();
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_task(
         &self,
         task: &Task,
@@ -177,6 +179,7 @@ impl Executor {
         done_task_ids: Arc<Mutex<Vec<Uuid>>>,
         log: Arc<Mutex<Log>>,
         task_counter: Arc<AtomicUsize>,
+        pretty_print: bool,
     ) {
         // Check if task is already scheduled
         {
@@ -200,6 +203,7 @@ impl Executor {
                         done_task_ids.clone(),
                         log.clone(),
                         task_counter.clone(),
+                        pretty_print,
                     );
                 }
             }
@@ -284,7 +288,7 @@ impl Executor {
                 }
 
                 // Execute command
-                task.action.execute(current_task, total_tasks);
+                task.action.execute(current_task, total_tasks, pretty_print);
 
                 // Update log entries of output dirs
                 {
