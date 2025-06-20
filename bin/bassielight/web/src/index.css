@@ -71,6 +71,13 @@ a:hover {
     text-decoration: underline;
 }
 
+.icon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+    margin-right: 0.5rem;
+}
+
 /* --- Button Containers --- */
 .button-grid {
     display: flex;
@@ -134,12 +141,7 @@ button.selected:hover {
     border-color: var(--primary-color);
 }
 
-.footer {
-    margin-top: 4rem;
-    font-size: 0.9rem;
-    color: #888;
-}
-
+/* --- Bottom Controls --- */
 .bottom-controls-container {
     position: fixed;
     bottom: 0;
@@ -156,7 +158,7 @@ button.selected:hover {
     align-items: center;
     justify-content: center;
     padding: 12px 0;
-    border: 1px solid #555;
+    border: 2px solid #555;
     border-radius: 8px;
     background-color: #3e3e3e;
     color: #e0e0e0;
