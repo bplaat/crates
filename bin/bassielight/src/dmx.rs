@@ -8,9 +8,19 @@ use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
 use rusb::{Context, Device};
+use serde::{Deserialize, Serialize};
 
 use crate::config::{Config, FixtureType};
 
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Mode {
+    Black,
+    Manual,
+    Auto,
+}
+
+pub(crate) static mut x_mode: Mode = Mode::Black;
 pub(crate) static mut x_color: u32 = 0;
 pub(crate) static mut x_toggle_color: u32 = 0;
 pub(crate) static mut x_toggle_speed: Option<Duration> = None;
@@ -63,9 +73,18 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                         x_color
                     }
                 };
-                dmx[base_addr] = (color >> 16) as u8;
-                dmx[base_addr + 1] = (color >> 8) as u8;
-                dmx[base_addr + 2] = color as u8;
+
+                if unsafe { x_mode == Mode::Manual } {
+                    dmx[base_addr] = (color >> 16) as u8;
+                    dmx[base_addr + 1] = (color >> 8) as u8;
+                    dmx[base_addr + 2] = color as u8;
+                } else if unsafe { x_mode == Mode::Black } {
+                    dmx[base_addr] = 0;
+                    dmx[base_addr + 1] = 0;
+                    dmx[base_addr + 2] = 0;
+                } else if unsafe { x_mode == Mode::Auto } {
+                    dmx[base_addr + 5] = 225;
+                }
             }
         }
 

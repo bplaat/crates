@@ -139,3 +139,41 @@ button.selected:hover {
     font-size: 0.9rem;
     color: #888;
 }
+
+.bottom-controls-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 15px 10px;
+}
+
+.control-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 0;
+    border: 1px solid #555;
+    border-radius: 8px;
+    background-color: #3e3e3e;
+    color: #e0e0e0;
+    cursor: pointer;
+    font-size: 16px;
+    font-family: inherit;
+    flex-grow: 1;
+    margin: 0 8px;
+    max-width: 200px;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.control-button:hover {
+    background-color: #4a4a4a;
+}
+
+.control-button:active {
+    background-color: #555555;
+    transform: scale(0.98);
+}

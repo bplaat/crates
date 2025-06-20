@@ -5,3 +5,4 @@ dist/
 *.db*
 *.jks
 .DS_Store
+config.json
