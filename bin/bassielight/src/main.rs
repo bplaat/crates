@@ -6,7 +6,7 @@
 
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 
 use std::thread;
 use std::time::Duration;
@@ -14,6 +14,7 @@ use std::time::Duration;
 use rust_embed::Embed;
 use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
 
+use crate::dmx::DMX_STATE;
 use crate::ipc::IpcMessage;
 
 mod config;
@@ -48,24 +49,20 @@ fn main() {
             });
         }
         Event::PageMessageReceived(message) => {
-            match serde_json::from_str::<IpcMessage>(&message).expect("Can't parse message") {
-                IpcMessage::SetColor { color } => unsafe {
-                    dmx::x_color = color;
-                },
-                IpcMessage::SetToggleColor { color } => unsafe {
-                    dmx::x_toggle_color = color;
-                },
-                IpcMessage::SetToggleSpeed { speed } => unsafe {
-                    dmx::x_toggle_speed = speed.map(Duration::from_millis);
-                    dmx::x_is_toggle_color = speed.is_some();
-                },
-                IpcMessage::SetStrobeSpeed { speed } => unsafe {
-                    dmx::x_strobe_speed = speed.map(Duration::from_millis);
-                    dmx::x_is_strobe = speed.is_some();
-                },
-                IpcMessage::SetMode { mode } => unsafe {
-                    dmx::x_mode = mode;
-                },
+            let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
+            let ipc_message = serde_json::from_str(&message).expect("Failed to parse IPC message");
+            match ipc_message {
+                IpcMessage::SetColor { color } => dmx_state.color = color,
+                IpcMessage::SetToggleColor { color } => dmx_state.toggle_color = color,
+                IpcMessage::SetToggleSpeed { speed } => {
+                    dmx_state.toggle_speed = speed.map(Duration::from_millis);
+                    dmx_state.is_toggle_color = speed.is_some();
+                }
+                IpcMessage::SetStrobeSpeed { speed } => {
+                    dmx_state.strobe_speed = speed.map(Duration::from_millis);
+                    dmx_state.is_strobe = speed.is_some();
+                }
+                IpcMessage::SetMode { mode } => dmx_state.mode = mode,
             }
         }
         _ => {}

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{Config, FixtureType};
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Mode {
     Black,
@@ -20,13 +21,25 @@ pub(crate) enum Mode {
     Auto,
 }
 
-pub(crate) static mut x_mode: Mode = Mode::Black;
-pub(crate) static mut x_color: u32 = 0;
-pub(crate) static mut x_toggle_color: u32 = 0;
-pub(crate) static mut x_toggle_speed: Option<Duration> = None;
-pub(crate) static mut x_is_toggle_color: bool = false;
-pub(crate) static mut x_strobe_speed: Option<Duration> = None;
-pub(crate) static mut x_is_strobe: bool = false;
+pub(crate) struct DmxState {
+    pub mode: Mode,
+    pub color: u32,
+    pub toggle_color: u32,
+    pub toggle_speed: Option<Duration>,
+    pub is_toggle_color: bool,
+    pub strobe_speed: Option<Duration>,
+    pub is_strobe: bool,
+}
+
+pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
+    mode: Mode::Manual,
+    color: 0x000000,
+    toggle_color: 0x000000,
+    toggle_speed: None,
+    is_toggle_color: false,
+    strobe_speed: None,
+    is_strobe: false,
+});
 
 /// Starts the DMX output thread for the given device using the given configuration.
 pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
@@ -37,53 +50,54 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
     let mut strobe_time = SystemTime::now();
 
     loop {
-        dmx.fill(0);
+        {
+            let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
+            dmx.fill(0);
 
-        if let Some(toggle_speed) = unsafe { x_toggle_speed } {
-            if SystemTime::now()
-                .duration_since(toggle_color_time)
-                .expect("Time went backwards")
-                > toggle_speed
-            {
-                unsafe { x_is_toggle_color = !x_is_toggle_color };
-                toggle_color_time = SystemTime::now();
+            if let Some(toggle_speed) = dmx_state.toggle_speed {
+                if SystemTime::now()
+                    .duration_since(toggle_color_time)
+                    .expect("Time went backwards")
+                    > toggle_speed
+                {
+                    dmx_state.is_toggle_color = !dmx_state.is_toggle_color;
+                    toggle_color_time = SystemTime::now();
+                }
             }
-        }
 
-        if let Some(strobe_speed) = unsafe { x_strobe_speed } {
-            if SystemTime::now()
-                .duration_since(strobe_time)
-                .expect("Time went backwards")
-                > strobe_speed
-            {
-                unsafe { x_is_strobe = !x_is_strobe };
-                strobe_time = SystemTime::now();
+            if let Some(strobe_speed) = dmx_state.strobe_speed {
+                if SystemTime::now()
+                    .duration_since(strobe_time)
+                    .expect("Time went backwards")
+                    > strobe_speed
+                {
+                    dmx_state.is_strobe = !dmx_state.is_strobe;
+                    strobe_time = SystemTime::now();
+                }
             }
-        }
 
-        for fixture in &config.fixtures {
-            if fixture.r#type == FixtureType::P56Led {
-                let base_addr = fixture.addr - 1;
-                let color = unsafe {
-                    if x_is_strobe {
+            for fixture in &config.fixtures {
+                if fixture.r#type == FixtureType::P56Led {
+                    let base_addr = fixture.addr - 1;
+                    let color = if dmx_state.is_strobe {
                         0x000000
-                    } else if x_is_toggle_color {
-                        x_toggle_color
+                    } else if dmx_state.is_toggle_color {
+                        dmx_state.toggle_color
                     } else {
-                        x_color
-                    }
-                };
+                        dmx_state.color
+                    };
 
-                if unsafe { x_mode == Mode::Manual } {
-                    dmx[base_addr] = (color >> 16) as u8;
-                    dmx[base_addr + 1] = (color >> 8) as u8;
-                    dmx[base_addr + 2] = color as u8;
-                } else if unsafe { x_mode == Mode::Black } {
-                    dmx[base_addr] = 0;
-                    dmx[base_addr + 1] = 0;
-                    dmx[base_addr + 2] = 0;
-                } else if unsafe { x_mode == Mode::Auto } {
-                    dmx[base_addr + 5] = 225;
+                    if dmx_state.mode == Mode::Manual {
+                        dmx[base_addr] = (color >> 16) as u8;
+                        dmx[base_addr + 1] = (color >> 8) as u8;
+                        dmx[base_addr + 2] = color as u8;
+                    } else if dmx_state.mode == Mode::Black {
+                        dmx[base_addr] = 0;
+                        dmx[base_addr + 1] = 0;
+                        dmx[base_addr + 2] = 0;
+                    } else if dmx_state.mode == Mode::Auto {
+                        dmx[base_addr + 5] = 225;
+                    }
                 }
             }
         }

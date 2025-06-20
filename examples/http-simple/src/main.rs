@@ -6,6 +6,8 @@
 
 //! A simple HTTP server example
 
+#![forbid(unsafe_code)]
+
 use std::net::{Ipv4Addr, TcpListener};
 use std::sync::LazyLock;
 use std::thread;
