@@ -121,7 +121,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
             bobje.target_dir, bobje.profile, bobje.manifest.package.name
         );
 
-        let mut link_inputs = Vec::new();
+        let mut link_inputs = vec![format!("{}/AndroidManifest.xml", bobje.manifest_dir)];
         let mut link_command = vec![
             format!("{}/aapt2", vars.build_tools_path),
             "link".to_string(),
