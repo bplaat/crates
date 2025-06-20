@@ -49,21 +49,21 @@ fn main() {
         .load_rust_embed::<WebAssets>()
         .build();
 
-    webview.run(|webview, event| {
-        let todos_config_path = format!(
-            "{}/{}/{}",
-            dirs::config_dir().expect("Can't get config dir").display(),
-            env!("CARGO_PKG_NAME"),
-            "todos.json"
-        );
-        if let Some(parent) = std::path::Path::new(&todos_config_path).parent() {
-            fs::create_dir_all(parent).expect("Can't create config directory");
-        }
+    let todos_config_path = format!(
+        "{}/{}/{}",
+        dirs::config_dir().expect("Can't get config dir").display(),
+        env!("CARGO_PKG_NAME"),
+        "todos.json"
+    );
+    if let Some(parent) = std::path::Path::new(&todos_config_path).parent() {
+        fs::create_dir_all(parent).expect("Can't create config directory");
+    }
 
+    webview.run(move |webview, event| {
         if let Event::PageMessageReceived(message) = event {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::GetTodos => {
-                    let todos: Vec<Todo> = fs::read_to_string(todos_config_path)
+                    let todos: Vec<Todo> = fs::read_to_string(&todos_config_path)
                         .ok()
                         .and_then(|data| serde_json::from_str(&data).ok())
                         .unwrap_or_default();
@@ -74,7 +74,7 @@ fn main() {
                 }
                 IpcMessage::UpdateTodos { todos } => {
                     fs::write(
-                        todos_config_path,
+                        &todos_config_path,
                         serde_json::to_string(&todos).expect("Failed to serialize todos"),
                     )
                     .expect("Failed to write todos to file");

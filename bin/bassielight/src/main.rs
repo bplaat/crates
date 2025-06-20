@@ -37,10 +37,12 @@ fn main() {
         .load_rust_embed::<WebAssets>()
         .build();
 
-    webview.run(|_, event| match event {
+    let config = config::load_config("config.json").expect("Can't load config.json");
+
+    webview.run(move |_, event| match event {
         Event::PageLoadFinished => {
+            let config = config.clone();
             thread::spawn(move || {
-                let config = config::load_config("config.json").expect("Can't load config.json");
                 if let Some(device) = usb::find_udmx_device() {
                     dmx::dmx_thread(device, config);
                 } else {
@@ -50,8 +52,7 @@ fn main() {
         }
         Event::PageMessageReceived(message) => {
             let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
-            let ipc_message = serde_json::from_str(&message).expect("Failed to parse IPC message");
-            match ipc_message {
+            match serde_json::from_str(&message).expect("Failed to parse IPC message") {
                 IpcMessage::SetColor { color } => dmx_state.color = color,
                 IpcMessage::SetToggleColor { color } => dmx_state.toggle_color = color,
                 IpcMessage::SetToggleSpeed { speed } => {

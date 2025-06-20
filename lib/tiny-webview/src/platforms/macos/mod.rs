@@ -22,10 +22,12 @@ mod webkit;
 const IVAR_SELF: &str = "_self";
 const IVAR_SELF_CSTR: &CStr = c"_self";
 
+type EventHandler = Box<dyn Fn(&mut Webview, Event) + 'static>;
+
 pub(crate) struct Webview {
     window: *mut Object,
     webview: *mut Object,
-    event_handler: Option<fn(&mut Webview, Event)>,
+    event_handler: Option<EventHandler>,
 }
 
 impl Webview {
@@ -195,13 +197,15 @@ impl Webview {
     }
 
     fn send_event(&mut self, event: Event) {
-        self.event_handler.expect("Should be some")(self, event);
+        let event_handler = self.event_handler.take().expect("Should be some");
+        event_handler(self, event);
+        self.event_handler = Some(event_handler);
     }
 }
 
 impl crate::Webview for Webview {
-    fn run(&mut self, event_handler: fn(&mut Webview, Event)) -> ! {
-        self.event_handler = Some(event_handler);
+    fn run(&mut self, event_handler: impl Fn(&mut Webview, Event) + 'static) -> ! {
+        self.event_handler = Some(Box::new(event_handler));
         unsafe {
             let delegate: *mut Object = msg_send![NSApp, delegate];
             #[allow(deprecated)]

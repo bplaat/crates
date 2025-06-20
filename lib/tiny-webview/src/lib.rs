@@ -16,7 +16,7 @@ mod sizes;
 /// Webview
 pub trait Webview {
     /// Start event loop
-    fn run(&mut self, _event_handler: fn(&mut Self, Event)) -> !;
+    fn run(&mut self, _event_handler: impl Fn(&mut Self, Event) + 'static) -> !;
 
     /// Set title
     fn set_title(&mut self, title: impl AsRef<str>);
