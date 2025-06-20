@@ -115,9 +115,10 @@ impl Executor {
         );
     }
 
-    pub(crate) fn execute(&self, log_path: &str) {
-        #[cfg(debug_assertions)]
-        println!("{:#?}", self.tasks);
+    pub(crate) fn execute(&self, log_path: &str, print_tasks: bool) {
+        if print_tasks {
+            println!("{:#?}", self.tasks);
+        }
 
         let log = Log::new(log_path);
         let num_threads = thread::available_parallelism().map_or(1, |n| n.get());

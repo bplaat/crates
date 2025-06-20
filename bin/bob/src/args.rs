@@ -39,6 +39,7 @@ pub(crate) struct Args {
     pub manifest_dir: String,
     pub target_dir: String,
     pub profile: Profile,
+    pub verbose: bool,
 }
 
 impl Default for Args {
@@ -48,6 +49,7 @@ impl Default for Args {
             manifest_dir: ".".to_string(),
             target_dir: "target".to_string(),
             profile: Profile::Debug,
+            verbose: cfg!(debug_assertions),
         }
     }
 }
@@ -57,13 +59,14 @@ pub(crate) fn parse_args() -> Args {
     let mut args_iter = env::args().skip(1);
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
-            "c" | "clean" => args.subcommand = Subcommand::Clean,
-            "b" | "build" => args.subcommand = Subcommand::Build,
-            "h" | "help" | "-h" | "--help" => args.subcommand = Subcommand::Help,
-            "r" | "run" => args.subcommand = Subcommand::Run,
-            "rb" | "rebuild" => args.subcommand = Subcommand::Rebuild,
-            "t" | "test" => args.subcommand = Subcommand::Test,
-            "v" | "version" | "-v" | "--version" => args.subcommand = Subcommand::Version,
+            "clean" => args.subcommand = Subcommand::Clean,
+            "build" => args.subcommand = Subcommand::Build,
+            "help" | "-h" | "--help" => args.subcommand = Subcommand::Help,
+            "run" => args.subcommand = Subcommand::Run,
+            "rebuild" => args.subcommand = Subcommand::Rebuild,
+            "test" => args.subcommand = Subcommand::Test,
+            "version" | "--version" => args.subcommand = Subcommand::Version,
+            "-v" | "--verbose" => args.verbose = true,
             "-C" | "--manifest-dir" => {
                 args.manifest_dir = args_iter.next().expect("Invalid argument")
             }

@@ -228,7 +228,7 @@ fn main() {
     // Build main bobje
     let mut executor = Executor::new();
     let bobje = Bobje::new(&args, ".", BobjeType::Binary, &mut executor);
-    executor.execute(&format!("{}/bob.log", &args.target_dir));
+    executor.execute(&format!("{}/bob.log", &args.target_dir), args.verbose);
 
     // Run build artifact
     if args.subcommand == Subcommand::Run {

@@ -9,9 +9,10 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 // MARK: Version
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum Version {
     Http1_0,
+    #[default]
     Http1_1,
 }
 
@@ -41,9 +42,10 @@ impl Display for Version {
 
 // MARK: Method
 /// HTTP method
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Method {
     /// GET
+    #[default]
     Get,
     /// HEAD
     Head,
