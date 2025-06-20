@@ -39,22 +39,26 @@ mod tasks;
 mod utils;
 
 // MARK: Subcommands
-fn subcommand_clean(target_dir: &str) {
+fn subcommand_clean(target_dir: &str, print: bool) {
     if !Path::new(target_dir).exists() {
-        println!("Removed 0 files");
+        if print {
+            println!("Removed 0 files");
+        }
         return;
     }
 
-    let files = index_files(target_dir);
-    let total_size: u64 = files
-        .iter()
-        .map(|file| fs::metadata(file).expect("Can't read file metadata").len())
-        .sum();
-    println!(
-        "Removed {} files, {} total",
-        files.len(),
-        format_bytes(total_size)
-    );
+    if print {
+        let files = index_files(target_dir);
+        let total_size: u64 = files
+            .iter()
+            .map(|file| fs::metadata(file).expect("Can't read file metadata").len())
+            .sum();
+        println!(
+            "Removed {} files, {} total",
+            files.len(),
+            format_bytes(total_size)
+        );
+    }
     fs::remove_dir_all(target_dir).expect("Can't remove target directory");
 }
 
@@ -212,12 +216,12 @@ fn main() {
 
     // Clean build artifacts
     if args.subcommand == Subcommand::Clean {
-        subcommand_clean(&args.target_dir);
+        subcommand_clean(&args.target_dir, true);
         return;
     }
     // Rebuild artifacts
     if args.subcommand == Subcommand::Rebuild {
-        subcommand_clean(&args.target_dir);
+        subcommand_clean(&args.target_dir, false);
     }
 
     // Check target directory

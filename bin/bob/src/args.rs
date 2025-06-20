@@ -49,7 +49,7 @@ impl Default for Args {
             manifest_dir: ".".to_string(),
             target_dir: "target".to_string(),
             profile: Profile::Debug,
-            verbose: cfg!(debug_assertions),
+            verbose: false,
         }
     }
 }

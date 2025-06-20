@@ -320,29 +320,23 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
     if fs::metadata(&vars.android_metadata.keystore_file).is_err()
         && fs::metadata(&target_keystore).is_err()
     {
-        let mut cmd = Command::new("keytool");
+        let mut cmd = Command::new("sh");
         vars.android_metadata.keystore_file = target_keystore;
-        cmd.arg("-genkey")
-            .arg("-keystore")
-            .arg(&vars.android_metadata.keystore_file)
-            .arg("-storetype")
-            .arg("JKS")
-            .arg("-keyalg")
-            .arg("RSA")
-            .arg("-keysize")
-            .arg("4096")
-            .arg("-validity")
-            .arg("7120");
+        let mut cmd_str = format!(
+            "keytool -genkey -keystore {} -storetype JKS -keyalg RSA -keysize 4096 -validity 7120",
+            &vars.android_metadata.keystore_file
+        );
         if !vars.android_metadata.key_alias.is_empty() {
-            cmd.arg("-alias").arg(&vars.android_metadata.key_alias);
+            cmd_str.push_str(&format!(" -alias {}", &vars.android_metadata.key_alias));
         }
+        cmd_str.push_str(&format!(
+            " -storepass {} -keypass {} -dname \"CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, S=Unknown, C=Unknown\"",
+            &vars.android_metadata.keystore_password,
+            &vars.android_metadata.key_password
+        ));
         let status = cmd
-            .arg("-storepass")
-            .arg(&vars.android_metadata.keystore_password)
-            .arg("-keypass")
-            .arg(&vars.android_metadata.key_password)
-            .arg("-dname")
-            .arg("CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, S=Unknown, C=Unknown")
+            .arg("-c")
+            .arg(format!("{} &> /dev/null", cmd_str))
             .status()
             .expect("Failed to execute keytool");
         if !status.success() {
