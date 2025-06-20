@@ -63,7 +63,7 @@ impl TaskAction {
             }
         }
 
-        if env::var("NO_COLOR").is_err() || env::var("CI").is_ok() {
+        if env::var("NO_COLOR").is_err() && env::var("CI").is_err() {
             let term_width = terminal_size::terminal_size()
                 .expect("Can't get terminal size")
                 .0
@@ -144,7 +144,7 @@ impl Executor {
         if print_tasks {
             println!("{:#?}", self.tasks);
         }
-        if env::var("NO_COLOR").is_err() || env::var("CI").is_ok() {
+        if env::var("NO_COLOR").is_err() && env::var("CI").is_err() {
             println!();
         }
 

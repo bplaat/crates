@@ -191,6 +191,11 @@ impl Bobje {
 
 // MARK: Main
 fn main() {
+    #[cfg(windows)]
+    if env::var("NO_COLOR").is_err() && env::var("CI").is_err() {
+        enable_ansi_support::enable_ansi_support().expect("Can't enable ANSI support");
+    }
+
     let args = parse_args();
 
     if args.subcommand == Subcommand::Help {

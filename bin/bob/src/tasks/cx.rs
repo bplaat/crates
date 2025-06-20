@@ -115,7 +115,11 @@ pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut Executor) {
                 bobje.target_dir,
                 bobje.profile,
                 bobje.manifest.package.name,
-                source_file.split("src/").nth(1).expect("Should be some")
+                source_file
+                    .split("src/")
+                    .nth(1)
+                    .expect("Should be some")
+                    .replace('\\', "/")
             );
             fs::create_dir_all(dest.rsplit_once('/').expect("Should be some").0)
                 .expect("Failed to create include directory");
