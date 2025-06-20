@@ -39,6 +39,7 @@ pub(crate) struct Args {
     pub manifest_dir: String,
     pub target_dir: String,
     pub profile: Profile,
+    pub target: Option<String>,
     pub verbose: bool,
     pub thread_count: usize,
 }
@@ -50,6 +51,7 @@ impl Default for Args {
             manifest_dir: ".".to_string(),
             target_dir: "target".to_string(),
             profile: Profile::Debug,
+            target: None,
             verbose: false,
             thread_count: thread::available_parallelism().map_or(1, |n| n.get()),
         }
@@ -73,6 +75,9 @@ pub(crate) fn parse_args() -> Args {
             }
             "-T" | "--target-dir" => {
                 args.target_dir = args_iter.next().expect("Invalid argument");
+            }
+            "--target" => {
+                args.target = Some(args_iter.next().expect("Invalid argument"));
             }
             "-r" | "--release" => args.profile = Profile::Release,
             "-v" | "--verbose" => args.verbose = true,
@@ -101,7 +106,8 @@ Options:
   -T <dir>, --target-dir      Write artifacts to directory <dir>
   -r, --release               Build artifacts in release mode
   -v, --verbose               Print verbose output
-  --single-threaded           Run tasks in a single thread
+  --target <target>           Build for the specified target (e.g., x86_64-unknown-linux-gnu)
+  --single-threaded           Run tasks single threaded
   --thread-count <count>      Use <count> threads for building (default: number of available cores)
 
 Subcommands:

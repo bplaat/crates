@@ -21,6 +21,16 @@ pub(crate) fn detect_bundle(bobje: &Bobje) -> bool {
     bobje.manifest.package.metadata.bundle.is_some()
 }
 
+pub(crate) fn bundle_is_lipo(bobje: &Bobje) -> bool {
+    bobje
+        .manifest
+        .package
+        .metadata
+        .bundle
+        .as_ref()
+        .is_some_and(|b| b.lipo)
+}
+
 pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
     let bundle_metadata = &bobje
         .manifest
@@ -30,8 +40,9 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
         .as_ref()
         .expect("Should be some");
     let contents_dir = format!(
-        "{}/{}/{}.app/Contents",
-        bobje.target_dir, bobje.profile, bobje.manifest.package.name
+        "{}/{}.app/Contents",
+        bobje.out_dir(),
+        bobje.manifest.package.name
     );
     let mut bundle_files = Vec::new();
 
@@ -61,20 +72,19 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
             .expect("Invalid UTF-8 sequence");
         executor.add_task_cmd(
             format!(
-                "iconutil -c icns {} -o {}/{}/{}.icns",
-                iconset, bobje.target_dir, bobje.profile, icon_name
+                "iconutil -c icns {} -o {}/{}.icns",
+                iconset,
+                bobje.out_dir(),
+                icon_name
             ),
             vec![iconset.clone()],
-            vec![format!(
-                "{}/{}/{}.icns",
-                bobje.target_dir, bobje.profile, icon_name
-            )],
+            vec![format!("{}/{}.icns", bobje.out_dir(), icon_name)],
         );
 
         // Copy .icns
         let dest = format!("{}/Resources/{}.icns", contents_dir, icon_name);
         executor.add_task_cp(
-            format!("{}/{}/{}.icns", bobje.target_dir, bobje.profile, icon_name),
+            format!("{}/{}.icns", bobje.out_dir(), icon_name),
             dest.clone(),
         );
         bundle_files.push(dest);
@@ -105,17 +115,49 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
     // Copy Info.plist
     let dest = format!("{}/Info.plist", contents_dir);
     executor.add_task_cp(
-        format!("{}/{}/src-gen/Info.plist", bobje.target_dir, bobje.profile),
+        format!("{}/src-gen/Info.plist", bobje.out_dir()),
         dest.clone(),
     );
     bundle_files.push(dest);
+
+    // Generate lipo binary
+    if bundle_metadata.lipo {
+        let x86_64 = format!(
+            "{}/x86_64-apple-darwin/{}/{}",
+            bobje.target_dir, bobje.profile, bobje.manifest.package.name
+        );
+        let aarch64 = format!(
+            "{}/aarch64-apple-darwin/{}/{}",
+            bobje.target_dir, bobje.profile, bobje.manifest.package.name,
+        );
+        executor.add_task_cmd(
+            format!(
+                "lipo -create {} {} -output {}/{}",
+                x86_64,
+                aarch64,
+                bobje.out_dir(),
+                bobje.manifest.package.name
+            ),
+            vec![x86_64, aarch64],
+            vec![format!(
+                "{}/{}",
+                bobje.out_dir(),
+                bobje.manifest.package.name
+            )],
+        );
+    }
 
     // Copy executable
     let dest = format!("{}/MacOS/{}", contents_dir, bobje.manifest.package.name);
     executor.add_task_cp(
         format!(
-            "{}/{}/{}",
-            bobje.target_dir, bobje.profile, bobje.manifest.package.name
+            "{}/{}",
+            if bundle_metadata.lipo {
+                bobje.out_dir()
+            } else {
+                bobje.out_dir_with_target()
+            },
+            bobje.manifest.package.name
         ),
         dest.clone(),
     );
@@ -125,16 +167,19 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
     executor.add_task_phony(
         bundle_files,
         vec![format!(
-            "{}/{}/{}.app",
-            bobje.target_dir, bobje.profile, bobje.manifest.package.name
+            "{}/{}.app",
+            bobje.out_dir(),
+            bobje.manifest.package.name
         )],
     );
 }
 
 pub(crate) fn run_bundle(bobje: &Bobje) {
     let status = Command::new(format!(
-        "{}/{}/{}.app/Contents/MacOS/{}",
-        bobje.target_dir, bobje.profile, bobje.manifest.package.name, bobje.manifest.package.name
+        "{}/{}.app/Contents/MacOS/{}",
+        bobje.out_dir(),
+        bobje.manifest.package.name,
+        bobje.manifest.package.name
     ))
     .status()
     .expect("Failed to execute executable");
@@ -198,9 +243,6 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
     _ = writeln!(s, r#"</dict>"#);
     _ = writeln!(s, r#"</plist>"#);
 
-    write_file_when_different(
-        &format!("{}/{}/src-gen/Info.plist", bobje.target_dir, bobje.profile),
-        &s,
-    )
-    .expect("Can't write src-gen/Info.plist");
+    write_file_when_different(&format!("{}/src-gen/Info.plist", bobje.out_dir()), &s)
+        .expect("Can't write src-gen/Info.plist");
 }

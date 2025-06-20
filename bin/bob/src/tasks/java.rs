@@ -113,9 +113,8 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
         });
 
     let jar_file = format!(
-        "{}/{}/{}-{}.jar",
-        bobje.target_dir,
-        bobje.profile,
+        "{}/{}-{}.jar",
+        bobje.out_dir(),
         bobje.manifest.package.name,
         bobje.manifest.package.version
     );
@@ -133,9 +132,8 @@ pub(crate) fn run_jar(bobje: &Bobje) {
     let status = Command::new("java")
         .arg("-jar")
         .arg(format!(
-            "{}/{}/{}-{}.jar",
-            bobje.target_dir,
-            bobje.profile,
+            "{}/{}-{}.jar",
+            bobje.out_dir(),
             bobje.manifest.package.name,
             bobje.manifest.package.version
         ))

@@ -19,7 +19,7 @@ use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
     generate_android_res_tasks, link_android_classpath, run_android_apk,
 };
-use crate::tasks::bundle::{detect_bundle, generate_bundle_tasks, run_bundle};
+use crate::tasks::bundle::{bundle_is_lipo, detect_bundle, generate_bundle_tasks, run_bundle};
 use crate::tasks::cx::{
     copy_cx_headers, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp, generate_c_tasks,
     generate_cpp_tasks, generate_cx_test_main, generate_ld_tasks, generate_objc_tasks,
@@ -73,9 +73,11 @@ pub(crate) enum BobjeType {
     Library,
 }
 
+#[derive(Clone)]
 pub(crate) struct Bobje {
     target_dir: String,
     profile: Profile,
+    target: Option<String>,
     is_test: bool,
     // ...
     r#type: BobjeType,
@@ -115,6 +117,7 @@ impl Bobje {
         let mut bobje = Self {
             target_dir: args.target_dir.clone(),
             profile: args.profile,
+            target: args.target.clone(),
             is_test: args.subcommand == Subcommand::Test,
             // ...
             r#type,
@@ -124,48 +127,75 @@ impl Bobje {
             dependencies,
         };
 
-        // FIXME: Fix bug where test corrupts target directory
-        if r#type == BobjeType::Binary && detect_cx(&bobje) && bobje.is_test {
-            generate_cx_test_main(&mut bobje);
-        }
-        if detect_cx(&bobje) {
-            copy_cx_headers(&bobje, executor);
-        }
-        if detect_c(&bobje) {
-            generate_c_tasks(&bobje, executor);
-        }
-        if detect_cpp(&bobje) {
-            generate_cpp_tasks(&bobje, executor);
-        }
-        if detect_objc(&bobje) {
-            generate_objc_tasks(&bobje, executor);
-        }
-        if detect_objcpp(&bobje) {
-            generate_objcpp_tasks(&bobje, executor);
-        }
-        if detect_android(&bobje) {
-            generate_android_res_tasks(&mut bobje, executor);
-        }
-        if detect_java(&bobje) {
-            if detect_android(&bobje) {
-                link_android_classpath(&mut bobje);
+        fn generate_bobje_tasks(bobje: &mut Bobje, executor: &mut Executor) {
+            // FIXME: Fix bug where test corrupts target directory
+            if bobje.r#type == BobjeType::Binary && detect_cx(bobje) && bobje.is_test {
+                generate_cx_test_main(bobje);
             }
-            generate_javac_tasks(&bobje, executor);
+            if detect_cx(bobje) {
+                copy_cx_headers(bobje, executor);
+            }
+            if detect_c(bobje) {
+                generate_c_tasks(bobje, executor);
+            }
+            if detect_cpp(bobje) {
+                generate_cpp_tasks(bobje, executor);
+            }
+            if detect_objc(bobje) {
+                generate_objc_tasks(bobje, executor);
+            }
+            if detect_objcpp(bobje) {
+                generate_objcpp_tasks(bobje, executor);
+            }
+            if detect_android(bobje) {
+                generate_android_res_tasks(bobje, executor);
+            }
+            if detect_java(bobje) {
+                if detect_android(bobje) {
+                    link_android_classpath(bobje);
+                }
+                generate_javac_tasks(bobje, executor);
+            }
+            if detect_cx(bobje) {
+                generate_ld_tasks(bobje, executor);
+            }
+            if bobje.r#type == BobjeType::Binary && detect_android(bobje) {
+                generate_android_dex_tasks(bobje, executor);
+                generate_android_final_apk_tasks(bobje, executor);
+            }
+            if bobje.r#type == BobjeType::Binary && detect_jar(bobje) {
+                generate_jar_tasks(bobje, executor);
+            }
         }
-        if detect_cx(&bobje) {
-            generate_ld_tasks(&bobje, executor);
-        }
-        if r#type == BobjeType::Binary && detect_android(&bobje) {
-            generate_android_dex_tasks(&bobje, executor);
-            generate_android_final_apk_tasks(&bobje, executor);
-        }
-        if r#type == BobjeType::Binary && detect_jar(&bobje) {
-            generate_jar_tasks(&bobje, executor);
+
+        if r#type == BobjeType::Binary && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
+            let mut bobje_x86_64 = bobje.clone();
+            bobje_x86_64.target = Some("x86_64-apple-darwin".to_string());
+            generate_bobje_tasks(&mut bobje_x86_64, executor);
+
+            let mut bobje_aarch64 = bobje.clone();
+            bobje_aarch64.target = Some("aarch64-apple-darwin".to_string());
+            generate_bobje_tasks(&mut bobje_aarch64, executor);
+        } else {
+            generate_bobje_tasks(&mut bobje, executor);
         }
         if r#type == BobjeType::Binary && detect_bundle(&bobje) {
             generate_bundle_tasks(&bobje, executor);
         }
+
         bobje
+    }
+
+    fn out_dir(&self) -> String {
+        format!("{}/{}", self.target_dir, self.profile)
+    }
+
+    fn out_dir_with_target(&self) -> String {
+        if let Some(target) = &self.target {
+            format!("{}/{}/{}", self.target_dir, target, self.profile)
+        } else {
+            self.out_dir()
+        }
     }
 }
 

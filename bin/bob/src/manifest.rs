@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct Manifest {
     pub package: Package,
@@ -16,7 +16,7 @@ pub(crate) struct Manifest {
     pub dependencies: HashMap<String, Dependency>,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct Package {
     pub name: String,
@@ -25,12 +25,12 @@ pub(crate) struct Package {
     pub metadata: PackageMetadata,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub(crate) struct Dependency {
     pub path: String,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct Build {
     pub cflags: String,
@@ -39,7 +39,7 @@ pub(crate) struct Build {
     pub classpath: Vec<String>,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct PackageMetadata {
     pub bundle: Option<BundleMetadata>,
@@ -48,9 +48,10 @@ pub(crate) struct PackageMetadata {
 }
 
 // MARK: Bundle
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct BundleMetadata {
+    pub lipo: bool,
     pub resources_dir: String,
     pub iconset: Option<String>,
     pub copyright: Option<String>,
@@ -59,6 +60,7 @@ pub(crate) struct BundleMetadata {
 impl Default for BundleMetadata {
     fn default() -> Self {
         Self {
+            lipo: false,
             resources_dir: "res".to_string(),
             iconset: None,
             copyright: None,
@@ -67,7 +69,7 @@ impl Default for BundleMetadata {
 }
 
 // MARK: Jar
-#[derive(Default, Deserialize)]
+#[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct JarMetadata {
     pub main_class: Option<String>,

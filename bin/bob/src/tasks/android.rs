@@ -79,9 +79,8 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
 
     // aapt2_compile tasks
     let compiled_res_dir = format!(
-        "{}/{}/res/{}",
-        bobje.target_dir,
-        bobje.profile,
+        "{}/res/{}",
+        bobje.out_dir(),
         vars.identifier.replace('.', "/")
     );
     for res_file in index_files(&res_dir) {
@@ -108,17 +107,17 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
 
     // aapt2_link task
     let r_java_path = format!(
-        "{}/{}/src-gen/{}/R.java",
-        bobje.target_dir,
-        bobje.profile,
+        "{}/src-gen/{}/R.java",
+        bobje.out_dir(),
         vars.identifier.replace('.', "/")
     );
     bobje.source_files.push(r_java_path.clone());
 
     if bobje.r#type == crate::BobjeType::Binary {
         let dest = format!(
-            "{}/{}/{}-unaligned.apk",
-            bobje.target_dir, bobje.profile, bobje.manifest.package.name
+            "{}/{}-unaligned.apk",
+            bobje.out_dir(),
+            bobje.manifest.package.name
         );
 
         let mut link_inputs = vec![format!("{}/AndroidManifest.xml", bobje.manifest_dir)];
@@ -157,9 +156,8 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
 
                 // Add compiled resources
                 let compiled_res_dir = format!(
-                    "{}/{}/res/{}",
-                    bobje.target_dir,
-                    bobje.profile,
+                    "{}/res/{}",
+                    bobje.out_dir(),
                     bobje
                         .manifest
                         .package
@@ -219,9 +217,8 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
         for dependency_bobje in bobje.dependencies.values() {
             if detect_android(dependency_bobje) {
                 let src_r_java = format!(
-                    "{}/{}/src-gen/{}/R.java",
-                    dependency_bobje.target_dir,
-                    dependency_bobje.profile,
+                    "{}/src-gen/{}/R.java",
+                    dependency_bobje.out_dir(),
                     dependency_bobje
                         .manifest
                         .package
@@ -293,10 +290,9 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
     }
     executor.add_task_cmd(
         format!(
-            "{} && cd {}/{} && zip {}-unaligned.apk classes.dex > /dev/null",
+            "{} && cd {} && zip {}-unaligned.apk classes.dex > /dev/null",
             d8_command.join(" "),
-            bobje.target_dir,
-            bobje.profile,
+            bobje.out_dir(),
             bobje.manifest.package.name
         ),
         inputs,
@@ -345,12 +341,14 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
 
     // zipalign
     let unaligned_apk = format!(
-        "{}/{}/{}-unaligned.apk",
-        bobje.target_dir, bobje.profile, bobje.manifest.package.name
+        "{}/{}-unaligned.apk",
+        bobje.out_dir(),
+        bobje.manifest.package.name
     );
     let unsigned_apk = format!(
-        "{}/{}/{}-unsigned.apk",
-        bobje.target_dir, bobje.profile, bobje.manifest.package.name
+        "{}/{}-unsigned.apk",
+        bobje.out_dir(),
+        bobje.manifest.package.name
     );
     executor.add_task_cmd(
         format!(
@@ -366,9 +364,8 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
 
     // apksigner
     let signed_apk = format!(
-        "{}/{}/{}-{}.apk",
-        bobje.target_dir,
-        bobje.profile,
+        "{}/{}-{}.apk",
+        bobje.out_dir(),
         bobje.manifest.package.name,
         bobje.manifest.package.version
     );
@@ -406,9 +403,8 @@ pub(crate) fn run_android_apk(bobje: &Bobje) {
         .arg("install")
         .arg("-r")
         .arg(format!(
-            "{}/{}/{}-{}.apk",
-            bobje.target_dir,
-            bobje.profile,
+            "{}/{}-{}.apk",
+            bobje.out_dir(),
             bobje.manifest.package.name,
             bobje.manifest.package.version
         ))

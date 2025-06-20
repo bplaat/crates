@@ -27,7 +27,7 @@ struct CxVars {
 impl CxVars {
     fn new(bobje: &Bobje) -> Self {
         // Cflags
-        let include_path = format!("{}/{}/include", bobje.target_dir, bobje.profile);
+        let include_path = format!("{}/include", bobje.out_dir_with_target());
         let mut cflags = match bobje.profile {
             Profile::Debug => "-g -DDEBUG".to_string(),
             Profile::Release => "-Os -DRELEASE".to_string(),
@@ -36,6 +36,9 @@ impl CxVars {
             " -Wall -Wextra -Wpedantic -Werror -I{}",
             include_path
         ));
+        if let Some(target) = &bobje.target {
+            cflags.push_str(&format!(" --target={}", target));
+        }
         if bobje.is_test {
             cflags.push_str(&format!(" -DTEST {}", pkg_config_cflags("cunit")));
         }
@@ -57,6 +60,9 @@ impl CxVars {
             .any(|p| p.ends_with(".m") || p.ends_with(".mm"))
         {
             ldflags.push_str(" -framework Foundation");
+        }
+        if let Some(target) = &bobje.target {
+            ldflags.push_str(&format!(" --target={}", target));
         }
         if bobje.is_test {
             ldflags.push(' ');
@@ -109,9 +115,8 @@ pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut Executor) {
             || source_file.ends_with(".hpp")
         {
             let dest = format!(
-                "{}/{}/include/{}/{}",
-                bobje.target_dir,
-                bobje.profile,
+                "{}/include/{}/{}",
+                bobje.out_dir_with_target(),
                 bobje.manifest.package.name,
                 source_file
                     .split("src/")
@@ -267,8 +272,9 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
                 }
             }
             inputs.push(format!(
-                "{}/{}/lib{}.a",
-                bobje.target_dir, bobje.profile, bobje.manifest.package.name
+                "{}/lib{}.a",
+                bobje.out_dir_with_target(),
+                bobje.manifest.package.name
             ));
         }
         for dependency_bobje in bobje.dependencies.values() {
@@ -278,8 +284,9 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
 
     if bobje.r#type == crate::BobjeType::Library {
         let static_library_file = format!(
-            "{}/{}/lib{}.a",
-            bobje.target_dir, bobje.profile, bobje.manifest.package.name
+            "{}/lib{}.a",
+            bobje.out_dir_with_target(),
+            bobje.manifest.package.name
         );
         executor.add_task_cmd(
             format!(
@@ -296,13 +303,15 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     if bobje.r#type == crate::BobjeType::Binary {
         let executable_file = if bobje.is_test {
             format!(
-                "{}/{}/test_{}",
-                bobje.target_dir, bobje.profile, bobje.manifest.package.name
+                "{}/test_{}",
+                bobje.out_dir_with_target(),
+                bobje.manifest.package.name
             )
         } else {
             format!(
-                "{}/{}/{}",
-                bobje.target_dir, bobje.profile, bobje.manifest.package.name
+                "{}/{}",
+                bobje.out_dir_with_target(),
+                bobje.manifest.package.name
             )
         };
         let ext = if cfg!(windows) { ".exe" } else { "" };
@@ -345,8 +354,10 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
 pub(crate) fn run_ld(bobje: &Bobje) {
     let ext = if cfg!(windows) { ".exe" } else { "" };
     let status = Command::new(format!(
-        "{}/{}/{}{}",
-        bobje.target_dir, bobje.profile, bobje.manifest.package.name, ext
+        "{}/{}{}",
+        bobje.out_dir_with_target(),
+        bobje.manifest.package.name,
+        ext
     ))
     .status()
     .expect("Failed to execute executable");
@@ -356,8 +367,10 @@ pub(crate) fn run_ld(bobje: &Bobje) {
 pub(crate) fn run_ld_tests(bobje: &Bobje) {
     let ext = if cfg!(windows) { ".exe" } else { "" };
     let status = Command::new(format!(
-        "{}/{}/test_{}{}",
-        bobje.target_dir, bobje.profile, bobje.manifest.package.name, ext
+        "{}/test_{}{}",
+        bobje.out_dir_with_target(),
+        bobje.manifest.package.name,
+        ext
     ))
     .status()
     .expect("Failed to execute executable");
@@ -367,9 +380,8 @@ pub(crate) fn run_ld_tests(bobje: &Bobje) {
 // MARK: Utils
 fn get_object_path(bobje: &Bobje, source_file: &str) -> String {
     format!(
-        "{}/{}/objects/{}/{}",
-        bobje.target_dir,
-        bobje.profile,
+        "{}/objects/{}/{}",
+        bobje.out_dir_with_target(),
         bobje.manifest.package.name,
         source_file
             .split("src/")
@@ -508,7 +520,7 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
 }}"#
     );
 
-    let dest = format!("{}/{}/src-gen/test_main.c", bobje.target_dir, bobje.profile);
+    let dest = format!("{}/src-gen/test_main.c", bobje.out_dir_with_target());
     write_file_when_different(&dest, &s).expect("Can't write src-gen/test_main.c");
     bobje.source_files.push(dest);
 }
