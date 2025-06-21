@@ -19,6 +19,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
+-   [small-websocket](lib/small-websocket) A simple and small websocket library for the [small-http](lib/small-http) library
 -   [tiny-webview](lib/tiny-webview) A cross-platform webview library for Rust with minimal dependencies
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library

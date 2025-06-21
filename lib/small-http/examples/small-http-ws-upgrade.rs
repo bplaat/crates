@@ -9,19 +9,16 @@
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, TcpListener};
 
-use base64::prelude::*;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use sha1::{Digest, Sha1};
-use small_http::{Method, Request, Response, Status};
+use small_http::{Request, Response, Status};
 
 fn handler(req: &Request) -> Response {
     let path = req.url.path();
     println!("{} {}", req.method, path);
 
     if path == "/ws" {
-        if req.method != Method::Get {
-            return Response::with_status(Status::MethodNotAllowed);
-        }
-
         // Send WebSocket upgrade response
         let mut res = Response::with_status(Status::SwitchingProtocols)
             .header("Upgrade", "websocket")
