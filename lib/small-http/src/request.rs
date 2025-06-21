@@ -30,7 +30,7 @@ pub struct Request {
     pub method: Method,
     /// Headers
     pub headers: HeaderMap,
-    /// Parameters
+    /// Parameters (mostly added for small-router)
     pub params: HashMap<String, String>,
     /// Body
     pub body: Option<Vec<u8>>,

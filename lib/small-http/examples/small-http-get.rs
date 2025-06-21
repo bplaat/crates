@@ -25,8 +25,8 @@ fn handler(req: &Request) -> Response {
             match serde_urlencoded::from_str::<GreetBody>(query) {
                 Ok(body) => body.name,
                 Err(_) => {
-                    return Response::with_header("Content-Type", "text/html")
-                        .status(Status::BadRequest)
+                    return Response::with_status(Status::BadRequest)
+                        .header("Content-Type", "text/html")
                         .body("<h1>400 Bad Request</h1>");
                 }
             }
@@ -37,8 +37,8 @@ fn handler(req: &Request) -> Response {
             .body(format!("<h1>Hello {}!</h1>", name));
     }
 
-    Response::with_header("Content-Type", "text/html")
-        .status(Status::NotFound)
+    Response::with_status(Status::NotFound)
+        .header("Content-Type", "text/html")
         .body("<h1>404 Not Found</h1>")
 }
 
