@@ -11,11 +11,11 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use std::{env, fs, thread};
 
+use sha1::{Digest, Sha1};
 use threadpool::ThreadPool;
 use uuid::Uuid;
 
 use crate::log::{Log, LogEntry};
-use crate::sha1::sha1;
 
 // MARK: Task
 #[derive(Debug, Clone)]
@@ -255,7 +255,9 @@ impl Executor {
                         exit(1)
                     });
                     if !buffer.is_empty() {
-                        Some(sha1(&buffer))
+                        let mut hasher = Sha1::new();
+                        hasher.update(buffer);
+                        Some(hasher.finalize().to_vec())
                     } else {
                         None
                     }

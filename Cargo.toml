@@ -38,6 +38,7 @@ libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 mime_guess = { path = "lib/mime_guess" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
+sha1 = { path = "lib/sha1" }
 terminal_size = { path = "lib/terminal_size" }
 threadpool = { path = "lib/threadpool" }
 url = { path = "lib/url" }

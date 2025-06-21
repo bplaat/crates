@@ -34,7 +34,6 @@ mod args;
 mod executor;
 mod log;
 mod manifest;
-mod sha1;
 mod tasks;
 mod utils;
 

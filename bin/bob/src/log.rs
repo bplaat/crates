@@ -13,7 +13,7 @@ use std::str::FromStr;
 pub(crate) struct LogEntry {
     pub input: String,
     pub modified_time: u64,
-    pub hash: Option<[u8; 20]>,
+    pub hash: Option<Vec<u8>>,
 }
 
 impl FromStr for LogEntry {
@@ -35,7 +35,7 @@ impl FromStr for LogEntry {
             if hash_bytes.len() != 40 {
                 return Err("Invalid hash length".to_string());
             }
-            let mut hash = [0u8; 20];
+            let mut hash = Vec::with_capacity(20);
             for (i, chunk) in hash_bytes.chunks(2).enumerate() {
                 hash[i] = u8::from_str_radix(
                     std::str::from_utf8(chunk).map_err(|_| "Invalid UTF-8")?,
@@ -59,7 +59,7 @@ impl FromStr for LogEntry {
 impl Display for LogEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.input, self.modified_time)?;
-        if let Some(hash) = self.hash {
+        if let Some(hash) = &self.hash {
             write!(f, " ")?;
             for byte in hash {
                 write!(f, "{:02x}", byte)?;

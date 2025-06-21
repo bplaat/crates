@@ -1,0 +1,9 @@
+[package]
+name = "sha1"
+version = "0.10.6+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true

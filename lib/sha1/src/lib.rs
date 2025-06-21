@@ -4,7 +4,42 @@
  * SPDX-License-Identifier: MIT
  */
 
-pub(crate) fn sha1(input: &[u8]) -> [u8; 20] {
+//! A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
+
+#![deny(unsafe_code)]
+
+/// Digest
+pub trait Digest {
+    /// New instance of the digest
+    fn new() -> Self;
+    /// Update the digest with new data
+    fn update(&mut self, data: impl AsRef<[u8]>);
+    /// Finalize the digest and return the hash
+    fn finalize(self) -> Vec<u8>;
+}
+
+/// A simple SHA1 implementation
+pub struct Sha1 {
+    buffer: Vec<u8>,
+}
+
+impl Digest for Sha1 {
+    fn new() -> Self {
+        Sha1 { buffer: Vec::new() }
+    }
+
+    fn update(&mut self, data: impl AsRef<[u8]>) {
+        self.buffer.extend_from_slice(data.as_ref());
+    }
+
+    #[allow(unused_mut)]
+    fn finalize(mut self) -> Vec<u8> {
+        let hash = sha1(&self.buffer);
+        hash.to_vec()
+    }
+}
+
+fn sha1(input: &[u8]) -> [u8; 20] {
     let mut h0 = 0x67452301u32;
     let mut h1 = 0xEFCDAB89u32;
     let mut h2 = 0x98BADCFEu32;
@@ -100,7 +135,9 @@ mod test {
         ];
 
         for (input, expected) in test_cases.iter() {
-            let hash = sha1(input.as_bytes());
+            let mut sha1 = Sha1::new();
+            sha1.update(input);
+            let hash = sha1.finalize();
             assert_eq!(to_hex(&hash), *expected, "Failed for input: {}", input);
         }
     }
