@@ -36,8 +36,8 @@ fn handler(req: &Request) -> Response {
 
     if path == "/greet" {
         if req.method != Method::Post {
-            return Response::with_header("Content-Type", "text/html")
-                .status(Status::MethodNotAllowed)
+            return Response::with_status(Status::MethodNotAllowed)
+                .header("Content-Type", "text/html")
                 .body("<h1>405 Method Not Allowed</h1>");
         }
 
@@ -45,8 +45,8 @@ fn handler(req: &Request) -> Response {
             match serde_urlencoded::from_bytes::<GreetBody>(req.body.as_deref().unwrap_or(&[])) {
                 Ok(body) => body,
                 Err(_) => {
-                    return Response::with_header("Content-Type", "text/html")
-                        .status(Status::BadRequest)
+                    return Response::with_status(Status::BadRequest)
+                        .header("Content-Type", "text/html")
                         .body("<h1>400 Bad Request</h1>");
                 }
             };
@@ -67,8 +67,8 @@ fn handler(req: &Request) -> Response {
         let data_res = match Request::get("http://ipinfo.io/json").fetch() {
             Ok(res) => res,
             Err(_) => {
-                return Response::with_header("Content-Type", "text/html")
-                    .status(Status::InternalServerError)
+                return Response::with_status(Status::InternalServerError)
+                    .header("Content-Type", "text/html")
                     .body("<h1>Can't fetch ipinfo.io</h1>");
             }
         };
@@ -82,8 +82,8 @@ fn handler(req: &Request) -> Response {
         return Response::with_status(Status::BadRequest).body("<h1>Can't parse user agent</h1>");
     }
 
-    Response::with_header("Content-Type", "text/html")
-        .status(Status::NotFound)
+    Response::with_status(Status::NotFound)
+        .header("Content-Type", "text/html")
         .body("<h1>404 Not Found</h1>")
 }
 

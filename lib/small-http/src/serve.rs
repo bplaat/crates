@@ -22,9 +22,15 @@ where
             .peer_addr()
             .expect("Can't get tcp stream client addr");
         match Request::read_from_stream(&mut stream, client_addr) {
-            Ok(req) => {
+            Ok(request) => {
                 // Handle request and write response
-                handler(&req).write_to_stream(&mut stream, &req, false);
+                let mut response = handler(&request);
+                response.write_to_stream(&mut stream, &request, false);
+
+                // If the response has a takeover function
+                if response.takeover.is_some() {
+                    panic!("Single-threaded server does not support takeover functions");
+                }
                 continue;
             }
             Err(err) => {
@@ -77,13 +83,20 @@ where
                 .peer_addr()
                 .expect("Can't get tcp stream client addr");
             match Request::read_from_stream(&mut stream, client_addr) {
-                Ok(req) => {
+                Ok(request) => {
                     // Handle request and write response
-                    handler(&req).write_to_stream(&mut stream, &req, true);
+                    let mut response = handler(&request);
+                    response.write_to_stream(&mut stream, &request, true);
+
+                    // If the response has a takeover function, move tcp stream
+                    if let Some(takeover) = response.takeover.take() {
+                        takeover(stream);
+                        return;
+                    }
 
                     // Close connection if HTTP/1.0 or Connection: close
-                    if req.version == crate::enums::Version::Http1_0
-                        || req.headers.get("Connection").map(|v| v.as_str()) == Some("close")
+                    if request.version == crate::enums::Version::Http1_0
+                        || request.headers.get("Connection").map(|v| v.as_str()) == Some("close")
                     {
                         return;
                     }

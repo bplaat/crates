@@ -7,6 +7,7 @@
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 
 use crate::enums::{Status, Version};
 use crate::header_map::HeaderMap;
@@ -23,6 +24,7 @@ pub struct Response {
     pub headers: HeaderMap,
     /// Body
     pub body: Vec<u8>,
+    pub(crate) takeover: Option<Box<dyn FnOnce(TcpStream) + 'static>>,
 }
 
 impl Response {
@@ -96,6 +98,12 @@ impl Response {
     pub fn redirect(mut self, location: impl Into<String>) -> Self {
         self.status = Status::TemporaryRedirect;
         self.headers.insert("Location".to_string(), location.into());
+        self
+    }
+
+    /// Set takeover function
+    pub fn takeover(mut self, f: impl FnOnce(TcpStream) + 'static) -> Self {
+        self.takeover = Some(Box::new(f));
         self
     }
 
@@ -187,12 +195,22 @@ impl Response {
     }
 
     pub(crate) fn write_to_stream(
-        mut self,
+        &mut self,
         stream: &mut dyn Write,
         req: &Request,
         keep_alive: bool,
     ) {
-        // Finish headers
+        self.finish_headers(req, keep_alive);
+
+        _ = write!(stream, "{} {}\r\n", req.version, self.status);
+        for (name, value) in self.headers.iter() {
+            _ = write!(stream, "{}: {}\r\n", name, value);
+        }
+        _ = write!(stream, "\r\n");
+        _ = stream.write_all(&self.body);
+    }
+
+    fn finish_headers(&mut self, req: &Request, keep_alive: bool) {
         #[cfg(feature = "date")]
         self.headers
             .insert("Date".to_string(), chrono::Utc::now().to_rfc2822());
@@ -211,14 +229,6 @@ impl Response {
                     .insert("Connection".to_string(), "close".to_string());
             }
         }
-
-        // Write response
-        _ = write!(stream, "{} {}\r\n", req.version, self.status);
-        for (name, value) in self.headers.iter() {
-            _ = write!(stream, "{}: {}\r\n", name, value);
-        }
-        _ = write!(stream, "\r\n");
-        _ = stream.write_all(&self.body);
     }
 }
 
@@ -306,7 +316,7 @@ mod test {
 
     #[test]
     fn test_write_response() {
-        let response = Response::with_status(Status::Ok)
+        let mut response = Response::with_status(Status::Ok)
             .header("Content-Length", "13")
             .body("Hello, world!");
         let mut response_stream = Vec::new();
@@ -324,7 +334,7 @@ mod test {
 
     #[test]
     fn test_write_response_with_headers() {
-        let response = Response::with_status(Status::NotFound)
+        let mut response = Response::with_status(Status::NotFound)
             .header("Content-Length", "0")
             .header("X-Custom-Header", "Value");
         let mut response_stream = Vec::new();
@@ -344,7 +354,7 @@ mod test {
     #[test]
     #[cfg(feature = "json")]
     fn test_write_response_with_json() {
-        let response = Response::with_json(serde_json::json!({"key": "value"}));
+        let mut response = Response::with_json(serde_json::json!({"key": "value"}));
         let mut response_stream = Vec::new();
         let request = Request {
             version: Version::Http1_1,

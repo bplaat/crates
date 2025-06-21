@@ -53,10 +53,7 @@ impl ThreadPool {
     }
 
     /// Executes a closure on an available worker thread.
-    pub fn execute<F>(&self, f: F)
-    where
-        F: FnOnce() + Send + 'static,
-    {
+    pub fn execute(&self, f: impl FnOnce() + Send + 'static) {
         self.sender
             .send(Box::new(f))
             .expect("A worker thread has died");
