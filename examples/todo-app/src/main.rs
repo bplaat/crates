@@ -13,7 +13,7 @@ use std::{env, fs};
 
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
-use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
+use tiny_webview::{Event, EventLoop, EventLoopBuilder, LogicalSize, Webview, WebviewBuilder};
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
@@ -39,6 +39,8 @@ enum IpcMessage {
 struct WebAssets;
 
 fn main() {
+    let mut event_loop = EventLoopBuilder::build();
+
     let mut webview = WebviewBuilder::new()
         .title("Todo App")
         .size(LogicalSize::new(1024.0, 768.0))
@@ -59,7 +61,7 @@ fn main() {
         fs::create_dir_all(parent).expect("Can't create config directory");
     }
 
-    webview.run(move |webview, event| {
+    event_loop.run(move |event| {
         if let Event::PageMessageReceived(message) = event {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::GetTodos => {

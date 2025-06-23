@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CStr, c_void};
+use std::ffi::{CString, c_void};
 use std::ptr::null;
 
 use block2::Block;
-use objc2::runtime::{AnyObject as Object, Bool, ClassBuilder, Sel};
+use objc2::runtime::{AnyClass, AnyObject as Object, Bool, ClassBuilder, Sel};
 use objc2::{class, msg_send, sel};
 
 use self::cocoa::*;
@@ -18,24 +18,21 @@ use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 mod cocoa;
 mod webkit;
 
-/// Webview
 const IVAR_SELF: &str = "_self";
-const IVAR_SELF_CSTR: &CStr = c"_self";
 
-type EventHandler = Box<dyn Fn(&mut Webview, Event) + 'static>;
-
-pub(crate) struct Webview {
-    window: *mut Object,
-    webview: *mut Object,
-    event_handler: Option<EventHandler>,
+// MARK: EventLoop
+pub(crate) struct EventLoop {
+    application: *mut Object,
+    event_handler: Option<Box<dyn FnMut(Event) + 'static>>,
 }
 
-impl Webview {
-    pub(crate) fn new(builder: WebviewBuilder) -> Self {
+impl EventLoop {
+    pub(crate) fn new() -> Self {
         // Register AppDelegate class
         let mut decl = ClassBuilder::new(c"AppDelegate", class!(NSObject))
             .expect("Can't create AppDelegate class");
-        decl.add_ivar::<*const c_void>(IVAR_SELF_CSTR);
+        let ivar_self = CString::new(IVAR_SELF).expect("Should be some");
+        decl.add_ivar::<*const c_void>(&ivar_self);
         unsafe {
             decl.add_method(
                 sel!(applicationDidFinishLaunching:),
@@ -44,35 +41,6 @@ impl Webview {
             decl.add_method(
                 sel!(applicationShouldTerminateAfterLastWindowClosed:),
                 app_should_terminate_after_last_window_closed as extern "C" fn(_, _, _) -> _,
-            );
-            decl.add_method(
-                sel!(windowDidMove:),
-                window_did_move as extern "C" fn(_, _, _),
-            );
-            decl.add_method(
-                sel!(windowDidResize:),
-                window_did_resize as extern "C" fn(_, _, _),
-            );
-            decl.add_method(
-                sel!(windowWillClose:),
-                window_will_close as extern "C" fn(_, _, _),
-            );
-            decl.add_method(
-                sel!(webView:didStartProvisionalNavigation:),
-                webview_did_start_provisional_navigation as extern "C" fn(_, _, _, _),
-            );
-            decl.add_method(
-                sel!(webView:didFinishNavigation:),
-                webview_did_finish_navigation as extern "C" fn(_, _, _, _),
-            );
-            decl.add_method(
-                sel!(webView:decidePolicyForNavigationAction:decisionHandler:),
-                webview_decide_policy_for_navigation_action as extern "C" fn(_, _, _, _, _),
-            );
-            #[cfg(feature = "ipc")]
-            decl.add_method(
-                sel!(userContentController:didReceiveScriptMessage:),
-                webview_did_receive_script_message as extern "C" fn(_, _, _, _),
             );
         }
         decl.register();
@@ -105,6 +73,123 @@ impl Webview {
                 action:sel!(terminate:), keyEquivalent:NSString::from_str("q")];
             let _: () = msg_send![app_menu, addItem:quit_menu_item];
         }
+
+        Self {
+            application,
+            event_handler: None,
+        }
+    }
+}
+
+impl crate::EventLoop for EventLoop {
+    fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
+        self.event_handler = Some(Box::new(event_handler));
+        unsafe {
+            let delegate: *mut Object = msg_send![self.application, delegate];
+            #[allow(deprecated)]
+            let self_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_SELF);
+            *self_ptr = self as *mut Self as *const c_void;
+        };
+        let _: () = unsafe { msg_send![self.application, run] };
+        unreachable!();
+    }
+}
+
+extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notification: *mut Object) {
+    // Focus windows
+    unsafe {
+        let application: *mut Object = msg_send![notification, object];
+        let _: Bool =
+            msg_send![application, setActivationPolicy:NS_APPLICATION_ACTIVATION_POLICY_REGULAR];
+        let _: () = msg_send![application, activateIgnoringOtherApps:true];
+
+        let windows: *mut Object = msg_send![application, windows];
+        let windows_count: usize = msg_send![windows, count];
+        for i in 0..windows_count {
+            let window: *mut Object = msg_send![windows, objectAtIndex:i];
+            let _: () = msg_send![window, makeKeyAndOrderFront:null::<Object>()];
+
+            // Send window created event
+            send_event(Event::WindowCreated);
+
+            // Send window resized event
+            let frame: NSRect = msg_send![window, frame];
+            send_event(Event::WindowResized(LogicalSize::new(
+                frame.size.width as f32,
+                frame.size.height as f32,
+            )));
+        }
+    }
+}
+
+extern "C" fn app_should_terminate_after_last_window_closed(
+    _this: *mut Object,
+    _sel: Sel,
+    _sender: *mut Object,
+) -> Bool {
+    Bool::YES
+}
+
+fn send_event(event: Event) {
+    let _self = unsafe {
+        let app_delegate: *mut Object = msg_send![NSApp, delegate];
+        #[allow(deprecated)]
+        &mut *(*(*app_delegate).get_ivar::<*const c_void>(IVAR_SELF) as *mut EventLoop)
+    };
+
+    if let Some(handler) = _self.event_handler.as_mut() {
+        handler(event);
+    }
+}
+
+// MARK: Webview
+pub(crate) struct Webview {
+    window: *mut Object,
+    webview: *mut Object,
+}
+
+impl Webview {
+    pub(crate) fn new(builder: WebviewBuilder) -> Self {
+        // Register WindowDelegate class
+        if AnyClass::get(c"WindowDelegate").is_none() {
+            let mut decl = ClassBuilder::new(c"WindowDelegate", class!(NSObject))
+                .expect("Can't create WindowDelegate class");
+            unsafe {
+                decl.add_method(
+                    sel!(windowDidMove:),
+                    window_did_move as extern "C" fn(_, _, _),
+                );
+                decl.add_method(
+                    sel!(windowDidResize:),
+                    window_did_resize as extern "C" fn(_, _, _),
+                );
+                decl.add_method(
+                    sel!(windowWillClose:),
+                    window_will_close as extern "C" fn(_, _, _),
+                );
+                decl.add_method(
+                    sel!(webView:didStartProvisionalNavigation:),
+                    webview_did_start_provisional_navigation as extern "C" fn(_, _, _, _),
+                );
+                decl.add_method(
+                    sel!(webView:didFinishNavigation:),
+                    webview_did_finish_navigation as extern "C" fn(_, _, _, _),
+                );
+                decl.add_method(
+                    sel!(webView:decidePolicyForNavigationAction:decisionHandler:),
+                    webview_decide_policy_for_navigation_action as extern "C" fn(_, _, _, _, _),
+                );
+                #[cfg(feature = "ipc")]
+                decl.add_method(
+                    sel!(userContentController:didReceiveScriptMessage:),
+                    webview_did_receive_script_message as extern "C" fn(_, _, _, _),
+                );
+            }
+            decl.register();
+        }
+
+        // Create WindowDelegate instance
+        let window_delegate: *mut Object = unsafe { msg_send![class!(WindowDelegate), new] };
 
         // Create window
         let window_rect = NSRect::new(
@@ -150,7 +235,7 @@ impl Webview {
             if builder.remember_window_state {
                 let _: Bool = msg_send![window, setFrameAutosaveName:NSString::from_str("window")];
             }
-            let _: () = msg_send![window, setDelegate:app_delegate];
+            let _: () = msg_send![window, setDelegate:window_delegate];
             window
         };
 
@@ -167,7 +252,7 @@ impl Webview {
             if let Some(html) = builder.should_load_html {
                 let _: *mut Object = msg_send![webview, loadHTMLString:NSString::from_str(html), baseURL:null::<Object>()];
             }
-            let _: () = msg_send![webview, setNavigationDelegate:app_delegate];
+            let _: () = msg_send![webview, setNavigationDelegate:window_delegate];
             webview
         };
 
@@ -185,37 +270,15 @@ impl Webview {
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
                     forMainFrameOnly:true];
             let _: () = msg_send![user_content_controller, addUserScript:user_script];
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:app_delegate, name:NSString::from_str("ipc")];
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:app_delegate, name:NSString::from_str("console")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:window_delegate, name:NSString::from_str("ipc")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:window_delegate, name:NSString::from_str("console")];
         }
 
-        Self {
-            window,
-            webview,
-            event_handler: None,
-        }
-    }
-
-    fn send_event(&mut self, event: Event) {
-        let event_handler = self.event_handler.take().expect("Should be some");
-        event_handler(self, event);
-        self.event_handler = Some(event_handler);
+        Self { window, webview }
     }
 }
 
 impl crate::Webview for Webview {
-    fn run(&mut self, event_handler: impl Fn(&mut Webview, Event) + 'static) -> ! {
-        self.event_handler = Some(Box::new(event_handler));
-        unsafe {
-            let delegate: *mut Object = msg_send![NSApp, delegate];
-            #[allow(deprecated)]
-            let self_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_SELF);
-            *self_ptr = self as *mut Webview as *const c_void;
-        };
-        let _: () = unsafe { msg_send![NSApp, run] };
-        unreachable!();
-    }
-
     fn set_title(&mut self, title: impl AsRef<str>) {
         unsafe { msg_send![self.window, setTitle:NSString::from_str(title)] }
     }
@@ -280,93 +343,50 @@ impl crate::Webview for Webview {
     }
 }
 
-extern "C" fn app_did_finish_launching(this: *mut Object, _sel: Sel, _notification: *mut Object) {
-    #[allow(deprecated)]
-    let _self = unsafe { &mut *(*(*this).get_ivar::<*mut c_void>(IVAR_SELF) as *mut Webview) };
-
-    // Show window
-    unsafe {
-        let _: Bool =
-            msg_send![NSApp, setActivationPolicy:NS_APPLICATION_ACTIVATION_POLICY_REGULAR];
-        let _: () = msg_send![NSApp, activateIgnoringOtherApps:true];
-        let _: () = msg_send![_self.window, makeKeyAndOrderFront:null::<Object>()];
-    }
-
-    // Send window created event
-    _self.send_event(Event::WindowCreated);
-
-    // Send window resized event
-    let frame: NSRect = unsafe { msg_send![_self.webview, frame] };
-    _self.send_event(Event::WindowResized(LogicalSize::new(
-        frame.size.width as f32,
-        frame.size.height as f32,
-    )));
-}
-
-extern "C" fn app_should_terminate_after_last_window_closed(
-    _this: *mut Object,
-    _sel: Sel,
-    _sender: *mut Object,
-) -> Bool {
-    Bool::YES
-}
-
-extern "C" fn window_did_move(this: *mut Object, _sel: Sel, _notification: *mut Object) {
-    #[allow(deprecated)]
-    let _self = unsafe { &mut *(*(*this).get_ivar::<*mut c_void>(IVAR_SELF) as *mut Webview) };
-
+extern "C" fn window_did_move(_this: *mut Object, _sel: Sel, notification: *mut Object) {
     // Send window moved event
-    let frame: NSRect = unsafe { msg_send![_self.window, frame] };
-    _self.send_event(Event::WindowMoved(LogicalPoint::new(
+    let window: *mut Object = unsafe { msg_send![notification, object] };
+    let frame: NSRect = unsafe { msg_send![window, frame] };
+    send_event(Event::WindowMoved(LogicalPoint::new(
         frame.origin.x as f32,
         frame.origin.y as f32,
     )));
 }
 
-extern "C" fn window_did_resize(this: *mut Object, _sel: Sel, _notification: *mut Object) {
-    #[allow(deprecated)]
-    let _self = unsafe { &mut *(*(*this).get_ivar::<*mut c_void>(IVAR_SELF) as *mut Webview) };
-
+extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mut Object) {
     // Send window resized event
-    let frame: NSRect = unsafe { msg_send![_self.webview, frame] };
-    _self.send_event(Event::WindowResized(LogicalSize::new(
+    let window: *mut Object = unsafe { msg_send![notification, object] };
+    let webview: *mut Object = unsafe { msg_send![window, contentView] };
+    let frame: NSRect = unsafe { msg_send![webview, frame] };
+    send_event(Event::WindowResized(LogicalSize::new(
         frame.size.width as f32,
         frame.size.height as f32,
     )));
 }
 
-extern "C" fn window_will_close(this: *mut Object, _sel: Sel, _notification: *mut Object) {
-    #[allow(deprecated)]
-    let _self = unsafe { &mut *(*(*this).get_ivar::<*mut c_void>(IVAR_SELF) as *mut Webview) };
-
+extern "C" fn window_will_close(_this: *mut Object, _sel: Sel, _notification: *mut Object) {
     // Send window closed event
-    _self.send_event(Event::WindowClosed);
+    send_event(Event::WindowClosed);
 }
 
 extern "C" fn webview_did_start_provisional_navigation(
-    this: *mut Object,
+    _this: *mut Object,
     _sel: Sel,
     _webview: *mut Object,
     _navigation: *mut Object,
 ) {
-    #[allow(deprecated)]
-    let _self = unsafe { &mut *(*(*this).get_ivar::<*mut c_void>(IVAR_SELF) as *mut Webview) };
-
     // Send page load started event
-    _self.send_event(Event::PageLoadStarted);
+    send_event(Event::PageLoadStarted);
 }
 
 extern "C" fn webview_did_finish_navigation(
-    this: *mut Object,
+    _this: *mut Object,
     _sel: Sel,
     _webview: *mut Object,
     _navigation: *mut Object,
 ) {
-    #[allow(deprecated)]
-    let _self = unsafe { &mut *(*(*this).get_ivar::<*mut c_void>(IVAR_SELF) as *mut Webview) };
-
     // Send page load finished event
-    _self.send_event(Event::PageLoadFinished);
+    send_event(Event::PageLoadFinished);
 }
 
 extern "C" fn webview_decide_policy_for_navigation_action(
@@ -399,14 +419,11 @@ extern "C" fn webview_decide_policy_for_navigation_action(
 
 #[cfg(feature = "ipc")]
 extern "C" fn webview_did_receive_script_message(
-    this: *mut Object,
+    _this: *mut Object,
     _sel: Sel,
     _user_content_controller: *mut Object,
     message: *mut Object,
 ) {
-    #[allow(deprecated)]
-    let _self = unsafe { &mut *(*(*this).get_ivar::<*mut c_void>(IVAR_SELF) as *mut Webview) };
-
     let name: NSString = unsafe { msg_send![message, name] };
     let name = name.to_string();
     let body: NSString = unsafe { msg_send![message, body] };
@@ -414,7 +431,7 @@ extern "C" fn webview_did_receive_script_message(
 
     if name == "ipc" {
         // Send ipc message received event
-        _self.send_event(Event::PageMessageReceived(body));
+        send_event(Event::PageMessageReceived(body));
     } else if name == "console" {
         // Print console message
         println!("{}", body);

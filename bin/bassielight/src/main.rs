@@ -12,7 +12,7 @@ use std::thread;
 use std::time::Duration;
 
 use rust_embed::Embed;
-use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
+use tiny_webview::{Event, EventLoop, EventLoopBuilder, LogicalSize, WebviewBuilder};
 
 use crate::dmx::DMX_STATE;
 use crate::ipc::IpcMessage;
@@ -27,7 +27,9 @@ mod usb;
 struct WebAssets;
 
 fn main() {
-    let mut webview = WebviewBuilder::new()
+    let mut event_loop = EventLoopBuilder::build();
+
+    let mut _webview = WebviewBuilder::new()
         .title("BassieLight")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
@@ -39,7 +41,7 @@ fn main() {
 
     let config = config::load_config("config.json").expect("Can't load config.json");
 
-    webview.run(move |_, event| match event {
+    event_loop.run(move |event| match event {
         Event::PageLoadFinished => {
             let config = config.clone();
             thread::spawn(move || {

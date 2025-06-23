@@ -6,12 +6,15 @@
 
 //! A simple tiny webview example
 
-use tiny_webview::{Webview, WebviewBuilder};
+use tiny_webview::{EventLoop, EventLoopBuilder, WebviewBuilder};
 
 fn main() {
-    let mut webview = WebviewBuilder::new()
+    let mut event_loop = EventLoopBuilder::build();
+
+    let mut _webview = WebviewBuilder::new()
         .title("Webview Simple Example")
         .load_url("https://github.com/bplaat/crates")
         .build();
-    webview.run(|_, _| {});
+
+    event_loop.run(|_| {});
 }

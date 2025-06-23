@@ -35,12 +35,12 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, GWL_STYLE,
-    GWL_USERDATA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect, HICON, MINMAXINFO,
-    MSG, PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN, SW_SHOWDEFAULT,
-    SW_SHOWNORMAL, SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-    SetWindowTextA, ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE,
-    WM_SIZE, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+    GWL_USERDATA, GetClassInfoExA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect,
+    HICON, MINMAXINFO, MSG, PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN,
+    SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER,
+    SetWindowPos, SetWindowTextA, ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI,
+    WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED,
+    WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
 };
 use windows::core::{BOOL, HSTRING, PCSTR, PWSTR, w};
 
@@ -49,104 +49,96 @@ use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 
 mod utils;
 
-type EventHandler = Box<dyn Fn(&mut Webview, Event) + 'static>;
+// MARK: EventLoop
+pub(crate) struct EventLoop;
 
-/// Webview
-pub(crate) struct Webview {
-    builder: Option<WebviewBuilder>,
+static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
+
+impl EventLoop {
+    pub(crate) fn new() -> Self {
+        // Enable PerMonitorV2 high DPI awareness
+        _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+        Self
+    }
+}
+
+impl crate::EventLoop for EventLoop {
+    fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
+        unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
+
+        // Start message loop
+        unsafe {
+            let mut msg = MSG::default();
+            while GetMessageA(&mut msg, None, 0, 0).into() {
+                _ = TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+            }
+            exit(msg.wParam.0 as i32);
+        }
+    }
+}
+
+fn send_event(event: Event) {
+    unsafe {
+        #[allow(static_mut_refs)]
+        if let Some(handler) = &mut EVENT_HANDLER {
+            handler(event);
+        }
+    }
+}
+
+// MARK: Webview
+struct WebviewData {
     hwnd: HWND,
     dpi: u32,
     min_size: Option<LogicalSize>,
     #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
     controller: Option<ICoreWebView2Controller>,
-    event_handler: Option<EventHandler>,
 }
+
+pub(crate) struct Webview(Box<WebviewData>);
 
 impl Webview {
     pub(crate) fn new(builder: WebviewBuilder) -> Self {
-        let min_size = builder.min_size;
-        #[cfg(feature = "remember_window_state")]
-        let remember_window_state = builder.remember_window_state;
-        Self {
-            builder: Some(builder),
-            hwnd: HWND(null_mut()),
-            dpi: USER_DEFAULT_SCREEN_DPI,
-            min_size,
-            #[cfg(feature = "remember_window_state")]
-            remember_window_state,
-            controller: None,
-            event_handler: None,
-        }
-    }
+        let dpi = unsafe { GetDpiForSystem() };
 
-    fn userdata_folder() -> String {
-        unsafe {
-            let appdata_path = convert_pwstr_to_string(
-                SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
-                    .expect("Should be some"),
-            );
-            format!(
-                "{}/{}",
-                appdata_path,
-                env::current_exe()
-                    .expect("Can't get current process name")
-                    .file_name()
-                    .expect("Can't get current process name")
-                    .to_string_lossy()
-                    .strip_suffix(".exe")
-                    .expect("Should strip .exe")
-            )
-        }
-    }
-
-    fn send_event(&mut self, event: Event) {
-        let event_handler = self.event_handler.take().expect("Should be some");
-        event_handler(self, event);
-        self.event_handler = Some(event_handler);
-    }
-}
-
-impl crate::Webview for Webview {
-    fn run(&mut self, event_handler: impl Fn(&mut Webview, Event) + 'static) -> ! {
-        self.event_handler = Some(Box::new(event_handler));
-
-        let builder = self.builder.take().expect("Should be some");
-
-        // Enable PerMonitorV2 high DPI awareness
-        _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-        self.dpi = unsafe { GetDpiForSystem() };
-
-        // Get executable icons
+        // Check if window class is already registered
         let instance = unsafe { GetModuleHandleA(None) }.expect("Can't get module handle");
-        let mut module_path = [0u8; MAX_PATH as usize];
-        _ = unsafe { GetModuleFileNameA(instance.into(), &mut module_path) };
-        let mut large_icon = HICON::default();
-        let mut small_icon = HICON::default();
+        let class_name = PCSTR(c"window".as_ptr() as _);
         unsafe {
-            ExtractIconExA(
-                PCSTR::from_raw(module_path.as_ptr()),
-                0,
-                Some(&mut large_icon),
-                Some(&mut small_icon),
-                1,
-            );
-        }
+            let mut wndclass = WNDCLASSEXA::default();
+            if GetClassInfoExA(Some(instance.into()), class_name, &mut wndclass as *mut _).is_err()
+            {
+                // Get executable icons
+                let mut module_path = [0u8; MAX_PATH as usize];
+                _ = GetModuleFileNameA(instance.into(), &mut module_path);
+                let mut large_icon = HICON::default();
+                let mut small_icon = HICON::default();
+                ExtractIconExA(
+                    PCSTR::from_raw(module_path.as_ptr()),
+                    0,
+                    Some(&mut large_icon),
+                    Some(&mut small_icon),
+                    1,
+                );
 
-        // Register window class
-        let wndclass = WNDCLASSEXA {
-            cbSize: size_of::<WNDCLASSEXA>() as u32,
-            lpfnWndProc: Some(window_proc),
-            hInstance: instance.into(),
-            hIcon: large_icon,
-            lpszClassName: PCSTR(c"window".as_ptr() as _),
-            hIconSm: small_icon,
-            ..Default::default()
-        };
-        unsafe { RegisterClassExA(&wndclass) };
+                // Register window class
+                let wndclass = WNDCLASSEXA {
+                    cbSize: size_of::<WNDCLASSEXA>() as u32,
+                    lpfnWndProc: Some(window_proc),
+                    hInstance: instance.into(),
+                    hIcon: large_icon,
+                    lpszClassName: class_name,
+                    hIconSm: small_icon,
+                    ..Default::default()
+                };
+                RegisterClassExA(&wndclass);
+            }
+        }
 
         // Create window
-        self.hwnd = unsafe {
+        let hwnd = unsafe {
             let style = if builder.resizable {
                 WS_OVERLAPPEDWINDOW
             } else {
@@ -156,13 +148,11 @@ impl crate::Webview for Webview {
             // Calculate window rect based on size and position
             let mut x = 0;
             let mut y = 0;
-            let width =
-                (builder.size.width as i32 * self.dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-            let height =
-                (builder.size.height as i32 * self.dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+            let width = (builder.size.width as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+            let height = (builder.size.height as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
             if let Some(position) = builder.position {
-                x = position.x as i32;
-                y = position.y as i32;
+                x = (position.x as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+                y = (position.y as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
             }
             if builder.should_center {
                 let screen_width = GetSystemMetrics(SM_CXSCREEN);
@@ -176,12 +166,12 @@ impl crate::Webview for Webview {
                 right: x + width,
                 bottom: y + height,
             };
-            _ = AdjustWindowRectExForDpi(&mut rect, style, false, WINDOW_EX_STYLE(0), self.dpi);
+            _ = AdjustWindowRectExForDpi(&mut rect, style, false, WINDOW_EX_STYLE(0), dpi);
 
             let title = CString::new(builder.title).expect("Can't convert to CString");
             let hwnd = CreateWindowExA(
                 WINDOW_EX_STYLE(0),
-                wndclass.lpszClassName,
+                class_name,
                 PCSTR(title.as_ptr() as _),
                 style,
                 if builder.position.is_some() || builder.should_center {
@@ -202,7 +192,6 @@ impl crate::Webview for Webview {
                 None,
             )
             .expect("Can't create window");
-            SetWindowLong(hwnd, GWL_USERDATA, self as *mut Webview as isize);
             if builder.should_force_dark_mode {
                 let enabled: BOOL = true.into();
                 _ = DwmSetWindowAttribute(
@@ -213,8 +202,8 @@ impl crate::Webview for Webview {
                 );
             }
 
-            if cfg!(feature = "remember_window_state") {
-                if builder.remember_window_state {
+            let should_show_window =
+                if cfg!(feature = "remember_window_state") && builder.remember_window_state {
                     let window_placement_path = format!("{}/window.bin", Self::userdata_folder());
                     if let Ok(mut file) = File::open(window_placement_path) {
                         let size =
@@ -226,14 +215,17 @@ impl crate::Webview for Webview {
                                 hwnd,
                                 &window_placement,
                             );
+                            false
+                        } else {
+                            true
                         }
                     } else {
-                        _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
+                        true
                     }
                 } else {
-                    _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
-                }
-            } else {
+                    true
+                };
+            if should_show_window {
                 _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
             }
             _ = UpdateWindow(hwnd);
@@ -241,8 +233,7 @@ impl crate::Webview for Webview {
         };
 
         // Create Webview2
-        unsafe {
-            let _self = self as *mut Webview;
+        let controller = unsafe {
             let environment = {
                 let (tx, rx) = mpsc::channel();
                 _ = CreateCoreWebView2EnvironmentWithOptions(
@@ -265,7 +256,6 @@ impl crate::Webview for Webview {
 
             let controller = {
                 let (tx, rx) = mpsc::channel();
-                let hwnd = self.hwnd;
                 CreateCoreWebView2ControllerCompletedHandler::wait_for_async_operation(
                     Box::new(move |handler| {
                         _ = environment.CreateCoreWebView2Controller(hwnd, &handler);
@@ -283,23 +273,21 @@ impl crate::Webview for Webview {
             };
 
             let mut rect = RECT::default();
-            _ = GetClientRect(self.hwnd, &mut rect);
+            _ = GetClientRect(hwnd, &mut rect);
             _ = controller.SetBounds(rect);
 
             let webview = controller.CoreWebView2().expect("Should be some");
 
             _ = webview.add_NavigationStarting(
                 &NavigationStartingEventHandler::create(Box::new(move |_sender, _args| {
-                    let _self = &mut *_self;
-                    _self.send_event(Event::PageLoadStarted);
+                    send_event(Event::PageLoadStarted);
                     Ok(())
                 })),
                 null_mut(),
             );
             _ = webview.add_NavigationCompleted(
                 &NavigationCompletedEventHandler::create(Box::new(move |_sender, _args| {
-                    let _self = &mut *_self;
-                    _self.send_event(Event::PageLoadFinished);
+                    send_event(Event::PageLoadFinished);
                     Ok(())
                 })),
                 null_mut(),
@@ -327,14 +315,13 @@ impl crate::Webview for Webview {
                 _ = webview.add_WebMessageReceived(
                     &webview2_com::WebMessageReceivedEventHandler::create(Box::new(
                         move |_sender, args| {
-                            let _self = &mut *_self;
                             let args = args.expect("Should be some");
                             let mut message = PWSTR::default();
                             _ = args.TryGetWebMessageAsString(&mut message);
                             let message = convert_pwstr_to_string(message);
                             if message.starts_with("ipc") {
                                 let message = message.trim_start_matches("ipc");
-                                _self.send_event(Event::PageMessageReceived(message.to_string()));
+                                send_event(Event::PageMessageReceived(message.to_string()));
                             } else if message.starts_with("console") {
                                 let message = message.trim_start_matches("console");
                                 println!("{}", message);
@@ -346,56 +333,85 @@ impl crate::Webview for Webview {
                 );
             }
 
-            self.controller = Some(controller);
             if let Some(url) = &builder.should_load_url {
-                self.load_url(url);
+                _ = webview.Navigate(&HSTRING::from(url));
             }
             if let Some(html) = &builder.should_load_html {
-                self.load_html(html);
+                _ = webview.NavigateToString(&HSTRING::from(html));
             }
-        }
+            controller
+        };
 
-        // Start event loop
+        let webview_data = Box::new(WebviewData {
+            hwnd,
+            dpi,
+            min_size: builder.min_size,
+            #[cfg(feature = "remember_window_state")]
+            remember_window_state: builder.remember_window_state,
+            controller: Some(controller),
+        });
         unsafe {
-            let mut msg = MSG::default();
-            while GetMessageA(&mut msg, None, 0, 0).into() {
-                _ = TranslateMessage(&msg);
-                DispatchMessageA(&msg);
-            }
-            exit(msg.wParam.0 as i32);
-        }
+            SetWindowLong(
+                hwnd,
+                GWL_USERDATA,
+                webview_data.as_ref() as *const _ as isize,
+            )
+        };
+        Self(webview_data)
     }
 
+    fn userdata_folder() -> String {
+        unsafe {
+            let appdata_path = convert_pwstr_to_string(
+                SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
+                    .expect("Should be some"),
+            );
+            format!(
+                "{}/{}",
+                appdata_path,
+                env::current_exe()
+                    .expect("Can't get current process name")
+                    .file_name()
+                    .expect("Can't get current process name")
+                    .to_string_lossy()
+                    .strip_suffix(".exe")
+                    .expect("Should strip .exe")
+            )
+        }
+    }
+}
+
+impl crate::Webview for Webview {
     fn set_title(&mut self, title: impl AsRef<str>) {
         let title = CString::new(title.as_ref()).expect("Can't convert to CString");
-        _ = unsafe { SetWindowTextA(self.hwnd, PCSTR(title.as_ptr() as _)) };
+        _ = unsafe { SetWindowTextA(self.0.hwnd, PCSTR(title.as_ptr() as _)) };
     }
 
     fn position(&self) -> LogicalPoint {
         let mut rect = RECT::default();
-        _ = unsafe { GetWindowRect(self.hwnd, &mut rect) };
+        _ = unsafe { GetWindowRect(self.0.hwnd, &mut rect) };
         LogicalPoint::new(
-            (rect.left * USER_DEFAULT_SCREEN_DPI as i32 / self.dpi as i32) as f32,
-            (rect.top * USER_DEFAULT_SCREEN_DPI as i32 / self.dpi as i32) as f32,
+            (rect.left * USER_DEFAULT_SCREEN_DPI as i32 / self.0.dpi as i32) as f32,
+            (rect.top * USER_DEFAULT_SCREEN_DPI as i32 / self.0.dpi as i32) as f32,
         )
     }
 
     fn size(&self) -> LogicalSize {
         let mut rect = RECT::default();
-        _ = unsafe { GetWindowRect(self.hwnd, &mut rect) };
+        _ = unsafe { GetWindowRect(self.0.hwnd, &mut rect) };
         LogicalSize::new(
-            ((rect.right - rect.left) * USER_DEFAULT_SCREEN_DPI as i32 / self.dpi as i32) as f32,
-            ((rect.bottom - rect.top) * USER_DEFAULT_SCREEN_DPI as i32 / self.dpi as i32) as f32,
+            ((rect.right - rect.left) * USER_DEFAULT_SCREEN_DPI as i32 / self.0.dpi as i32) as f32,
+            ((rect.bottom - rect.top) * USER_DEFAULT_SCREEN_DPI as i32 / self.0.dpi as i32) as f32,
         )
     }
 
     fn set_position(&mut self, point: LogicalPoint) {
         _ = unsafe {
             SetWindowPos(
-                self.hwnd,
+                self.0.hwnd,
                 None,
-                point.x as i32 * self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
-                point.y as i32 * self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
+                point.x as i32 * self.0.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
+                point.y as i32 * self.0.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
                 0,
                 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
@@ -406,26 +422,26 @@ impl crate::Webview for Webview {
     fn set_size(&mut self, size: LogicalSize) {
         _ = unsafe {
             SetWindowPos(
-                self.hwnd,
+                self.0.hwnd,
                 None,
                 0,
                 0,
-                size.width as i32 * self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
-                size.height as i32 * self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
+                size.width as i32 * self.0.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
+                size.height as i32 * self.0.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
                 SWP_NOREPOSITION | SWP_NOZORDER | SWP_NOACTIVATE,
             )
         };
     }
 
     fn set_min_size(&mut self, min_size: LogicalSize) {
-        self.min_size = Some(min_size);
+        self.0.min_size = Some(min_size);
     }
 
     fn set_resizable(&mut self, resizable: bool) {
         unsafe {
-            let style = WINDOW_STYLE(GetWindowLong(self.hwnd, GWL_STYLE) as u32);
+            let style = WINDOW_STYLE(GetWindowLong(self.0.hwnd, GWL_STYLE) as u32);
             SetWindowLong(
-                self.hwnd,
+                self.0.hwnd,
                 GWL_STYLE,
                 if resizable {
                     style & !WS_THICKFRAME
@@ -439,7 +455,7 @@ impl crate::Webview for Webview {
 
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
-            if let Some(controller) = &self.controller {
+            if let Some(controller) = &self.0.controller {
                 let webview = controller.CoreWebView2().expect("Should be some");
                 _ = webview.Navigate(&HSTRING::from(url.as_ref()));
             }
@@ -448,7 +464,7 @@ impl crate::Webview for Webview {
 
     fn load_html(&mut self, html: impl AsRef<str>) {
         unsafe {
-            if let Some(controller) = &self.controller {
+            if let Some(controller) = &self.0.controller {
                 let webview = controller.CoreWebView2().expect("Should be some");
                 _ = webview.NavigateToString(&HSTRING::from(html.as_ref()));
             }
@@ -457,7 +473,7 @@ impl crate::Webview for Webview {
 
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         unsafe {
-            if let Some(controller) = &self.controller {
+            if let Some(controller) = &self.0.controller {
                 let webview = controller.CoreWebView2().expect("Should be some");
                 _ = webview.ExecuteScript(&HSTRING::from(script.as_ref()), None);
             }
@@ -472,7 +488,7 @@ unsafe extern "system" fn window_proc(
     l_param: LPARAM,
 ) -> LRESULT {
     let _self = unsafe {
-        let ptr = GetWindowLong(hwnd, GWL_USERDATA) as *mut Webview;
+        let ptr = GetWindowLong(hwnd, GWL_USERDATA) as *mut WebviewData;
         if ptr.is_null() {
             return DefWindowProcA(hwnd, msg, w_param, l_param);
         }
@@ -480,13 +496,13 @@ unsafe extern "system" fn window_proc(
     };
     match msg {
         WM_CREATE => {
-            _self.send_event(Event::WindowCreated);
+            send_event(Event::WindowCreated);
             LRESULT(0)
         }
         WM_MOVE => {
             let x = l_param.0 as u16 as i32;
             let y = (l_param.0 >> 16) as u16 as i32;
-            _self.send_event(Event::WindowMoved(LogicalPoint::new(
+            send_event(Event::WindowMoved(LogicalPoint::new(
                 (x * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
                 (y * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
             )));
@@ -495,7 +511,7 @@ unsafe extern "system" fn window_proc(
         WM_SIZE => {
             let width = (l_param.0 as u16) as i32;
             let height = ((l_param.0 >> 16) as u16) as i32;
-            _self.send_event(Event::WindowResized(LogicalSize::new(
+            send_event(Event::WindowResized(LogicalSize::new(
                 (width * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
                 (height * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
             )));
@@ -567,7 +583,7 @@ unsafe extern "system" fn window_proc(
                 }
             }
 
-            _self.send_event(Event::WindowClosed);
+            send_event(Event::WindowClosed);
             _ = unsafe { DestroyWindow(hwnd) };
             LRESULT(0)
         }

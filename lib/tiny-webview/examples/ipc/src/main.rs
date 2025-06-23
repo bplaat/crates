@@ -7,7 +7,7 @@
 //! A tiny webview ipc example
 
 use serde::{Deserialize, Serialize};
-use tiny_webview::{Event, LogicalSize, Webview, WebviewBuilder};
+use tiny_webview::{Event, EventLoop, EventLoopBuilder, LogicalSize, Webview, WebviewBuilder};
 
 const APP_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/app.min.html"));
 
@@ -19,6 +19,8 @@ enum IpcMessage {
 }
 
 fn main() {
+    let mut event_loop = EventLoopBuilder::build();
+
     let mut webview = WebviewBuilder::new()
         .title("Webview IPC Example")
         .size(LogicalSize::new(1024.0, 768.0))
@@ -29,7 +31,7 @@ fn main() {
         .load_html(APP_HTML)
         .build();
 
-    webview.run(|webview, event| match event {
+    event_loop.run(move |event| match event {
         // Window events
         Event::WindowCreated => {
             println!("Window created");

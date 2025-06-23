@@ -68,19 +68,6 @@ unsafe extern "C" {
     pub(crate) fn g_key_file_free(key_file: *mut GKeyFile);
 }
 
-// MARK: GIO
-#[repr(C)]
-pub(crate) struct GApplication(u8);
-pub(crate) const G_APPLICATION_DEFAULT_FLAGS: i32 = 0;
-#[link(name = "gio-2.0")]
-unsafe extern "C" {
-    pub(crate) fn g_application_run(
-        application: *mut GApplication,
-        argc: i32,
-        argv: *const *const c_char,
-    ) -> i32;
-}
-
 // MARK: GDK
 #[repr(C)]
 pub(crate) struct GdkDisplay(u8);
@@ -92,21 +79,19 @@ unsafe extern "C" {
 
 // MARK: GTK
 #[repr(C)]
-pub(crate) struct GtkApplication(u8);
-#[repr(C)]
 pub(crate) struct GtkWidget(u8);
 #[repr(C)]
 pub(crate) struct GtkWindow(u8);
 #[repr(C)]
 pub(crate) struct GtkSettings(u8);
+pub(crate) const GTK_WINDOW_TOPLEVEL: i32 = 0;
 pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
 #[link(name = "gtk-3")]
 unsafe extern "C" {
-    pub(crate) fn gtk_application_new(
-        application_id: *const c_char,
-        flags: i32,
-    ) -> *mut GtkApplication;
-    pub(crate) fn gtk_application_window_new(app: *mut GtkApplication) -> *mut GtkWindow;
+    pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
+    pub(crate) fn gtk_main();
+    pub(crate) fn gtk_main_quit();
+    pub(crate) fn gtk_window_new(r#type: i32) -> *mut GtkWindow;
     pub(crate) fn gtk_widget_set_size_request(widget: *mut GtkWidget, width: i32, height: i32);
     pub(crate) fn gtk_container_add(container: *mut GtkWidget, widget: *mut GtkWidget);
     pub(crate) fn gtk_window_get_position(window: *mut GtkWindow, x: *mut i32, y: *mut i32);

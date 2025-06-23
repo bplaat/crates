@@ -13,11 +13,27 @@ mod event;
 mod platforms;
 mod sizes;
 
-/// Webview
-pub trait Webview {
+// MARK: EventLoop trait
+/// EventLoop trait
+pub trait EventLoop {
     /// Start event loop
-    fn run(&mut self, _event_handler: impl Fn(&mut Self, Event) + 'static) -> !;
+    fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> !;
+}
 
+// MARK: EventLoopBuilder
+/// EventLoop builder
+pub struct EventLoopBuilder;
+
+impl EventLoopBuilder {
+    /// Create new event loop builder
+    pub fn build() -> impl EventLoop {
+        platforms::EventLoop::new()
+    }
+}
+
+// MARK: Webview trait
+/// Webview trait
+pub trait Webview {
     /// Set title
     fn set_title(&mut self, title: impl AsRef<str>);
     /// Get position
@@ -50,6 +66,7 @@ pub trait Webview {
     }
 }
 
+// MARK: WebviewBuilder
 /// Webview builder
 pub struct WebviewBuilder {
     title: String,
