@@ -41,7 +41,11 @@ fn main() {
 
     Command::new(NPM)
         .arg("run")
-        .arg("build")
+        .arg(if cfg!(debug_assertions) {
+            "build-debug"
+        } else {
+            "build-release"
+        })
         .current_dir("web")
         .output()
         .expect("Failed to run npm run build");

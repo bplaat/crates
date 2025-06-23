@@ -117,6 +117,8 @@ unsafe extern "C" {
 #[repr(C)]
 pub(crate) struct WebKitWebView(u8);
 #[repr(C)]
+pub(crate) struct WebkitSettings(u8);
+#[repr(C)]
 pub(crate) struct WebKitNavigationPolicyDecision(u8);
 #[repr(C)]
 pub(crate) struct WebKitURIRequest(u8);
@@ -134,6 +136,8 @@ pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
 #[link(name = "webkit2gtk-4.1")]
 unsafe extern "C" {
     pub(crate) fn webkit_web_view_new() -> *mut WebKitWebView;
+    pub(crate) fn webkit_web_view_get_settings(web_view: *mut WebKitWebView)
+    -> *mut WebkitSettings;
     pub(crate) fn webkit_web_view_load_uri(web_view: *mut WebKitWebView, uri: *const c_char);
     pub(crate) fn webkit_web_view_load_html(
         web_view: *mut WebKitWebView,
@@ -176,6 +180,10 @@ unsafe extern "C" {
     pub(crate) fn webkit_javascript_result_get_js_value(
         result: *mut WebKitJavascriptResult,
     ) -> *mut c_void;
+    pub(crate) fn webkit_settings_set_enable_developer_extras(
+        settings: *mut WebkitSettings,
+        enable: bool,
+    );
 }
 
 // MARK: JavaScriptCoreGtk

@@ -253,6 +253,14 @@ impl Webview {
                 let _: *mut Object = msg_send![webview, loadHTMLString:NSString::from_str(html), baseURL:null::<Object>()];
             }
             let _: () = msg_send![webview, setNavigationDelegate:window_delegate];
+
+            if cfg!(debug_assertions) {
+                let webview_configuration: *mut Object = msg_send![webview, configuration];
+                let webview_preferences: *mut Object =
+                    msg_send![webview_configuration, preferences];
+                let ns_bool_yes: *mut Object = msg_send![class!(NSNumber), numberWithBool:true];
+                let _: () = msg_send![webview_preferences, setValue:ns_bool_yes, forKey:NSString::from_str("developerExtrasEnabled")];
+            }
             webview
         };
 

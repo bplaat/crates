@@ -201,6 +201,10 @@ impl Webview {
                 webkit_web_view_new()
             };
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
+            if cfg!(debug_assertions) {
+                let webview_settings = webkit_web_view_get_settings(webview);
+                webkit_settings_set_enable_developer_extras(webview_settings, true);
+            }
             if let Some(should_load_url) = builder.should_load_url {
                 let url = CString::new(should_load_url).expect("Can't convert to CString");
                 webkit_web_view_load_uri(webview, url.as_ptr());

@@ -4,8 +4,8 @@
     "version": "0.1.0",
     "type": "module",
     "scripts": {
-        "dev": "vite",
-        "build": "vite build"
+        "build-debug": "vite build --mode debug --minify=false",
+        "build-release": "vite build --mode release"
     },
     "dependencies": {
         "preact": "^10.26.5"
