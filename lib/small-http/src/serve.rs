@@ -21,15 +21,17 @@ where
         let client_addr = stream
             .peer_addr()
             .expect("Can't get tcp stream client addr");
+
         match Request::read_from_stream(&mut stream, client_addr) {
             Ok(request) => {
                 // Handle request and write response
                 let mut response = handler(&request);
                 response.write_to_stream(&mut stream, &request, false);
 
-                // If the response has a takeover function
-                if response.takeover.is_some() {
-                    panic!("Single-threaded server does not support takeover functions");
+                // If the response has a takeover function, start thread and move tcp stream
+                if let Some(takeover) = response.takeover.take() {
+                    std::thread::spawn(move || takeover(stream));
+                    return;
                 }
                 continue;
             }
@@ -88,9 +90,9 @@ where
                     let mut response = handler(&request);
                     response.write_to_stream(&mut stream, &request, true);
 
-                    // If the response has a takeover function, move tcp stream
+                    // If the response has a takeover function, start thread and move tcp stream
                     if let Some(takeover) = response.takeover.take() {
-                        takeover(stream);
+                        std::thread::spawn(move || takeover(stream));
                         return;
                     }
 

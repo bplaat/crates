@@ -24,7 +24,7 @@ pub struct Response {
     pub headers: HeaderMap,
     /// Body
     pub body: Vec<u8>,
-    pub(crate) takeover: Option<Box<dyn FnOnce(TcpStream) + 'static>>,
+    pub(crate) takeover: Option<Box<dyn FnOnce(TcpStream) + Send + 'static>>,
 }
 
 impl Response {
@@ -102,7 +102,7 @@ impl Response {
     }
 
     /// Set takeover function
-    pub fn takeover(mut self, f: impl FnOnce(TcpStream) + 'static) -> Self {
+    pub fn takeover(mut self, f: impl FnOnce(TcpStream) + Send + 'static) -> Self {
         self.takeover = Some(Box::new(f));
         self
     }
