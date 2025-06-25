@@ -10,6 +10,7 @@
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::{Arc, Mutex};
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
@@ -31,18 +32,43 @@ pub enum Message {
 }
 
 /// WebSocket connection
+#[derive(Clone)]
 pub struct WebSocket {
-    /// The underlying TCP stream
-    pub stream: TcpStream,
+    stream: Arc<Mutex<TcpStream>>,
 }
 
+impl PartialEq for WebSocket {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.stream, &other.stream)
+    }
+}
+impl Eq for WebSocket {}
+
 impl WebSocket {
+    fn new(stream: TcpStream) -> Self {
+        stream
+            .set_nonblocking(true)
+            .expect("Failed to set non-blocking mode");
+        WebSocket {
+            stream: Arc::new(Mutex::new(stream)),
+        }
+    }
+
+    /// Get the underlying TCP stream peer address
+    pub fn peer_addr(&self) -> std::io::Result<std::net::SocketAddr> {
+        self.stream.lock().expect("Can't get lock").peer_addr()
+    }
+
     /// Receive WebSocket message
     pub fn recv(&mut self) -> std::io::Result<Option<Message>> {
+        // Do a non-blocking read
+        let mut stream = self.stream.lock().expect("Can't get lock");
         let mut buf = [0; 1024];
-        let n = self.stream.read(&mut buf)?;
-        if n == 0 {
-            return Ok(None); // Connection closed
+        match stream.read(&mut buf) {
+            Ok(0) => return Ok(None), // Connection closed
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
+            Err(e) => return Err(e),
         }
 
         // Parse WebSocket frame
@@ -145,7 +171,10 @@ impl WebSocket {
                 self.write_frame(&mut frame, &payload)?;
             }
         }
-        self.stream.write_all(&frame)
+        self.stream
+            .lock()
+            .expect("Can't get lock")
+            .write_all(&frame)
     }
 
     fn write_frame(&self, frame: &mut Vec<u8>, payload: &[u8]) -> std::io::Result<()> {
@@ -165,7 +194,7 @@ impl WebSocket {
 }
 
 /// Upgrade HTTP request to WebSocket connection
-pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + 'static) -> Response {
+pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'static) -> Response {
     let mut res = Response::with_status(Status::SwitchingProtocols)
         .header("Upgrade", "websocket")
         .header("Connection", "Upgrade");
@@ -178,6 +207,6 @@ pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + 'static) -> 
             BASE64_STANDARD.encode(hasher.finalize()),
         );
     }
-    res = res.takeover(|stream| handler(WebSocket { stream }));
+    res = res.takeover(|stream| handler(WebSocket::new(stream)));
     res
 }

@@ -19,7 +19,7 @@ fn handler(req: &Request) -> Response {
         return small_websocket::upgrade(req, |mut ws| {
             println!(
                 "Client connected: {}",
-                ws.stream.peer_addr().expect("Can't get client addr")
+                ws.peer_addr().expect("Can't get client addr")
             );
             while let Some(message) = ws.recv().expect("Failed to receive message") {
                 if let Message::Text(text) = message {

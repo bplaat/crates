@@ -11,4 +11,7 @@ workspace = true
 [dependencies]
 base64 = "0.22"
 sha1 = "0.10.6"
-small-http = "0.1.0"
+small-http = { version = "0.1.0", default-features = false }
+
+[dev-dependencies]
+small-http = { version = "0.1.0" }
