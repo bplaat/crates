@@ -21,11 +21,16 @@ fn handler(req: &Request) -> Response {
                 "Client connected: {}",
                 ws.peer_addr().expect("Can't get client addr")
             );
-            while let Some(message) = ws.recv().expect("Failed to receive message") {
-                if let Message::Text(text) = message {
-                    println!("Client recv: {}", text);
-                    ws.send(Message::Text(text))
-                        .expect("Failed to send message");
+            loop {
+                let message = ws.recv().expect("Failed to receive message");
+                match message {
+                    Message::Text(text) => {
+                        println!("Client recv: {}", text);
+                        ws.send(Message::Text(text))
+                            .expect("Failed to send message");
+                    }
+                    Message::Close(_, _) => break,
+                    _ => {}
                 }
             }
             println!("Client disconnected");

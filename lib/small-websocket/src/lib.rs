@@ -8,6 +8,8 @@
 
 #![deny(unsafe_code)]
 
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
@@ -46,12 +48,52 @@ impl Eq for WebSocket {}
 
 impl WebSocket {
     fn new(stream: TcpStream) -> Self {
-        stream
-            .set_nonblocking(true)
-            .expect("Failed to set non-blocking mode");
         WebSocket {
             stream: Arc::new(Mutex::new(stream)),
         }
+    }
+
+    /// Connect to a WebSocket server
+    #[cfg(feature = "client")]
+    pub fn connect(url: impl AsRef<str>) -> Result<Self, ConnectError> {
+        let parsed_url = url::Url::parse(url.as_ref()).map_err(|_| ConnectError)?;
+        let mut stream = TcpStream::connect(format!(
+            "{}:{}",
+            parsed_url.host().expect("URL should have a host"),
+            parsed_url.port().unwrap_or(80)
+        ))
+        .map_err(|_| ConnectError)?;
+
+        let mut random_key = [0u8; 16];
+        getrandom::fill(&mut random_key).expect("Can't generate random key");
+        let req = Request::get(url.as_ref())
+            .header("Upgrade", "websocket")
+            .header("Connection", "Upgrade")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", BASE64_STANDARD.encode(random_key));
+        req.write_to_stream(&mut stream, false);
+
+        let res = Response::read_from_stream(&mut stream).map_err(|_| ConnectError)?;
+        if res.status != Status::SwitchingProtocols {
+            return Err(ConnectError);
+        }
+        let websocket_accept = res
+            .headers
+            .get("Sec-WebSocket-Accept")
+            .ok_or(ConnectError)?;
+        let mut sha1 = Sha1::new();
+        sha1.update(random_key);
+        sha1.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+        let expected_accept = BASE64_STANDARD.encode(sha1.finalize());
+        if *websocket_accept != expected_accept {
+            eprintln!(
+                "WebSocket connection failed: expected Sec-WebSocket-Accept header to be '{}', got '{}'",
+                expected_accept, websocket_accept
+            );
+            return Err(ConnectError);
+        }
+
+        Ok(WebSocket::new(stream))
     }
 
     /// Get the underlying TCP stream peer address
@@ -60,17 +102,46 @@ impl WebSocket {
     }
 
     /// Receive WebSocket message
-    pub fn recv(&mut self) -> std::io::Result<Option<Message>> {
-        // Do a non-blocking read
+    pub fn recv(&mut self) -> std::io::Result<Message> {
         let mut stream = self.stream.lock().expect("Can't get lock");
         let mut buf = [0; 1024];
         match stream.read(&mut buf) {
-            Ok(0) => return Ok(None), // Connection closed
+            Ok(0) => {
+                return Ok(Message::Close(None, Some("Connection closed".to_string())));
+            }
             Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
             Err(e) => return Err(e),
         }
+        Self::parse_message(&buf).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid WebSocket frame")
+        })
+    }
 
+    /// Receive WebSocket message without blocking
+    pub fn recv_non_blocking(&mut self) -> std::io::Result<Option<Message>> {
+        let mut stream = self.stream.lock().expect("Can't get lock");
+        stream.set_nonblocking(true)?;
+        let mut buf = [0; 1024];
+        match stream.read(&mut buf) {
+            Ok(0) => {
+                return Ok(Some(Message::Close(
+                    None,
+                    Some("Connection closed".to_string()),
+                )));
+            }
+            Ok(_) => {}
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                return Ok(None);
+            }
+            Err(e) => return Err(e),
+        }
+        stream.set_nonblocking(false)?;
+        Self::parse_message(&buf).map(Some).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid WebSocket frame")
+        })
+    }
+
+    fn parse_message(buf: &[u8]) -> Option<Message> {
         // Parse WebSocket frame
         let opcode = buf[0] & 0x0F;
         let masked = (buf[1] & 0x80) != 0;
@@ -114,7 +185,7 @@ impl WebSocket {
         }
 
         // Return appropriate message type
-        Ok(match opcode {
+        match opcode {
             0x1 => Some(Message::Text(
                 String::from_utf8_lossy(&payload).into_owned(),
             )),
@@ -135,7 +206,7 @@ impl WebSocket {
             0x9 => Some(Message::Ping(payload)),
             0xA => Some(Message::Pong(payload)),
             _ => None,
-        })
+        }
     }
 
     /// Write a WebSocket message
@@ -193,14 +264,27 @@ impl WebSocket {
     }
 }
 
+/// ConnectError
+#[derive(Debug)]
+pub struct ConnectError;
+
+impl Display for ConnectError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Connect error")
+    }
+}
+
+impl Error for ConnectError {}
+
 /// Upgrade HTTP request to WebSocket connection
 pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'static) -> Response {
     let mut res = Response::with_status(Status::SwitchingProtocols)
         .header("Upgrade", "websocket")
         .header("Connection", "Upgrade");
     if let Some(key) = request.headers.get("Sec-WebSocket-Key") {
+        let bytes = BASE64_STANDARD.decode(key.as_bytes()).unwrap_or_default();
         let mut hasher = Sha1::new();
-        hasher.update(key.as_bytes());
+        hasher.update(bytes.as_slice());
         hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
         res = res.header(
             "Sec-WebSocket-Accept",
@@ -209,4 +293,37 @@ pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'stat
     }
     res = res.takeover(|stream| handler(WebSocket::new(stream)));
     res
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use std::net::{Ipv4Addr, TcpListener};
+
+    use super::*;
+
+    #[test]
+    fn test_websocket_server_client() {
+        // Create WebSocket server
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            small_http::serve(listener, |req| {
+                upgrade(req, |mut ws| {
+                    loop {
+                        if let Message::Text(text) = ws.recv().expect("Failed to receive message") {
+                            ws.send(Message::Text(text)).unwrap();
+                        }
+                    }
+                })
+            });
+        });
+
+        // Connect WebSocket client
+        let mut ws = WebSocket::connect(format!("ws://{}:{}/", addr.ip(), addr.port())).unwrap();
+        ws.send(Message::Text("Hello".to_string())).unwrap();
+        if let Message::Text(text) = ws.recv().unwrap() {
+            assert_eq!(text, "Hello")
+        }
+    }
 }
