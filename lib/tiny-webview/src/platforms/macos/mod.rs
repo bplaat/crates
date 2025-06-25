@@ -21,12 +21,12 @@ mod webkit;
 const IVAR_SELF: &str = "_self";
 
 // MARK: EventLoop
-pub(crate) struct EventLoop {
+pub(crate) struct PlatformEventLoop {
     application: *mut Object,
     event_handler: Option<Box<dyn FnMut(Event) + 'static>>,
 }
 
-impl EventLoop {
+impl PlatformEventLoop {
     pub(crate) fn new() -> Self {
         // Register AppDelegate class
         let mut decl = ClassBuilder::new(c"AppDelegate", class!(NSObject))
@@ -81,7 +81,7 @@ impl EventLoop {
     }
 }
 
-impl crate::EventLoop for EventLoop {
+impl crate::EventLoopInterface for PlatformEventLoop {
     fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
         self.event_handler = Some(Box::new(event_handler));
         unsafe {
@@ -134,7 +134,7 @@ fn send_event(event: Event) {
     let _self = unsafe {
         let app_delegate: *mut Object = msg_send![NSApp, delegate];
         #[allow(deprecated)]
-        &mut *(*(*app_delegate).get_ivar::<*const c_void>(IVAR_SELF) as *mut EventLoop)
+        &mut *(*(*app_delegate).get_ivar::<*const c_void>(IVAR_SELF) as *mut PlatformEventLoop)
     };
 
     if let Some(handler) = _self.event_handler.as_mut() {
@@ -143,12 +143,12 @@ fn send_event(event: Event) {
 }
 
 // MARK: Webview
-pub(crate) struct Webview {
+pub(crate) struct PlatformWebview {
     window: *mut Object,
     webview: *mut Object,
 }
 
-impl Webview {
+impl PlatformWebview {
     pub(crate) fn new(builder: WebviewBuilder) -> Self {
         // Register WindowDelegate class
         if AnyClass::get(c"WindowDelegate").is_none() {
@@ -286,7 +286,7 @@ impl Webview {
     }
 }
 
-impl crate::Webview for Webview {
+impl crate::WebviewInterface for PlatformWebview {
     fn set_title(&mut self, title: impl AsRef<str>) {
         unsafe { msg_send![self.window, setTitle:NSString::from_str(title)] }
     }

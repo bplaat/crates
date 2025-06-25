@@ -6,7 +6,7 @@
 
 //! A simple tiny webview multi-window example
 
-use tiny_webview::{EventLoop, EventLoopBuilder, LogicalPoint, WebviewBuilder};
+use tiny_webview::{EventLoopBuilder, LogicalPoint, WebviewBuilder};
 
 fn main() {
     let mut event_loop = EventLoopBuilder::build();

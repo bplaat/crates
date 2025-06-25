@@ -7,14 +7,13 @@
 //! A tiny webview ipc example
 
 use serde::{Deserialize, Serialize};
-use tiny_webview::{Event, EventLoop, EventLoopBuilder, LogicalSize, Webview, WebviewBuilder};
+use tiny_webview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
 
 const APP_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/app.min.html"));
 
 #[derive(Deserialize, Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 enum IpcMessage {
-    #[serde(rename = "hello")]
     Hello { name: String },
 }
 

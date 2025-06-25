@@ -16,11 +16,11 @@ use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 mod headers;
 
 // MARK: EventLoop
-pub(crate) struct EventLoop;
+pub(crate) struct PlatformEventLoop;
 
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
-impl EventLoop {
+impl PlatformEventLoop {
     pub(crate) fn new() -> Self {
         // Init GTK
         unsafe {
@@ -41,7 +41,7 @@ impl EventLoop {
     }
 }
 
-impl crate::EventLoop for EventLoop {
+impl crate::EventLoopInterface for PlatformEventLoop {
     fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
         unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
 
@@ -68,9 +68,9 @@ struct WebviewData {
     remember_window_state: bool,
 }
 
-pub(crate) struct Webview(Box<WebviewData>);
+pub(crate) struct PlatformWebview(Box<WebviewData>);
 
-impl Webview {
+impl PlatformWebview {
     pub(crate) fn new(builder: WebviewBuilder) -> Self {
         // Force dark mode if enabled
         if builder.should_force_dark_mode {
@@ -241,7 +241,7 @@ impl Webview {
         // Fill webview data and return
         webview_data.window = window;
         webview_data.webview = webview;
-        Webview(webview_data)
+        Self(webview_data)
     }
 
     #[cfg(feature = "remember_window_state")]
@@ -329,7 +329,7 @@ impl Webview {
     }
 }
 
-impl crate::Webview for Webview {
+impl crate::WebviewInterface for PlatformWebview {
     fn set_title(&mut self, title: impl AsRef<str>) {
         let title = CString::new(title.as_ref()).expect("Can't convert to CString");
         unsafe { gtk_window_set_title(self.0.window, title.as_ptr()) }
@@ -432,7 +432,7 @@ extern "C" fn window_on_close(
     // Save window state
     #[cfg(feature = "remember_window_state")]
     if _self.remember_window_state {
-        Webview::save_window_state(_self.window);
+        PlatformWebview::save_window_state(_self.window);
     }
 
     // Send window closed event

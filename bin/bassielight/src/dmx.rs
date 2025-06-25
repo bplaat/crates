@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{Config, FixtureType};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Mode {
     Black,

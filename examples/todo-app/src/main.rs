@@ -13,7 +13,7 @@ use std::{env, fs};
 
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
-use tiny_webview::{Event, EventLoop, EventLoopBuilder, LogicalSize, Webview, WebviewBuilder};
+use tiny_webview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
@@ -24,13 +24,10 @@ struct Todo {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 enum IpcMessage {
-    #[serde(rename = "get-todos")]
     GetTodos,
-    #[serde(rename = "get-todos-response")]
     GetTodosResponse { todos: Vec<Todo> },
-    #[serde(rename = "update-todos")]
     UpdateTodos { todos: Vec<Todo> },
 }
 

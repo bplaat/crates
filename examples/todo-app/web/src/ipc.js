@@ -17,8 +17,27 @@ export default class Ipc {
     send(type, data = {}) {
         console.log(`Send ${type}`);
         const message = JSON.stringify({ type, ...data });
-        if (this.type === 'ipc') window.ipc.postMessage(message);
-        if (this.type === 'ws') this.ws.send(message);
+        return new Promise((resolve) => {
+            if (this.type === 'ipc') {
+                window.ipc.postMessage(message);
+                resolve();
+            }
+            if (this.type === 'ws') {
+                if (this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(message);
+                    resolve();
+                } else {
+                    this.ws.addEventListener(
+                        'open',
+                        () => {
+                            this.ws.send(message);
+                            resolve();
+                        },
+                        { once: true }
+                    );
+                }
+            }
+        });
     }
 
     on(type, callback) {
