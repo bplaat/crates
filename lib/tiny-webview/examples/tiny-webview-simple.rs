@@ -6,7 +6,7 @@
 
 //! A simple tiny webview example
 
-use tiny_webview::{EventLoop, EventLoopBuilder, WebviewBuilder};
+use tiny_webview::{EventLoopBuilder, WebviewBuilder};
 
 fn main() {
     let mut event_loop = EventLoopBuilder::build();

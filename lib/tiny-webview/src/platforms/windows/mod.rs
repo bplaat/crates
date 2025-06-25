@@ -50,11 +50,11 @@ use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
 mod utils;
 
 // MARK: EventLoop
-pub(crate) struct EventLoop;
+pub(crate) struct PlatformEventLoop;
 
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
-impl EventLoop {
+impl PlatformEventLoop {
     pub(crate) fn new() -> Self {
         // Enable PerMonitorV2 high DPI awareness
         _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
@@ -62,7 +62,7 @@ impl EventLoop {
     }
 }
 
-impl crate::EventLoop for EventLoop {
+impl crate::EventLoopInterface for PlatformEventLoop {
     fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
         unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
 
@@ -97,9 +97,9 @@ struct WebviewData {
     controller: Option<ICoreWebView2Controller>,
 }
 
-pub(crate) struct Webview(Box<WebviewData>);
+pub(crate) struct PlatformWebview(Box<WebviewData>);
 
-impl Webview {
+impl PlatformWebview {
     pub(crate) fn new(builder: WebviewBuilder) -> Self {
         let dpi = unsafe { GetDpiForSystem() };
 
@@ -381,7 +381,7 @@ impl Webview {
     }
 }
 
-impl crate::Webview for Webview {
+impl crate::WebviewInterface for PlatformWebview {
     fn set_title(&mut self, title: impl AsRef<str>) {
         let title = CString::new(title.as_ref()).expect("Can't convert to CString");
         _ = unsafe { SetWindowTextA(self.0.hwnd, PCSTR(title.as_ptr() as _)) };
@@ -568,7 +568,7 @@ unsafe extern "system" fn window_proc(
                         &mut window_placement,
                     );
                     let window_placement_path =
-                        format!("{}/window.bin", Webview::userdata_folder());
+                        format!("{}/window.bin", PlatformWebview::userdata_folder());
                     if let Ok(mut file) = std::fs::OpenOptions::new()
                         .write(true)
                         .create(true)

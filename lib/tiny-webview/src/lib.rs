@@ -9,60 +9,39 @@
 pub use event::*;
 pub use sizes::*;
 
+use crate::platforms::{PlatformEventLoop, PlatformWebview};
+
 mod event;
 mod platforms;
 mod sizes;
-
-// MARK: EventLoop trait
-/// EventLoop trait
-pub trait EventLoop {
-    /// Start event loop
-    fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> !;
-}
 
 // MARK: EventLoopBuilder
 /// EventLoop builder
 pub struct EventLoopBuilder;
 
 impl EventLoopBuilder {
-    /// Create new event loop builder
-    pub fn build() -> impl EventLoop {
-        platforms::EventLoop::new()
+    /// Create new event loop
+    pub fn build() -> EventLoop {
+        EventLoop::new(PlatformEventLoop::new())
     }
 }
 
-// MARK: Webview trait
-/// Webview trait
-pub trait Webview {
-    /// Set title
-    fn set_title(&mut self, title: impl AsRef<str>);
-    /// Get position
-    fn position(&self) -> LogicalPoint;
-    /// Get size
-    fn size(&self) -> LogicalSize;
-    /// Set position
-    fn set_position(&mut self, point: LogicalPoint);
-    /// Set size
-    fn set_size(&mut self, size: LogicalSize);
-    /// Set minimum size
-    fn set_min_size(&mut self, min_size: LogicalSize);
-    /// Set resizable
-    fn set_resizable(&mut self, resizable: bool);
+// MARK: EventLoop
+pub(crate) trait EventLoopInterface {
+    fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> !;
+}
 
-    /// Load URL
-    fn load_url(&mut self, url: impl AsRef<str>);
-    /// Load HTML string
-    fn load_html(&mut self, html: impl AsRef<str>);
-    /// Evaluate script
-    fn evaluate_script(&mut self, script: impl AsRef<str>);
+/// Event loop
+pub struct EventLoop(PlatformEventLoop);
 
-    /// Send IPC message
-    #[cfg(feature = "ipc")]
-    fn send_ipc_message(&mut self, message: impl AsRef<str>) {
-        self.evaluate_script(format!(
-            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{}`}}));",
-            message.as_ref()
-        ));
+impl EventLoop {
+    fn new(event_loop: PlatformEventLoop) -> Self {
+        Self(event_loop)
+    }
+
+    /// Run the event loop
+    pub fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
+        self.0.run(event_handler)
     }
 }
 
@@ -197,7 +176,7 @@ impl WebviewBuilder {
 
     /// Build webview
     #[allow(unused_mut)]
-    pub fn build(mut self) -> impl Webview {
+    pub fn build(mut self) -> Webview {
         // Spawn a local http server when assets_get is set
         #[cfg(feature = "rust-embed")]
         if let Some(assets_get) = self.embed_assets_get.take() {
@@ -233,6 +212,91 @@ impl WebviewBuilder {
             self.should_load_url = Some(format!("http://{}/", local_addr));
         }
 
-        platforms::Webview::new(self)
+        Webview::new(PlatformWebview::new(self))
+    }
+}
+
+// MARK: Webview
+pub(crate) trait WebviewInterface {
+    fn set_title(&mut self, title: impl AsRef<str>);
+    fn position(&self) -> LogicalPoint;
+    fn size(&self) -> LogicalSize;
+    fn set_position(&mut self, point: LogicalPoint);
+    fn set_size(&mut self, size: LogicalSize);
+    fn set_min_size(&mut self, min_size: LogicalSize);
+    fn set_resizable(&mut self, resizable: bool);
+
+    fn load_url(&mut self, url: impl AsRef<str>);
+    fn load_html(&mut self, html: impl AsRef<str>);
+    fn evaluate_script(&mut self, script: impl AsRef<str>);
+}
+
+/// Webview
+pub struct Webview(PlatformWebview);
+unsafe impl Send for Webview {}
+unsafe impl Sync for Webview {}
+
+impl Webview {
+    fn new(webview: PlatformWebview) -> Self {
+        Self(webview)
+    }
+
+    /// Set title
+    pub fn set_title(&mut self, title: impl AsRef<str>) {
+        self.0.set_title(title)
+    }
+
+    /// Get position
+    pub fn position(&self) -> LogicalPoint {
+        self.0.position()
+    }
+
+    /// Get size
+    pub fn size(&self) -> LogicalSize {
+        self.0.size()
+    }
+
+    /// Set position
+    pub fn set_position(&mut self, point: LogicalPoint) {
+        self.0.set_position(point)
+    }
+
+    /// Set size
+    pub fn set_size(&mut self, size: LogicalSize) {
+        self.0.set_size(size)
+    }
+
+    /// Set minimum size
+    pub fn set_min_size(&mut self, min_size: LogicalSize) {
+        self.0.set_min_size(min_size)
+    }
+
+    /// Set resizable
+    pub fn set_resizable(&mut self, resizable: bool) {
+        self.0.set_resizable(resizable)
+    }
+
+    /// Load URL
+    pub fn load_url(&mut self, url: impl AsRef<str>) {
+        self.0.load_url(url)
+    }
+
+    /// Load HTML string
+    pub fn load_html(&mut self, html: impl AsRef<str>) {
+        self.0.load_html(html)
+    }
+
+    /// Evaluate script
+    pub fn evaluate_script(&mut self, script: impl AsRef<str>) {
+        self.0.evaluate_script(script)
+    }
+
+    /// Send IPC message
+    #[cfg(feature = "ipc")]
+    pub fn send_ipc_message(&mut self, message: impl AsRef<str>) {
+        self.evaluate_script(format!(
+            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{}`}}));",
+            message.as_ref()
+        ));
     }
 }

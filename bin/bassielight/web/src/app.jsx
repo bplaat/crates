@@ -38,26 +38,47 @@ function capitalizeFirstLetter(string) {
 }
 
 export function App() {
-    const [selectedColor, setSelectedColor] = useState(COLORS[0]);
-    const [selectedToggleColor, setSelectedToggleColor] = useState(COLORS[0]);
-    const [selectedToggleSpeed, setSelectedToggleSpeed] = useState(SPEEDS[0]);
-    const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useState(SPEEDS[0]);
-    const [selectedMode, setSelectedMode] = useState(MODES[0].type);
+    const [selectedColor, setSelectedColor] = useState(undefined);
+    const [selectedToggleColor, setSelectedToggleColor] = useState(undefined);
+    const [selectedToggleSpeed, setSelectedToggleSpeed] = useState(undefined);
+    const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useState(undefined);
+    const [selectedMode, setSelectedMode] = useState(undefined);
 
-    useEffect(() => {
-        ipc.send('setColor', { color: selectedColor });
+    useEffect(async () => {
+        const { state } = await ipc.request('getState');
+        setSelectedColor(state.color);
+        setSelectedToggleColor(state.toggleColor);
+        setSelectedToggleSpeed(state.toggleSpeed);
+        setSelectedStrobeSpeed(state.strobeSpeed);
+        setSelectedMode(state.mode);
+
+        const selectedColorListener = ipc.on('setColor', ({ color }) => setSelectedColor(color));
+        const selectedToggleColorListener = ipc.on('setToggleColor', ({ color }) => setSelectedToggleColor(color));
+        const selectedToggleSpeedListener = ipc.on('setToggleSpeed', ({ speed }) => setSelectedToggleSpeed(speed));
+        const selectedStrobeSpeedListener = ipc.on('setStrobeSpeed', ({ speed }) => setSelectedStrobeSpeed(speed));
+        const selectedModeListener = ipc.on('setMode', ({ mode }) => setSelectedMode(mode));
+        return () => {
+            selectedColorListener.remove();
+            selectedToggleColorListener.remove();
+            selectedToggleSpeedListener.remove();
+            selectedStrobeSpeedListener.remove();
+            selectedModeListener.remove();
+        };
+    }, []);
+    useEffect(async () => {
+        if (selectedColor !== undefined) await ipc.send('setColor', { color: selectedColor });
     }, [selectedColor]);
-    useEffect(() => {
-        ipc.send('setToggleColor', { color: selectedToggleColor });
+    useEffect(async () => {
+        if (selectedToggleColor !== undefined) await ipc.send('setToggleColor', { color: selectedToggleColor });
     }, [selectedToggleColor]);
-    useEffect(() => {
-        ipc.send('setToggleSpeed', { speed: selectedToggleSpeed });
+    useEffect(async () => {
+        if (selectedToggleSpeed !== undefined) await ipc.send('setToggleSpeed', { speed: selectedToggleSpeed });
     }, [selectedToggleSpeed]);
-    useEffect(() => {
-        ipc.send('setStrobeSpeed', { speed: selectedStrobeSpeed });
+    useEffect(async () => {
+        if (selectedStrobeSpeed !== undefined) await ipc.send('setStrobeSpeed', { speed: selectedStrobeSpeed });
     }, [selectedStrobeSpeed]);
-    useEffect(() => {
-        ipc.send('setMode', { mode: selectedMode });
+    useEffect(async () => {
+        if (selectedMode !== undefined) await ipc.send('setMode', { mode: selectedMode });
     }, [selectedMode]);
 
     return (

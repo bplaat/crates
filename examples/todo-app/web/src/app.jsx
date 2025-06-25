@@ -14,11 +14,11 @@ export function App() {
     const [input, setInput] = useState('');
 
     useEffect(async () => {
-        const { todos } = await ipc.request('get-todos');
+        const { todos } = await ipc.request('getTodos');
         setTodos(todos);
     }, []);
-    useEffect(() => {
-        ipc.send('update-todos', { todos });
+    useEffect(async () => {
+        await ipc.send('updateTodos', { todos });
     }, [todos]);
 
     const addTodo = (e) => {
