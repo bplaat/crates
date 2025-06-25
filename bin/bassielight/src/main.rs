@@ -12,6 +12,7 @@ use std::thread;
 use std::time::Duration;
 
 use rust_embed::Embed;
+use small_websocket::Message;
 use tiny_webview::{Event, EventLoop, EventLoopBuilder, LogicalSize, WebviewBuilder};
 
 use crate::dmx::DMX_STATE;
@@ -26,6 +27,25 @@ mod usb;
 #[folder = "$OUT_DIR/web"]
 struct WebAssets;
 
+fn ipc_message_received(message: &str) {
+    let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
+    let message = serde_json::from_str(message).expect("Failed to parse IPC message");
+    println!("[RUST] Received IPC message: {:?}", message);
+    match message {
+        IpcMessage::SetColor { color } => dmx_state.color = color,
+        IpcMessage::SetToggleColor { color } => dmx_state.toggle_color = color,
+        IpcMessage::SetToggleSpeed { speed } => {
+            dmx_state.toggle_speed = speed.map(Duration::from_millis);
+            dmx_state.is_toggle_color = speed.is_some();
+        }
+        IpcMessage::SetStrobeSpeed { speed } => {
+            dmx_state.strobe_speed = speed.map(Duration::from_millis);
+            dmx_state.is_strobe = speed.is_some();
+        }
+        IpcMessage::SetMode { mode } => dmx_state.mode = mode,
+    }
+}
+
 fn main() {
     let mut event_loop = EventLoopBuilder::build();
 
@@ -37,10 +57,28 @@ fn main() {
         .remember_window_state(true)
         .force_dark_mode(true)
         .load_rust_embed::<WebAssets>()
+        .internal_http_serve_handle(|req| {
+            if req.url.path() == "/ipc" {
+                return Some(small_websocket::upgrade(req, |mut ws| {
+                    loop {
+                        let message = match ws.recv() {
+                            Ok(message) => message,
+                            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => continue,
+                            Err(err) => panic!("WebSocket recv error: {}", err),
+                        };
+                        match message {
+                            Message::Text(text) => ipc_message_received(&text),
+                            Message::Close(_, _) => break,
+                            _ => {}
+                        }
+                    }
+                }));
+            }
+            None
+        })
         .build();
 
     let config = config::load_config("config.json").expect("Can't load config.json");
-
     event_loop.run(move |event| match event {
         Event::PageLoadFinished => {
             let config = config.clone();
@@ -48,26 +86,11 @@ fn main() {
                 if let Some(device) = usb::find_udmx_device() {
                     dmx::dmx_thread(device, config);
                 } else {
-                    eprintln!("No uDMX device found");
+                    eprintln!("[RUST] No uDMX device found");
                 }
             });
         }
-        Event::PageMessageReceived(message) => {
-            let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
-            match serde_json::from_str(&message).expect("Failed to parse IPC message") {
-                IpcMessage::SetColor { color } => dmx_state.color = color,
-                IpcMessage::SetToggleColor { color } => dmx_state.toggle_color = color,
-                IpcMessage::SetToggleSpeed { speed } => {
-                    dmx_state.toggle_speed = speed.map(Duration::from_millis);
-                    dmx_state.is_toggle_color = speed.is_some();
-                }
-                IpcMessage::SetStrobeSpeed { speed } => {
-                    dmx_state.strobe_speed = speed.map(Duration::from_millis);
-                    dmx_state.is_strobe = speed.is_some();
-                }
-                IpcMessage::SetMode { mode } => dmx_state.mode = mode,
-            }
-        }
+        Event::PageMessageReceived(message) => ipc_message_received(&message),
         _ => {}
     });
 }

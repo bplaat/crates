@@ -400,7 +400,7 @@ extern "C" fn webview_did_finish_navigation(
 extern "C" fn webview_decide_policy_for_navigation_action(
     _this: *mut Object,
     _sel: Sel,
-    webview: *mut Object,
+    _webview: *mut Object,
     navigation_action: *mut Object,
     decision_handler: &Block<dyn Fn(i64)>,
 ) {
@@ -409,15 +409,8 @@ extern "C" fn webview_decide_policy_for_navigation_action(
         if target_frame.is_null() {
             let request: *mut Object = msg_send![navigation_action, request];
             let url: *mut Object = msg_send![request, URL];
-            let url_string: NSString = msg_send![url, absoluteString];
-            let current_url: *mut Object = msg_send![webview, URL];
-            let current_url_string: NSString = msg_send![current_url, absoluteString];
-            if url_string.to_string() != "about:blank"
-                && url_string.to_string() != current_url_string.to_string()
-            {
-                let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
-                let _: Bool = msg_send![workspace, openURL:url];
-            }
+            let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+            let _: Bool = msg_send![workspace, openURL:url];
             decision_handler.call((WK_NAVIGATION_ACTION_POLICY_CANCEL,));
         } else {
             decision_handler.call((WK_NAVIGATION_ACTION_POLICY_ALLOW,));

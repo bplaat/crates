@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Leonard van der Plaat
+ * Copyright (c) 2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */

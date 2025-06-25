@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::dmx::Mode;
 
 #[allow(clippy::enum_variant_names)]
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub(crate) enum IpcMessage {
     #[serde(rename = "setColor")]

@@ -82,6 +82,8 @@ pub struct WebviewBuilder {
     should_load_html: Option<String>,
     #[cfg(feature = "rust-embed")]
     embed_assets_get: Option<fn(&str) -> Option<rust_embed::EmbeddedFile>>,
+    #[cfg(feature = "rust-embed")]
+    internal_http_serve_handle: Option<fn(&small_http::Request) -> Option<small_http::Response>>,
 }
 
 impl Default for WebviewBuilder {
@@ -103,6 +105,8 @@ impl Default for WebviewBuilder {
             should_load_html: None,
             #[cfg(feature = "rust-embed")]
             embed_assets_get: None,
+            #[cfg(feature = "rust-embed")]
+            internal_http_serve_handle: None,
         }
     }
 }
@@ -181,7 +185,18 @@ impl WebviewBuilder {
         self
     }
 
+    /// Set internal http server handler
+    #[cfg(feature = "rust-embed")]
+    pub fn internal_http_serve_handle(
+        mut self,
+        handle: fn(&small_http::Request) -> Option<small_http::Response>,
+    ) -> Self {
+        self.internal_http_serve_handle = Some(handle);
+        self
+    }
+
     /// Build webview
+    #[allow(unused_mut)]
     pub fn build(mut self) -> impl Webview {
         // Spawn a local http server when assets_get is set
         #[cfg(feature = "rust-embed")]
@@ -191,13 +206,21 @@ impl WebviewBuilder {
             let local_addr = listener
                 .local_addr()
                 .expect("Can't start local http server");
+            println!("Local HTTP server started at http://{}/", local_addr);
             std::thread::spawn(move || {
                 small_http::serve_single_threaded(listener, move |req| {
-                    let path = match req.url.path().trim_start_matches('/') {
-                        "" => "index.html".to_string(),
-                        other => other.to_string(),
-                    };
-                    if let Some(file) = assets_get(&path) {
+                    let mut path = req.url.path().to_string();
+                    if path.ends_with('/') {
+                        path = format!("{}index.html", path);
+                    }
+
+                    if let Some(handle) = self.internal_http_serve_handle {
+                        if let Some(response) = handle(req) {
+                            return response;
+                        }
+                    }
+
+                    if let Some(file) = assets_get(path.trim_start_matches('/')) {
                         let mime = mime_guess::from_path(&path).first_or_octet_stream();
                         small_http::Response::with_header("Content-Type", mime.to_string())
                             .body(file.data)

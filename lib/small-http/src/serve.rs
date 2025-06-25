@@ -6,6 +6,7 @@
 
 use std::io::Write;
 use std::net::TcpListener;
+use std::time::Duration;
 
 use crate::request::Request;
 use crate::response::Response;
@@ -16,7 +17,12 @@ where
     F: Fn(&Request) -> Response + Clone + Send + 'static,
 {
     // Listen for incoming tcp clients
-    for mut stream in listener.incoming().flatten() {
+    for stream in listener.incoming() {
+        let mut stream = stream.expect("Failed to accept connection");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .expect("Can't set read timeout");
+
         // Read incoming request
         let client_addr = stream
             .peer_addr()
@@ -26,20 +32,21 @@ where
             Ok(request) => {
                 // Handle request and write response
                 let mut response = handler(&request);
-                response.write_to_stream(&mut stream, &request, false);
+                response.write_to_stream(
+                    &mut stream,
+                    &request,
+                    request.headers.get("Connection").is_some(),
+                );
 
                 // If the response has a takeover function, start thread and move tcp stream
                 if let Some(takeover) = response.takeover.take() {
                     std::thread::spawn(move || takeover(stream));
-                    return;
                 }
-                continue;
             }
             Err(err) => {
                 // Invalid request received
                 _ = write!(stream, "HTTP/1.0 400 Bad Request\r\n\r\n");
                 println!("Error: Invalid http request: {:?}", err);
-                return;
             }
         }
     }
@@ -56,7 +63,8 @@ where
     let pool = threadpool::ThreadPool::new(num_threads * 64);
 
     // Listen for incoming tcp clients
-    for mut stream in listener.incoming().flatten() {
+    for stream in listener.incoming() {
+        let mut stream = stream.expect("Failed to accept connection");
         stream
             .set_read_timeout(Some(crate::KEEP_ALIVE_TIMEOUT))
             .expect("Can't set read timeout");

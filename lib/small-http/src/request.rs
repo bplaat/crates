@@ -163,23 +163,33 @@ impl Request {
             let mut line = String::new();
             reader
                 .read_line(&mut line)
-                .map_err(|_| InvalidRequestError)?;
+                .map_err(|_| InvalidRequestError("Can't read first line".to_string()))?;
             let mut parts = line.split(' ');
             (
                 parts
                     .next()
-                    .ok_or(InvalidRequestError)?
+                    .ok_or(InvalidRequestError(
+                        "Can't read 1st part of first line".to_string(),
+                    ))?
                     .trim()
                     .parse()
-                    .map_err(|_| InvalidRequestError)?,
-                parts.next().ok_or(InvalidRequestError)?.trim().to_string(),
+                    .map_err(|_| InvalidRequestError("Can't parse method".to_string()))?,
                 parts
                     .next()
-                    .ok_or(InvalidRequestError)?
+                    .ok_or(InvalidRequestError(
+                        "Can't read 2st part of first line".to_string(),
+                    ))?
+                    .trim()
+                    .to_string(),
+                parts
+                    .next()
+                    .ok_or(InvalidRequestError(
+                        "Can't read 3st part of first line".to_string(),
+                    ))?
                     .trim()
                     .to_string()
                     .parse()
-                    .map_err(|_| InvalidRequestError)?,
+                    .map_err(|_| InvalidRequestError("Can't parse HTTP version".to_string()))?,
             )
         };
 
@@ -189,11 +199,13 @@ impl Request {
             let mut line = String::new();
             reader
                 .read_line(&mut line)
-                .map_err(|_| InvalidRequestError)?;
+                .map_err(|_| InvalidRequestError("Can't read header line".to_string()))?;
             if line == "\r\n" {
                 break;
             }
-            let split = line.find(':').ok_or(InvalidRequestError)?;
+            let split = line
+                .find(':')
+                .ok_or(InvalidRequestError("Can't parse header line".to_string()))?;
             headers.insert(
                 line[0..split].trim().to_string(),
                 line[split + 1..].trim().to_string(),
@@ -203,10 +215,16 @@ impl Request {
         // Read body
         let mut body = None;
         if let Some(content_length) = headers.get("Content-Length") {
-            let content_length = content_length.parse().map_err(|_| InvalidRequestError)?;
+            let content_length = content_length
+                .parse()
+                .map_err(|_| InvalidRequestError("Can't parse Content-Length".to_string()))?;
             if content_length > 0 {
                 let mut buffer = vec![0; content_length];
-                reader.read(&mut buffer).map_err(|_| InvalidRequestError)?;
+                reader.read(&mut buffer).map_err(|_| {
+                    InvalidRequestError(
+                        "Can't read Content-Length amount of bytes from stream".to_string(),
+                    )
+                })?;
                 body = Some(buffer);
             }
         }
@@ -215,13 +233,15 @@ impl Request {
         let url = Url::from_str(&if version == Version::Http1_1 {
             format!(
                 "http://{}{}",
-                headers.get("Host").ok_or(InvalidRequestError)?,
+                headers.get("Host").ok_or(InvalidRequestError(
+                    "HTTP version is 1.1 but Host header is not set".to_string()
+                ))?,
                 path
             )
         } else {
             format!("http://localhost{}", path)
         })
-        .map_err(|_| InvalidRequestError)?;
+        .map_err(|_| InvalidRequestError("Can't parse request url".to_string()))?;
 
         Ok(Request {
             version,
@@ -301,11 +321,11 @@ impl Request {
 
 // MARK: InvalidRequestError
 #[derive(Debug)]
-pub(crate) struct InvalidRequestError;
+pub(crate) struct InvalidRequestError(String);
 
 impl Display for InvalidRequestError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Invalid request")
+        write!(f, "Invalid request: {}", self.0)
     }
 }
 

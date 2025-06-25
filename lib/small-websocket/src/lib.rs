@@ -20,6 +20,7 @@ use sha1::{Digest, Sha1};
 use small_http::{Request, Response, Status};
 
 /// WebSocket message
+#[derive(Debug, Clone)]
 pub enum Message {
     /// Text message
     Text(String),
@@ -66,11 +67,12 @@ impl WebSocket {
 
         let mut random_key = [0u8; 16];
         getrandom::fill(&mut random_key).expect("Can't generate random key");
+        let random_key = BASE64_STANDARD.encode(random_key);
         let req = Request::get(url.as_ref())
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
             .header("Sec-WebSocket-Version", "13")
-            .header("Sec-WebSocket-Key", BASE64_STANDARD.encode(random_key));
+            .header("Sec-WebSocket-Key", &random_key);
         req.write_to_stream(&mut stream, false);
 
         let res = Response::read_from_stream(&mut stream).map_err(|_| ConnectError)?;
@@ -82,7 +84,7 @@ impl WebSocket {
             .get("Sec-WebSocket-Accept")
             .ok_or(ConnectError)?;
         let mut sha1 = Sha1::new();
-        sha1.update(random_key);
+        sha1.update(random_key.as_bytes());
         sha1.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
         let expected_accept = BASE64_STANDARD.encode(sha1.finalize());
         if *websocket_accept != expected_accept {
@@ -106,15 +108,12 @@ impl WebSocket {
         let mut stream = self.stream.lock().expect("Can't get lock");
         let mut buf = [0; 1024];
         match stream.read(&mut buf) {
-            Ok(0) => {
-                return Ok(Message::Close(None, Some("Connection closed".to_string())));
-            }
-            Ok(_) => {}
-            Err(e) => return Err(e),
+            Ok(0) => Ok(Message::Close(None, Some("Connection closed".to_string()))),
+            Ok(_) => Self::parse_message(&buf).ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid WebSocket frame")
+            }),
+            Err(e) => Err(e),
         }
-        Self::parse_message(&buf).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid WebSocket frame")
-        })
     }
 
     /// Receive WebSocket message without blocking
@@ -123,22 +122,16 @@ impl WebSocket {
         stream.set_nonblocking(true)?;
         let mut buf = [0; 1024];
         match stream.read(&mut buf) {
-            Ok(0) => {
-                return Ok(Some(Message::Close(
-                    None,
-                    Some("Connection closed".to_string()),
-                )));
-            }
-            Ok(_) => {}
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                return Ok(None);
-            }
-            Err(e) => return Err(e),
+            Ok(0) => Ok(Some(Message::Close(
+                None,
+                Some("Connection closed".to_string()),
+            ))),
+            Ok(_) => Self::parse_message(&buf).map(Some).ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid WebSocket frame")
+            }),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+            Err(e) => Err(e),
         }
-        stream.set_nonblocking(false)?;
-        Self::parse_message(&buf).map(Some).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid WebSocket frame")
-        })
     }
 
     fn parse_message(buf: &[u8]) -> Option<Message> {
@@ -282,9 +275,8 @@ pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'stat
         .header("Upgrade", "websocket")
         .header("Connection", "Upgrade");
     if let Some(key) = request.headers.get("Sec-WebSocket-Key") {
-        let bytes = BASE64_STANDARD.decode(key.as_bytes()).unwrap_or_default();
         let mut hasher = Sha1::new();
-        hasher.update(bytes.as_slice());
+        hasher.update(key.as_bytes());
         hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
         res = res.header(
             "Sec-WebSocket-Accept",

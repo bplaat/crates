@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2025 Leonard van der Plaat
+ * Copyright (c) 2025 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -34,6 +35,9 @@ body {
     flex-direction: column;
     align-items: center;
     text-align: center;
+
+    /* Adjust for .bottom-controls-container */
+    margin-bottom: 4rem;
 }
 
 h2 {
@@ -61,14 +65,8 @@ i {
 }
 
 a {
-    color: var(--primary-color);
+    color: currentColor;
     text-decoration: none;
-    transition: color 0.2s ease;
-}
-
-a:hover {
-    color: #4ca9ff;
-    text-decoration: underline;
 }
 
 .icon {
@@ -88,7 +86,8 @@ a:hover {
 }
 
 /* --- General Button Styling --- */
-button {
+button,
+.button {
     padding: 0;
     border: 2px solid transparent;
     border-radius: 8px;
@@ -97,6 +96,7 @@ button {
     font-family: inherit;
     background-color: var(--button-bg);
     color: var(--text-color);
+    text-decoration: none;
     cursor: pointer;
     transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
     -webkit-user-select: none;
@@ -104,17 +104,22 @@ button {
     outline: none;
 }
 
-button:hover {
+button:hover,
+button:focus,
+.button:hover,
+.button:focus {
     background-color: var(--button-hover-bg);
     border-color: var(--primary-color);
 }
 
-button:active {
+button:active,
+.button:active {
     background-color: var(--button-active-bg);
     transform: scale(0.96);
 }
 
-button:focus-visible {
+button:focus-visible,
+.button:focus-visible {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px var(--background-color), 0 0 0 4px var(--primary-color);
 }
@@ -150,7 +155,7 @@ button.selected:hover {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 15px 10px;
+    padding: 1rem;
 }
 
 .control-button {
