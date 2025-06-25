@@ -32,6 +32,7 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
+ "small-websocket",
  "tiny-webview",
  "winres",
 ]

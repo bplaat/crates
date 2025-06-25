@@ -5,18 +5,20 @@
  */
 
 import { useState, useEffect } from 'preact/hooks';
-import { request, send } from './ipc.js';
+import Ipc from './ipc.js';
+
+const ipc = new Ipc();
 
 export function App() {
     const [todos, setTodos] = useState([]);
     const [input, setInput] = useState('');
 
     useEffect(async () => {
-        const { todos } = await request('get-todos');
+        const { todos } = await ipc.request('get-todos');
         setTodos(todos);
     }, []);
     useEffect(() => {
-        send('update-todos', { todos });
+        ipc.send('update-todos', { todos });
     }, [todos]);
 
     const addTodo = (e) => {

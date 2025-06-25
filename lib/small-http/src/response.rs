@@ -219,12 +219,14 @@ impl Response {
             .insert("Content-Length".to_string(), self.body.len().to_string());
         if req.version == Version::Http1_1 {
             if keep_alive && req.headers.get("Connection").map(|v| v.as_str()) != Some("close") {
-                self.headers
-                    .insert("Connection".to_string(), "keep-alive".to_string());
-                self.headers.insert(
-                    "Keep-Alive".to_string(),
-                    format!("timeout={}", KEEP_ALIVE_TIMEOUT.as_secs()),
-                );
+                if self.headers.get("Connection").is_none() {
+                    self.headers
+                        .insert("Connection".to_string(), "keep-alive".to_string());
+                    self.headers.insert(
+                        "Keep-Alive".to_string(),
+                        format!("timeout={}", KEEP_ALIVE_TIMEOUT.as_secs()),
+                    );
+                }
             } else {
                 self.headers
                     .insert("Connection".to_string(), "close".to_string());
