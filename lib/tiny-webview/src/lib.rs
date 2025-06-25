@@ -80,6 +80,8 @@ pub struct WebviewBuilder {
     should_center: bool,
     should_load_url: Option<String>,
     should_load_html: Option<String>,
+    #[cfg(feature = "rust-embed")]
+    embed_assets_get: Option<fn(&str) -> Option<rust_embed::EmbeddedFile>>,
 }
 
 impl Default for WebviewBuilder {
@@ -99,6 +101,8 @@ impl Default for WebviewBuilder {
             should_center: false,
             should_load_url: None,
             should_load_html: None,
+            #[cfg(feature = "rust-embed")]
+            embed_assets_get: None,
         }
     }
 }
@@ -173,34 +177,39 @@ impl WebviewBuilder {
     /// Load rust-embed folder
     #[cfg(feature = "rust-embed")]
     pub fn load_rust_embed<A: rust_embed::RustEmbed>(mut self) -> Self {
-        // Spawn a local http server
-        let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-            .unwrap_or_else(|_| panic!("Can't start local http server"));
-        let local_addr = listener
-            .local_addr()
-            .expect("Can't start local http server");
-        std::thread::spawn(move || {
-            small_http::serve_single_threaded(listener, |req| {
-                let path = match req.url.path().trim_start_matches('/') {
-                    "" => "index.html".to_string(),
-                    other => other.to_string(),
-                };
-                if let Some(file) = <A as rust_embed::RustEmbed>::get(&path) {
-                    let mime = mime_guess::from_path(&path).first_or_octet_stream();
-                    small_http::Response::with_header("Content-Type", mime.to_string())
-                        .body(file.data)
-                } else {
-                    small_http::Response::with_status(small_http::Status::NotFound)
-                        .body(b"404 Not Found".to_vec())
-                }
-            });
-        });
-        self.should_load_url = Some(format!("http://{}/", local_addr));
+        self.embed_assets_get = Some(A::get);
         self
     }
 
     /// Build webview
-    pub fn build(self) -> impl Webview {
+    pub fn build(mut self) -> impl Webview {
+        // Spawn a local http server when assets_get is set
+        #[cfg(feature = "rust-embed")]
+        if let Some(assets_get) = self.embed_assets_get.take() {
+            let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+                .unwrap_or_else(|_| panic!("Can't start local http server"));
+            let local_addr = listener
+                .local_addr()
+                .expect("Can't start local http server");
+            std::thread::spawn(move || {
+                small_http::serve_single_threaded(listener, move |req| {
+                    let path = match req.url.path().trim_start_matches('/') {
+                        "" => "index.html".to_string(),
+                        other => other.to_string(),
+                    };
+                    if let Some(file) = assets_get(&path) {
+                        let mime = mime_guess::from_path(&path).first_or_octet_stream();
+                        small_http::Response::with_header("Content-Type", mime.to_string())
+                            .body(file.data)
+                    } else {
+                        small_http::Response::with_status(small_http::Status::NotFound)
+                            .body(b"404 Not Found".to_vec())
+                    }
+                });
+            });
+            self.should_load_url = Some(format!("http://{}/", local_addr));
+        }
+
         platforms::Webview::new(self)
     }
 }
