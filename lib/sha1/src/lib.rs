@@ -6,7 +6,7 @@
 
 //! A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
 
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 
 /// Digest
 pub trait Digest {
