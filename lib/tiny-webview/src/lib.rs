@@ -180,16 +180,25 @@ impl WebviewBuilder {
         // Spawn a local http server when assets_get is set
         #[cfg(feature = "rust-embed")]
         if let Some(assets_get) = self.embed_assets_get.take() {
+            // Get local address by binding random socket
+            let socket = std::net::UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
+                .expect("Can't bind UDP socket");
+            socket
+                .connect("1.1.1.1:80")
+                .expect("Can't connect to random internet server");
+            let local_addr = socket.local_addr().expect("Can't get local address");
+
+            // Start a local HTTP server
             let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
                 .unwrap_or_else(|_| panic!("Can't start local http server"));
             let local_addr = format!(
-                "127.0.0.1:{}",
+                "{}:{}",
+                local_addr.ip(),
                 listener
                     .local_addr()
-                    .expect("Can't start local http server")
+                    .expect("Can't get local http server addr")
                     .port()
             );
-            println!("Local HTTP server started at http://{}/", local_addr);
             std::thread::spawn(move || {
                 small_http::serve_single_threaded(listener, move |req| {
                     let mut path = req.url.path().to_string();
