@@ -83,14 +83,15 @@ impl FromStr for Url {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split("://").collect();
+
         if parts.len() != 2 {
-            return Err(ParseError);
+            return Err(ParseError("No scheme found".to_string()));
         }
 
         let scheme = parts[0].to_string();
         let mut path = parts[1];
         if scheme.is_empty() || path.is_empty() {
-            return Err(ParseError);
+            return Err(ParseError("Scheme or path are empty".to_string()));
         }
 
         let mut authority = None;
@@ -123,10 +124,14 @@ impl FromStr for Url {
             let mut port = None;
             if let Some(idx) = authority.find(':') {
                 host = &authority[..idx];
-                port = Some(authority[idx + 1..].parse().map_err(|_| ParseError)?);
+                port = Some(
+                    authority[idx + 1..]
+                        .parse()
+                        .map_err(|_| ParseError("Can't parse port".to_string()))?,
+                );
                 if let Some(port) = port {
                     if port == 0 {
-                        return Err(ParseError);
+                        return Err(ParseError("Port cannot be 0".to_string()));
                     }
                 }
             }
@@ -176,11 +181,11 @@ impl Display for Url {
 // MARK: ParseError
 /// Url parser error
 #[derive(Debug)]
-pub struct ParseError;
+pub struct ParseError(String);
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "URL parse error")
+        write!(f, "URL parse error: {}", self.0)
     }
 }
 
@@ -222,6 +227,16 @@ mod test {
             "http://example.com:8080/path?query",
             "http://example.com:8080/path#fragment",
             "http://example.com:8080/path?query#fragment",
+            "ws://example.com/",
+            "wss://example.com/",
+            "ws://example.com:8080/",
+            "wss://example.com:8080/",
+            "ws://example.com/path",
+            "wss://example.com/path",
+            "ws://example.com/path?query",
+            "wss://example.com/path?query",
+            "ws://example.com/path#fragment",
+            "wss://example.com/path#fragment",
         ];
         for url in &urls {
             assert!(Url::from_str(url).is_ok());
@@ -305,6 +320,25 @@ mod test {
             (
                 "http://example.com:8080/path?query#fragment",
                 "http://example.com:8080/path?query#fragment",
+            ),
+            ("ws://example.com/", "ws://example.com/"),
+            ("wss://example.com/", "wss://example.com/"),
+            ("ws://example.com:8080/", "ws://example.com:8080/"),
+            ("wss://example.com:8080/", "wss://example.com:8080/"),
+            ("ws://example.com/path", "ws://example.com/path"),
+            ("wss://example.com/path", "wss://example.com/path"),
+            ("ws://example.com/path?query", "ws://example.com/path?query"),
+            (
+                "wss://example.com/path?query",
+                "wss://example.com/path?query",
+            ),
+            (
+                "ws://example.com/path#fragment",
+                "ws://example.com/path#fragment",
+            ),
+            (
+                "wss://example.com/path#fragment",
+                "wss://example.com/path#fragment",
             ),
         ];
         for (input, expected) in &urls {

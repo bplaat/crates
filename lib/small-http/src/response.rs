@@ -113,7 +113,8 @@ impl Response {
         serde_json::from_slice(&self.body)
     }
 
-    pub(crate) fn read_from_stream(stream: &mut dyn Read) -> Result<Self, InvalidResponseError> {
+    /// Read response from stream
+    pub fn read_from_stream(stream: &mut dyn Read) -> Result<Self, InvalidResponseError> {
         let mut reader = BufReader::new(stream);
 
         // Read first line
@@ -233,8 +234,9 @@ impl Response {
 }
 
 // MARK: InvalidResponseError
+/// Invalid response error
 #[derive(Debug)]
-pub(crate) struct InvalidResponseError;
+pub struct InvalidResponseError;
 
 impl Display for InvalidResponseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

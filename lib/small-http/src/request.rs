@@ -234,7 +234,8 @@ impl Request {
         })
     }
 
-    pub(crate) fn write_to_stream(mut self, stream: &mut dyn Write, keep_alive: bool) {
+    /// Write request to TCP stream
+    pub fn write_to_stream(mut self, stream: &mut dyn Write, keep_alive: bool) {
         // Finish headers
         let host = self.url.host().expect("No host in URL");
         self.headers.insert(
