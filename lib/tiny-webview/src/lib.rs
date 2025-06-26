@@ -221,12 +221,13 @@ impl WebviewBuilder {
                 let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
                     .unwrap_or_else(|_| panic!("Can't start local http server"));
                 self.should_load_url = Some(format!(
-                    "http://{}:{}/",
+                    "http://{}:{}{}",
                     local_ip_address::local_ip().expect("Can't get local ip addr"),
                     listener
                         .local_addr()
                         .expect("Can't get local http server port")
-                        .port()
+                        .port(),
+                    self.should_load_url.as_deref().unwrap_or("/")
                 ));
                 listener
             } else {
@@ -234,11 +235,11 @@ impl WebviewBuilder {
                 let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
                     .unwrap_or_else(|_| panic!("Can't start local http server"));
                 self.should_load_url = Some(format!(
-                    "http://localhost:{}/",
+                    "http://{}{}",
                     listener
                         .local_addr()
-                        .expect("Can't get local http server addr")
-                        .port()
+                        .expect("Can't get local http server addr"),
+                    self.should_load_url.as_deref().unwrap_or("/")
                 ));
                 listener
             };

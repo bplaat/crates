@@ -229,6 +229,14 @@ name = "js"
 version = "0.1.0"
 
 [[package]]
+name = "jubicamp-timemachine"
+version = "0.1.0"
+dependencies = [
+ "rust-embed",
+ "tiny-webview",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.174"
 source = "registry+https://github.com/rust-lang/crates.io-index"
