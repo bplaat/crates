@@ -270,14 +270,19 @@ impl PlatformWebview {
         let window_delegate: *mut Object = unsafe { msg_send![class!(WindowDelegate), new] };
 
         // Create window
-        let window_rect = NSRect::new(
-            if let Some(position) = builder.position {
-                NSPoint::new(position.x as f64, position.y as f64)
-            } else {
-                NSPoint::new(0.0, 0.0)
-            },
-            NSSize::new(builder.size.width as f64, builder.size.height as f64),
-        );
+        let window_rect = if builder.fullscreen && builder.position.is_none() {
+            let screen: *mut Object = unsafe { msg_send![class!(NSScreen), mainScreen] };
+            unsafe { msg_send![screen, frame] }
+        } else {
+            NSRect::new(
+                if let Some(position) = builder.position {
+                    NSPoint::new(position.x as f64, position.y as f64)
+                } else {
+                    NSPoint::new(0.0, 0.0)
+                },
+                NSSize::new(builder.size.width as f64, builder.size.height as f64),
+            )
+        };
         let mut window_style_mask = NS_WINDOW_STYLE_MASK_TITLED
             | NS_WINDOW_STYLE_MASK_CLOSABLE
             | NS_WINDOW_STYLE_MASK_MINIATURIZABLE;

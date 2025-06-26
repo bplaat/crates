@@ -261,17 +261,21 @@ impl PlatformWebview {
             // Calculate window rect based on size and position
             let mut x = 0;
             let mut y = 0;
-            let width = (builder.size.width as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-            let height = (builder.size.height as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+            let mut width =
+                (builder.size.width as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+            let mut height =
+                (builder.size.height as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+            if builder.fullscreen && builder.position.is_none() {
+                width = GetSystemMetrics(SM_CXSCREEN);
+                height = GetSystemMetrics(SM_CYSCREEN);
+            }
             if let Some(position) = builder.position {
                 x = (position.x as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
                 y = (position.y as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
             }
             if builder.should_center {
-                let screen_width = GetSystemMetrics(SM_CXSCREEN);
-                let screen_height = GetSystemMetrics(SM_CYSCREEN);
-                x = (screen_width - width) / 2;
-                y = (screen_height - height) / 2;
+                x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
+                y = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
             }
             let mut rect = RECT {
                 left: x,
@@ -287,12 +291,12 @@ impl PlatformWebview {
                 class_name,
                 PCSTR(title.as_ptr() as _),
                 style,
-                if builder.position.is_some() || builder.should_center {
+                if builder.position.is_some() || builder.should_center || builder.fullscreen {
                     rect.left
                 } else {
                     CW_USEDEFAULT
                 },
-                if builder.position.is_some() || builder.should_center {
+                if builder.position.is_some() || builder.should_center || builder.fullscreen {
                     rect.top
                 } else {
                     CW_USEDEFAULT
