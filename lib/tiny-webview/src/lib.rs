@@ -9,7 +9,7 @@
 pub use event::*;
 pub use sizes::*;
 
-use crate::platforms::{PlatformEventLoop, PlatformWebview};
+use crate::platforms::{PlatformEventLoop, PlatformEventLoopProxy, PlatformWebview};
 
 mod event;
 mod platforms;
@@ -28,7 +28,8 @@ impl EventLoopBuilder {
 
 // MARK: EventLoop
 pub(crate) trait EventLoopInterface {
-    fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> !;
+    fn create_proxy(&self) -> PlatformEventLoopProxy;
+    fn run(self, event_handler: impl FnMut(Event) + 'static) -> !;
 }
 
 /// Event loop
@@ -39,9 +40,33 @@ impl EventLoop {
         Self(event_loop)
     }
 
+    /// Create new event loop proxy
+    pub fn create_proxy(&self) -> EventLoopProxy {
+        EventLoopProxy::new(self.0.create_proxy())
+    }
+
     /// Run the event loop
-    pub fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
+    pub fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
         self.0.run(event_handler)
+    }
+}
+
+// MARK: EventLoopProxy
+/// Event loop proxy
+pub struct EventLoopProxy(PlatformEventLoopProxy);
+
+pub(crate) trait EventLoopProxyInterface {
+    fn send_user_event(&self, data: String);
+}
+
+impl EventLoopProxy {
+    fn new(proxy: PlatformEventLoopProxy) -> Self {
+        Self(proxy)
+    }
+
+    /// Send user event to the event loop
+    pub fn send_user_event(&self, data: String) {
+        self.0.send_user_event(data);
     }
 }
 

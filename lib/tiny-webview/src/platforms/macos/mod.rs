@@ -82,16 +82,20 @@ impl PlatformEventLoop {
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
-    fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
+    fn run(mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
         self.event_handler = Some(Box::new(event_handler));
         unsafe {
             let delegate: *mut Object = msg_send![self.application, delegate];
             #[allow(deprecated)]
             let self_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_SELF);
-            *self_ptr = self as *mut Self as *const c_void;
+            *self_ptr = &mut self as *mut Self as *const c_void;
         };
         let _: () = unsafe { msg_send![self.application, run] };
         unreachable!();
+    }
+
+    fn create_proxy(&self) -> PlatformEventLoopProxy {
+        PlatformEventLoopProxy::new()
     }
 }
 
@@ -139,6 +143,21 @@ fn send_event(event: Event) {
 
     if let Some(handler) = _self.event_handler.as_mut() {
         handler(event);
+    }
+}
+
+// MARK: PlatformEventLoopProxy
+pub(crate) struct PlatformEventLoopProxy;
+
+impl PlatformEventLoopProxy {
+    pub(crate) fn new() -> Self {
+        Self
+    }
+}
+
+impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
+    fn send_user_event(&self, data: String) {
+        send_event(Event::UserEvent(data));
     }
 }
 

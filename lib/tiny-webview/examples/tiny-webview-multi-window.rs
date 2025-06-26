@@ -9,7 +9,7 @@
 use tiny_webview::{EventLoopBuilder, LogicalPoint, WebviewBuilder};
 
 fn main() {
-    let mut event_loop = EventLoopBuilder::build();
+    let event_loop = EventLoopBuilder::build();
 
     let mut _webview_a = WebviewBuilder::new()
         .title("Window A")

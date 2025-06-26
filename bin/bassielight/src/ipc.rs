@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use small_websocket::{Message, WebSocket};
-use tiny_webview::Webview;
+use tiny_webview::EventLoopProxy;
 
 use crate::dmx::{DMX_STATE, Mode};
 
@@ -24,7 +24,6 @@ pub(crate) struct State {
     pub mode: Mode,
 }
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub(crate) enum IpcMessage {
@@ -41,15 +40,15 @@ pub(crate) enum IpcMessage {
 pub(crate) static IPC_CONNECTIONS: Mutex<Vec<IpcConnection>> = Mutex::new(Vec::new());
 
 pub(crate) enum IpcConnection {
-    WebviewIpc(Arc<Mutex<Webview>>),
+    WebviewIpc(Arc<EventLoopProxy>),
     WebSocket(WebSocket),
 }
 
 impl PartialEq for IpcConnection {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::WebviewIpc(a), Self::WebviewIpc(b)) => Arc::ptr_eq(a, b),
-            (Self::WebSocket(a), Self::WebSocket(b)) => a == b,
+            (Self::WebviewIpc(_), Self::WebviewIpc(_)) => true,
+            (Self::WebSocket(ws1), Self::WebSocket(ws2)) => ws1 == ws2,
             _ => false,
         }
     }
@@ -60,11 +59,7 @@ impl IpcConnection {
     pub(crate) fn send(&mut self, message: String) {
         println!("[RUST] Sending IPC message: {}", message);
         match self {
-            Self::WebviewIpc(webview) => webview
-                .lock()
-                .expect("Can't lock webview")
-                .send_ipc_message(message),
-
+            Self::WebviewIpc(event_loop_proxy) => event_loop_proxy.send_user_event(message),
             Self::WebSocket(ws) => ws
                 .send(Message::Text(message))
                 .expect("Failed to send IPC message"),

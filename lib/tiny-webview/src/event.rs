@@ -25,4 +25,7 @@ pub enum Event {
     /// Ipc message received
     #[cfg(feature = "ipc")]
     PageMessageReceived(String),
+
+    /// User event
+    UserEvent(String),
 }

@@ -18,7 +18,7 @@ enum IpcMessage {
 }
 
 fn main() {
-    let mut event_loop = EventLoopBuilder::build();
+    let event_loop = EventLoopBuilder::build();
 
     let mut webview = WebviewBuilder::new()
         .title("Webview IPC Example")
@@ -69,5 +69,7 @@ fn main() {
                 }
             }
         }
+
+        _ => {}
     });
 }

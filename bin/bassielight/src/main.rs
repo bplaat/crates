@@ -8,7 +8,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -29,57 +29,54 @@ struct WebAssets;
 
 // MARK: Main
 fn main() {
-    let mut event_loop = EventLoopBuilder::build();
+    let event_loop = EventLoopBuilder::build();
 
-    let webview = Arc::new(Mutex::new(
-        WebviewBuilder::new()
-            .title("BassieLight")
-            .size(LogicalSize::new(1024.0, 768.0))
-            .min_size(LogicalSize::new(640.0, 480.0))
-            .center()
-            .remember_window_state(true)
-            .force_dark_mode(true)
-            .load_rust_embed::<WebAssets>()
-            .internal_http_serve_expose(true)
-            .internal_http_server_handle(|req| {
-                if req.url.path() == "/ipc" {
-                    return Some(small_websocket::upgrade(req, |mut ws| {
-                        IPC_CONNECTIONS
-                            .lock()
-                            .expect("Failed to lock IPC connections")
-                            .push(IpcConnection::WebSocket(ws.clone()));
-                        loop {
-                            let message = match ws.recv_non_blocking() {
-                                Ok(message) => message,
-                                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                                    continue;
-                                }
-                                Err(err) => panic!("WebSocket recv error: {}", err),
-                            };
-                            match message {
-                                Some(Message::Text(text)) => {
-                                    ipc_message_handler(
-                                        IpcConnection::WebSocket(ws.clone()),
-                                        &text,
-                                    );
-                                }
-                                Some(Message::Close(_, _)) => break,
-                                None => {
-                                    thread::sleep(Duration::from_millis(100));
-                                }
-                                _ => {}
+    let mut webview = WebviewBuilder::new()
+        .title("BassieLight")
+        .size(LogicalSize::new(1024.0, 768.0))
+        .min_size(LogicalSize::new(640.0, 480.0))
+        .center()
+        .remember_window_state(true)
+        .force_dark_mode(true)
+        .load_rust_embed::<WebAssets>()
+        .internal_http_serve_expose(true)
+        .internal_http_server_handle(|req| {
+            if req.url.path() == "/ipc" {
+                return Some(small_websocket::upgrade(req, |mut ws| {
+                    IPC_CONNECTIONS
+                        .lock()
+                        .expect("Failed to lock IPC connections")
+                        .push(IpcConnection::WebSocket(ws.clone()));
+                    loop {
+                        let message = match ws.recv_non_blocking() {
+                            Ok(message) => message,
+                            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                                continue;
                             }
+                            Err(err) => panic!("WebSocket recv error: {}", err),
+                        };
+                        match message {
+                            Some(Message::Text(text)) => {
+                                ipc_message_handler(IpcConnection::WebSocket(ws.clone()), &text);
+                            }
+                            Some(Message::Close(_, _)) => break,
+                            None => {
+                                thread::sleep(Duration::from_millis(100));
+                            }
+                            _ => {}
                         }
-                        IPC_CONNECTIONS
-                            .lock()
-                            .expect("Failed to lock IPC connections")
-                            .retain(|conn| conn != &IpcConnection::WebSocket(ws.clone()));
-                    }));
-                }
-                None
-            })
-            .build(),
-    ));
+                    }
+                    IPC_CONNECTIONS
+                        .lock()
+                        .expect("Failed to lock IPC connections")
+                        .retain(|conn| conn != &IpcConnection::WebSocket(ws.clone()));
+                }));
+            }
+            None
+        })
+        .build();
+
+    let event_loop_proxy = Arc::new(event_loop.create_proxy());
 
     let config = config::load_config("config.json").expect("Can't load config.json");
     event_loop.run(move |event| match event {
@@ -87,7 +84,7 @@ fn main() {
             IPC_CONNECTIONS
                 .lock()
                 .expect("Failed to lock IPC connections")
-                .push(IpcConnection::WebviewIpc(webview.clone()));
+                .push(IpcConnection::WebviewIpc(event_loop_proxy.clone()));
 
             let config = config.clone();
             thread::spawn(move || {
@@ -98,10 +95,11 @@ fn main() {
                 }
             });
         }
-        Event::PageMessageReceived(message) => {
-            ipc_message_handler(IpcConnection::WebviewIpc(webview.clone()), &message)
-        }
-
+        Event::PageMessageReceived(message) => ipc_message_handler(
+            IpcConnection::WebviewIpc(event_loop_proxy.clone()),
+            &message,
+        ),
+        Event::UserEvent(data) => webview.send_ipc_message(&data),
         _ => {}
     });
 }

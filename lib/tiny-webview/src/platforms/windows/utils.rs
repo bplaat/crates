@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#![allow(non_snake_case)]
+
 use windows::Win32::Foundation::HWND;
 use windows::core::PWSTR;
 
@@ -15,7 +17,6 @@ pub(crate) fn convert_pwstr_to_string(pwstr: PWSTR) -> String {
     String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(pwstr.0, len) })
 }
 
-#[allow(non_snake_case)]
 #[cfg(target_pointer_width = "32")]
 pub(crate) unsafe fn GetWindowLong(
     hwnd: HWND,
@@ -23,7 +24,6 @@ pub(crate) unsafe fn GetWindowLong(
 ) -> isize {
     (unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowLongA(hwnd, index) }) as isize
 }
-#[allow(non_snake_case)]
 #[cfg(target_pointer_width = "64")]
 pub(crate) unsafe fn GetWindowLong(
     hwnd: HWND,
@@ -32,7 +32,6 @@ pub(crate) unsafe fn GetWindowLong(
     unsafe { windows::Win32::UI::WindowsAndMessaging::GetWindowLongPtrA(hwnd, index) }
 }
 
-#[allow(non_snake_case)]
 #[cfg(target_pointer_width = "32")]
 pub(crate) unsafe fn SetWindowLong(
     hwnd: HWND,
@@ -42,7 +41,6 @@ pub(crate) unsafe fn SetWindowLong(
     (unsafe { windows::Win32::UI::WindowsAndMessaging::SetWindowLongA(hwnd, index, value as i32) })
         as isize
 }
-#[allow(non_snake_case)]
 #[cfg(target_pointer_width = "64")]
 pub(crate) unsafe fn SetWindowLong(
     hwnd: HWND,

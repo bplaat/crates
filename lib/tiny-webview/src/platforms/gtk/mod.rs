@@ -42,12 +42,16 @@ impl PlatformEventLoop {
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
-    fn run(&mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
+    fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
         unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
 
         // Start event loop
         unsafe { gtk_main() };
         exit(0);
+    }
+
+    fn create_proxy(&self) -> PlatformEventLoopProxy {
+        PlatformEventLoopProxy::new()
     }
 }
 
@@ -57,6 +61,21 @@ fn send_event(event: Event) {
         if let Some(handler) = &mut EVENT_HANDLER {
             handler(event);
         }
+    }
+}
+
+// MARK: PlatformEventLoopProxy
+pub(crate) struct PlatformEventLoopProxy;
+
+impl PlatformEventLoopProxy {
+    pub(crate) fn new() -> Self {
+        Self
+    }
+}
+
+impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
+    fn send_user_event(&self, data: String) {
+        send_event(Event::UserEvent(data));
     }
 }
 

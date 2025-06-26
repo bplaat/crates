@@ -36,7 +36,7 @@ enum IpcMessage {
 struct WebAssets;
 
 fn main() {
-    let mut event_loop = EventLoopBuilder::build();
+    let event_loop = EventLoopBuilder::build();
 
     let mut webview = WebviewBuilder::new()
         .title("Todo App")
