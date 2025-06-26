@@ -40,7 +40,8 @@ fn main() {
             .remember_window_state(true)
             .force_dark_mode(true)
             .load_rust_embed::<WebAssets>()
-            .internal_http_serve_handle(|req| {
+            .internal_http_serve_expose(true)
+            .internal_http_server_handle(|req| {
                 if req.url.path() == "/ipc" {
                     return Some(small_websocket::upgrade(req, |mut ws| {
                         IPC_CONNECTIONS

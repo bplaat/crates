@@ -48,8 +48,8 @@ pub(crate) enum IpcConnection {
 impl PartialEq for IpcConnection {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (IpcConnection::WebviewIpc(a), IpcConnection::WebviewIpc(b)) => Arc::ptr_eq(a, b),
-            (IpcConnection::WebSocket(a), IpcConnection::WebSocket(b)) => a == b,
+            (Self::WebviewIpc(a), Self::WebviewIpc(b)) => Arc::ptr_eq(a, b),
+            (Self::WebSocket(a), Self::WebSocket(b)) => a == b,
             _ => false,
         }
     }
@@ -60,11 +60,12 @@ impl IpcConnection {
     pub(crate) fn send(&mut self, message: String) {
         println!("[RUST] Sending IPC message: {}", message);
         match self {
-            IpcConnection::WebviewIpc(webview) => webview
+            Self::WebviewIpc(webview) => webview
                 .lock()
                 .expect("Can't lock webview")
                 .send_ipc_message(message),
-            IpcConnection::WebSocket(ws) => ws
+
+            Self::WebSocket(ws) => ws
                 .send(Message::Text(message))
                 .expect("Failed to send IPC message"),
         }

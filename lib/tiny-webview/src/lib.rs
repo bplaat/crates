@@ -62,7 +62,9 @@ pub struct WebviewBuilder {
     #[cfg(feature = "rust-embed")]
     embed_assets_get: Option<fn(&str) -> Option<rust_embed::EmbeddedFile>>,
     #[cfg(feature = "rust-embed")]
-    internal_http_serve_handle: Option<fn(&small_http::Request) -> Option<small_http::Response>>,
+    internal_http_server_expose: bool,
+    #[cfg(feature = "rust-embed")]
+    internal_http_server_handle: Option<fn(&small_http::Request) -> Option<small_http::Response>>,
 }
 
 impl Default for WebviewBuilder {
@@ -85,7 +87,9 @@ impl Default for WebviewBuilder {
             #[cfg(feature = "rust-embed")]
             embed_assets_get: None,
             #[cfg(feature = "rust-embed")]
-            internal_http_serve_handle: None,
+            internal_http_server_expose: false,
+            #[cfg(feature = "rust-embed")]
+            internal_http_server_handle: None,
         }
     }
 }
@@ -164,13 +168,20 @@ impl WebviewBuilder {
         self
     }
 
+    /// Expose internal http server to other devices in the network
+    #[cfg(feature = "rust-embed")]
+    pub fn internal_http_serve_expose(mut self, expose: bool) -> Self {
+        self.internal_http_server_expose = expose;
+        self
+    }
+
     /// Set internal http server handler
     #[cfg(feature = "rust-embed")]
-    pub fn internal_http_serve_handle(
+    pub fn internal_http_server_handle(
         mut self,
         handle: fn(&small_http::Request) -> Option<small_http::Response>,
     ) -> Self {
-        self.internal_http_serve_handle = Some(handle);
+        self.internal_http_server_handle = Some(handle);
         self
     }
 
@@ -180,25 +191,41 @@ impl WebviewBuilder {
         // Spawn a local http server when assets_get is set
         #[cfg(feature = "rust-embed")]
         if let Some(assets_get) = self.embed_assets_get.take() {
-            // Get local address by binding random socket
-            let socket = std::net::UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
-                .expect("Can't bind UDP socket");
-            socket
-                .connect("1.1.1.1:80")
-                .expect("Can't connect to random internet server");
-            let local_addr = socket.local_addr().expect("Can't get local address");
+            let listener = if self.internal_http_server_expose {
+                // Get local address by binding random socket
+                let socket = std::net::UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
+                    .expect("Can't bind UDP socket");
+                socket
+                    .connect("1.1.1.1:80")
+                    .expect("Can't connect to random internet server");
+                let local_addr = socket.local_addr().expect("Can't get local address");
 
-            // Start a local HTTP server
-            let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
-                .unwrap_or_else(|_| panic!("Can't start local http server"));
-            let local_addr = format!(
-                "{}:{}",
-                local_addr.ip(),
+                // Start an exposed HTTP server
+                let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
+                    .unwrap_or_else(|_| panic!("Can't start local http server"));
+                self.should_load_url = Some(format!(
+                    "http://{}:{}/",
+                    local_addr.ip(),
+                    listener
+                        .local_addr()
+                        .expect("Can't get local http server addr")
+                        .port()
+                ));
                 listener
-                    .local_addr()
-                    .expect("Can't get local http server addr")
-                    .port()
-            );
+            } else {
+                // Start a local HTTP server
+                let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+                    .unwrap_or_else(|_| panic!("Can't start local http server"));
+                self.should_load_url = Some(format!(
+                    "http://localhost:{}/",
+                    listener
+                        .local_addr()
+                        .expect("Can't get local http server addr")
+                        .port()
+                ));
+                listener
+            };
+
             std::thread::spawn(move || {
                 small_http::serve_single_threaded(listener, move |req| {
                     let mut path = req.url.path().to_string();
@@ -206,7 +233,7 @@ impl WebviewBuilder {
                         path = format!("{}index.html", path);
                     }
 
-                    if let Some(handle) = self.internal_http_serve_handle {
+                    if let Some(handle) = self.internal_http_server_handle {
                         if let Some(response) = handle(req) {
                             return response;
                         }
@@ -222,7 +249,6 @@ impl WebviewBuilder {
                     }
                 });
             });
-            self.should_load_url = Some(format!("http://{}/", local_addr));
         }
 
         Webview::new(PlatformWebview::new(self))
