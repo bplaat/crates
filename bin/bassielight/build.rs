@@ -72,7 +72,8 @@ fn main() {
 
     // Generate resources for macOS
     if cfg!(target_os = "macos") {
-        let target_dir = "../../target"; // FIXME: Find way to not hardcode this path
+        let target_dir = "../../target/BassieLight"; // FIXME: Find way to not hardcode this path
+        std::fs::create_dir_all(target_dir).expect("Failed to create target directory");
 
         // Create icon.icns
         std::process::Command::new("iconutil")

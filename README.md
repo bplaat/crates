@@ -30,6 +30,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
 -   [jubicamp-timemachine](bin/jubicamp-timemachine) Time machine software for the JubiCamp 2025 scouting camp
 -   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
+-   [navidrome](bin/navidrome) A [navidrome.plaatsoft.nl](https://navidrome.plaatsoft.nl/) webview wrapper
 -   [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook
 
 ### Replacement libraries
