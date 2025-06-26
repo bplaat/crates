@@ -66,6 +66,8 @@ unsafe extern "C" {
         error: *mut *mut c_void,
     ) -> bool;
     pub(crate) fn g_key_file_free(key_file: *mut GKeyFile);
+    pub(crate) fn g_idle_add(function: extern "C" fn(*mut c_void) -> i32, data: *mut c_void)
+    -> u32;
 }
 
 // MARK: GDK

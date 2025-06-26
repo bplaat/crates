@@ -75,8 +75,15 @@ impl PlatformEventLoopProxy {
 
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
-        send_event(Event::UserEvent(data));
+        let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
+        unsafe { g_idle_add(send_event_callback, ptr) };
     }
+}
+
+extern "C" fn send_event_callback(ptr: *mut c_void) -> i32 {
+    let event = unsafe { Box::from_raw(ptr as *mut Event) };
+    send_event(*event);
+    0
 }
 
 // MARK: Webview

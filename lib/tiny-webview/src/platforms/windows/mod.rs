@@ -6,7 +6,7 @@
 
 #![allow(clippy::upper_case_acronyms)]
 
-use std::ffi::CString;
+use std::ffi::{CString, c_void};
 use std::fs::File;
 use std::io::Read;
 use std::process::exit;
@@ -36,11 +36,12 @@ use windows::Win32::UI::Shell::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, GWL_STYLE,
     GWL_USERDATA, GetClassInfoExA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect,
-    HICON, MINMAXINFO, MSG, PostQuitMessage, RegisterClassExA, SM_CXSCREEN, SM_CYSCREEN,
-    SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE, SWP_NOZORDER,
-    SetWindowPos, SetWindowTextA, ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY, WM_DPICHANGED,
-    WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WNDCLASSEXA, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+    HICON, MINMAXINFO, MSG, PostMessageA, PostQuitMessage, RegisterClassExA, SM_CXSCREEN,
+    SM_CYSCREEN, SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE,
+    SWP_NOZORDER, SetWindowPos, SetWindowTextA, ShowWindow, TranslateMessage,
+    USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY,
+    WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WM_USER, WNDCLASSEXA, WS_OVERLAPPEDWINDOW,
+    WS_THICKFRAME,
 };
 use windows::core::{BOOL, HSTRING, PCSTR, PWSTR, w};
 
@@ -52,6 +53,7 @@ mod utils;
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop;
 
+static mut FIRST_HWND: Option<HWND> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
 impl PlatformEventLoop {
@@ -92,6 +94,8 @@ fn send_event(event: Event) {
 }
 
 // MARK: PlatformEventLoopProxy
+const WM_SEND_MESSAGE: u32 = WM_USER + 1;
+
 pub(crate) struct PlatformEventLoopProxy;
 
 impl PlatformEventLoopProxy {
@@ -102,7 +106,12 @@ impl PlatformEventLoopProxy {
 
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
-        send_event(Event::UserEvent(data));
+        if let Some(hwnd) = unsafe { FIRST_HWND } {
+            let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
+            _ = unsafe {
+                PostMessageA(Some(hwnd), WM_SEND_MESSAGE, WPARAM(ptr as usize), LPARAM(0))
+            };
+        }
     }
 }
 
@@ -361,6 +370,13 @@ impl PlatformWebview {
             controller
         };
 
+        #[allow(static_mut_refs)]
+        unsafe {
+            if FIRST_HWND.is_none() {
+                FIRST_HWND = Some(hwnd);
+            }
+        }
+
         let webview_data = Box::new(WebviewData {
             hwnd,
             dpi,
@@ -574,6 +590,12 @@ unsafe extern "system" fn window_proc(
                     (*minmax_info).ptMinTrackSize.y = min_height;
                 }
             }
+            LRESULT(0)
+        }
+        WM_SEND_MESSAGE => {
+            let ptr = w_param.0 as *mut c_void;
+            let event = unsafe { Box::from_raw(ptr as *mut Event) };
+            send_event(*event);
             LRESULT(0)
         }
         WM_CLOSE => {

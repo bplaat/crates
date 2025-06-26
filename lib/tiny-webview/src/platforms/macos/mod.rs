@@ -42,6 +42,7 @@ impl PlatformEventLoop {
                 sel!(applicationShouldTerminateAfterLastWindowClosed:),
                 app_should_terminate_after_last_window_closed as extern "C" fn(_, _, _) -> _,
             );
+            decl.add_method(sel!(sendEvent:), app_send_event as extern "C" fn(_, _, _));
         }
         decl.register();
 
@@ -99,6 +100,18 @@ impl crate::EventLoopInterface for PlatformEventLoop {
     }
 }
 
+fn send_event(event: Event) {
+    let _self = unsafe {
+        let app_delegate: *mut Object = msg_send![NSApp, delegate];
+        #[allow(deprecated)]
+        &mut *(*(*app_delegate).get_ivar::<*const c_void>(IVAR_SELF) as *mut PlatformEventLoop)
+    };
+
+    if let Some(handler) = _self.event_handler.as_mut() {
+        handler(event);
+    }
+}
+
 extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notification: *mut Object) {
     // Focus windows
     unsafe {
@@ -134,16 +147,10 @@ extern "C" fn app_should_terminate_after_last_window_closed(
     Bool::YES
 }
 
-fn send_event(event: Event) {
-    let _self = unsafe {
-        let app_delegate: *mut Object = msg_send![NSApp, delegate];
-        #[allow(deprecated)]
-        &mut *(*(*app_delegate).get_ivar::<*const c_void>(IVAR_SELF) as *mut PlatformEventLoop)
-    };
-
-    if let Some(handler) = _self.event_handler.as_mut() {
-        handler(event);
-    }
+extern "C" fn app_send_event(_this: *mut Object, _sel: Sel, value: *mut Object) {
+    let ptr: *mut c_void = unsafe { msg_send![value, pointerValue] };
+    let event = unsafe { Box::from_raw(ptr as *mut Event) };
+    send_event(*event);
 }
 
 // MARK: PlatformEventLoopProxy
@@ -157,7 +164,14 @@ impl PlatformEventLoopProxy {
 
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
-        send_event(Event::UserEvent(data));
+        unsafe {
+            let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
+            let value: *mut Object = msg_send![class!(NSValue), valueWithPointer:ptr];
+            let app_delegate: *mut Object = msg_send![NSApp, delegate];
+            let _: () = msg_send![app_delegate, performSelectorOnMainThread:sel!(sendEvent:),
+                       withObject:value,
+                    waitUntilDone:Bool::NO];
+        }
     }
 }
 
