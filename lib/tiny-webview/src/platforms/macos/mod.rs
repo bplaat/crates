@@ -43,6 +43,10 @@ impl PlatformEventLoop {
                 app_should_terminate_after_last_window_closed as extern "C" fn(_, _, _) -> _,
             );
             decl.add_method(sel!(sendEvent:), app_send_event as extern "C" fn(_, _, _));
+            decl.add_method(
+                sel!(openAboutDialog:),
+                app_open_about_dialog as extern "C" fn(_, _, _),
+            );
         }
         decl.register();
 
@@ -58,6 +62,8 @@ impl PlatformEventLoop {
 
         // Create menu
         unsafe {
+            let app_name: NSString = msg_send![application, valueForKey:NSString::from_str("name")];
+
             let menubar: *mut Object = msg_send![class!(NSMenu), new];
             let _: () = msg_send![application, setMainMenu:menubar];
 
@@ -67,7 +73,16 @@ impl PlatformEventLoop {
             let app_menu: *mut Object = msg_send![class!(NSMenu), new];
             let _: () = msg_send![menu_bar_item, setSubmenu:app_menu];
 
-            let app_name: NSString = msg_send![application, valueForKey:NSString::from_str("name")];
+            let about_menu_item: *mut Object = msg_send![class!(NSMenuItem), alloc];
+            let about_menu_item: *mut Object = msg_send![about_menu_item,
+                initWithTitle:NSString::from_str(format!("About {}", app_name)),
+                action:sel!(openAboutDialog:),
+                keyEquivalent:NSString::from_str("")];
+            let _: () = msg_send![app_menu, addItem:about_menu_item];
+
+            let separator_item: *mut Object = msg_send![class!(NSMenuItem), separatorItem];
+            let _: () = msg_send![app_menu, addItem:separator_item];
+
             let quit_menu_item: *mut Object = msg_send![class!(NSMenuItem), alloc];
             let quit_menu_item: *mut Object = msg_send![quit_menu_item,
                 initWithTitle:NSString::from_str(format!("Quit {}", app_name)),
@@ -164,6 +179,10 @@ extern "C" fn app_send_event(_this: *mut Object, _sel: Sel, value: *mut Object) 
     let ptr: *mut c_void = unsafe { msg_send![value, pointerValue] };
     let event = unsafe { Box::from_raw(ptr as *mut Event) };
     send_event(*event);
+}
+
+extern "C" fn app_open_about_dialog(_this: *mut Object, _sel: Sel, _sender: *mut Object) {
+    let _: () = unsafe { msg_send![NSApp, orderFrontStandardAboutPanel:null::<Object>()] };
 }
 
 // MARK: PlatformEventLoopProxy
