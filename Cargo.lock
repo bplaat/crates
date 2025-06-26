@@ -254,6 +254,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "local-ip-address"
+version = "0.6.5+patch"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -573,6 +580,7 @@ name = "tiny-webview"
 version = "0.1.0"
 dependencies = [
  "block2",
+ "local-ip-address",
  "mime_guess",
  "objc2",
  "rust-embed",

@@ -35,6 +35,7 @@ dirs = { path = "lib/dirs" }
 enable-ansi-support = { path = "lib/enable-ansi-support" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
+local-ip-address = { path = "lib/local-ip-address" }
 mime_guess = { path = "lib/mime_guess" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }

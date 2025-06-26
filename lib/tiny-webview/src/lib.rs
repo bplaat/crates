@@ -217,23 +217,15 @@ impl WebviewBuilder {
         #[cfg(feature = "rust-embed")]
         if let Some(assets_get) = self.embed_assets_get.take() {
             let listener = if self.internal_http_server_expose {
-                // Get local address by binding random socket
-                let socket = std::net::UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
-                    .expect("Can't bind UDP socket");
-                socket
-                    .connect("1.1.1.1:80")
-                    .expect("Can't connect to random internet server");
-                let local_addr = socket.local_addr().expect("Can't get local address");
-
                 // Start an exposed HTTP server
                 let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
                     .unwrap_or_else(|_| panic!("Can't start local http server"));
                 self.should_load_url = Some(format!(
                     "http://{}:{}/",
-                    local_addr.ip(),
+                    local_ip_address::local_ip().expect("Can't get local ip addr"),
                     listener
                         .local_addr()
-                        .expect("Can't get local http server addr")
+                        .expect("Can't get local http server port")
                         .port()
                 ));
                 listener
