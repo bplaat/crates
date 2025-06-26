@@ -31,9 +31,8 @@ windows = { version = "0.61.3", features = [
 webview2-com = "0.37.0"
 
 [features]
-default = ["remember_window_state", "ipc"]
+default = ["remember_window_state"]
 remember_window_state = []
-ipc = []
 rust-embed = [
     "dep:rust-embed",
     "dep:small-http",

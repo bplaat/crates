@@ -9,7 +9,9 @@
 pub use event::*;
 pub use sizes::*;
 
-use crate::platforms::{PlatformEventLoop, PlatformEventLoopProxy, PlatformWebview};
+use crate::platforms::{
+    PlatformEventLoop, PlatformEventLoopProxy, PlatformMonitor, PlatformWebview,
+};
 
 mod event;
 mod platforms;
@@ -28,6 +30,7 @@ impl EventLoopBuilder {
 
 // MARK: EventLoop
 pub(crate) trait EventLoopInterface {
+    fn available_monitors(&self) -> Vec<PlatformMonitor>;
     fn create_proxy(&self) -> PlatformEventLoopProxy;
     fn run(self, event_handler: impl FnMut(Event) + 'static) -> !;
 }
@@ -38,6 +41,15 @@ pub struct EventLoop(PlatformEventLoop);
 impl EventLoop {
     fn new(event_loop: PlatformEventLoop) -> Self {
         Self(event_loop)
+    }
+
+    /// List available monitors
+    pub fn available_monitors(&self) -> Vec<Monitor> {
+        self.0
+            .available_monitors()
+            .into_iter()
+            .map(Monitor::new)
+            .collect()
     }
 
     /// Create new event loop proxy
@@ -70,6 +82,43 @@ impl EventLoopProxy {
     }
 }
 
+// MARK: Monitor
+/// Monitor
+pub struct Monitor(PlatformMonitor);
+
+pub(crate) trait MonitorInterface {
+    fn name(&self) -> String;
+    fn position(&self) -> LogicalPoint;
+    fn size(&self) -> LogicalSize;
+    fn scale_factor(&self) -> f32;
+}
+
+impl Monitor {
+    fn new(monitor: PlatformMonitor) -> Self {
+        Self(monitor)
+    }
+
+    /// Get monitor name
+    pub fn name(&self) -> String {
+        self.0.name()
+    }
+
+    /// Get monitor position
+    pub fn position(&self) -> LogicalPoint {
+        self.0.position()
+    }
+
+    /// Get monitor size
+    pub fn size(&self) -> LogicalSize {
+        self.0.size()
+    }
+
+    /// Get monitor scale factor
+    pub fn scale_factor(&self) -> f32 {
+        self.0.scale_factor()
+    }
+}
+
 // MARK: WebviewBuilder
 /// Webview builder
 pub struct WebviewBuilder {
@@ -78,6 +127,7 @@ pub struct WebviewBuilder {
     size: LogicalSize,
     min_size: Option<LogicalSize>,
     resizable: bool,
+    fullscreen: bool,
     #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
     should_force_dark_mode: bool,
@@ -103,6 +153,7 @@ impl Default for WebviewBuilder {
             },
             min_size: None,
             resizable: true,
+            fullscreen: false,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
             should_force_dark_mode: false,
@@ -152,6 +203,12 @@ impl WebviewBuilder {
     /// Set resizable
     pub fn resizable(mut self, resizable: bool) -> Self {
         self.resizable = resizable;
+        self
+    }
+
+    /// Set fullscreen
+    pub fn fullscreen(mut self, fullscreen: bool) -> Self {
+        self.fullscreen = fullscreen;
         self
     }
 
@@ -349,7 +406,6 @@ impl Webview {
     }
 
     /// Send IPC message
-    #[cfg(feature = "ipc")]
     pub fn send_ipc_message(&mut self, message: impl AsRef<str>) {
         self.evaluate_script(format!(
             "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{}`}}));",

@@ -73,10 +73,27 @@ unsafe extern "C" {
 // MARK: GDK
 #[repr(C)]
 pub(crate) struct GdkDisplay(u8);
+#[repr(C)]
+pub(crate) struct GdkMonitor(u8);
+#[repr(C)]
+pub(crate) struct GdkRectangle {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
 #[link(name = "gdk-3")]
 unsafe extern "C" {
     pub(crate) fn gdk_display_get_default() -> *mut GdkDisplay;
     pub(crate) fn gdk_display_get_name(display: *mut GdkDisplay) -> *const c_char;
+    pub(crate) fn gdk_display_get_n_monitors(display: *mut GdkDisplay) -> i32;
+    pub(crate) fn gdk_display_get_monitor(
+        display: *mut GdkDisplay,
+        monitor_num: i32,
+    ) -> *mut GdkMonitor;
+    pub(crate) fn gdk_monitor_get_name(monitor: *mut GdkMonitor) -> *const c_char;
+    pub(crate) fn gdk_monitor_get_geometry(monitor: *mut GdkMonitor, geometry: *mut GdkRectangle);
+    pub(crate) fn gdk_monitor_get_scale_factor(monitor: *mut GdkMonitor) -> i32;
 }
 
 // MARK: GTK
@@ -95,6 +112,7 @@ unsafe extern "C" {
     pub(crate) fn gtk_main_quit();
     pub(crate) fn gtk_window_new(r#type: i32) -> *mut GtkWindow;
     pub(crate) fn gtk_widget_set_size_request(widget: *mut GtkWidget, width: i32, height: i32);
+    pub(crate) fn gtk_window_fullscreen(window: *mut GtkWindow);
     pub(crate) fn gtk_container_add(container: *mut GtkWidget, widget: *mut GtkWidget);
     pub(crate) fn gtk_window_get_position(window: *mut GtkWindow, x: *mut i32, y: *mut i32);
     pub(crate) fn gtk_window_set_title(window: *mut GtkWindow, title: *const c_char);
@@ -137,7 +155,6 @@ pub(crate) const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
 pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
 #[link(name = "webkit2gtk-4.1")]
 unsafe extern "C" {
-    pub(crate) fn webkit_web_view_new() -> *mut WebKitWebView;
     pub(crate) fn webkit_web_view_get_settings(web_view: *mut WebKitWebView)
     -> *mut WebkitSettings;
     pub(crate) fn webkit_web_view_load_uri(web_view: *mut WebKitWebView, uri: *const c_char);

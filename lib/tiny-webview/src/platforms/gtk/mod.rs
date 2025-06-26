@@ -5,6 +5,7 @@
  */
 
 use std::ffi::{CStr, CString, c_char, c_void};
+use std::mem::MaybeUninit;
 use std::path::Path;
 use std::process::exit;
 use std::ptr::{null, null_mut};
@@ -42,6 +43,15 @@ impl PlatformEventLoop {
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn available_monitors(&self) -> Vec<PlatformMonitor> {
+        unsafe {
+            let display = gdk_display_get_default();
+            (0..gdk_display_get_n_monitors(display))
+                .map(|i| PlatformMonitor::new(gdk_display_get_monitor(display, i)))
+                .collect()
+        }
+    }
+
     fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
         unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
 
@@ -84,6 +94,48 @@ extern "C" fn send_event_callback(ptr: *mut c_void) -> i32 {
     let event = unsafe { Box::from_raw(ptr as *mut Event) };
     send_event(*event);
     0
+}
+
+// MARK: PlatformMonitor
+pub(crate) struct PlatformMonitor {
+    monitor: *mut GdkMonitor,
+}
+
+impl PlatformMonitor {
+    pub(crate) fn new(monitor: *mut GdkMonitor) -> Self {
+        Self { monitor }
+    }
+}
+
+impl crate::MonitorInterface for PlatformMonitor {
+    fn name(&self) -> String {
+        unsafe {
+            let name_ptr = gdk_monitor_get_name(self.monitor);
+            CStr::from_ptr(name_ptr).to_string_lossy().into_owned()
+        }
+    }
+
+    fn position(&self) -> LogicalPoint {
+        let mut rect = MaybeUninit::<GdkRectangle>::uninit();
+        unsafe {
+            gdk_monitor_get_geometry(self.monitor, rect.as_mut_ptr());
+        }
+        let rect = unsafe { rect.assume_init() };
+        LogicalPoint::new(rect.x as f32, rect.y as f32)
+    }
+
+    fn size(&self) -> LogicalSize {
+        let mut rect = MaybeUninit::<GdkRectangle>::uninit();
+        unsafe {
+            gdk_monitor_get_geometry(self.monitor, rect.as_mut_ptr());
+        }
+        let rect = unsafe { rect.assume_init() };
+        LogicalSize::new(rect.width as f32, rect.height as f32)
+    }
+
+    fn scale_factor(&self) -> f32 {
+        unsafe { gdk_monitor_get_scale_factor(self.monitor) as f32 }
+    }
 }
 
 // MARK: Webview
@@ -135,6 +187,9 @@ impl PlatformWebview {
                     min_size.height as i32,
                 );
             }
+            if builder.fullscreen {
+                gtk_window_fullscreen(window);
+            }
             gtk_window_set_resizable(window, builder.resizable);
             if builder.should_center {
                 gtk_window_set_position(window, GTK_WIN_POS_CENTER);
@@ -185,9 +240,8 @@ impl PlatformWebview {
 
         // Create webview
         let webview = unsafe {
-            let webview = if cfg!(feature = "ipc") {
-                let user_content_controller = webkit_user_content_manager_new();
-                let user_script = webkit_user_script_new(
+            let user_content_controller = webkit_user_content_manager_new();
+            let user_script = webkit_user_script_new(
                     c"window.ipc = new EventTarget();\
                             window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);\
                             console.log = message => window.webkit.messageHandlers.console.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);".as_ptr(),
@@ -196,36 +250,33 @@ impl PlatformWebview {
                     null(),
                     null(),
                 );
-                webkit_user_content_manager_add_script(user_content_controller, user_script);
-                g_signal_connect_data(
-                    user_content_controller as *mut c_void,
-                    c"script-message-received::ipc".as_ptr(),
-                    webview_on_message_ipc as *const c_void,
-                    webview_data.as_mut() as *mut _ as *const c_void,
-                    null(),
-                    G_CONNECT_DEFAULT,
-                );
-                g_signal_connect_data(
-                    user_content_controller as *mut c_void,
-                    c"script-message-received::console".as_ptr(),
-                    webview_on_message_console as *const c_void,
-                    webview_data.as_mut() as *mut _ as *const c_void,
-                    null(),
-                    G_CONNECT_DEFAULT,
-                );
-                webkit_user_content_manager_register_script_message_handler(
-                    user_content_controller,
-                    c"ipc".as_ptr(),
-                );
-                webkit_user_content_manager_register_script_message_handler(
-                    user_content_controller,
-                    c"console".as_ptr(),
-                );
+            webkit_user_content_manager_add_script(user_content_controller, user_script);
+            g_signal_connect_data(
+                user_content_controller as *mut c_void,
+                c"script-message-received::ipc".as_ptr(),
+                webview_on_message_ipc as *const c_void,
+                webview_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                user_content_controller as *mut c_void,
+                c"script-message-received::console".as_ptr(),
+                webview_on_message_console as *const c_void,
+                webview_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            webkit_user_content_manager_register_script_message_handler(
+                user_content_controller,
+                c"ipc".as_ptr(),
+            );
+            webkit_user_content_manager_register_script_message_handler(
+                user_content_controller,
+                c"console".as_ptr(),
+            );
+            let webview = webkit_web_view_new_with_user_content_manager(user_content_controller);
 
-                webkit_web_view_new_with_user_content_manager(user_content_controller)
-            } else {
-                webkit_web_view_new()
-            };
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
             if cfg!(debug_assertions) {
                 let webview_settings = webkit_web_view_get_settings(webview);
@@ -494,7 +545,6 @@ extern "C" fn webview_on_navigation_policy_decision(
     false
 }
 
-#[cfg(feature = "ipc")]
 extern "C" fn webview_on_message_ipc(
     _manager: *mut WebKitUserContentManager,
     _message: *mut WebKitJavascriptResult,
@@ -506,7 +556,6 @@ extern "C" fn webview_on_message_ipc(
     send_event(Event::PageMessageReceived(message.to_string()));
 }
 
-#[cfg(feature = "ipc")]
 extern "C" fn webview_on_message_console(
     _manager: *mut WebKitUserContentManager,
     _message: *mut WebKitJavascriptResult,

@@ -23,7 +23,6 @@ pub enum Event {
     /// Page load finished
     PageLoadFinished,
     /// Ipc message received
-    #[cfg(feature = "ipc")]
     PageMessageReceived(String),
 
     /// User event

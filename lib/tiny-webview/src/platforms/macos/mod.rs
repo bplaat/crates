@@ -83,6 +83,19 @@ impl PlatformEventLoop {
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn available_monitors(&self) -> Vec<PlatformMonitor> {
+        let mut monitors = Vec::new();
+        unsafe {
+            let screens: *mut Object = msg_send![class!(NSScreen), screens];
+            let count: usize = msg_send![screens, count];
+            for i in 0..count {
+                let screen: *mut Object = msg_send![screens, objectAtIndex:i];
+                monitors.push(PlatformMonitor::new(screen));
+            }
+        }
+        monitors
+    }
+
     fn run(mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
         self.event_handler = Some(Box::new(event_handler));
         unsafe {
@@ -175,6 +188,39 @@ impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     }
 }
 
+// MARK: PlatformMonitor
+pub(crate) struct PlatformMonitor {
+    pub(crate) screen: *mut Object,
+}
+
+impl PlatformMonitor {
+    pub(crate) fn new(screen: *mut Object) -> Self {
+        Self { screen }
+    }
+}
+
+impl crate::MonitorInterface for PlatformMonitor {
+    fn name(&self) -> String {
+        let name: NSString = unsafe { msg_send![self.screen, localizedName] };
+        name.to_string()
+    }
+
+    fn position(&self) -> LogicalPoint {
+        let frame: NSRect = unsafe { msg_send![self.screen, frame] };
+        LogicalPoint::new(frame.origin.x as f32, frame.origin.y as f32)
+    }
+
+    fn size(&self) -> LogicalSize {
+        let frame: NSRect = unsafe { msg_send![self.screen, frame] };
+        LogicalSize::new(frame.size.width as f32, frame.size.height as f32)
+    }
+
+    fn scale_factor(&self) -> f32 {
+        let backing_scale_factor: f64 = unsafe { msg_send![self.screen, backingScaleFactor] };
+        backing_scale_factor as f32
+    }
+}
+
 // MARK: Webview
 pub(crate) struct PlatformWebview {
     window: *mut Object,
@@ -212,7 +258,6 @@ impl PlatformWebview {
                     sel!(webView:decidePolicyForNavigationAction:decisionHandler:),
                     webview_decide_policy_for_navigation_action as extern "C" fn(_, _, _, _, _),
                 );
-                #[cfg(feature = "ipc")]
                 decl.add_method(
                     sel!(userContentController:didReceiveScriptMessage:),
                     webview_did_receive_script_message as extern "C" fn(_, _, _, _),
@@ -239,10 +284,16 @@ impl PlatformWebview {
         if builder.resizable {
             window_style_mask |= NS_WINDOW_STYLE_MASK_RESIZABLE;
         }
+        if builder.fullscreen {
+            window_style_mask = 0;
+        }
         let window = unsafe {
             let window: *mut Object = msg_send![class!(NSWindow), alloc];
             let window: *mut Object = msg_send![window, initWithContentRect:window_rect, styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:false];
             let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title)];
+            if builder.fullscreen {
+                let _: () = msg_send![window, setLevel: 25_i64];
+            }
             if builder.should_force_dark_mode {
                 let appearance: *mut Object =
                     msg_send![class!(NSAppearance), appearanceNamed:NSAppearanceNameDarkAqua];
@@ -298,7 +349,6 @@ impl PlatformWebview {
         };
 
         // Create ipc handler
-        #[cfg(feature = "ipc")]
         unsafe {
             let webview_configuration: *mut Object = msg_send![webview, configuration];
             let user_content_controller: *mut Object =
@@ -451,7 +501,6 @@ extern "C" fn webview_decide_policy_for_navigation_action(
     }
 }
 
-#[cfg(feature = "ipc")]
 extern "C" fn webview_did_receive_script_message(
     _this: *mut Object,
     _sel: Sel,

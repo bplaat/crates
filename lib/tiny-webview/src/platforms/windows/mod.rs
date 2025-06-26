@@ -24,11 +24,13 @@ use webview2_com::{
 };
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, MAX_PATH, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
-use windows::Win32::Graphics::Gdi::UpdateWindow;
+use windows::Win32::Graphics::Gdi::{
+    EnumDisplayMonitors, GetMonitorInfoA, HDC, HMONITOR, MONITORINFO, MONITORINFOEXA, UpdateWindow,
+};
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameA, GetModuleHandleA};
 use windows::Win32::UI::HiDpi::{
-    AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem,
-    SetProcessDpiAwarenessContext,
+    AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForMonitor,
+    GetDpiForSystem, MDT_EFFECTIVE_DPI, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::Shell::{
     ExtractIconExA, FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath, ShellExecuteW,
@@ -41,7 +43,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SWP_NOZORDER, SetWindowPos, SetWindowTextA, ShowWindow, TranslateMessage,
     USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY,
     WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WM_USER, WNDCLASSEXA, WS_OVERLAPPEDWINDOW,
-    WS_THICKFRAME,
+    WS_POPUP, WS_THICKFRAME,
 };
 use windows::core::{BOOL, HSTRING, PCSTR, PWSTR, w};
 
@@ -65,6 +67,30 @@ impl PlatformEventLoop {
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn available_monitors(&self) -> Vec<PlatformMonitor> {
+        static mut MONITORS: Option<Vec<PlatformMonitor>> = None;
+        unsafe extern "system" fn monitor_enum_proc(
+            hmonitor: HMONITOR,
+            _hdc: HDC,
+            _lprc_clip: *mut RECT,
+            _lparam: LPARAM,
+        ) -> BOOL {
+            unsafe {
+                #[allow(static_mut_refs)]
+                if let Some(monitors) = &mut MONITORS {
+                    monitors.push(PlatformMonitor::new(hmonitor));
+                }
+            }
+            true.into()
+        }
+        unsafe {
+            MONITORS = Some(Vec::new());
+            _ = EnumDisplayMonitors(None, None, Some(monitor_enum_proc), LPARAM(0));
+            #[allow(static_mut_refs)]
+            MONITORS.take().unwrap_or_default()
+        }
+    }
+
     fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
         unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
 
@@ -111,6 +137,63 @@ impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
             _ = unsafe {
                 PostMessageA(Some(hwnd), WM_SEND_MESSAGE, WPARAM(ptr as usize), LPARAM(0))
             };
+        }
+    }
+}
+
+// MARK: PlatformMonitor
+pub(crate) struct PlatformMonitor {
+    hmonitor: HMONITOR,
+    info: MONITORINFOEXA,
+}
+
+impl PlatformMonitor {
+    pub(crate) fn new(hmonitor: HMONITOR) -> Self {
+        let mut info = MONITORINFOEXA {
+            monitorInfo: MONITORINFO {
+                cbSize: size_of::<MONITORINFOEXA>() as u32,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        unsafe {
+            _ = GetMonitorInfoA(hmonitor, &mut info as *mut _ as *mut _);
+        }
+        Self { hmonitor, info }
+    }
+}
+
+impl crate::MonitorInterface for PlatformMonitor {
+    fn name(&self) -> String {
+        unsafe { CString::from_raw(self.info.szDevice.as_ptr() as *mut _) }
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn position(&self) -> LogicalPoint {
+        LogicalPoint::new(
+            self.info.monitorInfo.rcMonitor.left as f32,
+            self.info.monitorInfo.rcMonitor.top as f32,
+        )
+    }
+
+    fn size(&self) -> LogicalSize {
+        LogicalSize::new(
+            (self.info.monitorInfo.rcMonitor.right - self.info.monitorInfo.rcMonitor.left) as f32,
+            (self.info.monitorInfo.rcMonitor.bottom - self.info.monitorInfo.rcMonitor.top) as f32,
+        )
+    }
+
+    fn scale_factor(&self) -> f32 {
+        unsafe {
+            let mut dpi_x = USER_DEFAULT_SCREEN_DPI;
+            let mut dpi_y = USER_DEFAULT_SCREEN_DPI;
+            let result = GetDpiForMonitor(self.hmonitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
+            if result.is_ok() {
+                dpi_x as f32 / USER_DEFAULT_SCREEN_DPI as f32
+            } else {
+                1.0
+            }
         }
     }
 }
@@ -167,7 +250,9 @@ impl PlatformWebview {
 
         // Create window
         let hwnd = unsafe {
-            let style = if builder.resizable {
+            let style = if builder.fullscreen {
+                WS_POPUP
+            } else if builder.resizable {
                 WS_OVERLAPPEDWINDOW
             } else {
                 WS_OVERLAPPEDWINDOW & !WS_THICKFRAME
@@ -332,34 +417,32 @@ impl PlatformWebview {
                 null_mut(),
             );
 
-            if cfg!(feature = "ipc") {
-                _ = webview.AddScriptToExecuteOnDocumentCreated(
+            _ = webview.AddScriptToExecuteOnDocumentCreated(
                     w!("window.ipc = new EventTarget();\
                         window.ipc.postMessage = message => window.chrome.webview.postMessage(`ipc${typeof message !== 'string' ? JSON.stringify(message) : message}`);\
                         console.log = message => window.chrome.webview.postMessage(`console${typeof message !== 'string' ? JSON.stringify(message) : message}`);"),
                     &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_sender, _args| {
                         Ok(())
                     })));
-                _ = webview.add_WebMessageReceived(
-                    &webview2_com::WebMessageReceivedEventHandler::create(Box::new(
-                        move |_sender, args| {
-                            let args = args.expect("Should be some");
-                            let mut message = PWSTR::default();
-                            _ = args.TryGetWebMessageAsString(&mut message);
-                            let message = convert_pwstr_to_string(message);
-                            if message.starts_with("ipc") {
-                                let message = message.trim_start_matches("ipc");
-                                send_event(Event::PageMessageReceived(message.to_string()));
-                            } else if message.starts_with("console") {
-                                let message = message.trim_start_matches("console");
-                                println!("{}", message);
-                            }
-                            Ok(())
-                        },
-                    )),
-                    null_mut(),
-                );
-            }
+            _ = webview.add_WebMessageReceived(
+                &webview2_com::WebMessageReceivedEventHandler::create(Box::new(
+                    move |_sender, args| {
+                        let args = args.expect("Should be some");
+                        let mut message = PWSTR::default();
+                        _ = args.TryGetWebMessageAsString(&mut message);
+                        let message = convert_pwstr_to_string(message);
+                        if message.starts_with("ipc") {
+                            let message = message.trim_start_matches("ipc");
+                            send_event(Event::PageMessageReceived(message.to_string()));
+                        } else if message.starts_with("console") {
+                            let message = message.trim_start_matches("console");
+                            println!("{}", message);
+                        }
+                        Ok(())
+                    },
+                )),
+                null_mut(),
+            );
 
             if let Some(url) = &builder.should_load_url {
                 _ = webview.Navigate(&HSTRING::from(url));
