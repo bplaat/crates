@@ -53,11 +53,16 @@ impl Default for Config {
 /// Loads the configuration from `path`. If the file does not exist, creates it with default values.
 pub(crate) fn load_config(path: impl AsRef<Path>) -> Result<Config> {
     if !path.as_ref().exists() {
+        if let Some(parent) = path.as_ref().parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         let default_conf = Config::default();
         let mut file = File::create(path)?;
         serde_json::to_writer_pretty(&mut file, &default_conf)?;
         return Ok(default_conf);
     }
+
     let file = File::open(path)?;
     let config = serde_json::from_reader(file)?;
     Ok(config)

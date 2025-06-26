@@ -28,6 +28,7 @@ name = "bassielight"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dirs",
  "rusb",
  "rust-embed",
  "serde",

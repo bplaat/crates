@@ -76,9 +76,15 @@ fn main() {
         })
         .build();
 
-    let event_loop_proxy = Arc::new(event_loop.create_proxy());
+    let config_path = format!(
+        "{}/BassieLight/config.json",
+        dirs::config_dir()
+            .expect("Can't find config directory")
+            .display()
+    );
+    let config = config::load_config(config_path).expect("Can't load config.json");
 
-    let config = config::load_config("config.json").expect("Can't load config.json");
+    let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {
         Event::PageLoadFinished => {
             IPC_CONNECTIONS
