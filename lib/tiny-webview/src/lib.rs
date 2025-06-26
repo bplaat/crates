@@ -347,8 +347,6 @@ pub(crate) trait WebviewInterface {
 
 /// Webview
 pub struct Webview(PlatformWebview);
-unsafe impl Send for Webview {}
-unsafe impl Sync for Webview {}
 
 impl Webview {
     fn new(webview: PlatformWebview) -> Self {
