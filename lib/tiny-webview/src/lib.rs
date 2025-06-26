@@ -140,6 +140,8 @@ pub struct WebviewBuilder {
     internal_http_server_expose: bool,
     #[cfg(feature = "rust-embed")]
     internal_http_server_handle: Option<fn(&small_http::Request) -> Option<small_http::Response>>,
+    #[cfg(target_os = "macos")]
+    macos_titlebar_hidden: bool,
 }
 
 impl Default for WebviewBuilder {
@@ -166,6 +168,8 @@ impl Default for WebviewBuilder {
             internal_http_server_expose: false,
             #[cfg(feature = "rust-embed")]
             internal_http_server_handle: None,
+            #[cfg(target_os = "macos")]
+            macos_titlebar_hidden: false,
         }
     }
 }
@@ -264,6 +268,13 @@ impl WebviewBuilder {
         handle: fn(&small_http::Request) -> Option<small_http::Response>,
     ) -> Self {
         self.internal_http_server_handle = Some(handle);
+        self
+    }
+
+    /// Set macOS titlebar hidden
+    #[cfg(target_os = "macos")]
+    pub fn macos_titlebar_hidden(mut self, hidden: bool) -> Self {
+        self.macos_titlebar_hidden = hidden;
         self
     }
 

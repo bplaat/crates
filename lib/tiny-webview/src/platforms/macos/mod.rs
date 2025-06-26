@@ -316,7 +316,11 @@ impl PlatformWebview {
             let window: *mut Object = msg_send![window, initWithContentRect:window_rect, styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:false];
             let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title)];
             if builder.fullscreen {
-                let _: () = msg_send![window, setLevel: 25_i64];
+                let _: () = msg_send![window, setLevel: 25i64];
+            }
+            if builder.macos_titlebar_hidden {
+                let _: () = msg_send![window, setTitlebarAppearsTransparent:Bool::YES];
+                let _: () = msg_send![window, setTitleVisibility:NS_WINDOW_TITLE_VISIBILITY_HIDDEN];
             }
             if builder.should_force_dark_mode {
                 let appearance: *mut Object =
@@ -349,8 +353,18 @@ impl PlatformWebview {
 
         // Create webview
         let webview = unsafe {
-            let webview: *mut Object = msg_send![class!(WKWebView), new];
-            let _: () = msg_send![window, setContentView:webview];
+            let content_view: *mut Object = msg_send![window, contentView];
+            let webview_rect = if builder.macos_titlebar_hidden {
+                let mut window_frame: NSRect = msg_send![window, frame];
+                window_frame.origin.x = 0.0;
+                window_frame.origin.y = 0.0;
+                window_frame
+            } else {
+                msg_send![content_view, frame]
+            };
+            let webview: *mut Object = msg_send![class!(WKWebView), alloc];
+            let webview: *mut Object = msg_send![webview, initWithFrame:webview_rect];
+            let _: () = msg_send![content_view, addSubview:webview];
             if let Some(url) = builder.should_load_url {
                 let url: *mut Object =
                     msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
@@ -469,9 +483,24 @@ extern "C" fn window_did_move(_this: *mut Object, _sel: Sel, notification: *mut 
 }
 
 extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mut Object) {
-    // Send window resized event
     let window: *mut Object = unsafe { msg_send![notification, object] };
-    let webview: *mut Object = unsafe { msg_send![window, contentView] };
+    let content_view: *mut Object = unsafe { msg_send![window, contentView] };
+    let subviews: *mut Object = unsafe { msg_send![content_view, subviews] };
+
+    // Update webview size
+    let titlebar_hidden = unsafe { msg_send![window, titlebarAppearsTransparent] };
+    let webview_rect = if titlebar_hidden {
+        let mut webview_rect: NSRect = unsafe { msg_send![window, frame] };
+        webview_rect.origin.x = 0.0;
+        webview_rect.origin.y = 0.0;
+        webview_rect
+    } else {
+        unsafe { msg_send![content_view, frame] }
+    };
+    let webview: *mut Object = unsafe { msg_send![subviews, objectAtIndex:0u64] };
+    let _: () = unsafe { msg_send![webview, setFrame:webview_rect] };
+
+    // Send window resized event
     let frame: NSRect = unsafe { msg_send![webview, frame] };
     send_event(Event::WindowResized(LogicalSize::new(
         frame.size.width as f32,

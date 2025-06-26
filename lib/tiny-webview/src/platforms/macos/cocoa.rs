@@ -72,6 +72,8 @@ pub(crate) const NS_WINDOW_STYLE_MASK_RESIZABLE: u64 = 1 << 3;
 
 pub(crate) const NS_BACKING_STORE_BUFFERED: u64 = 2;
 
+pub(crate) const NS_WINDOW_TITLE_VISIBILITY_HIDDEN: i64 = 1;
+
 #[repr(transparent)]
 pub(crate) struct NSString(*mut Object);
 
