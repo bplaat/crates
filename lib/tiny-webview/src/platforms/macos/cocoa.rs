@@ -75,6 +75,9 @@ pub(crate) const NS_BACKING_STORE_BUFFERED: u64 = 2;
 
 pub(crate) const NS_WINDOW_TITLE_VISIBILITY_HIDDEN: i64 = 1;
 
+pub(crate) const NS_EVENT_MODIFIER_FLAG_OPTION: u64 = 1 << 19;
+pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
+
 #[repr(transparent)]
 pub(crate) struct NSString(*mut Object);
 
