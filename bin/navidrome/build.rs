@@ -64,7 +64,7 @@ fn main() {
         let manifest = format!(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-    <assemblyIdentity type="win32" name="Navidrome" version="{}.0" processorArchitecture="{}"/>
+    <assemblyIdentity type="win32" name="Navidrome" version="{}.0" processorArchitecture="*"/>
     <description>Navidrome</description>
 
     <dependency>
@@ -89,16 +89,7 @@ fn main() {
     </trustInfo>
 </assembly>
 "#,
-            env!("CARGO_PKG_VERSION"),
-            if cfg!(target_arch = "x86_64") {
-                "amd64"
-            } else if cfg!(target_arch = "aarch64") {
-                "arm64"
-            } else if cfg!(target_arch = "x86") {
-                "x86"
-            } else {
-                panic!("Unsupported architecture for Windows resources");
-            }
+            env!("CARGO_PKG_VERSION")
         );
 
         let mut res = winres::WindowsResource::new();

@@ -356,6 +356,12 @@ impl PlatformWebview {
 
         // Create Webview2
         let controller = unsafe {
+            if let Some(color) = builder.background_color {
+                env::set_var(
+                    "WEBVIEW2_DEFAULT_BACKGROUND_COLOR",
+                    format!("0xFF{:06X}", color & 0xFFFFFF),
+                );
+            }
             let environment = {
                 let (tx, rx) = mpsc::channel();
                 _ = CreateCoreWebView2EnvironmentWithOptions(
