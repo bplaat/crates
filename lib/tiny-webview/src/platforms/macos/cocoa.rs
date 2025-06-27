@@ -13,6 +13,7 @@ use objc2::{Encode, Encoding, class, msg_send};
 #[link(name = "Cocoa", kind = "framework")]
 unsafe extern "C" {
     pub(crate) static NSApp: *mut Object;
+    pub(crate) static NSAppearanceNameAqua: *const Object;
     pub(crate) static NSAppearanceNameDarkAqua: *const Object;
 }
 

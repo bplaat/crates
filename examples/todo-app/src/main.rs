@@ -13,7 +13,7 @@ use std::{env, fs};
 
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
-use tiny_webview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
+use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
@@ -44,7 +44,8 @@ fn main() {
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state(true)
-        .force_dark_mode(true)
+        .theme(Theme::Dark)
+        .background_color(0x222222)
         .load_rust_embed::<WebAssets>()
         .build();
 

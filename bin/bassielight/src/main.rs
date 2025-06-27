@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use rust_embed::Embed;
 use small_websocket::Message;
-use tiny_webview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
+use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
 use crate::ipc::{IPC_CONNECTIONS, IpcConnection, ipc_message_handler};
 
@@ -28,18 +28,20 @@ mod usb;
 struct WebAssets;
 
 // MARK: Main
+#[allow(unused_mut)]
 fn main() {
     let event_loop = EventLoopBuilder::build();
 
-    let mut webview = WebviewBuilder::new()
+    let mut webview_builder = WebviewBuilder::new()
         .title("BassieLight")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state(true)
-        .force_dark_mode(true)
+        .theme(Theme::Dark)
+        .background_color(0x1a1a1a)
         .load_rust_embed::<WebAssets>()
-        .internal_http_serve_expose(true)
+        .internal_http_server_expose(true)
         .internal_http_server_handle(|req| {
             if req.url.path() == "/ipc" {
                 return Some(small_websocket::upgrade(req, |mut ws| {
@@ -73,8 +75,13 @@ fn main() {
                 }));
             }
             None
-        })
-        .build();
+        });
+    #[cfg(target_os = "macos")]
+    {
+        webview_builder =
+            webview_builder.macos_titlebar_style(tiny_webview::MacosTitlebarStyle::Transparent);
+    }
+    let mut webview = webview_builder.build();
 
     let config_path = format!(
         "{}/BassieLight/config.json",

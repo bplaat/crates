@@ -20,10 +20,15 @@ html {
         'Apple Color Emoji', 'Segoe UI Emoji';
     font-size: 16px;
     line-height: 1.6;
+
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+
+    cursor: default;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 body {

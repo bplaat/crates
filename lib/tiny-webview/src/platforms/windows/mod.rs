@@ -15,17 +15,19 @@ use std::sync::mpsc;
 use std::{env, mem};
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
+    COREWEBVIEW2_COLOR, CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
+    ICoreWebView2Controller2,
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
     NavigationCompletedEventHandler, NavigationStartingEventHandler,
     NewWindowRequestedEventHandler,
 };
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, MAX_PATH, RECT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
 use windows::Win32::Graphics::Gdi::{
-    EnumDisplayMonitors, GetMonitorInfoA, HDC, HMONITOR, MONITORINFO, MONITORINFOEXA, UpdateWindow,
+    CreateSolidBrush, EnumDisplayMonitors, FillRect, GetMonitorInfoA, HDC, HMONITOR,
+    InvalidateRect, MONITORINFO, MONITORINFOEXA, UpdateWindow,
 };
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameA, GetModuleHandleA};
 use windows::Win32::UI::HiDpi::{
@@ -42,13 +44,13 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SM_CYSCREEN, SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE,
     SWP_NOZORDER, SetWindowPos, SetWindowTextA, ShowWindow, TranslateMessage,
     USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY,
-    WM_DPICHANGED, WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WM_USER, WNDCLASSEXA, WS_OVERLAPPEDWINDOW,
-    WS_POPUP, WS_THICKFRAME,
+    WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WM_USER, WNDCLASSEXA,
+    WS_OVERLAPPEDWINDOW, WS_POPUP, WS_THICKFRAME,
 };
-use windows::core::{BOOL, HSTRING, PCSTR, PWSTR, w};
+use windows::core::{BOOL, HSTRING, Interface, PCSTR, PWSTR, w};
 
 use self::utils::*;
-use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
+use crate::{Event, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
 
 mod utils;
 
@@ -203,6 +205,7 @@ struct WebviewData {
     hwnd: HWND,
     dpi: u32,
     min_size: Option<LogicalSize>,
+    background_color: Option<u32>,
     #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
     controller: Option<ICoreWebView2Controller>,
@@ -250,7 +253,7 @@ impl PlatformWebview {
 
         // Create window
         let hwnd = unsafe {
-            let style = if builder.fullscreen {
+            let style = if builder.should_fullscreen {
                 WS_POPUP
             } else if builder.resizable {
                 WS_OVERLAPPEDWINDOW
@@ -265,7 +268,7 @@ impl PlatformWebview {
                 (builder.size.width as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
             let mut height =
                 (builder.size.height as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-            if builder.fullscreen && builder.position.is_none() {
+            if builder.should_fullscreen && builder.position.is_none() {
                 width = GetSystemMetrics(SM_CXSCREEN);
                 height = GetSystemMetrics(SM_CYSCREEN);
             }
@@ -291,12 +294,14 @@ impl PlatformWebview {
                 class_name,
                 PCSTR(title.as_ptr() as _),
                 style,
-                if builder.position.is_some() || builder.should_center || builder.fullscreen {
+                if builder.position.is_some() || builder.should_center || builder.should_fullscreen
+                {
                     rect.left
                 } else {
                     CW_USEDEFAULT
                 },
-                if builder.position.is_some() || builder.should_center || builder.fullscreen {
+                if builder.position.is_some() || builder.should_center || builder.should_fullscreen
+                {
                     rect.top
                 } else {
                     CW_USEDEFAULT
@@ -309,8 +314,8 @@ impl PlatformWebview {
                 None,
             )
             .expect("Can't create window");
-            if builder.should_force_dark_mode {
-                let enabled: BOOL = true.into();
+            if let Some(theme) = builder.theme {
+                let enabled: BOOL = (theme == Theme::Dark).into();
                 _ = DwmSetWindowAttribute(
                     hwnd,
                     DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -392,6 +397,17 @@ impl PlatformWebview {
             let mut rect = RECT::default();
             _ = GetClientRect(hwnd, &mut rect);
             _ = controller.SetBounds(rect);
+            if builder.background_color.is_some() {
+                let controller2 = controller
+                    .cast::<ICoreWebView2Controller2>()
+                    .expect("Should be some");
+                _ = controller2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR {
+                    A: 0x0,
+                    R: 0x0,
+                    G: 0x0,
+                    B: 0x0,
+                });
+            }
 
             let webview = controller.CoreWebView2().expect("Should be some");
 
@@ -468,6 +484,7 @@ impl PlatformWebview {
             hwnd,
             dpi,
             min_size: builder.min_size,
+            background_color: builder.background_color,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
             controller: Some(controller),
@@ -575,6 +592,23 @@ impl crate::WebviewInterface for PlatformWebview {
         }
     }
 
+    fn set_theme(&mut self, theme: Theme) {
+        unsafe {
+            let enabled: BOOL = (theme == Theme::Dark).into();
+            _ = DwmSetWindowAttribute(
+                self.0.hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                &enabled as *const _ as *const _,
+                size_of::<BOOL>() as u32,
+            );
+        }
+    }
+
+    fn set_background_color(&mut self, color: u32) {
+        self.0.background_color = Some(color);
+        _ = unsafe { InvalidateRect(Some(self.0.hwnd), None, true) };
+    }
+
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
             if let Some(controller) = &self.0.controller {
@@ -620,6 +654,22 @@ unsafe extern "system" fn window_proc(
         WM_CREATE => {
             send_event(Event::WindowCreated);
             LRESULT(0)
+        }
+        WM_ERASEBKGND => {
+            if let Some(color) = _self.background_color {
+                let hdc = HDC(w_param.0 as *mut c_void);
+                let mut client_rect = RECT::default();
+                _ = unsafe { GetClientRect(hwnd, &mut client_rect) };
+                let brush = unsafe {
+                    CreateSolidBrush(COLORREF(
+                        ((color & 0xFF) << 16) | (color & 0xFF00) | ((color >> 16) & 0xFF),
+                    ))
+                };
+                _ = unsafe { FillRect(hdc, &client_rect, brush) };
+                LRESULT(1)
+            } else {
+                LRESULT(0)
+            }
         }
         WM_MOVE => {
             let x = l_param.0 as u16 as i32;

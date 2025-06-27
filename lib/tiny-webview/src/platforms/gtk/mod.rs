@@ -151,13 +151,13 @@ pub(crate) struct PlatformWebview(Box<WebviewData>);
 impl PlatformWebview {
     pub(crate) fn new(builder: WebviewBuilder) -> Self {
         // Force dark mode if enabled
-        if builder.should_force_dark_mode {
+        if let Some(theme) = builder.theme {
             unsafe {
                 let settings = gtk_settings_get_default();
                 g_object_set(
                     settings as *mut c_void,
                     c"gtk-application-prefer-dark-theme".as_ptr(),
-                    1 as *const c_void,
+                    if theme == crate::Theme::Dark { 1 } else { 0 } as *const c_void,
                     null::<c_void>(),
                 );
             }
@@ -187,7 +187,20 @@ impl PlatformWebview {
                     min_size.height as i32,
                 );
             }
-            if builder.fullscreen {
+            if let Some(color) = builder.background_color {
+                let rgba = GdkRGBA {
+                    red: ((color >> 16) & 0xFF) as f64 / 255.0,
+                    green: ((color >> 8) & 0xFF) as f64 / 255.0,
+                    blue: (color & 0xFF) as f64 / 255.0,
+                    alpha: 1.0,
+                };
+                gtk_widget_override_background_color(
+                    window as *mut GtkWidget,
+                    GTK_STATE_FLAG_NORMAL,
+                    &rgba,
+                );
+            }
+            if builder.should_fullscreen {
                 gtk_window_fullscreen(window);
             }
             gtk_window_set_resizable(window, builder.resizable);
@@ -276,8 +289,16 @@ impl PlatformWebview {
                 c"console".as_ptr(),
             );
             let webview = webkit_web_view_new_with_user_content_manager(user_content_controller);
-
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
+            if builder.background_color.is_some() {
+                let rgba = GdkRGBA {
+                    red: 0.0,
+                    green: 0.0,
+                    blue: 0.0,
+                    alpha: 0.0,
+                };
+                webkit_web_view_set_background_color(webview, &rgba);
+            }
             if cfg!(debug_assertions) {
                 let webview_settings = webkit_web_view_get_settings(webview);
                 webkit_settings_set_enable_developer_extras(webview_settings, true);
@@ -446,6 +467,34 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn set_resizable(&mut self, resizable: bool) {
         unsafe { gtk_window_set_resizable(self.0.window, resizable) }
+    }
+
+    fn set_theme(&mut self, theme: crate::Theme) {
+        unsafe {
+            let settings = gtk_settings_get_default();
+            g_object_set(
+                settings as *mut c_void,
+                c"gtk-application-prefer-dark-theme".as_ptr(),
+                if theme == crate::Theme::Dark { 1 } else { 0 } as *const c_void,
+                null::<c_void>(),
+            );
+        }
+    }
+
+    fn set_background_color(&mut self, color: u32) {
+        unsafe {
+            let rgba = GdkRGBA {
+                red: ((color >> 16) & 0xFF) as f64 / 255.0,
+                green: ((color >> 8) & 0xFF) as f64 / 255.0,
+                blue: (color & 0xFF) as f64 / 255.0,
+                alpha: 1.0,
+            };
+            gtk_widget_override_background_color(
+                self.0.window as *mut GtkWidget,
+                GTK_STATE_FLAG_NORMAL,
+                &rgba,
+            );
+        }
     }
 
     fn load_url(&mut self, url: impl AsRef<str>) {

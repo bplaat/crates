@@ -7,7 +7,7 @@
 //! A tiny webview ipc example
 
 use serde::{Deserialize, Serialize};
-use tiny_webview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
+use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
 const APP_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/app.min.html"));
 
@@ -26,7 +26,7 @@ fn main() {
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state(true)
-        .force_dark_mode(true)
+        .theme(Theme::Dark)
         .load_html(APP_HTML)
         .build();
 

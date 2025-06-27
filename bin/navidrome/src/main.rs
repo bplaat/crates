@@ -6,7 +6,7 @@
 
 //! A [navidrome.plaatsoft.nl](https://navidrome.plaatsoft.nl/) webview wrapper
 
-use tiny_webview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
+use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
 #[allow(unused_mut, unused_variables)]
 fn main() {
@@ -18,10 +18,12 @@ fn main() {
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state(true)
-        .force_dark_mode(true);
+        .background_color(0x000000)
+        .theme(Theme::Dark);
     #[cfg(target_os = "macos")]
     {
-        webview_builder = webview_builder.macos_titlebar_hidden(true);
+        webview_builder =
+            webview_builder.macos_titlebar_style(tiny_webview::MacosTitlebarStyle::Hidden);
     }
     let mut webview = webview_builder
         .load_url("https://navidrome.plaatsoft.nl/")
@@ -39,6 +41,12 @@ fn main() {
 
                     const scrollbarStyle = document.createElement('style');
                     scrollbarStyle.innerHTML = `
+                    body {
+                        cursor: default;
+                        -webkit-user-select: none;
+                        user-select: none;
+                    }
+
                     ::-webkit-scrollbar {
                         width: 8px;
                         height: 8px;
@@ -55,6 +63,8 @@ fn main() {
                     }
                     `;
                     document.head.appendChild(scrollbarStyle);
+
+                    window.addEventListener('contextmenu', (e) => e.preventDefault());
                 }, 0);
                 "#,
             );

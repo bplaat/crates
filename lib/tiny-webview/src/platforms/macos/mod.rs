@@ -13,7 +13,7 @@ use objc2::{class, msg_send, sel};
 
 use self::cocoa::*;
 use self::webkit::*;
-use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
+use crate::{Event, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WebviewBuilder};
 
 mod cocoa;
 mod webkit;
@@ -289,7 +289,7 @@ impl PlatformWebview {
         let window_delegate: *mut Object = unsafe { msg_send![class!(WindowDelegate), new] };
 
         // Create window
-        let window_rect = if builder.fullscreen && builder.position.is_none() {
+        let window_rect = if builder.should_fullscreen && builder.position.is_none() {
             let screen: *mut Object = unsafe { msg_send![class!(NSScreen), mainScreen] };
             unsafe { msg_send![screen, frame] }
         } else {
@@ -308,23 +308,35 @@ impl PlatformWebview {
         if builder.resizable {
             window_style_mask |= NS_WINDOW_STYLE_MASK_RESIZABLE;
         }
-        if builder.fullscreen {
+        if builder.should_fullscreen {
             window_style_mask = 0;
         }
         let window = unsafe {
             let window: *mut Object = msg_send![class!(NSWindow), alloc];
             let window: *mut Object = msg_send![window, initWithContentRect:window_rect, styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:false];
             let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title)];
-            if builder.fullscreen {
+            if builder.should_fullscreen {
                 let _: () = msg_send![window, setLevel: 25i64];
             }
-            if builder.macos_titlebar_hidden {
+            if let Some(color) = builder.background_color {
+                let color: *mut Object = msg_send![class!(NSColor), colorWithRed:((color >> 16) & 0xFF) as f64 / 255.0,
+                    green:((color >> 8) & 0xFF) as f64 / 255.0,
+                    blue:(color & 0xFF) as f64 / 255.0, alpha:1.0];
+                let _: () = msg_send![window, setBackgroundColor:color];
+            }
+            if builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
+                || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden
+            {
                 let _: () = msg_send![window, setTitlebarAppearsTransparent:Bool::YES];
+            }
+            if builder.macos_titlebar_style == MacosTitlebarStyle::Hidden {
                 let _: () = msg_send![window, setTitleVisibility:NS_WINDOW_TITLE_VISIBILITY_HIDDEN];
             }
-            if builder.should_force_dark_mode {
-                let appearance: *mut Object =
-                    msg_send![class!(NSAppearance), appearanceNamed:NSAppearanceNameDarkAqua];
+            if let Some(theme) = builder.theme {
+                let appearance: *mut Object = msg_send![class!(NSAppearance), appearanceNamed:match theme {
+                    Theme::Light => NSAppearanceNameAqua,
+                    Theme::Dark => NSAppearanceNameDarkAqua,
+                }];
                 let _: () = msg_send![window, setAppearance:appearance];
             }
             if let Some(min_size) = builder.min_size {
@@ -354,7 +366,7 @@ impl PlatformWebview {
         // Create webview
         let webview = unsafe {
             let content_view: *mut Object = msg_send![window, contentView];
-            let webview_rect = if builder.macos_titlebar_hidden {
+            let webview_rect = if builder.macos_titlebar_style == MacosTitlebarStyle::Hidden {
                 let mut window_frame: NSRect = msg_send![window, frame];
                 window_frame.origin.x = 0.0;
                 window_frame.origin.y = 0.0;
@@ -364,7 +376,12 @@ impl PlatformWebview {
             };
             let webview: *mut Object = msg_send![class!(WKWebView), alloc];
             let webview: *mut Object = msg_send![webview, initWithFrame:webview_rect];
+            let _: () = msg_send![webview, setNavigationDelegate:window_delegate];
             let _: () = msg_send![content_view, addSubview:webview];
+            if builder.background_color.is_some() {
+                let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
+                let _: () = msg_send![webview, setValue:value, forKey:NSString::from_str("drawsBackground")];
+            }
             if let Some(url) = builder.should_load_url {
                 let url: *mut Object =
                     msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
@@ -374,8 +391,6 @@ impl PlatformWebview {
             if let Some(html) = builder.should_load_html {
                 let _: *mut Object = msg_send![webview, loadHTMLString:NSString::from_str(html), baseURL:null::<Object>()];
             }
-            let _: () = msg_send![webview, setNavigationDelegate:window_delegate];
-
             if cfg!(debug_assertions) {
                 let webview_configuration: *mut Object = msg_send![webview, configuration];
                 let webview_preferences: *mut Object =
@@ -451,6 +466,28 @@ impl crate::WebviewInterface for PlatformWebview {
         unsafe { msg_send![self.window, setStyleMask:style_mask] }
     }
 
+    fn set_theme(&mut self, theme: Theme) {
+        unsafe {
+            let appearance: *mut Object = msg_send![class!(NSAppearance), appearanceNamed:match theme {
+                Theme::Light => NSAppearanceNameAqua,
+                Theme::Dark => NSAppearanceNameDarkAqua,
+            }];
+            let _: () = msg_send![self.window, setAppearance:appearance];
+        }
+    }
+
+    fn set_background_color(&mut self, color: u32) {
+        unsafe {
+            let color: *mut Object = msg_send![class!(NSColor), colorWithRed:((color >> 16) & 0xFF) as f64 / 255.0,
+                green:((color >> 8) & 0xFF) as f64 / 255.0,
+                blue:(color & 0xFF) as f64 / 255.0, alpha:1.0];
+            let _: () = msg_send![self.window, setBackgroundColor:color];
+
+            let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
+            let _: () = msg_send![self.webview, setValue:value, forKey:NSString::from_str("drawsBackground")];
+        }
+    }
+
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
             let url: *mut Object = msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
@@ -488,8 +525,8 @@ extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mu
     let subviews: *mut Object = unsafe { msg_send![content_view, subviews] };
 
     // Update webview size
-    let titlebar_hidden = unsafe { msg_send![window, titlebarAppearsTransparent] };
-    let webview_rect = if titlebar_hidden {
+    let title_visibility: i64 = unsafe { msg_send![window, titleVisibility] };
+    let webview_rect = if title_visibility == NS_WINDOW_TITLE_VISIBILITY_HIDDEN {
         let mut webview_rect: NSRect = unsafe { msg_send![window, frame] };
         webview_rect.origin.x = 0.0;
         webview_rect.origin.y = 0.0;

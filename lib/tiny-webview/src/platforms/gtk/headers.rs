@@ -82,6 +82,13 @@ pub(crate) struct GdkRectangle {
     pub width: i32,
     pub height: i32,
 }
+#[repr(C)]
+pub(crate) struct GdkRGBA {
+    pub red: f64,
+    pub green: f64,
+    pub blue: f64,
+    pub alpha: f64,
+}
 #[link(name = "gdk-3")]
 unsafe extern "C" {
     pub(crate) fn gdk_display_get_default() -> *mut GdkDisplay;
@@ -105,6 +112,7 @@ pub(crate) struct GtkWindow(u8);
 pub(crate) struct GtkSettings(u8);
 pub(crate) const GTK_WINDOW_TOPLEVEL: i32 = 0;
 pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
+pub(crate) const GTK_STATE_FLAG_NORMAL: i32 = 0;
 #[link(name = "gtk-3")]
 unsafe extern "C" {
     pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
@@ -131,6 +139,11 @@ unsafe extern "C" {
         error: *mut *mut GError,
     );
     pub(crate) fn gtk_settings_get_default() -> *mut GtkSettings;
+    pub(crate) fn gtk_widget_override_background_color(
+        widget: *mut GtkWidget,
+        state: i32,
+        color: *const GdkRGBA,
+    );
 }
 
 // MARK: WebKitGtk
@@ -202,6 +215,10 @@ unsafe extern "C" {
     pub(crate) fn webkit_settings_set_enable_developer_extras(
         settings: *mut WebkitSettings,
         enable: bool,
+    );
+    pub(crate) fn webkit_web_view_set_background_color(
+        web_view: *mut WebKitWebView,
+        color: *const GdkRGBA,
     );
 }
 

@@ -120,6 +120,27 @@ impl Monitor {
 }
 
 // MARK: WebviewBuilder
+/// Theme
+#[derive(PartialEq, Eq)]
+pub enum Theme {
+    /// Light theme
+    Light,
+    /// Dark theme
+    Dark,
+}
+
+/// MacOS Titlebar style
+#[cfg(target_os = "macos")]
+#[derive(PartialEq, Eq)]
+pub enum MacosTitlebarStyle {
+    /// Default titlebar style
+    Default,
+    /// Transparent titlebar
+    Transparent,
+    /// Hidden titlebar
+    Hidden,
+}
+
 /// Webview builder
 pub struct WebviewBuilder {
     title: String,
@@ -127,11 +148,12 @@ pub struct WebviewBuilder {
     size: LogicalSize,
     min_size: Option<LogicalSize>,
     resizable: bool,
-    fullscreen: bool,
+    theme: Option<Theme>,
+    background_color: Option<u32>,
     #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
-    should_force_dark_mode: bool,
     should_center: bool,
+    should_fullscreen: bool,
     should_load_url: Option<String>,
     should_load_html: Option<String>,
     #[cfg(feature = "rust-embed")]
@@ -141,7 +163,7 @@ pub struct WebviewBuilder {
     #[cfg(feature = "rust-embed")]
     internal_http_server_handle: Option<fn(&small_http::Request) -> Option<small_http::Response>>,
     #[cfg(target_os = "macos")]
-    macos_titlebar_hidden: bool,
+    macos_titlebar_style: MacosTitlebarStyle,
 }
 
 impl Default for WebviewBuilder {
@@ -155,11 +177,12 @@ impl Default for WebviewBuilder {
             },
             min_size: None,
             resizable: true,
-            fullscreen: false,
+            theme: None,
+            background_color: None,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
-            should_force_dark_mode: false,
             should_center: false,
+            should_fullscreen: false,
             should_load_url: None,
             should_load_html: None,
             #[cfg(feature = "rust-embed")]
@@ -169,7 +192,7 @@ impl Default for WebviewBuilder {
             #[cfg(feature = "rust-embed")]
             internal_http_server_handle: None,
             #[cfg(target_os = "macos")]
-            macos_titlebar_hidden: false,
+            macos_titlebar_style: MacosTitlebarStyle::Default,
         }
     }
 }
@@ -210,9 +233,15 @@ impl WebviewBuilder {
         self
     }
 
-    /// Set fullscreen
-    pub fn fullscreen(mut self, fullscreen: bool) -> Self {
-        self.fullscreen = fullscreen;
+    /// Set theme
+    pub fn theme(mut self, theme: Theme) -> Self {
+        self.theme = Some(theme);
+        self
+    }
+
+    /// Set window background color
+    pub fn background_color(mut self, color: u32) -> Self {
+        self.background_color = Some(color);
         self
     }
 
@@ -223,15 +252,15 @@ impl WebviewBuilder {
         self
     }
 
-    /// Force dark mode
-    pub fn force_dark_mode(mut self, force_dark_mode: bool) -> Self {
-        self.should_force_dark_mode = force_dark_mode;
-        self
-    }
-
     /// Center window
     pub fn center(mut self) -> Self {
         self.should_center = true;
+        self
+    }
+
+    /// Set fullscreen
+    pub fn fullscreen(mut self, fullscreen: bool) -> Self {
+        self.should_fullscreen = fullscreen;
         self
     }
 
@@ -256,7 +285,7 @@ impl WebviewBuilder {
 
     /// Expose internal http server to other devices in the network
     #[cfg(feature = "rust-embed")]
-    pub fn internal_http_serve_expose(mut self, expose: bool) -> Self {
+    pub fn internal_http_server_expose(mut self, expose: bool) -> Self {
         self.internal_http_server_expose = expose;
         self
     }
@@ -271,10 +300,10 @@ impl WebviewBuilder {
         self
     }
 
-    /// Set macOS titlebar hidden
+    /// Set macOS title transparent
     #[cfg(target_os = "macos")]
-    pub fn macos_titlebar_hidden(mut self, hidden: bool) -> Self {
-        self.macos_titlebar_hidden = hidden;
+    pub fn macos_titlebar_style(mut self, style: MacosTitlebarStyle) -> Self {
+        self.macos_titlebar_style = style;
         self
     }
 
@@ -350,7 +379,8 @@ pub(crate) trait WebviewInterface {
     fn set_size(&mut self, size: LogicalSize);
     fn set_min_size(&mut self, min_size: LogicalSize);
     fn set_resizable(&mut self, resizable: bool);
-
+    fn set_theme(&mut self, theme: Theme);
+    fn set_background_color(&mut self, color: u32);
     fn load_url(&mut self, url: impl AsRef<str>);
     fn load_html(&mut self, html: impl AsRef<str>);
     fn evaluate_script(&mut self, script: impl AsRef<str>);
@@ -397,6 +427,16 @@ impl Webview {
     /// Set resizable
     pub fn set_resizable(&mut self, resizable: bool) {
         self.0.set_resizable(resizable)
+    }
+
+    /// Set theme
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.0.set_theme(theme)
+    }
+
+    /// Set window background color
+    pub fn set_background_color(&mut self, color: u32) {
+        self.0.set_background_color(color)
     }
 
     /// Load URL
