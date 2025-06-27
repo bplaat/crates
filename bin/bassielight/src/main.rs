@@ -32,7 +32,7 @@ struct WebAssets;
 fn main() {
     let event_loop = EventLoopBuilder::build();
 
-    let mut webview_builder = WebviewBuilder::new()
+    let mut webview = WebviewBuilder::new()
         .title("BassieLight")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
@@ -75,13 +75,8 @@ fn main() {
                 }));
             }
             None
-        });
-    #[cfg(target_os = "macos")]
-    {
-        webview_builder =
-            webview_builder.macos_titlebar_style(tiny_webview::MacosTitlebarStyle::Transparent);
-    }
-    let mut webview = webview_builder.build();
+        })
+        .build();
 
     let config_path = format!(
         "{}/BassieLight/config.json",

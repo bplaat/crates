@@ -26,7 +26,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         webview_builder =
-            webview_builder.macos_titlebar_style(tiny_webview::MacosTitlebarStyle::Hidden);
+            webview_builder.macos_titlebar_style(tiny_webview::MacosTitlebarStyle::Transparent);
     }
     let mut webview = webview_builder
         .load_url("https://navidrome.plaatsoft.nl/")

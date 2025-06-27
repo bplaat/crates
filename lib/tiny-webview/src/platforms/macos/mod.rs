@@ -472,7 +472,9 @@ impl PlatformWebview {
         // Create webview
         let webview = unsafe {
             let content_view: *mut Object = msg_send![window, contentView];
-            let webview_rect = if builder.macos_titlebar_style == MacosTitlebarStyle::Hidden {
+            let webview_rect = if builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
+                || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden
+            {
                 let mut window_frame: NSRect = msg_send![window, frame];
                 window_frame.origin.x = 0.0;
                 window_frame.origin.y = 0.0;
@@ -631,8 +633,7 @@ extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mu
     let subviews: *mut Object = unsafe { msg_send![content_view, subviews] };
 
     // Update webview size
-    let title_visibility: i64 = unsafe { msg_send![window, titleVisibility] };
-    let webview_rect = if title_visibility == NS_WINDOW_TITLE_VISIBILITY_HIDDEN {
+    let webview_rect = if unsafe { msg_send![window, titlebarAppearsTransparent] } {
         let mut webview_rect: NSRect = unsafe { msg_send![window, frame] };
         webview_rect.origin.x = 0.0;
         webview_rect.origin.y = 0.0;

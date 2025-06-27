@@ -16,7 +16,7 @@ fn main() {
         .title("Webview Background Example")
         .background_color(0x05445e)
         .theme(Theme::Dark)
-        .load_html("<h1 style=\"color:#fff\">Hello Webview!</h1>");
+        .load_html("<body style=\"height:100vh;margin:0;display:flex;align-items:center;justify-content:center\"><h1 style=\"color:#fff\">Hello Webview!</h1>");
     #[cfg(target_os = "macos")]
     {
         webview_builder =
