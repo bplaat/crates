@@ -6,6 +6,9 @@
 
 //! A [navidrome.plaatsoft.nl](https://navidrome.plaatsoft.nl/) webview wrapper
 
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![forbid(unsafe_code)]
+
 use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
 #[allow(unused_mut, unused_variables)]
