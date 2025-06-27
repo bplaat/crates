@@ -15,4 +15,4 @@ homepage = "https://github.com/bplaat/crates/tree/master/lib/small-router"
 workspace = true
 
 [dependencies]
-small-http = "0.1.0"
+small-http = { version = "0.2.0", default-features = false }
