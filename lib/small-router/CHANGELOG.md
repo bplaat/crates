@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 _Placeholder_
 
+## [0.2.0] - 2025-06-27
+
+### Changed
+
+-   Updated to `small-http` v0.2.0
+
 ## [0.1.1] - 2025-02-24
 
 ### Added
@@ -21,6 +27,7 @@ _Placeholder_
 
 _Initial release_
 
-[Unreleased]: https://github.com/bplaat/crates/compare/small-router%2Fv0.1.1...HEAD
+[Unreleased]: https://github.com/bplaat/crates/compare/small-router%2Fv0.2.0...HEAD
+[0.2.0]: https://github.com/bplaat/crates/releases/tag/small-router%2Fv0.2.0
 [0.1.1]: https://github.com/bplaat/crates/releases/tag/small-router%2Fv0.1.1
 [0.1.0]: https://github.com/bplaat/crates/releases/tag/small-router%2Fv0.1.0
