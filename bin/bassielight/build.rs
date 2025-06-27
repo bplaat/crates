@@ -70,7 +70,7 @@ fn main() {
     copy_dir_all(std::path::Path::new("web/dist"), &dest_path)
         .expect("Failed to copy web/dist files to $OUT_DIR");
 
-    // Generate resources for macOS
+    // Generate resources for macOS bundle
     if cfg!(target_os = "macos") {
         let target_dir = "../../target/BassieLight"; // FIXME: Find way to not hardcode this path
         std::fs::create_dir_all(target_dir).expect("Failed to create target directory");
@@ -120,14 +120,5 @@ fn main() {
         );
         std::fs::write(format!("{}/Info.plist", target_dir), info_plist)
             .expect("Failed to write Info.plist");
-    }
-
-    // Compile Windows resources
-    if cfg!(windows) {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("meta/windows/icon.ico")
-            .set_manifest_file("meta/windows/manifest.xml")
-            .set("LegalCopyright", "Copyright © 2025 Bastiaan van der Plaat");
-        res.compile().expect("Failed to compile Windows resources.");
     }
 }

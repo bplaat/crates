@@ -10,3 +10,6 @@ workspace = true
 
 [dependencies]
 tiny-webview = { path = "../../lib/tiny-webview" }
+
+[build-dependencies]
+winres = "0.1.12"
