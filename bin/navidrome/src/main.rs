@@ -40,11 +40,14 @@ fn main() {
                 r#"
                 const scrollbarStyle = document.createElement('style');
                 scrollbarStyle.innerHTML = `
-                body {
-                    padding-top: 28px;
+                html, body {
+                    overscroll-behavior: none;
                     cursor: default;
                     -webkit-user-select: none;
                     user-select: none;
+                }
+                body {
+                    padding-top: 28px;
                 }
                 header.MuiAppBar-root {
                     padding-top: 28px;
