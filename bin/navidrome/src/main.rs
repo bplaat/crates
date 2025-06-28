@@ -38,37 +38,35 @@ fn main() {
             #[cfg(target_os = "macos")]
             webview.evaluate_script(
                 r#"
-                setTimeout(() => {
-                    document.body.style.paddingTop = '28px';
-                    document.querySelector('header.MuiAppBar-root').style.paddingTop = '28px';
+                const scrollbarStyle = document.createElement('style');
+                scrollbarStyle.innerHTML = `
+                body {
+                    padding-top: 28px;
+                    cursor: default;
+                    -webkit-user-select: none;
+                    user-select: none;
+                }
+                header.MuiAppBar-root {
+                    padding-top: 28px;
+                }
 
-                    const scrollbarStyle = document.createElement('style');
-                    scrollbarStyle.innerHTML = `
-                    body {
-                        cursor: default;
-                        -webkit-user-select: none;
-                        user-select: none;
-                    }
-
-                    ::-webkit-scrollbar {
-                        width: 8px;
-                        height: 8px;
-                    }
-                    ::-webkit-scrollbar-track {
-                        background-color: #131313;
-                    }
-                    ::-webkit-scrollbar-thumb {
-                        background-color: #444;
-                        border-radius: 4px;
-                    }
-                    ::-webkit-scrollbar-thumb:hover {
-                        background-color: #555;
-                    }
-                    `;
-                    document.head.appendChild(scrollbarStyle);
-
-                    window.addEventListener('contextmenu', (e) => e.preventDefault());
-                }, 0);
+                ::-webkit-scrollbar {
+                    width: 8px;
+                    height: 8px;
+                }
+                ::-webkit-scrollbar-track {
+                    background-color: #131313;
+                }
+                ::-webkit-scrollbar-thumb {
+                    background-color: #444;
+                    border-radius: 4px;
+                }
+                ::-webkit-scrollbar-thumb:hover {
+                    background-color: #555;
+                }
+                `;
+                document.head.appendChild(scrollbarStyle);
+                window.addEventListener('contextmenu', (e) => e.preventDefault());
                 "#,
             );
         }
