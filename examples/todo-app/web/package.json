@@ -8,10 +8,10 @@
         "build-release": "vite build --mode release"
     },
     "dependencies": {
-        "preact": "^10.26.5"
+        "preact": "^10.26.9"
     },
     "devDependencies": {
         "@preact/preset-vite": "^2.10.1",
-        "vite": "^6.3.5"
+        "vite": "^7.0.0"
     }
 }
