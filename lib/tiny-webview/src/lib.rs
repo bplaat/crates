@@ -156,12 +156,16 @@ pub struct WebviewBuilder {
     should_fullscreen: bool,
     should_load_url: Option<String>,
     should_load_html: Option<String>,
+
     #[cfg(feature = "rust-embed")]
     embed_assets_get: Option<fn(&str) -> Option<rust_embed::EmbeddedFile>>,
+    #[cfg(feature = "rust-embed")]
+    internal_http_server_port: Option<u16>,
     #[cfg(feature = "rust-embed")]
     internal_http_server_expose: bool,
     #[cfg(feature = "rust-embed")]
     internal_http_server_handle: Option<fn(&small_http::Request) -> Option<small_http::Response>>,
+
     #[cfg(target_os = "macos")]
     macos_titlebar_style: MacosTitlebarStyle,
 }
@@ -185,12 +189,16 @@ impl Default for WebviewBuilder {
             should_fullscreen: false,
             should_load_url: None,
             should_load_html: None,
+
             #[cfg(feature = "rust-embed")]
             embed_assets_get: None,
+            #[cfg(feature = "rust-embed")]
+            internal_http_server_port: None,
             #[cfg(feature = "rust-embed")]
             internal_http_server_expose: false,
             #[cfg(feature = "rust-embed")]
             internal_http_server_handle: None,
+
             #[cfg(target_os = "macos")]
             macos_titlebar_style: MacosTitlebarStyle::Default,
         }
@@ -283,6 +291,13 @@ impl WebviewBuilder {
         self
     }
 
+    /// Set internal http server port
+    #[cfg(feature = "rust-embed")]
+    pub fn internal_http_server_port(mut self, port: u16) -> Self {
+        self.internal_http_server_port = Some(port);
+        self
+    }
+
     /// Expose internal http server to other devices in the network
     #[cfg(feature = "rust-embed")]
     pub fn internal_http_server_expose(mut self, expose: bool) -> Self {
@@ -313,9 +328,10 @@ impl WebviewBuilder {
         // Spawn a local http server when assets_get is set
         #[cfg(feature = "rust-embed")]
         if let Some(assets_get) = self.embed_assets_get.take() {
+            let port = self.internal_http_server_port.unwrap_or(0);
             let listener = if self.internal_http_server_expose {
                 // Start an exposed HTTP server
-                let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))
+                let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, port))
                     .unwrap_or_else(|_| panic!("Can't start local http server"));
                 self.should_load_url = Some(format!(
                     "http://{}:{}{}",
@@ -329,7 +345,7 @@ impl WebviewBuilder {
                 listener
             } else {
                 // Start a local HTTP server
-                let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+                let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
                     .unwrap_or_else(|_| panic!("Can't start local http server"));
                 self.should_load_url = Some(format!(
                     "http://{}{}",

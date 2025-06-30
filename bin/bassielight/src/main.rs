@@ -27,6 +27,8 @@ mod usb;
 #[folder = "$OUT_DIR/web"]
 struct WebAssets;
 
+const PORT: u16 = 39027;
+
 // MARK: Main
 #[allow(unused_mut)]
 fn main() {
@@ -41,6 +43,7 @@ fn main() {
         .theme(Theme::Dark)
         .background_color(0x1a1a1a)
         .load_rust_embed::<WebAssets>()
+        .internal_http_server_port(PORT)
         .internal_http_server_expose(true)
         .internal_http_server_handle(|req| {
             if req.url.path() == "/ipc" {
