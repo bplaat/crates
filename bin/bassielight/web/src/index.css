@@ -220,6 +220,7 @@ button.selected:hover {
 }
 
 .qr-image {
-    width: 50vw;
+    width: 60vw;
+    max-width: 60vh;
     background-color: #fff;
 }
