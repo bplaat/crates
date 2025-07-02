@@ -39,12 +39,12 @@ fn main() {
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
-        .remember_window_state(true)
+        .remember_window_state()
         .theme(Theme::Dark)
         .background_color(0x1a1a1a)
         .load_rust_embed::<WebAssets>()
         .internal_http_server_port(PORT)
-        .internal_http_server_expose(true)
+        .internal_http_server_expose()
         .internal_http_server_handle(|req| {
             if req.url.path() == "/ipc" {
                 return Some(small_websocket::upgrade(req, |mut ws| {

@@ -18,38 +18,36 @@ struct WebAssets;
 
 fn main() {
     let event_loop = EventLoopBuilder::build();
-    let monitors = event_loop.available_monitors();
+    let mut monitors = event_loop.available_monitors();
+    monitors.sort_by_key(|m| !m.is_primary());
 
     let _webview = WebviewBuilder::new()
         .title("Screen 1")
-        .position(monitors[0].position())
-        .size(monitors[0].size())
-        .fullscreen(true)
+        .monitor(&monitors[0])
+        .fullscreen()
         .load_rust_embed::<WebAssets>()
         .load_url("/screen1.html")
         .build();
 
-    if let Some(monitor) = monitors.get(1) {
-        let _webview = WebviewBuilder::new()
+    let _webview2 = monitors.get(1).map(|monitor| {
+        WebviewBuilder::new()
             .title("Screen 2")
-            .position(monitor.position())
-            .size(monitor.size())
-            .fullscreen(true)
+            .monitor(monitor)
+            .fullscreen()
             .load_rust_embed::<WebAssets>()
             .load_url("/screen2.html")
-            .build();
-    }
+            .build()
+    });
 
-    if let Some(monitor) = monitors.get(2) {
-        let _webview = WebviewBuilder::new()
+    let _webview3 = monitors.get(2).map(|monitor| {
+        WebviewBuilder::new()
             .title("Screen 3")
-            .position(monitor.position())
-            .size(monitor.size())
-            .fullscreen(true)
+            .monitor(monitor)
+            .fullscreen()
             .load_rust_embed::<WebAssets>()
             .load_url("/screen3.html")
-            .build();
-    }
+            .build()
+    });
 
     event_loop.run(move |_event| {});
 }

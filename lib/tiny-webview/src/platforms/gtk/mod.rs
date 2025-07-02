@@ -43,12 +43,18 @@ impl PlatformEventLoop {
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn primary_monitor(&self) -> PlatformMonitor {
+        unsafe { PlatformMonitor::new(gdk_display_get_primary_monitor(gdk_display_get_default())) }
+    }
+
     fn available_monitors(&self) -> Vec<PlatformMonitor> {
         unsafe {
             let display = gdk_display_get_default();
-            (0..gdk_display_get_n_monitors(display))
-                .map(|i| PlatformMonitor::new(gdk_display_get_monitor(display, i)))
-                .collect()
+            let mut monitors = Vec::new();
+            for i in 0..gdk_display_get_n_monitors(display) {
+                monitors.push(PlatformMonitor::new(gdk_display_get_monitor(display, i)));
+            }
+            monitors
         }
     }
 
@@ -110,7 +116,7 @@ impl PlatformMonitor {
 impl crate::MonitorInterface for PlatformMonitor {
     fn name(&self) -> String {
         unsafe {
-            let name_ptr = gdk_monitor_get_name(self.monitor);
+            let name_ptr = gdk_monitor_get_model(self.monitor);
             CStr::from_ptr(name_ptr).to_string_lossy().into_owned()
         }
     }
@@ -121,7 +127,19 @@ impl crate::MonitorInterface for PlatformMonitor {
             gdk_monitor_get_geometry(self.monitor, rect.as_mut_ptr());
         }
         let rect = unsafe { rect.assume_init() };
-        LogicalPoint::new(rect.x as f32, rect.y as f32)
+
+        // The GTK monitors are not offset by primary monitor position,
+        // so we need to calculate the position relative to the primary monitor.
+        let primary_monitor_rect = unsafe {
+            let primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+            let mut primary_monitor_rect = MaybeUninit::<GdkRectangle>::uninit();
+            gdk_monitor_get_geometry(primary_monitor, primary_monitor_rect.as_mut_ptr());
+            primary_monitor_rect.assume_init()
+        };
+        LogicalPoint::new(
+            (rect.x - primary_monitor_rect.x) as f32,
+            (rect.y - primary_monitor_rect.y) as f32,
+        )
     }
 
     fn size(&self) -> LogicalSize {
@@ -135,6 +153,10 @@ impl crate::MonitorInterface for PlatformMonitor {
 
     fn scale_factor(&self) -> f32 {
         unsafe { gdk_monitor_get_scale_factor(self.monitor) as f32 }
+    }
+
+    fn is_primary(&self) -> bool {
+        unsafe { gdk_monitor_is_primary(self.monitor) }
     }
 }
 
@@ -150,6 +172,12 @@ pub(crate) struct PlatformWebview(Box<WebviewData>);
 
 impl PlatformWebview {
     pub(crate) fn new(builder: WebviewBuilder) -> Self {
+        let is_wayland = unsafe {
+            CStr::from_ptr(gdk_display_get_name(gdk_display_get_default()))
+                .to_string_lossy()
+                .contains("wayland")
+        };
+
         // Force dark mode if enabled
         if let Some(theme) = builder.theme {
             unsafe {
@@ -180,6 +208,7 @@ impl PlatformWebview {
                 builder.size.width as i32,
                 builder.size.height as i32,
             );
+            gtk_window_set_resizable(window, builder.resizable);
             if let Some(min_size) = builder.min_size {
                 gtk_widget_set_size_request(
                     window as *mut GtkWidget,
@@ -200,12 +229,38 @@ impl PlatformWebview {
                     &rgba,
                 );
             }
+
+            let monitor_rect = if let Some(monitor) = builder.monitor {
+                let mut rect = MaybeUninit::<GdkRectangle>::uninit();
+                gdk_monitor_get_geometry(monitor.monitor, rect.as_mut_ptr());
+                rect.assume_init()
+            } else {
+                let primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+                let mut rect = MaybeUninit::<GdkRectangle>::uninit();
+                gdk_monitor_get_geometry(primary_monitor, rect.as_mut_ptr());
+                rect.assume_init()
+            };
+            if let Some(position) = builder.position {
+                gtk_window_move(
+                    window,
+                    position.x as i32 + monitor_rect.x,
+                    position.y as i32 + monitor_rect.y,
+                );
+            }
             if builder.should_fullscreen {
+                gtk_window_move(window, monitor_rect.x, monitor_rect.y);
                 gtk_window_fullscreen(window);
             }
-            gtk_window_set_resizable(window, builder.resizable);
             if builder.should_center {
-                gtk_window_set_position(window, GTK_WIN_POS_CENTER);
+                if !is_wayland {
+                    gtk_window_move(
+                        window,
+                        monitor_rect.x + (monitor_rect.width - builder.size.width as i32) / 2,
+                        monitor_rect.y + (monitor_rect.height - builder.size.height as i32) / 2,
+                    );
+                } else {
+                    gtk_window_set_position(window, GTK_WIN_POS_CENTER);
+                }
             }
             #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
@@ -220,9 +275,7 @@ impl PlatformWebview {
                 null(),
                 G_CONNECT_DEFAULT,
             );
-            let display = gdk_display_get_default();
-            let display_name = CStr::from_ptr(gdk_display_get_name(display)).to_string_lossy();
-            if !display_name.contains("wayland") {
+            if !is_wayland {
                 g_signal_connect_data(
                     window as *mut c_void,
                     c"configure-event".as_ptr(),
@@ -448,7 +501,19 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 
     fn set_position(&mut self, point: LogicalPoint) {
-        unsafe { gtk_window_move(self.0.window, point.x as i32, point.y as i32) }
+        let primary_monitor_rect = unsafe {
+            let primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+            let mut primary_monitor_rect = MaybeUninit::<GdkRectangle>::uninit();
+            gdk_monitor_get_geometry(primary_monitor, primary_monitor_rect.as_mut_ptr());
+            primary_monitor_rect.assume_init()
+        };
+        unsafe {
+            gtk_window_move(
+                self.0.window,
+                point.x as i32 + primary_monitor_rect.x,
+                point.y as i32 + primary_monitor_rect.y,
+            )
+        }
     }
 
     fn set_size(&mut self, size: LogicalSize) {
