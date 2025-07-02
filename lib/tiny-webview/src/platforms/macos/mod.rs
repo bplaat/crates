@@ -38,10 +38,6 @@ impl PlatformEventLoop {
                 sel!(applicationDidFinishLaunching:),
                 app_did_finish_launching as extern "C" fn(_, _, _),
             );
-            decl.add_method(
-                sel!(applicationShouldTerminateAfterLastWindowClosed:),
-                app_should_terminate_after_last_window_closed as extern "C" fn(_, _, _) -> _,
-            );
             decl.add_method(sel!(sendEvent:), app_send_event as extern "C" fn(_, _, _));
             decl.add_method(
                 sel!(openAboutDialog:),
@@ -276,14 +272,6 @@ extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notificati
             )));
         }
     }
-}
-
-extern "C" fn app_should_terminate_after_last_window_closed(
-    _this: *mut Object,
-    _sel: Sel,
-    _sender: *mut Object,
-) -> Bool {
-    Bool::YES
 }
 
 extern "C" fn app_send_event(_this: *mut Object, _sel: Sel, value: *mut Object) {
@@ -672,6 +660,9 @@ extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mu
 extern "C" fn window_will_close(_this: *mut Object, _sel: Sel, _notification: *mut Object) {
     // Send window closed event
     send_event(Event::WindowClosed);
+
+    // Terminate the application
+    let _: () = unsafe { msg_send![NSApp, terminate:null::<Object>()] };
 }
 
 extern "C" fn webview_did_start_provisional_navigation(
