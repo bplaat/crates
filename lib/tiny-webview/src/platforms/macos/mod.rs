@@ -202,6 +202,13 @@ impl PlatformEventLoop {
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn primary_monitor(&self) -> PlatformMonitor {
+        unsafe {
+            let screen: *mut Object = msg_send![class!(NSScreen), mainScreen];
+            PlatformMonitor::new(screen)
+        }
+    }
+
     fn available_monitors(&self) -> Vec<PlatformMonitor> {
         let mut monitors = Vec::new();
         unsafe {
@@ -342,6 +349,11 @@ impl crate::MonitorInterface for PlatformMonitor {
         let backing_scale_factor: f64 = unsafe { msg_send![self.screen, backingScaleFactor] };
         backing_scale_factor as f32
     }
+
+    fn is_primary(&self) -> bool {
+        let main_screen: *mut Object = unsafe { msg_send![class!(NSScreen), mainScreen] };
+        self.screen == main_screen
+    }
 }
 
 // MARK: Webview
@@ -395,19 +407,35 @@ impl PlatformWebview {
         let window_delegate: *mut Object = unsafe { msg_send![class!(WindowDelegate), new] };
 
         // Create window
-        let window_rect = if builder.should_fullscreen && builder.position.is_none() {
+        let screen_rect: NSRect = if let Some(monitor) = builder.monitor {
+            unsafe { msg_send![monitor.screen, frame] }
+        } else {
             let screen: *mut Object = unsafe { msg_send![class!(NSScreen), mainScreen] };
             unsafe { msg_send![screen, frame] }
+        };
+        let window_rect = if builder.should_fullscreen {
+            screen_rect
         } else {
             NSRect::new(
                 if let Some(position) = builder.position {
-                    NSPoint::new(position.x as f64, position.y as f64)
+                    NSPoint::new(
+                        screen_rect.origin.x + position.x as f64,
+                        screen_rect.origin.y
+                            + (screen_rect.size.height - builder.size.height as f64)
+                            - position.y as f64,
+                    )
                 } else {
-                    NSPoint::new(0.0, 0.0)
+                    NSPoint::new(
+                        screen_rect.origin.x
+                            + (screen_rect.size.width - builder.size.width as f64) / 2.0,
+                        screen_rect.origin.y
+                            + (screen_rect.size.height - builder.size.height as f64) / 2.0,
+                    )
                 },
                 NSSize::new(builder.size.width as f64, builder.size.height as f64),
             )
         };
+
         let mut window_style_mask = NS_WINDOW_STYLE_MASK_TITLED
             | NS_WINDOW_STYLE_MASK_CLOSABLE
             | NS_WINDOW_STYLE_MASK_MINIATURIZABLE;
@@ -417,9 +445,11 @@ impl PlatformWebview {
         if builder.should_fullscreen {
             window_style_mask = 0;
         }
+
         let window = unsafe {
             let window: *mut Object = msg_send![class!(NSWindow), alloc];
             let window: *mut Object = msg_send![window, initWithContentRect:window_rect, styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:false];
+            let _: () = msg_send![window, setFrameOrigin:window_rect.origin];
             let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title)];
             if builder.should_fullscreen {
                 let _: () = msg_send![window, setLevel: 25i64];
@@ -447,19 +477,6 @@ impl PlatformWebview {
             }
             if let Some(min_size) = builder.min_size {
                 let _: () = msg_send![window, setMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
-            }
-            if builder.position.is_none() || builder.should_center {
-                let screen: *mut Object = msg_send![window, screen];
-                let screen_frame: NSRect = msg_send![screen, frame];
-                let window_frame: NSRect = msg_send![window, frame];
-                let centered_rect = NSRect::new(
-                    NSPoint::new(
-                        (screen_frame.size.width - window_frame.size.width) / 2.0,
-                        (screen_frame.size.height - window_frame.size.height) / 2.0,
-                    ),
-                    window_frame.size,
-                );
-                let _: () = msg_send![window, setFrame:centered_rect, display:true];
             }
             #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {

@@ -23,11 +23,12 @@ use webview2_com::{
     NavigationCompletedEventHandler, NavigationStartingEventHandler,
     NewWindowRequestedEventHandler,
 };
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, RECT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
 use windows::Win32::Graphics::Gdi::{
     CreateSolidBrush, EnumDisplayMonitors, FillRect, GetMonitorInfoA, HDC, HMONITOR,
-    InvalidateRect, MONITORINFO, MONITORINFOEXA, UpdateWindow,
+    InvalidateRect, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MONITORINFOEXA, MonitorFromPoint,
+    UpdateWindow,
 };
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameA, GetModuleHandleA};
 use windows::Win32::UI::HiDpi::{
@@ -69,6 +70,11 @@ impl PlatformEventLoop {
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn primary_monitor(&self) -> PlatformMonitor {
+        let hmonitor = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
+        PlatformMonitor::new(hmonitor)
+    }
+
     fn available_monitors(&self) -> Vec<PlatformMonitor> {
         static mut MONITORS: Option<Vec<PlatformMonitor>> = None;
         unsafe extern "system" fn monitor_enum_proc(
@@ -167,9 +173,14 @@ impl PlatformMonitor {
 
 impl crate::MonitorInterface for PlatformMonitor {
     fn name(&self) -> String {
-        unsafe { CString::from_raw(self.info.szDevice.as_ptr() as *mut _) }
-            .to_string_lossy()
-            .into_owned()
+        let byte_vec: Vec<u8> = self
+            .info
+            .szDevice
+            .iter()
+            .take_while(|&x| *x != 0)
+            .map(|&x| x as u8)
+            .collect();
+        String::from_utf8(byte_vec).expect("Can't parse string")
     }
 
     fn position(&self) -> LogicalPoint {
@@ -197,6 +208,10 @@ impl crate::MonitorInterface for PlatformMonitor {
                 1.0
             }
         }
+    }
+
+    fn is_primary(&self) -> bool {
+        self.info.monitorInfo.rcMonitor.left == 0 && self.info.monitorInfo.rcMonitor.top == 0
     }
 }
 
@@ -262,23 +277,45 @@ impl PlatformWebview {
             };
 
             // Calculate window rect based on size and position
+            let monitor_rect = if let Some(monitor) = builder.monitor {
+                monitor.info.monitorInfo.rcMonitor
+            } else {
+                RECT {
+                    left: 0,
+                    top: 0,
+                    right: GetSystemMetrics(SM_CXSCREEN),
+                    bottom: GetSystemMetrics(SM_CYSCREEN),
+                }
+            };
+
+            let mut position_set = false;
             let mut x = 0;
             let mut y = 0;
             let mut width =
                 (builder.size.width as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
             let mut height =
                 (builder.size.height as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-            if builder.should_fullscreen && builder.position.is_none() {
-                width = GetSystemMetrics(SM_CXSCREEN);
-                height = GetSystemMetrics(SM_CYSCREEN);
-            }
             if let Some(position) = builder.position {
-                x = (position.x as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-                y = (position.y as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+                position_set = true;
+                x = monitor_rect.left
+                    + (position.x as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+                y = monitor_rect.top
+                    + (position.y as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
             }
-            if builder.should_center {
-                x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
-                y = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
+            if builder.should_fullscreen {
+                position_set = true;
+                x = monitor_rect.left;
+                y = monitor_rect.top;
+                width = monitor_rect.right - monitor_rect.left;
+                height = monitor_rect.bottom - monitor_rect.top;
+            } else if builder.should_center {
+                position_set = true;
+                x = monitor_rect.left + ((monitor_rect.right - monitor_rect.left) - width) / 2;
+                y = monitor_rect.top + ((monitor_rect.bottom - monitor_rect.top) - height) / 2;
+            } else if !position_set && builder.monitor.is_some() {
+                position_set = true;
+                x = monitor_rect.left + (64 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+                y = monitor_rect.top + (64 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
             }
             let mut rect = RECT {
                 left: x,
@@ -294,14 +331,12 @@ impl PlatformWebview {
                 class_name,
                 PCSTR(title.as_ptr() as _),
                 style,
-                if builder.position.is_some() || builder.should_center || builder.should_fullscreen
-                {
+                if position_set {
                     rect.left
                 } else {
                     CW_USEDEFAULT
                 },
-                if builder.position.is_some() || builder.should_center || builder.should_fullscreen
-                {
+                if position_set {
                     rect.top
                 } else {
                     CW_USEDEFAULT

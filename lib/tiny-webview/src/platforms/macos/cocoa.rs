@@ -17,6 +17,7 @@ unsafe extern "C" {
     pub(crate) static NSAppearanceNameDarkAqua: *const Object;
 }
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub(crate) struct CGPoint {
     pub(crate) x: f64,
@@ -32,6 +33,7 @@ unsafe impl Encode for CGPoint {
 }
 pub(crate) type NSPoint = CGPoint;
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub(crate) struct CGSize {
     pub(crate) width: f64,
@@ -47,6 +49,7 @@ unsafe impl Encode for CGSize {
 }
 pub(crate) type NSSize = CGSize;
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub(crate) struct CGRect {
     pub(crate) origin: CGPoint,

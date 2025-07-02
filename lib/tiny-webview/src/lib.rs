@@ -30,6 +30,7 @@ impl EventLoopBuilder {
 
 // MARK: EventLoop
 pub(crate) trait EventLoopInterface {
+    fn primary_monitor(&self) -> PlatformMonitor;
     fn available_monitors(&self) -> Vec<PlatformMonitor>;
     fn create_proxy(&self) -> PlatformEventLoopProxy;
     fn run(self, event_handler: impl FnMut(Event) + 'static) -> !;
@@ -41,6 +42,11 @@ pub struct EventLoop(PlatformEventLoop);
 impl EventLoop {
     fn new(event_loop: PlatformEventLoop) -> Self {
         Self(event_loop)
+    }
+
+    /// Get primary monitor
+    pub fn primary_monitor(&self) -> Monitor {
+        Monitor::new(self.0.primary_monitor())
     }
 
     /// List available monitors
@@ -91,6 +97,7 @@ pub(crate) trait MonitorInterface {
     fn position(&self) -> LogicalPoint;
     fn size(&self) -> LogicalSize;
     fn scale_factor(&self) -> f32;
+    fn is_primary(&self) -> bool;
 }
 
 impl Monitor {
@@ -104,6 +111,8 @@ impl Monitor {
     }
 
     /// Get monitor position
+    ///
+    /// Primary monitor is 0x0 position all other monitors are relative to the primary monitor.
     pub fn position(&self) -> LogicalPoint {
         self.0.position()
     }
@@ -116,6 +125,11 @@ impl Monitor {
     /// Get monitor scale factor
     pub fn scale_factor(&self) -> f32 {
         self.0.scale_factor()
+    }
+
+    /// Get if monitor is primary
+    pub fn is_primary(&self) -> bool {
+        self.0.is_primary()
     }
 }
 
@@ -142,7 +156,7 @@ pub enum MacosTitlebarStyle {
 }
 
 /// Webview builder
-pub struct WebviewBuilder {
+pub struct WebviewBuilder<'a> {
     title: String,
     position: Option<LogicalPoint>,
     size: LogicalSize,
@@ -152,6 +166,7 @@ pub struct WebviewBuilder {
     background_color: Option<u32>,
     #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
+    monitor: Option<&'a PlatformMonitor>,
     should_center: bool,
     should_fullscreen: bool,
     should_load_url: Option<String>,
@@ -170,7 +185,7 @@ pub struct WebviewBuilder {
     macos_titlebar_style: MacosTitlebarStyle,
 }
 
-impl Default for WebviewBuilder {
+impl<'a> Default for WebviewBuilder<'a> {
     fn default() -> Self {
         Self {
             title: "Untitled".to_string(),
@@ -185,6 +200,7 @@ impl Default for WebviewBuilder {
             background_color: None,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
+            monitor: None,
             should_center: false,
             should_fullscreen: false,
             should_load_url: None,
@@ -205,7 +221,7 @@ impl Default for WebviewBuilder {
     }
 }
 
-impl WebviewBuilder {
+impl<'a> WebviewBuilder<'a> {
     /// Create new webview builder
     pub fn new() -> Self {
         Self::default()
@@ -255,8 +271,14 @@ impl WebviewBuilder {
 
     /// Set remember window state
     #[cfg(feature = "remember_window_state")]
-    pub fn remember_window_state(mut self, remember_window_state: bool) -> Self {
-        self.remember_window_state = remember_window_state;
+    pub fn remember_window_state(mut self) -> Self {
+        self.remember_window_state = true;
+        self
+    }
+
+    /// Set monitor
+    pub fn monitor(mut self, monitor: &'a Monitor) -> Self {
+        self.monitor = Some(&monitor.0);
         self
     }
 
@@ -267,8 +289,8 @@ impl WebviewBuilder {
     }
 
     /// Set fullscreen
-    pub fn fullscreen(mut self, fullscreen: bool) -> Self {
-        self.should_fullscreen = fullscreen;
+    pub fn fullscreen(mut self) -> Self {
+        self.should_fullscreen = true;
         self
     }
 
@@ -300,8 +322,8 @@ impl WebviewBuilder {
 
     /// Expose internal http server to other devices in the network
     #[cfg(feature = "rust-embed")]
-    pub fn internal_http_server_expose(mut self, expose: bool) -> Self {
-        self.internal_http_server_expose = expose;
+    pub fn internal_http_server_expose(mut self) -> Self {
+        self.internal_http_server_expose = true;
         self
     }
 

@@ -12,9 +12,9 @@ fn main() {
     let event_loop = EventLoopBuilder::build();
 
     let mut _webview = WebviewBuilder::new()
-        .title("Webview Simple Example")
-        .fullscreen(true) // Set fullscreen to true
-        .load_url("https://bplaat.nl/")
+        .title("Webview Simple Fullscreen Example")
+        .fullscreen() // Set fullscreen to true
+        .load_url("https://example.com")
         .build();
 
     event_loop.run(|_| {});

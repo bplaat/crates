@@ -98,9 +98,11 @@ unsafe extern "C" {
         display: *mut GdkDisplay,
         monitor_num: i32,
     ) -> *mut GdkMonitor;
-    pub(crate) fn gdk_monitor_get_name(monitor: *mut GdkMonitor) -> *const c_char;
+    pub(crate) fn gdk_display_get_primary_monitor(display: *mut GdkDisplay) -> *mut GdkMonitor;
+    pub(crate) fn gdk_monitor_get_model(monitor: *mut GdkMonitor) -> *const c_char;
     pub(crate) fn gdk_monitor_get_geometry(monitor: *mut GdkMonitor, geometry: *mut GdkRectangle);
     pub(crate) fn gdk_monitor_get_scale_factor(monitor: *mut GdkMonitor) -> i32;
+    pub(crate) fn gdk_monitor_is_primary(monitor: *mut GdkMonitor) -> bool;
 }
 
 // MARK: GTK
