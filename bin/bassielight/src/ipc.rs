@@ -28,12 +28,27 @@ pub(crate) struct State {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub(crate) enum IpcMessage {
     GetState,
-    GetStateResponse { state: State },
-    SetColor { color: u32 },
-    SetToggleColor { color: u32 },
-    SetToggleSpeed { speed: Option<u64> },
-    SetStrobeSpeed { speed: Option<u64> },
-    SetMode { mode: Mode },
+    GetStateResponse {
+        state: State,
+    },
+    SetColor {
+        color: u32,
+    },
+    SetToggleColor {
+        #[serde(rename = "toggleColor")]
+        toggle_color: u32,
+    },
+    SetToggleSpeed {
+        #[serde(rename = "toggleSpeed")]
+        toggle_speed: Option<u64>,
+    },
+    SetStrobeSpeed {
+        #[serde(rename = "strobeSpeed")]
+        strobe_speed: Option<u64>,
+    },
+    SetMode {
+        mode: Mode,
+    },
 }
 
 // MARK: IpcConnection
@@ -67,13 +82,15 @@ impl IpcConnection {
     }
 
     pub(crate) fn broadcast(&mut self, message: String) {
-        println!("[RUST] Broadcasting IPC message: {}", message);
         let mut connections = IPC_CONNECTIONS
             .lock()
             .expect("Failed to lock IPC connections");
-        for connection in connections.iter_mut() {
-            if connection != self {
-                connection.send(message.clone());
+        if connections.len() > 1 {
+            println!("[RUST] Broadcasting IPC message: {}", message);
+            for connection in connections.iter_mut() {
+                if connection != self {
+                    connection.send(message.clone());
+                }
             }
         }
     }
@@ -106,26 +123,26 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
                     .expect("Failed to serialize IPC message"),
             );
         }
-        IpcMessage::SetToggleColor { color } => {
-            dmx_state.toggle_color = color;
+        IpcMessage::SetToggleColor { toggle_color } => {
+            dmx_state.toggle_color = toggle_color;
             connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetToggleColor { color })
+                serde_json::to_string(&IpcMessage::SetToggleColor { toggle_color })
                     .expect("Failed to serialize IPC message"),
             );
         }
-        IpcMessage::SetToggleSpeed { speed } => {
-            dmx_state.toggle_speed = speed.map(Duration::from_millis);
-            dmx_state.is_toggle_color = speed.is_some();
+        IpcMessage::SetToggleSpeed { toggle_speed } => {
+            dmx_state.toggle_speed = toggle_speed.map(Duration::from_millis);
+            dmx_state.is_toggle_color = toggle_speed.is_some();
             connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetToggleSpeed { speed })
+                serde_json::to_string(&IpcMessage::SetToggleSpeed { toggle_speed })
                     .expect("Failed to serialize IPC message"),
             );
         }
-        IpcMessage::SetStrobeSpeed { speed } => {
-            dmx_state.strobe_speed = speed.map(Duration::from_millis);
-            dmx_state.is_strobe = speed.is_some();
+        IpcMessage::SetStrobeSpeed { strobe_speed } => {
+            dmx_state.strobe_speed = strobe_speed.map(Duration::from_millis);
+            dmx_state.is_strobe = strobe_speed.is_some();
             connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetStrobeSpeed { speed })
+                serde_json::to_string(&IpcMessage::SetStrobeSpeed { strobe_speed })
                     .expect("Failed to serialize IPC message"),
             );
         }

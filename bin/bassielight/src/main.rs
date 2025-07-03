@@ -61,10 +61,10 @@ fn main() {
                             Err(err) => panic!("WebSocket recv error: {}", err),
                         };
                         match message {
+                            Some(Message::Close(_, _)) => break,
                             Some(Message::Text(text)) => {
                                 ipc_message_handler(IpcConnection::WebSocket(ws.clone()), &text);
                             }
-                            Some(Message::Close(_, _)) => break,
                             None => {
                                 thread::sleep(Duration::from_millis(100));
                             }
@@ -81,13 +81,13 @@ fn main() {
         })
         .build();
 
-    let config_path = format!(
+    let config = config::load_config(format!(
         "{}/BassieLight/config.json",
         dirs::config_dir()
             .expect("Can't find config directory")
             .display()
-    );
-    let config = config::load_config(config_path).expect("Can't load config.json");
+    ))
+    .expect("Can't load config.json");
 
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {

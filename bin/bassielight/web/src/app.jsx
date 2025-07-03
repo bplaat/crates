@@ -34,8 +34,26 @@ const MODES = [
     },
 ];
 
-function capitalizeFirstLetter(string) {
+function capitalize(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function useIpcState(key) {
+    const [value, setValue] = useState(undefined);
+    const setMessageType = `set${capitalize(key)}`;
+    useEffect(() => {
+        const listener = ipc.on(setMessageType, (payload) => {
+            setValue(payload[key]);
+        });
+        return () => listener.remove();
+    }, []);
+    const setIpcValue = (newValue, isUserInitiated = true) => {
+        setValue(newValue);
+        if (isUserInitiated) {
+            ipc.send(setMessageType, { [key]: newValue });
+        }
+    };
+    return [value, setIpcValue];
 }
 
 function QrModal({ url, onClose }) {
@@ -52,49 +70,21 @@ function QrModal({ url, onClose }) {
 }
 
 export function App() {
-    const [selectedColor, setSelectedColor] = useState(undefined);
-    const [selectedToggleColor, setSelectedToggleColor] = useState(undefined);
-    const [selectedToggleSpeed, setSelectedToggleSpeed] = useState(undefined);
-    const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useState(undefined);
-    const [selectedMode, setSelectedMode] = useState(undefined);
     const [showQrCode, setShowQrCode] = useState(false);
+    const [selectedColor, setSelectedColor] = useIpcState('color');
+    const [selectedToggleColor, setSelectedToggleColor] = useIpcState('toggleColor');
+    const [selectedToggleSpeed, setSelectedToggleSpeed] = useIpcState('toggleSpeed');
+    const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useIpcState('strobeSpeed');
+    const [selectedMode, setSelectedMode] = useIpcState('mode');
 
     useEffect(async () => {
         const { state } = await ipc.request('getState');
-        setSelectedColor(state.color);
-        setSelectedToggleColor(state.toggleColor);
-        setSelectedToggleSpeed(state.toggleSpeed);
-        setSelectedStrobeSpeed(state.strobeSpeed);
-        setSelectedMode(state.mode);
-
-        const selectedColorListener = ipc.on('setColor', ({ color }) => setSelectedColor(color));
-        const selectedToggleColorListener = ipc.on('setToggleColor', ({ color }) => setSelectedToggleColor(color));
-        const selectedToggleSpeedListener = ipc.on('setToggleSpeed', ({ speed }) => setSelectedToggleSpeed(speed));
-        const selectedStrobeSpeedListener = ipc.on('setStrobeSpeed', ({ speed }) => setSelectedStrobeSpeed(speed));
-        const selectedModeListener = ipc.on('setMode', ({ mode }) => setSelectedMode(mode));
-        return () => {
-            selectedColorListener.remove();
-            selectedToggleColorListener.remove();
-            selectedToggleSpeedListener.remove();
-            selectedStrobeSpeedListener.remove();
-            selectedModeListener.remove();
-        };
+        setSelectedColor(state.color, false);
+        setSelectedToggleColor(state.toggleColor, false);
+        setSelectedToggleSpeed(state.toggleSpeed, false);
+        setSelectedStrobeSpeed(state.strobeSpeed, false);
+        setSelectedMode(state.mode, false);
     }, []);
-    useEffect(async () => {
-        if (selectedColor !== undefined) await ipc.send('setColor', { color: selectedColor });
-    }, [selectedColor]);
-    useEffect(async () => {
-        if (selectedToggleColor !== undefined) await ipc.send('setToggleColor', { color: selectedToggleColor });
-    }, [selectedToggleColor]);
-    useEffect(async () => {
-        if (selectedToggleSpeed !== undefined) await ipc.send('setToggleSpeed', { speed: selectedToggleSpeed });
-    }, [selectedToggleSpeed]);
-    useEffect(async () => {
-        if (selectedStrobeSpeed !== undefined) await ipc.send('setStrobeSpeed', { speed: selectedStrobeSpeed });
-    }, [selectedStrobeSpeed]);
-    useEffect(async () => {
-        if (selectedMode !== undefined) await ipc.send('setMode', { mode: selectedMode });
-    }, [selectedMode]);
 
     return (
         <>
@@ -158,7 +148,7 @@ export function App() {
                         <svg className="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                             {mode.icon}
                         </svg>
-                        {capitalizeFirstLetter(mode.type)}
+                        {capitalize(mode.type)}
                     </button>
                 ))}
             </div>
