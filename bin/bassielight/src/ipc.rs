@@ -11,14 +11,14 @@ use serde::{Deserialize, Serialize};
 use small_websocket::{Message, WebSocket};
 use tiny_webview::EventLoopProxy;
 
-use crate::dmx::{DMX_STATE, Mode};
+use crate::dmx::{Color, DMX_STATE, Mode};
 
 // MARK: IpcMessage
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct State {
-    pub color: u32,
-    pub toggle_color: u32,
+    pub color: Color,
+    pub toggle_color: Color,
     pub toggle_speed: Option<u64>,
     pub strobe_speed: Option<u64>,
     pub mode: Mode,
@@ -32,11 +32,11 @@ pub(crate) enum IpcMessage {
         state: State,
     },
     SetColor {
-        color: u32,
+        color: Color,
     },
     SetToggleColor {
         #[serde(rename = "toggleColor")]
-        toggle_color: u32,
+        toggle_color: Color,
     },
     SetToggleSpeed {
         #[serde(rename = "toggleSpeed")]

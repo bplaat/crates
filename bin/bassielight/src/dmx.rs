@@ -13,6 +13,43 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{Config, FixtureType};
 
+// MARK: Color
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl Color {
+    pub(crate) const BLACK: Color = Color { r: 0, g: 0, b: 0 };
+}
+
+impl Serialize for Color {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let value: u32 = ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32);
+        serializer.serialize_u32(value)
+    }
+}
+
+impl<'de> Deserialize<'de> for Color {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = u32::deserialize(deserializer)?;
+        Ok(Color {
+            r: ((value >> 16) & 0xFF) as u8,
+            g: ((value >> 8) & 0xFF) as u8,
+            b: (value & 0xFF) as u8,
+        })
+    }
+}
+
+// MARK: Mode
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Mode {
@@ -21,10 +58,11 @@ pub(crate) enum Mode {
     Auto,
 }
 
+// MARK: DmxState
 pub(crate) struct DmxState {
     pub mode: Mode,
-    pub color: u32,
-    pub toggle_color: u32,
+    pub color: Color,
+    pub toggle_color: Color,
     pub toggle_speed: Option<Duration>,
     pub is_toggle_color: bool,
     pub strobe_speed: Option<Duration>,
@@ -33,14 +71,15 @@ pub(crate) struct DmxState {
 
 pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
     mode: Mode::Black,
-    color: 0x000000,
-    toggle_color: 0x000000,
+    color: Color::BLACK,
+    toggle_color: Color::BLACK,
     toggle_speed: None,
     is_toggle_color: false,
     strobe_speed: None,
     is_strobe: false,
 });
 
+// MARK: DMX Thread
 /// Starts the DMX output thread for the given device using the given configuration.
 pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
     let handle = device.open().expect("Can't open uDMX device");
@@ -80,7 +119,7 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                 if fixture.r#type == FixtureType::P56Led {
                     let base_addr = fixture.addr - 1;
                     let color = if dmx_state.is_strobe {
-                        0x000000
+                        Color::BLACK
                     } else if dmx_state.is_toggle_color {
                         dmx_state.toggle_color
                     } else {
@@ -88,9 +127,9 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                     };
 
                     if dmx_state.mode == Mode::Manual {
-                        dmx[base_addr] = (color >> 16) as u8;
-                        dmx[base_addr + 1] = (color >> 8) as u8;
-                        dmx[base_addr + 2] = color as u8;
+                        dmx[base_addr] = color.r;
+                        dmx[base_addr + 1] = color.g;
+                        dmx[base_addr + 2] = color.b;
                     } else if dmx_state.mode == Mode::Black {
                         dmx[base_addr] = 0;
                         dmx[base_addr + 1] = 0;
