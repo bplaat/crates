@@ -6,10 +6,10 @@
 
 import { render } from 'preact';
 import './index.css';
-import { App } from './app.jsx';
+import { App } from './app.tsx';
 
 if (import.meta.env.MODE === 'release') {
     window.addEventListener('contextmenu', (event) => event.preventDefault());
 }
 
-render(<App />, document.getElementById('app'));
+render(<App />, document.getElementById('app')!);

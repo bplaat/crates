@@ -34,20 +34,20 @@ const MODES = [
     },
 ];
 
-function capitalize(string) {
+function capitalize(string: string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
-function useIpcState(key) {
+function useIpcState(key: string): [any, (value: any, isUserInitiated?: boolean) => void] {
     const [value, setValue] = useState(undefined);
     const setMessageType = `set${capitalize(key)}`;
     useEffect(() => {
-        const listener = ipc.on(setMessageType, (payload) => {
-            setValue(payload[key]);
+        const listener = ipc.on(setMessageType, (data: { [key: string]: any }) => {
+            setValue(data[key]);
         });
         return () => listener.remove();
     }, []);
-    const setIpcValue = (newValue, isUserInitiated = true) => {
+    const setIpcValue = (newValue: any, isUserInitiated = true) => {
         setValue(newValue);
         if (isUserInitiated) {
             ipc.send(setMessageType, { [key]: newValue });
@@ -56,7 +56,7 @@ function useIpcState(key) {
     return [value, setIpcValue];
 }
 
-function QrModal({ url, onClose }) {
+function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
     return (
         <div className="qr-modal" onClick={onClose}>
             <div className="qr-image" dangerouslySetInnerHTML={{ __html: encodeQR(url, 'svg') }} />
@@ -77,13 +77,23 @@ export function App() {
     const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useIpcState('strobeSpeed');
     const [selectedMode, setSelectedMode] = useIpcState('mode');
 
-    useEffect(async () => {
-        const { state } = await ipc.request('getState');
-        setSelectedColor(state.color, false);
-        setSelectedToggleColor(state.toggleColor, false);
-        setSelectedToggleSpeed(state.toggleSpeed, false);
-        setSelectedStrobeSpeed(state.strobeSpeed, false);
-        setSelectedMode(state.mode, false);
+    useEffect(() => {
+        (async () => {
+            const { state } = (await ipc.request('getState')) as {
+                state: {
+                    color: number;
+                    toggleColor: number;
+                    toggleSpeed: number | null;
+                    strobeSpeed: number | null;
+                    mode: string;
+                };
+            };
+            setSelectedColor(state.color, false);
+            setSelectedToggleColor(state.toggleColor, false);
+            setSelectedToggleSpeed(state.toggleSpeed, false);
+            setSelectedStrobeSpeed(state.strobeSpeed, false);
+            setSelectedMode(state.mode, false);
+        })();
     }, []);
 
     return (
