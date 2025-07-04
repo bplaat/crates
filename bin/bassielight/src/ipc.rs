@@ -11,17 +11,22 @@ use serde::{Deserialize, Serialize};
 use small_websocket::{Message, WebSocket};
 use tiny_webview::EventLoopProxy;
 
+use crate::CONFIG;
+use crate::config::{Config, DMX_SWITCHES_LENGTH};
 use crate::dmx::{Color, DMX_STATE, Mode};
 
 // MARK: IpcMessage
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct State {
+    pub config: Config,
     pub color: Color,
     pub toggle_color: Color,
     pub toggle_speed: Option<u64>,
     pub strobe_speed: Option<u64>,
     pub mode: Mode,
+    pub switches_toggle: [bool; DMX_SWITCHES_LENGTH],
+    pub switches_press: [bool; DMX_SWITCHES_LENGTH],
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -45,6 +50,14 @@ pub(crate) enum IpcMessage {
     SetStrobeSpeed {
         #[serde(rename = "strobeSpeed")]
         strobe_speed: Option<u64>,
+    },
+    SetSwitchesToggle {
+        #[serde(rename = "switchesToggle")]
+        switches_toggle: [bool; 4],
+    },
+    SetSwitchesPress {
+        #[serde(rename = "switchesPress")]
+        switches_press: [bool; 4],
     },
     SetMode {
         mode: Mode,
@@ -104,11 +117,18 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
     match message {
         IpcMessage::GetState => {
             let state = State {
+                config: CONFIG
+                    .lock()
+                    .expect("Failed to lock config")
+                    .clone()
+                    .expect("Config is not set"),
                 color: dmx_state.color,
                 toggle_color: dmx_state.toggle_color,
                 toggle_speed: dmx_state.toggle_speed.map(|d| d.as_millis() as u64),
                 strobe_speed: dmx_state.strobe_speed.map(|d| d.as_millis() as u64),
                 mode: dmx_state.mode,
+                switches_toggle: dmx_state.switches_toggle,
+                switches_press: dmx_state.switches_press,
             };
             connection.send(
                 serde_json::to_string(&IpcMessage::GetStateResponse { state })
@@ -143,6 +163,20 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             dmx_state.is_strobe = strobe_speed.is_some();
             connection.broadcast(
                 serde_json::to_string(&IpcMessage::SetStrobeSpeed { strobe_speed })
+                    .expect("Failed to serialize IPC message"),
+            );
+        }
+        IpcMessage::SetSwitchesToggle { switches_toggle } => {
+            dmx_state.switches_toggle = switches_toggle;
+            connection.broadcast(
+                serde_json::to_string(&IpcMessage::SetSwitchesToggle { switches_toggle })
+                    .expect("Failed to serialize IPC message"),
+            );
+        }
+        IpcMessage::SetSwitchesPress { switches_press } => {
+            dmx_state.switches_press = switches_press;
+            connection.broadcast(
+                serde_json::to_string(&IpcMessage::SetSwitchesPress { switches_press })
                     .expect("Failed to serialize IPC message"),
             );
         }

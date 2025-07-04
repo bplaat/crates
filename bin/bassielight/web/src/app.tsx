@@ -71,28 +71,45 @@ function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
 
 export function App() {
     const [showQrCode, setShowQrCode] = useState(false);
+    const [switchesLabels, setSwitchesLabels] = useState<string[] | undefined>(undefined);
     const [selectedColor, setSelectedColor] = useIpcState('color');
     const [selectedToggleColor, setSelectedToggleColor] = useIpcState('toggleColor');
     const [selectedToggleSpeed, setSelectedToggleSpeed] = useIpcState('toggleSpeed');
     const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useIpcState('strobeSpeed');
+    const [switchesToggle, setSwitchesToggle] = useIpcState('switchesToggle');
+    const [switchesPress, setSwitchesPress] = useIpcState('switchesPress');
     const [selectedMode, setSelectedMode] = useIpcState('mode');
 
     useEffect(() => {
         (async () => {
             const { state } = (await ipc.request('getState')) as {
                 state: {
+                    config: {
+                        fixtures: {
+                            type: string;
+                            switches?: string[];
+                        }[];
+                    };
                     color: number;
                     toggleColor: number;
                     toggleSpeed: number | null;
                     strobeSpeed: number | null;
                     mode: string;
+                    switchesToggle: boolean[];
+                    switchesPress: boolean[];
                 };
             };
+            const switchFixture = state.config.fixtures.find((fixture) => fixture.type === 'multidim_mkii');
+            if (switchFixture?.switches) {
+                setSwitchesLabels(switchFixture.switches);
+            }
             setSelectedColor(state.color, false);
             setSelectedToggleColor(state.toggleColor, false);
             setSelectedToggleSpeed(state.toggleSpeed, false);
             setSelectedStrobeSpeed(state.strobeSpeed, false);
             setSelectedMode(state.mode, false);
+            setSwitchesToggle(state.switchesToggle, false);
+            setSwitchesPress(state.switchesPress, false);
         })();
     }, []);
 
@@ -147,6 +164,50 @@ export function App() {
                     </button>
                 ))}
             </div>
+
+            {switchesLabels && (
+                <>
+                    <h2>Switches</h2>
+                    <div className="button-grid">
+                        Toggle
+                        {switchesLabels.map((label, index) => (
+                            <button
+                                key={`toggle-${index}`}
+                                className={`text-button${switchesToggle[index] ? ' selected' : ''}`}
+                                onClick={() => {
+                                    const newToggles = [...switchesToggle];
+                                    newToggles[index] = !newToggles[index];
+                                    setSwitchesToggle(newToggles);
+                                }}
+                            >
+                                {label || `Toggle ${index + 1}`}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="button-grid">
+                        Press
+                        {switchesLabels.map((label, index) => (
+                            <button
+                                key={`press-${index}`}
+                                className={`text-button${switchesPress[index] ? ' selected' : ''}`}
+                                onMouseDown={() => {
+                                    const newPresses = [...switchesPress];
+                                    newPresses[index] = true;
+                                    setSwitchesPress(newPresses);
+                                }}
+                                onMouseUp={(event: MouseEvent) => {
+                                    const newPresses = [...switchesPress];
+                                    newPresses[index] = false;
+                                    setSwitchesPress(newPresses);
+                                    (event.currentTarget as HTMLElement).blur();
+                                }}
+                            >
+                                {label || `Press ${index + 1}`}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
 
             <div className="bottom-controls-container">
                 {MODES.map((mode) => (
