@@ -10,42 +10,45 @@ use std::path::Path;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+// Constants
+pub(crate) const DMX_LENGTH: usize = 512;
+pub(crate) const DMX_FPS: u64 = 44;
+pub(crate) const DMX_SWITCHES_LENGTH: usize = 4;
+
 /// Types of DMX fixtures.
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum FixtureType {
+    #[serde(rename = "p56led")]
     P56Led,
+    #[serde(rename = "multidim_mkii")]
+    MultiDimMKII,
 }
 
 /// DMX fixture configuration.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Fixture {
-    /// Unique name identifier for the fixture.
     pub name: String,
-    /// Fixture type (e.g., "p56led").
     #[serde(rename = "type")]
     pub r#type: FixtureType,
-    /// DMX channel address (1-indexed) for the fixture's first channel.
     pub addr: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub switches: Option<Vec<String>>,
 }
 
 /// Application configuration.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Config {
-    /// List of fixtures.
     pub fixtures: Vec<Fixture>,
-    /// DMX buffer length.
     pub dmx_length: usize,
-    /// DMX frames per second.
     pub dmx_fps: u64,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            fixtures: vec![],
-            dmx_length: 512,
-            dmx_fps: 44,
+            fixtures: Vec::new(),
+            dmx_length: DMX_LENGTH,
+            dmx_fps: DMX_FPS,
         }
     }
 }

@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime};
 use rusb::{Context, Device};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Config, FixtureType};
+use crate::config::{Config, DMX_SWITCHES_LENGTH, FixtureType};
 
 // MARK: Color
 #[derive(Debug, Copy, Clone)]
@@ -67,6 +67,8 @@ pub(crate) struct DmxState {
     pub is_toggle_color: bool,
     pub strobe_speed: Option<Duration>,
     pub is_strobe: bool,
+    pub switches_toggle: [bool; DMX_SWITCHES_LENGTH],
+    pub switches_press: [bool; DMX_SWITCHES_LENGTH],
 }
 
 pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
@@ -77,6 +79,8 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
     is_toggle_color: false,
     strobe_speed: None,
     is_strobe: false,
+    switches_toggle: [false; DMX_SWITCHES_LENGTH],
+    switches_press: [false; DMX_SWITCHES_LENGTH],
 });
 
 // MARK: DMX Thread
@@ -136,6 +140,23 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                         dmx[base_addr + 2] = 0;
                     } else if dmx_state.mode == Mode::Auto {
                         dmx[base_addr + 5] = 225;
+                    }
+                }
+
+                if fixture.r#type == FixtureType::MultiDimMKII {
+                    let base_addr = fixture.addr - 1;
+                    if dmx_state.mode == Mode::Manual {
+                        for i in 0..DMX_SWITCHES_LENGTH {
+                            if dmx_state.switches_toggle[i] || dmx_state.switches_press[i] {
+                                dmx[base_addr + i] = 255; // Switch is on
+                            } else {
+                                dmx[base_addr + i] = 0; // Switch is off
+                            }
+                        }
+                    } else {
+                        for i in 0..DMX_SWITCHES_LENGTH {
+                            dmx[base_addr + i] = 0; // All switches off
+                        }
                     }
                 }
             }
