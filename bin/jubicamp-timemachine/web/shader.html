@@ -1,0 +1,814 @@
+<!--
+    Copyright (c) 2025 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Screen 1</title>
+        <style>
+            body {
+                margin: 0;
+                overflow: hidden;
+                background-color: #000;
+            }
+            canvas {
+                display: block;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="canvas"></canvas>
+        <script type="module">
+            import Ipc from './ipc.js';
+
+            const SHADERS = [
+                `
+                        #ifdef GL_ES
+                        precision mediump float;
+                        #endif
+
+                        uniform float time;
+                        uniform vec2 resolution;
+
+                        #define pi 3.141592653589793238462643383279
+                        #define pi_inv 0.318309886183790671537767526745
+                        #define pi2_inv 11.159154983763372
+
+                        vec2 complex_div(vec2 numerator, vec2 denominator)
+                        {
+                        	return vec2(numerator.x*denominator.x + numerator.y*denominator.y, numerator.y*denominator.x - numerator.x*denominator.y)/ vec2(denominator.x*denominator.x + denominator.y*denominator.y);
+                        }
+
+                        float sigmoid(float x)
+                        {
+                        	return sin(x*.01)*exp(-x*x);
+                        }
+
+                        float smoothcircle(vec2 uv, vec2 center, vec2 aspect, float radius, float sharpness)
+                        {
+                        	return sigmoid((length((uv - center) * aspect) - radius) * sharpness);
+                        }
+
+
+                        vec2 spiralzoom(vec2 domain, vec2 center, float n, float spiral_factor, float zoom_factor, vec2 pos)
+                        {
+                        	vec2 uv = domain - center;
+                        	float angle = atan(uv.y, uv.x);
+                        	float d = length(uv);
+
+                        	return vec2(angle*n*pi2_inv + log(d)*spiral_factor, -log(d)*zoom_factor) + pos;
+                        }
+
+                        vec2 mobius(vec2 domain, vec2 zero_pos, vec2 asymptote_pos)
+                        {
+                        	return complex_div(domain - zero_pos, domain - asymptote_pos);
+                        }
+
+                        float gear(vec2 domain, float phase, vec2 pos)
+                        {
+                        	float angle = atan(domain.y - pos.y, domain.x - pos.x);
+                        	float d = 0.2 + sin((angle + phase) * 10.)*0.;
+
+                        	return smoothcircle(domain, pos, vec2(1), d, 40.);
+                        }
+
+                        float geartile(vec2 domain, float phase)
+                        {
+                        	domain = fract(domain);
+
+                        	return
+                        		gear(domain, -phase, vec2(-0.25,0.25)) +
+                        		gear(domain, phase, vec2(-0.25,0.75)) +
+                        		gear(domain, phase, vec2(1.25,0.25)) +
+                        		gear(domain, -phase, vec2(1.25,0.75)) +
+                        		gear(domain, -phase, vec2(0.25,-0.25)) +
+                        		gear(domain, phase, vec2(0.75,-0.25)) +
+                        		gear(domain, phase, vec2(0.25,1.25)) +
+                        		gear(domain, -phase, vec2(0.75,1.25)) +
+                        		gear(domain, phase, vec2(0.25,0.25)) +
+                        		gear(domain, -phase, vec2(0.25,0.75)) +
+                        		gear(domain, -phase, vec2(0.75,0.25)) +
+                        		gear(domain, phase, vec2(0.75,0.75));
+                        }
+
+                        void main(void)
+                        {
+                        	vec2 uv = (gl_FragCoord.xy - .5*resolution) / resolution.x;
+
+                        	float phase = (time+10.)*0.5;
+                        	float dist = 0.5;
+                        	vec2 uv_bipolar = mobius(uv, vec2(-dist*0.5, 0.), vec2(dist*0.5, 0.));
+                        	uv_bipolar = spiralzoom(uv_bipolar, vec2(0.0), 5., -0.125*pi, 0.8, vec2(0.125,0.125)*phase*5.);
+                        	uv_bipolar = vec2(-uv_bipolar.y,uv_bipolar.x); // 90° rotation
+
+                        	vec2 uv_spiral = spiralzoom(uv, vec2(0.5), 5., -0.125*pi, 0.8, vec2(-0.,0.25)*phase);
+                        	vec2 uv_tilt = uv_spiral;
+                        	float z = 1./(1.-uv_tilt.y)/(uv_tilt.y);
+                        	uv_tilt = 0.5 + (uv_tilt - 0.5) * log(z);
+
+                        	float grid = geartile(uv_bipolar, -phase);
+
+                        	gl_FragColor = vec4(uv+vec2(0.5),0.0,1.0);
+
+                        	gl_FragColor = mix(vec4(0,0,1.0,0), gl_FragColor, 1.1+sin(uv_bipolar.y * pi * 2.0));
+                        	gl_FragColor += vec4(0.6*abs(uv_bipolar.x+uv_bipolar.y),0.8,1.0+(uv_bipolar.y * pi * 5.0),1.0)* -grid*500.0;
+                        }
+                                        `,
+                `#ifdef GL_ES
+                        precision mediump float;
+                        #endif
+
+                        #extension GL_OES_standard_derivatives : enable
+
+                        #define TAU 7.28318530718
+                        #define MAX_ITER 16
+
+                        uniform float time;
+                        uniform vec2 resolution;
+
+                        void main() {
+                        	vec2 uv = gl_FragCoord.xy / resolution.xy;
+                        	uv-=0.5;
+                        	uv = abs(uv);
+                        	uv *=sin(time);
+
+                        	vec2 p = mod(uv*TAU, TAU)-1.0;
+                        	vec2 i = vec2(p);
+                        	float c = .005;
+                        	float inten = .015;
+                        	uv *= fract(uv*resolution.xy/2.0);
+
+
+                        	for (int n = 0; n < MAX_ITER; n++) {
+                        		float t = 0.4*(time+23.0) * (1.0 - (11.5 / float(n+99)));
+                        		i = p + vec2(cos(t - i.x) + sin(t + i.y), sin(t - i.y) + cos(t + i.x));
+                        		c += 1.0/length(vec2(p.x / (sin(i.x+t)/inten),p.y / (cos(i.y+t)/inten)));
+                        		uv = vec2(c*0.2,c*c*0.8);
+                        	}
+
+                        	c /= float(MAX_ITER);
+                        	c = 1.0-pow(c, 52.0);
+                        	vec3 colour = vec3(pow(abs(c), 1.0));
+                        	colour = clamp(colour*colour, 88.0, 88.0);
+
+                        	vec3 tint = 0.5 + 0.5 * cos(time+uv.xyx+vec3(2.0,4.0,6.0));
+                        	gl_FragColor = vec4(sin(time+colour)+2.0 * tint , 1.0);
+                        }`,
+                `#ifdef GL_ES
+                        precision mediump float;
+                        #endif
+                        #define NUMBER_OF_POINTS 80
+                        uniform float time;
+                        uniform vec2 resolution;
+
+                        void main( void ) {
+                        	float pi=3.14159265359;
+                        	vec2 position = ( gl_FragCoord.xy / resolution.xy );
+
+                        	vec4 color = vec4(0.0,0.0,0.0,1.0);
+                        	int pointIndex=0;
+                        	vec2 points[NUMBER_OF_POINTS];
+                        	float xValue=0.0;
+                        	float thresh=0.1;
+                        	int intersections=0;
+                        	for(int i=0;i<NUMBER_OF_POINTS;i++){
+                        		xValue+=1.0;
+                        		float sinValue=(xValue/(2.0*pi))+sin(time);
+                        		points[i]=vec2(xValue/80.0,sin(sinValue)/4.0 +0.5);
+                        	}
+                        	float distanceToPoint[NUMBER_OF_POINTS];
+                        	float minDistance=10000000.0;
+                        	for(int i=0;i<NUMBER_OF_POINTS;i++){
+                        		distanceToPoint[i]=distance(position,points[i]);
+                        		if(distanceToPoint[i]<0.01){
+                        			//color.r=1.0;
+                        			color.g=1.0;
+                        		}
+                        		if(distanceToPoint[i]<minDistance){
+                        			pointIndex=i;
+                        			minDistance=distanceToPoint[i];
+                        		}
+                        	}
+
+                        	for(int j=0;j<NUMBER_OF_POINTS;j++){
+                        		if( ( distanceToPoint[j]-minDistance)<thresh){
+                        			intersections++;
+                        		}
+
+                        	}
+                        	if(intersections>=1){
+                        		//color.b=1.0;
+                        	}
+                        	color.r=sin(float(pointIndex));
+
+                        	//	color=value;
+
+
+                        	gl_FragColor = color;
+
+                        }`,
+                `// By @paulofalcao
+                        //
+                        // Blobs
+
+                        #ifdef GL_ES
+                        precision highp float;
+                        #endif
+
+                        uniform float time;
+                        uniform vec2 resolution;
+
+                        float makePoint(float x,float y,float fx,float fy,float sx,float sy,float t){
+                           float xx=x+sin(t*fx)*sx;
+                           float yy=y+cos(t*fy)*sy;
+                           return 1.0/sqrt(xx*xx+yy*yy);
+                        }
+
+                        void main( void ) {
+
+                           vec2 p=(gl_FragCoord.xy/resolution.x)*2.0-vec2(1.0,resolution.y/resolution.x);
+
+                           p=p*2.0;
+
+                           float x=p.x;
+                           float y=p.y;
+
+                           float a=
+                               makePoint(x,y,3.3,2.9,0.3,0.3,time);
+                           a=a+makePoint(x,y,1.9,2.0,0.4,0.4,time);
+                           a=a+makePoint(x,y,0.8,0.7,0.4,0.5,time);
+                           a=a+makePoint(x,y,2.3,0.1,0.6,0.3,time);
+                           a=a+makePoint(x,y,1.8,1.7,0.5,0.4,time);
+
+                           float b=
+                               makePoint(x,y,1.2,1.9,0.3,0.3,time);
+                           b=b+makePoint(x,y,0.7,2.7,0.4,0.4,time);
+                           b=b+makePoint(x,y,1.4,0.6,0.4,0.5,time);
+                           b=b+makePoint(x,y,2.6,0.4,0.6,0.3,time);
+                           b=b+makePoint(x,y,0.7,1.4,0.5,0.4,time);
+                           b=b+makePoint(x,y,0.7,1.7,0.4,0.4,time);
+                           b=b+makePoint(x,y,0.8,0.5,0.4,0.5,time);
+                           b=b+makePoint(x,y,1.4,0.9,0.6,0.3,time);
+                           b=b+makePoint(x,y,0.7,1.3,0.5,0.4,time);
+
+                           float c=
+                               makePoint(x,y,3.7,0.3,0.3,0.3,time);
+                           c=c+makePoint(x,y,1.9,1.3,0.4,0.4,time);
+                           c=c+makePoint(x,y,0.8,0.9,0.4,0.5,time);
+                           c=c+makePoint(x,y,1.2,1.7,0.6,0.3,time);
+                           c=c+makePoint(x,y,0.3,0.6,0.5,0.4,time);
+                           c=c+makePoint(x,y,0.3,0.3,0.4,0.4,time);
+                           c=c+makePoint(x,y,1.4,0.8,0.4,0.5,time);
+                           c=c+makePoint(x,y,0.2,0.6,0.6,0.3,time);
+                           c=c+makePoint(x,y,1.3,0.5,0.5,0.4,time);
+
+                           vec3 d=vec3(a,b,c)/32.0;
+
+                           gl_FragColor = vec4(d.x,d.y,d.z,1.0);
+                        }`,
+                `#ifdef GL_ES
+                        precision mediump float;
+                        #endif
+
+                        uniform float time;
+                        uniform vec2 resolution;
+                        uniform sampler2D backbuffer;
+
+                        #define PI 3.14159
+
+                        void main(){
+                        	vec2 p = (gl_FragCoord.xy - 0.5 * resolution) / min(resolution.x, resolution.y);
+                        	vec2 t = vec2(gl_FragCoord.xy / resolution);
+
+                        	vec3 c = vec3(0);
+
+                        	for(int i = 0; i < 20; i++) {
+                        		float t = 0.4 * PI * float(i) / 30.0 * time * 5.5;
+                        		float x = cos(3.0*t);
+                        		float y = sin(4.0*t);
+                        		vec2 o = 0.40 * vec2(x, y);
+                        		float r = fract(x);
+                        		float g = 1.0 - r;
+                        		c += 0.01 / (length(p-o)) * vec3(r, g, 0.9);
+                        	}
+
+                        	gl_FragColor = vec4(c, 1);
+                        }`,
+                `#ifdef GL_ES
+                        precision mediump float;
+                        #endif
+
+                        uniform float time;
+                        uniform vec2 resolution;
+
+                        vec3 lazer(vec2 pos, vec3 clr, float mult)
+                        {
+
+                        	float x = time/.33 * 2.0;
+                        	float w = fract(x*0.5);
+                        	w = sin(3.14156*w);
+                        	w *= 1.5+pos.x;
+                        	w *= 2.0;
+                                vec3 color = clr * mult * w / abs(pos.y);
+
+                        	float d = distance(pos,vec2(-1.0+fract(x*0.5)*2.,0.0));
+                        	color += (clr * 0.25*w/d);
+                        	return color;
+                        }
+
+                        void main()
+                        {
+                        	vec2 pos = ( gl_FragCoord.xy / resolution.xy * 2.0 ) - 1.0;
+                        	vec3 color = max(vec3(0.), lazer(pos, vec3(1.7, 0.2, 3.), 0.25));
+                        	gl_FragColor = vec4(color * 0.05, 1.0);
+                        }
+                        `,
+                `#ifdef GL_ES
+                        precision highp float;
+                        #endif
+
+
+                        uniform float time;
+                        uniform vec2 resolution;
+
+                        #define mouse vec2(sin(time)/48., cos(time)/48.)
+                        #define iterations 14
+                        #define formuparam2 0.79
+
+                        #define volsteps 5
+                        #define stepsize 0.390
+
+                        #define zoom 0.900
+                        #define tile   0.850
+                        #define speed2  0.0
+                        #define brightness 0.003
+                        #define darkmatter 0.400
+                        #define distfading 0.560
+                        #define saturation 0.800
+
+
+                        #define transverseSpeed zoom*2.0
+                        #define cloud 0.11
+
+
+                        float triangle(float x, float a) {
+                        	float output2 = 2.0*abs(  2.0*  ( (x/a) - floor( (x/a) + 0.5) ) ) - 1.0;
+                        	return output2;
+                        }
+
+                        float field(in vec3 p) {
+                        	float strength = 7. + .03 * log(1.e-6 + fract(sin(time) * 4373.11));
+                        	float accum = 0.;
+                        	float prev = 0.;
+                        	float tw = 0.;
+
+                        	//for (int i = 0; i < 1; ++i) {
+                        		float mag = dot(p, p);
+                        		p = abs(p) / mag + vec3(-.5, -.8 + 0.1*sin(time*0.7 + 2.0), -1.1+0.3*cos(time*0.3));
+                        		float w = exp(-float(0) / 7.);
+                        		accum += w * exp(-strength * pow(abs(mag - prev), 2.3));
+                        		tw += w;
+                        		prev = mag;
+                        	//}
+                        	return max(0., 5. * accum / tw - .7);
+                        }
+
+
+
+                        void main() {
+                             	vec2 uv2 = 2. * gl_FragCoord.xy / vec2(512) - 1.;
+                        	vec2 uvs = uv2 * vec2(512)  / 512.;
+
+                        	float time2 = time;
+                                float speed = speed2;
+                                speed = .01 * cos(time2*0.02 + 3.1415926/4.0);
+
+                            	float formuparam = formuparam2;
+
+
+                        	vec2 uv = uvs;
+
+                        	float a_xz = 0.9;
+                        	float a_yz = -.6;
+                        	float a_xy = 0.9 + time*0.08;
+
+                        	mat2 rot_xz = mat2(cos(a_xz),sin(a_xz),-sin(a_xz),cos(a_xz));
+                        	mat2 rot_yz = mat2(cos(a_yz),sin(a_yz),-sin(a_yz),cos(a_yz));
+                        	mat2 rot_xy = mat2(cos(a_xy),sin(a_xy),-sin(a_xy),cos(a_xy));
+
+
+                        	float v2 =1.0;
+                        	vec3 dir=vec3(uv*zoom,1.);
+                        	vec3 from=vec3(0.0, 0.0,0.0);
+                                from.x -= 5.0*(mouse.x-0.5);
+                                from.y -= 5.0*(mouse.y-0.5);
+
+
+                        	vec3 forward = vec3(0.,0.,1.);
+                        	from.x += transverseSpeed*(1.0)*cos(0.01*time) + 0.001*time;
+                        	from.y += transverseSpeed*(1.0)*sin(0.01*time) +0.001*time;
+                        	from.z += 0.003*time;
+
+                        	dir.xy*=rot_xy;
+                        	forward.xy *= rot_xy;
+                        	dir.xz*=rot_xz;
+                        	forward.xz *= rot_xz;
+                        	dir.yz*= rot_yz;
+                        	forward.yz *= rot_yz;
+
+                        	from.xy*=-rot_xy;
+                        	from.xz*=rot_xz;
+                        	from.yz*= rot_yz;
+
+                        	float zooom = (time2-3311.)*speed;
+                        	from += forward* zooom;
+                        	float sampleShift = mod( zooom, stepsize );
+
+                        	float zoffset = -sampleShift;
+                        	sampleShift /= stepsize;
+
+
+                        	float s=0.24;
+                        	float s3 = s + stepsize/2.0;
+                        	vec3 v=vec3(0.);
+                        	float t3 = 0.0;
+
+                        	vec3 backCol2 = vec3(0.);
+                        	for (int r=0; r<volsteps; r++) {
+                        		vec3 p2=from+(s+zoffset)*dir;
+                        		vec3 p3=from+(s3+zoffset)*dir;
+
+                        		p2 = abs(vec3(tile)-mod(p2,vec3(tile*2.)));
+                        		p3 = abs(vec3(tile)-mod(p3,vec3(tile*2.)));
+                        		#ifdef cloud
+                        		t3 = field(p3);
+                        		#endif
+
+                        		float pa,a=pa=0.;
+                        		for (int i=0; i<iterations; i++) {
+                        			p2=abs(p2)/dot(p2,p2)-formuparam;
+
+                        			float D = abs(length(p2)-pa);
+                        			a += i > 7 ? min( 12., D) : D;
+                        			pa=length(p2);
+                        		}
+
+
+
+                        		a*=a*a;
+
+                        		float s1 = s+zoffset;
+
+                        		float fade = pow(distfading,max(0.,float(r)-sampleShift));
+
+                        		v+=fade;
+
+
+
+                        		if( r == 0 )
+                        			fade *= (1. - (sampleShift));
+
+                        		if( r == volsteps-1 )
+                        			fade *= sampleShift;
+                        		v+=vec3(s1,s1*s1,s1*s1*s1*s1)*a*brightness*fade;
+
+                        		backCol2 += mix(.11, 1., v2) * vec3(1.8 * t3 * t3 * t3, 1.4 * t3 * t3, t3) * fade;
+
+
+                        		s+=stepsize;
+                        		s3 += stepsize;
+                        	}
+
+                        	v=mix(vec3(length(v)),v,saturation);
+
+                        	vec4 forCol2 = vec4(v*.01,1.);
+                        	#ifdef cloud
+                        	backCol2 *= cloud;
+                        	#endif
+                        	backCol2.b *= 1.8;
+                        	backCol2.r *= 0.05;
+
+                        	backCol2.b = 0.5*mix(backCol2.g, backCol2.b, 0.8);
+                        	backCol2.g = 0.0;
+                        	backCol2.bg = mix(backCol2.gb, backCol2.bg, 0.5*(cos(time*0.01) + 1.0));
+                        	gl_FragColor = forCol2 + vec4(backCol2, 1.0);
+                        }
+                        `,
+                `/*
+                         * Original shader from: https://www.shadertoy.com/view/tlfGRN
+                         */
+
+                        #ifdef GL_ES
+                        precision highp float;
+                        #endif
+
+                        // glslsandbox uniforms
+                        uniform float time;
+                        uniform vec2 resolution;
+
+                        // shadertoy globals
+                        #define iTime time
+                        #define iResolution resolution
+                        const vec4  iMouse = vec4(0.0);
+
+                        // --------[ Original ShaderToy begins here ]---------- //
+                        #define EPS 0.0001
+                        #define PI 3.14159265359
+                        #define FLT_MAX 3.402823466e+38
+                        #define FLT_MIN 1.1e-38
+                        #define DBL_MAX 1.7976931348623158e+308
+                        #define DBL_MIN 2.2250738585072014e-308
+
+                        const int maxIterations = 64;
+                        const float stepScale = .9;
+                        const float stopThreshold = .005;
+
+                        float fov = .65;
+                        float nearClip = 0.;
+                        float farClip = 80.;
+
+                        struct Surface {
+                          	float dist;
+                          	vec3 position;
+                          	vec3 baseColor;
+                          	vec3 normal;
+                          	vec3 emissiveColor;
+                        };
+
+                        struct Hit {
+                          	Surface surface;
+                          	Surface near;
+                          	vec3 color;
+                        };
+
+                        float saturate(float s) {
+                        	return clamp(s, 0., 1.);
+                        }
+
+                        float smin(float a, float b, float k) {
+                        	float res = exp(-k * a) + exp(-k * b);
+                          	return -log(res) / k;
+                        }
+
+                        mat2 rot2(float t) {
+                            return mat2(cos(t), -sin(t), sin(t), cos(t));
+                        }
+
+                        float scene(vec3 p) {
+                            vec3 p1 = p;
+                            p1.xy += vec2(iTime * .8 + 10., iTime * .4 + 20.);
+                            p1.xy *= rot2(PI * .05);
+
+                            vec3 p2 = p;
+                            p2.yz += vec2(iTime * .4 + 30., iTime * .8 + 40.);
+                            p2.yz *= rot2(PI * .04);
+
+                            vec3 p3 = p;
+                            p3.xz += vec2(iTime * .8 + 50., iTime * .6 + 60.);
+                            p3.xz *= rot2(PI / 2. + iTime * .0);
+
+                            float m = 6.;
+
+                            p1.y += sin(sin(p1.z * 1.2 + iTime * 4.) * .3) * .3;
+                        	p1.x += sin(sin(p1.z * 1. + iTime * 2.) * .4) * .2;
+                            p1.y = mod(p1.y, m) - m * .5;
+                            p1.x = mod(p1.x, m) - m * .5;
+
+
+                            p2.y += sin(sin(p2.z * 1.2 + iTime * 4.) * .4) * .4;
+                        	p2.x += sin(sin(p2.z * .5 + iTime * 3.) * .5) * .3;
+                            p2.y = mod(p2.y, m) - m * .5;
+                            p2.x = mod(p2.x, m) - m * .5;
+
+                            p3.y += sin(sin(p3.z * .8 + iTime * 2.) * .4) * .2;
+                        	p3.x += sin(sin(p3.z * 1.1 + iTime * 3.) * .5) * .4;
+                            p3.y = mod(p3.y, m) - m * .5;
+                            p3.x = mod(p3.x, m) - m * .5;
+
+                            float c = smin(length(p1.xy), length(p2.xy), 4.);
+                            c = smin(c, length(p3.xy), 4.);
+
+                            return c;
+                        }
+
+                        Hit rayMarching(vec3 origin, vec3 dir, float start, float end) {
+                          	Surface cs;
+                          	cs.dist = -1.;
+
+                          	Hit hit;
+                            hit.color = vec3(0.);
+
+                          	float sceneDist = 0.;
+                          	float rayDepth = start;
+
+                          	for(int i = 0; i < maxIterations; i++) {
+                            	sceneDist = scene(origin + dir * rayDepth);
+
+                            	if((sceneDist < stopThreshold) || (rayDepth >= end)) {
+                             		break;
+                            	}
+                        	    rayDepth += sceneDist * stepScale;
+                            	vec3 p = origin + dir * rayDepth;
+                             	vec3 c = sin((iTime + PI / 2.) * 4. * vec3(.123, .456, .789)) * .4 + .6;
+                              	hit.color += max(vec3(0.), .09 / sceneDist * c);
+                          	}
+
+                        	/*
+                          	if (sceneDist >= stopThreshold) {
+                            	rayDepth = end;
+                          	} else {
+                            	rayDepth += sceneDist;
+                          	}
+                          	*/
+
+                        	cs.dist = rayDepth;
+                            hit.surface = cs;
+
+                        	return hit;
+                        }
+
+                        vec3 fog(vec3 color, float distance, vec3 fogColor, float b) {
+                        	float fogAmount = 1. - exp(-distance * b);
+                          	return mix(color, fogColor, fogAmount);
+                        }
+
+                        void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+                          	vec2 mouse = iMouse.xy;
+
+                          	vec2 aspect = vec2(iResolution.x / iResolution.y, 1.);
+                          	vec2 screenCoord = (2. * fragCoord.xy / iResolution.xy - 1.) * aspect;
+
+                            // displacement
+                            vec2 uv = screenCoord;
+                            uv.xy *= rot2(iTime * .07);
+                            uv.y += sin(screenCoord.x * 2.4 + iTime * .05) * .16;
+                            uv.x += sin(uv.y * 2.4 + iTime * .1) * .12;
+
+                          	// mouse = mouse.xy / iResolution.xy - .5;
+
+                          	// camera settings
+                            //vec3 lookAt = vec3(cos(iTime * .4) * .5, sin(iTime * .3) * .5, 0.);
+                            float z = iTime * -5.;
+                          	vec3 lookAt = vec3(0., 0., z - 1.);
+                            vec3 cameraPos = vec3(0., 0., z);
+
+                          	// camera vectors
+                          	vec3 forward = normalize(lookAt - cameraPos);
+                          	vec3 right = normalize(cross(forward, vec3(0., 1., 0.)));
+                          	vec3 up = normalize(cross(right, forward));
+
+                          	// raymarch
+                          	vec3 rayOrigin = cameraPos;
+                          	vec3 rayDirection = normalize(forward + fov * uv.x * right + fov * uv.y * up);
+                          	Hit hit = rayMarching(rayOrigin, rayDirection, nearClip, farClip);
+                          	Surface surface = hit.surface;
+
+                          	surface.position = rayOrigin + rayDirection * surface.dist;
+
+                          	// color
+                          	vec3 sceneColor = vec3(0.);
+
+                            sceneColor = hit.color;
+
+                           	sceneColor = fog(sceneColor, surface.dist, vec3(0.), .065);
+
+                            // vignet by channel
+                            float vignetR = 1. - smoothstep(0., 2.5 + sin(iTime * 1.) * 1.5, length(screenCoord)) * .8;
+                            float vignetG = 1. - smoothstep(0., 2.5 + cos(iTime * 1.2) * 1.5, length(screenCoord)) * .8;
+                            float vignetB = 1. - smoothstep(0., 2.5 + sin(iTime * 1.4) * 1.5, length(screenCoord)) * .8;
+
+                            sceneColor.x *= vignetR;
+                            sceneColor.y *= vignetG;
+                            sceneColor.z *= vignetB;
+
+                            // debug distance color
+                            //sceneColor.rgb = vec3(surface.dist / farClip);
+
+                          	fragColor = vec4(sceneColor, 1.);
+                        }
+
+                        // --------[ Original ShaderToy ends here ]---------- //
+
+                        void main(void)
+                        {
+                            mainImage(gl_FragColor, gl_FragCoord.xy);
+                        }`,
+                `/* lame-ass tunnel by kusma */
+
+            #ifdef GL_ES
+            precision mediump float;
+            #endif
+
+            uniform float time;
+            uniform vec2 resolution;
+
+            void main( void ) {
+            	vec2 position = (gl_FragCoord.xy - resolution * 0.5) / resolution.yy;
+            	float th = atan(position.y, position.x) / (2.0 * 3.1415926) + 0.5;
+            	float dd = length(position);
+            	float d = 0.25 / dd + time;
+
+            	vec3 uv = vec3(th + d, th - d, th + sin(d) * 0.1);
+            	float a = 0.5 + cos(uv.x * 3.1415926 * 2.0) * 0.5;
+            	float b = 0.5 + cos(uv.y * 3.1415926 * 2.0) * 0.5;
+            	float c = 0.5 + cos(uv.z * 3.1415926 * 6.0) * 0.5;
+            	vec3 color = mix(vec3(1.0, 1.8, 0.9), vec3(0.1, 0.1, 0.2), pow(a, 0.2)) * 0.75;
+            	color += mix(vec3(0.8, 0.9, 1.0), vec3(0.1, 0.1, 0.2),  pow(b, 0.1)) * 0.75;
+            	color += mix(vec3(0.9, 0.8, 1.0), vec3(0.1, 0.2, 0.2),  pow(c, 0.1)) * 0.75;
+            	gl_FragColor = vec4(color * clamp(dd, 0.0, 9.0), 1.0);
+            }`,
+            ];
+
+            function rand(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            }
+
+            const canvas = document.getElementById('canvas');
+            const gl = canvas.getContext('webgl');
+
+            function resize() {
+                canvas.width = window.innerWidth * window.devicePixelRatio;
+                canvas.height = window.innerHeight * window.devicePixelRatio;
+                canvas.style.width = `${window.innerWidth}px`;
+                canvas.style.height = `${window.innerHeight}px`;
+            }
+            window.addEventListener('resize', resize);
+
+            let globalTimeout = 5000,
+                timeoutRef,
+                program,
+                positionAttributeLocation,
+                timeUniformLocation,
+                resolutionUniformLocation,
+                positionBuffer;
+            function compileRandomShader() {
+                const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vertexShader, 'attribute vec4 p;void main(){gl_Position=p;}');
+                gl.compileShader(vertexShader);
+                if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+                    console.log(gl.getShaderInfoLog(vertexShader));
+                }
+
+                const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fragmentShader, SHADERS[rand(0, SHADERS.length - 1)]);
+                gl.compileShader(fragmentShader);
+                if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+                    console.log(gl.getShaderInfoLog(fragmentShader));
+                }
+
+                program = gl.createProgram();
+                gl.attachShader(program, vertexShader);
+                gl.attachShader(program, fragmentShader);
+                gl.linkProgram(program);
+
+                positionAttributeLocation = gl.getAttribLocation(program, 'p');
+                timeUniformLocation = gl.getUniformLocation(program, 'time');
+                resolutionUniformLocation = gl.getUniformLocation(program, 'resolution');
+
+                positionBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                gl.bufferData(
+                    gl.ARRAY_BUFFER,
+                    new Float32Array([-1, 1, -1, -1, 1, 1, 1, -1, 1, 1, -1, -1]),
+                    gl.STATIC_DRAW
+                );
+
+                timeoutRef = setTimeout(compileRandomShader, globalTimeout);
+            }
+            compileRandomShader();
+
+            const ipc = new Ipc();
+            ipc.on('shaderRandom', compileRandomShader);
+            ipc.on('shaderSetTimeout', ({ timeout }) => {
+                if (timeoutRef) clearTimeout(timeoutRef);
+                globalTimeout = timeout;
+                compileRandomShader();
+            });
+
+            function loop() {
+                window.requestAnimationFrame(loop);
+
+                gl.viewport(0, 0, canvas.width, canvas.height);
+
+                gl.clearColor(0, 0, 0, 1);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                gl.useProgram(program);
+
+                gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
+                gl.uniform1f(timeUniformLocation, window.performance.now() / 1000);
+
+                gl.enableVertexAttribArray(positionAttributeLocation);
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
+            resize();
+            loop();
+        </script>
+    </body>
+</html>

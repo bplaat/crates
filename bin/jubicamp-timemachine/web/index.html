@@ -1,0 +1,35 @@
+<!--
+    Copyright (c) 2025 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Jubicamp Timemachine Controller</title>
+    </head>
+    <body>
+        <h1>Jubicamp Timemachine Controller</h1>
+        <h2>Shader</h2>
+        <p>
+            <button id="shader-random-button">Random shader</button>
+            | Timeout (ms):
+            <input type="number" id="shader-timeout-input" value="5000" />
+        </p>
+        <script type="module">
+            import Ipc from './ipc.js';
+            const ipc = new Ipc();
+            document.getElementById('shader-random-button').addEventListener('click', () => {
+                ipc.send('shaderRandom');
+            });
+            document.getElementById('shader-timeout-input').addEventListener('change', (event) => {
+                const timeout = parseInt(event.target.value, 10);
+                if (!isNaN(timeout)) {
+                    ipc.send('shaderSetTimeout', { timeout });
+                }
+            });
+        </script>
+    </body>
+</html>

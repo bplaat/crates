@@ -233,7 +233,12 @@ version = "0.1.0"
 name = "jubicamp-timemachine"
 version = "0.1.0"
 dependencies = [
+ "local-ip-address",
  "rust-embed",
+ "serde",
+ "serde_json",
+ "small-http",
+ "small-websocket",
  "tiny-webview",
 ]
 

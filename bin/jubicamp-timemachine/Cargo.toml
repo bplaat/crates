@@ -9,6 +9,12 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-tiny-webview = { path = "../../lib/tiny-webview", features = ["rust-embed"] }
-
+local-ip-address = "0.6.5"
 rust-embed = "8.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+small-http = { version = "0.2.0", default-features = false }
+small-websocket = { path = "../../lib/small-websocket", default-features = false }
+tiny-webview = { path = "../../lib/tiny-webview", features = [
+    "rust-embed",
+], default-features = false }
