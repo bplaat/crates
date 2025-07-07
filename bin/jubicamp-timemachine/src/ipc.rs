@@ -16,6 +16,7 @@ use tiny_webview::EventLoopProxy;
 pub(crate) enum IpcMessage {
     ShaderRandom,
     ShaderSetTimeout { timeout: u64 },
+    MatrixSetYear { year: Option<i64> },
 }
 
 // MARK: IpcConnection

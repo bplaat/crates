@@ -21,12 +21,76 @@
                 top: 0;
                 left: 0;
             }
+            #year-container {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin: 0;
+                color: #00ff00;
+                font-family: monospace;
+                font-size: 10vw;
+                text-shadow: 0 2vw 4vw rgba(0, 0, 0, 0.5);
+            }
         </style>
     </head>
     <body>
         <canvas id="canvas"></canvas>
         <canvas id="canvas2"></canvas>
+        <h1 id="year-container"></h1>
         <script type="module">
+            import Ipc from './ipc.js';
+
+            const ipc = new Ipc();
+
+            // Year animation
+            let currentYear = null;
+            let animating = false;
+
+            function getYearLabel(year) {
+                const absYear = Math.abs(year);
+                const suffix = year >= 0 ? ' AD' : ' BC';
+                return `${absYear}${suffix}`;
+            }
+
+            function animateYear(from, to, duration = 5000) {
+                if (animating) return;
+                animating = true;
+                const yearContainer = document.getElementById('year-container');
+                const start = performance.now();
+                function step(now) {
+                    const elapsed = now - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const value = Math.round(from + (to - from) * progress);
+                    yearContainer.textContent = getYearLabel(value);
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        animating = false;
+                        currentYear = to;
+                    }
+                }
+                requestAnimationFrame(step);
+            }
+
+            ipc.on('matrixSetYear', ({ year }) => {
+                const yearContainer = document.getElementById('year-container');
+                if (year !== null) {
+                    if (currentYear === null) {
+                        currentYear = 2025;
+                    }
+                    animateYear(currentYear, year);
+                } else {
+                    yearContainer.textContent = '';
+                    currentYear = null;
+                }
+            });
+
+            // Matrix animation
             var canvas = document.getElementById('canvas'),
                 ctx = canvas.getContext('2d'),
                 canvas2 = document.getElementById('canvas2'),

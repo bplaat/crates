@@ -72,21 +72,21 @@ fn main() {
     let mut webview1 = WebviewBuilder::new()
         .title("Screen 1")
         .monitor(&monitors[0])
-        // .fullscreen()
+        .fullscreen()
         .internal_http_server_port(PORT)
         .internal_http_server_expose()
         .internal_http_server_handle(internal_http_server_handle)
         .load_rust_embed::<WebAssets>()
-        .load_url("/shader.html")
+        .load_url("/matrix.html")
         .build();
 
     let mut webview2 = monitors.get(1).map(|monitor| {
         WebviewBuilder::new()
             .title("Screen 2")
             .monitor(monitor)
-            // .fullscreen()
+            .fullscreen()
             .load_rust_embed::<WebAssets>()
-            .load_url("/matrix.html")
+            .load_url("/shader.html")
             .build()
     });
 
@@ -94,7 +94,7 @@ fn main() {
         WebviewBuilder::new()
             .title("Screen 3")
             .monitor(monitor)
-            // .fullscreen()
+            .fullscreen()
             .load_rust_embed::<WebAssets>()
             .load_url("/terminal.html")
             .build()

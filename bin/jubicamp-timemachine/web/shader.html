@@ -738,8 +738,7 @@
             }
             window.addEventListener('resize', resize);
 
-            let globalTimeout = 5000,
-                timeoutRef,
+            let intervalRef,
                 program,
                 positionAttributeLocation,
                 timeUniformLocation,
@@ -776,17 +775,16 @@
                     new Float32Array([-1, 1, -1, -1, 1, 1, 1, -1, 1, 1, -1, -1]),
                     gl.STATIC_DRAW
                 );
-
-                timeoutRef = setTimeout(compileRandomShader, globalTimeout);
             }
             compileRandomShader();
+            intervalRef = setInterval(compileRandomShader, 5000);
 
             const ipc = new Ipc();
             ipc.on('shaderRandom', compileRandomShader);
             ipc.on('shaderSetTimeout', ({ timeout }) => {
-                if (timeoutRef) clearTimeout(timeoutRef);
-                globalTimeout = timeout;
+                clearInterval(intervalRef);
                 compileRandomShader();
+                intervalRef = setInterval(compileRandomShader, timeout);
             });
 
             function loop() {

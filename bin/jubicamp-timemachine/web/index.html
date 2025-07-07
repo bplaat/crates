@@ -12,20 +12,45 @@
     </head>
     <body>
         <h1>Jubicamp Timemachine Controller</h1>
-        <h2>Shader</h2>
+
+        <h2>Matrix screen</h2>
+        <p>
+            Year: <input type="number" id="matrix-year-input" value="" />
+            <button id="matrix-set-year-button">Set year</button>
+        </p>
+
+        <h2>Shader screen</h2>
         <p>
             <button id="shader-random-button">Random shader</button>
             | Timeout (ms):
             <input type="number" id="shader-timeout-input" value="5000" />
+            <button id="shader-timeout-set-button">Set timeout</button>
         </p>
+
+        <p>Made by <a href="https://bplaat.nl/">Bastiaan van der Plaat</a></p>
+
         <script type="module">
             import Ipc from './ipc.js';
             const ipc = new Ipc();
+
+            // Matrix
+            const matrixYearInput = document.getElementById('matrix-year-input');
+            document.getElementById('matrix-set-year-button').addEventListener('click', () => {
+                const year = parseInt(matrixYearInput.value, 10);
+                if (!isNaN(year)) {
+                    ipc.send('matrixSetYear', { year });
+                } else {
+                    ipc.send('matrixSetYear', { year: null });
+                }
+            });
+
+            // Shader
             document.getElementById('shader-random-button').addEventListener('click', () => {
                 ipc.send('shaderRandom');
             });
-            document.getElementById('shader-timeout-input').addEventListener('change', (event) => {
-                const timeout = parseInt(event.target.value, 10);
+            const shaderTimeoutInput = document.getElementById('shader-timeout-input');
+            document.getElementById('shader-timeout-set-button').addEventListener('click', () => {
+                const timeout = parseInt(shaderTimeoutInput.value, 10);
                 if (!isNaN(timeout)) {
                     ipc.send('shaderSetTimeout', { timeout });
                 }
