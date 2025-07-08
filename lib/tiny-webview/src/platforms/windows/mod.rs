@@ -359,29 +359,31 @@ impl PlatformWebview {
                 );
             }
 
-            let should_show_window =
-                if cfg!(feature = "remember_window_state") && builder.remember_window_state {
-                    let window_placement_path = format!("{}/window.bin", Self::userdata_folder());
-                    if let Ok(mut file) = File::open(window_placement_path) {
-                        let size =
-                            size_of::<windows::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT>();
-                        let mut buffer = vec![0u8; size];
-                        if file.read_exact(&mut buffer).is_ok() {
-                            let window_placement = std::ptr::read(buffer.as_ptr() as *const _);
-                            _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPlacement(
-                                hwnd,
-                                &window_placement,
-                            );
-                            false
-                        } else {
-                            true
-                        }
+            #[cfg(feature = "remember_window_state")]
+            let should_show_window = if builder.remember_window_state {
+                let window_placement_path = format!("{}/window.bin", Self::userdata_folder());
+                if let Ok(mut file) = File::open(window_placement_path) {
+                    let size =
+                        size_of::<windows::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT>();
+                    let mut buffer = vec![0u8; size];
+                    if file.read_exact(&mut buffer).is_ok() {
+                        let window_placement = std::ptr::read(buffer.as_ptr() as *const _);
+                        _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPlacement(
+                            hwnd,
+                            &window_placement,
+                        );
+                        false
                     } else {
                         true
                     }
                 } else {
                     true
-                };
+                }
+            } else {
+                true
+            };
+            #[cfg(not(feature = "remember_window_state"))]
+            let should_show_window = true;
             if should_show_window {
                 _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
             }
