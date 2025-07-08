@@ -22,9 +22,13 @@ function check_copyright() {
     fi
 }
 
-function check() {
+function check_web() {
     # Format
-    check_copyright
+    npx --yes prettier@2.8.8 --check --write $(find bin examples lib -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" | grep -v "node_modules" | grep -v "dist")
+}
+
+function check_rust() {
+    # Format
     cargo +nightly fmt -- --check
     # Lint
     cargo clippy --locked --all-targets --all-features -- -D warnings
@@ -32,6 +36,12 @@ function check() {
     # Test
     cargo test --doc --all-features --locked
     cargo nextest run --all-features --locked --no-fail-fast --retries 2
+}
+
+function check() {
+    check_copyright
+    check_web
+    check_rust
 }
 
 function coverage() {
