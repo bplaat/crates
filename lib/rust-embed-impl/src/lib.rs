@@ -92,6 +92,17 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         (file_path.to_string(), const_ident)
     };
 
+    // Create consts for all files
+    let embed_files: Vec<_> = files
+        .iter()
+        .map(|path: &String| {
+            let (_, const_ident) = to_const_name(path);
+            quote! {
+                const #const_ident: &[u8] = include_bytes!(#path);
+            }
+        })
+        .collect();
+
     // Create a mapping of file paths to consts
     let embed_mapping: Vec<_> = files
         .iter()
@@ -99,23 +110,8 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             let (file_path, const_ident) = to_const_name(path);
             quote! {
                 #file_path => Some(rust_embed::EmbeddedFile {
-                    data: std::borrow::Cow::Borrowed(&#const_ident),
+                    data: std::borrow::Cow::Borrowed(#const_ident),
                 }),
-            }
-        })
-        .collect();
-
-    // Read all files and create consts
-    let embed_files: Vec<_> = files
-        .iter()
-        .map(|path: &String| {
-            let (_, const_ident) = to_const_name(path);
-            let content =
-                fs::read(path).unwrap_or_else(|_| panic!("Failed to read file: {}", path));
-            let len = content.len();
-            let bytes = content.iter().map(|&b| quote! {#b,}).collect::<Vec<_>>();
-            quote! {
-                const #const_ident: [u8; #len] = [#(#bytes)*];
             }
         })
         .collect();
