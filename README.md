@@ -49,6 +49,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [threadpool](lib/threadpool) A minimal replacement for the [threadpool](https://crates.io/crates/threadpool) crate
 -   [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 -   [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
+-   [winres](lib/winres) A minimal replacement for the [winres](https://crates.io/crates/winres) crate
 
 ## Getting Started
 
