@@ -71,7 +71,8 @@ fn main() {
         .expect("Failed to copy web/dist files to $OUT_DIR");
 
     // Generate resources for macOS bundle
-    if cfg!(target_os = "macos") {
+    #[cfg(target_os = "macos")]
+    {
         let target_dir = "../../target/BassieLight"; // FIXME: Find way to not hardcode this path
         std::fs::create_dir_all(target_dir).expect("Failed to create target directory");
 
@@ -124,7 +125,8 @@ fn main() {
     }
 
     // Compile Windows resources
-    if cfg!(windows) {
+    #[cfg(windows)]
+    {
         let manifest = format!(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">

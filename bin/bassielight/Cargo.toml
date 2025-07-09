@@ -19,5 +19,5 @@ tiny-webview = { path = "../../lib/tiny-webview", features = ["rust-embed"] }
 small-http = { version = "0.2.0", default-features = false }
 small-websocket = { path = "../../lib/small-websocket", default-features = false }
 
-[build-dependencies]
+[target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
