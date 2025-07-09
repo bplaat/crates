@@ -72,9 +72,8 @@ impl TaskAction {
 
         if pretty_print {
             let term_width = terminal_size::terminal_size()
-                .expect("Can't get terminal size")
-                .0
-                .0 as usize;
+                .map(|(w, _)| w.0 as usize)
+                .unwrap_or(80);
             if !first_line {
                 print!("\x1B[1A\x1B[2K");
             }
