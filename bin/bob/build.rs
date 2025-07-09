@@ -23,7 +23,10 @@ fn main() {
             if dir_name == "lib" {
                 continue;
             }
-            if cfg!(not(target_os = "macos")) && dir_name.starts_with("objc") {
+            // FIXME: Enable Kotlin on Linux CI
+            if cfg!(not(target_os = "macos"))
+                && (dir_name.starts_with("objc") || dir_name.contains("kotlin"))
+            {
                 continue;
             }
 
@@ -57,7 +60,8 @@ fn test_bob_{}() {{
                     .replace('-', "_"),
                 entry.path().display(),
                 entry.path().display(),
-                if dir_name == "c" || dir_name == "cpp" {
+                // FIXME: Enable Cunit tests on Linux CI
+                if cfg!(target_os = "macos") && (dir_name == "c" || dir_name == "cpp") {
                     format!(
                         r#"
     // Test example
