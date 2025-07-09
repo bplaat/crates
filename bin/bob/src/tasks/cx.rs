@@ -351,7 +351,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     }
 }
 
-pub(crate) fn run_ld(bobje: &Bobje) {
+pub(crate) fn run_ld(bobje: &Bobje) -> ! {
     let ext = if cfg!(windows) { ".exe" } else { "" };
     let status = Command::new(format!(
         "{}/{}{}",
@@ -361,10 +361,10 @@ pub(crate) fn run_ld(bobje: &Bobje) {
     ))
     .status()
     .expect("Failed to execute executable");
-    exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1))
 }
 
-pub(crate) fn run_ld_tests(bobje: &Bobje) {
+pub(crate) fn run_ld_tests(bobje: &Bobje) -> ! {
     let ext = if cfg!(windows) { ".exe" } else { "" };
     let status = Command::new(format!(
         "{}/test_{}{}",
@@ -374,7 +374,7 @@ pub(crate) fn run_ld_tests(bobje: &Bobje) {
     ))
     .status()
     .expect("Failed to execute executable");
-    exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1))
 }
 
 // MARK: Utils

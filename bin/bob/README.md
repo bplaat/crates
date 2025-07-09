@@ -7,12 +7,12 @@ A simple build system for my projects, because I like the simplicity of Cargo.
 ## Supported project types
 
 -   Clang/GCC languages (.c, .cpp, .m, .mm)
--   Java (.java)
--   Android (.java, .xml)
+-   JVM languages (.java, .kt)
+-   Android (.java, .kt, .xml)
 
 ### Supported package types
 
--   Java Jar (.jar)
+-   Java Archive (.jar)
 -   macOS bundle (.app)
 -   Android APK (.apk)
 

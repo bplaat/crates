@@ -36,6 +36,7 @@ pub(crate) struct Build {
     pub cflags: String,
     pub ldflags: String,
     pub javac_flags: String,
+    pub kotlinc_flags: String,
     pub classpath: Vec<String>,
 }
 

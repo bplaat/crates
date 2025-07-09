@@ -10,7 +10,7 @@ use std::{env, fs};
 
 use crate::executor::Executor;
 use crate::manifest::AndroidMetadata;
-use crate::tasks::java::find_modules;
+use crate::tasks::jvm::find_modules;
 use crate::utils::index_files;
 use crate::{Bobje, Profile};
 
@@ -395,7 +395,7 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
     );
 }
 
-pub(crate) fn run_android_apk(bobje: &Bobje) {
+pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
     let vars = AndroidVars::new(bobje);
     let adb_path = format!("{}/adb", vars.platform_tools_path);
 
@@ -425,7 +425,7 @@ pub(crate) fn run_android_apk(bobje: &Bobje) {
         ))
         .status()
         .expect("Failed to execute adb");
-    exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1))
 }
 
 // MARK: Utils

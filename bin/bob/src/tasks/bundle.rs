@@ -174,7 +174,7 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
     );
 }
 
-pub(crate) fn run_bundle(bobje: &Bobje) {
+pub(crate) fn run_bundle(bobje: &Bobje) -> ! {
     let status = Command::new(format!(
         "{}/{}.app/Contents/MacOS/{}",
         bobje.out_dir(),
@@ -183,7 +183,7 @@ pub(crate) fn run_bundle(bobje: &Bobje) {
     ))
     .status()
     .expect("Failed to execute executable");
-    exit(status.code().unwrap_or(1));
+    exit(status.code().unwrap_or(1))
 }
 
 // MARK: Utils
