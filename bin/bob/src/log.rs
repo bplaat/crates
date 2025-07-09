@@ -31,18 +31,17 @@ impl FromStr for LogEntry {
             .map_err(|_| "Invalid modified time".to_string())?;
 
         let hash = if parts.len() == 3 {
-            let hash_bytes = parts[2].as_bytes();
-            if hash_bytes.len() != 40 {
+            let hash_str = parts[2];
+            if hash_str.len() % 2 != 0 {
                 return Err("Invalid hash length".to_string());
             }
-            let mut hash = Vec::with_capacity(20);
-            for (i, chunk) in hash_bytes.chunks(2).enumerate() {
-                hash[i] = u8::from_str_radix(
-                    std::str::from_utf8(chunk).map_err(|_| "Invalid UTF-8")?,
-                    16,
-                )
-                .map_err(|_| "Invalid hash format".to_string())?;
-            }
+            let hash = (0..hash_str.len())
+                .step_by(2)
+                .map(|i| {
+                    u8::from_str_radix(&hash_str[i..i + 2], 16)
+                        .map_err(|_| "Invalid hash format".to_string())
+                })
+                .collect::<Result<Vec<u8>, _>>()?;
             Some(hash)
         } else {
             None
