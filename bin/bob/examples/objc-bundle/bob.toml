@@ -1,6 +1,6 @@
 [package]
 name = "Alert"
-identifier = "com.example.Alert"
+id = "com.example.Alert"
 version = "0.1.0"
 
 [build]

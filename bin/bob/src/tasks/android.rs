@@ -16,7 +16,7 @@ use crate::{Bobje, Profile};
 
 // MARK: Android vars
 struct AndroidVars {
-    identifier: String,
+    id: String,
     android_metadata: AndroidMetadata,
     platform_jar: String,
     build_tools_path: String,
@@ -25,15 +25,10 @@ struct AndroidVars {
 
 impl AndroidVars {
     fn new(bobje: &Bobje) -> Self {
-        let identifier = bobje
-            .manifest
-            .package
-            .identifier
-            .as_ref()
-            .unwrap_or_else(|| {
-                eprintln!("Manifest package identifier is required");
-                exit(1);
-            });
+        let id = bobje.manifest.package.id.as_ref().unwrap_or_else(|| {
+            eprintln!("Manifest package id is required");
+            exit(1);
+        });
         let android_metadata = bobje
             .manifest
             .package
@@ -52,7 +47,7 @@ impl AndroidVars {
         );
         let platform_tools_path = format!("{}/platform-tools", android_home);
         Self {
-            identifier: identifier.clone(),
+            id: id.clone(),
             android_metadata: android_metadata.clone(),
             platform_jar,
             build_tools_path,
@@ -78,11 +73,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
     }
 
     // aapt2_compile tasks
-    let compiled_res_dir = format!(
-        "{}/res/{}",
-        bobje.out_dir(),
-        vars.identifier.replace('.', "/")
-    );
+    let compiled_res_dir = format!("{}/res/{}", bobje.out_dir(), vars.id.replace('.', "/"));
     for res_file in index_files(&res_dir) {
         let mut compiled_res_file = format!(
             "{}/{}.flat",
@@ -109,7 +100,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
     let r_java_path = format!(
         "{}/src-gen/{}/R.java",
         bobje.out_dir(),
-        vars.identifier.replace('.', "/")
+        vars.id.replace('.', "/")
     );
     bobje.source_files.push(r_java_path.clone());
 
@@ -161,7 +152,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                     bobje
                         .manifest
                         .package
-                        .identifier
+                        .id
                         .as_ref()
                         .expect("Should be some")
                         .replace('.', "/")
@@ -222,7 +213,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                     dependency_bobje
                         .manifest
                         .package
-                        .identifier
+                        .id
                         .as_ref()
                         .expect("Should be some")
                         .replace('.', "/")
@@ -233,16 +224,11 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                         r_java_path,
                         src_r_java,
                         if cfg!(target_os = "macos") { " ''" } else { "" },
-                        bobje
-                            .manifest
-                            .package
-                            .identifier
-                            .as_ref()
-                            .expect("Should be some"),
+                        bobje.manifest.package.id.as_ref().expect("Should be some"),
                         dependency_bobje
                             .manifest
                             .package
-                            .identifier
+                            .id
                             .as_ref()
                             .expect("Should be some"),
                         src_r_java
@@ -421,7 +407,7 @@ pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
         .arg("-n")
         .arg(format!(
             "{}/{}",
-            vars.identifier, vars.android_metadata.main_activity
+            vars.id, vars.android_metadata.main_activity
         ))
         .status()
         .expect("Failed to execute adb");

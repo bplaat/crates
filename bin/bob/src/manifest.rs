@@ -20,7 +20,7 @@ pub(crate) struct Manifest {
 #[serde(default)]
 pub(crate) struct Package {
     pub name: String,
-    pub identifier: Option<String>,
+    pub id: Option<String>,
     pub version: String,
     pub metadata: PackageMetadata,
 }
