@@ -388,10 +388,10 @@ fn get_object_path(bobje: &Bobje, source_file: &str) -> String {
             .nth(1)
             .or_else(|| source_file.split("src-gen/").nth(1))
             .expect("Should be some")
-            .replace(".c", ".o")
             .replace(".cpp", ".o")
+            .replace(".c", ".o")
+            .replace(".mm", ".o")
             .replace(".m", ".o")
-            .replace(".mm", ".o"),
     )
 }
 
