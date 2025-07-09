@@ -13,7 +13,6 @@ use std::{env, fs, thread};
 
 use sha1::{Digest, Sha1};
 use threadpool::ThreadPool;
-use uuid::Uuid;
 
 use crate::log::{Log, LogEntry};
 
@@ -93,7 +92,7 @@ impl TaskAction {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Task {
-    id: Uuid,
+    id: usize,
     action: TaskAction,
     inputs: Vec<String>,
     outputs: Vec<String>,
@@ -102,12 +101,16 @@ pub(crate) struct Task {
 // MARK: Executor
 #[derive(Debug)]
 pub(crate) struct Executor {
+    tasks_id_counter: usize,
     tasks: Vec<Task>,
 }
 
 impl Executor {
     pub(crate) fn new() -> Self {
-        Self { tasks: Vec::new() }
+        Self {
+            tasks_id_counter: 0,
+            tasks: Vec::new(),
+        }
     }
 
     pub(crate) fn add_task(
@@ -118,11 +121,12 @@ impl Executor {
     ) {
         if !self.tasks.iter().any(|task| task.outputs == outputs) {
             self.tasks.push(Task {
-                id: Uuid::new_v4(),
+                id: self.tasks_id_counter,
                 action,
                 inputs,
                 outputs,
             });
+            self.tasks_id_counter += 1;
         }
     }
 
@@ -176,8 +180,8 @@ impl Executor {
         &self,
         task: &Task,
         pool: &ThreadPool,
-        scheduled_task_ids: Arc<Mutex<Vec<Uuid>>>,
-        done_task_ids: Arc<Mutex<Vec<Uuid>>>,
+        scheduled_task_ids: Arc<Mutex<Vec<usize>>>,
+        done_task_ids: Arc<Mutex<Vec<usize>>>,
         log: Arc<Mutex<Log>>,
         task_counter: Arc<AtomicUsize>,
         pretty_print: bool,

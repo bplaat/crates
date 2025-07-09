@@ -59,7 +59,6 @@ dependencies = [
  "sha1",
  "terminal_size",
  "threadpool",
- "uuid",
 ]
 
 [[package]]
