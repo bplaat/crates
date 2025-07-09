@@ -51,7 +51,7 @@ fn main() {
         .expect("Failed to run npm run build");
 
     // Copy all files from web/dist to OUT_DIR
-    let out_dir = env::var("OUT_DIR").expect("$OUT_DIR not set");
+    let out_dir = env::var("OUT_DIR").expect("Should be some");
     let dest_path = Path::new(&out_dir).join("web");
     if dest_path.exists() {
         fs::remove_dir_all(&dest_path).expect("Failed to remove old web dir");

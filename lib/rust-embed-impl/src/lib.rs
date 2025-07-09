@@ -54,7 +54,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     folder_path = if Path::new(&folder_path).is_relative() {
         format!(
             "{}/{}",
-            env::var("CARGO_MANIFEST_DIR").expect("Should be set"),
+            env::var("CARGO_MANIFEST_DIR").expect("Should be some"),
             folder_path
         )
     } else {

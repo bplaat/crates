@@ -48,7 +48,7 @@ fn main() {
         .expect("Failed to run npm run build");
 
     // Copy built assets to OUT_DIR/web
-    let out_dir = std::env::var("OUT_DIR").expect("$OUT_DIR not set");
+    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
     let dest_path = std::path::Path::new(&out_dir).join("web");
     if dest_path.exists() {
         std::fs::remove_dir_all(&dest_path).expect("Failed to remove old web dir");

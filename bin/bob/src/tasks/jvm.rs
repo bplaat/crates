@@ -5,6 +5,8 @@
  */
 
 use std::collections::HashMap;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process::{Command, exit};
 use std::{env, fs};
 
@@ -109,7 +111,7 @@ pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
     let modules = find_modules(bobje);
     let module_deps = find_dependencies(&modules);
 
-    let mut kotlinc_flags = "-Wextra -Werror".to_string();
+    let mut kotlinc_flags = "-Werror".to_string();
     if !bobje.manifest.build.kotlinc_flags.is_empty() {
         kotlinc_flags.push(' ');
         kotlinc_flags.push_str(&bobje.manifest.build.kotlinc_flags);
@@ -133,6 +135,7 @@ pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
         }
     );
 
+    let kotlin_stdlib = get_kotlin_stdlib();
     for module in &modules {
         let mut inputs = module.source_files.clone();
         if let Some(dependencies) = module_deps.get(&module.name) {
@@ -149,7 +152,6 @@ pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
         }
 
         // Extract Kotlin standard library
-        let kotlin_stdlib = get_kotlin_stdlib();
         let output_dir = format!("{}/kotlin", classes_dir);
         executor.add_task_cmd(
             format!("cd {} && jar xf {}", classes_dir, kotlin_stdlib),
@@ -245,16 +247,12 @@ fn get_module_name(source_file: &str) -> String {
 }
 
 fn get_kotlin_stdlib() -> String {
-    let kotlin_home = env::var("KOTLIN_HOME").expect("$KOTLIN_HOME not set");
-    let path1 = format!("{}/lib/kotlin-stdlib.jar", kotlin_home);
-    if fs::metadata(&path1).is_ok() {
-        return path1;
+    let kotlin_home = parse_kotlin_home().expect("Could not find kotlinc in PATH");
+    let path = format!("{}/lib/kotlin-stdlib.jar", kotlin_home.display());
+    if fs::metadata(&path).is_ok() {
+        return path;
     }
-    let path2 = format!("{}/libexec/lib/kotlin-stdlib.jar", kotlin_home);
-    if fs::metadata(&path2).is_ok() {
-        return path2;
-    }
-    panic!("kotlin-stdlib.jar not found in $KOTLIN_HOME/lib or $KOTLIN_HOME/libexec/lib");
+    panic!("Can't find kotlin-stdlib.jar in system");
 }
 
 #[derive(Clone)]
@@ -328,6 +326,54 @@ fn find_main_class(bobje: &Bobje) -> Option<String> {
                     return Some(get_class_name(source_file) + "Kt");
                 }
             }
+        }
+    }
+    None
+}
+
+fn parse_kotlin_home() -> Option<PathBuf> {
+    let cmd_path = resolve_command_path("kotlinc")?;
+    let mut file = fs::File::open(&cmd_path).ok()?;
+    let mut shebang = [0; 2];
+    file.read_exact(&mut shebang).ok()?;
+    if &shebang == b"#!" {
+        parse_kotlin_shell_script(&cmd_path).or(Some(cmd_path))
+    } else {
+        Some(cmd_path)
+    }
+}
+
+fn resolve_command_path(cmd: &str) -> Option<PathBuf> {
+    if cmd.contains('/') {
+        Some(PathBuf::from(cmd))
+    } else {
+        env::var("PATH")
+            .ok()?
+            .split(':')
+            .map(|p| Path::new(p).join(cmd))
+            .find(|p| p.exists() && p.is_file())
+    }
+}
+
+fn parse_kotlin_shell_script(script_path: &Path) -> Option<PathBuf> {
+    let contents = fs::read_to_string(script_path).ok()?;
+    let re = Regex::new(r#"KOTLIN_HOME\s*=\s*([^\s;]+)"#).ok()?;
+    if let Some(caps) = re.captures(&contents) {
+        if let Some(kotlin_home) = caps.get(1) {
+            return Some(PathBuf::from(kotlin_home.as_str()));
+        }
+    }
+    let re = Regex::new(r#"exec\s+["']?([^\s"']+)["']?"#).ok()?;
+    if let Some(caps) = re.captures(&contents) {
+        if let Some(cmd) = caps.get(1) {
+            return Some(
+                PathBuf::from(cmd.as_str())
+                    .parent()
+                    .expect("Should have parent")
+                    .parent()
+                    .expect("Should have parent")
+                    .to_path_buf(),
+            );
         }
     }
     None
