@@ -15,10 +15,8 @@ class MainActivity : Activity() {
 
         // Read the name from assets/name.txt and display it in the label
         try {
-            assets.open("name.txt").use { inputStream ->
-                BufferedReader(InputStreamReader(inputStream)).use { reader ->
-                    findViewById<TextView>(R.id.label).text = "Hello ${reader.readLine()}!"
-                }
+            BufferedReader(InputStreamReader(assets.open("name.txt"))).use { reader ->
+                findViewById<TextView>(R.id.label).text = "Hello ${reader.readLine()}!"
             }
         } catch (e: IOException) {
             e.printStackTrace()

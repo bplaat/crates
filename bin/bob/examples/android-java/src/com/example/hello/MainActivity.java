@@ -15,8 +15,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         // Read the name from assets/name.txt and display it in the label
-        try (var inputStream = getAssets().open("name.txt");
-             var reader = new BufferedReader(new InputStreamReader(inputStream))) {
+        try (var reader = new BufferedReader(new InputStreamReader(getAssets().open("name.txt")))) {
             ((TextView)findViewById(R.id.label)).setText("Hello " + reader.readLine() + "!");
         } catch (IOException e) {
             e.printStackTrace();
