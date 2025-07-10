@@ -224,13 +224,16 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
 
         executor.add_task_cmd(
             format!(
-                "proguard -injars {} -outjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null",
+                "proguard -injars {} -outjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null && rm -rf {}/META-INF && find {} -name '*.kotlin_builtins' -delete && find {} -type d -empty -delete",
                 classes_dir, optimized_classes_dir, java_home,
                 keeps
                     .iter()
                     .map(|keep| format!("-keep '{}'", keep))
                     .collect::<Vec<_>>()
-                    .join(" ")
+                    .join(" "),
+                optimized_classes_dir,
+                optimized_classes_dir,
+                optimized_classes_dir
             ),
             modules
                 .iter()

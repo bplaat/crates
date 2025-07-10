@@ -333,7 +333,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
 
 // MARK: Android APK
 pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Executor) {
-    let mut vars = AndroidVars::new(bobje);
+    let vars = AndroidVars::new(bobje);
 
     // Generate dummy keystore if it doesn't exist
     let target_keystore = format!(
@@ -344,7 +344,6 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
         && fs::metadata(&target_keystore).is_err()
     {
         let mut cmd = Command::new("sh");
-        vars.android_metadata.keystore_file = target_keystore;
         let mut cmd_str = format!(
             "keytool -genkey -keystore {} -storetype JKS -keyalg RSA -keysize 4096 -validity 7120",
             &vars.android_metadata.keystore_file
@@ -388,7 +387,11 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
         "{}/apksigner sign --min-sdk-version {} --v4-signing-enabled false --ks {} ",
         vars.build_tools_path,
         vars.android_metadata.min_sdk_version,
-        vars.android_metadata.keystore_file
+        if fs::metadata(&vars.android_metadata.keystore_file).is_ok() {
+            vars.android_metadata.keystore_file
+        } else {
+            target_keystore
+        }
     );
     if !vars.android_metadata.key_alias.is_empty() {
         apksigner_cmd.push_str(&format!(
