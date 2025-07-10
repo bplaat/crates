@@ -1,17 +1,12 @@
 #include <cstdlib>
-#include <animals/Cat.hpp>
-#include <animals/Dog.hpp>
+#include <cstdio>
+#include <mul/mul.h>
 #include "Person.hpp"
 
 int main(void) {
     Person bastiaan("Bastiaan");
     bastiaan.greet();
 
-    Cat cat("Mittens");
-    cat.greet();
-
-    Dog dog("Rover");
-    dog.greet();
-
+    printf("Hello mul %d!\n", mul(3, 4));
     return EXIT_SUCCESS;
 }
