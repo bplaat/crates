@@ -4,4 +4,4 @@ id = "com.example.hello"
 version = "0.1.0"
 
 [dependencies]
-popup = { path = "../lib/android-lib" }
+popup = { path = "../lib/android-kotlin-lib" }

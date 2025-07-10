@@ -264,12 +264,31 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
     ];
     let mut inputs = Vec::new();
     for module in &modules {
-        let classes = format!("{}/{}/*.class", classes_dir, module.name.replace('.', "/"));
-        if !d8_command.contains(&classes) {
-            d8_command.push(classes);
-            inputs.push(format!("{}/{}", classes_dir, module.name.replace('.', "/")));
+        let module_classes_dir = format!("{}/{}", classes_dir, module.name.replace('.', "/"));
+        if !inputs.contains(&module_classes_dir) {
+            d8_command.push(format!("$(find {} -name '*.class')", module_classes_dir));
+            inputs.push(module_classes_dir);
         }
     }
+    for dependency_bobje in bobje.dependencies.values() {
+        if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
+            let module_classes_dir = format!(
+                "{}/{}",
+                classes_dir,
+                dependency_bobje
+                    .jar
+                    .as_ref()
+                    .expect("Should be some")
+                    .package
+                    .replace('.', "/")
+            );
+            if !inputs.contains(&module_classes_dir) {
+                d8_command.push(format!("$(find {} -name '*.class')", module_classes_dir));
+                inputs.push(module_classes_dir);
+            }
+        }
+    }
+
     executor.add_task_cmd(
         format!(
             "{} && cd {} && zip {}-unaligned.apk classes.dex > /dev/null",

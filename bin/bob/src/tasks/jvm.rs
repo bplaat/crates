@@ -15,15 +15,20 @@ use crate::args::Profile;
 use crate::executor::Executor;
 use crate::manifest::JarDependency;
 
-// MARK: Java tasks
-pub(crate) fn detect_java(bobje: &Bobje) -> bool {
+// MARK: Java/Kotlin tasks
+pub(crate) fn detect_java_kotlin(bobje: &Bobje) -> bool {
     bobje
         .source_files
         .iter()
         .any(|path| path.ends_with(".java"))
+        || detect_kotlin_from_source_files(&bobje.source_files)
 }
 
-pub(crate) fn generate_javac_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn detect_kotlin_from_source_files(source_files: &[String]) -> bool {
+    source_files.iter().any(|path| path.ends_with(".kt"))
+}
+
+pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
     let classes_dir = format!("{}/classes", bobje.out_dir());
     let modules = find_modules(bobje);
     let module_deps = find_dependencies(&modules);
@@ -40,78 +45,6 @@ pub(crate) fn generate_javac_tasks(bobje: &Bobje, executor: &mut Executor) {
         javac_flags.push(' ');
         javac_flags.push_str(&bobje.manifest.build.javac_flags);
     }
-
-    #[cfg(windows)]
-    let class_separator = ";";
-    #[cfg(not(windows))]
-    let class_separator = ":";
-    let classpath = format!(
-        "{}{}",
-        classes_dir,
-        if !bobje.manifest.build.classpath.is_empty() {
-            format!(
-                "{}{}",
-                class_separator,
-                bobje.manifest.build.classpath.join(class_separator)
-            )
-        } else {
-            "".to_string()
-        }
-    );
-
-    for module in &modules {
-        let mut inputs = module.source_files.clone();
-        if let Some(dependencies) = module_deps.get(&module.name) {
-            for dependency_module in dependencies {
-                let classes_module_dir = format!(
-                    "{}/{}",
-                    classes_dir,
-                    dependency_module.name.replace('.', "/")
-                );
-                if !inputs.contains(&classes_module_dir) {
-                    inputs.push(classes_module_dir);
-                }
-            }
-        }
-        executor.add_task_cmd(
-            format!(
-                "javac {} -cp {} -d {} {}",
-                javac_flags,
-                classpath,
-                classes_dir,
-                module.source_files.join(" ")
-            ),
-            inputs,
-            vec![format!("{}/{}", classes_dir, module.name.replace('.', "/"))],
-        );
-    }
-}
-
-pub(crate) fn run_java_class(bobje: &Bobje) -> ! {
-    let status = Command::new("java")
-        .arg("-cp")
-        .arg(format!("{}/classes", bobje.out_dir()))
-        .arg(find_main_class(bobje).unwrap_or_else(|| {
-            eprintln!("Can't find main class");
-            exit(1);
-        }))
-        .status()
-        .expect("Failed to execute java");
-    exit(status.code().unwrap_or(1))
-}
-
-// MARK: Kotlin tasks
-pub(crate) fn detect_kotlin(bobje: &Bobje) -> bool {
-    detect_kotlin_from_source_files(&bobje.source_files)
-}
-pub(crate) fn detect_kotlin_from_source_files(source_files: &[String]) -> bool {
-    source_files.iter().any(|path| path.ends_with(".kt"))
-}
-
-pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
-    let classes_dir = format!("{}/classes", bobje.out_dir());
-    let modules = find_modules(bobje);
-    let module_deps = find_dependencies(&modules);
 
     let mut kotlinc_flags = "-Werror".to_string();
     if !bobje.manifest.build.kotlinc_flags.is_empty() {
@@ -151,7 +84,6 @@ pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
                 }
             }
         }
-
         for dependency_bobje in bobje.dependencies.values() {
             if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
                 inputs.push(format!(
@@ -167,18 +99,67 @@ pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
             }
         }
 
-        executor.add_task_cmd(
-            format!(
+        let mut commands = Vec::new();
+
+        // Javac
+        let java_files = module
+            .source_files
+            .iter()
+            .filter(|f| f.ends_with(".java"))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !java_files.is_empty() {
+            commands.push(format!(
+                "javac {} -cp {} -d {} {}",
+                javac_flags,
+                classpath,
+                classes_dir,
+                java_files.join(" ")
+            ));
+        }
+
+        // Kotlinc
+        let kotlin_files = module
+            .source_files
+            .iter()
+            .filter(|f| f.ends_with(".kt"))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !kotlin_files.is_empty() {
+            commands.push(format!(
                 "kotlinc {} -cp {} -d {} {}",
                 kotlinc_flags,
                 classpath,
                 classes_dir,
-                module.source_files.join(" ")
-            ),
+                module
+                    .source_files
+                    .iter()
+                    .filter(|f| f.ends_with(".kt"))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ));
+        }
+
+        executor.add_task_cmd(
+            commands.join(" && "),
             inputs,
             vec![format!("{}/{}", classes_dir, module.name.replace('.', "/"))],
         );
     }
+}
+
+pub(crate) fn run_java_class(bobje: &Bobje) -> ! {
+    let status = Command::new("java")
+        .arg("-cp")
+        .arg(format!("{}/classes", bobje.out_dir()))
+        .arg(find_main_class(bobje).unwrap_or_else(|| {
+            eprintln!("Can't find main class");
+            exit(1);
+        }))
+        .status()
+        .expect("Failed to execute java");
+    exit(status.code().unwrap_or(1))
 }
 
 // MARK: Jar tasks

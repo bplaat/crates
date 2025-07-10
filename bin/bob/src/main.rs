@@ -26,9 +26,8 @@ use crate::tasks::cx::{
     generate_objcpp_tasks, run_ld, run_ld_tests,
 };
 use crate::tasks::jvm::{
-    detect_jar, detect_java, detect_kotlin, detect_kotlin_from_source_files,
-    download_extract_jar_tasks, generate_jar_tasks, generate_javac_tasks, generate_kotlinc_tasks,
-    run_jar, run_java_class,
+    detect_jar, detect_java_kotlin, detect_kotlin_from_source_files, download_extract_jar_tasks,
+    generate_jar_tasks, generate_javac_kotlinc_tasks, run_jar, run_java_class,
 };
 use crate::utils::{format_bytes, index_files};
 
@@ -177,14 +176,11 @@ impl Bobje {
             if detect_android(bobje) {
                 generate_android_res_tasks(bobje, executor);
             }
-            if detect_java(bobje) && detect_android(bobje) {
+            if detect_java_kotlin(bobje) && detect_android(bobje) {
                 link_android_classpath(bobje);
             }
-            if detect_java(bobje) {
-                generate_javac_tasks(bobje, executor);
-            }
-            if detect_kotlin(bobje) {
-                generate_kotlinc_tasks(bobje, executor);
+            if detect_java_kotlin(bobje) {
+                generate_javac_kotlinc_tasks(bobje, executor);
             }
             if detect_cx(bobje) {
                 generate_ld_tasks(bobje, executor);
@@ -321,7 +317,7 @@ fn main() {
         if detect_cx(&bobje) {
             run_ld(&bobje);
         }
-        if detect_java(&bobje) || detect_kotlin(&bobje) {
+        if detect_java_kotlin(&bobje) {
             run_java_class(&bobje);
         }
         eprintln!("No build artifact to run");
