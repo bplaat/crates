@@ -112,6 +112,7 @@ impl Bobje {
                 path: None,
                 jar: Some(JarDependency {
                     package: "kotlin".to_string(),
+                    version: "2.2.0".to_string(),
                     url: "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.0/kotlin-stdlib-2.2.0.jar".to_string(),
                 }),
             });
@@ -226,7 +227,7 @@ impl Bobje {
             // ...
             r#type: BobjeType::ExternalJar,
             name: name.to_string(),
-            version: "0.1.0".to_string(),
+            version: jar.version.clone(),
             manifest_dir: "".to_string(),
             manifest: Manifest::default(),
             jar: Some(jar.clone()),

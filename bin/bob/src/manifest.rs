@@ -34,6 +34,7 @@ pub(crate) struct Dependency {
 #[derive(Clone, Deserialize)]
 pub(crate) struct JarDependency {
     pub package: String,
+    pub version: String,
     pub url: String,
 }
 
