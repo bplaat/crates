@@ -84,18 +84,14 @@ pub fn config_dir() -> Option<PathBuf> {
     ))]
     {
         let path = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
-            format!(
-                "{}/.config",
-                std::env::var("HOME").expect("Can't read $HOME env variable")
-            )
+            format!("{}/.config", std::env::var("HOME").expect("$HOME not set"))
         });
         Some(PathBuf::from(path))
     }
 
     #[cfg(target_os = "macos")]
     {
-        let path =
-            std::env::var("HOME").unwrap_or_else(|_| panic!("Can't read $HOME env variable"));
+        let path = std::env::var("HOME").unwrap_or_else(|_| panic!("$HOME not set"));
         Some(PathBuf::from(format!(
             "{}/Library/Application Support",
             path
@@ -120,19 +116,14 @@ pub fn audio_dir() -> Option<PathBuf> {
         target_os = "netbsd"
     ))]
     {
-        let path = std::env::var("XDG_MUSIC_DIR").unwrap_or_else(|_| {
-            format!(
-                "{}/Music",
-                std::env::var("HOME").expect("Can't read $HOME env variable")
-            )
-        });
+        let path = std::env::var("XDG_MUSIC_DIR")
+            .unwrap_or_else(|_| format!("{}/Music", std::env::var("HOME").expect("$HOME not set")));
         Some(PathBuf::from(path))
     }
 
     #[cfg(target_os = "macos")]
     {
-        let path =
-            std::env::var("HOME").unwrap_or_else(|_| panic!("Can't read $HOME env variable"));
+        let path = std::env::var("HOME").unwrap_or_else(|_| panic!("$HOME not set"));
         Some(PathBuf::from(format!("{}/Music", path)))
     }
 

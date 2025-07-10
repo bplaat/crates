@@ -117,7 +117,7 @@ pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut Executor) {
             let dest = format!(
                 "{}/include/{}/{}",
                 bobje.out_dir_with_target(),
-                bobje.manifest.package.name,
+                bobje.name,
                 source_file
                     .split("src/")
                     .nth(1)
@@ -274,7 +274,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             inputs.push(format!(
                 "{}/lib{}.a",
                 bobje.out_dir_with_target(),
-                bobje.manifest.package.name
+                bobje.name
             ));
         }
         for dependency_bobje in bobje.dependencies.values() {
@@ -283,11 +283,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     }
 
     if bobje.r#type == crate::BobjeType::Library {
-        let static_library_file = format!(
-            "{}/lib{}.a",
-            bobje.out_dir_with_target(),
-            bobje.manifest.package.name
-        );
+        let static_library_file = format!("{}/lib{}.a", bobje.out_dir_with_target(), bobje.name);
         executor.add_task_cmd(
             format!(
                 "{} rc {} {}",
@@ -302,17 +298,9 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
 
     if bobje.r#type == crate::BobjeType::Binary {
         let executable_file = if bobje.is_test {
-            format!(
-                "{}/test_{}",
-                bobje.out_dir_with_target(),
-                bobje.manifest.package.name
-            )
+            format!("{}/test_{}", bobje.out_dir_with_target(), bobje.name)
         } else {
-            format!(
-                "{}/{}",
-                bobje.out_dir_with_target(),
-                bobje.manifest.package.name
-            )
+            format!("{}/{}", bobje.out_dir_with_target(), bobje.name)
         };
         let ext = if cfg!(windows) { ".exe" } else { "" };
         if bobje.profile == Profile::Release {
@@ -356,7 +344,7 @@ pub(crate) fn run_ld(bobje: &Bobje) -> ! {
     let status = Command::new(format!(
         "{}/{}{}",
         bobje.out_dir_with_target(),
-        bobje.manifest.package.name,
+        bobje.name,
         ext
     ))
     .status()
@@ -369,7 +357,7 @@ pub(crate) fn run_ld_tests(bobje: &Bobje) -> ! {
     let status = Command::new(format!(
         "{}/test_{}{}",
         bobje.out_dir_with_target(),
-        bobje.manifest.package.name,
+        bobje.name,
         ext
     ))
     .status()
@@ -382,7 +370,7 @@ fn get_object_path(bobje: &Bobje, source_file: &str) -> String {
     format!(
         "{}/objects/{}/{}",
         bobje.out_dir_with_target(),
-        bobje.manifest.package.name,
+        bobje.name,
         source_file
             .split("src/")
             .nth(1)

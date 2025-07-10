@@ -5,16 +5,15 @@
  */
 
 use std::collections::HashMap;
-use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::fs;
 use std::process::{Command, exit};
-use std::{env, fs};
 
 use regex::Regex;
 
 use crate::Bobje;
 use crate::args::Profile;
 use crate::executor::Executor;
+use crate::manifest::JarDependency;
 
 // MARK: Java tasks
 pub(crate) fn detect_java(bobje: &Bobje) -> bool {
@@ -25,7 +24,7 @@ pub(crate) fn detect_java(bobje: &Bobje) -> bool {
 }
 
 pub(crate) fn generate_javac_tasks(bobje: &Bobje, executor: &mut Executor) {
-    let classes_dir = format!("{}/{}/classes", bobje.target_dir, bobje.profile);
+    let classes_dir = format!("{}/classes", bobje.out_dir());
     let modules = find_modules(bobje);
     let module_deps = find_dependencies(&modules);
 
@@ -91,7 +90,7 @@ pub(crate) fn generate_javac_tasks(bobje: &Bobje, executor: &mut Executor) {
 pub(crate) fn run_java_class(bobje: &Bobje) -> ! {
     let status = Command::new("java")
         .arg("-cp")
-        .arg(format!("{}/{}/classes", bobje.target_dir, bobje.profile))
+        .arg(format!("{}/classes", bobje.out_dir()))
         .arg(find_main_class(bobje).unwrap_or_else(|| {
             eprintln!("Can't find main class");
             exit(1);
@@ -103,11 +102,14 @@ pub(crate) fn run_java_class(bobje: &Bobje) -> ! {
 
 // MARK: Kotlin tasks
 pub(crate) fn detect_kotlin(bobje: &Bobje) -> bool {
-    bobje.source_files.iter().any(|path| path.ends_with(".kt"))
+    detect_kotlin_from_source_files(&bobje.source_files)
+}
+pub(crate) fn detect_kotlin_from_source_files(source_files: &[String]) -> bool {
+    source_files.iter().any(|path| path.ends_with(".kt"))
 }
 
 pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
-    let classes_dir = format!("{}/{}/classes", bobje.target_dir, bobje.profile);
+    let classes_dir = format!("{}/classes", bobje.out_dir());
     let modules = find_modules(bobje);
     let module_deps = find_dependencies(&modules);
 
@@ -135,7 +137,6 @@ pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
         }
     );
 
-    let kotlin_stdlib = get_kotlin_stdlib();
     for module in &modules {
         let mut inputs = module.source_files.clone();
         if let Some(dependencies) = module_deps.get(&module.name) {
@@ -151,14 +152,20 @@ pub(crate) fn generate_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
             }
         }
 
-        // Extract Kotlin standard library
-        let output_dir = format!("{}/kotlin", classes_dir);
-        executor.add_task_cmd(
-            format!("cd {} && jar xf {}", classes_dir, kotlin_stdlib),
-            vec![kotlin_stdlib.clone()],
-            vec![output_dir.clone()],
-        );
-        inputs.push(output_dir);
+        for dependency_bobje in bobje.dependencies.values() {
+            if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
+                inputs.push(format!(
+                    "{}/{}",
+                    classes_dir,
+                    dependency_bobje
+                        .jar
+                        .as_ref()
+                        .expect("Should be some")
+                        .package
+                        .replace('.', "/")
+                ));
+            }
+        }
 
         executor.add_task_cmd(
             format!(
@@ -179,8 +186,37 @@ pub(crate) fn detect_jar(bobje: &Bobje) -> bool {
     bobje.manifest.package.metadata.jar.is_some()
 }
 
+pub(crate) fn download_extract_jar_tasks(
+    bobje: &Bobje,
+    executor: &mut Executor,
+    jar: &JarDependency,
+) {
+    // Add download task
+    let downloaded_jar = format!(
+        "{}/jar-cache/{}-{}.jar",
+        bobje.target_dir, bobje.name, bobje.version
+    );
+    executor.add_task_cmd(
+        format!("wget {} -O {}", jar.url, downloaded_jar),
+        vec![],
+        vec![downloaded_jar.clone()],
+    );
+
+    // Add extract task
+    let classes_dir = format!("{}/classes", bobje.out_dir());
+    executor.add_task_cmd(
+        format!(
+            "cd {} && jar xf {}",
+            classes_dir,
+            downloaded_jar.replace(&bobje.target_dir, "../..")
+        ),
+        vec![downloaded_jar],
+        vec![format!("{}/{}", classes_dir, jar.package.replace('.', "/"))],
+    );
+}
+
 pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
-    let classes_dir = format!("{}/{}/classes", bobje.target_dir, bobje.profile);
+    let classes_dir = format!("{}/classes", bobje.out_dir());
     let modules = find_modules(bobje);
 
     let main_class = bobje
@@ -197,12 +233,7 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
             })
         });
 
-    let jar_file = format!(
-        "{}/{}-{}.jar",
-        bobje.out_dir(),
-        bobje.manifest.package.name,
-        bobje.manifest.package.version
-    );
+    let jar_file = format!("{}/{}-{}.jar", bobje.out_dir(), bobje.name, bobje.version);
     executor.add_task_cmd(
         format!("jar cfe {} {} -C {} .", jar_file, main_class, classes_dir),
         modules
@@ -219,8 +250,8 @@ pub(crate) fn run_jar(bobje: &Bobje) -> ! {
         .arg(format!(
             "{}/{}-{}.jar",
             bobje.out_dir(),
-            bobje.manifest.package.name,
-            bobje.manifest.package.version
+            bobje.name,
+            bobje.version
         ))
         .status()
         .expect("Failed to execute java");
@@ -244,15 +275,6 @@ fn get_module_name(source_file: &str) -> String {
         .rsplit_once('.')
         .map_or("", |(prefix, _)| prefix)
         .to_string()
-}
-
-fn get_kotlin_stdlib() -> String {
-    let kotlin_home = parse_kotlin_home().expect("Could not find kotlinc in PATH");
-    let path = format!("{}/lib/kotlin-stdlib.jar", kotlin_home.display());
-    if fs::metadata(&path).is_ok() {
-        return path;
-    }
-    panic!("Can't find kotlin-stdlib.jar in system");
 }
 
 #[derive(Clone)]
@@ -326,54 +348,6 @@ fn find_main_class(bobje: &Bobje) -> Option<String> {
                     return Some(get_class_name(source_file) + "Kt");
                 }
             }
-        }
-    }
-    None
-}
-
-fn parse_kotlin_home() -> Option<PathBuf> {
-    let cmd_path = resolve_command_path("kotlinc")?;
-    let mut file = fs::File::open(&cmd_path).ok()?;
-    let mut shebang = [0; 2];
-    file.read_exact(&mut shebang).ok()?;
-    if &shebang == b"#!" {
-        parse_kotlin_shell_script(&cmd_path).or(Some(cmd_path))
-    } else {
-        Some(cmd_path)
-    }
-}
-
-fn resolve_command_path(cmd: &str) -> Option<PathBuf> {
-    if cmd.contains('/') {
-        Some(PathBuf::from(cmd))
-    } else {
-        env::var("PATH")
-            .ok()?
-            .split(':')
-            .map(|p| Path::new(p).join(cmd))
-            .find(|p| p.exists() && p.is_file())
-    }
-}
-
-fn parse_kotlin_shell_script(script_path: &Path) -> Option<PathBuf> {
-    let contents = fs::read_to_string(script_path).ok()?;
-    let re = Regex::new(r#"KOTLIN_HOME\s*=\s*([^\s;]+)"#).ok()?;
-    if let Some(caps) = re.captures(&contents) {
-        if let Some(kotlin_home) = caps.get(1) {
-            return Some(PathBuf::from(kotlin_home.as_str()));
-        }
-    }
-    let re = Regex::new(r#"exec\s+["']?([^\s"']+)["']?"#).ok()?;
-    if let Some(caps) = re.captures(&contents) {
-        if let Some(cmd) = caps.get(1) {
-            return Some(
-                PathBuf::from(cmd.as_str())
-                    .parent()
-                    .expect("Should have parent")
-                    .parent()
-                    .expect("Should have parent")
-                    .to_path_buf(),
-            );
         }
     }
     None

@@ -27,7 +27,14 @@ pub(crate) struct Package {
 
 #[derive(Clone, Deserialize)]
 pub(crate) struct Dependency {
-    pub path: String,
+    pub path: Option<String>,
+    pub jar: Option<JarDependency>,
+}
+
+#[derive(Clone, Deserialize)]
+pub(crate) struct JarDependency {
+    pub package: String,
+    pub url: String,
 }
 
 #[derive(Default, Clone, Deserialize)]

@@ -23,10 +23,7 @@ fn main() {
             if dir_name == "lib" {
                 continue;
             }
-            // FIXME: Enable Kotlin on Linux CI
-            if cfg!(not(target_os = "macos"))
-                && (dir_name.starts_with("objc") || dir_name.contains("kotlin"))
-            {
+            if cfg!(not(target_os = "macos")) && dir_name.starts_with("objc") {
                 continue;
             }
 

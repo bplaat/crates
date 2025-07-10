@@ -39,11 +39,7 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
         .bundle
         .as_ref()
         .expect("Should be some");
-    let contents_dir = format!(
-        "{}/{}.app/Contents",
-        bobje.out_dir(),
-        bobje.manifest.package.name
-    );
+    let contents_dir = format!("{}/{}.app/Contents", bobje.out_dir(), bobje.name);
     let mut bundle_files = Vec::new();
 
     // Copy resources
@@ -124,11 +120,11 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
     if bundle_metadata.lipo {
         let x86_64 = format!(
             "{}/x86_64-apple-darwin/{}/{}",
-            bobje.target_dir, bobje.profile, bobje.manifest.package.name
+            bobje.target_dir, bobje.profile, bobje.name
         );
         let aarch64 = format!(
             "{}/aarch64-apple-darwin/{}/{}",
-            bobje.target_dir, bobje.profile, bobje.manifest.package.name,
+            bobje.target_dir, bobje.profile, bobje.name,
         );
         executor.add_task_cmd(
             format!(
@@ -136,19 +132,15 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
                 x86_64,
                 aarch64,
                 bobje.out_dir(),
-                bobje.manifest.package.name
+                bobje.name
             ),
             vec![x86_64, aarch64],
-            vec![format!(
-                "{}/{}",
-                bobje.out_dir(),
-                bobje.manifest.package.name
-            )],
+            vec![format!("{}/{}", bobje.out_dir(), bobje.name)],
         );
     }
 
     // Copy executable
-    let dest = format!("{}/MacOS/{}", contents_dir, bobje.manifest.package.name);
+    let dest = format!("{}/MacOS/{}", contents_dir, bobje.name);
     executor.add_task_cp(
         format!(
             "{}/{}",
@@ -157,7 +149,7 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
             } else {
                 bobje.out_dir_with_target()
             },
-            bobje.manifest.package.name
+            bobje.name
         ),
         dest.clone(),
     );
@@ -166,11 +158,7 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
     // Create phony bundle task
     executor.add_task_phony(
         bundle_files,
-        vec![format!(
-            "{}/{}.app",
-            bobje.out_dir(),
-            bobje.manifest.package.name
-        )],
+        vec![format!("{}/{}.app", bobje.out_dir(), bobje.name)],
     );
 }
 
@@ -178,8 +166,8 @@ pub(crate) fn run_bundle(bobje: &Bobje) -> ! {
     let status = Command::new(format!(
         "{}/{}.app/Contents/MacOS/{}",
         bobje.out_dir(),
-        bobje.manifest.package.name,
-        bobje.manifest.package.name
+        bobje.name,
+        bobje.name
     ))
     .status()
     .expect("Failed to execute executable");
@@ -205,17 +193,17 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
     _ = writeln!(s, r#"	<key>CFBundlePackageType</key>"#);
     _ = writeln!(s, r#"	<string>APPL</string>"#);
     _ = writeln!(s, r#"	<key>CFBundleName</key>"#);
-    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.manifest.package.name);
+    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.name);
     _ = writeln!(s, r#"	<key>CFBundleDisplayName</key>"#);
-    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.manifest.package.name);
+    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.name);
     _ = writeln!(s, r#"	<key>CFBundleIdentifier</key>"#);
     _ = writeln!(s, r#"	<string>{}</string>"#, id);
     _ = writeln!(s, r#"	<key>CFBundleVersion</key>"#);
-    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.manifest.package.version);
+    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.version);
     _ = writeln!(s, r#"	<key>CFBundleShortVersionString</key>"#);
-    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.manifest.package.version);
+    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.version);
     _ = writeln!(s, r#"	<key>CFBundleExecutable</key>"#);
-    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.manifest.package.name);
+    _ = writeln!(s, r#"	<string>{}</string>"#, bobje.name);
     _ = writeln!(s, r#"	<key>LSMinimumSystemVersion</key>"#);
     _ = writeln!(s, r#"	<string>11.0</string>"#,);
     if let Some(copyright) = &bundle.copyright {
