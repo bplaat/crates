@@ -14,7 +14,7 @@ use std::{env, fs};
 
 use crate::args::{Args, Profile, Subcommand, parse_args, subcommand_help};
 use crate::executor::Executor;
-use crate::manifest::Manifest;
+use crate::manifest::{Dependency, JarDependency, Manifest};
 use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
     generate_android_res_tasks, link_android_classpath, run_android_apk,
@@ -26,8 +26,9 @@ use crate::tasks::cx::{
     generate_objcpp_tasks, run_ld, run_ld_tests,
 };
 use crate::tasks::jvm::{
-    detect_jar, detect_java, detect_kotlin, generate_jar_tasks, generate_javac_tasks,
-    generate_kotlinc_tasks, run_jar, run_java_class,
+    detect_jar, detect_java, detect_kotlin, detect_kotlin_from_source_files,
+    download_extract_jar_tasks, generate_jar_tasks, generate_javac_tasks, generate_kotlinc_tasks,
+    run_jar, run_java_class,
 };
 use crate::utils::{format_bytes, index_files};
 
@@ -71,6 +72,7 @@ fn subcommand_version() {
 pub(crate) enum BobjeType {
     Binary,
     Library,
+    ExternalJar,
 }
 
 #[derive(Clone)]
@@ -81,17 +83,20 @@ pub(crate) struct Bobje {
     is_test: bool,
     // ...
     r#type: BobjeType,
+    name: String,
+    version: String,
     manifest_dir: String,
     manifest: Manifest,
+    jar: Option<JarDependency>,
     source_files: Vec<String>,
     dependencies: HashMap<String, Bobje>,
 }
 
 impl Bobje {
-    fn new(args: &Args, manifest_dir: &str, r#type: BobjeType, executor: &mut Executor) -> Self {
+    fn new(args: &Args, r#type: BobjeType, manifest_dir: &str, executor: &mut Executor) -> Self {
         // Read manifest
         let manifest_path = format!("{}/bob.toml", manifest_dir);
-        let manifest: Manifest =
+        let mut manifest: Manifest =
             basic_toml::from_str(&fs::read_to_string(&manifest_path).unwrap_or_else(|err| {
                 eprintln!("Can't read {} file: {}", manifest_path, err);
                 exit(1);
@@ -100,17 +105,36 @@ impl Bobje {
                 eprintln!("Can't parse {} file: {}", manifest_path, err);
                 exit(1);
             });
+        let source_files = index_files(&format!("{}/src/", manifest_dir));
+
+        // Add Kotlin stdlib when Kotlin is used
+        if detect_kotlin_from_source_files(&source_files) {
+            manifest.dependencies.insert("kotlin-stdlib".to_string(), Dependency {
+                path: None,
+                jar: Some(JarDependency {
+                    package: "kotlin".to_string(),
+                    url: "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.0/kotlin-stdlib-2.2.0.jar".to_string(),
+                }),
+            });
+        }
 
         // Build dependencies
         let mut dependencies = HashMap::new();
-        for dep in manifest.dependencies.values() {
-            let dep_bobje = Bobje::new(
-                args,
-                &format!("{}/{}", manifest_dir, dep.path),
-                BobjeType::Library,
-                executor,
-            );
-            dependencies.insert(dep_bobje.manifest.package.name.clone(), dep_bobje);
+        for (dep_name, dep) in &manifest.dependencies {
+            if let Some(path) = &dep.path {
+                let dep_bobje = Bobje::new(
+                    args,
+                    BobjeType::Library,
+                    &format!("{}/{}", manifest_dir, path),
+                    executor,
+                );
+                dependencies.insert(dep_bobje.name.clone(), dep_bobje);
+            }
+
+            if let Some(jar) = &dep.jar {
+                let dep_bobje = Bobje::new_external_jar(args, dep_name, jar, executor);
+                dependencies.insert(dep_bobje.name.clone(), dep_bobje);
+            }
         }
 
         // Generate tasks
@@ -121,9 +145,12 @@ impl Bobje {
             is_test: args.subcommand == Subcommand::Test,
             // ...
             r#type,
+            name: manifest.package.name.clone(),
+            version: manifest.package.version.clone(),
             manifest_dir: manifest_dir.to_string(),
             manifest,
-            source_files: index_files(&format!("{}/src/", manifest_dir)),
+            jar: None,
+            source_files,
             dependencies,
         };
 
@@ -189,6 +216,31 @@ impl Bobje {
         bobje
     }
 
+    fn new_external_jar(
+        args: &Args,
+        name: &str,
+        jar: &JarDependency,
+        executor: &mut Executor,
+    ) -> Self {
+        let bobje = Self {
+            target_dir: args.target_dir.clone(),
+            profile: args.profile,
+            target: args.target.clone(),
+            is_test: args.subcommand == Subcommand::Test,
+            // ...
+            r#type: BobjeType::ExternalJar,
+            name: name.to_string(),
+            version: "0.1.0".to_string(),
+            manifest_dir: "".to_string(),
+            manifest: Manifest::default(),
+            jar: Some(jar.clone()),
+            source_files: vec![],
+            dependencies: HashMap::new(),
+        };
+        download_extract_jar_tasks(&bobje, executor, jar);
+        bobje
+    }
+
     fn out_dir(&self) -> String {
         format!("{}/{}", self.target_dir, self.profile)
     }
@@ -248,7 +300,7 @@ fn main() {
 
     // Build main bobje
     let mut executor = Executor::new();
-    let bobje = Bobje::new(&args, ".", BobjeType::Binary, &mut executor);
+    let bobje = Bobje::new(&args, BobjeType::Binary, ".", &mut executor);
     executor.execute(
         &format!("{}/bob.log", &args.target_dir),
         args.verbose,
