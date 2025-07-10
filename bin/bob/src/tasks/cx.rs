@@ -64,10 +64,6 @@ impl CxVars {
         if let Some(target) = &bobje.target {
             ldflags.push_str(&format!(" --target={}", target));
         }
-        if bobje.is_test {
-            ldflags.push(' ');
-            ldflags.push_str(&pkg_config_libs("cunit"));
-        }
         if !bobje.manifest.build.ldflags.is_empty() {
             ldflags.push(' ');
             ldflags.push_str(&bobje.manifest.build.ldflags);
@@ -308,10 +304,15 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             let stripped_path = format!("{}{}", executable_file, ext);
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} -o {}",
+                    "{} {} {} {} -o {}",
                     if contains_cpp { vars.cxx } else { vars.cc },
                     vars.ldflags,
                     inputs.join(" "),
+                    if bobje.is_test {
+                        pkg_config_libs("cunit")
+                    } else {
+                        "".to_string()
+                    },
                     unstripped_path,
                 ),
                 inputs.clone(),
@@ -326,10 +327,15 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             let out_path = format!("{}{}", executable_file, ext);
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} -o {}",
+                    "{} {} {} {} -o {}",
                     if contains_cpp { vars.cxx } else { vars.cc },
                     vars.ldflags,
                     inputs.join(" "),
+                    if bobje.is_test {
+                        pkg_config_libs("cunit")
+                    } else {
+                        "".to_string()
+                    },
                     out_path,
                 ),
                 inputs.clone(),
