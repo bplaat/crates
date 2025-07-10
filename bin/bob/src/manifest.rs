@@ -82,6 +82,7 @@ impl Default for BundleMetadata {
 #[serde(default)]
 pub(crate) struct JarMetadata {
     pub main_class: Option<String>,
+    pub proguard_keep: Vec<String>,
 }
 
 // MARK: Android
@@ -97,6 +98,7 @@ pub(crate) struct AndroidMetadata {
     pub key_password: String,
     pub resources_dir: String,
     pub assets_dir: String,
+    pub proguard_keep: Vec<String>,
 }
 
 impl Default for AndroidMetadata {
@@ -111,6 +113,7 @@ impl Default for AndroidMetadata {
             key_password: "android".to_string(),
             resources_dir: "res".to_string(),
             assets_dir: "assets".to_string(),
+            proguard_keep: Vec::new(),
         }
     }
 }

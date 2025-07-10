@@ -108,6 +108,14 @@ impl Bobje {
 
         // Add Kotlin stdlib when Kotlin is used
         if detect_kotlin_from_source_files(&source_files) {
+            manifest.dependencies.insert("jetbrains-annotations".to_string(), Dependency {
+                path: None,
+                jar: Some(JarDependency {
+                    package: "org.jetbrains.annotations".to_string(),
+                    version: "26.0.2".to_string(),
+                    url: "https://repo1.maven.org/maven2/org/jetbrains/annotations/26.0.2/annotations-26.0.2.jar".to_string(),
+                }),
+            });
             manifest.dependencies.insert("kotlin-stdlib".to_string(), Dependency {
                 path: None,
                 jar: Some(JarDependency {

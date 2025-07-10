@@ -33,14 +33,10 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
     let modules = find_modules(bobje);
     let module_deps = find_dependencies(&modules);
 
-    let mut javac_flags = format!(
-        "-Xlint -Werror {}",
-        if bobje.profile == Profile::Release {
-            "-g:none"
-        } else {
-            "-g"
-        }
-    );
+    let mut javac_flags = "-Xlint -Werror".to_string();
+    if bobje.profile == Profile::Debug {
+        javac_flags.push_str(" -g");
+    }
     if !bobje.manifest.build.javac_flags.is_empty() {
         javac_flags.push(' ');
         javac_flags.push_str(&bobje.manifest.build.javac_flags);
@@ -214,13 +210,57 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
             })
         });
 
+    // Minify names and tree shake classes with ProGuard
+    let optimized_classes_dir = format!("{}-optimized", classes_dir);
+    if bobje.profile == Profile::Release {
+        let java_home = std::env::var("JAVA_HOME").expect("$JAVA_HOME no set");
+        let mut keeps = vec![format!(
+            "public class {} {{ public static void main(java.lang.String[]); }}",
+            main_class
+        )];
+        if let Some(jar) = bobje.manifest.package.metadata.jar.as_ref() {
+            keeps.extend(jar.proguard_keep.clone());
+        }
+
+        executor.add_task_cmd(
+            format!(
+                "proguard -injars {} -outjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null",
+                classes_dir, optimized_classes_dir, java_home,
+                keeps
+                    .iter()
+                    .map(|keep| format!("-keep '{}'", keep))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            modules
+                .iter()
+                .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
+                .collect::<Vec<_>>(),
+            vec![optimized_classes_dir.clone()],
+        );
+    }
+
+    // Build JAR file
     let jar_file = format!("{}/{}-{}.jar", bobje.out_dir(), bobje.name, bobje.version);
     executor.add_task_cmd(
-        format!("jar cfe {} {} -C {} .", jar_file, main_class, classes_dir),
-        modules
-            .iter()
-            .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
-            .collect::<Vec<_>>(),
+        format!(
+            "jar cfe {} {} -C {} .",
+            jar_file,
+            main_class,
+            if bobje.profile == Profile::Release {
+                &optimized_classes_dir
+            } else {
+                &classes_dir
+            }
+        ),
+        if bobje.profile == Profile::Release {
+            vec![optimized_classes_dir]
+        } else {
+            modules
+                .iter()
+                .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
+                .collect::<Vec<_>>()
+        },
         vec![jar_file],
     );
 }
@@ -240,7 +280,7 @@ pub(crate) fn run_jar(bobje: &Bobje) -> ! {
 }
 
 // MARK: Utils
-fn get_class_name(source_file: &str) -> String {
+pub(crate) fn get_class_name(source_file: &str) -> String {
     source_file
         .split("src/")
         .nth(1)

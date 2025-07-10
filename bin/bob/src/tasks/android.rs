@@ -10,7 +10,7 @@ use std::{env, fs};
 
 use crate::executor::Executor;
 use crate::manifest::AndroidMetadata;
-use crate::tasks::jvm::find_modules;
+use crate::tasks::jvm::{find_modules, get_class_name};
 use crate::utils::index_files;
 use crate::{Bobje, Profile};
 
@@ -249,8 +249,53 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
     let classes_dir = format!("{}/classes", bobje.out_dir());
     let modules = find_modules(bobje);
 
+    let mut inputs = modules
+        .iter()
+        .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
+        .collect::<Vec<_>>();
+    for dependency_bobje in bobje.dependencies.values() {
+        if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
+            let jar = dependency_bobje.jar.as_ref().expect("Should be some");
+            inputs.push(format!("{}/{}", classes_dir, jar.package.replace('.', "/")));
+        }
+    }
+
+    // Minify names and tree shake classes with ProGuard
+    let optimized_classes_dir = format!("{}-optimized", classes_dir);
+    if bobje.profile == Profile::Release {
+        let java_home = env::var("JAVA_HOME").expect("$JAVA_HOME no set");
+        let mut keeps = Vec::new();
+        for module in &modules {
+            for source_file in &module.source_files {
+                if source_file.contains("Activity") {
+                    keeps.push(format!(
+                        "public class {} {{ protected void onCreate(android.os.Bundle); }}",
+                        get_class_name(source_file)
+                    ));
+                }
+            }
+        }
+        if let Some(android) = bobje.manifest.package.metadata.android.as_ref() {
+            keeps.extend(android.proguard_keep.clone());
+        }
+
+        executor.add_task_cmd(
+            format!(
+                "proguard -injars {} -outjars {} -libraryjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null",
+                classes_dir, optimized_classes_dir, vars.platform_jar, java_home,
+                keeps
+                    .iter()
+                    .map(|keep| format!("-keep '{}'", keep))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            inputs.clone(),
+            vec![optimized_classes_dir.clone()],
+        );
+    }
+
     // Compile classes.dex with d8 task
-    let mut d8_command = vec![
+    let d8_command = [
         format!("{}/d8", vars.build_tools_path),
         if bobje.profile == Profile::Release {
             "--release"
@@ -261,34 +306,15 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
         format!("--lib {}", vars.platform_jar),
         format!("--min-api {}", vars.android_metadata.min_sdk_version),
         format!("--output {}", bobje.out_dir()),
-    ];
-    let mut inputs = Vec::new();
-    for module in &modules {
-        let module_classes_dir = format!("{}/{}", classes_dir, module.name.replace('.', "/"));
-        if !inputs.contains(&module_classes_dir) {
-            d8_command.push(format!("$(find {} -name '*.class')", module_classes_dir));
-            inputs.push(module_classes_dir);
-        }
-    }
-    for dependency_bobje in bobje.dependencies.values() {
-        if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
-            let module_classes_dir = format!(
-                "{}/{}",
-                classes_dir,
-                dependency_bobje
-                    .jar
-                    .as_ref()
-                    .expect("Should be some")
-                    .package
-                    .replace('.', "/")
-            );
-            if !inputs.contains(&module_classes_dir) {
-                d8_command.push(format!("$(find {} -name '*.class')", module_classes_dir));
-                inputs.push(module_classes_dir);
+        format!(
+            "$(find {} -name '*.class' | grep -v 'META-INF')",
+            if bobje.profile == Profile::Release {
+                &optimized_classes_dir
+            } else {
+                &classes_dir
             }
-        }
-    }
-
+        ),
+    ];
     executor.add_task_cmd(
         format!(
             "{} && cd {} && zip {}-unaligned.apk classes.dex > /dev/null",
@@ -296,7 +322,11 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
             bobje.out_dir(),
             bobje.name
         ),
-        inputs,
+        if bobje.profile == Profile::Release {
+            vec![optimized_classes_dir]
+        } else {
+            inputs
+        },
         vec![format!("{}/classes.dex", bobje.out_dir())],
     );
 }
