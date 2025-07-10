@@ -57,8 +57,7 @@ fn test_bob_{}() {{
                     .replace('-', "_"),
                 entry.path().display(),
                 entry.path().display(),
-                // FIXME: Enable Cunit tests on Linux CI
-                if cfg!(target_os = "macos") && (dir_name == "c" || dir_name == "cpp") {
+                if dir_name == "c" || dir_name == "cpp" {
                     format!(
                         r#"
     // Test example
