@@ -253,10 +253,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                 );
                 executor.add_task_cmd(
                     format!(
-                        "cp {} {} && sed -i{} 's/package {};/package {};/g' {}",
-                        r_java_path,
-                        src_r_java,
-                        if cfg!(target_os = "macos") { " ''" } else { "" },
+                        "sed 's/package {};/package {};/g' {} > {}",
                         bobje.manifest.package.id.as_ref().expect("Should be some"),
                         dependency_bobje
                             .manifest
@@ -264,6 +261,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                             .id
                             .as_ref()
                             .expect("Should be some"),
+                        r_java_path,
                         src_r_java
                     ),
                     vec![r_java_path.clone()],
