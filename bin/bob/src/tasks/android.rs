@@ -42,7 +42,41 @@ impl AndroidVars {
             "{}/platforms/android-{}/android.jar",
             android_home, android_metadata.target_sdk_version
         );
-        let command_line_tools_path = format!("{}/cmdline-tools/latest/bin", android_home);
+
+        // Determine command_line_tools_path: prefer 'latest', else pick highest versioned folder
+        let cmdline_tools_dir = format!("{}/cmdline-tools", android_home);
+        let latest_path = format!("{}/latest/bin", cmdline_tools_dir);
+        let command_line_tools_path = if Path::new(&latest_path).exists() {
+            latest_path
+        } else {
+            // Find highest x.x versioned folder
+            let mut highest_version: Option<(u32, u32, String)> = None;
+            if let Ok(entries) = fs::read_dir(&cmdline_tools_dir) {
+                for entry in entries.flatten() {
+                    let file_name = entry.file_name();
+                    let file_name_str = file_name.to_string_lossy();
+                    // Match folders like "10.0" or "8.1"
+                    if let Some((major, minor)) = file_name_str
+                        .split_once('.')
+                        .and_then(|(maj, min)| maj.parse::<u32>().ok().zip(min.parse::<u32>().ok()))
+                    {
+                        if highest_version
+                            .as_ref()
+                            .is_none_or(|(h_maj, h_min, _)| (major, minor) > (*h_maj, *h_min))
+                        {
+                            highest_version = Some((major, minor, file_name_str.to_string()));
+                        }
+                    }
+                }
+            }
+            if let Some((_, _, folder)) = highest_version {
+                format!("{}/{}/bin", cmdline_tools_dir, folder)
+            } else {
+                eprintln!("No valid cmdline-tools found in {cmdline_tools_dir}");
+                exit(1);
+            }
+        };
+
         let build_tools_path = format!(
             "{}/build-tools/{}.0.0",
             android_home, android_metadata.target_sdk_version
