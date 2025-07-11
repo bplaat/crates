@@ -263,7 +263,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
     // Minify names and tree shake classes with ProGuard
     let optimized_classes_dir = format!("{}-optimized", classes_dir);
     if bobje.profile == Profile::Release {
-        let java_home = env::var("JAVA_HOME").expect("$JAVA_HOME no set");
+        let java_home = env::var("JAVA_HOME").expect("$JAVA_HOME not set");
         let mut keeps = Vec::new();
         for module in &modules {
             for source_file in &module.source_files {
@@ -281,13 +281,16 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
 
         executor.add_task_cmd(
             format!(
-                "proguard -injars {} -outjars {} -libraryjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null",
+                "proguard -injars {} -outjars {} -libraryjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null && rm -rf {}/META-INF && find {} -name '*.kotlin_builtins' -delete && find {} -type d -empty -delete",
                 classes_dir, optimized_classes_dir, vars.platform_jar, java_home,
                 keeps
                     .iter()
                     .map(|keep| format!("-keep '{}'", keep))
                     .collect::<Vec<_>>()
-                    .join(" ")
+                    .join(" "),
+                optimized_classes_dir,
+                optimized_classes_dir,
+                optimized_classes_dir
             ),
             inputs.clone(),
             vec![optimized_classes_dir.clone()],
@@ -346,7 +349,7 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
         let mut cmd = Command::new("sh");
         let mut cmd_str = format!(
             "keytool -genkey -keystore {} -storetype JKS -keyalg RSA -keysize 4096 -validity 7120",
-            &vars.android_metadata.keystore_file
+            &target_keystore
         );
         if !vars.android_metadata.key_alias.is_empty() {
             cmd_str.push_str(&format!(" -alias {}", &vars.android_metadata.key_alias));
