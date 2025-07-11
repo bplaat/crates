@@ -11,7 +11,7 @@ use std::{env, fs};
 use crate::executor::Executor;
 use crate::manifest::AndroidMetadata;
 use crate::tasks::jvm::{find_modules, get_class_name};
-use crate::utils::index_files;
+use crate::utils::{index_files, write_file_when_different};
 use crate::{Bobje, Profile};
 
 // MARK: Android vars
@@ -19,6 +19,7 @@ struct AndroidVars {
     id: String,
     android_metadata: AndroidMetadata,
     platform_jar: String,
+    command_line_tools_path: String,
     build_tools_path: String,
     platform_tools_path: String,
 }
@@ -41,6 +42,7 @@ impl AndroidVars {
             "{}/platforms/android-{}/android.jar",
             android_home, android_metadata.target_sdk_version
         );
+        let command_line_tools_path = format!("{}/cmdline-tools/latest/bin", android_home);
         let build_tools_path = format!(
             "{}/build-tools/{}.0.0",
             android_home, android_metadata.target_sdk_version
@@ -50,6 +52,7 @@ impl AndroidVars {
             id: id.clone(),
             android_metadata: android_metadata.clone(),
             platform_jar,
+            command_line_tools_path,
             build_tools_path,
             platform_tools_path,
         }
@@ -260,78 +263,79 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
         }
     }
 
-    // Minify names and tree shake classes with ProGuard
-    let optimized_classes_dir = format!("{}-optimized", classes_dir);
+    // Compile classes.dex with r8 task
     if bobje.profile == Profile::Release {
-        let java_home = env::var("JAVA_HOME").expect("$JAVA_HOME not set");
-        let mut keeps = Vec::new();
+        // Write proguard config file
+        let mut proguard_config = String::new();
         for module in &modules {
             for source_file in &module.source_files {
                 if source_file.contains("Activity") {
-                    keeps.push(format!(
-                        "public class {} {{ protected void onCreate(android.os.Bundle); }}",
+                    proguard_config.push_str(&format!(
+                        "-keep public class {} {{ protected void onCreate(android.os.Bundle); }}\n",
                         get_class_name(source_file)
                     ));
                 }
             }
         }
         if let Some(android) = bobje.manifest.package.metadata.android.as_ref() {
-            keeps.extend(android.proguard_keep.clone());
+            for keep in &android.proguard_keep {
+                proguard_config.push_str(&format!("-keep {}\n", keep));
+            }
         }
+        let proguard_config_path = format!("{}/proguard.cfg", bobje.out_dir());
+        write_file_when_different(&proguard_config_path, &proguard_config)
+            .expect("Can't write proguard.cfg");
 
+        // Add r8 task
+        let r8_command = [
+            format!("{}/r8", vars.command_line_tools_path),
+            "--release".to_string(),
+            "--dex".to_string(),
+            format!("--min-api {}", vars.android_metadata.min_sdk_version),
+            format!("--lib {}", vars.platform_jar),
+            format!("--output {}", bobje.out_dir()),
+            "--pg-compat".to_string(),
+            format!("--pg-conf {}", proguard_config_path),
+            format!(
+                "$(find {} -name '*.class' | grep -v 'META-INF')",
+                &classes_dir
+            ),
+        ];
         executor.add_task_cmd(
             format!(
-                "proguard -injars {} -outjars {} -libraryjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null && rm -rf {}/META-INF && find {} -name '*.kotlin_builtins' -delete && find {} -type d -empty -delete",
-                classes_dir, optimized_classes_dir, vars.platform_jar, java_home,
-                keeps
-                    .iter()
-                    .map(|keep| format!("-keep '{}'", keep))
-                    .collect::<Vec<_>>()
-                    .join(" "),
-                optimized_classes_dir,
-                optimized_classes_dir,
-                optimized_classes_dir
+                "{} && cd {} && zip {}-unaligned.apk classes.dex > /dev/null",
+                r8_command.join(" "),
+                bobje.out_dir(),
+                bobje.name
             ),
-            inputs.clone(),
-            vec![optimized_classes_dir.clone()],
+            inputs,
+            vec![format!("{}/classes.dex", bobje.out_dir())],
         );
     }
-
     // Compile classes.dex with d8 task
-    let d8_command = [
-        format!("{}/d8", vars.build_tools_path),
-        if bobje.profile == Profile::Release {
-            "--release"
-        } else {
-            "--debug"
-        }
-        .to_string(),
-        format!("--lib {}", vars.platform_jar),
-        format!("--min-api {}", vars.android_metadata.min_sdk_version),
-        format!("--output {}", bobje.out_dir()),
-        format!(
-            "$(find {} -name '*.class' | grep -v 'META-INF')",
-            if bobje.profile == Profile::Release {
-                &optimized_classes_dir
-            } else {
+    else {
+        let d8_command = [
+            format!("{}/d8", vars.build_tools_path),
+            "--debug".to_string(),
+            format!("--min-api {}", vars.android_metadata.min_sdk_version),
+            format!("--lib {}", vars.platform_jar),
+            format!("--output {}", bobje.out_dir()),
+            format!(
+                "$(find {} -name '*.class' | grep -v 'META-INF')",
                 &classes_dir
-            }
-        ),
-    ];
-    executor.add_task_cmd(
-        format!(
-            "{} && cd {} && zip {}-unaligned.apk classes.dex > /dev/null",
-            d8_command.join(" "),
-            bobje.out_dir(),
-            bobje.name
-        ),
-        if bobje.profile == Profile::Release {
-            vec![optimized_classes_dir]
-        } else {
-            inputs
-        },
-        vec![format!("{}/classes.dex", bobje.out_dir())],
-    );
+            ),
+        ];
+        executor.add_task_cmd(
+            format!(
+                "{} && cd {} && zip {}-unaligned.apk classes.dex > /dev/null",
+                d8_command.join(" "),
+                bobje.out_dir(),
+                bobje.name
+            ),
+            inputs,
+            vec![format!("{}/classes.dex", bobje.out_dir())],
+        );
+    }
 }
 
 // MARK: Android APK
