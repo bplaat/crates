@@ -352,18 +352,26 @@ impl<'a> WebviewBuilder<'a> {
         if let Some(assets_get) = self.embed_assets_get.take() {
             let port = self.internal_http_server_port.unwrap_or(0);
             let listener = if self.internal_http_server_expose {
-                // Start an exposed HTTP server
+                // Try to get local IP address, fallback to localhost if it fails
                 let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, port))
                     .unwrap_or_else(|_| panic!("Can't start local http server"));
-                self.should_load_url = Some(format!(
-                    "http://{}:{}{}",
-                    local_ip_address::local_ip().expect("Can't get local ip addr"),
-                    listener
-                        .local_addr()
-                        .expect("Can't get local http server port")
-                        .port(),
-                    self.should_load_url.as_deref().unwrap_or("/")
-                ));
+                let local_addr = listener
+                    .local_addr()
+                    .expect("Can't get local http server port");
+                if let Ok(ip) = local_ip_address::local_ip() {
+                    self.should_load_url = Some(format!(
+                        "http://{}:{}{}",
+                        ip,
+                        local_addr.port(),
+                        self.should_load_url.as_deref().unwrap_or("/")
+                    ));
+                } else {
+                    self.should_load_url = Some(format!(
+                        "http://{}{}",
+                        local_addr,
+                        self.should_load_url.as_deref().unwrap_or("/")
+                    ));
+                }
                 listener
             } else {
                 // Start a local HTTP server
