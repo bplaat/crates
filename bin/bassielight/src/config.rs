@@ -20,6 +20,8 @@ pub(crate) const DMX_SWITCHES_LENGTH: usize = 4;
 pub(crate) enum FixtureType {
     #[serde(rename = "p56led")]
     P56Led,
+    #[serde(rename = "american_dj_mega_tripar")]
+    AmericanDJMegaTripar,
     #[serde(rename = "multidim_mkii")]
     MultiDimMKII,
 }

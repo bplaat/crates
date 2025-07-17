@@ -120,42 +120,48 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
             }
 
             for fixture in &config.fixtures {
-                if fixture.r#type == FixtureType::P56Led {
-                    let base_addr = fixture.addr - 1;
-                    let color = if dmx_state.is_strobe {
-                        Color::BLACK
-                    } else if dmx_state.is_toggle_color {
-                        dmx_state.toggle_color
-                    } else {
-                        dmx_state.color
-                    };
+                match fixture.r#type {
+                    FixtureType::P56Led | FixtureType::AmericanDJMegaTripar => {
+                        let base_addr = fixture.addr - 1;
+                        let color = if dmx_state.is_strobe {
+                            Color::BLACK
+                        } else if dmx_state.is_toggle_color {
+                            dmx_state.toggle_color
+                        } else {
+                            dmx_state.color
+                        };
 
-                    if dmx_state.mode == Mode::Manual {
-                        dmx[base_addr] = color.r;
-                        dmx[base_addr + 1] = color.g;
-                        dmx[base_addr + 2] = color.b;
-                    } else if dmx_state.mode == Mode::Black {
-                        dmx[base_addr] = 0;
-                        dmx[base_addr + 1] = 0;
-                        dmx[base_addr + 2] = 0;
-                    } else if dmx_state.mode == Mode::Auto {
-                        dmx[base_addr + 5] = 225;
-                    }
-                }
-
-                if fixture.r#type == FixtureType::MultiDimMKII {
-                    let base_addr = fixture.addr - 1;
-                    if dmx_state.mode == Mode::Manual {
-                        for i in 0..DMX_SWITCHES_LENGTH {
-                            if dmx_state.switches_toggle[i] || dmx_state.switches_press[i] {
-                                dmx[base_addr + i] = 255; // Switch is on
-                            } else {
-                                dmx[base_addr + i] = 0; // Switch is off
+                        if dmx_state.mode == Mode::Manual {
+                            dmx[base_addr] = color.r;
+                            dmx[base_addr + 1] = color.g;
+                            dmx[base_addr + 2] = color.b;
+                        } else if dmx_state.mode == Mode::Black {
+                            dmx[base_addr] = 0;
+                            dmx[base_addr + 1] = 0;
+                            dmx[base_addr + 2] = 0;
+                        } else if dmx_state.mode == Mode::Auto {
+                            if fixture.r#type == FixtureType::P56Led {
+                                dmx[base_addr + 5] = 225;
+                            }
+                            if fixture.r#type == FixtureType::AmericanDJMegaTripar {
+                                dmx[base_addr + 6] = 240;
                             }
                         }
-                    } else {
-                        for i in 0..DMX_SWITCHES_LENGTH {
-                            dmx[base_addr + i] = 0; // All switches off
+                    }
+                    FixtureType::MultiDimMKII => {
+                        let base_addr = fixture.addr - 1;
+                        if dmx_state.mode == Mode::Manual {
+                            for i in 0..DMX_SWITCHES_LENGTH {
+                                if dmx_state.switches_toggle[i] || dmx_state.switches_press[i] {
+                                    dmx[base_addr + i] = 255; // Switch is on
+                                } else {
+                                    dmx[base_addr + i] = 0; // Switch is off
+                                }
+                            }
+                        } else {
+                            for i in 0..DMX_SWITCHES_LENGTH {
+                                dmx[base_addr + i] = 0; // All switches off
+                            }
                         }
                     }
                 }
