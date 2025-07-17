@@ -32,16 +32,13 @@ impl FromStr for LogEntry {
 
         let hash = if parts.len() == 3 {
             let hash_str = parts[2];
-            if hash_str.len() % 2 != 0 {
-                return Err("Invalid hash length".to_string());
-            }
-            let hash = (0..hash_str.len())
-                .step_by(2)
-                .map(|i| {
+            let mut hash = Vec::with_capacity(hash_str.len() / 2);
+            for i in (0..hash_str.len()).step_by(2) {
+                hash.push(
                     u8::from_str_radix(&hash_str[i..i + 2], 16)
-                        .map_err(|_| "Invalid hash format".to_string())
-                })
-                .collect::<Result<Vec<u8>, _>>()?;
+                        .map_err(|_| "Invalid hash format".to_string())?,
+                );
+            }
             Some(hash)
         } else {
             None
