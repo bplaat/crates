@@ -656,7 +656,8 @@ impl crate::WebviewInterface for PlatformWebview {
         unsafe {
             if let Some(controller) = &self.0.controller {
                 let webview = controller.CoreWebView2().expect("Should be some");
-                let uri = webview.Source().expect("Should be some");
+                let mut uri = PWSTR::default();
+                _ = webview.Source(&mut uri);
                 Some(convert_pwstr_to_string(uri))
             } else {
                 None
