@@ -22,6 +22,8 @@ pub(crate) enum FixtureType {
     P56Led,
     #[serde(rename = "american_dj_mega_tripar")]
     AmericanDJMegaTripar,
+    #[serde(rename = "ayra_compar_10")]
+    AyraCompar10,
     #[serde(rename = "multidim_mkii")]
     MultiDimMKII,
 }

@@ -121,7 +121,9 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
 
             for fixture in &config.fixtures {
                 match fixture.r#type {
-                    FixtureType::P56Led | FixtureType::AmericanDJMegaTripar => {
+                    FixtureType::P56Led
+                    | FixtureType::AmericanDJMegaTripar
+                    | FixtureType::AyraCompar10 => {
                         let base_addr = fixture.addr - 1;
                         let color = if dmx_state.is_strobe {
                             Color::BLACK
@@ -132,19 +134,25 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                         };
 
                         if dmx_state.mode == Mode::Manual {
-                            dmx[base_addr] = color.r;
-                            dmx[base_addr + 1] = color.g;
-                            dmx[base_addr + 2] = color.b;
-                        } else if dmx_state.mode == Mode::Black {
-                            dmx[base_addr] = 0;
-                            dmx[base_addr + 1] = 0;
-                            dmx[base_addr + 2] = 0;
+                            if fixture.r#type == FixtureType::AyraCompar10 {
+                                dmx[base_addr] = 255;
+                                dmx[base_addr + 2] = color.r;
+                                dmx[base_addr + 3] = color.g;
+                                dmx[base_addr + 4] = color.b;
+                            } else {
+                                dmx[base_addr] = color.r;
+                                dmx[base_addr + 1] = color.g;
+                                dmx[base_addr + 2] = color.b;
+                            }
                         } else if dmx_state.mode == Mode::Auto {
                             if fixture.r#type == FixtureType::P56Led {
                                 dmx[base_addr + 5] = 225;
                             }
                             if fixture.r#type == FixtureType::AmericanDJMegaTripar {
                                 dmx[base_addr + 6] = 240;
+                            }
+                            if fixture.r#type == FixtureType::AyraCompar10 {
+                                dmx[base_addr + 7] = 221;
                             }
                         }
                     }
