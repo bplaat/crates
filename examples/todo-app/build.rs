@@ -19,7 +19,8 @@ fn main() {
     // Install npm packages
     if !Path::new("web/node_modules").exists() {
         Command::new(NPM)
-            .arg("install")
+            .arg("ci")
+            .arg("--prefer-offline")
             .current_dir("web")
             .output()
             .expect("Failed to run npm install");

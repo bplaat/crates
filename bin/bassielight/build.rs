@@ -15,7 +15,8 @@ fn main() {
     // Install npm packages if needed
     if !std::path::Path::new("web/node_modules").exists() {
         std::process::Command::new(NPM)
-            .arg("install")
+            .arg("ci")
+            .arg("--prefer-offline")
             .current_dir("web")
             .output()
             .expect("Failed to run npm install");

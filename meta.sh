@@ -10,6 +10,7 @@ function clean() {
 }
 
 function check_copyright() {
+    echo "Checking copyright headers..."
     exit=0
     for file in $(find bin examples lib -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" | grep -v "node_modules" | grep -v "dist"); do
         if ! grep -E -q "Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+" "$file"; then
@@ -24,16 +25,22 @@ function check_copyright() {
 
 function check_web() {
     # Format
-    npx --yes prettier@2.8.8 --check --write $(find bin examples lib -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" | grep -v "node_modules" | grep -v "dist")
+    echo "Checking web formatting..."
+    npx --prefer-offline --yes prettier@2.8.8 --check --write $(find bin examples lib -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" | grep -v "node_modules" | grep -v "dist")
 }
 
 function check_rust() {
     # Format
+    echo "Checking Rust formatting..."
     cargo +nightly fmt -- --check
     # Lint
+    echo "Linting Rust code..."
     cargo clippy --locked --all-targets --all-features -- -D warnings
+    # Dependencies
+    echo "Checking Rust dependencies..."
     cargo deny check --hide-inclusion-graph
     # Test
+    echo "Running Rust tests..."
     cargo test --doc --all-features --locked
     cargo nextest run --all-features --locked --no-fail-fast --retries 2
 }
