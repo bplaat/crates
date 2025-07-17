@@ -72,7 +72,7 @@ pub(crate) struct DmxState {
 }
 
 pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
-    mode: Mode::Black,
+    mode: Mode::Manual,
     color: Color::BLACK,
     toggle_color: Color::BLACK,
     toggle_speed: None,
