@@ -558,6 +558,17 @@ impl crate::WebviewInterface for PlatformWebview {
         }
     }
 
+    fn url(&self) -> Option<String> {
+        unsafe {
+            let url = webkit_web_view_get_uri(self.0.webview);
+            if !url.is_null() {
+                Some(CStr::from_ptr(url).to_string_lossy().into_owned())
+            } else {
+                None
+            }
+        }
+    }
+
     fn load_url(&mut self, url: impl AsRef<str>) {
         let url = CString::new(url.as_ref()).expect("Can't convert to CString");
         unsafe { webkit_web_view_load_uri(self.0.webview, url.as_ptr()) }

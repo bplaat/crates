@@ -652,6 +652,18 @@ impl crate::WebviewInterface for PlatformWebview {
         _ = unsafe { InvalidateRect(Some(self.0.hwnd), None, true) };
     }
 
+    fn url(&self) -> Option<String> {
+        unsafe {
+            if let Some(controller) = &self.0.controller {
+                let webview = controller.CoreWebView2().expect("Should be some");
+                let uri = webview.Source().expect("Should be some");
+                Some(convert_pwstr_to_string(uri))
+            } else {
+                None
+            }
+        }
+    }
+
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
             if let Some(controller) = &self.0.controller {

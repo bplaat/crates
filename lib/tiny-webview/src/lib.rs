@@ -419,6 +419,7 @@ pub(crate) trait WebviewInterface {
     fn set_resizable(&mut self, resizable: bool);
     fn set_theme(&mut self, theme: Theme);
     fn set_background_color(&mut self, color: u32);
+    fn url(&self) -> Option<String>;
     fn load_url(&mut self, url: impl AsRef<str>);
     fn load_html(&mut self, html: impl AsRef<str>);
     fn evaluate_script(&mut self, script: impl AsRef<str>);
@@ -475,6 +476,11 @@ impl Webview {
     /// Set window background color
     pub fn set_background_color(&mut self, color: u32) {
         self.0.set_background_color(color)
+    }
+
+    /// Get URL
+    pub fn url(&self) -> Option<String> {
+        self.0.url()
     }
 
     /// Load URL

@@ -178,6 +178,7 @@ unsafe extern "C" {
         content: *const c_char,
         base_uri: *const c_char,
     );
+    pub(crate) fn webkit_web_view_get_uri(web_view: *mut WebKitWebView) -> *mut c_char;
     pub(crate) fn webkit_web_view_evaluate_javascript(
         web_view: *mut WebKitWebView,
         script: *const c_char,

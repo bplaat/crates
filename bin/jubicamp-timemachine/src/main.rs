@@ -101,9 +101,8 @@ fn main() {
     });
 
     println!(
-        "Webserver running at: http://{}:{}/",
-        local_ip_address::local_ip().expect("Can't get local ip addr"),
-        PORT
+        "Webserver running at: {}",
+        webview1.url().expect("Should be some")
     );
 
     let event_loop_proxy = Arc::new(event_loop.create_proxy());

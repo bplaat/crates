@@ -602,6 +602,18 @@ impl crate::WebviewInterface for PlatformWebview {
         }
     }
 
+    fn url(&self) -> Option<String> {
+        unsafe {
+            let url: *mut Object = msg_send![self.webview, URL];
+            if !url.is_null() {
+                let url: NSString = msg_send![url, absoluteString];
+                Some(url.to_string())
+            } else {
+                None
+            }
+        }
+    }
+
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
             let url: *mut Object = msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
