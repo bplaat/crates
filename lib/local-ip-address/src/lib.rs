@@ -78,8 +78,10 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
         let socket = std::net::UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))?;
         socket
             .connect("1.1.1.1:80")
-            .expect("Can't connect to random internet server");
-        let local_addr = socket.local_addr().expect("Can't get local address");
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let local_addr = socket
+            .local_addr()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         Ok(local_addr.ip())
     }
 }
