@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#![allow(unused)]
+
 use std::ffi::{c_char, c_void};
 
 // MARK: GObject
