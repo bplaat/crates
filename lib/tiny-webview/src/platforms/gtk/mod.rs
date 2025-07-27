@@ -415,9 +415,9 @@ impl PlatformWebview {
         unsafe {
             let settings = g_key_file_new();
             let file = CString::new(Self::settings_path()).expect("Can't convert to CString");
-            let mut error = null_mut();
-            g_key_file_load_from_file(settings, file.as_ptr(), 0, &mut error);
-            if error.is_null() {
+            let mut err = null_mut();
+            g_key_file_load_from_file(settings, file.as_ptr(), 0, &mut err);
+            if err.is_null() {
                 let group = c"window".as_ptr();
                 let x = g_key_file_get_integer(settings, group, c"x".as_ptr(), null_mut());
                 let y = g_key_file_get_integer(settings, group, c"y".as_ptr(), null_mut());
@@ -434,7 +434,7 @@ impl PlatformWebview {
                     gtk_window_maximize(window);
                 }
             } else {
-                g_error_free(error);
+                g_error_free(err);
             }
             g_key_file_free(settings);
         }
@@ -685,5 +685,5 @@ extern "C" fn webview_on_message_console(
     let message = unsafe { webkit_javascript_result_get_js_value(_message) };
     let message = unsafe { jsc_value_to_string(message) };
     let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
-    println!("{}", message);
+    println!("{message}");
 }

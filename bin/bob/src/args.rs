@@ -89,7 +89,7 @@ pub(crate) fn parse_args() -> Args {
                     .expect("Invalid argument")
             }
             _ => {
-                eprintln!("Unknown argument: {}", arg);
+                eprintln!("Unknown argument: {arg}");
                 exit(1);
             }
         }

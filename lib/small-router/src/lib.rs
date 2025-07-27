@@ -354,7 +354,7 @@ mod test {
 
     fn hello(req: &Request, _ctx: &()) -> Response {
         let name = req.params.get("name").unwrap();
-        Response::with_status(Status::Ok).body(format!("Hello, {}!", name))
+        Response::with_status(Status::Ok).body(format!("Hello, {name}!"))
     }
 
     #[test]

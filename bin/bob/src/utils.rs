@@ -21,7 +21,7 @@ pub(crate) fn format_bytes(bytes: u64) -> String {
     } else if bytes >= KIB {
         format!("{:.2} KiB", bytes as f64 / KIB as f64)
     } else {
-        format!("{} bytes", bytes)
+        format!("{bytes} bytes")
     }
 }
 
@@ -47,12 +47,12 @@ pub(crate) fn write_file_when_different(path: &str, contents: &str) -> io::Resul
 pub(crate) fn index_files(dir: &str) -> Vec<String> {
     let mut files = Vec::new();
     let entries = fs::read_dir(dir).unwrap_or_else(|_| {
-        eprintln!("Can't read directory: {}", dir);
+        eprintln!("Can't read directory: {dir}");
         exit(1);
     });
     for entry in entries {
         let entry = entry.unwrap_or_else(|_| {
-            eprintln!("Can't read directory: {}", dir);
+            eprintln!("Can't read directory: {dir}");
             exit(1);
         });
         let path = entry.path();

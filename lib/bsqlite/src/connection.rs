@@ -37,7 +37,7 @@ impl InnerConnection {
         if result != SQLITE_OK {
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(db)) }.to_string_lossy();
             return Err(ConnectionError {
-                msg: format!("Failed to open database: {}", error),
+                msg: format!("Failed to open database: {error}"),
             });
         }
         Ok(InnerConnection(db))
@@ -56,10 +56,7 @@ impl InnerConnection {
         };
         if result != SQLITE_OK {
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(self.0)) }.to_string_lossy();
-            panic!(
-                "bsqlite: Failed to prepare SQL statement!\n  Query: {}\n  Error: {}",
-                query, error
-            );
+            panic!("bsqlite: Failed to prepare SQL statement!\n  Query: {query}\n  Error: {error}");
         }
         Statement::new(statement)
     }

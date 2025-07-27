@@ -239,7 +239,7 @@ impl Request {
                 path
             )
         } else {
-            format!("http://localhost{}", path)
+            format!("http://localhost{path}")
         })
         .map_err(|_| InvalidRequestError("Can't parse request url".to_string()))?;
 
@@ -298,7 +298,7 @@ impl Request {
         };
         _ = write!(stream, "{} {} HTTP/1.1\r\n", self.method, path);
         for (name, value) in self.headers.iter() {
-            _ = write!(stream, "{}: {}\r\n", name, value);
+            _ = write!(stream, "{name}: {value}\r\n");
         }
         _ = write!(stream, "\r\n");
         if let Some(body) = &self.body {
@@ -419,7 +419,7 @@ mod test {
             stream.flush().unwrap();
         });
 
-        let res = Request::get(format!("http://{}/", server_addr))
+        let res = Request::get(format!("http://{server_addr}/"))
             .fetch()
             .unwrap();
         assert_eq!(res.status, Status::Ok);
@@ -440,7 +440,7 @@ mod test {
             stream.flush().unwrap();
         });
 
-        let res = Request::get(format!("http://{}/", server_addr))
+        let res = Request::get(format!("http://{server_addr}/"))
             .fetch()
             .unwrap();
         assert_eq!(res.status, Status::Ok);

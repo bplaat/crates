@@ -70,7 +70,7 @@ impl PlatformEventLoop {
             let _: () = msg_send![app_menu_item, setSubmenu:app_menu];
 
             let _: *mut Object = msg_send![app_menu,
-                addItemWithTitle:NSString::from_str(format!("About {}", app_name)),
+                addItemWithTitle:NSString::from_str(format!("About {app_name}")),
                 action:sel!(openAboutDialog:),
                 keyEquivalent:NSString::from_str("")
             ];
@@ -89,7 +89,7 @@ impl PlatformEventLoop {
             let _: () = msg_send![app_menu, addItem:separator_item];
 
             let _: *mut Object = msg_send![app_menu,
-                addItemWithTitle:NSString::from_str(format!("Hide {}", app_name)),
+                addItemWithTitle:NSString::from_str(format!("Hide {app_name}")),
                 action:sel!(hide:),
                 keyEquivalent:NSString::from_str("h")
             ];
@@ -108,7 +108,7 @@ impl PlatformEventLoop {
             let _: () = msg_send![app_menu, addItem:separator_item];
 
             let _: *mut Object = msg_send![app_menu,
-                addItemWithTitle:NSString::from_str(format!("Quit {}", app_name)),
+                addItemWithTitle:NSString::from_str(format!("Quit {app_name}")),
                 action:sel!(terminate:),
                 keyEquivalent:NSString::from_str("q")];
 
@@ -735,6 +735,6 @@ extern "C" fn webview_did_receive_script_message(
         send_event(Event::PageMessageReceived(body));
     } else if name == "console" {
         // Print console message
-        println!("{}", body);
+        println!("{body}");
     }
 }

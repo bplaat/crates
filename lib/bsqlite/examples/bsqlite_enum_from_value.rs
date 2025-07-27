@@ -46,6 +46,6 @@ fn main() {
     let rows =
         db.query::<(String, i64, HairColor)>("SELECT name, age, hair_color FROM persons", ());
     for row in rows {
-        println!("{:?}", row);
+        println!("{row:?}");
     }
 }

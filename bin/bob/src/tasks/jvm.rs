@@ -211,7 +211,7 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
         });
 
     // Minify names and tree shake classes with ProGuard
-    let optimized_classes_dir = format!("{}-optimized", classes_dir);
+    let optimized_classes_dir = format!("{classes_dir}-optimized");
     if bobje.profile == Profile::Release {
         let java_home = std::env::var("JAVA_HOME").expect("$JAVA_HOME not set");
         let mut keeps = vec![format!(
@@ -228,7 +228,7 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
                 classes_dir, optimized_classes_dir, java_home,
                 keeps
                     .iter()
-                    .map(|keep| format!("-keep '{}'", keep))
+                    .map(|keep| format!("-keep '{keep}'"))
                     .collect::<Vec<_>>()
                     .join(" "),
                 optimized_classes_dir,

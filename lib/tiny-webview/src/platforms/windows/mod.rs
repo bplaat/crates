@@ -408,7 +408,7 @@ impl PlatformWebview {
                     &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(
                         move |error_code, environment| {
                             if let Err(e) = error_code {
-                                panic!("Failed to create WebView2 environment: {:?}", e);
+                                panic!("Failed to create WebView2 environment: {e:?}");
                             }
                             tx.send(environment.expect("Should be some"))
                                 .expect("Should send environment");
@@ -499,7 +499,7 @@ impl PlatformWebview {
                             send_event(Event::PageMessageReceived(message.to_string()));
                         } else if message.starts_with("console") {
                             let message = message.trim_start_matches("console");
-                            println!("{}", message);
+                            println!("{message}");
                         }
                         Ok(())
                     },

@@ -92,10 +92,7 @@ pub fn config_dir() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let path = std::env::var("HOME").unwrap_or_else(|_| panic!("$HOME not set"));
-        Some(PathBuf::from(format!(
-            "{}/Library/Application Support",
-            path
-        )))
+        Some(PathBuf::from(format!("{path}/Library/Application Support")))
     }
 
     #[cfg(windows)]
@@ -124,7 +121,7 @@ pub fn audio_dir() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let path = std::env::var("HOME").unwrap_or_else(|_| panic!("$HOME not set"));
-        Some(PathBuf::from(format!("{}/Music", path)))
+        Some(PathBuf::from(format!("{path}/Music")))
     }
 
     #[cfg(windows)]

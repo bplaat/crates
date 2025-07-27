@@ -160,19 +160,19 @@ impl Display for Url {
         write!(f, "{}://", self.scheme)?;
         if let Some(authority) = &self.authority {
             if let Some(userinfo) = &authority.userinfo {
-                write!(f, "{}@", userinfo)?;
+                write!(f, "{userinfo}@")?;
             }
             write!(f, "{}", authority.host)?;
             if let Some(port) = authority.port {
-                write!(f, ":{}", port)?;
+                write!(f, ":{port}")?;
             }
         }
         write!(f, "{}", self.path)?;
         if let Some(query) = &self.query {
-            write!(f, "?{}", query)?;
+            write!(f, "?{query}")?;
         }
         if let Some(fragment) = &self.fragment {
-            write!(f, "#{}", fragment)?;
+            write!(f, "#{fragment}")?;
         }
         Ok(())
     }

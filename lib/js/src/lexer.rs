@@ -103,7 +103,7 @@ pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
             continue;
         }
 
-        return Err(format!("Lexer: unknown character: {}", char));
+        return Err(format!("Lexer: unknown character: {char}"));
     }
 
     tokens.push(Token::Eof);

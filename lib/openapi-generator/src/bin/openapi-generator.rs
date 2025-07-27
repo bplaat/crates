@@ -41,7 +41,7 @@ fn parse_args() -> Args {
                     .expect("Invalid generator");
             }
             _ => {
-                eprintln!("Unknown argument: {}", arg);
+                eprintln!("Unknown argument: {arg}");
                 std::process::exit(1);
             }
         }

@@ -66,7 +66,7 @@ fn download_album(
     let album_cover = if let Some(album_cover_xl) = &album.cover_xl {
         let album_cover = metadata_service.download(album_cover_xl)?;
         if args.with_cover {
-            fs::write(format!("{}/cover.jpg", album_folder), &album_cover)?;
+            fs::write(format!("{album_folder}/cover.jpg"), &album_cover)?;
         }
         Some(album_cover)
     } else {
@@ -123,10 +123,10 @@ fn download_track(
         format!("{} - {}", album.title, track.title),
     ];
     for search_query in search_queries {
-        println!("Searching {}...", search_query);
+        println!("Searching {search_query}...");
         let mut search_process = Command::new("yt-dlp")
             .arg("--dump-json")
-            .arg(format!("ytsearch25:{}", search_query))
+            .arg(format!("ytsearch25:{search_query}"))
             .stdout(Stdio::piped())
             .spawn()?;
 
@@ -162,11 +162,11 @@ fn download_track(
                     .arg(&path)
                     .stdout(Stdio::piped())
                     .spawn()?;
-                println!("Downloading {}...", path);
+                println!("Downloading {path}...");
                 download_process.wait()?;
 
                 // Update metadata
-                println!("Updating metadata {}...", path);
+                println!("Updating metadata {path}...");
                 let mut tag = mp4ameta::Tag::default();
                 tag.set_title(&track.title);
                 for artist in album.contributors.iter() {

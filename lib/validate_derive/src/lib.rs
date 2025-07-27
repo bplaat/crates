@@ -238,32 +238,32 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                         if rule.is_option {
                             quote! {
                                 if let Some(value) = &self.#field_name {
-                                    if let Err(error) = #custom(value, context) {
-                                        report.insert_error(stringify!(#field_name), error.message());
+                                    if let Err(err) = #custom(value, context) {
+                                        report.insert_error(stringify!(#field_name), err.message());
                                     }
                                 }
                             }
                         } else {
                             quote! {
                                 let value = &self.#field_name;
-                                if let Err(error) = #custom(value, context) {
-                                    report.insert_error(stringify!(#field_name), error.message());
+                                if let Err(err) = #custom(value, context) {
+                                    report.insert_error(stringify!(#field_name), err.message());
                                 }
                             }
                         }
                     } else if rule.is_option {
                         quote! {
                             if let Some(value) = &self.#field_name {
-                                if let Err(error) = #custom(value) {
-                                    report.insert_error(stringify!(#field_name), error.message());
+                                if let Err(err) = #custom(value) {
+                                    report.insert_error(stringify!(#field_name), err.message());
                                 }
                             }
                         }
                     } else {
                         quote! {
                             let value = &self.#field_name;
-                            if let Err(error) = #custom(value) {
-                                report.insert_error(stringify!(#field_name), error.message());
+                            if let Err(err) = #custom(value) {
+                                report.insert_error(stringify!(#field_name), err.message());
                             }
                         }
                     }

@@ -41,7 +41,7 @@ fn internal_http_server_handle(req: &Request) -> Option<Response> {
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                         continue;
                     }
-                    Err(err) => panic!("WebSocket recv error: {}", err),
+                    Err(err) => panic!("WebSocket recv error: {err}"),
                 };
                 match message {
                     Some(Message::Close(_, _)) => break,

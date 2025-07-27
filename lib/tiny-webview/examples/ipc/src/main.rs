@@ -36,7 +36,7 @@ fn main() {
             println!("Window created");
         }
         Event::WindowMoved(point) => {
-            println!("Window moved: {:?}", point);
+            println!("Window moved: {point:?}");
         }
         Event::WindowResized(size) => {
             println!("Window resized: {}x{}", size.width, size.height);
@@ -65,7 +65,7 @@ fn main() {
         Event::PageMessageReceived(message) => {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::Hello { name } => {
-                    println!("Hello, {}!", name);
+                    println!("Hello, {name}!");
                 }
             }
         }

@@ -46,6 +46,6 @@ fn main() {
         Args { limit: 2 }
     );
     for row in rows {
-        println!("{:?}", row);
+        println!("{row:?}");
     }
 }

@@ -32,15 +32,15 @@ impl TaskAction {
         let first_line = *first_line_mutex;
         *first_line_mutex = false;
 
-        let mut line = format!("[{}/{}] ", current_task, total_tasks);
+        let mut line = format!("[{current_task}/{total_tasks}] ");
         match self {
             TaskAction::Phony(dest) => {
                 line += dest;
             }
             TaskAction::Copy(src, dst) => {
-                line += &format!("cp {} {}", src, dst);
+                line += &format!("cp {src} {dst}");
                 fs::copy(src, dst).unwrap_or_else(|_| {
-                    eprintln!("Failed to copy {} to {}", src, dst);
+                    eprintln!("Failed to copy {src} to {dst}");
                     exit(1)
                 });
             }
@@ -59,11 +59,11 @@ impl TaskAction {
                     Command::new("sh").arg("-c").arg(command).status()
                 }
                 .unwrap_or_else(|_| {
-                    eprintln!("Failed to execute command: {}", command);
+                    eprintln!("Failed to execute command: {command}");
                     exit(1)
                 });
                 if !status.success() {
-                    eprintln!("Command failed: {}", command);
+                    eprintln!("Command failed: {command}");
                     exit(1);
                 }
             }
@@ -85,7 +85,7 @@ impl TaskAction {
                 }
             );
         } else {
-            println!("{}", line);
+            println!("{line}");
         }
     }
 }
@@ -235,7 +235,7 @@ impl Executor {
             for input in &task.inputs {
                 // Get input modified time
                 let metadata = fs::metadata(input).unwrap_or_else(|_| {
-                    eprintln!("{:?}\nCan't open input file: {}", task, input);
+                    eprintln!("{task:?}\nCan't open input file: {input}");
                     exit(1)
                 });
                 let modified_time = metadata
@@ -254,7 +254,7 @@ impl Executor {
                 } else {
                     // Calculate input hash
                     let buffer = fs::read(input).unwrap_or_else(|_| {
-                        eprintln!("Can't read input file: {}", input);
+                        eprintln!("Can't read input file: {input}");
                         exit(1)
                     });
                     if !buffer.is_empty() {
@@ -311,7 +311,7 @@ impl Executor {
                     let mut log = log.lock().expect("Could not lock mutex");
                     for output in &task.outputs {
                         let metadata = fs::metadata(output).unwrap_or_else(|_| {
-                            eprintln!("Can't open output file: {}", output);
+                            eprintln!("Can't open output file: {output}");
                             exit(1)
                         });
                         if metadata.is_dir() {

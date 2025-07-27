@@ -94,17 +94,17 @@ pub(crate) struct Bobje {
 impl Bobje {
     fn new(args: &Args, r#type: BobjeType, manifest_dir: &str, executor: &mut Executor) -> Self {
         // Read manifest
-        let manifest_path = format!("{}/bob.toml", manifest_dir);
+        let manifest_path = format!("{manifest_dir}/bob.toml");
         let mut manifest: Manifest =
             basic_toml::from_str(&fs::read_to_string(&manifest_path).unwrap_or_else(|err| {
-                eprintln!("Can't read {} file: {}", manifest_path, err);
+                eprintln!("Can't read {manifest_path} file: {err}");
                 exit(1);
             }))
             .unwrap_or_else(|err| {
-                eprintln!("Can't parse {} file: {}", manifest_path, err);
+                eprintln!("Can't parse {manifest_path} file: {err}");
                 exit(1);
             });
-        let source_files = index_files(&format!("{}/src/", manifest_dir));
+        let source_files = index_files(&format!("{manifest_dir}/src/"));
 
         // Add Kotlin stdlib when Kotlin is used
         if detect_kotlin_from_source_files(&source_files) {
@@ -133,7 +133,7 @@ impl Bobje {
                 let dep_bobje = Bobje::new(
                     args,
                     BobjeType::Library,
-                    &format!("{}/{}", manifest_dir, path),
+                    &format!("{manifest_dir}/{path}"),
                     executor,
                 );
                 dependencies.insert(dep_bobje.name.clone(), dep_bobje);

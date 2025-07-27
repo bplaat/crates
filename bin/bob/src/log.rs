@@ -58,7 +58,7 @@ impl Display for LogEntry {
         if let Some(hash) = &self.hash {
             write!(f, " ")?;
             for byte in hash {
-                write!(f, "{:02x}", byte)?;
+                write!(f, "{byte:02x}")?;
             }
         }
         Ok(())
@@ -78,15 +78,15 @@ impl Log {
             .read(true)
             .append(true)
             .open(path)
-            .unwrap_or_else(|_| panic!("Can't open file: {}", path));
+            .unwrap_or_else(|_| panic!("Can't open file: {path}"));
         let mut contents = String::new();
         file.read_to_string(&mut contents)
-            .unwrap_or_else(|_| panic!("Can't read file: {}", path));
+            .unwrap_or_else(|_| panic!("Can't read file: {path}"));
         let entries = contents
             .lines()
             .map(|line| {
                 line.parse()
-                    .unwrap_or_else(|_| panic!("Corrupt log file: {}", path))
+                    .unwrap_or_else(|_| panic!("Corrupt log file: {path}"))
             })
             .collect::<Vec<LogEntry>>();
         Log { file, entries }
@@ -97,7 +97,7 @@ impl Log {
     }
 
     pub(crate) fn add(&mut self, entry: LogEntry) {
-        writeln!(self.file, "{}", entry).unwrap_or_else(|_| panic!("Can't write to file"));
+        writeln!(self.file, "{entry}").unwrap_or_else(|_| panic!("Can't write to file"));
         self.entries.push(entry);
     }
 }

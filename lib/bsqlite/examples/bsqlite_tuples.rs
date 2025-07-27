@@ -35,6 +35,6 @@ fn main() {
     // Read rows
     let rows = db.query::<(String, i64)>("SELECT name, age FROM persons", ());
     for row in rows {
-        println!("{:?}", row);
+        println!("{row:?}");
     }
 }

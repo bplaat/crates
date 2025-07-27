@@ -391,7 +391,7 @@ impl<'a> WebviewBuilder<'a> {
                 small_http::serve_single_threaded(listener, move |req| {
                     let mut path = req.url.path().to_string();
                     if path.ends_with('/') {
-                        path = format!("{}index.html", path);
+                        path = format!("{path}index.html");
                     }
 
                     if let Some(handle) = self.internal_http_server_handle {

@@ -138,7 +138,7 @@ mod test {
         let mut client = Client::new();
         for _ in 0..10 {
             client
-                .fetch(Request::get(format!("http://{}/", server_addr)))
+                .fetch(Request::get(format!("http://{server_addr}/")))
                 .unwrap();
         }
     }

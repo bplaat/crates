@@ -44,7 +44,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     // Replace $ENV_VAR in folder_path with their values from the environment
     #[cfg(feature = "interpolate-folder-path")]
     for (key, value) in env::vars() {
-        let pattern = format!("${}", key);
+        let pattern = format!("${key}");
         if folder_path.contains(&pattern) {
             folder_path = folder_path.replace(&pattern, &value);
         }

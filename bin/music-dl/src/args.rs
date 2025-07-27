@@ -60,7 +60,7 @@ pub(crate) fn parse_args() -> Args {
                 if args.query.is_empty() {
                     args.query = arg;
                 } else {
-                    eprintln!("Unknown argument: {}", arg);
+                    eprintln!("Unknown argument: {arg}");
                     exit(1);
                 }
             }

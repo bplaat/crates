@@ -59,7 +59,7 @@ fn main() {
     // Read rows back
     let persons = db.query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ());
     for person in persons {
-        println!("{:?}", person); // -> Person { id: 1, name: "Alice", age: 30 }
+        println!("{person:?}"); // -> Person { id: 1, name: "Alice", age: 30 }
     }
 }
 ```

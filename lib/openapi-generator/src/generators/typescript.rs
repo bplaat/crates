@@ -41,7 +41,7 @@ fn schema_generate_code(
     }
 
     if let Some(r#enum) = &schema.r#enum {
-        let mut code = format!("export enum {} {{\n", name);
+        let mut code = format!("export enum {name} {{\n");
         for variant in r#enum {
             _ = writeln!(
                 code,
@@ -57,17 +57,14 @@ fn schema_generate_code(
 
     if let Some(additional_properties) = &schema.additional_properties {
         let field_type = schema_generate_code(code_schemas, name.clone(), additional_properties);
-        let code = format!(
-            "export type {} = {{ [key: string]: {} }};\n\n",
-            name, field_type
-        );
+        let code = format!("export type {name} = {{ [key: string]: {field_type} }};\n\n",);
         code_schemas.insert(name.clone(), code);
         return name;
     }
 
     let r#type = schema.r#type.as_ref().expect("Schema should have type");
     if r#type == "object" {
-        let mut code = format!("export interface {} {{\n", name);
+        let mut code = format!("export interface {name} {{\n");
         if let Some(properties) = &schema.properties {
             for (prop_name, prop_schema) in properties {
                 let is_optional = schema
@@ -78,9 +75,9 @@ fn schema_generate_code(
                 let prop_type =
                     schema_generate_code(code_schemas, prop_name.to_string(), prop_schema);
                 if is_optional {
-                    _ = writeln!(code, "    {}?: {},", prop_name, prop_type);
+                    _ = writeln!(code, "    {prop_name}?: {prop_type},");
                 } else {
-                    _ = writeln!(code, "    {}: {},", prop_name, prop_type);
+                    _ = writeln!(code, "    {prop_name}: {prop_type},");
                 }
             }
         }
@@ -101,7 +98,7 @@ fn schema_generate_code(
         "array" => {
             let items = schema.items.as_ref().expect("No items");
             let item_type = schema_generate_code(code_schemas, "item".to_string(), items);
-            format!("{}[]", item_type)
+            format!("{item_type}[]")
         }
         _ => panic!("Unsupported type"),
     }

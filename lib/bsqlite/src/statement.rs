@@ -60,10 +60,7 @@ impl RawStatement {
             let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0)) }.to_string_lossy();
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0))) }
                 .to_string_lossy();
-            panic!(
-                "bsqlite: Can't bind value to statement!\n  Query: {}\n  Error: {}",
-                query, error
-            );
+            panic!("bsqlite: Can't bind value to statement!\n  Query: {query}\n  Error: {error}");
         }
     }
 
@@ -72,7 +69,7 @@ impl RawStatement {
         let c_name = CString::new(name).expect("Can't convert to CString");
         let index = unsafe { sqlite3_bind_parameter_index(self.0, c_name.as_ptr()) };
         if index == 0 {
-            panic!("bsqlite: Can't find named parameter: {}", name);
+            panic!("bsqlite: Can't find named parameter: {name}");
         }
         self.bind_value(index - 1, value);
     }
@@ -155,10 +152,7 @@ impl<T: FromRow> Iterator for Statement<T> {
             let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0 .0)) }.to_string_lossy();
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0 .0))) }
                 .to_string_lossy();
-            panic!(
-                "bsqlite: Can't step statement!\n  Query: {}\n  Error: {}",
-                query, error
-            );
+            panic!("bsqlite: Can't step statement!\n  Query: {query}\n  Error: {error}");
         }
     }
 }

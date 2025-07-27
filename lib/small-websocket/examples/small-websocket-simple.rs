@@ -25,7 +25,7 @@ fn handler(req: &Request) -> Response {
                 let message = ws.recv().expect("Failed to receive message");
                 match message {
                     Message::Text(text) => {
-                        println!("Client recv: {}", text);
+                        println!("Client recv: {text}");
                         ws.send(Message::Text(text))
                             .expect("Failed to send message");
                     }

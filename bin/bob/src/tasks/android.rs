@@ -44,8 +44,8 @@ impl AndroidVars {
         );
 
         // Determine command_line_tools_path: prefer 'latest', else pick highest versioned folder
-        let cmdline_tools_dir = format!("{}/cmdline-tools", android_home);
-        let latest_path = format!("{}/latest/bin", cmdline_tools_dir);
+        let cmdline_tools_dir = format!("{android_home}/cmdline-tools");
+        let latest_path = format!("{cmdline_tools_dir}/latest/bin");
         let command_line_tools_path = if Path::new(&latest_path).exists() {
             latest_path
         } else {
@@ -70,7 +70,7 @@ impl AndroidVars {
                 }
             }
             if let Some((_, _, folder)) = highest_version {
-                format!("{}/{}/bin", cmdline_tools_dir, folder)
+                format!("{cmdline_tools_dir}/{folder}/bin")
             } else {
                 eprintln!("No valid cmdline-tools found in {cmdline_tools_dir}");
                 exit(1);
@@ -81,7 +81,7 @@ impl AndroidVars {
             "{}/build-tools/{}.0.0",
             android_home, android_metadata.target_sdk_version
         );
-        let platform_tools_path = format!("{}/platform-tools", android_home);
+        let platform_tools_path = format!("{android_home}/platform-tools");
         Self {
             id: id.clone(),
             android_metadata: android_metadata.clone(),
@@ -208,7 +208,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                     }
                     link_inputs.push(compiled_res_file);
                 }
-                link_command.push(format!("{}/*.flat", compiled_res_dir));
+                link_command.push(format!("{compiled_res_dir}/*.flat"));
             }
         }
         add_bobje_resources(bobje, &mut link_command, &mut link_inputs);
@@ -311,7 +311,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
         }
         if let Some(android) = bobje.manifest.package.metadata.android.as_ref() {
             for keep in &android.proguard_keep {
-                proguard_config.push_str(&format!("-keep {}\n", keep));
+                proguard_config.push_str(&format!("-keep {keep}\n"));
             }
         }
         let proguard_config_path = format!("{}/proguard.cfg", bobje.out_dir());
@@ -327,7 +327,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
             format!("--lib {}", vars.platform_jar),
             format!("--output {}", bobje.out_dir()),
             "--pg-compat".to_string(),
-            format!("--pg-conf {}", proguard_config_path),
+            format!("--pg-conf {proguard_config_path}"),
             format!(
                 "$(find {} -name '*.class' | grep -v 'META-INF')",
                 &classes_dir
@@ -397,7 +397,7 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
         ));
         let status = cmd
             .arg("-c")
-            .arg(format!("{} &> /dev/null", cmd_str))
+            .arg(format!("{cmd_str} &> /dev/null"))
             .status()
             .expect("Failed to execute keytool");
         if !status.success() {

@@ -41,9 +41,7 @@ fn test_bob_{}() {{
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!(
-            "Failed to rebuild example {}:\nstdout: {{}}\nstderr: {{}}",
-            stdout,
-            stderr
+            "Failed to rebuild example {}:\nstdout: {{stdout}}\nstderr: {{stderr}}",
         );
     }}
     {}
@@ -76,9 +74,7 @@ fn test_bob_{}() {{
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         panic!(
-            "Failed to test example {}:\nstdout: {{}}\nstderr: {{}}",
-            stdout,
-            stderr
+            "Failed to test example {}:\nstdout: {{stdout}}\nstderr: {{stderr}}",
         );
     }}
     "#,

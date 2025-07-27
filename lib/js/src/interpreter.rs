@@ -29,7 +29,7 @@ impl<'a> Interpreter<'a> {
             Node::Number(number) => Ok(*number),
             Node::Variable(variable) => match self.env.get(variable) {
                 Some(value) => Ok(*value),
-                None => Err(format!("Interpreter: variable {} doesn't exists", variable)),
+                None => Err(format!("Interpreter: variable {variable} doesn't exists")),
             },
             Node::Assign(lhs, rhs) => {
                 let result = self.eval(rhs)?;

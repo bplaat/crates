@@ -33,11 +33,10 @@ impl CxVars {
             Profile::Release => "-Os -DRELEASE".to_string(),
         };
         cflags.push_str(&format!(
-            " -Wall -Wextra -Wpedantic -Werror -I{}",
-            include_path
+            " -Wall -Wextra -Wpedantic -Werror -I{include_path}"
         ));
         if let Some(target) = &bobje.target {
-            cflags.push_str(&format!(" --target={}", target));
+            cflags.push_str(&format!(" --target={target}"));
         }
         if bobje.is_test {
             cflags.push_str(&format!(" -DTEST {}", pkg_config_cflags("cunit")));
@@ -62,7 +61,7 @@ impl CxVars {
             ldflags.push_str(" -framework Foundation");
         }
         if let Some(target) = &bobje.target {
-            ldflags.push_str(&format!(" --target={}", target));
+            ldflags.push_str(&format!(" --target={target}"));
         }
         if !bobje.manifest.build.ldflags.is_empty() {
             ldflags.push(' ');
@@ -300,8 +299,8 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
         };
         let ext = if cfg!(windows) { ".exe" } else { "" };
         if bobje.profile == Profile::Release {
-            let unstripped_path = format!("{}-unstripped{}", executable_file, ext);
-            let stripped_path = format!("{}{}", executable_file, ext);
+            let unstripped_path = format!("{executable_file}-unstripped{ext}");
+            let stripped_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
                     "{} {} {} {} -o {}",
@@ -324,7 +323,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
                 vec![stripped_path.clone()],
             );
         } else {
-            let out_path = format!("{}{}", executable_file, ext);
+            let out_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
                     "{} {} {} {} -o {}",
@@ -461,7 +460,7 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
     _ = writeln!(s, "#include <CUnit/Basic.h>\n");
     for test_function in &test_functions {
         for function in &test_function.functions {
-            _ = writeln!(s, "extern void {}(void);", function);
+            _ = writeln!(s, "extern void {function}(void);");
         }
     }
     _ = writeln!(s, "\nint main(void) {{");
@@ -488,8 +487,7 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
         for function in &test_function.functions {
             _ = writeln!(
                 s,
-                "    CU_add_test({}, \"{}\", {});",
-                module_name_suite, function, function
+                "    CU_add_test({module_name_suite}, \"{function}\", {function});"
             );
         }
         _ = writeln!(s);

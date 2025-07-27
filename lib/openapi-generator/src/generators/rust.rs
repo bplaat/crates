@@ -42,8 +42,7 @@ fn schema_generate_code(
 
     if let Some(r#enum) = &schema.r#enum {
         let mut code = format!(
-            "#[derive(Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]\npub(crate) enum {} {{\n",
-            name
+            "#[derive(Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]\npub(crate) enum {name} {{\n"
         );
         for variant in r#enum {
             _ = writeln!(
@@ -61,8 +60,7 @@ fn schema_generate_code(
     if let Some(additional_properties) = &schema.additional_properties {
         let field_type = schema_generate_code(code_schemas, name.clone(), additional_properties);
         let code = format!(
-            "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {}(pub std::collections::HashMap<String, {}>);\n\n",
-            name, field_type
+            "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {name}(pub std::collections::HashMap<String, {field_type}>);\n\n",
         );
         code_schemas.insert(name.clone(), code);
         return name;
@@ -71,8 +69,7 @@ fn schema_generate_code(
     let r#type = schema.r#type.as_ref().expect("Schema should have type");
     if r#type == "object" {
         let mut code = format!(
-            "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {} {{\n",
-            name
+            "#[derive(Clone, serde::Deserialize, serde::Serialize)]\npub(crate) struct {name} {{\n",
         );
         if let Some(properties) = &schema.properties {
             for (prop_name, prop_schema) in properties {
@@ -84,7 +81,7 @@ fn schema_generate_code(
                 let mut prop_type =
                     schema_generate_code(code_schemas, prop_name.clone(), prop_schema);
                 if prop_type == name {
-                    prop_type = format!("Box<{}>", prop_type);
+                    prop_type = format!("Box<{prop_type}>");
                 }
                 let prop_name = prop_name.replace("type", "r#type");
                 let field_name = prop_name.to_snake_case();
@@ -92,18 +89,17 @@ fn schema_generate_code(
                     if prop_name != field_name {
                         _ = writeln!(
                             code,
-                            "    #[serde(rename = \"{}\", skip_serializing_if = \"Option::is_none\")]",
-                            prop_name
+                            "    #[serde(rename = \"{prop_name}\", skip_serializing_if = \"Option::is_none\")]"
                         );
                     } else {
                         code.push_str("    #[serde(skip_serializing_if = \"Option::is_none\")]\n");
                     }
-                    _ = writeln!(code, "    pub {}: Option<{}>,", field_name, prop_type);
+                    _ = writeln!(code, "    pub {field_name}: Option<{prop_type}>,");
                 } else {
                     if prop_name != field_name {
-                        _ = writeln!(code, "    #[serde(rename = \"{}\")]", prop_name);
+                        _ = writeln!(code, "    #[serde(rename = \"{prop_name}\")]");
                     }
-                    _ = writeln!(code, "    pub {}: {},", field_name, prop_type);
+                    _ = writeln!(code, "    pub {field_name}: {prop_type},");
                 }
             }
         }
@@ -138,7 +134,7 @@ fn schema_generate_code(
         "array" => {
             let items = schema.items.as_ref().expect("No items");
             let item_type = schema_generate_code(code_schemas, "item".to_string(), items);
-            format!("Vec<{}>", item_type)
+            format!("Vec<{item_type}>")
         }
         _ => panic!("Unsupported type"),
     }

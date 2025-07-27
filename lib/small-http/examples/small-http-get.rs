@@ -34,7 +34,7 @@ fn handler(req: &Request) -> Response {
             "World".to_string()
         };
         return Response::with_header("Content-Type", "text/html")
-            .body(format!("<h1>Hello {}!</h1>", name));
+            .body(format!("<h1>Hello {name}!</h1>"));
     }
 
     Response::with_status(Status::NotFound)

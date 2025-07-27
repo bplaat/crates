@@ -113,7 +113,7 @@ impl FromStr for NaiveDate {
 impl Display for NaiveDate {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let (year, month, day) = timestamp_to_ymd(self.0);
-        write!(f, "{:04}-{:02}-{:02}", year, month, day)
+        write!(f, "{year:04}-{month:02}-{day:02}")
     }
 }
 

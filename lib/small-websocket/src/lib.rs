@@ -89,8 +89,7 @@ impl WebSocket {
         let expected_accept = BASE64_STANDARD.encode(sha1.finalize());
         if *websocket_accept != expected_accept {
             eprintln!(
-                "WebSocket connection failed: expected Sec-WebSocket-Accept header to be '{}', got '{}'",
-                expected_accept, websocket_accept
+                "WebSocket connection failed: expected Sec-WebSocket-Accept header to be '{expected_accept}', got '{websocket_accept}'",
             );
             return Err(ConnectError);
         }

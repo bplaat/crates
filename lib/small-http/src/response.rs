@@ -205,7 +205,7 @@ impl Response {
 
         _ = write!(stream, "{} {}\r\n", req.version, self.status);
         for (name, value) in self.headers.iter() {
-            _ = write!(stream, "{}: {}\r\n", name, value);
+            _ = write!(stream, "{name}: {value}\r\n");
         }
         _ = write!(stream, "\r\n");
         _ = stream.write_all(&self.body);

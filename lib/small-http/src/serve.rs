@@ -46,7 +46,7 @@ where
             Err(err) => {
                 // Invalid request received
                 _ = write!(stream, "HTTP/1.0 400 Bad Request\r\n\r\n");
-                println!("Error: Invalid http request: {:?}", err);
+                println!("Error: Invalid http request: {err:?}");
             }
         }
     }
@@ -78,11 +78,11 @@ where
                     return;
                 }
                 Ok(_) => {} // Data available continue
-                Err(e) => {
-                    if e.kind() != std::io::ErrorKind::WouldBlock
-                        && e.kind() != std::io::ErrorKind::TimedOut
+                Err(err) => {
+                    if err.kind() != std::io::ErrorKind::WouldBlock
+                        && err.kind() != std::io::ErrorKind::TimedOut
                     {
-                        println!("Error: {:?}", e);
+                        println!("Error: {err:?}");
                     }
                     return;
                 }
@@ -114,7 +114,7 @@ where
                 Err(err) => {
                     // Invalid request received
                     _ = write!(stream, "HTTP/1.0 400 Bad Request\r\n\r\n");
-                    println!("Error: Invalid http request: {:?}", err);
+                    println!("Error: Invalid http request: {err:?}");
                     return;
                 }
             }

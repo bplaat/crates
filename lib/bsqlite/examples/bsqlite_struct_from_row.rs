@@ -59,6 +59,6 @@ fn main() {
     // Read rows back
     let persons = db.query::<Person>(formatcp!("SELECT {} FROM persons", Person::columns()), ());
     for person in persons {
-        println!("{:?}", person);
+        println!("{person:?}");
     }
 }

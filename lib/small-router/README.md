@@ -15,10 +15,8 @@ fn home(_req: &Request, _ctx: &()) -> Response {
     Response::with_body("Home")
 }
 fn hello(req: &Request, _ctx: &()) -> Response {
-    Response::with_body(format!(
-        "Hello, {}!",
-        req.params.get("name").unwrap_or(&"World".to_string())
-    ))
+    let name = req.params.get("name").unwrap_or(&"World".to_string());
+    Response::with_body(format!("Hello, {name}!"))
 }
 fn not_found(_req: &Request, _ctx: &()) -> Response {
     Response::with_status(Status::NotFound).body("404 Not Found")

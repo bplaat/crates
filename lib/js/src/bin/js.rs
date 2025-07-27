@@ -32,12 +32,12 @@ fn repl(verbose: bool) {
         match context.eval(text.as_str()) {
             Ok(result) => {
                 if verbose {
-                    println!("Result: {}", result);
+                    println!("Result: {result}");
                 } else {
-                    println!("{}", result);
+                    println!("{result}");
                 }
             }
-            Err(error) => println!("Error: {}", error),
+            Err(err) => println!("Error: {err}"),
         }
     }
 }
@@ -67,11 +67,11 @@ fn main() {
     match context.eval(text) {
         Ok(result) => {
             if verbose {
-                println!("Result: {}", result);
+                println!("Result: {result}");
             } else {
-                println!("{}", result);
+                println!("{result}");
             }
         }
-        Err(error) => println!("Error: {}", error),
+        Err(err) => println!("Error: {err}"),
     }
 }

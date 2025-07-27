@@ -20,7 +20,7 @@ fn main() {
                 "icns",
                 "meta/macos/icon.iconset",
                 "-o",
-                &format!("{}/icon.icns", target_dir),
+                &format!("{target_dir}/icon.icns"),
             ])
             .output()
             .expect("Failed to create icon.icns");
@@ -56,7 +56,7 @@ fn main() {
             env!("CARGO_PKG_VERSION"),
             env!("CARGO_PKG_VERSION")
         );
-        std::fs::write(format!("{}/Info.plist", target_dir), info_plist)
+        std::fs::write(format!("{target_dir}/Info.plist"), info_plist)
             .expect("Failed to write Info.plist");
     }
 

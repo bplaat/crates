@@ -85,7 +85,7 @@ impl Eq for IpcConnection {}
 
 impl IpcConnection {
     pub(crate) fn send(&mut self, message: String) {
-        println!("[RUST] Sending IPC message: {}", message);
+        println!("[RUST] Sending IPC message: {message}");
         match self {
             Self::WebviewIpc(event_loop_proxy) => event_loop_proxy.send_user_event(message),
             Self::WebSocket(ws) => ws
@@ -99,7 +99,7 @@ impl IpcConnection {
             .lock()
             .expect("Failed to lock IPC connections");
         if connections.len() > 1 {
-            println!("[RUST] Broadcasting IPC message: {}", message);
+            println!("[RUST] Broadcasting IPC message: {message}");
             for connection in connections.iter_mut() {
                 if connection != self {
                     connection.send(message.clone());
@@ -113,7 +113,7 @@ impl IpcConnection {
 pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) {
     let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
     let message = serde_json::from_str(message).expect("Failed to parse IPC message");
-    println!("[RUST] Received IPC message: {:?}", message);
+    println!("[RUST] Received IPC message: {message:?}");
     match message {
         IpcMessage::GetState => {
             let state = State {

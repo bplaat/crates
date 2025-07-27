@@ -31,21 +31,21 @@ impl Context {
     /// Evaluate script
     pub fn eval(&mut self, text: &str) -> Result<i64, String> {
         if self.verbose {
-            println!("Text: {}", text);
+            println!("Text: {text}");
         }
 
         let tokens = lexer(text)?;
         if self.verbose {
             print!("Tokens: ");
             for token in &tokens {
-                print!("{:?}, ", token);
+                print!("{token:?}, ");
             }
             println!();
         }
 
         let node = Parser::new(&tokens).node()?;
         if self.verbose {
-            println!("Node: {:?}", node);
+            println!("Node: {node:?}");
         }
 
         Interpreter::new(&mut self.env).eval(&node)

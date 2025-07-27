@@ -50,8 +50,7 @@ fn handler(req: &Request) -> Response {
                 let masked = (buf[1] & 0x80) != 0;
                 let payload_len = (buf[1] & 0x7F) as usize;
                 println!(
-                    "Recv frame: fin={}, opcode={}, masked={}, len={}",
-                    fin, opcode, masked, payload_len
+                    "Recv frame: fin={fin}, opcode={opcode}, masked={masked}, len={payload_len}"
                 );
 
                 // Handle text frame
@@ -67,7 +66,7 @@ fn handler(req: &Request) -> Response {
                         payload.extend_from_slice(&buf[2..2 + payload_len]);
                     }
                     let text = String::from_utf8_lossy(&payload);
-                    println!("Recv frame text: {}", text);
+                    println!("Recv frame text: {text}");
 
                     // Echo back the text frame
                     let response_frame = [

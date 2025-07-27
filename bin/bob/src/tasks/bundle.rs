@@ -78,7 +78,7 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
         );
 
         // Copy .icns
-        let dest = format!("{}/Resources/{}.icns", contents_dir, icon_name);
+        let dest = format!("{contents_dir}/Resources/{icon_name}.icns");
         executor.add_task_cp(
             format!("{}/{}.icns", bobje.out_dir(), icon_name),
             dest.clone(),
@@ -109,7 +109,7 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
     generate_info_plist(bobje, bundle_metadata, extra_keys.as_deref());
 
     // Copy Info.plist
-    let dest = format!("{}/Info.plist", contents_dir);
+    let dest = format!("{contents_dir}/Info.plist");
     executor.add_task_cp(
         format!("{}/src-gen/Info.plist", bobje.out_dir()),
         dest.clone(),
@@ -197,7 +197,7 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
     _ = writeln!(s, r#"	<key>CFBundleDisplayName</key>"#);
     _ = writeln!(s, r#"	<string>{}</string>"#, bobje.name);
     _ = writeln!(s, r#"	<key>CFBundleIdentifier</key>"#);
-    _ = writeln!(s, r#"	<string>{}</string>"#, id);
+    _ = writeln!(s, r#"	<string>{id}</string>"#);
     _ = writeln!(s, r#"	<key>CFBundleVersion</key>"#);
     _ = writeln!(s, r#"	<string>{}</string>"#, bobje.version);
     _ = writeln!(s, r#"	<key>CFBundleShortVersionString</key>"#);
@@ -205,10 +205,10 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
     _ = writeln!(s, r#"	<key>CFBundleExecutable</key>"#);
     _ = writeln!(s, r#"	<string>{}</string>"#, bobje.name);
     _ = writeln!(s, r#"	<key>LSMinimumSystemVersion</key>"#);
-    _ = writeln!(s, r#"	<string>11.0</string>"#,);
+    _ = writeln!(s, r#"	<string>11.0</string>"#);
     if let Some(copyright) = &bundle.copyright {
         _ = writeln!(s, r#"	<key>NSHumanReadableCopyright</key>"#);
-        _ = writeln!(s, r#"	<string>{}</string>"#, copyright);
+        _ = writeln!(s, r#"	<string>{copyright}</string>"#);
     }
     if let Some(iconset) = &bundle.iconset {
         let iconset_path = PathBuf::from(iconset);
@@ -218,10 +218,10 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
             .to_str()
             .expect("Invalid UTF-8 sequence");
         _ = writeln!(s, r#"	<key>CFBundleIconFile</key>"#);
-        _ = writeln!(s, r#"	<string>{}.icns</string>"#, icon_name);
+        _ = writeln!(s, r#"	<string>{icon_name}.icns</string>"#);
     }
     if let Some(extra_keys) = extra_keys {
-        _ = writeln!(s, "{}", extra_keys);
+        _ = writeln!(s, "{extra_keys}");
     }
     _ = writeln!(s, r#"</dict>"#);
     _ = writeln!(s, r#"</plist>"#);

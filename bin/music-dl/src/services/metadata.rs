@@ -45,8 +45,7 @@ impl MetadataService {
 
     pub(crate) fn get_artist_albums(&self, artist_id: i64) -> Result<Vec<AlbumSmall>> {
         Ok(Request::get(format!(
-            "http://api.deezer.com/artist/{}/albums?limit=500",
-            artist_id
+            "http://api.deezer.com/artist/{artist_id}/albums?limit=500",
         ))
         .header("User-Agent", USER_AGENT)
         .fetch()?
@@ -55,18 +54,17 @@ impl MetadataService {
     }
 
     pub(crate) fn get_album(&self, album_id: i64) -> Result<Album> {
-        Ok(Request::get(format!(
-            "http://api.deezer.com/album/{}?limit=500",
-            album_id
-        ))
-        .header("User-Agent", USER_AGENT)
-        .fetch()?
-        .into_json::<Album>()?)
+        Ok(
+            Request::get(format!("http://api.deezer.com/album/{album_id}?limit=500",))
+                .header("User-Agent", USER_AGENT)
+                .fetch()?
+                .into_json::<Album>()?,
+        )
     }
 
     pub(crate) fn get_track(&self, track_id: i64) -> Result<Track> {
         Ok(
-            Request::get(format!("http://api.deezer.com/track/{}", track_id))
+            Request::get(format!("http://api.deezer.com/track/{track_id}"))
                 .header("User-Agent", USER_AGENT)
                 .fetch()?
                 .into_json::<Track>()?,

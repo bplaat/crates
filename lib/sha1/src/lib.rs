@@ -123,7 +123,7 @@ mod test {
     use super::*;
 
     fn to_hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     #[test]
@@ -138,7 +138,7 @@ mod test {
             let mut sha1 = Sha1::new();
             sha1.update(input);
             let hash = sha1.finalize();
-            assert_eq!(to_hex(&hash), *expected, "Failed for input: {}", input);
+            assert_eq!(to_hex(&hash), *expected, "Failed for input: {input}");
         }
     }
 }
