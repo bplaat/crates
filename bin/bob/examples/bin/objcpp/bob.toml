@@ -3,4 +3,4 @@ name = "hello"
 version = "0.1.0"
 
 [dependencies]
-animals = { path = "../lib/cpp-lib" }
+animals = { path = "../../lib/objc-lib" }

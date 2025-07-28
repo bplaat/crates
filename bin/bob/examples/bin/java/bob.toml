@@ -5,4 +5,4 @@ version = "0.1.0"
 [package.metadata.jar]
 
 [dependencies]
-animals = { path = "../lib/kotlin-lib" }
+animals = { path = "../../lib/java-lib" }
