@@ -1,0 +1,21 @@
+<!--
+    Copyright (c) 2025 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Baksteen</title>
+    </head>
+    <body>
+        <canvas id="canvas" width="800" height="600" style="border: 1px solid black"></canvas>
+        <script type="module">
+            import init, { start } from './baksteen.js';
+            await init();
+            start();
+        </script>
+    </body>
+</html>
