@@ -35,24 +35,13 @@ fn main() {
     event_loop.run(move |event| {
         if let Event::PageLoadFinished = event {
             // Inject some styles to make the player look better
-            #[cfg(target_os = "macos")]
-            webview.evaluate_script(
-                r#"
-                const scrollbarStyle = document.createElement('style');
-                scrollbarStyle.innerHTML = `
+            let scrollbar_style = r#"
                 html, body {
                     overscroll-behavior: none;
                     cursor: default;
                     -webkit-user-select: none;
                     user-select: none;
                 }
-                body {
-                    padding-top: 28px;
-                }
-                header.MuiAppBar-root {
-                    padding-top: 28px;
-                }
-
                 ::-webkit-scrollbar {
                     width: 8px;
                     height: 8px;
@@ -67,11 +56,37 @@ fn main() {
                 ::-webkit-scrollbar-thumb:hover {
                     background-color: #555;
                 }
-                `;
-                document.head.appendChild(scrollbarStyle);
-                window.addEventListener('contextmenu', (e) => e.preventDefault());
-                "#,
-            );
+                "#;
+            #[cfg(target_os = "macos")]
+            {
+                webview.evaluate_script(format!(
+                    r#"
+                    const style = document.createElement('style');
+                    style.innerHTML = `
+                        {scrollbar_style}
+                        body {{
+                            padding-top: 28px;
+                        }}
+                        header.MuiAppBar-root {{
+                            padding-top: 28px;
+                        }}
+                    `;
+                    document.head.appendChild(style);
+                    window.addEventListener('contextmenu', (e) => e.preventDefault());
+                    "#
+                ));
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                webview.evaluate_script(format!(
+                    r#"
+                    const style = document.createElement('style');
+                    style.innerHTML = `{scrollbar_style}`;
+                    document.head.appendChild(style);
+                    window.addEventListener('contextmenu', (e) => e.preventDefault());
+                    "#
+                ));
+            }
         }
     });
 }
