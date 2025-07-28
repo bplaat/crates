@@ -9,13 +9,17 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Baksteen</title>
+        <link rel="stylesheet" href="style.css" />
     </head>
     <body>
-        <canvas id="canvas" width="800" height="600" style="border: 1px solid black"></canvas>
+        <h1>Baksteen</h1>
+        <canvas id="canvas" width="1024" height="768" style="border: 1px solid black"></canvas>
+        <p>Made by <a href="https://github.com/bplaat">Bastiaan van der Plaat</a></p>
+
         <script type="module">
-            import init, { start } from './baksteen.js';
+            import init, { main } from './baksteen.js';
             await init();
-            start();
+            main();
         </script>
     </body>
 </html>
