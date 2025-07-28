@@ -5,7 +5,6 @@
  */
 
 #![doc = include_str!("../README.md")]
-#![forbid(unsafe_code)]
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -29,6 +28,7 @@ use crate::tasks::jvm::{
     detect_jar, detect_java_kotlin, detect_kotlin_from_source_files, download_extract_jar_tasks,
     generate_jar_tasks, generate_javac_kotlinc_tasks, run_jar, run_java_class,
 };
+use crate::tasks::template::{detect_template, process_templates};
 use crate::utils::{format_bytes, index_files};
 
 mod args;
@@ -163,6 +163,9 @@ impl Bobje {
         };
 
         fn generate_bobje_tasks(bobje: &mut Bobje, executor: &mut Executor) {
+            if detect_template(bobje) {
+                process_templates(bobje, executor);
+            }
             // FIXME: Fix bug where test corrupts target directory
             if bobje.r#type == BobjeType::Binary && detect_cx(bobje) && bobje.is_test {
                 generate_cx_test_main(bobje);
@@ -286,6 +289,19 @@ fn main() {
     if !Path::new("bob.toml").exists() {
         eprintln!("Can't find bob.toml file");
         exit(1);
+    }
+
+    // Read .env file if exists
+    if let Ok(env_content) = fs::read_to_string(".env") {
+        for line in env_content.lines() {
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim();
+                let value = value.trim();
+                if !key.is_empty() && !value.is_empty() {
+                    unsafe { env::set_var(key, value) };
+                }
+            }
+        }
     }
 
     // Clean build artifacts

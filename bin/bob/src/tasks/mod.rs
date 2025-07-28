@@ -8,3 +8,4 @@ pub(crate) mod android;
 pub(crate) mod bundle;
 pub(crate) mod cx;
 pub(crate) mod jvm;
+pub(crate) mod template;

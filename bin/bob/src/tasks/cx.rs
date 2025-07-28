@@ -116,6 +116,7 @@ pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut Executor) {
                 source_file
                     .split("src/")
                     .nth(1)
+                    .or_else(|| source_file.split("src-gen/").nth(1))
                     .expect("Should be some")
                     .replace('\\', "/")
             );

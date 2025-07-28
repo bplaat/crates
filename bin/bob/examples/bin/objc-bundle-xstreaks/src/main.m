@@ -5,7 +5,7 @@
  */
 
 #import <Cocoa/Cocoa.h>
-#include "secrets.h"
+#include "XStreaks/secrets.h"
 
 @interface AppDelegate : NSObject <NSApplicationDelegate>
     @property (strong, nonatomic) NSString *username;
