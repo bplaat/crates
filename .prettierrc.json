@@ -4,7 +4,7 @@
     "singleQuote": true,
     "overrides": [
         {
-            "files": "*.{yaml,yml}",
+            "files": "*.{yml,yaml}",
             "options": {
                 "tabWidth": 2
             }

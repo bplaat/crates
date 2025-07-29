@@ -26,6 +26,7 @@ function check_copyright() {
 function check_web() {
     # Format
     echo "Checking web formatting..."
+    # This is the default Prettier version, in the VSCode extension :|
     npx --prefer-offline --yes prettier@2.8.8 --check --write $(find bin examples lib -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" | grep -v "node_modules" | grep -v "dist")
 }
 
