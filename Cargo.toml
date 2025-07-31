@@ -12,6 +12,10 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = [
     "Window",
     "Document",
+    "Event",
     "HtmlCanvasElement",
     "CanvasRenderingContext2d",
+    "HtmlFormElement",
+    "HtmlInputElement",
+    "HtmlSelectElement",
 ] }
