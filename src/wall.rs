@@ -8,27 +8,10 @@ use std::str::FromStr;
 
 use web_sys::CanvasRenderingContext2d;
 
+use crate::brick::Brick;
 use crate::consts::*;
 
-// MARK: Brick
-pub(crate) struct Brick {
-    x: f64,
-    y: f64,
-    width: f64,
-}
-
-impl Brick {
-    fn new(x: f64, y: f64, width: f64) -> Self {
-        Brick { x, y, width }
-    }
-
-    fn draw(&self, context: &CanvasRenderingContext2d) {
-        context.set_fill_style_str("red");
-        context.fill_rect(self.x, self.y, self.width, BRICK_HEIGHT);
-    }
-}
-
-// MARK: Wall
+// MARK: Bond type
 pub(crate) enum BondType {
     Stretcher, // Normal bricks
     Header,    // Half bricks
@@ -49,10 +32,14 @@ impl FromStr for BondType {
     }
 }
 
+// MARK: Wall
 pub(crate) struct Wall {
     pub(crate) width: f64,
     pub(crate) height: f64,
     bricks: Vec<Brick>,
+    robot_x: f64,
+    robot_y: f64,
+    current_stride: usize,
 }
 
 impl Wall {
@@ -195,26 +182,99 @@ impl Wall {
             width,
             height,
             bricks,
+            robot_x: 0.0,
+            robot_y: height - STRIDE_HEIGHT,
+            current_stride: 1,
         }
     }
 
+    pub(crate) fn next_brick(&mut self) -> bool {
+        // Get list of all unbuild bricks sorted by y position
+        let mut bricks_iter = self
+            .bricks
+            .iter_mut()
+            .filter(|b| !b.is_build())
+            .collect::<Vec<_>>();
+        bricks_iter.sort_by(|a, b| {
+            b.y.partial_cmp(&a.y)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal))
+        });
+
+        if let Some(brick) = bricks_iter.first_mut() {
+            // Check if brick is within robot's reach
+            let in_reach = brick.x >= self.robot_x
+                && brick.x + brick.width <= self.robot_x + STRIDE_WIDTH
+                && brick.y >= self.robot_y
+                && brick.y + BRICK_HEIGHT <= self.robot_y + STRIDE_HEIGHT;
+
+            // If not, move the robot to the brick's position
+            if !in_reach {
+                self.robot_x = brick.x.min(self.width - STRIDE_WIDTH);
+                self.robot_y = brick.y.min(self.height - STRIDE_HEIGHT);
+                self.current_stride += 1;
+            }
+
+            // Build the brick
+            brick.build(self.current_stride);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn fill_bricks(&mut self) {
+        while self.next_brick() {}
+    }
+
     pub(crate) fn draw(&self, context: &CanvasRenderingContext2d) {
+        let canvas = context.canvas().unwrap();
+
+        // Scale canvas
+        let scale = canvas.width() as f64 / (self.width * 1.2);
+        context.reset();
+        context.scale(scale, scale).unwrap();
+
+        // Clear canvas
+        context.clear_rect(
+            0.0,
+            0.0,
+            canvas.width() as f64 * scale,
+            canvas.height() as f64 * scale,
+        );
+
+        // Draw bricks
         for brick in &self.bricks {
             brick.draw(context);
         }
 
-        // Draw wall outline
+        // Draw wall outline and label
         context.set_stroke_style_str("green");
         context.set_line_width(5.0);
         context.stroke_rect(0.0, 0.0, self.width, self.height);
+        context.set_fill_style_str("green");
+        context.fill_rect(0.0, 0.0, 80.0, 30.0);
+        context.set_fill_style_str("white");
+        context.set_font("bold 20px sans-serif");
+        context.set_text_align("center");
+        context.set_text_baseline("middle");
+        context.fill_text("Wall", 80.0 / 2.0, 30.0 / 2.0).unwrap();
 
-        // Draw robot's reach
+        // Draw robot's reach and label
         context.set_stroke_style_str("blue");
-        context.stroke_rect(
-            0.0,
-            self.height - STRIDE_HEIGHT,
-            STRIDE_WIDTH,
-            STRIDE_HEIGHT,
-        );
+        context.stroke_rect(self.robot_x, self.robot_y, STRIDE_WIDTH, STRIDE_HEIGHT);
+        context.set_fill_style_str("blue");
+        context.fill_rect(self.robot_x, self.robot_y, 80.0, 30.0);
+        context.set_fill_style_str("white");
+        context.set_font("bold 20px sans-serif");
+        context.set_text_align("center");
+        context.set_text_baseline("middle");
+        context
+            .fill_text(
+                "Robot",
+                self.robot_x + 80.0 / 2.0,
+                self.robot_y + 30.0 / 2.0,
+            )
+            .unwrap();
     }
 }

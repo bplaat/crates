@@ -13,9 +13,11 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Document",
     "Event",
+    "KeyboardEvent",
     "HtmlCanvasElement",
     "CanvasRenderingContext2d",
     "HtmlFormElement",
     "HtmlInputElement",
     "HtmlSelectElement",
+    "HtmlButtonElement",
 ] }
