@@ -13,10 +13,10 @@ use crate::consts::*;
 
 // MARK: Bond type
 pub(crate) enum BondType {
-    Stretcher, // Normal bricks
-    Header,    // Half bricks
-    English,   // Half bricks every alternating row
-    Flemish,   // Half bricks alternating
+    Stretcher,
+    Header,
+    English,
+    Flemish,
 }
 
 impl FromStr for BondType {
@@ -33,21 +33,27 @@ impl FromStr for BondType {
 }
 
 // MARK: Wall
+
+struct Robot {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    current_stride: usize,
+}
+
 pub(crate) struct Wall {
     width: f64,
     height: f64,
     bricks: Vec<Brick>,
-    robot_x: f64,
-    robot_y: f64,
-    current_stride: usize,
+    robot: Robot,
 }
 
 impl Wall {
     pub(crate) fn new(width: f64, height: f64, bond: BondType) -> Self {
-        let rows = (height / (BRICK_HEIGHT + BRICK_HEAD_JOINT)).ceil() as usize;
-
         let mut bricks = Vec::new();
         let mut y = height - BRICK_HEIGHT;
+        let rows = (height / (BRICK_HEIGHT + BRICK_HEAD_JOINT)).ceil() as usize;
         for j in 0..rows {
             match bond {
                 // MARK: Stretcher bond
@@ -178,13 +184,21 @@ impl Wall {
 
             y -= BRICK_HEIGHT + BRICK_HEAD_JOINT;
         }
+
+        let robot_height = STRIDE_HEIGHT.min(height);
+        let robot = Robot {
+            x: 0.0,
+            y: height - robot_height,
+            width: STRIDE_WIDTH.min(width),
+            height: robot_height,
+            current_stride: 1,
+        };
+
         Wall {
             width,
             height,
             bricks,
-            robot_x: 0.0,
-            robot_y: height - STRIDE_HEIGHT,
-            current_stride: 1,
+            robot,
         }
     }
 
@@ -202,10 +216,10 @@ impl Wall {
 
         // Sort bricks so those within robot's reach come first
         bricks_iter.sort_by_key(|brick| {
-            let in_reach = brick.x() >= self.robot_x
-                && brick.x() + brick.width() <= self.robot_x + STRIDE_WIDTH
-                && brick.y() >= self.robot_y
-                && brick.y() + BRICK_HEIGHT <= self.robot_y + STRIDE_HEIGHT;
+            let in_reach = brick.x() >= self.robot.x
+                && brick.x() + brick.width() <= self.robot.x + self.robot.width
+                && brick.y() >= self.robot.y
+                && brick.y() + BRICK_HEIGHT <= self.robot.y + self.robot.height;
             if in_reach { 0 } else { 1 }
         });
 
@@ -235,22 +249,22 @@ impl Wall {
 
         if let Some(brick) = bricks_iter.first_mut() {
             // Check if brick is within robot's reach
-            let in_reach = brick.x() >= self.robot_x
-                && brick.x() + brick.width() <= self.robot_x + STRIDE_WIDTH
-                && brick.y() >= self.robot_y
-                && brick.y() + BRICK_HEIGHT <= self.robot_y + STRIDE_HEIGHT;
+            let in_reach = brick.x() >= self.robot.x
+                && brick.x() + brick.width() <= self.robot.x + self.robot.width
+                && brick.y() >= self.robot.y
+                && brick.y() + BRICK_HEIGHT <= self.robot.y + self.robot.height;
 
             // If not, move the robot to the bricks center
             if !in_reach {
-                self.robot_x = (brick.x() + brick.width() / 2.0 - STRIDE_WIDTH / 2.0)
-                    .clamp(0.0, self.width - STRIDE_WIDTH);
-                self.robot_y = (brick.y() + BRICK_HEIGHT / 2.0 - STRIDE_HEIGHT / 2.0)
-                    .clamp(0.0, self.height - STRIDE_HEIGHT);
-                self.current_stride += 1;
+                self.robot.x = (brick.x() + brick.width() / 2.0 - self.robot.width / 2.0)
+                    .clamp(0.0, self.width - self.robot.width);
+                self.robot.y = (brick.y() + BRICK_HEIGHT / 2.0 - self.robot.height / 2.0)
+                    .clamp(0.0, self.height - self.robot.height);
+                self.robot.current_stride += 1;
             }
 
             // Build the brick
-            brick.build(self.current_stride);
+            brick.build(self.robot.current_stride);
             true
         } else {
             false
@@ -287,6 +301,8 @@ impl Wall {
         context.set_stroke_style_str("green");
         context.set_line_width(5.0);
         context.stroke_rect(0.0, 0.0, self.width, self.height);
+
+        // Wall label
         context.set_fill_style_str("green");
         context.fill_rect(0.0, 0.0, 80.0, 30.0);
         context.set_fill_style_str("white");
@@ -297,9 +313,16 @@ impl Wall {
 
         // Draw robot's reach and label
         context.set_stroke_style_str("blue");
-        context.stroke_rect(self.robot_x, self.robot_y, STRIDE_WIDTH, STRIDE_HEIGHT);
+        context.stroke_rect(
+            self.robot.x,
+            self.robot.y,
+            self.robot.width,
+            self.robot.height,
+        );
+
+        // Robot label
         context.set_fill_style_str("blue");
-        context.fill_rect(self.robot_x, self.robot_y, 80.0, 30.0);
+        context.fill_rect(self.robot.x, self.robot.y, 80.0, 30.0);
         context.set_fill_style_str("white");
         context.set_font("bold 20px sans-serif");
         context.set_text_align("center");
@@ -307,8 +330,8 @@ impl Wall {
         context
             .fill_text(
                 "Robot",
-                self.robot_x + 80.0 / 2.0,
-                self.robot_y + 30.0 / 2.0,
+                self.robot.x + 80.0 / 2.0,
+                self.robot.y + 30.0 / 2.0,
             )
             .unwrap();
     }

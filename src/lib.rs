@@ -17,9 +17,10 @@ mod brick;
 mod consts;
 mod wall;
 
+// Global wall state
 static WALL: RwLock<Option<Wall>> = RwLock::new(None);
 
-fn init_wall(
+fn wall_init(
     context: &CanvasRenderingContext2d,
     wall_width_input: &web_sys::HtmlInputElement,
     wall_height_input: &web_sys::HtmlInputElement,
@@ -32,6 +33,13 @@ fn init_wall(
     );
     wall.draw(context);
     *WALL.write().unwrap() = Some(wall);
+}
+
+fn wall_next_brick(context: &CanvasRenderingContext2d) {
+    if let Some(ref mut wall) = *WALL.write().unwrap() {
+        wall.next_brick();
+        wall.draw(context);
+    }
 }
 
 #[wasm_bindgen]
@@ -86,8 +94,7 @@ pub fn main() -> Result<(), JsValue> {
         let context = context.clone();
         let closure = Closure::wrap(Box::new(move |event: Event| {
             event.prevent_default();
-
-            init_wall(
+            wall_init(
                 &context,
                 &wall_width_input,
                 &wall_height_input,
@@ -104,8 +111,7 @@ pub fn main() -> Result<(), JsValue> {
         let context = context.clone();
         let closure = Closure::wrap(Box::new(move |event: Event| {
             event.prevent_default();
-
-            init_wall(
+            wall_init(
                 &context,
                 &wall_width_input,
                 &wall_height_input,
@@ -115,7 +121,7 @@ pub fn main() -> Result<(), JsValue> {
         wall_form.add_event_listener_with_callback("submit", closure.as_ref().unchecked_ref())?;
         closure.forget();
     }
-    init_wall(
+    wall_init(
         &context,
         &wall_width_input,
         &wall_height_input,
@@ -127,12 +133,7 @@ pub fn main() -> Result<(), JsValue> {
         let context = context.clone();
         let closure = Closure::wrap(Box::new(move |event: Event| {
             event.prevent_default();
-            let mut wall = WALL.write().unwrap();
-            if let Some(ref mut wall) = *wall {
-                wall.next_brick();
-
-                wall.draw(&context);
-            }
+            wall_next_brick(&context);
         }) as Box<dyn FnMut(_)>);
         next_brick_button
             .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())?;
@@ -143,12 +144,7 @@ pub fn main() -> Result<(), JsValue> {
         let closure = Closure::wrap(Box::new(move |event: KeyboardEvent| {
             if event.key() == " " || event.key() == "Enter" {
                 event.prevent_default();
-
-                let mut wall = WALL.write().unwrap();
-                if let Some(ref mut wall) = *wall {
-                    wall.next_brick();
-                    wall.draw(&context);
-                }
+                wall_next_brick(&context);
             }
         }) as Box<dyn FnMut(_)>);
         window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())?;
@@ -160,9 +156,7 @@ pub fn main() -> Result<(), JsValue> {
         let context = context.clone();
         let closure = Closure::wrap(Box::new(move |event: Event| {
             event.prevent_default();
-
-            let mut wall = WALL.write().unwrap();
-            if let Some(ref mut wall) = *wall {
+            if let Some(ref mut wall) = *WALL.write().unwrap() {
                 wall.fill_bricks();
                 wall.draw(&context);
             }
