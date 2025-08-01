@@ -8,10 +8,11 @@ use web_sys::CanvasRenderingContext2d;
 
 use crate::consts::BRICK_HEIGHT;
 
+#[derive(Clone)]
 pub(crate) struct Brick {
-    pub(crate) x: f64,
-    pub(crate) y: f64,
-    pub(crate) width: f64,
+    x: f64,
+    y: f64,
+    width: f64,
     build_stride: Option<usize>,
 }
 
@@ -23,6 +24,18 @@ impl Brick {
             width,
             build_stride: None,
         }
+    }
+
+    pub(crate) fn x(&self) -> f64 {
+        self.x
+    }
+
+    pub(crate) fn y(&self) -> f64 {
+        self.y
+    }
+
+    pub(crate) fn width(&self) -> f64 {
+        self.width
     }
 
     pub(crate) fn is_build(&self) -> bool {

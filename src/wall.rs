@@ -34,8 +34,8 @@ impl FromStr for BondType {
 
 // MARK: Wall
 pub(crate) struct Wall {
-    pub(crate) width: f64,
-    pub(crate) height: f64,
+    width: f64,
+    height: f64,
     bricks: Vec<Brick>,
     robot_x: f64,
     robot_y: f64,
@@ -188,30 +188,64 @@ impl Wall {
         }
     }
 
+    // MARK: Next brick algorithm
     pub(crate) fn next_brick(&mut self) -> bool {
-        // Get list of all unbuild bricks sorted by y position
+        // Clone bricks to avoid borrowing issues
+        let bricks = self.bricks.clone();
+
+        // Get all unbuild bricks
         let mut bricks_iter = self
             .bricks
             .iter_mut()
             .filter(|b| !b.is_build())
             .collect::<Vec<_>>();
-        bricks_iter.sort_by(|a, b| {
-            b.y.partial_cmp(&a.y)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal))
+
+        // Sort bricks so those within robot's reach come first
+        bricks_iter.sort_by_key(|brick| {
+            let in_reach = brick.x() >= self.robot_x
+                && brick.x() + brick.width() <= self.robot_x + STRIDE_WIDTH
+                && brick.y() >= self.robot_y
+                && brick.y() + BRICK_HEIGHT <= self.robot_y + STRIDE_HEIGHT;
+            if in_reach { 0 } else { 1 }
+        });
+
+        // Filter out all bricks that can't be build
+        bricks_iter.retain(|brick| {
+            // If brick is on the bottom row, it can always be built
+            if brick.y() == self.height - BRICK_HEIGHT {
+                return true;
+            }
+
+            // Check if all bricks below this brick are built
+            let below_y = brick.y() + BRICK_HEIGHT + BRICK_HEAD_JOINT;
+            let mut covered = 0.0;
+            for b in &bricks {
+                if b.y() == below_y
+                    && b.is_build()
+                    && b.x() < brick.x() + brick.width()
+                    && b.x() + b.width() > brick.x()
+                {
+                    let left = brick.x().max(b.x());
+                    let right = (brick.x() + brick.width()).min(b.x() + b.width());
+                    covered += right - left + BRICK_HEAD_JOINT;
+                }
+            }
+            covered >= brick.width()
         });
 
         if let Some(brick) = bricks_iter.first_mut() {
             // Check if brick is within robot's reach
-            let in_reach = brick.x >= self.robot_x
-                && brick.x + brick.width <= self.robot_x + STRIDE_WIDTH
-                && brick.y >= self.robot_y
-                && brick.y + BRICK_HEIGHT <= self.robot_y + STRIDE_HEIGHT;
+            let in_reach = brick.x() >= self.robot_x
+                && brick.x() + brick.width() <= self.robot_x + STRIDE_WIDTH
+                && brick.y() >= self.robot_y
+                && brick.y() + BRICK_HEIGHT <= self.robot_y + STRIDE_HEIGHT;
 
-            // If not, move the robot to the brick's position
+            // If not, move the robot to the bricks center
             if !in_reach {
-                self.robot_x = brick.x.min(self.width - STRIDE_WIDTH);
-                self.robot_y = brick.y.min(self.height - STRIDE_HEIGHT);
+                self.robot_x = (brick.x() + brick.width() / 2.0 - STRIDE_WIDTH / 2.0)
+                    .clamp(0.0, self.width - STRIDE_WIDTH);
+                self.robot_y = (brick.y() + BRICK_HEIGHT / 2.0 - STRIDE_HEIGHT / 2.0)
+                    .clamp(0.0, self.height - STRIDE_HEIGHT);
                 self.current_stride += 1;
             }
 
@@ -227,6 +261,7 @@ impl Wall {
         while self.next_brick() {}
     }
 
+    // MARK: Draw wall
     pub(crate) fn draw(&self, context: &CanvasRenderingContext2d) {
         let canvas = context.canvas().unwrap();
 

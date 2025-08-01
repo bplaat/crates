@@ -40,7 +40,7 @@ pub fn main() -> Result<(), JsValue> {
     let window = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
-    // Get canvas context
+    // Canvas context
     let canvas = document
         .get_element_by_id("canvas")
         .unwrap()
@@ -141,7 +141,7 @@ pub fn main() -> Result<(), JsValue> {
     {
         let context = context.clone();
         let closure = Closure::wrap(Box::new(move |event: KeyboardEvent| {
-            if event.key() == "Enter" {
+            if event.key() == " " || event.key() == "Enter" {
                 event.prevent_default();
 
                 let mut wall = WALL.write().unwrap();
