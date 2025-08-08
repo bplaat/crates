@@ -28,6 +28,15 @@ fn test_run_tests() {
     assert_js(2, "20 % 3");
     assert_js(34, "--34");
     assert_js(-40, "---40");
+    assert_js(1, "5 & 3");
+    assert_js(7, "5 | 3");
+    assert_js(6, "5 ^ 3");
+    assert_js(16, "8 << 1");
+    assert_js(4, "8 >> 1");
+    assert_js(0, "8 >> 4");
+    assert_js(4, "8 >>> 1");
+    assert_js(0, "8 >>> 4");
+
     assert_js(40, "20;30;40");
     assert_js(91, "34,  48,91");
     assert_js(10, "a = 10");

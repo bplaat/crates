@@ -12,7 +12,7 @@ use std::{env, io};
 use js::Context;
 
 fn repl(verbose: bool) {
-    println!("BassieCalc");
+    println!("BassieJS");
     let mut context = Context::new();
     context.set_verbose(verbose);
     loop {

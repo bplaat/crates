@@ -51,6 +51,15 @@ impl<'a> Interpreter<'a> {
                 Ok(if rhs != 0 { self.eval(lhs)? / rhs } else { 0 })
             }
             Node::Mod(lhs, rhs) => Ok(self.eval(lhs)? % self.eval(rhs)?),
+            Node::BitwiseAnd(lhs, rhs) => Ok(self.eval(lhs)? & self.eval(rhs)?),
+            Node::BitwiseOr(lhs, rhs) => Ok(self.eval(lhs)? | self.eval(rhs)?),
+            Node::BitwiseXor(lhs, rhs) => Ok(self.eval(lhs)? ^ self.eval(rhs)?),
+            Node::BitwiseNot(unary) => Ok(!self.eval(unary)?),
+            Node::LeftShift(lhs, rhs) => Ok(self.eval(lhs)? << self.eval(rhs)?),
+            Node::SignedRightShift(lhs, rhs) => Ok(self.eval(lhs)? >> self.eval(rhs)?),
+            Node::UnsignedRightShift(lhs, rhs) => {
+                Ok(((self.eval(lhs)? as u64) >> (self.eval(rhs)? as u64)) as i64)
+            }
         }
     }
 }

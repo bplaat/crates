@@ -19,6 +19,13 @@ pub(crate) enum Node {
     Exp(Box<Node>, Box<Node>),
     Div(Box<Node>, Box<Node>),
     Mod(Box<Node>, Box<Node>),
+    BitwiseAnd(Box<Node>, Box<Node>),
+    BitwiseOr(Box<Node>, Box<Node>),
+    BitwiseXor(Box<Node>, Box<Node>),
+    BitwiseNot(Box<Node>),
+    LeftShift(Box<Node>, Box<Node>),
+    SignedRightShift(Box<Node>, Box<Node>),
+    UnsignedRightShift(Box<Node>, Box<Node>),
 }
 
 pub(crate) struct Parser<'a> {
@@ -76,8 +83,56 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(Node::Assign(Box::new(lhs), Box::new(self.assign()?)))
             }
-            _ => self.add(),
+            _ => self.shift(),
         }
+    }
+
+    fn shift(&mut self) -> Result<Node, String> {
+        let mut node = self.bitwise()?;
+        loop {
+            match self.peek() {
+                Token::LeftShift => {
+                    self.next();
+                    node = Node::LeftShift(Box::new(node), Box::new(self.bitwise()?));
+                }
+                Token::SignedRightShift => {
+                    self.next();
+                    node = Node::SignedRightShift(Box::new(node), Box::new(self.bitwise()?));
+                }
+                Token::UnsignedRightShift => {
+                    self.next();
+                    node = Node::UnsignedRightShift(Box::new(node), Box::new(self.bitwise()?));
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+        Ok(node)
+    }
+
+    fn bitwise(&mut self) -> Result<Node, String> {
+        let mut node = self.add()?;
+        loop {
+            match self.peek() {
+                Token::BitwiseAnd => {
+                    self.next();
+                    node = Node::BitwiseAnd(Box::new(node), Box::new(self.add()?));
+                }
+                Token::BitwiseOr => {
+                    self.next();
+                    node = Node::BitwiseOr(Box::new(node), Box::new(self.add()?));
+                }
+                Token::BitwiseXor => {
+                    self.next();
+                    node = Node::BitwiseXor(Box::new(node), Box::new(self.add()?));
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+        Ok(node)
     }
 
     fn add(&mut self) -> Result<Node, String> {
@@ -137,6 +192,10 @@ impl<'a> Parser<'a> {
             Token::Sub => {
                 self.next();
                 Ok(Node::Neg(Box::new(self.unary()?)))
+            }
+            Token::BitwiseNot => {
+                self.next();
+                Ok(Node::BitwiseNot(Box::new(self.unary()?)))
             }
             _ => self.primary(),
         }

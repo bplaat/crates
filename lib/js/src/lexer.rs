@@ -6,13 +6,16 @@
 
 #[derive(Debug)]
 pub(crate) enum Token {
+    Eof,
+
     Number(i64),
     Variable(String),
-    Eof,
+
     LParen,
     RParen,
     Comma,
     Semicolon,
+
     Assign,
     Add,
     Sub,
@@ -20,6 +23,13 @@ pub(crate) enum Token {
     Exp,
     Div,
     Mod,
+    BitwiseAnd,
+    BitwiseXor,
+    BitwiseOr,
+    BitwiseNot,
+    LeftShift,
+    SignedRightShift,
+    UnsignedRightShift,
 }
 
 pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
@@ -101,6 +111,43 @@ pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
         if char == '%' {
             tokens.push(Token::Mod);
             continue;
+        }
+        if char == '&' {
+            tokens.push(Token::BitwiseAnd);
+            continue;
+        }
+        if char == '|' {
+            tokens.push(Token::BitwiseOr);
+            continue;
+        }
+        if char == '^' {
+            tokens.push(Token::BitwiseXor);
+            continue;
+        }
+        if char == '~' {
+            tokens.push(Token::BitwiseNot);
+            continue;
+        }
+        if char == '<' {
+            if let Some('<') = chars.peek() {
+                chars.next();
+                chars.next();
+                tokens.push(Token::LeftShift);
+                continue;
+            }
+        }
+        if char == '>' {
+            if let Some('>') = chars.peek() {
+                chars.next();
+                if let Some('>') = chars.peek() {
+                    chars.next();
+                    tokens.push(Token::UnsignedRightShift);
+                    continue;
+                } else {
+                    tokens.push(Token::SignedRightShift);
+                    continue;
+                }
+            }
         }
 
         return Err(format!("Lexer: unknown character: {char}"));
