@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum Token {
     Eof,
 
+    Undefined,
+    Null,
     Number(i64),
     Variable(String),
+    Boolean(bool),
 
     LParen,
     RParen,
@@ -32,9 +35,25 @@ pub(crate) enum Token {
     UnsignedRightShift,
 }
 
-pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
-    let mut tokens = Vec::new();
+struct Keyword {
+    keyword: &'static str,
+    token: Token,
+}
 
+impl Keyword {
+    fn new(keyword: &'static str, token: Token) -> Self {
+        Keyword { keyword, token }
+    }
+}
+
+pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
+    let keywords = [
+        Keyword::new("undefined", Token::Undefined),
+        Keyword::new("null", Token::Null),
+        Keyword::new("true", Token::Boolean(true)),
+        Keyword::new("false", Token::Boolean(false)),
+    ];
+    let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
     while let Some(char) = chars.next() {
         if char.is_whitespace() {
@@ -61,7 +80,18 @@ pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
                 }
                 variable.push(chars.next().expect("Invalid variable"));
             }
-            tokens.push(Token::Variable(variable));
+
+            let mut found = false;
+            for keyword in &keywords {
+                if keyword.keyword == variable {
+                    tokens.push(keyword.token.clone());
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                tokens.push(Token::Variable(variable));
+            }
             continue;
         }
 

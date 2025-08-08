@@ -36,6 +36,10 @@ fn test_run_tests() {
     assert_js(Value::Number(0), "8 >> 4");
     assert_js(Value::Number(4), "8 >>> 1");
     assert_js(Value::Number(0), "8 >>> 4");
+    assert_js(Value::Undefined, "undefined");
+    assert_js(Value::Null, "null");
+    assert_js(Value::Boolean(true), "true");
+    assert_js(Value::Boolean(false), "false");
 
     assert_js(Value::Number(40), "20;30;40");
     assert_js(Value::Number(91), "34,  48,91");

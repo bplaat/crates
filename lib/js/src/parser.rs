@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+use crate::Value;
 use crate::lexer::Token;
 
 #[derive(Debug)]
 pub(crate) enum Node {
     Nodes(Vec<Node>),
-    Number(i64),
+    Value(Value),
     Variable(String),
     Neg(Box<Node>),
     Assign(Box<Node>, Box<Node>),
@@ -209,8 +210,21 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(node)
             }
+            Token::Undefined => {
+                self.next();
+                Ok(Node::Value(Value::Undefined))
+            }
+            Token::Null => {
+                self.next();
+                Ok(Node::Value(Value::Null))
+            }
+            Token::Boolean(boolean) => {
+                let node = Node::Value(Value::Boolean(*boolean));
+                self.next();
+                Ok(node)
+            }
             Token::Number(number) => {
-                let node = Node::Number(*number);
+                let node = Node::Value(Value::Number(*number));
                 self.next();
                 Ok(node)
             }

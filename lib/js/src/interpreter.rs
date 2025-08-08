@@ -27,7 +27,7 @@ impl<'a> Interpreter<'a> {
                 }
                 Ok(result)
             }
-            Node::Number(number) => Ok(Value::Number(*number)),
+            Node::Value(value) => Ok(value.clone()),
             Node::Variable(variable) => match self.env.get(variable) {
                 Some(value) => Ok(value.clone()),
                 None => Err(format!("Interpreter: variable {variable} doesn't exists")),

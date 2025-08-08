@@ -11,6 +11,8 @@ pub enum Value {
     Undefined,
     /// Null value
     Null,
+    /// Boolean value
+    Boolean(bool),
     /// Number value
     Number(i64),
 }
