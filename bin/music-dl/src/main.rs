@@ -12,15 +12,16 @@ use std::process::{Command, Stdio, exit};
 use std::time::Duration;
 use std::{fs, thread};
 
-use anyhow::Result;
 use threadpool::ThreadPool;
 
 use crate::args::{Args, Subcommand, parse_args};
+use crate::result::Result;
 use crate::services::metadata::MetadataService;
 use crate::structs::deezer::{Album, Track};
 use crate::structs::youtube::Video;
 
 mod args;
+mod result;
 mod services;
 mod structs;
 
@@ -28,7 +29,7 @@ const DOWNLOAD_THREAD_COUNT: usize = 16;
 const TRACK_DURATION_SLACK: i64 = 5;
 
 // MARK: Subcommands
-fn subcommand_download(args: &Args) -> Result<()> {
+fn subcommand_download(args: &Args) {
     if args.query.is_empty() {
         eprintln!("Query argument is required");
         exit(1);
@@ -36,15 +37,14 @@ fn subcommand_download(args: &Args) -> Result<()> {
 
     // Find album ids
     let metadata_service = MetadataService::new();
-    let album_ids = get_album_ids(&metadata_service, args)?;
+    let album_ids = get_album_ids(&metadata_service, args).expect("Can't get album ids");
 
     // Start downloading albums
     let mut pool = ThreadPool::new(DOWNLOAD_THREAD_COUNT);
     for album_id in album_ids {
-        download_album(args, &mut pool, metadata_service, album_id)?;
+        download_album(args, &mut pool, metadata_service, album_id).expect("Can't download album");
     }
     pool.join();
-    Ok(())
 }
 
 fn download_album(
@@ -212,7 +212,7 @@ fn download_track(
     Ok(())
 }
 
-fn subcommand_list(args: &Args) -> Result<()> {
+fn subcommand_list(args: &Args) {
     if args.query.is_empty() {
         eprintln!("Query argument is required");
         exit(1);
@@ -220,15 +220,19 @@ fn subcommand_list(args: &Args) -> Result<()> {
 
     // Find album ids
     let metadata_service = MetadataService::new();
-    let album_ids = get_album_ids(&metadata_service, args)?;
+    let album_ids = get_album_ids(&metadata_service, args).expect("Can't get album ids");
 
     // List albums
     for album_id in album_ids {
-        let album = metadata_service.get_album(album_id)?;
+        let album = metadata_service
+            .get_album(album_id)
+            .expect("Can't get album");
         let mut tracks = Vec::new();
         let mut album_is_multi_disk = false;
         for track in &album.tracks.data {
-            let track = metadata_service.get_track(track.id)?;
+            let track = metadata_service
+                .get_track(track.id)
+                .expect("Can't get track");
             if track.disk_number > 1 {
                 album_is_multi_disk = true;
             }
@@ -279,7 +283,6 @@ fn subcommand_list(args: &Args) -> Result<()> {
         // Sleep for 0.5s to avoid Deezer rate limiting
         thread::sleep(Duration::from_millis(500));
     }
-    Ok(())
 }
 
 fn subcommand_help() {
@@ -349,13 +352,12 @@ fn escape_path(path: &str) -> String {
 }
 
 // MARK: Main
-fn main() -> Result<()> {
+fn main() {
     let args = parse_args();
     match args.subcommand {
-        Subcommand::Download => subcommand_download(&args)?,
-        Subcommand::List => subcommand_list(&args)?,
+        Subcommand::Download => subcommand_download(&args),
+        Subcommand::List => subcommand_list(&args),
         Subcommand::Help => subcommand_help(),
         Subcommand::Version => subcommand_version(),
     }
-    Ok(())
 }

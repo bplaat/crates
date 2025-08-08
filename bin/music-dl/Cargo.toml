@@ -11,7 +11,6 @@ workspace = true
 [dependencies]
 small-http = { version = "0.2.0", features = ["json"] }
 
-anyhow = "1.0"
 dirs = "6.0"
 mp4ameta = "0.13"
 percent-encoding = "2.3"
