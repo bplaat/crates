@@ -16,10 +16,9 @@ pub struct Height(pub u16);
 pub fn terminal_size() -> Option<(Width, Height)> {
     #[cfg(unix)]
     {
-        use libc::{TIOCGWINSZ, ioctl, winsize};
-        let fd: std::os::fd::RawFd = 0;
+        use libc::{STDOUT_FILENO, TIOCGWINSZ, ioctl, winsize};
         let mut size: winsize = unsafe { std::mem::zeroed() };
-        if unsafe { ioctl(fd, TIOCGWINSZ, &mut size) } == -1 {
+        if unsafe { ioctl(STDOUT_FILENO, TIOCGWINSZ, &mut size) } == -1 {
             return None;
         }
         Some((Width(size.ws_col), Height(size.ws_row)))
@@ -27,7 +26,7 @@ pub fn terminal_size() -> Option<(Width, Height)> {
 
     #[cfg(windows)]
     #[allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
-    unsafe {
+    {
         #[repr(C)]
         struct COORD {
             X: i16,
@@ -58,13 +57,9 @@ pub fn terminal_size() -> Option<(Width, Height)> {
             ) -> i32;
         }
 
-        let h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-        let mut csbi: CONSOLE_SCREEN_BUFFER_INFO = std::mem::zeroed();
-        _ = GetConsoleScreenBufferInfo(h_stdout, &mut csbi);
-        Some((
-            Width((csbi.srWindow.Right - csbi.srWindow.Left + 1) as u16),
-            Height((csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as u16),
-        ))
+        let mut csbi: CONSOLE_SCREEN_BUFFER_INFO = unsafe { std::mem::zeroed() };
+        _ = unsafe { GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &mut csbi) };
+        Some((Width(csbi.dwSize.X as u16), Height(csbi.dwSize.Y as u16)))
     }
 
     #[cfg(not(any(unix, windows)))]
