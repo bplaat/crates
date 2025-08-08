@@ -7,7 +7,6 @@
 use std::fs::File;
 use std::path::Path;
 
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 // Constants
@@ -58,19 +57,17 @@ impl Default for Config {
 }
 
 /// Loads the configuration from `path`. If the file does not exist, creates it with default values.
-pub(crate) fn load_config(path: impl AsRef<Path>) -> Result<Config> {
-    if !path.as_ref().exists() {
+pub(crate) fn load_config(path: impl AsRef<Path>) -> Config {
+    if let Ok(file) = File::open(path.as_ref()) {
+        serde_json::from_reader(file).expect("Can't read and/or parse config.json")
+    } else {
         if let Some(parent) = path.as_ref().parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).expect("Can't create directories");
         }
 
         let default_conf = Config::default();
-        let mut file = File::create(path)?;
-        serde_json::to_writer_pretty(&mut file, &default_conf)?;
-        return Ok(default_conf);
+        let mut file = File::create(path).expect("Can't open config.json");
+        serde_json::to_writer_pretty(&mut file, &default_conf).expect("Can't write config.json");
+        default_conf
     }
-
-    let file = File::open(path)?;
-    let config = serde_json::from_reader(file)?;
-    Ok(config)
 }

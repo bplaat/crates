@@ -82,7 +82,7 @@ fn main() {
     } else {
         "config.json".to_string()
     };
-    let config = config::load_config(config_path).expect("Can't load config.json");
+    let config = config::load_config(config_path);
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
 
     // Create webview
