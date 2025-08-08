@@ -8,8 +8,10 @@
 #![forbid(unsafe_code)]
 
 pub use context::Context;
+pub use value::Value;
 
 mod context;
 mod interpreter;
 mod lexer;
 mod parser;
+mod value;

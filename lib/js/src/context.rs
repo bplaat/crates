@@ -9,12 +9,13 @@ use std::collections::HashMap;
 use crate::interpreter::Interpreter;
 use crate::lexer::lexer;
 use crate::parser::Parser;
+use crate::value::Value;
 
 /// Context
 #[derive(Default)]
 pub struct Context {
     verbose: bool,
-    env: HashMap<String, i64>,
+    env: HashMap<String, Value>,
 }
 
 impl Context {
@@ -29,7 +30,7 @@ impl Context {
     }
 
     /// Evaluate script
-    pub fn eval(&mut self, text: &str) -> Result<i64, String> {
+    pub fn eval(&mut self, text: &str) -> Result<Value, String> {
         if self.verbose {
             println!("Text: {text}");
         }

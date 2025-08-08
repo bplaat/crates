@@ -7,59 +7,105 @@
 use std::collections::HashMap;
 
 use crate::parser::Node;
+use crate::value::Value;
 
 pub(crate) struct Interpreter<'a> {
-    env: &'a mut HashMap<String, i64>,
+    env: &'a mut HashMap<String, Value>,
 }
 
 impl<'a> Interpreter<'a> {
-    pub(crate) fn new(env: &'a mut HashMap<String, i64>) -> Self {
+    pub(crate) fn new(env: &'a mut HashMap<String, Value>) -> Self {
         Interpreter { env }
     }
 
-    pub(crate) fn eval(&mut self, node: &Node) -> Result<i64, String> {
+    pub(crate) fn eval(&mut self, node: &Node) -> Result<Value, String> {
         match node {
             Node::Nodes(nodes) => {
-                let mut result = 0;
+                let mut result = Value::Undefined;
                 for node in nodes {
                     result = self.eval(node)?;
                 }
                 Ok(result)
             }
-            Node::Number(number) => Ok(*number),
+            Node::Number(number) => Ok(Value::Number(*number)),
             Node::Variable(variable) => match self.env.get(variable) {
-                Some(value) => Ok(*value),
+                Some(value) => Ok(value.clone()),
                 None => Err(format!("Interpreter: variable {variable} doesn't exists")),
             },
             Node::Assign(lhs, rhs) => {
                 let result = self.eval(rhs)?;
                 match lhs.as_ref() {
                     Node::Variable(variable) => {
-                        self.env.insert(variable.to_string(), result);
+                        self.env.insert(variable.to_string(), result.clone());
                     }
                     _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
                 }
                 Ok(result)
             }
-            Node::Neg(unary) => Ok(-self.eval(unary)?),
-            Node::Add(lhs, rhs) => Ok(self.eval(lhs)? + self.eval(rhs)?),
-            Node::Sub(lhs, rhs) => Ok(self.eval(lhs)? - self.eval(rhs)?),
-            Node::Mul(lhs, rhs) => Ok(self.eval(lhs)? * self.eval(rhs)?),
-            Node::Exp(lhs, rhs) => Ok(self.eval(lhs)?.pow(self.eval(rhs)? as u32)),
-            Node::Div(lhs, rhs) => {
-                let rhs = self.eval(rhs)?;
-                Ok(if rhs != 0 { self.eval(lhs)? / rhs } else { 0 })
-            }
-            Node::Mod(lhs, rhs) => Ok(self.eval(lhs)? % self.eval(rhs)?),
-            Node::BitwiseAnd(lhs, rhs) => Ok(self.eval(lhs)? & self.eval(rhs)?),
-            Node::BitwiseOr(lhs, rhs) => Ok(self.eval(lhs)? | self.eval(rhs)?),
-            Node::BitwiseXor(lhs, rhs) => Ok(self.eval(lhs)? ^ self.eval(rhs)?),
-            Node::BitwiseNot(unary) => Ok(!self.eval(unary)?),
-            Node::LeftShift(lhs, rhs) => Ok(self.eval(lhs)? << self.eval(rhs)?),
-            Node::SignedRightShift(lhs, rhs) => Ok(self.eval(lhs)? >> self.eval(rhs)?),
-            Node::UnsignedRightShift(lhs, rhs) => {
-                Ok(((self.eval(lhs)? as u64) >> (self.eval(rhs)? as u64)) as i64)
-            }
+            Node::Neg(unary) => match self.eval(unary)? {
+                Value::Number(n) => Ok(Value::Number(-n)),
+                _ => Err(String::from("Interpreter: negation on non-number")),
+            },
+            Node::Add(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
+                _ => Err(String::from("Interpreter: addition on non-numbers")),
+            },
+            Node::Sub(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
+                _ => Err(String::from("Interpreter: subtraction on non-numbers")),
+            },
+            Node::Mul(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
+                _ => Err(String::from("Interpreter: multiplication on non-numbers")),
+            },
+            Node::Exp(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a.pow(b as u32))),
+                _ => Err(String::from("Interpreter: exponentiation on non-numbers")),
+            },
+            Node::Div(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => {
+                    Ok(Value::Number(if b != 0 { a / b } else { 0 }))
+                }
+                _ => Err(String::from("Interpreter: division on non-numbers")),
+            },
+            Node::Mod(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a % b)),
+                _ => Err(String::from("Interpreter: modulo on non-numbers")),
+            },
+            Node::BitwiseAnd(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a & b)),
+                _ => Err(String::from("Interpreter: bitwise and on non-numbers")),
+            },
+            Node::BitwiseOr(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a | b)),
+                _ => Err(String::from("Interpreter: bitwise or on non-numbers")),
+            },
+            Node::BitwiseXor(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a ^ b)),
+                _ => Err(String::from("Interpreter: bitwise xor on non-numbers")),
+            },
+            Node::BitwiseNot(unary) => match self.eval(unary)? {
+                Value::Number(n) => Ok(Value::Number(!n)),
+                _ => Err(String::from("Interpreter: bitwise not on non-number")),
+            },
+            Node::LeftShift(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a << b)),
+                _ => Err(String::from("Interpreter: left shift on non-numbers")),
+            },
+            Node::SignedRightShift(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a >> b)),
+                _ => Err(String::from(
+                    "Interpreter: signed right shift on non-numbers",
+                )),
+            },
+            Node::UnsignedRightShift(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => {
+                    Ok(Value::Number(((a as u64) >> (b as u64)) as i64))
+                }
+                _ => Err(String::from(
+                    "Interpreter: unsigned right shift on non-numbers",
+                )),
+            },
         }
     }
 }
