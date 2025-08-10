@@ -42,7 +42,7 @@ impl<'a> Interpreter<'a> {
                 }
                 Ok(result)
             }
-            Node::Neg(unary) => match self.eval(unary)? {
+            Node::UnaryMinus(unary) => match self.eval(unary)? {
                 Value::Number(n) => Ok(Value::Number(-n)),
                 _ => Err(String::from("Interpreter: negation on non-number")),
             },
@@ -50,27 +50,27 @@ impl<'a> Interpreter<'a> {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
                 _ => Err(String::from("Interpreter: addition on non-numbers")),
             },
-            Node::Sub(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            Node::Subtract(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
                 _ => Err(String::from("Interpreter: subtraction on non-numbers")),
             },
-            Node::Mul(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            Node::Multiply(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
                 _ => Err(String::from("Interpreter: multiplication on non-numbers")),
             },
-            Node::Exp(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
-                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a.pow(b as u32))),
-                _ => Err(String::from("Interpreter: exponentiation on non-numbers")),
-            },
-            Node::Div(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            Node::Divide(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => {
                     Ok(Value::Number(if b != 0 { a / b } else { 0 }))
                 }
                 _ => Err(String::from("Interpreter: division on non-numbers")),
             },
-            Node::Mod(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            Node::Remainder(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a % b)),
                 _ => Err(String::from("Interpreter: modulo on non-numbers")),
+            },
+            Node::Exponentiate(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a.pow(b as u32))),
+                _ => Err(String::from("Interpreter: exponentiation on non-numbers")),
             },
             Node::BitwiseAnd(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a & b)),
@@ -106,6 +106,8 @@ impl<'a> Interpreter<'a> {
                     "Interpreter: unsigned right shift on non-numbers",
                 )),
             },
+
+            _ => unimplemented!(),
         }
     }
 }

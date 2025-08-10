@@ -7,6 +7,10 @@
 #[derive(Debug, Clone)]
 pub(crate) enum Token {
     Eof,
+    LParen,
+    RParen,
+    Comma,
+    Semicolon,
 
     Undefined,
     Null,
@@ -14,18 +18,13 @@ pub(crate) enum Token {
     Variable(String),
     Boolean(bool),
 
-    LParen,
-    RParen,
-    Comma,
-    Semicolon,
-
     Assign,
     Add,
-    Sub,
-    Mul,
-    Exp,
-    Div,
-    Mod,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
+    Exponentiate,
     BitwiseAnd,
     BitwiseXor,
     BitwiseOr,
@@ -33,6 +32,17 @@ pub(crate) enum Token {
     LeftShift,
     SignedRightShift,
     UnsignedRightShift,
+    LessThen,
+    LessThenEquals,
+    GreaterThen,
+    GreaterThenEquals,
+    Equals,
+    NotEquals,
+    StrictEquals,
+    StrictNotEquals,
+    LogicalAnd,
+    LogicalOr,
+    LogicalNot,
 }
 
 struct Keyword {
@@ -53,6 +63,40 @@ pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
         Keyword::new("true", Token::Boolean(true)),
         Keyword::new("false", Token::Boolean(false)),
     ];
+
+    // NOTE: Sort by keyword length
+    let symbols = [
+        Keyword::new(">>>", Token::UnsignedRightShift),
+        Keyword::new("===", Token::StrictEquals),
+        Keyword::new("!==", Token::StrictNotEquals),
+        Keyword::new("<<", Token::LeftShift),
+        Keyword::new(">>", Token::SignedRightShift),
+        Keyword::new("<=", Token::LessThenEquals),
+        Keyword::new(">=", Token::GreaterThenEquals),
+        Keyword::new("&&", Token::LogicalAnd),
+        Keyword::new("||", Token::LogicalOr),
+        Keyword::new("**", Token::Exponentiate),
+        Keyword::new("==", Token::Equals),
+        Keyword::new("!=", Token::NotEquals),
+        Keyword::new("(", Token::LParen),
+        Keyword::new(")", Token::RParen),
+        Keyword::new(",", Token::Comma),
+        Keyword::new(";", Token::Semicolon),
+        Keyword::new("=", Token::Assign),
+        Keyword::new("+", Token::Add),
+        Keyword::new("-", Token::Subtract),
+        Keyword::new("*", Token::Multiply),
+        Keyword::new("/", Token::Divide),
+        Keyword::new("%", Token::Remainder),
+        Keyword::new("&", Token::BitwiseAnd),
+        Keyword::new("|", Token::BitwiseOr),
+        Keyword::new("^", Token::BitwiseXor),
+        Keyword::new("~", Token::BitwiseNot),
+        Keyword::new("<", Token::LessThen),
+        Keyword::new(">", Token::GreaterThen),
+        Keyword::new("!", Token::LogicalNot),
+    ];
+
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
     while let Some(char) = chars.next() {
@@ -95,88 +139,25 @@ pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
             continue;
         }
 
-        if char == '(' {
-            tokens.push(Token::LParen);
-            continue;
-        }
-        if char == ')' {
-            tokens.push(Token::RParen);
-            continue;
-        }
-        if char == ',' {
-            tokens.push(Token::Comma);
-            continue;
-        }
-        if char == ';' {
-            tokens.push(Token::Semicolon);
-            continue;
-        }
-        if char == '=' {
-            tokens.push(Token::Assign);
-            continue;
-        }
-        if char == '+' {
-            tokens.push(Token::Add);
-            continue;
-        }
-        if char == '-' {
-            tokens.push(Token::Sub);
-            continue;
-        }
-        if char == '*' {
-            if let Some(c) = chars.peek() {
-                if *c == '*' {
-                    chars.next();
-                    tokens.push(Token::Exp);
-                    continue;
-                }
-            }
-            tokens.push(Token::Mul);
-            continue;
-        }
-        if char == '/' {
-            tokens.push(Token::Div);
-            continue;
-        }
-        if char == '%' {
-            tokens.push(Token::Mod);
-            continue;
-        }
-        if char == '&' {
-            tokens.push(Token::BitwiseAnd);
-            continue;
-        }
-        if char == '|' {
-            tokens.push(Token::BitwiseOr);
-            continue;
-        }
-        if char == '^' {
-            tokens.push(Token::BitwiseXor);
-            continue;
-        }
-        if char == '~' {
-            tokens.push(Token::BitwiseNot);
-            continue;
-        }
-        if char == '<' {
-            if let Some('<') = chars.peek() {
-                chars.next();
-                chars.next();
-                tokens.push(Token::LeftShift);
-                continue;
-            }
-        }
-        if char == '>' {
-            if let Some('>') = chars.peek() {
-                chars.next();
-                if let Some('>') = chars.peek() {
-                    chars.next();
-                    tokens.push(Token::UnsignedRightShift);
-                    continue;
+        for symbol in &symbols {
+            let symbol_len = symbol.keyword.len();
+            let mut matched = true;
+            let mut collected = String::new();
+            collected.push(char);
+            for _ in 1..symbol_len {
+                if let Some(next_char) = chars.peek() {
+                    collected.push(*next_char);
                 } else {
-                    tokens.push(Token::SignedRightShift);
-                    continue;
+                    matched = false;
+                    break;
                 }
+            }
+            if matched && collected == symbol.keyword {
+                for _ in 1..symbol_len {
+                    chars.next();
+                }
+                tokens.push(symbol.token.clone());
+                break;
             }
         }
 
