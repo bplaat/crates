@@ -291,7 +291,14 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
     for dependency_bobje in bobje.dependencies.values() {
         if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
             let jar = dependency_bobje.jar.as_ref().expect("Should be some");
-            inputs.push(format!("{}/{}", classes_dir, jar.package.replace('.', "/")));
+            inputs.push(format!(
+                "{}/{}",
+                classes_dir,
+                jar.package_override
+                    .as_ref()
+                    .unwrap_or(&jar.package)
+                    .replace('.', "/")
+            ));
         }
     }
 

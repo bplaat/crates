@@ -17,11 +17,12 @@ use crate::manifest::JarDependency;
 
 // MARK: Java/Kotlin tasks
 pub(crate) fn detect_java_kotlin(bobje: &Bobje) -> bool {
-    bobje
-        .source_files
-        .iter()
-        .any(|path| path.ends_with(".java"))
+    detect_java_from_source_files(&bobje.source_files)
         || detect_kotlin_from_source_files(&bobje.source_files)
+}
+
+pub(crate) fn detect_java_from_source_files(source_files: &[String]) -> bool {
+    source_files.iter().any(|path| path.ends_with(".java"))
 }
 
 pub(crate) fn detect_kotlin_from_source_files(source_files: &[String]) -> bool {
@@ -82,14 +83,13 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
         }
         for dependency_bobje in bobje.dependencies.values() {
             if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
+                let jar = dependency_bobje.jar.as_ref().expect("Should be some");
                 inputs.push(format!(
                     "{}/{}",
                     classes_dir,
-                    dependency_bobje
-                        .jar
+                    jar.package_override
                         .as_ref()
-                        .expect("Should be some")
-                        .package
+                        .unwrap_or(&jar.package)
                         .replace('.', "/")
                 ));
             }
@@ -173,11 +173,16 @@ pub(crate) fn download_extract_jar_tasks(
         "{}/jar-cache/{}-{}.jar",
         bobje.target_dir, bobje.name, bobje.version
     );
-    executor.add_task_cmd(
-        format!("wget {} -O {}", jar.url, downloaded_jar),
-        vec![],
-        vec![downloaded_jar.clone()],
-    );
+    if let Some(path) = &jar.path {
+        executor.add_task_cp(path.clone(), downloaded_jar.clone());
+    }
+    if let Some(url) = &jar.url {
+        executor.add_task_cmd(
+            format!("wget {url} -O {downloaded_jar}"),
+            vec![],
+            vec![downloaded_jar.clone()],
+        );
+    }
 
     // Add extract task
     let classes_dir = format!("{}/classes", bobje.out_dir());
@@ -188,7 +193,14 @@ pub(crate) fn download_extract_jar_tasks(
             downloaded_jar.replace(&bobje.target_dir, "../..")
         ),
         vec![downloaded_jar],
-        vec![format!("{}/{}", classes_dir, jar.package.replace('.', "/"))],
+        vec![format!(
+            "{}/{}",
+            classes_dir,
+            jar.package_override
+                .as_ref()
+                .unwrap_or(&jar.package)
+                .replace('.', "/")
+        )],
     );
 }
 

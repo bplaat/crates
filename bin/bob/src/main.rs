@@ -108,22 +108,24 @@ impl Bobje {
 
         // Add Kotlin stdlib when Kotlin is used
         if detect_kotlin_from_source_files(&source_files) {
-            manifest.dependencies.insert("jetbrains-annotations".to_string(), Dependency {
-                path: None,
-                jar: Some(JarDependency {
-                    package: "org.jetbrains.annotations".to_string(),
-                    version: "26.0.2".to_string(),
-                    url: "https://repo1.maven.org/maven2/org/jetbrains/annotations/26.0.2/annotations-26.0.2.jar".to_string(),
-                }),
-            });
-            manifest.dependencies.insert("kotlin-stdlib".to_string(), Dependency {
-                path: None,
-                jar: Some(JarDependency {
-                    package: "kotlin".to_string(),
-                    version: "2.2.0".to_string(),
-                    url: "https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.0/kotlin-stdlib-2.2.0.jar".to_string(),
-                }),
-            });
+            // Manual dependency in https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.0/kotlin-stdlib-2.2.0.pom
+            // FIXME: Automatically resolve maven dependency trees by fetching and parsing pom.xml
+            manifest.dependencies.insert(
+                "jetbrains-annotations".to_string(),
+                Dependency {
+                    path: None,
+                    maven: Some("org.jetbrains:annotations:13.0".to_string()),
+                    jar: None,
+                },
+            );
+            manifest.dependencies.insert(
+                "kotlin-stdlib".to_string(),
+                Dependency {
+                    path: None,
+                    maven: Some("org.jetbrains.kotlin:kotlin-stdlib:2.2.0".to_string()),
+                    jar: None,
+                },
+            );
         }
 
         // Build dependencies
@@ -141,6 +143,32 @@ impl Bobje {
 
             if let Some(jar) = &dep.jar {
                 let dep_bobje = Bobje::new_external_jar(args, dep_name, jar, executor);
+                dependencies.insert(dep_bobje.name.clone(), dep_bobje);
+            }
+
+            if let Some(maven) = &dep.maven {
+                let mut parts = maven.split(':');
+                let package = parts.next().expect("Can't parse maven string").to_string();
+                let name = parts.next().expect("Can't parse maven string").to_string();
+                let version = parts.next().expect("Can't parse maven string").to_string();
+
+                let package_override = if package == "org.jetbrains.kotlin" {
+                    Some("kotlin".to_string())
+                } else {
+                    None
+                };
+                let url = format!(
+                    "https://repo1.maven.org/maven2/{}/{name}/{version}/{name}-{version}.jar",
+                    package.replace(".", "/")
+                );
+                let jar = JarDependency {
+                    package,
+                    package_override,
+                    version,
+                    path: None,
+                    url: Some(url),
+                };
+                let dep_bobje = Bobje::new_external_jar(args, dep_name, &jar, executor);
                 dependencies.insert(dep_bobje.name.clone(), dep_bobje);
             }
         }

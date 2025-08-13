@@ -53,7 +53,7 @@ fn internal_http_server_handle(req: &Request) -> Option<Response> {
                         ipc_message_handler(IpcConnection::WebSocket(ws.clone()), &text);
                     }
                     None => {
-                        // FIXME: Create async framework no not micro sleep threads
+                        // FIXME: Create async framework don't do micro sleeps
                         thread::sleep(Duration::from_millis(100));
                     }
                     _ => {}

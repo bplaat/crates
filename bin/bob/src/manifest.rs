@@ -29,13 +29,16 @@ pub(crate) struct Package {
 pub(crate) struct Dependency {
     pub path: Option<String>,
     pub jar: Option<JarDependency>,
+    pub maven: Option<String>,
 }
 
 #[derive(Clone, Deserialize)]
 pub(crate) struct JarDependency {
     pub package: String,
+    pub package_override: Option<String>,
     pub version: String,
-    pub url: String,
+    pub path: Option<String>,
+    pub url: Option<String>,
 }
 
 #[derive(Default, Clone, Deserialize)]
