@@ -46,6 +46,7 @@ name = "bob"
 version = "0.1.0"
 dependencies = [
  "basic-toml",
+ "dirs",
  "enable-ansi-support",
  "regex",
  "serde",

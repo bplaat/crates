@@ -5,8 +5,8 @@
  */
 
 use std::collections::HashMap;
-use std::fs;
 use std::process::{Command, exit};
+use std::{env, fs};
 
 use regex::Regex;
 
@@ -169,16 +169,29 @@ pub(crate) fn download_extract_jar_tasks(
     jar: &JarDependency,
 ) {
     // Add download task
+    let cache_dir = dirs::cache_dir().expect("Failed to get cache directory");
+    let lock_file = format!("{}/bob/.lock", cache_dir.display());
     let downloaded_jar = format!(
-        "{}/jar-cache/{}-{}.jar",
-        bobje.target_dir, bobje.name, bobje.version
+        "{}/bob/jar-cache/{}-{}.jar",
+        cache_dir.display(),
+        bobje.name,
+        bobje.version
     );
     if let Some(path) = &jar.path {
         executor.add_task_cp(path.clone(), downloaded_jar.clone());
     }
     if let Some(url) = &jar.url {
         executor.add_task_cmd(
-            format!("wget {url} -O {downloaded_jar} 2> /dev/null"),
+            format!(
+                "while [ -f {lock_file} ]; do \
+                    sleep 0.1; \
+                done; \
+                touch {lock_file}; \
+                if [ ! -f {downloaded_jar} ]; then \
+                    wget {url} -O {downloaded_jar} 2> /dev/null; \
+                fi; \
+                rm -f {lock_file}"
+            ),
             vec![],
             vec![downloaded_jar.clone()],
         );
@@ -187,11 +200,7 @@ pub(crate) fn download_extract_jar_tasks(
     // Add extract task
     let classes_dir = format!("{}/classes", bobje.out_dir());
     executor.add_task_cmd(
-        format!(
-            "cd {} && jar xf {}",
-            classes_dir,
-            downloaded_jar.replace(&bobje.target_dir, "../..")
-        ),
+        format!("cd {classes_dir} && jar xf {downloaded_jar}"),
         vec![downloaded_jar],
         vec![format!(
             "{}/{}",
@@ -225,7 +234,7 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
     // Minify names and tree shake classes with ProGuard
     let optimized_classes_dir = format!("{classes_dir}-optimized");
     if bobje.profile == Profile::Release {
-        let java_home = std::env::var("JAVA_HOME").expect("$JAVA_HOME not set");
+        let java_home = env::var("JAVA_HOME").expect("$JAVA_HOME not set");
         let mut keeps = vec![format!(
             "public class {} {{ public static void main(java.lang.String[]); }}",
             main_class
