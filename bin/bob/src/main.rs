@@ -106,6 +106,20 @@ impl Bobje {
             });
         let source_files = index_files(&format!("{manifest_dir}/src/"));
 
+        // When test add cunit pkg-config dependency
+        let is_test = args.subcommand == Subcommand::Test;
+        if is_test {
+            manifest.dependencies.insert(
+                "cunit".to_string(),
+                Dependency {
+                    path: None,
+                    pkg_config: Some("cunit".to_string()),
+                    maven: None,
+                    jar: None,
+                },
+            );
+        }
+
         // Add Kotlin stdlib when Kotlin is used
         if detect_kotlin_from_source_files(&source_files) {
             // Manual dependency in https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.0/kotlin-stdlib-2.2.0.pom
@@ -114,6 +128,7 @@ impl Bobje {
                 "jetbrains-annotations".to_string(),
                 Dependency {
                     path: None,
+                    pkg_config: None,
                     maven: Some("org.jetbrains:annotations:13.0".to_string()),
                     jar: None,
                 },
@@ -122,6 +137,7 @@ impl Bobje {
                 "kotlin-stdlib".to_string(),
                 Dependency {
                     path: None,
+                    pkg_config: None,
                     maven: Some("org.jetbrains.kotlin:kotlin-stdlib:2.2.0".to_string()),
                     jar: None,
                 },
@@ -178,7 +194,7 @@ impl Bobje {
             target_dir: args.target_dir.clone(),
             profile: args.profile,
             target: args.target.clone(),
-            is_test: args.subcommand == Subcommand::Test,
+            is_test,
             // ...
             r#type,
             name: manifest.package.name.clone(),

@@ -39,11 +39,16 @@ impl CxVars {
             cflags.push_str(&format!(" --target={target}"));
         }
         if bobje.is_test {
-            cflags.push_str(&format!(" -DTEST {}", pkg_config_cflags("cunit")));
+            cflags.push_str(" -DTEST");
         }
         if !bobje.manifest.build.cflags.is_empty() {
             cflags.push(' ');
             cflags.push_str(&bobje.manifest.build.cflags);
+        }
+        for dep in bobje.manifest.dependencies.values() {
+            if let Some(pkg_config) = &dep.pkg_config {
+                cflags.push_str(&format!(" {}", pkg_config_cflags(pkg_config)));
+            }
         }
 
         // Ldflags
@@ -66,6 +71,11 @@ impl CxVars {
         if !bobje.manifest.build.ldflags.is_empty() {
             ldflags.push(' ');
             ldflags.push_str(&bobje.manifest.build.ldflags);
+        }
+        for dep in bobje.manifest.dependencies.values() {
+            if let Some(pkg_config) = &dep.pkg_config {
+                ldflags.push_str(&format!(" {}", pkg_config_libs(pkg_config)));
+            }
         }
 
         // Use Clang on macOS and Windows, GCC elsewhere
@@ -304,15 +314,10 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             let stripped_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} {} -o {}",
+                    "{} {} {} -o {}",
                     if contains_cpp { vars.cxx } else { vars.cc },
                     vars.ldflags,
                     inputs.join(" "),
-                    if bobje.is_test {
-                        pkg_config_libs("cunit")
-                    } else {
-                        "".to_string()
-                    },
                     unstripped_path,
                 ),
                 inputs.clone(),
@@ -327,15 +332,10 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             let out_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} {} -o {}",
+                    "{} {} {} -o {}",
                     if contains_cpp { vars.cxx } else { vars.cc },
                     vars.ldflags,
                     inputs.join(" "),
-                    if bobje.is_test {
-                        pkg_config_libs("cunit")
-                    } else {
-                        "".to_string()
-                    },
                     out_path,
                 ),
                 inputs.clone(),

@@ -26,8 +26,10 @@ pub(crate) struct Package {
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) struct Dependency {
     pub path: Option<String>,
+    pub pkg_config: Option<String>,
     pub jar: Option<JarDependency>,
     pub maven: Option<String>,
 }
