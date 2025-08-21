@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::process::exit;
-use std::{fs, io};
+use std::{env, fs, io};
 
 pub(crate) fn format_bytes(bytes: u64) -> String {
     const KIB: u64 = 1024;
@@ -66,4 +66,18 @@ pub(crate) fn index_files(dir: &str) -> Vec<String> {
         }
     }
     files
+}
+
+pub(crate) fn read_env_file(path: &str) -> io::Result<()> {
+    let contents = fs::read_to_string(path)?;
+    for line in contents.lines() {
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+            if !key.is_empty() && !value.is_empty() {
+                unsafe { env::set_var(key, value) };
+            }
+        }
+    }
+    Ok(())
 }

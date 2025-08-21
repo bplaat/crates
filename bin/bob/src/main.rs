@@ -29,7 +29,7 @@ use crate::tasks::jvm::{
     generate_jar_tasks, generate_javac_kotlinc_tasks, run_jar, run_java_class,
 };
 use crate::tasks::template::{detect_template, process_templates};
-use crate::utils::{format_bytes, index_files};
+use crate::utils::{format_bytes, index_files, read_env_file};
 
 mod args;
 mod executor;
@@ -106,7 +106,7 @@ impl Bobje {
             });
         let source_files = index_files(&format!("{manifest_dir}/src/"));
 
-        // When test add cunit pkg-config dependency
+        // Add cunit pkg-config dependency when cx test
         let is_test = args.subcommand == Subcommand::Test;
         if is_test {
             manifest.dependencies.insert(
@@ -168,11 +168,13 @@ impl Bobje {
                 let name = parts.next().expect("Can't parse maven string").to_string();
                 let version = parts.next().expect("Can't parse maven string").to_string();
 
+                // NOTE: Fix for kotlin stdlib package
                 let package_override = if package == "org.jetbrains.kotlin" {
                     Some("kotlin".to_string())
                 } else {
                     None
                 };
+
                 let url = format!(
                     "https://repo1.maven.org/maven2/{}/{name}/{version}/{name}-{version}.jar",
                     package.replace(".", "/")
@@ -241,12 +243,14 @@ impl Bobje {
             if detect_cx(bobje) {
                 generate_ld_tasks(bobje, executor);
             }
-            if bobje.r#type == BobjeType::Binary && detect_android(bobje) {
-                generate_android_dex_tasks(bobje, executor);
-                generate_android_final_apk_tasks(bobje, executor);
-            }
-            if bobje.r#type == BobjeType::Binary && detect_jar(bobje) {
-                generate_jar_tasks(bobje, executor);
+            if bobje.r#type == BobjeType::Binary {
+                if detect_android(bobje) {
+                    generate_android_dex_tasks(bobje, executor);
+                    generate_android_final_apk_tasks(bobje, executor);
+                }
+                if detect_jar(bobje) {
+                    generate_jar_tasks(bobje, executor);
+                }
             }
         }
 
@@ -335,24 +339,15 @@ fn main() {
         exit(1);
     }
 
-    // Read .env file if exists
-    if let Ok(env_content) = fs::read_to_string(".env") {
-        for line in env_content.lines() {
-            if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim();
-                let value = value.trim();
-                if !key.is_empty() && !value.is_empty() {
-                    unsafe { env::set_var(key, value) };
-                }
-            }
-        }
-    }
+    // Read .env file
+    _ = read_env_file(".env");
 
     // Clean build artifacts
     if args.subcommand == Subcommand::Clean {
         subcommand_clean(&args.target_dir, true);
         return;
     }
+
     // Rebuild artifacts
     if args.subcommand == Subcommand::Rebuild {
         subcommand_clean(&args.target_dir, false);
