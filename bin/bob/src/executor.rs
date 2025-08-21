@@ -27,25 +27,21 @@ pub(crate) enum TaskAction {
 static FIRST_LINE: Mutex<bool> = Mutex::new(true);
 
 impl TaskAction {
-    fn execute(&self, current_task: usize, total_tasks: usize, pretty_print: bool) {
+    fn execute(&self, task_counter: Arc<AtomicUsize>, total_tasks: usize, pretty_print: bool) {
         let mut first_line_mutex = FIRST_LINE.lock().expect("Could not lock mutex");
         let first_line = *first_line_mutex;
         *first_line_mutex = false;
 
-        let mut line = format!("[{current_task}/{total_tasks}] ");
-        match self {
-            TaskAction::Phony(dest) => {
-                line += dest;
-            }
+        let line = match self {
+            TaskAction::Phony(dest) => dest.clone(),
             TaskAction::Copy(src, dst) => {
-                line += &format!("cp {src} {dst}");
                 fs::copy(src, dst).unwrap_or_else(|_| {
                     eprintln!("Failed to copy {src} to {dst}");
                     exit(1)
                 });
+                format!("cp {src} {dst}")
             }
             TaskAction::Command(command) => {
-                line += command;
                 let status = if cfg!(windows) {
                     if command.contains("&&") {
                         let mut parts = command.split(' ').collect::<Vec<_>>();
@@ -66,8 +62,11 @@ impl TaskAction {
                     eprintln!("Command failed: {command}");
                     exit(1);
                 }
+                command.clone()
             }
-        }
+        };
+        let current_task = task_counter.fetch_add(1, Ordering::SeqCst);
+        let line = format!("[{current_task}/{total_tasks}] {line}");
 
         if pretty_print {
             let term_width = terminal_size::terminal_size()
@@ -155,7 +154,20 @@ impl Executor {
         );
     }
 
-    pub(crate) fn execute(&self, log_path: &str, verbose: bool, thread_count: usize) {
+    fn remove_orphans(&mut self) {
+        let tasks = self.tasks.clone();
+        self.tasks.retain(|task| {
+            tasks.iter().any(|other_task| {
+                other_task
+                    .inputs
+                    .iter()
+                    .any(|input| task.outputs.contains(input))
+            }) || tasks.last().is_some_and(|last| last.id == task.id)
+        });
+    }
+
+    pub(crate) fn execute(&mut self, log_path: &str, verbose: bool, thread_count: usize) {
+        self.remove_orphans();
         if verbose {
             println!("{:#?}", self.tasks);
         }
@@ -214,8 +226,8 @@ impl Executor {
             }
         }
 
+        let task_counter: Arc<AtomicUsize> = task_counter.clone();
         let total_tasks = self.tasks.len();
-        let current_task = task_counter.fetch_add(1, Ordering::SeqCst);
         let task = task.clone();
         pool.execute(move || {
             // Wait for dependencies to finish
@@ -304,7 +316,7 @@ impl Executor {
                 }
 
                 // Execute command
-                task.action.execute(current_task, total_tasks, pretty_print);
+                task.action.execute(task_counter, total_tasks, pretty_print);
 
                 // Update log entries of output dirs
                 {
@@ -327,6 +339,8 @@ impl Executor {
                         }
                     }
                 }
+            } else {
+                _ = task_counter.fetch_add(1, Ordering::SeqCst);
             }
 
             // Mark task as done
