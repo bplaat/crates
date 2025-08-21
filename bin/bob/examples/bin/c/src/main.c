@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <mul/mul.h>
+#include <mul-c/mul.h>
 #include "sub/sub.h"
 #include "add.h"
 
