@@ -43,6 +43,12 @@ pub(crate) mod windows {
         fn CoTaskMemFree(pv: *mut std::ffi::c_void);
     }
 
+    pub(crate) const FOLDERID_LOCAL_APPDATA: Guid = Guid {
+        data1: 0xF1B32785,
+        data2: 0x6FBA,
+        data3: 0x4FCF,
+        data4: [0x9D, 0x55, 0x7B, 0x8E, 0x7F, 0x15, 0x70, 0x91],
+    };
     pub(crate) const FOLDERID_ROAMING_APPDATA: Guid = Guid {
         data1: 0x3EB685DB,
         data2: 0x65F9,
@@ -70,6 +76,36 @@ pub(crate) mod windows {
         let path = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(path_ptr, len) });
         unsafe { CoTaskMemFree(path_ptr as *mut std::ffi::c_void) };
         path
+    }
+}
+
+/// Get user's cache directory
+pub fn cache_dir() -> Option<PathBuf> {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
+    {
+        let path = std::env::var("XDG_CACHE_HOME").unwrap_or_else(|_| {
+            format!("{}/.cache", std::env::var("HOME").expect("$HOME not set"))
+        });
+        Some(PathBuf::from(path))
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let path = std::env::var("HOME").unwrap_or_else(|_| panic!("$HOME not set"));
+        Some(PathBuf::from(format!("{path}/Library/Caches")))
+    }
+
+    #[cfg(windows)]
+    {
+        Some(PathBuf::from(windows::get_known_folder_path(
+            &windows::FOLDERID_LOCAL_APPDATA,
+        )))
     }
 }
 
