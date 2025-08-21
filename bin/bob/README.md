@@ -2,7 +2,7 @@
 
 # Bassie's Obvious Builder (bob)
 
-A simple build system for my projects, because I like the simplicity of Cargo.
+A simple build system for my projects, because I really like the simplicity of Cargo and I detest all the other build systems :^)
 
 ## Supported project types
 
@@ -18,13 +18,15 @@ A simple build system for my projects, because I like the simplicity of Cargo.
 
 ## Getting Started
 
+### Creating a C project
+
 -   Install bob
 
     ```sh
     cargo install --git https://github.com/bplaat/crates bob
     ```
 
--   Create a `bob.toml` file in your project root:
+-   Create a `bob.toml` manifest file in your project root:
 
     ```toml
     [project]
@@ -32,7 +34,7 @@ A simple build system for my projects, because I like the simplicity of Cargo.
     version = "0.1.0"
     ```
 
--   Create source files in the `src` directory, for example `main.c`:
+-   Create a `src/main.c` source file:
 
     ```c
     #include <stdio.h>
@@ -48,7 +50,7 @@ A simple build system for my projects, because I like the simplicity of Cargo.
     bob run
     ```
 
-## Creating simple unit tests (in C/C++)
+### Running C unit tests
 
 -   You can create unit tests inline in your C code, for example if you have this function:
 
