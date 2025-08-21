@@ -18,6 +18,7 @@ use crate::{Bobje, Profile};
 struct CxVars {
     cflags: String,
     ldflags: String,
+    libs: String,
     cc: String,
     cxx: String,
     ar: String,
@@ -72,9 +73,12 @@ impl CxVars {
             ldflags.push(' ');
             ldflags.push_str(&bobje.manifest.build.ldflags);
         }
+
+        // Libs
+        let mut libs = String::new();
         for dep in bobje.manifest.dependencies.values() {
             if let Some(pkg_config) = &dep.pkg_config {
-                ldflags.push_str(&format!(" {}", pkg_config_libs(pkg_config)));
+                libs.push_str(&format!(" {}", pkg_config_libs(pkg_config)));
             }
         }
 
@@ -104,6 +108,7 @@ impl CxVars {
         Self {
             cflags,
             ldflags,
+            libs,
             cc,
             cxx,
             ar,
@@ -314,10 +319,11 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             let stripped_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} -o {}",
+                    "{} {} {} {} -o {}",
                     if contains_cpp { vars.cxx } else { vars.cc },
                     vars.ldflags,
                     inputs.join(" "),
+                    vars.libs,
                     unstripped_path,
                 ),
                 inputs.clone(),
@@ -332,10 +338,11 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             let out_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} -o {}",
+                    "{} {} {} {} -o {}",
                     if contains_cpp { vars.cxx } else { vars.cc },
                     vars.ldflags,
                     inputs.join(" "),
+                    vars.libs,
                     out_path,
                 ),
                 inputs.clone(),
