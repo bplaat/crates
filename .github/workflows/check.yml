@@ -28,7 +28,7 @@ jobs:
           path: |
             ~/.cargo
             ~/.rustup
-          key: linux-x86_64-rust-toolchain
+          key: linux-x86_64-rust-with-tools-toolchain
       - name: Install extra Rust tooling
         if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
         run: |
@@ -50,7 +50,7 @@ jobs:
           path: |
             ~/.cargo
             ~/.rustup
-          key: macos-aarch64-rust-toolchain
+          key: macos-aarch64-rust-with-tools-toolchain
       - name: Install extra Rust tooling
         if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
         run: |
@@ -69,7 +69,7 @@ jobs:
           path: |
             ~/.cargo
             ~/.rustup
-          key: windows-x86_64-rust-toolchain
+          key: windows-x86_64-rust-with-tools-toolchain
       - name: Install extra Rust tooling
         if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
         run: |
