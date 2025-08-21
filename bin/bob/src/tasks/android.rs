@@ -9,7 +9,7 @@ use std::process::{Command, exit};
 use std::{env, fs};
 
 use crate::executor::Executor;
-use crate::manifest::AndroidMetadata;
+use crate::manifest::{AndroidMetadata, PackageType};
 use crate::tasks::jvm::{find_modules, get_class_name};
 use crate::utils::{index_files, write_file_when_different};
 use crate::{Bobje, Profile};
@@ -141,7 +141,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
     );
     bobje.source_files.push(r_java_path.clone());
 
-    if bobje.r#type == crate::BobjeType::Binary {
+    if bobje.r#type == PackageType::Binary {
         let dest = format!("{}/{}-unaligned.apk", bobje.out_dir(), bobje.name);
 
         let mut link_inputs = vec![format!("{}/AndroidManifest.xml", bobje.manifest_dir)];
@@ -289,7 +289,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
         .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
         .collect::<Vec<_>>();
     for dependency_bobje in bobje.dependencies.values() {
-        if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
+        if dependency_bobje.r#type == PackageType::ExternalJar {
             let jar = dependency_bobje.jar.as_ref().expect("Should be some");
             inputs.push(format!(
                 "{}/{}",

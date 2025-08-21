@@ -12,6 +12,7 @@ use std::{env, thread};
 pub(crate) enum Subcommand {
     Build,
     Clean,
+    CleanCache,
     Help,
     Rebuild,
     Run,
@@ -23,6 +24,7 @@ pub(crate) enum Subcommand {
 pub(crate) enum Profile {
     Debug,
     Release,
+    Test,
 }
 
 impl Display for Profile {
@@ -30,6 +32,7 @@ impl Display for Profile {
         match self {
             Profile::Debug => write!(f, "debug"),
             Profile::Release => write!(f, "release"),
+            Profile::Test => write!(f, "test"),
         }
     }
 }
@@ -64,11 +67,15 @@ pub(crate) fn parse_args() -> Args {
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
             "clean" => args.subcommand = Subcommand::Clean,
+            "clean-cache" => args.subcommand = Subcommand::CleanCache,
             "build" => args.subcommand = Subcommand::Build,
             "help" | "-h" | "--help" => args.subcommand = Subcommand::Help,
             "run" => args.subcommand = Subcommand::Run,
             "rebuild" => args.subcommand = Subcommand::Rebuild,
-            "test" => args.subcommand = Subcommand::Test,
+            "test" => {
+                args.subcommand = Subcommand::Test;
+                args.profile = Profile::Test;
+            }
             "version" | "--version" => args.subcommand = Subcommand::Version,
             "-C" | "--manifest-dir" => {
                 args.manifest_dir = args_iter.next().expect("Invalid argument")
@@ -112,6 +119,7 @@ Options:
 
 Subcommands:
   clean                       Remove build artifacts
+  clean-cache                 Clean global bob cache
   build                       Build the project
   help                        Print this help message
   rebuild                     Clean and build the project

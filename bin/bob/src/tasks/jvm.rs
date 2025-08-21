@@ -13,19 +13,18 @@ use regex::Regex;
 use crate::Bobje;
 use crate::args::Profile;
 use crate::executor::Executor;
-use crate::manifest::JarDependency;
+use crate::manifest::{JarDependency, PackageType};
 
 // MARK: Java/Kotlin tasks
-pub(crate) fn detect_java_kotlin(bobje: &Bobje) -> bool {
-    detect_java_from_source_files(&bobje.source_files)
-        || detect_kotlin_from_source_files(&bobje.source_files)
+pub(crate) fn detect_java_kotlin(source_files: &[String]) -> bool {
+    detect_java(source_files) || detect_kotlin(source_files)
 }
 
-pub(crate) fn detect_java_from_source_files(source_files: &[String]) -> bool {
+pub(crate) fn detect_java(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".java"))
 }
 
-pub(crate) fn detect_kotlin_from_source_files(source_files: &[String]) -> bool {
+pub(crate) fn detect_kotlin(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".kt"))
 }
 
@@ -50,22 +49,15 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
     }
 
     #[cfg(windows)]
-    let class_separator = ";";
+    let classpath_separator = ";";
     #[cfg(not(windows))]
-    let class_separator = ":";
-    let classpath = format!(
-        "{}{}",
-        classes_dir,
-        if !bobje.manifest.build.classpath.is_empty() {
-            format!(
-                "{}{}",
-                class_separator,
-                bobje.manifest.build.classpath.join(class_separator)
-            )
-        } else {
-            "".to_string()
-        }
-    );
+    let classpath_separator = ":";
+    let mut classpath = String::new();
+    classpath.push_str(&classes_dir);
+    if !bobje.manifest.build.classpath.is_empty() {
+        classpath.push_str(classpath_separator);
+        classpath.push_str(&bobje.manifest.build.classpath.join(classpath_separator));
+    }
 
     for module in &modules {
         let mut inputs = module.source_files.clone();
@@ -82,7 +74,7 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
             }
         }
         for dependency_bobje in bobje.dependencies.values() {
-            if dependency_bobje.r#type == crate::BobjeType::ExternalJar {
+            if dependency_bobje.r#type == PackageType::ExternalJar {
                 let jar = dependency_bobje.jar.as_ref().expect("Should be some");
                 inputs.push(format!(
                     "{}/{}",
@@ -127,13 +119,7 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
                 kotlinc_flags,
                 classpath,
                 classes_dir,
-                module
-                    .source_files
-                    .iter()
-                    .filter(|f| f.ends_with(".kt"))
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(" ")
+                kotlin_files.join(" ")
             ));
         }
 
@@ -142,6 +128,30 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
             inputs,
             vec![format!("{}/{}", classes_dir, module.name.replace('.', "/"))],
         );
+    }
+
+    // Add phony build target with all tests
+    if bobje.profile == Profile::Test && bobje.r#type == PackageType::Binary {
+        let mut inputs = Vec::new();
+        let mut outputs = Vec::new();
+        for module in &modules {
+            let mut found_test = false;
+            for source_file in &module.source_files {
+                println!("Checking source file: {source_file}");
+                if source_file.ends_with("Test.java") || source_file.ends_with("Test.kt") {
+                    found_test = true;
+                    outputs.push(format!(
+                        "{}/{}.class",
+                        classes_dir,
+                        get_class_name(source_file).replace(".", "/")
+                    ));
+                }
+            }
+            if found_test {
+                inputs.push(format!("{}/{}", classes_dir, module.name.replace('.', "/")));
+            }
+        }
+        executor.add_task_phony(inputs, outputs);
     }
 }
 
@@ -155,6 +165,21 @@ pub(crate) fn run_java_class(bobje: &Bobje) -> ! {
         }))
         .status()
         .expect("Failed to execute java");
+    exit(status.code().unwrap_or(1))
+}
+
+pub(crate) fn run_junit_tests(bobje: &Bobje) -> ! {
+    let mut cmd = Command::new("java");
+    cmd.arg("-cp")
+        .arg(format!("{}/classes", bobje.out_dir()))
+        .arg("org.junit.runner.JUnitCore");
+    for source_file in &bobje.source_files {
+        if source_file.ends_with("Test.java") || source_file.ends_with("Test.kt") {
+            cmd.arg(get_class_name(source_file));
+        }
+    }
+
+    let status = cmd.status().expect("JUnit tests failed");
     exit(status.code().unwrap_or(1))
 }
 
@@ -305,11 +330,13 @@ pub(crate) fn run_jar(bobje: &Bobje) -> ! {
 
 // MARK: Utils
 pub(crate) fn get_class_name(source_file: &str) -> String {
-    source_file
+    let relative_path = source_file
         .split("src/")
         .nth(1)
         .or_else(|| source_file.split("src-gen/").nth(1))
-        .expect("Should be some")
+        .unwrap_or(source_file);
+
+    relative_path
         .trim_end_matches(".java")
         .trim_end_matches(".kt")
         .replace(['/', '\\'], ".")
@@ -335,8 +362,15 @@ pub(crate) fn find_modules(bobje: &Bobje) -> Vec<Module> {
             modules.push(module);
         }
     }
+
     for source_file in &bobje.source_files {
         if source_file.ends_with(".java") || source_file.ends_with(".kt") {
+            if bobje.profile != Profile::Test
+                && (source_file.ends_with("Test.java") || source_file.ends_with("Test.kt"))
+            {
+                continue;
+            }
+
             let module_name = get_module_name(source_file);
             if let Some(module) = modules.iter_mut().find(|m| m.name == module_name) {
                 module.source_files.push(source_file.to_string());
@@ -348,6 +382,18 @@ pub(crate) fn find_modules(bobje: &Bobje) -> Vec<Module> {
             }
         }
     }
+
+    // Sort module with main class to be last
+    if let Some(main_class) = find_main_class(bobje) {
+        if let Some(pos) = modules
+            .iter()
+            .position(|m| m.name == get_module_name(&main_class))
+        {
+            let main_module = modules.remove(pos);
+            modules.push(main_module);
+        }
+    }
+
     modules
 }
 

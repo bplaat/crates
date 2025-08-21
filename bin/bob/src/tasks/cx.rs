@@ -11,6 +11,7 @@ use std::process::{Command, exit};
 use regex::Regex;
 
 use crate::executor::Executor;
+use crate::manifest::PackageType;
 use crate::utils::write_file_when_different;
 use crate::{Bobje, Profile};
 
@@ -32,15 +33,13 @@ impl CxVars {
         let mut cflags = match bobje.profile {
             Profile::Debug => "-g -DDEBUG".to_string(),
             Profile::Release => "-Os -DRELEASE".to_string(),
+            Profile::Test => "-g -DDEBUG -DTEST".to_string(),
         };
         cflags.push_str(&format!(
             " -Wall -Wextra -Wpedantic -Werror -I{include_path}"
         ));
         if let Some(target) = &bobje.target {
             cflags.push_str(&format!(" --target={target}"));
-        }
-        if bobje.is_test {
-            cflags.push_str(" -DTEST");
         }
         if !bobje.manifest.build.cflags.is_empty() {
             cflags.push(' ');
@@ -143,8 +142,8 @@ pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut Executor) {
 }
 
 // MARK: C tasks
-pub(crate) fn detect_c(bobje: &Bobje) -> bool {
-    bobje.source_files.iter().any(|path| path.ends_with(".c"))
+pub(crate) fn detect_c(source_files: &[String]) -> bool {
+    source_files.iter().any(|path| path.ends_with(".c"))
 }
 
 pub(crate) fn generate_c_tasks(bobje: &Bobje, executor: &mut Executor) {
@@ -168,8 +167,8 @@ pub(crate) fn generate_c_tasks(bobje: &Bobje, executor: &mut Executor) {
 }
 
 // MARK: C++ tasks
-pub(crate) fn detect_cpp(bobje: &Bobje) -> bool {
-    bobje.source_files.iter().any(|path| path.ends_with(".cpp"))
+pub(crate) fn detect_cpp(source_files: &[String]) -> bool {
+    source_files.iter().any(|path| path.ends_with(".cpp"))
 }
 
 pub(crate) fn generate_cpp_tasks(bobje: &Bobje, executor: &mut Executor) {
@@ -193,8 +192,8 @@ pub(crate) fn generate_cpp_tasks(bobje: &Bobje, executor: &mut Executor) {
 }
 
 // MARK: Objective-C tasks
-pub(crate) fn detect_objc(bobje: &Bobje) -> bool {
-    bobje.source_files.iter().any(|path| path.ends_with(".m"))
+pub(crate) fn detect_objc(source_files: &[String]) -> bool {
+    source_files.iter().any(|path| path.ends_with(".m"))
 }
 
 pub(crate) fn generate_objc_tasks(bobje: &Bobje, executor: &mut Executor) {
@@ -218,8 +217,8 @@ pub(crate) fn generate_objc_tasks(bobje: &Bobje, executor: &mut Executor) {
 }
 
 // MARK: Objective-C++ tasks
-pub(crate) fn detect_objcpp(bobje: &Bobje) -> bool {
-    bobje.source_files.iter().any(|path| path.ends_with(".mm"))
+pub(crate) fn detect_objcpp(source_files: &[String]) -> bool {
+    source_files.iter().any(|path| path.ends_with(".mm"))
 }
 
 pub(crate) fn generate_objcpp_tasks(bobje: &Bobje, executor: &mut Executor) {
@@ -243,8 +242,11 @@ pub(crate) fn generate_objcpp_tasks(bobje: &Bobje, executor: &mut Executor) {
 }
 
 // MARK: Linker tasks
-pub(crate) fn detect_cx(bobje: &Bobje) -> bool {
-    detect_c(bobje) || detect_cpp(bobje) || detect_objc(bobje) || detect_objcpp(bobje)
+pub(crate) fn detect_cx(source_files: &[String]) -> bool {
+    detect_c(source_files)
+        || detect_cpp(source_files)
+        || detect_objc(source_files)
+        || detect_objcpp(source_files)
 }
 
 pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
@@ -253,7 +255,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     // Gather inputs
     let mut inputs = Vec::new();
     let mut contains_cpp = false;
-    if bobje.is_test {
+    if bobje.profile == Profile::Test {
         let test_functions = find_test_function(bobje);
         for test_function in &test_functions {
             inputs.push(get_object_path(bobje, &test_function.source_file));
@@ -293,7 +295,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
         }
     }
 
-    if bobje.r#type == crate::BobjeType::Library {
+    if bobje.r#type == PackageType::Library {
         let static_library_file = format!("{}/lib{}.a", bobje.out_dir_with_target(), bobje.name);
         executor.add_task_cmd(
             format!(
@@ -307,8 +309,8 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
         );
     }
 
-    if bobje.r#type == crate::BobjeType::Binary {
-        let executable_file = if bobje.is_test {
+    if bobje.r#type == PackageType::Binary || bobje.profile == Profile::Test {
+        let executable_file = if bobje.profile == Profile::Test {
             format!("{}/test_{}", bobje.out_dir_with_target(), bobje.name)
         } else {
             format!("{}/{}", bobje.out_dir_with_target(), bobje.name)
@@ -365,7 +367,7 @@ pub(crate) fn run_ld(bobje: &Bobje) -> ! {
     exit(status.code().unwrap_or(1))
 }
 
-pub(crate) fn run_ld_tests(bobje: &Bobje) -> ! {
+pub(crate) fn run_ld_cunit_tests(bobje: &Bobje) -> ! {
     let ext = if cfg!(windows) { ".exe" } else { "" };
     let status = Command::new(format!(
         "{}/test_{}{}",

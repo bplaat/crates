@@ -16,12 +16,25 @@ pub(crate) struct Manifest {
     pub dependencies: HashMap<String, Dependency>,
 }
 
+#[derive(Default, Copy, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum PackageType {
+    #[default]
+    #[serde(alias = "bin")]
+    Binary,
+    #[serde(alias = "lib")]
+    Library,
+    #[serde(skip)]
+    ExternalJar,
+}
+
 #[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct Package {
     pub name: String,
     pub id: Option<String>,
     pub version: String,
+    pub r#type: PackageType,
     pub metadata: PackageMetadata,
 }
 

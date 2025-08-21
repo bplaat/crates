@@ -16,6 +16,11 @@ A simple build system for my projects, because I really like the simplicity of C
 -   macOS bundle (.app)
 -   Android APK (.apk)
 
+### Supported unit test libraries
+
+-   CUnit (.c, .cpp, .m, .mm)
+-   JUnit (.java, .kt)
+
 ## Getting Started
 
 ### Creating a C project

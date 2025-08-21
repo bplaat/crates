@@ -7,6 +7,10 @@ public class Dog {
         this.name = name;
     }
 
+    public String name() {
+        return name;
+    }
+
     public void greet() {
         System.out.println("Woof said " + name + "!");
     }

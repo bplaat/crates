@@ -130,11 +130,7 @@ impl Executor {
     }
 
     pub(crate) fn add_task_phony(&mut self, inputs: Vec<String>, outputs: Vec<String>) {
-        self.add_task(
-            TaskAction::Phony(outputs.first().expect("Should have one output").clone()),
-            inputs,
-            outputs,
-        );
+        self.add_task(TaskAction::Phony(outputs.join(" ")), inputs, outputs);
     }
 
     pub(crate) fn add_task_cmd(

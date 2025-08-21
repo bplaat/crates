@@ -12,8 +12,8 @@ use crate::executor::Executor;
 use crate::utils::write_file_when_different;
 
 // MARK: Template tasks
-pub(crate) fn detect_template(bobje: &Bobje) -> bool {
-    bobje.source_files.iter().any(|path| path.ends_with(".in"))
+pub(crate) fn detect_template(source_files: &[String]) -> bool {
+    source_files.iter().any(|path| path.ends_with(".in"))
 }
 
 pub(crate) fn process_templates(bobje: &mut Bobje, _executor: &mut Executor) {
