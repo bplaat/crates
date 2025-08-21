@@ -79,16 +79,24 @@ impl Log {
             .append(true)
             .open(path)
             .unwrap_or_else(|_| panic!("Can't open file: {path}"));
+
         let mut contents = String::new();
         file.read_to_string(&mut contents)
             .unwrap_or_else(|_| panic!("Can't read file: {path}"));
-        let entries = contents
+
+        let entries = match contents
             .lines()
-            .map(|line| {
-                line.parse()
-                    .unwrap_or_else(|_| panic!("Corrupt log file: {path}"))
-            })
-            .collect::<Vec<LogEntry>>();
+            .map(|line| line.parse::<LogEntry>())
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(entries) => entries,
+            Err(_) => {
+                // Truncate the file if corrupt and return empty log
+                file.set_len(0)
+                    .unwrap_or_else(|_| panic!("Can't truncate file: {path}"));
+                Vec::new()
+            }
+        };
         Log { file, entries }
     }
 
