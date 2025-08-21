@@ -253,8 +253,14 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     let vars = CxVars::new(bobje);
 
     // Gather inputs
-    let mut inputs = Vec::new();
     let mut contains_cpp = false;
+    for source_file in &bobje.source_files {
+        if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
+            contains_cpp = true;
+        }
+    }
+
+    let mut inputs = Vec::new();
     if bobje.profile == Profile::Test {
         let test_functions = find_test_function(bobje);
         for test_function in &test_functions {
@@ -268,9 +274,6 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
                 || source_file.ends_with(".mm")
             {
                 inputs.push(get_object_path(bobje, source_file));
-            }
-            if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
-                contains_cpp = true;
             }
         }
 
@@ -295,7 +298,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
         }
     }
 
-    if bobje.r#type == PackageType::Library {
+    if bobje.r#type == PackageType::Library && bobje.profile != Profile::Test {
         let static_library_file = format!("{}/lib{}.a", bobje.out_dir_with_target(), bobje.name);
         executor.add_task_cmd(
             format!(
