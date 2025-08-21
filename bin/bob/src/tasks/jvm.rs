@@ -178,7 +178,7 @@ pub(crate) fn download_extract_jar_tasks(
     }
     if let Some(url) = &jar.url {
         executor.add_task_cmd(
-            format!("wget {url} -O {downloaded_jar}"),
+            format!("wget {url} -O {downloaded_jar} 2> /dev/null"),
             vec![],
             vec![downloaded_jar.clone()],
         );
