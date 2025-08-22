@@ -74,6 +74,12 @@ pub(crate) struct JarDependency {
 #[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct Build {
+    // Platform specific
+    pub macos: Option<Box<Build>>,
+    pub linux: Option<Box<Build>>,
+    pub windows: Option<Box<Build>>,
+
+    pub asflags: String,
     pub cflags: String,
     pub ldflags: String,
     pub target: Option<String>,
@@ -82,6 +88,38 @@ pub(crate) struct Build {
     pub javac_flags: String,
     pub kotlinc_flags: String,
     pub classpath: Vec<String>,
+}
+
+impl Build {
+    pub(crate) fn merge(&mut self, other_build: Build) {
+        if !other_build.asflags.is_empty() {
+            self.asflags = other_build.asflags;
+        }
+        if !other_build.cflags.is_empty() {
+            self.cflags = other_build.cflags;
+        }
+        if !other_build.ldflags.is_empty() {
+            self.ldflags = other_build.ldflags;
+        }
+        if other_build.target.is_some() {
+            self.target = other_build.target;
+        }
+        if other_build.arch.is_some() {
+            self.arch = other_build.arch;
+        }
+        if other_build.entry.is_some() {
+            self.entry = other_build.entry;
+        }
+        if !other_build.javac_flags.is_empty() {
+            self.javac_flags = other_build.javac_flags;
+        }
+        if !other_build.kotlinc_flags.is_empty() {
+            self.kotlinc_flags = other_build.kotlinc_flags;
+        }
+        if !other_build.classpath.is_empty() {
+            self.classpath = other_build.classpath;
+        }
+    }
 }
 
 #[derive(Default, Clone, Deserialize)]

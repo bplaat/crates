@@ -115,6 +115,23 @@ impl Bobje {
             });
         let source_files = index_files(&format!("{manifest_dir}/src/"));
 
+        // Merge platform specific build config
+        if cfg!(target_os = "macos")
+            && let Some(macos_build) = &manifest.build.macos
+        {
+            manifest.build.merge(*macos_build.clone());
+        }
+        if cfg!(target_os = "linux")
+            && let Some(linux_build) = &manifest.build.linux
+        {
+            manifest.build.merge(*linux_build.clone());
+        }
+        if cfg!(windows)
+            && let Some(windows_build) = &manifest.build.windows
+        {
+            manifest.build.merge(*windows_build.clone());
+        }
+
         // Add libSystem dep when Cx on macOS
         if cfg!(target_os = "macos") && detect_cx(&source_files) {
             manifest.dependencies.insert(
@@ -236,7 +253,7 @@ impl Bobje {
             } else if cfg!(target_os = "linux") {
                 target = Some(format!("{arch}-unknown-linux-gnu"));
             } else {
-                panic!("Unsupported custom arch target tripple");
+                panic!("Unsupported custom arch target triple");
             }
         }
         if let Some(args_target) = &args.target {

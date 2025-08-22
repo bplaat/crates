@@ -40,4 +40,4 @@ strlen:
 .data
 
 hello:
-    .asciz "Hello x86_64 assembler!\n"
+    .asciz "Hello from x86_64 assembler!\n"

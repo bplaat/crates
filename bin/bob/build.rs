@@ -33,7 +33,7 @@ fn main() {
             .next_back()
             .expect("Failed to get last part of path")
             .to_string();
-        if cfg!(not(target_os = "macos")) && dir_name.starts_with("objc")
+        if (cfg!(not(target_os = "macos")) && dir_name.starts_with("objc"))
             || dir_name == "android-java-lib"
             || dir_name == "android-kotlin-lib"
         {

@@ -17,6 +17,7 @@ use crate::{Bobje, Profile};
 
 // MARK: Cx vars
 struct CxVars {
+    asflags: String,
     cflags: String,
     ldflags: String,
     libs: String,
@@ -29,6 +30,18 @@ struct CxVars {
 
 impl CxVars {
     fn new(bobje: &Bobje) -> Self {
+        let use_llvm = cfg!(any(target_os = "macos", windows));
+
+        // Asflags
+        let mut asflags = if !bobje.manifest.build.asflags.is_empty() {
+            bobje.manifest.build.asflags.clone()
+        } else {
+            String::new()
+        };
+        if use_llvm && let Some(target) = &bobje.target {
+            asflags.push_str(&format!(" --target={target}"));
+        }
+
         // Cflags
         let mut cflags = match bobje.profile {
             Profile::Debug => "-g -DDEBUG".to_string(),
@@ -39,7 +52,7 @@ impl CxVars {
             " -Wall -Wextra -Wpedantic -Werror -I{}/include",
             bobje.out_dir_with_target()
         ));
-        if let Some(target) = &bobje.target {
+        if use_llvm && let Some(target) = &bobje.target {
             cflags.push_str(&format!(" --target={target}"));
         }
         if !bobje.manifest.build.cflags.is_empty() {
@@ -60,6 +73,9 @@ impl CxVars {
         };
         if let Some(entry) = &bobje.manifest.build.entry {
             ldflags.push_str(&format!(" -e {entry}"));
+            if !cfg!(target_os = "macos") {
+                ldflags.push_str(" -nostartfiles");
+            }
         }
 
         // Libs
@@ -103,33 +119,48 @@ impl CxVars {
             }
         }
 
-        // Use Clang on macOS and Windows, GCC elsewhere
-        #[cfg(target_os = "macos")]
-        let (cc, cxx, ld, ar, strip) = (
-            "clang".to_string(),
-            "clang++".to_string(),
-            "ld".to_string(),
-            "ar".to_string(),
-            "strip".to_string(),
-        );
-        #[cfg(windows)]
-        let (cc, cxx, ld, ar, strip) = (
-            "clang".to_string(),
-            "clang++".to_string(),
-            "ld".to_string(),
-            "llvm-ar".to_string(),
-            "llvm-strip".to_string(),
-        );
-        #[cfg(not(any(target_os = "macos", windows)))]
-        let (cc, cxx, ld, ar, strip) = (
-            "gcc".to_string(),
-            "g++".to_string(),
-            "ld".to_string(),
-            "ar".to_string(),
-            "strip".to_string(),
-        );
+        // Find correct toolchain
+        let (cc, cxx, ld, ar, strip) = if use_llvm {
+            (
+                "clang".to_string(),
+                "clang++".to_string(),
+                "ld".to_string(),
+                "ar".to_string(),
+                "strip".to_string(),
+            )
+        } else if let Some(target) = &bobje.target {
+            let prefix = target.replace("-unknown-linux-gnu", "-linux-gnu");
+            if cfg!(target_arch = "x86_64") && target == "x86_64-linux-gnu"
+                || cfg!(target_arch = "aarch64") && target == "aarch64-linux-gnu"
+            {
+                (
+                    "gcc".to_string(),
+                    "g++".to_string(),
+                    "ld".to_string(),
+                    "ar".to_string(),
+                    "strip".to_string(),
+                )
+            } else {
+                (
+                    format!("{prefix}-gcc"),
+                    format!("{prefix}-g++"),
+                    format!("{prefix}-ld"),
+                    format!("{prefix}-ar"),
+                    format!("{prefix}-strip"),
+                )
+            }
+        } else {
+            (
+                "gcc".to_string(),
+                "g++".to_string(),
+                "ld".to_string(),
+                "ar".to_string(),
+                "strip".to_string(),
+            )
+        };
 
         Self {
+            asflags,
             cflags,
             ldflags,
             libs,
@@ -171,7 +202,7 @@ pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut Executor) {
 pub(crate) fn detect_asm(source_files: &[String]) -> bool {
     source_files
         .iter()
-        .any(|path| path.ends_with(".s") || path.ends_with(".asm"))
+        .any(|path| path.ends_with(".s") || path.ends_with(".S"))
 }
 
 pub(crate) fn generate_asm_tasks(bobje: &Bobje, executor: &mut Executor) {
@@ -179,20 +210,13 @@ pub(crate) fn generate_asm_tasks(bobje: &Bobje, executor: &mut Executor) {
     let asm_source_files = bobje
         .source_files
         .iter()
-        .filter(|source_file| source_file.ends_with(".s") || source_file.ends_with(".asm"));
+        .filter(|source_file| source_file.ends_with(".s") || source_file.ends_with(".S"));
     for source_file in asm_source_files {
         let object_file = get_object_path(bobje, source_file);
         executor.add_task_cmd(
             format!(
                 "{} {} -c {} -o {}",
-                vars.cc,
-                if let Some(target) = &bobje.target {
-                    format!("--target={target}")
-                } else {
-                    String::new()
-                },
-                source_file,
-                object_file
+                vars.cc, vars.asflags, source_file, object_file
             ),
             vec![source_file.clone()],
             vec![object_file],
@@ -317,7 +341,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     let mut contains_cpp = false;
     for source_file in &bobje.source_files {
         if source_file.ends_with(".s")
-            || source_file.ends_with(".asm")
+            || source_file.ends_with(".S")
             || source_file.ends_with(".c")
             || source_file.ends_with(".cpp")
             || source_file.ends_with(".m")
@@ -491,7 +515,7 @@ fn get_object_path(bobje: &Bobje, source_file: &str) -> String {
             .or_else(|| source_file.split("src-gen/").nth(1))
             .expect("Should be some")
             .replace(".s", ".o")
-            .replace(".asm", ".o")
+            .replace(".S", ".o")
             .replace(".cpp", ".o")
             .replace(".c", ".o")
             .replace(".mm", ".o")
@@ -584,7 +608,7 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
                 .nth(1)
                 .expect("Should be some")
                 .trim_end_matches(".s")
-                .trim_end_matches(".asm")
+                .trim_end_matches(".S")
                 .trim_end_matches(".c")
                 .trim_end_matches(".cpp")
                 .trim_end_matches(".m")
