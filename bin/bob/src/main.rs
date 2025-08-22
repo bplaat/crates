@@ -21,8 +21,8 @@ use crate::tasks::android::{
 use crate::tasks::bundle::{bundle_is_lipo, detect_bundle, generate_bundle_tasks, run_bundle};
 use crate::tasks::cx::{
     copy_cx_headers, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp, generate_c_tasks,
-    generate_cpp_tasks, generate_cx_test_main, generate_ld_tasks, generate_objc_tasks,
-    generate_objcpp_tasks, run_ld, run_ld_cunit_tests,
+    generate_cpp_tasks, generate_cx_test_main, generate_ld_cunit_tests, generate_ld_tasks,
+    generate_objc_tasks, generate_objcpp_tasks, run_ld, run_ld_cunit_tests,
 };
 use crate::tasks::jvm::{
     detect_jar, detect_java_kotlin, detect_kotlin, download_extract_jar_tasks, generate_jar_tasks,
@@ -268,7 +268,11 @@ impl Bobje {
                 generate_javac_kotlinc_tasks(bobje, executor);
             }
             if detect_cx(&bobje.source_files) {
-                generate_ld_tasks(bobje, executor);
+                if bobje.profile == Profile::Test {
+                    generate_ld_cunit_tests(bobje, executor);
+                } else {
+                    generate_ld_tasks(bobje, executor);
+                }
             }
             if bobje.r#type == PackageType::Binary {
                 if detect_android(bobje) {

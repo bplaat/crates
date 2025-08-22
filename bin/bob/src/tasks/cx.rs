@@ -253,52 +253,43 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     let vars = CxVars::new(bobje);
 
     // Gather inputs
+    let mut inputs = Vec::new();
     let mut contains_cpp = false;
     for source_file in &bobje.source_files {
+        if source_file.ends_with(".c")
+            || source_file.ends_with(".cpp")
+            || source_file.ends_with(".m")
+            || source_file.ends_with(".mm")
+        {
+            inputs.push(get_object_path(bobje, source_file));
+        }
         if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
             contains_cpp = true;
         }
     }
 
-    let mut inputs = Vec::new();
-    if bobje.profile == Profile::Test {
-        let test_functions = find_test_function(bobje);
-        for test_function in &test_functions {
-            inputs.push(get_object_path(bobje, &test_function.source_file));
-        }
-    } else {
-        for source_file in &bobje.source_files {
-            if source_file.ends_with(".c")
-                || source_file.ends_with(".cpp")
-                || source_file.ends_with(".m")
-                || source_file.ends_with(".mm")
-            {
-                inputs.push(get_object_path(bobje, source_file));
-            }
-        }
-
-        // Add dependencies
-        fn add_dependency_inputs(bobje: &Bobje, inputs: &mut Vec<String>, contains_cpp: &mut bool) {
-            for dependency_bobje in bobje.dependencies.values() {
-                add_dependency_inputs(dependency_bobje, inputs, contains_cpp);
-            }
-            for source_file in &bobje.source_files {
-                if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
-                    *contains_cpp = true;
-                }
-            }
-            inputs.push(format!(
-                "{}/lib{}.a",
-                bobje.out_dir_with_target(),
-                bobje.name
-            ));
-        }
+    // Add dependencies
+    fn add_dependency_inputs(bobje: &Bobje, inputs: &mut Vec<String>, contains_cpp: &mut bool) {
         for dependency_bobje in bobje.dependencies.values() {
-            add_dependency_inputs(dependency_bobje, &mut inputs, &mut contains_cpp);
+            add_dependency_inputs(dependency_bobje, inputs, contains_cpp);
         }
+        for source_file in &bobje.source_files {
+            if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
+                *contains_cpp = true;
+            }
+        }
+        inputs.push(format!(
+            "{}/lib{}.a",
+            bobje.out_dir_with_target(),
+            bobje.name
+        ));
+    }
+    for dependency_bobje in bobje.dependencies.values() {
+        add_dependency_inputs(dependency_bobje, &mut inputs, &mut contains_cpp);
     }
 
-    if bobje.r#type == PackageType::Library && bobje.profile != Profile::Test {
+    // Create static library
+    if bobje.r#type == PackageType::Library {
         let static_library_file = format!("{}/lib{}.a", bobje.out_dir_with_target(), bobje.name);
         executor.add_task_cmd(
             format!(
@@ -308,16 +299,13 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
                 inputs.join(" "),
             ),
             inputs.clone(),
-            vec![static_library_file.clone()],
+            vec![static_library_file],
         );
     }
 
-    if bobje.r#type == PackageType::Binary || bobje.profile == Profile::Test {
-        let executable_file = if bobje.profile == Profile::Test {
-            format!("{}/test_{}", bobje.out_dir_with_target(), bobje.name)
-        } else {
-            format!("{}/{}", bobje.out_dir_with_target(), bobje.name)
-        };
+    // Link executable
+    if bobje.r#type == PackageType::Binary {
+        let executable_file = format!("{}/{}", bobje.out_dir_with_target(), bobje.name);
         let ext = if cfg!(windows) { ".exe" } else { "" };
         if bobje.profile == Profile::Release {
             let unstripped_path = format!("{executable_file}-unstripped{ext}");
@@ -336,8 +324,8 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             );
             executor.add_task_cmd(
                 format!("{} {} -o {}", vars.strip, unstripped_path, stripped_path),
-                vec![unstripped_path.clone()],
-                vec![stripped_path.clone()],
+                vec![unstripped_path],
+                vec![stripped_path],
             );
         } else {
             let out_path = format!("{executable_file}{ext}");
@@ -351,10 +339,43 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
                     out_path,
                 ),
                 inputs.clone(),
-                vec![out_path.clone()],
+                vec![out_path],
             );
         }
     }
+}
+
+pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut Executor) {
+    let vars = CxVars::new(bobje);
+
+    // Gather inputs
+    let mut inputs = Vec::new();
+    let mut contains_cpp = false;
+    let test_functions = find_test_functions(bobje);
+    for test_function in &test_functions {
+        inputs.push(get_object_path(bobje, &test_function.source_file));
+        if test_function.source_file.ends_with(".cpp") || test_function.source_file.ends_with(".mm")
+        {
+            contains_cpp = true;
+        }
+    }
+
+    // Link test executable
+    let executable_file = format!("{}/test_{}", bobje.out_dir_with_target(), bobje.name);
+    let ext = if cfg!(windows) { ".exe" } else { "" };
+    let out_path = format!("{executable_file}{ext}");
+    executor.add_task_cmd(
+        format!(
+            "{} {} {} {} -o {}",
+            if contains_cpp { vars.cxx } else { vars.cc },
+            vars.ldflags,
+            inputs.join(" "),
+            vars.libs,
+            out_path,
+        ),
+        inputs,
+        vec![out_path],
+    );
 }
 
 pub(crate) fn run_ld(bobje: &Bobje) -> ! {
@@ -444,7 +465,7 @@ struct TestFunction {
     functions: Vec<String>,
 }
 
-fn find_test_function(bobje: &Bobje) -> Vec<TestFunction> {
+fn find_test_functions(bobje: &Bobje) -> Vec<TestFunction> {
     let mut test_functions = Vec::new();
     let re = Regex::new(r"void\s+(test_[^\(]+)").expect("Can't compile regex");
     for source_file in &bobje.source_files {
@@ -465,12 +486,11 @@ fn find_test_function(bobje: &Bobje) -> Vec<TestFunction> {
 }
 
 pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
-    let test_functions = find_test_function(bobje);
+    let test_functions = find_test_functions(bobje);
 
     let mut s = String::new();
     _ = writeln!(s, "// This file is generated by bob, do not edit!");
-    _ = writeln!(s, "#include <stdint.h>");
-    _ = writeln!(s, "#include <CUnit/Basic.h>\n");
+    _ = writeln!(s, "\n#include <CUnit/Basic.h>\n");
     for test_function in &test_functions {
         for function in &test_function.functions {
             _ = writeln!(s, "extern void {function}(void);");
@@ -513,7 +533,7 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
     #define ANSI_COLOR_RED "\x1b[31m"
     #define ANSI_COLOR_GREEN "\x1b[32m"
     #define ANSI_COLOR_RESET "\x1b[0m"
-    uint32_t number_of_failures = CU_get_number_of_failures();
+    int number_of_failures = CU_get_number_of_failures();
     if (number_of_failures == 0) {{
         printf(ANSI_COLOR_GREEN "All tests passed!" ANSI_COLOR_RESET "\n");
     }} else {{

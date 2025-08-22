@@ -131,13 +131,12 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
     }
 
     // Add phony build target with all tests
-    if bobje.profile == Profile::Test && bobje.r#type == PackageType::Binary {
+    if bobje.profile == Profile::Test {
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         for module in &modules {
             let mut found_test = false;
             for source_file in &module.source_files {
-                println!("Checking source file: {source_file}");
                 if source_file.ends_with("Test.java") || source_file.ends_with("Test.kt") {
                     found_test = true;
                     outputs.push(format!(
