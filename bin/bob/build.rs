@@ -63,15 +63,7 @@ fn test_bob_{}() {{
             dir_name.replace('-', "_"),
             entry,
             dir_name,
-            if dir_name == "c"
-                || dir_name == "cpp"
-                || dir_name == "cpp-c-interop"
-                || dir_name == "java"
-                || dir_name == "kotlin"
-                || dir_name == "c-lib"
-                || dir_name == "java-lib"
-                || dir_name == "kotlin-lib"
-            {
+            if dir_name.contains("-with-tests") {
                 format!(
                     r#"
     // Test example

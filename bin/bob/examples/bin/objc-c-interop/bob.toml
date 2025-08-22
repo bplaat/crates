@@ -3,4 +3,4 @@ name = "hello"
 version = "0.1.0"
 
 [dependencies]
-mul = { path = "../../lib/c-lib" }
+mul = { path = "../../lib/c-lib-with-tests" }
