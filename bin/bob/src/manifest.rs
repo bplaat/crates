@@ -76,6 +76,9 @@ pub(crate) struct JarDependency {
 pub(crate) struct Build {
     pub cflags: String,
     pub ldflags: String,
+    pub target: Option<String>,
+    pub arch: Option<String>,
+    pub entry: Option<String>,
     pub javac_flags: String,
     pub kotlinc_flags: String,
     pub classpath: Vec<String>,

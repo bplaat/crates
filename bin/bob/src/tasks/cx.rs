@@ -30,14 +30,14 @@ struct CxVars {
 impl CxVars {
     fn new(bobje: &Bobje) -> Self {
         // Cflags
-        let include_path = format!("{}/include", bobje.out_dir_with_target());
         let mut cflags = match bobje.profile {
             Profile::Debug => "-g -DDEBUG".to_string(),
             Profile::Release => "-Os -DRELEASE".to_string(),
             Profile::Test => "-g -DDEBUG -DTEST".to_string(),
         };
         cflags.push_str(&format!(
-            " -Wall -Wextra -Wpedantic -Werror -I{include_path}"
+            " -Wall -Wextra -Wpedantic -Werror -I{}/include",
+            bobje.out_dir_with_target()
         ));
         if let Some(target) = &bobje.target {
             cflags.push_str(&format!(" --target={target}"));
@@ -53,11 +53,14 @@ impl CxVars {
         }
 
         // Ldflags
-        let ldflags = if !bobje.manifest.build.ldflags.is_empty() {
+        let mut ldflags = if !bobje.manifest.build.ldflags.is_empty() {
             bobje.manifest.build.ldflags.clone()
         } else {
             String::new()
         };
+        if let Some(entry) = &bobje.manifest.build.entry {
+            ldflags.push_str(&format!(" -e {entry}"));
+        }
 
         // Libs
         let mut libs = String::new();
@@ -164,6 +167,39 @@ pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut Executor) {
     }
 }
 
+// MARK: Asm tasks
+pub(crate) fn detect_asm(source_files: &[String]) -> bool {
+    source_files
+        .iter()
+        .any(|path| path.ends_with(".s") || path.ends_with(".asm"))
+}
+
+pub(crate) fn generate_asm_tasks(bobje: &Bobje, executor: &mut Executor) {
+    let vars = CxVars::new(bobje);
+    let asm_source_files = bobje
+        .source_files
+        .iter()
+        .filter(|source_file| source_file.ends_with(".s") || source_file.ends_with(".asm"));
+    for source_file in asm_source_files {
+        let object_file = get_object_path(bobje, source_file);
+        executor.add_task_cmd(
+            format!(
+                "{} {} -c {} -o {}",
+                vars.cc,
+                if let Some(target) = &bobje.target {
+                    format!("--target={target}")
+                } else {
+                    String::new()
+                },
+                source_file,
+                object_file
+            ),
+            vec![source_file.clone()],
+            vec![object_file],
+        );
+    }
+}
+
 // MARK: C tasks
 pub(crate) fn detect_c(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".c"))
@@ -266,7 +302,8 @@ pub(crate) fn generate_objcpp_tasks(bobje: &Bobje, executor: &mut Executor) {
 
 // MARK: Linker tasks
 pub(crate) fn detect_cx(source_files: &[String]) -> bool {
-    detect_c(source_files)
+    detect_asm(source_files)
+        || detect_c(source_files)
         || detect_cpp(source_files)
         || detect_objc(source_files)
         || detect_objcpp(source_files)
@@ -279,7 +316,9 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     let mut inputs = Vec::new();
     let mut contains_cpp = false;
     for source_file in &bobje.source_files {
-        if source_file.ends_with(".c")
+        if source_file.ends_with(".s")
+            || source_file.ends_with(".asm")
+            || source_file.ends_with(".c")
             || source_file.ends_with(".cpp")
             || source_file.ends_with(".m")
             || source_file.ends_with(".mm")
@@ -451,6 +490,8 @@ fn get_object_path(bobje: &Bobje, source_file: &str) -> String {
             .nth(1)
             .or_else(|| source_file.split("src-gen/").nth(1))
             .expect("Should be some")
+            .replace(".s", ".o")
+            .replace(".asm", ".o")
             .replace(".cpp", ".o")
             .replace(".c", ".o")
             .replace(".mm", ".o")
@@ -542,6 +583,8 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
                 .split("src/")
                 .nth(1)
                 .expect("Should be some")
+                .trim_end_matches(".s")
+                .trim_end_matches(".asm")
                 .trim_end_matches(".c")
                 .trim_end_matches(".cpp")
                 .trim_end_matches(".m")

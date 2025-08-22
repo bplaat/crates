@@ -20,9 +20,10 @@ use crate::tasks::android::{
 };
 use crate::tasks::bundle::{bundle_is_lipo, detect_bundle, generate_bundle_tasks, run_bundle};
 use crate::tasks::cx::{
-    copy_cx_headers, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp, generate_c_tasks,
-    generate_cpp_tasks, generate_cx_test_main, generate_ld_cunit_tests, generate_ld_tasks,
-    generate_objc_tasks, generate_objcpp_tasks, run_ld, run_ld_cunit_tests,
+    copy_cx_headers, detect_asm, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp,
+    generate_asm_tasks, generate_c_tasks, generate_cpp_tasks, generate_cx_test_main,
+    generate_ld_cunit_tests, generate_ld_tasks, generate_objc_tasks, generate_objcpp_tasks, run_ld,
+    run_ld_cunit_tests,
 };
 use crate::tasks::jvm::{
     detect_jar, detect_java_kotlin, detect_kotlin, download_extract_jar_tasks, generate_jar_tasks,
@@ -87,11 +88,11 @@ fn subcommand_version() {
 pub(crate) struct Bobje {
     target_dir: String,
     profile: Profile,
-    target: Option<String>,
     // ...
     r#type: PackageType,
     name: String,
     version: String,
+    target: Option<String>,
     manifest_dir: String,
     manifest: Manifest,
     jar: Option<JarDependency>,
@@ -224,15 +225,33 @@ impl Bobje {
             }
         }
 
+        // Build target triple
+        let mut target = None;
+        if let Some(manifest_target) = &manifest.build.target {
+            target = Some(manifest_target.clone());
+        }
+        if let Some(arch) = &manifest.build.arch {
+            if cfg!(target_os = "macos") {
+                target = Some(format!("{arch}-apple-darwin"));
+            } else if cfg!(target_os = "linux") {
+                target = Some(format!("{arch}-unknown-linux-gnu"));
+            } else {
+                panic!("Unsupported custom arch target tripple");
+            }
+        }
+        if let Some(args_target) = &args.target {
+            target = Some(args_target.clone());
+        }
+
         // Generate tasks
         let mut bobje = Self {
             target_dir: args.target_dir.clone(),
             profile: args.profile,
-            target: args.target.clone(),
             // ...
             r#type: manifest.package.r#type,
             name: manifest.package.name.clone(),
             version: manifest.package.version.clone(),
+            target,
             manifest_dir: manifest_dir.to_string(),
             manifest,
             jar: None,
@@ -249,6 +268,9 @@ impl Bobje {
             }
             if detect_cx(&bobje.source_files) {
                 copy_cx_headers(bobje, executor);
+            }
+            if detect_asm(&bobje.source_files) {
+                generate_asm_tasks(bobje, executor);
             }
             if detect_c(&bobje.source_files) {
                 generate_c_tasks(bobje, executor);
@@ -316,11 +338,11 @@ impl Bobje {
         let bobje = Self {
             target_dir: args.target_dir.clone(),
             profile: args.profile,
-            target: args.target.clone(),
             // ...
             r#type: PackageType::ExternalJar,
             name: name.to_string(),
             version: jar.version.clone(),
+            target: args.target.clone(),
             manifest_dir: "".to_string(),
             manifest: Manifest::default(),
             jar: Some(jar.clone()),

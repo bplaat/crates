@@ -6,7 +6,7 @@ A simple build system for my projects, because I really like the simplicity of C
 
 ## Supported project types
 
--   Clang/GCC languages (.c, .cpp, .m, .mm)
+-   Clang/GCC languages (.c, .cpp, .m, .mm, .s, .asm)
 -   JVM languages (.java, .kt)
 -   Android (.java, .kt, .xml)
 

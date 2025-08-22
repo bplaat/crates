@@ -1,0 +1,7 @@
+[package]
+name = "hello"
+version = "0.1.0"
+
+[build]
+arch = "x86_64"
+entry = "_start"
