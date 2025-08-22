@@ -179,6 +179,10 @@ impl Bobje {
         for (dep_name, dep) in &manifest.dependencies {
             if let Some(path) = &dep.path {
                 let dep_bobje = Bobje::new(args, &format!("{manifest_dir}/{path}"), executor);
+                if dep_bobje.r#type != PackageType::Library {
+                    eprintln!("Dependency '{dep_name}' in {path} is not a library");
+                    exit(1);
+                }
                 dependencies.insert(dep_bobje.name.clone(), dep_bobje);
             }
 
