@@ -62,18 +62,19 @@ impl CxVars {
         // Libs
         let mut libs = String::new();
         if cfg!(target_os = "macos") {
-            let xcode_path = Command::new("xcode-select")
-                .arg("-p")
+            let sdk_path = Command::new("xcrun")
+                .arg("--show-sdk-path")
                 .output()
                 .map(|output| {
                     if output.status.success() {
                         String::from_utf8_lossy(&output.stdout).trim().to_string()
                     } else {
-                        String::new()
+                        panic!("Can't find macOS SDK path");
                     }
                 })
                 .unwrap_or_default();
-            libs.push_str(&format!(" -L{xcode_path}/SDKs/MacOSX.sdk/usr/lib"));
+
+            libs.push_str(&format!(" -L{sdk_path}/usr/lib"));
 
             if bobje
                 .manifest
@@ -81,9 +82,7 @@ impl CxVars {
                 .values()
                 .any(|dep| matches!(dep, Dependency::Framework { .. }))
             {
-                libs.push_str(&format!(
-                    " -F{xcode_path}/SDKs/MacOSX.sdk/System/Library/Frameworks"
-                ));
+                libs.push_str(&format!(" -F{sdk_path}/System/Library/Frameworks"));
             }
             for dep in bobje.manifest.dependencies.values() {
                 if let Dependency::Framework { framework } = &dep {
