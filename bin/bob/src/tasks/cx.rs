@@ -11,7 +11,7 @@ use std::process::{Command, exit};
 use regex::Regex;
 
 use crate::executor::Executor;
-use crate::manifest::PackageType;
+use crate::manifest::{Dependency, PackageType};
 use crate::utils::write_file_when_different;
 use crate::{Bobje, Profile};
 
@@ -47,7 +47,7 @@ impl CxVars {
             cflags.push_str(&bobje.manifest.build.cflags);
         }
         for dep in bobje.manifest.dependencies.values() {
-            if let Some(pkg_config) = &dep.pkg_config {
+            if let Dependency::PkgConfig { pkg_config } = &dep {
                 cflags.push_str(&format!(" {}", pkg_config_cflags(pkg_config)));
             }
         }
@@ -79,24 +79,24 @@ impl CxVars {
                 .manifest
                 .dependencies
                 .values()
-                .any(|dep| dep.framework.is_some())
+                .any(|dep| matches!(dep, Dependency::Framework { .. }))
             {
                 libs.push_str(&format!(
                     " -F{xcode_path}/SDKs/MacOSX.sdk/System/Library/Frameworks"
                 ));
             }
             for dep in bobje.manifest.dependencies.values() {
-                if let Some(framework) = &dep.framework {
+                if let Dependency::Framework { framework } = &dep {
                     libs.push_str(&format!(" -framework {framework}"));
                 }
             }
         }
 
         for dep in bobje.manifest.dependencies.values() {
-            if let Some(library) = &dep.library {
+            if let Dependency::Library { library } = &dep {
                 libs.push_str(&format!(" -l{library}"));
             }
-            if let Some(pkg_config) = &dep.pkg_config {
+            if let Dependency::PkgConfig { pkg_config } = &dep {
                 libs.push_str(&format!(" {}", pkg_config_libs(pkg_config)));
             }
         }

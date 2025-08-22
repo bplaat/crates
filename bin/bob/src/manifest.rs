@@ -39,14 +39,27 @@ pub(crate) struct Package {
 }
 
 #[derive(Clone, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) struct Dependency {
-    pub path: Option<String>,
-    pub library: Option<String>,
-    pub pkg_config: Option<String>,
-    pub framework: Option<String>,
-    pub jar: Option<JarDependency>,
-    pub maven: Option<String>,
+#[serde(untagged)]
+pub(crate) enum Dependency {
+    Path {
+        path: String,
+    },
+    Library {
+        library: String,
+    },
+    PkgConfig {
+        #[serde(rename = "pkg-config")]
+        pkg_config: String,
+    },
+    Framework {
+        framework: String,
+    },
+    Jar {
+        jar: JarDependency,
+    },
+    Maven {
+        maven: String,
+    },
 }
 
 #[derive(Clone, Deserialize)]
