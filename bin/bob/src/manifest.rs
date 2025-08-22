@@ -42,7 +42,9 @@ pub(crate) struct Package {
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct Dependency {
     pub path: Option<String>,
+    pub library: Option<String>,
     pub pkg_config: Option<String>,
+    pub framework: Option<String>,
     pub jar: Option<JarDependency>,
     pub maven: Option<String>,
 }

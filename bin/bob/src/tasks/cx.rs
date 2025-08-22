@@ -22,6 +22,7 @@ struct CxVars {
     libs: String,
     cc: String,
     cxx: String,
+    ld: String,
     ar: String,
     strip: String,
 }
@@ -52,30 +53,49 @@ impl CxVars {
         }
 
         // Ldflags
-        let mut ldflags = String::new();
-        if bobje.profile == Profile::Release {
-            ldflags.push_str(" -Os");
+        let ldflags = if !bobje.manifest.build.ldflags.is_empty() {
+            bobje.manifest.build.ldflags.clone()
         } else {
-            ldflags.push_str(" -g");
-        }
-        if bobje
-            .source_files
-            .iter()
-            .any(|p| p.ends_with(".m") || p.ends_with(".mm"))
-        {
-            ldflags.push_str(" -framework Foundation");
-        }
-        if let Some(target) = &bobje.target {
-            ldflags.push_str(&format!(" --target={target}"));
-        }
-        if !bobje.manifest.build.ldflags.is_empty() {
-            ldflags.push(' ');
-            ldflags.push_str(&bobje.manifest.build.ldflags);
-        }
+            String::new()
+        };
 
         // Libs
         let mut libs = String::new();
+        if cfg!(target_os = "macos") {
+            let xcode_path = Command::new("xcode-select")
+                .arg("-p")
+                .output()
+                .map(|output| {
+                    if output.status.success() {
+                        String::from_utf8_lossy(&output.stdout).trim().to_string()
+                    } else {
+                        String::new()
+                    }
+                })
+                .unwrap_or_default();
+            libs.push_str(&format!(" -L{xcode_path}/SDKs/MacOSX.sdk/usr/lib"));
+
+            if bobje
+                .manifest
+                .dependencies
+                .values()
+                .any(|dep| dep.framework.is_some())
+            {
+                libs.push_str(&format!(
+                    " -F{xcode_path}/SDKs/MacOSX.sdk/System/Library/Frameworks"
+                ));
+            }
+            for dep in bobje.manifest.dependencies.values() {
+                if let Some(framework) = &dep.framework {
+                    libs.push_str(&format!(" -framework {framework}"));
+                }
+            }
+        }
+
         for dep in bobje.manifest.dependencies.values() {
+            if let Some(library) = &dep.library {
+                libs.push_str(&format!(" -l{library}"));
+            }
             if let Some(pkg_config) = &dep.pkg_config {
                 libs.push_str(&format!(" {}", pkg_config_libs(pkg_config)));
             }
@@ -83,23 +103,26 @@ impl CxVars {
 
         // Use Clang on macOS and Windows, GCC elsewhere
         #[cfg(target_os = "macos")]
-        let (cc, cxx, ar, strip) = (
+        let (cc, cxx, ld, ar, strip) = (
             "clang".to_string(),
             "clang++".to_string(),
+            "ld".to_string(),
             "ar".to_string(),
             "strip".to_string(),
         );
         #[cfg(windows)]
-        let (cc, cxx, ar, strip) = (
+        let (cc, cxx, ld, ar, strip) = (
             "clang".to_string(),
             "clang++".to_string(),
+            "ld".to_string(),
             "llvm-ar".to_string(),
             "llvm-strip".to_string(),
         );
         #[cfg(not(any(target_os = "macos", windows)))]
-        let (cc, cxx, ar, strip) = (
+        let (cc, cxx, ld, ar, strip) = (
             "gcc".to_string(),
             "g++".to_string(),
+            "ld".to_string(),
             "ar".to_string(),
             "strip".to_string(),
         );
@@ -110,6 +133,7 @@ impl CxVars {
             libs,
             cc,
             cxx,
+            ld,
             ar,
             strip,
         }
@@ -304,6 +328,13 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     }
 
     // Link executable
+    let linker = if cfg!(target_os = "macos") {
+        vars.ld
+    } else if contains_cpp {
+        vars.cxx
+    } else {
+        vars.cc
+    };
     if bobje.r#type == PackageType::Binary {
         let executable_file = format!("{}/{}", bobje.out_dir_with_target(), bobje.name);
         let ext = if cfg!(windows) { ".exe" } else { "" };
@@ -313,7 +344,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             executor.add_task_cmd(
                 format!(
                     "{} {} {} {} -o {}",
-                    if contains_cpp { vars.cxx } else { vars.cc },
+                    linker,
                     vars.ldflags,
                     inputs.join(" "),
                     vars.libs,
@@ -332,7 +363,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             executor.add_task_cmd(
                 format!(
                     "{} {} {} {} -o {}",
-                    if contains_cpp { vars.cxx } else { vars.cc },
+                    linker,
                     vars.ldflags,
                     inputs.join(" "),
                     vars.libs,
@@ -367,7 +398,13 @@ pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut Executor) {
     executor.add_task_cmd(
         format!(
             "{} {} {} {} -o {}",
-            if contains_cpp { vars.cxx } else { vars.cc },
+            if cfg!(target_os = "macos") {
+                vars.ld
+            } else if contains_cpp {
+                vars.cxx
+            } else {
+                vars.cc
+            },
             vars.ldflags,
             inputs.join(" "),
             vars.libs,

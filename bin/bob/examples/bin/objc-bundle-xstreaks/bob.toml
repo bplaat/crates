@@ -3,8 +3,8 @@ name = "XStreaks"
 id = "nl.plaatsoft.XStreaks"
 version = "0.1.0"
 
-[build]
-ldflags = "-framework Cocoa"
+[dependencies]
+cocoa = { framework = "Cocoa" }
 
 [package.metadata.bundle]
 lipo = true

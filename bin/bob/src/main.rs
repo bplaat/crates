@@ -114,6 +114,37 @@ impl Bobje {
             });
         let source_files = index_files(&format!("{manifest_dir}/src/"));
 
+        // MARK: Automatic dependencies
+        // Add System dep when Cx on macOS
+        if cfg!(target_os = "macos") && detect_cx(&source_files) {
+            manifest.dependencies.insert(
+                "system".to_string(),
+                Dependency {
+                    path: None,
+                    library: Some("System".to_string()),
+                    pkg_config: None,
+                    framework: None,
+                    maven: None,
+                    jar: None,
+                },
+            );
+        }
+
+        // Add Foundation framework dep when using Objective-C
+        if detect_objc(&source_files) || detect_objcpp(&source_files) {
+            manifest.dependencies.insert(
+                "foundation".to_string(),
+                Dependency {
+                    path: None,
+                    library: None,
+                    pkg_config: None,
+                    framework: Some("Foundation".to_string()),
+                    maven: None,
+                    jar: None,
+                },
+            );
+        }
+
         // Add Kotlin stdlib when Kotlin is used
         if detect_kotlin(&source_files) {
             // Manual dependency in https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.0/kotlin-stdlib-2.2.0.pom
@@ -122,7 +153,9 @@ impl Bobje {
                 "kotlin-stdlib".to_string(),
                 Dependency {
                     path: None,
+                    library: None,
                     pkg_config: None,
+                    framework: None,
                     maven: Some("org.jetbrains.kotlin:kotlin-stdlib:2.2.0".to_string()),
                     jar: None,
                 },
@@ -131,7 +164,9 @@ impl Bobje {
                 "jetbrains-annotations".to_string(),
                 Dependency {
                     path: None,
+                    library: None,
                     pkg_config: None,
+                    framework: None,
                     maven: Some("org.jetbrains:annotations:13.0".to_string()),
                     jar: None,
                 },
@@ -145,7 +180,9 @@ impl Bobje {
                     "cunit".to_string(),
                     Dependency {
                         path: None,
+                        library: None,
                         pkg_config: Some("cunit".to_string()),
+                        framework: None,
                         maven: None,
                         jar: None,
                     },
@@ -157,7 +194,9 @@ impl Bobje {
                     "junit".to_string(),
                     Dependency {
                         path: None,
+                        library: None,
                         pkg_config: None,
+                        framework: None,
                         maven: Some("junit:junit:4.13.2".to_string()),
                         jar: None,
                     },
@@ -166,13 +205,16 @@ impl Bobje {
                     "hamcrest".to_string(),
                     Dependency {
                         path: None,
+                        library: None,
                         pkg_config: None,
+                        framework: None,
                         maven: Some("org.hamcrest:hamcrest-core:1.3".to_string()),
                         jar: None,
                     },
                 );
             }
         }
+        // MARK: End automatic dependencies
 
         // Build dependencies
         let mut dependencies = HashMap::new();
