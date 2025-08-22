@@ -147,7 +147,7 @@ impl Bobje {
 
         // Add Kotlin stdlib when Kotlin is used
         if detect_kotlin(&source_files) {
-            // Manual dependency in https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.0/kotlin-stdlib-2.2.0.pom
+            // Manual dependency in https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.0.0/kotlin-stdlib-2.0.0.pom
             // FIXME: Automatically resolve maven dependency trees by fetching and parsing pom.xml
             manifest.dependencies.insert(
                 "kotlin-stdlib".to_string(),
@@ -156,7 +156,7 @@ impl Bobje {
                     library: None,
                     pkg_config: None,
                     framework: None,
-                    maven: Some("org.jetbrains.kotlin:kotlin-stdlib:2.2.0".to_string()),
+                    maven: Some("org.jetbrains.kotlin:kotlin-stdlib:2.0.0".to_string()),
                     jar: None,
                 },
             );
