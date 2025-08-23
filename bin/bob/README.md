@@ -6,9 +6,9 @@ A simple build system for my projects, because I really like the simplicity of C
 
 ## Supported project types
 
--   Clang/GCC languages (.c, .cpp, .m, .mm, .s, .S)
--   JVM languages (.java, .kt)
--   Android (.java, .kt, .xml)
+-   Clang/GCC languages (C, C++, Objective-C, Objective-C++, Assembly)
+-   JVM languages (Java, Kotlin)
+-   Android (Java, Kotlin, XML)
 
 ### Supported package types
 
@@ -18,8 +18,8 @@ A simple build system for my projects, because I really like the simplicity of C
 
 ### Supported unit test libraries
 
--   CUnit (.c, .cpp, .m, .mm)
--   JUnit (.java, .kt)
+-   CUnit (C, C++, Objective-C, Objective-C++)
+-   JUnit (Java, Kotlin)
 
 ## Getting Started
 
