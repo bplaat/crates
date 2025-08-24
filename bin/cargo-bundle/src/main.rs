@@ -11,9 +11,11 @@ use std::fs;
 use std::process::{Command, exit};
 
 use crate::manifest::Manifest;
+use crate::utils::copy_dir;
 
 mod args;
 mod manifest;
+mod utils;
 
 fn read_manifest(path: &str) -> Manifest {
     let manifest_path = format!("{path}/Cargo.toml");
@@ -45,49 +47,40 @@ fn generate_resources(path: &str, target_dir: &str, bundle: &manifest::BundleMet
             .expect("Failed to create icon.icns");
     }
 
-    // Generate Info.plist
-    let mut extra = String::new();
+    // Create Info.plist
+    let mut plist = vec![
+        ("CFBundlePackageType", "APPL".to_string()),
+        ("CFBundleName", bundle.name.clone()),
+        ("CFBundleDisplayName", bundle.name.clone()),
+        ("CFBundleIdentifier", bundle.identifier.clone()),
+        ("CFBundleVersion", env!("CARGO_PKG_VERSION").to_string()),
+        (
+            "CFBundleShortVersionString",
+            env!("CARGO_PKG_VERSION").to_string(),
+        ),
+        ("CFBundleExecutable", bundle.name.clone()),
+        ("LSMinimumSystemVersion", "11.0".to_string()),
+    ];
     if bundle.iconset.is_some() {
-        extra.push_str("\n\t<key>CFBundleIconFile</key>\n\t<string>icon</string>");
+        plist.push(("CFBundleIconFile", "icon".to_string()));
     }
     if let Some(copyright) = &bundle.copyright {
-        extra.push_str(&format!(
-            "\n\t<key>NSHumanReadableCopyright</key>\n\t<string>{copyright}</string>"
-        ));
+        plist.push(("NSHumanReadableCopyright", copyright.clone()));
     }
 
-    let info_plist = format!(
+    // Write Info.plist using the Vec
+    let mut info_plist = String::from(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleName</key>
-	<string>{}</string>
-	<key>CFBundleDisplayName</key>
-	<string>{}</string>
-	<key>CFBundleIdentifier</key>
-	<string>{}</string>
-	<key>CFBundleVersion</key>
-	<string>{}</string>
-	<key>CFBundleShortVersionString</key>
-	<string>{}</string>
-	<key>CFBundleExecutable</key>
-	<string>{}</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>11.0</string>{}
-</dict>
-</plist>
 "#,
-        bundle.name,
-        bundle.name,
-        bundle.identifier,
-        env!("CARGO_PKG_VERSION"),
-        env!("CARGO_PKG_VERSION"),
-        bundle.name,
-        extra
     );
+    for (key, value) in &plist {
+        info_plist.push_str(&format!("\t<key>{key}</key>\n\t<string>{value}</string>\n"));
+    }
+    info_plist.push_str("</dict>\n</plist>\n");
+
     fs::write(format!("{target_dir}/Info.plist"), info_plist).expect("Failed to write Info.plist");
 }
 
@@ -133,19 +126,6 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
     .expect("Failed to copy icon.icns");
 
     if let Some(resources_dir) = &bundle.resources_dir {
-        fn copy_dir(src: &str, dst: &str) {
-            for entry in fs::read_dir(src).expect("Failed to read resources directory") {
-                let entry = entry.expect("Failed to read directory entry");
-                let path = entry.path();
-                let dest_path = format!("{}/{}", dst, entry.file_name().to_string_lossy());
-                if path.is_dir() {
-                    fs::create_dir_all(&dest_path).expect("Can't create resource subdirectory");
-                    copy_dir(&path.to_string_lossy(), &dest_path);
-                } else {
-                    fs::copy(&path, &dest_path).expect("Failed to copy resource file");
-                }
-            }
-        }
         copy_dir(
             &format!("{path}/{resources_dir}"),
             &format!("{bundle_dir}/Resources"),
