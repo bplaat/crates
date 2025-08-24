@@ -29,6 +29,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [baksteen](bin/baksteen/) A brick laying robot simulator
 -   [bassielight](bin/bassielight) A simple lights controller with GUI
 -   [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
+-   [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
 -   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 -   [navidrome](bin/navidrome) A [navidrome.plaatsoft.nl](https://navidrome.plaatsoft.nl/) webview wrapper
 -   [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook

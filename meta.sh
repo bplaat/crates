@@ -69,44 +69,18 @@ function build_pages_baksteen() {
     wasm-bindgen --target web --no-typescript --out-dir dist/baksteen --out-name baksteen target/wasm32-unknown-unknown/release/baksteen.wasm
 }
 
-function build_release() {
-    # FIXME: Find way to do this better
-    release_bassielight_macos
-    release_navidrome_macos
-}
-
-function build_release_bassielight_macos() {
-    bundle_dir="target/BassieLight.app/Contents"
-    mkdir -p $bundle_dir/MacOS $bundle_dir/Resources
-    for target in x86_64-apple-darwin aarch64-apple-darwin; do
-        cargo build --release --bin "bassielight" --target $target
-    done
-    lipo -create target/x86_64-apple-darwin/release/bassielight target/aarch64-apple-darwin/release/bassielight \
-        -output $bundle_dir/MacOS/BassieLight
-    cp target/BassieLight/icon.icns $bundle_dir/Resources
-    cp target/BassieLight/Info.plist $bundle_dir
-    cd target && rm -f BassieLight.zip && zip -r BassieLight.zip BassieLight.app && cd ..
-}
-
-function build_release_navidrome_macos() {
-    bundle_dir="target/Navidrome.app/Contents"
-    mkdir -p $bundle_dir/MacOS $bundle_dir/Resources
-    for target in x86_64-apple-darwin aarch64-apple-darwin; do
-        cargo build --release --bin "navidrome" --target $target
-    done
-    lipo -create target/x86_64-apple-darwin/release/navidrome target/aarch64-apple-darwin/release/navidrome \
-        -output $bundle_dir/MacOS/Navidrome
-    cp target/Navidrome/icon.icns $bundle_dir/Resources
-    cp target/Navidrome/Info.plist $bundle_dir
-    cd target && rm -f Navidrome.zip && zip -r Navidrome.zip Navidrome.app && cd ..
+function build_bundle() {
+    cargo install --path bin/cargo-bundle
+    cargo bundle --path bin/bassielight
+    cargo bundle --path bin/navidrome
 }
 
 case "${1:-check}" in
     build-pages)
         build_pages
         ;;
-    build-release)
-        build_release
+    build-bundle)
+        build_bundle
         ;;
     clean)
         clean
@@ -118,7 +92,7 @@ case "${1:-check}" in
         coverage
         ;;
     *)
-        echo "Usage: $0 {build-pages|build-release|clean|check|coverage}"
+        echo "Usage: $0 {build-pages|build-bundle|clean|check|coverage}"
         exit 1
         ;;
 esac
