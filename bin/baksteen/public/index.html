@@ -1,0 +1,47 @@
+<!--
+    Copyright (c) 2025 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Baksteen</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <h1>Baksteen</h1>
+
+        <form id="wall-form">
+            <label for="wall-width">Width (mm):</label>
+            <input type="number" id="wall-width" value="2300" />
+            <label for="wall-height">Height (mm):</label>
+            <input type="number" id="wall-height" value="2000" />
+            <label for="wall-bond">Bond:</label>
+            <select id="wall-bond">
+                <option value="stretcher">Stretcher</option>
+                <option value="header">Header</option>
+                <option value="english">English</option>
+                <option value="flemish">Flemish</option>
+            </select>
+            <button type="submit">Create Wall</button>
+        </form>
+
+        <canvas id="canvas" width="1024" height="768" style="border: 1px solid black"></canvas>
+        <p>
+            Actions:
+            <button id="next-brick-button">Next brick</button>
+            <button id="fill-bricks-button">Fill with bricks</button>
+        </p>
+
+        <p>Source code: <a href="https://github.com/bplaat/baksteen">github.com/bplaat/baksteen</a></p>
+
+        <script type="module">
+            import init, { main } from './baksteen.js';
+            await init();
+            main();
+        </script>
+    </body>
+</html>
