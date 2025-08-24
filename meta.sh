@@ -57,16 +57,16 @@ function coverage() {
 }
 
 function build_pages() {
-    mkdir -p dist
-    cp index.html dist/
+    mkdir -p target/pages
+    cp index.html target/pages/
     build_pages_baksteen
 }
 
 function build_pages_baksteen() {
-    mkdir -p dist/baksteen
-    cp -r bin/baksteen/public/* dist/baksteen
+    mkdir -p target/pages/baksteen
+    cp -r bin/baksteen/public/* target/pages/baksteen
     cargo build --release -p baksteen --target wasm32-unknown-unknown
-    wasm-bindgen --target web --no-typescript --out-dir dist/baksteen --out-name baksteen target/wasm32-unknown-unknown/release/baksteen.wasm
+    wasm-bindgen --target web --no-typescript --out-dir target/pages/baksteen --out-name baksteen target/wasm32-unknown-unknown/release/baksteen.wasm
 }
 
 function build_bundle() {
