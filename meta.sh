@@ -56,14 +56,26 @@ function coverage() {
     cargo llvm-cov nextest --all-features --locked --no-fail-fast --retries 2
 }
 
-function release() {
+function build_pages() {
+    mkdir -p dist
+    cp index.html dist/
+    build_pages_baksteen
+}
+
+function build_pages_baksteen() {
+    mkdir -p dist/baksteen
+    cp -r bin/baksteen/public/* dist/baksteen
+    cargo build --release -p baksteen --target wasm32-unknown-unknown
+    wasm-bindgen --target web --no-typescript --out-dir dist/baksteen --out-name baksteen target/wasm32-unknown-unknown/release/baksteen.wasm
+}
+
+function build_release() {
     # FIXME: Find way to do this better
     release_bassielight_macos
     release_navidrome_macos
-    open target
 }
 
-function release_bassielight_macos() {
+function build_release_bassielight_macos() {
     bundle_dir="target/BassieLight.app/Contents"
     mkdir -p $bundle_dir/MacOS $bundle_dir/Resources
     for target in x86_64-apple-darwin aarch64-apple-darwin; do
@@ -76,7 +88,7 @@ function release_bassielight_macos() {
     cd target && rm -f BassieLight.zip && zip -r BassieLight.zip BassieLight.app && cd ..
 }
 
-function release_navidrome_macos() {
+function build_release_navidrome_macos() {
     bundle_dir="target/Navidrome.app/Contents"
     mkdir -p $bundle_dir/MacOS $bundle_dir/Resources
     for target in x86_64-apple-darwin aarch64-apple-darwin; do
@@ -90,6 +102,12 @@ function release_navidrome_macos() {
 }
 
 case "${1:-check}" in
+    build-pages)
+        build_pages
+        ;;
+    build-release)
+        build_release
+        ;;
     clean)
         clean
         ;;
@@ -99,11 +117,8 @@ case "${1:-check}" in
     coverage)
         coverage
         ;;
-    release)
-        release
-        ;;
     *)
-        echo "Usage: $0 {clean|check|coverage|release}"
+        echo "Usage: $0 {build-pages|build-release|clean|check|coverage}"
         exit 1
         ;;
 esac

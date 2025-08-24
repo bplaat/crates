@@ -1,9 +1,11 @@
-name: Check, build and deploy to GitHub Pages
+name: build-deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: ['check']
     branches: [master]
-  workflow_dispatch:
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -11,12 +13,13 @@ permissions:
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build-deploy-pages:
     runs-on: ubuntu-24.04
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -24,17 +27,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install extra Rust tooling
         run: |
-          rustup toolchain add nightly --component rustfmt
           rustup target add wasm32-unknown-unknown
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y wasm-bindgen-cli
-      - name: Check
-        run: ./meta.sh check
-      - name: Build
-        run: ./meta.sh build
-      - name: Deploy
+      - name: Build pages
+        run: ./meta.sh build-pages
+      - name: Upload pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
       - id: deployment
+        name: Deploy pages
         uses: actions/deploy-pages@v4

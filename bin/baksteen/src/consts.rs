@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-// NOTE: The bed and head joints sizes are switched because otherwise the example wouldn't fit
 pub(crate) const BRICK_BED_JOINT: f64 = 10.0; // Padding between bricks
 pub(crate) const BRICK_HEAD_JOINT: f64 = 12.5; // Padding between rows
 

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#![doc = include_str!("../README.md")]
+#![allow(clippy::unwrap_used)]
 #![forbid(unsafe_code)]
 
 use std::sync::RwLock;
@@ -42,6 +44,7 @@ fn wall_next_brick(context: &CanvasRenderingContext2d) {
     }
 }
 
+/// Main
 #[wasm_bindgen]
 pub fn main() -> Result<(), JsValue> {
     // MARK: Elements
