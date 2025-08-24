@@ -79,7 +79,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   For coverage reports, install the `llvm-tools` and `cargo-llvm-cov` tool:
 
     ```sh
-    rustup component add llvm-tools-preview
+    rustup component add llvm-tools
     cargo binstall -y cargo-llvm-cov
     ./meta.sh coverage
     ```
