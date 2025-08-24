@@ -33,10 +33,24 @@ fn main() {
             .next_back()
             .expect("Failed to get last part of path")
             .to_string();
-        if (cfg!(not(target_os = "macos")) && dir_name.starts_with("objc"))
-            || dir_name == "android-java-lib"
-            || dir_name == "android-kotlin-lib"
-        {
+
+        if env::var("CI").is_ok() {
+            // Skip Objective-C tests on non macOS  GitHub runners
+            if !cfg!(target_os = "macos") && dir_name.starts_with("objc") {
+                continue;
+            }
+
+            // Skip some tests on Linux aarch64 GitHub runner
+            if cfg!(target_os = "linux")
+                && cfg!(target_arch = "aarch64")
+                && (dir_name.starts_with("android") || dir_name == "asm")
+            {
+                continue;
+            }
+        }
+
+        // FIXME: Skip android libs because direct build is not working yet
+        if dir_name == "android-java-lib" || dir_name == "android-kotlin-lib" {
             continue;
         }
 
