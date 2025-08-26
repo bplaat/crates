@@ -1,5 +1,5 @@
 [package]
-name = "hello"
+name = "hello-sqlite"
 version = "0.1.0"
 
 [dependencies]
