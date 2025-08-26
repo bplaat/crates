@@ -8,7 +8,9 @@
         "rust-lang.rust-analyzer",
         "tamasfe.even-better-toml",
         // Web extensions
-        "esbenp.prettier-vscode"
+        "esbenp.prettier-vscode",
+        // C/C++/Obj-C/Obj-C++ extensions
+        "xaver.clang-format"
     ],
     "search.exclude": {
         "**/target/**": true,

@@ -1,8 +1,9 @@
-#include <stdlib.h>
-#include <stdio.h>
 #include <mul/mul.h>
-#include "sub/sub.h"
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "add.h"
+#include "sub/sub.h"
 
 int main(void) {
     printf("Hello add %d!\n", add(1, 2));

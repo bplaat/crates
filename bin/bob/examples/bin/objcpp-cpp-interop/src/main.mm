@@ -1,6 +1,6 @@
-#include <cstdlib>
 #include <animals/Cat.hpp>
 #include <animals/Dog.hpp>
+#include <cstdlib>
 #include "Person.hh"
 
 int main(void) {

@@ -1,6 +1,8 @@
-#include <cstdlib>
-#include <cstdio>
 #include <mul/mul.h>
+
+#include <cstdio>
+#include <cstdlib>
+
 #include "Person.hpp"
 
 int main(void) {

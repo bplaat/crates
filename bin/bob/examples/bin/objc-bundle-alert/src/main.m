@@ -2,7 +2,7 @@
 
 int main(void) {
     @autoreleasepool {
-        NSAlert *alert = [NSAlert new];
+        NSAlert* alert = [NSAlert new];
         [alert setMessageText:@"Hello macOS!"];
         [alert runModal];
     }

@@ -1,10 +1,10 @@
 #import <Foundation/Foundation.h>
 
 @interface Cat : NSObject {
-    NSString *_name;
+    NSString* _name;
 }
 
-- (instancetype)initWithName:(NSString *)name;
+- (instancetype)initWithName:(NSString*)name;
 - (void)greet;
 
 @end

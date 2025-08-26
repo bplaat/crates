@@ -1,0 +1,9 @@
+---
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 120
+DerivePointerAlignment: false
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Empty
+AccessModifierOffset: -4
+ObjCBlockIndentWidth: 4

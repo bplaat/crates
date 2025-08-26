@@ -2,7 +2,8 @@
 
 class Person {
     const char* m_name;
+
 public:
-    Person(const char *name);
+    Person(const char* name);
     void greet();
 };

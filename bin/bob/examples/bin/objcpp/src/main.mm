@@ -7,7 +7,7 @@ int main(void) {
         Person bastiaan("Bastiaan");
         bastiaan.greet();
 
-        Cat *cat = [[Cat alloc] initWithName:@"Whiskers"];
+        Cat* cat = [[Cat alloc] initWithName:@"Whiskers"];
         [cat greet];
     }
     return EXIT_SUCCESS;
