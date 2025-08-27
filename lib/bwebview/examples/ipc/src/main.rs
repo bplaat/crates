@@ -36,7 +36,7 @@ fn main() {
             println!("Window created");
         }
         Event::WindowMoved(point) => {
-            println!("Window moved: {point:?}");
+            println!("Window moved: {}x{}", point.x, point.y);
         }
         Event::WindowResized(size) => {
             println!("Window resized: {}x{}", size.width, size.height);

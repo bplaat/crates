@@ -104,6 +104,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bwindow"
+version = "0.1.0"
+dependencies = [
+ "objc2",
+ "raw-window-handle",
+]
+
+[[package]]
 name = "cargo-bundle"
 version = "0.1.0"
 dependencies = [
@@ -433,6 +441,10 @@ checksum = "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "raw-window-handle"
+version = "0.6.2+patch"
 
 [[package]]
 name = "regex"

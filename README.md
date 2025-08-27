@@ -15,6 +15,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 ### Libraries
 
 -   [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
+-   [bwindow](lib/bwindow) A cross-platform window library for Rust with minimal dependencies
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [js](lib/js) A WIP JavaScript interpreter
 -   [minify-html](lib/minify-html) A simple HTML minifier library
@@ -43,6 +44,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 -   [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
 -   [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
+-   [raw-window-handle](lib/raw-window-handle) A minimal replacement for the [raw-window-handle](https://crates.io/crates/raw-window-handle) crate
 -   [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 -   [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 -   [sha1](lib/sha1) A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
