@@ -109,7 +109,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
         return;
     }
 
-    // aapt2_compile tasks
+    // Compile resources task
     let compiled_res_dir = format!("{}/res/{}", bobje.out_dir(), vars.id.replace('.', "/"));
     for res_file in index_files(&res_dir) {
         let mut compiled_res_file = format!(
@@ -133,29 +133,30 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
         );
     }
 
-    // aapt2_link task
+    // Link resources task
     let r_java_path = format!(
         "{}/src-gen/{}/R.java",
         bobje.out_dir(),
         vars.id.replace('.', "/")
     );
-    bobje.source_files.push(r_java_path.clone());
-
     if bobje.r#type == PackageType::Binary {
         let dest = format!("{}/{}-unaligned.apk", bobje.out_dir(), bobje.name);
 
-        let mut link_inputs = vec![format!("{}/AndroidManifest.xml", bobje.manifest_dir)];
         let mut link_command = vec![
             format!("{}/aapt2", vars.build_tools_path),
             "link".to_string(),
         ];
+        let mut link_inputs = vec![format!("{}/AndroidManifest.xml", bobje.manifest_dir)];
+        let mut link_outputs = vec![dest.clone(), r_java_path.clone()];
+
         fn add_bobje_resources(
             bobje: &Bobje,
             link_command: &mut Vec<String>,
             link_inputs: &mut Vec<String>,
+            link_outputs: &mut Vec<String>,
         ) {
             for dependency_bobje in bobje.dependencies.values() {
-                add_bobje_resources(dependency_bobje, link_command, link_inputs);
+                add_bobje_resources(dependency_bobje, link_command, link_inputs, link_outputs);
             }
             if detect_android(bobje) {
                 let android_metadata = bobje
@@ -179,39 +180,44 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                 }
 
                 // Add compiled resources
-                let compiled_res_dir = format!(
-                    "{}/res/{}",
-                    bobje.out_dir(),
-                    bobje
-                        .manifest
-                        .package
-                        .id
-                        .as_ref()
-                        .expect("Should be some")
-                        .replace('.', "/")
-                );
+                let package_id = bobje.manifest.package.id.as_ref().expect("Should be some");
+                let compiled_res_dir =
+                    format!("{}/res/{}", bobje.out_dir(), package_id.replace('.', "/"));
                 let res_dir = format!("{}/{}", bobje.manifest_dir, android_metadata.resources_dir);
-                if !Path::new(&res_dir).exists() {
-                    return;
-                }
-                for res_file in index_files(&res_dir) {
-                    let mut compiled_res_file = format!(
-                        "{}/{}.flat",
-                        compiled_res_dir,
-                        res_file
-                            .trim_start_matches(&res_dir)
-                            .trim_start_matches(['/', '\\'])
-                            .replace(['/', '\\'], "_")
-                    );
-                    if compiled_res_file.contains("/values") {
-                        compiled_res_file = compiled_res_file.replace(".xml", ".arsc");
+                if Path::new(&res_dir).exists() {
+                    for res_file in index_files(&res_dir) {
+                        let mut compiled_res_file = format!(
+                            "{}/{}.flat",
+                            compiled_res_dir,
+                            res_file
+                                .trim_start_matches(&res_dir)
+                                .trim_start_matches(['/', '\\'])
+                                .replace(['/', '\\'], "_")
+                        );
+                        if compiled_res_file.contains("/values") {
+                            compiled_res_file = compiled_res_file.replace(".xml", ".arsc");
+                        }
+                        link_inputs.push(compiled_res_file);
                     }
-                    link_inputs.push(compiled_res_file);
+                    if bobje.r#type == PackageType::Library {
+                        link_command.push("--extra-packages".to_string());
+                        link_command.push(package_id.clone());
+                        link_outputs.push(format!(
+                            "{}/src-gen/{}/R.java",
+                            bobje.out_dir(),
+                            package_id.replace('.', "/")
+                        ));
+                    }
+                    link_command.push(format!("{compiled_res_dir}/*.flat"));
                 }
-                link_command.push(format!("{compiled_res_dir}/*.flat"));
             }
         }
-        add_bobje_resources(bobje, &mut link_command, &mut link_inputs);
+        add_bobje_resources(
+            bobje,
+            &mut link_command,
+            &mut link_inputs,
+            &mut link_outputs,
+        );
 
         link_command.extend(vec![
             "--manifest".to_string(),
@@ -231,45 +237,9 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
             "-o".to_string(),
             dest.to_string(),
         ]);
-        executor.add_task_cmd(
-            link_command.join(" "),
-            link_inputs,
-            vec![dest, r_java_path.clone()],
-        );
-
-        // Copy this bobje's R.java to every dependency R.java
-        for dependency_bobje in bobje.dependencies.values() {
-            if detect_android(dependency_bobje) {
-                let src_r_java = format!(
-                    "{}/src-gen/{}/R.java",
-                    dependency_bobje.out_dir(),
-                    dependency_bobje
-                        .manifest
-                        .package
-                        .id
-                        .as_ref()
-                        .expect("Should be some")
-                        .replace('.', "/")
-                );
-                executor.add_task_cmd(
-                    format!(
-                        "sed 's/package {};/package {};/g' {} > {}",
-                        bobje.manifest.package.id.as_ref().expect("Should be some"),
-                        dependency_bobje
-                            .manifest
-                            .package
-                            .id
-                            .as_ref()
-                            .expect("Should be some"),
-                        r_java_path,
-                        src_r_java
-                    ),
-                    vec![r_java_path.clone()],
-                    vec![src_r_java],
-                );
-            }
-        }
+        executor.add_task_cmd(link_command.join(" "), link_inputs, link_outputs);
     }
+    bobje.source_files.push(r_java_path.clone());
 }
 
 // MARK: Link classpath
