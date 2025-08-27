@@ -6,6 +6,8 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ### Published libraries
 
+These crates are published to [crates.io](https://crates.io) and are more polished and documented
+
 -   [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
 -   [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
 -   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
@@ -13,6 +15,8 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library **([crates.io](https://crates.io/crates/small-router))**
 
 ### Libraries
+
+These libraries are not published to [crates.io](https://crates.io) and are more intended for personal use but can still be useful
 
 -   [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
@@ -24,7 +28,9 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
 
-### Tools
+### Tools / Websites
+
+Various tools and websites, for the live deployed sites go to [bplaat.github.io/crates/](https://bplaat.github.io/crates/)
 
 -   [baksteen](bin/baksteen/) A brick laying robot simulator
 -   [bassielight](bin/bassielight) A simple lights controller with GUI
@@ -35,6 +41,8 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook
 
 ### Replacement libraries
+
+These libraries are created as minimal / smaller replacements for common used crates
 
 -   [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 -   [dirs](lib/dirs) A minimal replacement for the [dirs](https://crates.io/crates/dirs) crate
@@ -51,18 +59,26 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 -   [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 -   [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 
+## Repo organization
+
+This repo is organized as a monorepo with `Cargo` as the main build system. My personal vision is that monorepo's work vary well when theres only one main build system, that is a single organization point for the whole project with all it's submodules.
+
+So this all Rust code is contained in a single `Cargo` workspace, that builds everything. Some crates have custom build steps that can run other build scripts / systems like `npm` and `vite`.
+
+The [meta.sh](meta.sh) script is contains all the main tasks, these are used from commandline and also CI. The only modules that use a different build system are the ones in the [bob/examples](bin/bob/examples) directory, but that is also a show case of the [bob](bin/bob) build system.
+
 ## Getting Started
 
--   Install the latest Rust toolchain with [rustup](https://rustup.rs/)
+-   Install Rust with [rustup](https://rustup.rs/)
 -   Install [Node.js](https://nodejs.org/)
--   Install the Rust nightly `rustfmt`:
+-   Install Rust nightly `rustfmt`:
 
     ```sh
     rustup toolchain add nightly --component rustfmt
     ```
 
--   Install `cargo-binstall` for [your platform](https://github.com/cargo-bins/cargo-binstall#quickly)
--   Install the `cargo-deny` and `cargo-nextest` tools:
+-   Install `cargo-binstall` see [documentation](https://github.com/cargo-bins/cargo-binstall#quickly)
+-   Install `cargo-deny` and `cargo-nextest`:
 
     ```sh
     cargo binstall -y cargo-deny cargo-nextest
