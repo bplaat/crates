@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A tiny webview ipc example
+//! A bwebview ipc example
 
+use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 use serde::{Deserialize, Serialize};
-use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
 const APP_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/app.min.html"));
 

@@ -7,9 +7,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use bwebview::EventLoopProxy;
 use serde::{Deserialize, Serialize};
 use small_websocket::{Message, WebSocket};
-use tiny_webview::EventLoopProxy;
 
 use crate::CONFIG;
 use crate::config::{Config, DMX_SWITCHES_LENGTH};

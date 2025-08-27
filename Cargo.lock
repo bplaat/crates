@@ -30,6 +30,7 @@ dependencies = [
 name = "bassielight"
 version = "0.1.0"
 dependencies = [
+ "bwebview",
  "dirs",
  "rusb",
  "rust-embed",
@@ -37,7 +38,6 @@ dependencies = [
  "serde_json",
  "small-http",
  "small-websocket",
- "tiny-webview",
  "winres",
 ]
 
@@ -88,6 +88,20 @@ name = "bumpalo"
 version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
+
+[[package]]
+name = "bwebview"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "local-ip-address",
+ "mime_guess",
+ "objc2",
+ "rust-embed",
+ "small-http",
+ "webview2-com",
+ "windows",
+]
 
 [[package]]
 name = "cargo-bundle"
@@ -154,6 +168,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "example-bwebview-ipc"
+version = "0.1.0"
+dependencies = [
+ "bwebview",
+ "minify-html",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "example-http-simple"
 version = "0.1.0"
 dependencies = [
@@ -182,24 +206,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "example-tiny-webview-ipc"
-version = "0.1.0"
-dependencies = [
- "minify-html",
- "serde",
- "serde_json",
- "tiny-webview",
-]
-
-[[package]]
 name = "example-todo-app"
 version = "0.1.0"
 dependencies = [
+ "bwebview",
  "dirs",
  "rust-embed",
  "serde",
  "serde_json",
- "tiny-webview",
  "uuid",
 ]
 
@@ -348,7 +362,7 @@ dependencies = [
 name = "navidrome"
 version = "0.1.0"
 dependencies = [
- "tiny-webview",
+ "bwebview",
  "winres",
 ]
 
@@ -632,20 +646,6 @@ dependencies = [
 [[package]]
 name = "threadpool"
 version = "1.8.0+patch"
-
-[[package]]
-name = "tiny-webview"
-version = "0.1.0"
-dependencies = [
- "block2",
- "local-ip-address",
- "mime_guess",
- "objc2",
- "rust-embed",
- "small-http",
- "webview2-com",
- "windows",
-]
 
 [[package]]
 name = "toml"

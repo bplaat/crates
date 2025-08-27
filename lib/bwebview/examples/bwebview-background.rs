@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A tiny webview background example
+//! A bwebview background example
 
-use tiny_webview::{EventLoopBuilder, Theme, WebviewBuilder};
+use bwebview::{EventLoopBuilder, Theme, WebviewBuilder};
 
 #[allow(unused_mut)]
 fn main() {
@@ -21,7 +21,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         webview_builder =
-            webview_builder.macos_titlebar_style(tiny_webview::MacosTitlebarStyle::Transparent);
+            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
     }
     let _webview = webview_builder.build();
 

@@ -15,7 +15,7 @@ iconset = "meta/macos/icon.iconset"
 workspace = true
 
 [dependencies]
-tiny-webview = { path = "../../lib/tiny-webview" }
+bwebview = { path = "../../lib/bwebview" }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"

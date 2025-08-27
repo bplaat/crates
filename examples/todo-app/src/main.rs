@@ -11,9 +11,9 @@
 
 use std::{env, fs};
 
+use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
-use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]

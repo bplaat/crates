@@ -1,4 +1,4 @@
-# Tiny Webview Rust library
+# Bassie Webview Rust library
 
 A cross-platform webview library for Rust with minimal dependencies
 

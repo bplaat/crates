@@ -9,7 +9,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 
-use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
+use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
 #[allow(unused_mut, unused_variables)]
 fn main() {
@@ -26,7 +26,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         webview_builder =
-            webview_builder.macos_titlebar_style(tiny_webview::MacosTitlebarStyle::Transparent);
+            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
     }
     let mut webview = webview_builder
         .load_url("https://navidrome.plaatsoft.nl/")

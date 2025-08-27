@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple tiny webview example
+//! A simple bwebview example
 
-use tiny_webview::{EventLoopBuilder, WebviewBuilder};
+use bwebview::{EventLoopBuilder, WebviewBuilder};
 
 fn main() {
     let event_loop = EventLoopBuilder::build();

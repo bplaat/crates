@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple tiny webview multi-window example
+//! A simple bwebview multi-window example
 
-use tiny_webview::{EventLoopBuilder, LogicalPoint, LogicalSize, WebviewBuilder};
+use bwebview::{EventLoopBuilder, LogicalPoint, LogicalSize, WebviewBuilder};
 
 fn main() {
     let event_loop = EventLoopBuilder::build();

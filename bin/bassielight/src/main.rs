@@ -12,10 +12,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 use rust_embed::Embed;
 use small_http::{Request, Response};
 use small_websocket::Message;
-use tiny_webview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
 use crate::config::Config;
 use crate::ipc::{IPC_CONNECTIONS, IpcConnection, ipc_message_handler};
