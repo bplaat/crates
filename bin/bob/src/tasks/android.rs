@@ -19,9 +19,6 @@ struct AndroidVars {
     id: String,
     android_metadata: AndroidMetadata,
     platform_jar: String,
-    command_line_tools_path: String,
-    build_tools_path: String,
-    platform_tools_path: String,
 }
 
 impl AndroidVars {
@@ -76,19 +73,24 @@ impl AndroidVars {
                 exit(1);
             }
         };
-
         let build_tools_path = format!(
             "{}/build-tools/{}.0.0",
             android_home, android_metadata.target_sdk_version
         );
         let platform_tools_path = format!("{android_home}/platform-tools");
+
+        // Extend current path
+        let path = env::var("PATH").expect("Can't read $PATH");
+        let path_ext =
+            format!("{command_line_tools_path}:{build_tools_path}:{platform_tools_path}");
+        if !path.contains(&path_ext) {
+            unsafe { env::set_var("PATH", format!("{path_ext}:{path}")) };
+        }
+
         Self {
             id: id.clone(),
-            android_metadata: android_metadata.clone(),
+            android_metadata,
             platform_jar,
-            command_line_tools_path,
-            build_tools_path,
-            platform_tools_path,
         }
     }
 }
@@ -124,10 +126,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
             compiled_res_file = compiled_res_file.replace(".xml", ".arsc");
         }
         executor.add_task_cmd(
-            format!(
-                "{}/aapt2 compile --no-crunch {} -o {}",
-                vars.build_tools_path, res_file, compiled_res_dir
-            ),
+            format!("aapt2 compile --no-crunch {res_file} -o {compiled_res_dir}"),
             vec![res_file],
             vec![compiled_res_file.clone()],
         );
@@ -142,10 +141,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
     if bobje.r#type == PackageType::Binary {
         let dest = format!("{}/{}-unaligned.apk", bobje.out_dir(), bobje.name);
 
-        let mut link_command = vec![
-            format!("{}/aapt2", vars.build_tools_path),
-            "link".to_string(),
-        ];
+        let mut link_command = vec!["aapt2".to_string(), "link".to_string()];
         let mut link_inputs = vec![format!("{}/AndroidManifest.xml", bobje.manifest_dir)];
         let mut link_outputs = vec![dest.clone(), r_java_path.clone()];
 
@@ -297,7 +293,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
 
         // Add r8 task
         let r8_command = [
-            format!("{}/r8", vars.command_line_tools_path),
+            "r8".to_string(),
             "--release".to_string(),
             "--dex".to_string(),
             format!("--min-api {}", vars.android_metadata.min_sdk_version),
@@ -324,7 +320,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
     // Compile classes.dex with d8 task
     else {
         let d8_command = [
-            format!("{}/d8", vars.build_tools_path),
+            "d8".to_string(),
             "--debug".to_string(),
             format!("--min-api {}", vars.android_metadata.min_sdk_version),
             format!("--lib {}", vars.platform_jar),
@@ -386,10 +382,7 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
     let unaligned_apk = format!("{}/{}-unaligned.apk", bobje.out_dir(), bobje.name);
     let unsigned_apk = format!("{}/{}-unsigned.apk", bobje.out_dir(), bobje.name);
     executor.add_task_cmd(
-        format!(
-            "{}/zipalign -f -p 4 {} {}",
-            vars.build_tools_path, unaligned_apk, unsigned_apk
-        ),
+        format!("zipalign -f -p 4 {unaligned_apk} {unsigned_apk}"),
         vec![
             unaligned_apk.clone(),
             format!("{}/classes.dex", bobje.out_dir()),
@@ -400,8 +393,7 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
     // apksigner
     let signed_apk = format!("{}/{}-{}.apk", bobje.out_dir(), bobje.name, bobje.version);
     let mut apksigner_cmd = format!(
-        "{}/apksigner sign --min-sdk-version {} --v4-signing-enabled false --ks {} ",
-        vars.build_tools_path,
+        "apksigner sign --min-sdk-version {} --v4-signing-enabled false --ks {} ",
         vars.android_metadata.min_sdk_version,
         if fs::metadata(&vars.android_metadata.keystore_file).is_ok() {
             vars.android_metadata.keystore_file
@@ -431,9 +423,8 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
 
 pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
     let vars = AndroidVars::new(bobje);
-    let adb_path = format!("{}/adb", vars.platform_tools_path);
 
-    let status = Command::new(&adb_path)
+    let status = Command::new("adb")
         .arg("install")
         .arg("-r")
         .arg(format!(
@@ -448,7 +439,7 @@ pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
         exit(status.code().unwrap_or(1));
     }
 
-    let status = Command::new(&adb_path)
+    let status = Command::new("adb")
         .arg("shell")
         .arg("am")
         .arg("start")
