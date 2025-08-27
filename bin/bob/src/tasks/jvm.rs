@@ -13,7 +13,7 @@ use regex::Regex;
 use crate::Bobje;
 use crate::args::Profile;
 use crate::executor::Executor;
-use crate::manifest::{JarDependency, PackageType};
+use crate::manifest::JarDependency;
 
 // MARK: Java/Kotlin tasks
 pub(crate) fn detect_java_kotlin(source_files: &[String]) -> bool {
@@ -74,7 +74,7 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
             }
         }
         for dependency_bobje in bobje.dependencies.values() {
-            if dependency_bobje.r#type == PackageType::ExternalJar {
+            if dependency_bobje.r#type.is_external_jar() {
                 let jar = dependency_bobje.jar.as_ref().expect("Should be some");
                 inputs.push(format!(
                     "{}/{}",

@@ -12,65 +12,106 @@ use serde::Deserialize;
 #[serde(default)]
 pub(crate) struct Manifest {
     pub package: Package,
+    #[serde(rename = "lib")]
+    pub library: Option<Library>,
     pub build: Build,
     pub dependencies: HashMap<String, Dependency>,
 }
 
-#[derive(Default, Copy, Clone, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum PackageType {
-    #[default]
-    #[serde(alias = "bin")]
-    Binary,
-    #[serde(alias = "lib")]
-    Library,
-    #[serde(skip)]
-    ExternalJar,
-}
-
+// MARK: Package
 #[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct Package {
     pub name: String,
     pub id: Option<String>,
     pub version: String,
-    pub r#type: PackageType,
     pub metadata: PackageMetadata,
 }
 
-#[derive(Clone, Deserialize)]
-#[serde(untagged)]
-pub(crate) enum Dependency {
-    Path {
-        path: String,
-    },
-    Library {
-        library: String,
-    },
-    PkgConfig {
-        #[serde(rename = "pkg-config")]
-        pkg_config: String,
-    },
-    Framework {
-        framework: String,
-    },
-    Jar {
-        jar: JarDependency,
-    },
-    Maven {
-        maven: String,
-    },
+#[derive(Default, Clone, Deserialize)]
+#[serde(default)]
+pub(crate) struct PackageMetadata {
+    pub bundle: Option<BundleMetadata>,
+    pub jar: Option<JarMetadata>,
+    pub android: Option<AndroidMetadata>,
 }
 
 #[derive(Clone, Deserialize)]
-pub(crate) struct JarDependency {
-    pub package: String,
-    pub package_override: Option<String>,
-    pub version: String,
-    pub path: Option<String>,
-    pub url: Option<String>,
+#[serde(default)]
+pub(crate) struct BundleMetadata {
+    pub lipo: bool,
+    pub resources_dir: String,
+    pub iconset: Option<String>,
+    pub copyright: Option<String>,
 }
 
+impl Default for BundleMetadata {
+    fn default() -> Self {
+        Self {
+            lipo: false,
+            resources_dir: "res".to_string(),
+            iconset: None,
+            copyright: None,
+        }
+    }
+}
+
+#[derive(Default, Clone, Deserialize)]
+#[serde(default)]
+pub(crate) struct JarMetadata {
+    pub main_class: Option<String>,
+    pub proguard_keep: Vec<String>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(default)]
+pub(crate) struct AndroidMetadata {
+    pub min_sdk_version: u32,
+    pub target_sdk_version: u32,
+    pub main_activity: String,
+    pub keystore_file: String,
+    pub key_alias: String,
+    pub keystore_password: String,
+    pub key_password: String,
+    pub resources_dir: String,
+    pub assets_dir: String,
+    pub proguard_keep: Vec<String>,
+}
+
+impl Default for AndroidMetadata {
+    fn default() -> Self {
+        Self {
+            min_sdk_version: 21,
+            target_sdk_version: 36,
+            main_activity: ".MainActivity".to_string(),
+            keystore_file: "keystore.jks".to_string(),
+            key_alias: "android".to_string(),
+            keystore_password: "android".to_string(),
+            key_password: "android".to_string(),
+            resources_dir: "res".to_string(),
+            assets_dir: "assets".to_string(),
+            proguard_keep: Vec::new(),
+        }
+    }
+}
+
+// MARK: Library
+#[derive(Default, Copy, Clone, Deserialize)]
+pub(crate) enum LibraryType {
+    #[default]
+    #[serde(rename = "staticlib")]
+    Static,
+    #[serde(rename = "dylib")]
+    Dynamic,
+}
+
+#[derive(Default, Clone, Deserialize)]
+#[serde(default)]
+pub(crate) struct Library {
+    pub r#type: LibraryType,
+}
+
+// MARK: Build
 #[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct Build {
@@ -122,72 +163,36 @@ impl Build {
     }
 }
 
-#[derive(Default, Clone, Deserialize)]
-#[serde(default)]
-pub(crate) struct PackageMetadata {
-    pub bundle: Option<BundleMetadata>,
-    pub jar: Option<JarMetadata>,
-    pub android: Option<AndroidMetadata>,
-}
-
-// MARK: Bundle
+// MARK: Dependencies
 #[derive(Clone, Deserialize)]
-#[serde(default)]
-pub(crate) struct BundleMetadata {
-    pub lipo: bool,
-    pub resources_dir: String,
-    pub iconset: Option<String>,
-    pub copyright: Option<String>,
+#[serde(untagged)]
+pub(crate) enum Dependency {
+    Path {
+        path: String,
+    },
+    Library {
+        library: String,
+    },
+    PkgConfig {
+        #[serde(rename = "pkg-config")]
+        pkg_config: String,
+    },
+    Framework {
+        framework: String,
+    },
+    Jar {
+        jar: JarDependency,
+    },
+    Maven {
+        maven: String,
+    },
 }
 
-impl Default for BundleMetadata {
-    fn default() -> Self {
-        Self {
-            lipo: false,
-            resources_dir: "res".to_string(),
-            iconset: None,
-            copyright: None,
-        }
-    }
-}
-
-// MARK: Jar
-#[derive(Default, Clone, Deserialize)]
-#[serde(default)]
-pub(crate) struct JarMetadata {
-    pub main_class: Option<String>,
-    pub proguard_keep: Vec<String>,
-}
-
-// MARK: Android
 #[derive(Clone, Deserialize)]
-#[serde(default)]
-pub(crate) struct AndroidMetadata {
-    pub min_sdk_version: u32,
-    pub target_sdk_version: u32,
-    pub main_activity: String,
-    pub keystore_file: String,
-    pub key_alias: String,
-    pub keystore_password: String,
-    pub key_password: String,
-    pub resources_dir: String,
-    pub assets_dir: String,
-    pub proguard_keep: Vec<String>,
-}
-
-impl Default for AndroidMetadata {
-    fn default() -> Self {
-        Self {
-            min_sdk_version: 21,
-            target_sdk_version: 36,
-            main_activity: ".MainActivity".to_string(),
-            keystore_file: "keystore.jks".to_string(),
-            key_alias: "android".to_string(),
-            keystore_password: "android".to_string(),
-            key_password: "android".to_string(),
-            resources_dir: "res".to_string(),
-            assets_dir: "assets".to_string(),
-            proguard_keep: Vec::new(),
-        }
-    }
+pub(crate) struct JarDependency {
+    pub package: String,
+    pub package_override: Option<String>,
+    pub version: String,
+    pub path: Option<String>,
+    pub url: Option<String>,
 }

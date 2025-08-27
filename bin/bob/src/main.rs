@@ -13,7 +13,7 @@ use std::{env, fs};
 
 use crate::args::{Args, Profile, Subcommand, parse_args, subcommand_help};
 use crate::executor::Executor;
-use crate::manifest::{Dependency, JarDependency, Manifest, PackageType};
+use crate::manifest::{Dependency, JarDependency, LibraryType, Manifest};
 use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
     generate_android_res_tasks, link_android_classpath, run_android_apk,
@@ -84,6 +84,27 @@ fn subcommand_version() {
 }
 
 // MARK: Bobje
+#[derive(Copy, Clone)]
+pub(crate) enum PackageType {
+    Binary,
+    Library { r#type: LibraryType },
+    ExternalJar,
+}
+
+impl PackageType {
+    pub(crate) fn is_binary(&self) -> bool {
+        matches!(self, PackageType::Binary)
+    }
+
+    pub(crate) fn is_library(&self) -> bool {
+        matches!(self, PackageType::Library { .. })
+    }
+
+    pub(crate) fn is_external_jar(&self) -> bool {
+        matches!(self, PackageType::ExternalJar)
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct Bobje {
     target_dir: String,
@@ -201,7 +222,7 @@ impl Bobje {
         for (dep_name, dep) in &manifest.dependencies {
             if let Dependency::Path { path } = &dep {
                 let dep_bobje = Bobje::new(args, &format!("{manifest_dir}/{path}"), executor);
-                if dep_bobje.r#type != PackageType::Library {
+                if !dep_bobje.r#type.is_library() {
                     eprintln!("Dependency '{dep_name}' in {path} is not a library");
                     exit(1);
                 }
@@ -265,7 +286,13 @@ impl Bobje {
             target_dir: args.target_dir.clone(),
             profile: args.profile,
             // ...
-            r#type: manifest.package.r#type,
+            r#type: if let Some(library) = &manifest.library {
+                PackageType::Library {
+                    r#type: library.r#type,
+                }
+            } else {
+                PackageType::Binary
+            },
             name: manifest.package.name.clone(),
             version: manifest.package.version.clone(),
             target,
@@ -317,7 +344,7 @@ impl Bobje {
                     generate_ld_tasks(bobje, executor);
                 }
             }
-            if bobje.r#type == PackageType::Binary {
+            if bobje.r#type.is_binary() {
                 if detect_android(bobje) {
                     generate_android_dex_tasks(bobje, executor);
                     generate_android_final_apk_tasks(bobje, executor);
@@ -328,7 +355,7 @@ impl Bobje {
             }
         }
 
-        if bobje.r#type == PackageType::Binary && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
+        if bobje.r#type.is_binary() && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
             let mut bobje_x86_64 = bobje.clone();
             bobje_x86_64.target = Some("x86_64-apple-darwin".to_string());
             generate_bobje_tasks(&mut bobje_x86_64, executor);
@@ -339,7 +366,7 @@ impl Bobje {
         } else {
             generate_bobje_tasks(&mut bobje, executor);
         }
-        if bobje.r#type == PackageType::Binary && detect_bundle(&bobje) {
+        if bobje.r#type.is_binary() && detect_bundle(&bobje) {
             generate_bundle_tasks(&bobje, executor);
         }
 

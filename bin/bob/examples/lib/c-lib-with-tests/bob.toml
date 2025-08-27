@@ -1,4 +1,5 @@
 [package]
 name = "mul"
 version = "0.1.0"
-type = "lib"
+
+[lib]

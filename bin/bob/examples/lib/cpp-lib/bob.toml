@@ -1,4 +1,6 @@
 [package]
 name = "animals"
 version = "0.1.0"
-type = "lib"
+
+[lib]
+type = "dylib"

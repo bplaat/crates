@@ -2,4 +2,5 @@
 name = "popup"
 id = "com.example.popup"
 version = "0.1.0"
-type = "lib"
+
+[lib]

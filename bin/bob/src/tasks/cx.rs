@@ -11,9 +11,9 @@ use std::process::{Command, exit};
 use regex::Regex;
 
 use crate::executor::Executor;
-use crate::manifest::{Dependency, PackageType};
+use crate::manifest::{Dependency, LibraryType};
 use crate::utils::write_file_when_different;
-use crate::{Bobje, Profile};
+use crate::{Bobje, PackageType, Profile};
 
 // MARK: Cx vars
 struct CxVars {
@@ -79,7 +79,7 @@ impl CxVars {
         }
 
         // Libs
-        let mut libs = String::new();
+        let mut libs = format!("-L{}", bobje.out_dir_with_target());
         if cfg!(target_os = "macos") {
             let sdk_path = Command::new("xcrun")
                 .arg("--show-sdk-path")
@@ -336,6 +336,14 @@ pub(crate) fn detect_cx(source_files: &[String]) -> bool {
 pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     let vars = CxVars::new(bobje);
 
+    let dylib_ext = if cfg!(target_os = "macos") {
+        "dylib"
+    } else if cfg!(windows) {
+        "dll"
+    } else {
+        "so"
+    };
+
     // Gather inputs
     let mut inputs = Vec::new();
     let mut contains_cpp = false;
@@ -355,41 +363,38 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     }
 
     // Add dependencies
-    fn add_dependency_inputs(bobje: &Bobje, inputs: &mut Vec<String>, contains_cpp: &mut bool) {
+    fn add_dependency_inputs(
+        bobje: &Bobje,
+        dylib_ext: &str,
+        inputs: &mut Vec<String>,
+        contains_cpp: &mut bool,
+    ) {
         for dependency_bobje in bobje.dependencies.values() {
-            add_dependency_inputs(dependency_bobje, inputs, contains_cpp);
+            add_dependency_inputs(dependency_bobje, dylib_ext, inputs, contains_cpp);
         }
         for source_file in &bobje.source_files {
             if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
                 *contains_cpp = true;
             }
         }
-        inputs.push(format!(
-            "{}/lib{}.a",
-            bobje.out_dir_with_target(),
-            bobje.name
-        ));
+
+        if let PackageType::Library { r#type } = bobje.r#type {
+            inputs.push(format!(
+                "{}/lib{}.{}",
+                bobje.out_dir_with_target(),
+                bobje.name,
+                match r#type {
+                    LibraryType::Static => "a",
+                    LibraryType::Dynamic => dylib_ext,
+                }
+            ));
+        }
     }
     for dependency_bobje in bobje.dependencies.values() {
-        add_dependency_inputs(dependency_bobje, &mut inputs, &mut contains_cpp);
+        add_dependency_inputs(dependency_bobje, dylib_ext, &mut inputs, &mut contains_cpp);
     }
 
-    // Create static library
-    if bobje.r#type == PackageType::Library {
-        let static_library_file = format!("{}/lib{}.a", bobje.out_dir_with_target(), bobje.name);
-        executor.add_task_cmd(
-            format!(
-                "{} rc {} {}",
-                vars.ar,
-                static_library_file,
-                inputs.join(" "),
-            ),
-            inputs.clone(),
-            vec![static_library_file],
-        );
-    }
-
-    // Link executable
+    // Link library
     let linker = if cfg!(target_os = "macos") {
         vars.ld
     } else if contains_cpp {
@@ -397,20 +402,90 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     } else {
         vars.cc
     };
-    if bobje.r#type == PackageType::Binary {
+    if let PackageType::Library { r#type } = bobje.r#type {
+        let input_objects = inputs
+            .iter()
+            .filter(|f| f.ends_with(".o"))
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(" ");
+        match r#type {
+            LibraryType::Static => {
+                let staticlib_path = format!("{}/lib{}.a", bobje.out_dir_with_target(), bobje.name);
+                executor.add_task_cmd(
+                    format!("{} rc {} {}", vars.ar, staticlib_path, input_objects),
+                    inputs.clone(),
+                    vec![staticlib_path],
+                );
+            }
+            LibraryType::Dynamic => {
+                let dylib_path = format!(
+                    "{}/lib{}.{}",
+                    bobje.out_dir_with_target(),
+                    bobje.name,
+                    dylib_ext
+                );
+                executor.add_task_cmd(
+                    format!(
+                        "{} {} {} {} {} {} -o {}",
+                        linker,
+                        if cfg!(target_os = "macos") {
+                            "-dylib"
+                        } else {
+                            "-shared"
+                        },
+                        vars.ldflags,
+                        input_objects,
+                        vars.libs,
+                        if cfg!(target_os = "macos") {
+                            format!("-install_name @rpath/lib{}.{}", bobje.name, dylib_ext)
+                        } else {
+                            String::new()
+                        },
+                        dylib_path,
+                    ),
+                    inputs.clone(),
+                    vec![dylib_path],
+                );
+            }
+        }
+    }
+
+    // Link executable
+    if bobje.r#type.is_binary() {
         let executable_file = format!("{}/{}", bobje.out_dir_with_target(), bobje.name);
         let ext = if cfg!(windows) { ".exe" } else { "" };
+
+        let input_objects = inputs
+            .iter()
+            .filter(|f| f.ends_with(".o") || f.ends_with(".a"))
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut libs = vars.libs.clone();
+        for input in &inputs {
+            if input.ends_with(dylib_ext) {
+                libs.push_str(&format!(
+                    " -l{}",
+                    input
+                        .rsplit_once('/')
+                        .expect("Failed to split")
+                        .1
+                        .strip_prefix("lib")
+                        .expect("Failed to strip prefix")
+                        .strip_suffix(&format!(".{dylib_ext}"))
+                        .expect("Failed to strip suffix")
+                ));
+            }
+        }
+
         if bobje.profile == Profile::Release {
             let unstripped_path = format!("{executable_file}-unstripped{ext}");
             let stripped_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} {} -o {}",
-                    linker,
-                    vars.ldflags,
-                    inputs.join(" "),
-                    vars.libs,
-                    unstripped_path,
+                    "{} {} {} {} -rpath @executable_path -o {}",
+                    linker, vars.ldflags, input_objects, libs, unstripped_path
                 ),
                 inputs.clone(),
                 vec![unstripped_path.clone()],
@@ -424,12 +499,8 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             let out_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} {} -o {}",
-                    linker,
-                    vars.ldflags,
-                    inputs.join(" "),
-                    vars.libs,
-                    out_path,
+                    "{} {} {} {} -rpath @executable_path -o {}",
+                    linker, vars.ldflags, input_objects, libs, out_path
                 ),
                 inputs.clone(),
                 vec![out_path],

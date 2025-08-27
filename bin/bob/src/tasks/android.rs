@@ -9,7 +9,7 @@ use std::process::{Command, exit};
 use std::{env, fs};
 
 use crate::executor::Executor;
-use crate::manifest::{AndroidMetadata, PackageType};
+use crate::manifest::AndroidMetadata;
 use crate::tasks::jvm::{find_modules, get_class_name};
 use crate::utils::{index_files, write_file_when_different};
 use crate::{Bobje, Profile};
@@ -138,7 +138,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
         bobje.out_dir(),
         vars.id.replace('.', "/")
     );
-    if bobje.r#type == PackageType::Binary {
+    if bobje.r#type.is_binary() {
         let dest = format!("{}/{}-unaligned.apk", bobje.out_dir(), bobje.name);
 
         let mut link_command = vec!["aapt2".to_string(), "link".to_string()];
@@ -195,7 +195,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                         }
                         link_inputs.push(compiled_res_file);
                     }
-                    if bobje.r#type == PackageType::Library {
+                    if bobje.r#type.is_library() {
                         link_command.push("--extra-packages".to_string());
                         link_command.push(package_id.clone());
                         link_outputs.push(format!(
@@ -255,7 +255,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
         .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
         .collect::<Vec<_>>();
     for dependency_bobje in bobje.dependencies.values() {
-        if dependency_bobje.r#type == PackageType::ExternalJar {
+        if dependency_bobje.r#type.is_external_jar() {
             let jar = dependency_bobje.jar.as_ref().expect("Should be some");
             inputs.push(format!(
                 "{}/{}",
