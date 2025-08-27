@@ -478,14 +478,19 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
                 ));
             }
         }
+        let rpath = if cfg!(target_os = "macos") {
+            "-rpath @executable_path"
+        } else {
+            "-Wl,-rpath='$ORIGIN'"
+        };
 
         if bobje.profile == Profile::Release {
             let unstripped_path = format!("{executable_file}-unstripped{ext}");
             let stripped_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} {} -rpath @executable_path -o {}",
-                    linker, vars.ldflags, input_objects, libs, unstripped_path
+                    "{} {} {} {} {} -o {}",
+                    linker, vars.ldflags, input_objects, libs, rpath, unstripped_path
                 ),
                 inputs.clone(),
                 vec![unstripped_path.clone()],
@@ -499,8 +504,8 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
             let out_path = format!("{executable_file}{ext}");
             executor.add_task_cmd(
                 format!(
-                    "{} {} {} {} -rpath @executable_path -o {}",
-                    linker, vars.ldflags, input_objects, libs, out_path
+                    "{} {} {} {} {} -o {}",
+                    linker, vars.ldflags, input_objects, libs, rpath, out_path
                 ),
                 inputs.clone(),
                 vec![out_path],
