@@ -42,7 +42,7 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
         javac_flags.push_str(&bobje.manifest.build.javac_flags);
     }
 
-    let mut kotlinc_flags = "-Werror".to_string();
+    let mut kotlinc_flags = "-no-reflect -Werror".to_string();
     if !bobje.manifest.build.kotlinc_flags.is_empty() {
         kotlinc_flags.push(' ');
         kotlinc_flags.push_str(&bobje.manifest.build.kotlinc_flags);
@@ -224,7 +224,7 @@ pub(crate) fn download_extract_jar_tasks(
     // Add extract task
     let classes_dir = format!("{}/classes", bobje.out_dir());
     executor.add_task_cmd(
-        format!("cd {classes_dir} && jar xf {downloaded_jar}"),
+        format!("cd {classes_dir} && unzip {downloaded_jar} *.class -x META-INF/* > /dev/null"),
         vec![downloaded_jar],
         vec![format!(
             "{}/{}",
@@ -269,16 +269,13 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
 
         executor.add_task_cmd(
             format!(
-                "proguard -injars {} -outjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null && rm -rf {}/META-INF && find {} -name '*.kotlin_builtins' -delete && find {} -type d -empty -delete",
+                "proguard -injars {}\\(!META-INF/**\\) -outjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null",
                 classes_dir, optimized_classes_dir, java_home,
                 keeps
                     .iter()
                     .map(|keep| format!("-keep '{keep}'"))
                     .collect::<Vec<_>>()
-                    .join(" "),
-                optimized_classes_dir,
-                optimized_classes_dir,
-                optimized_classes_dir
+                    .join(" ")
             ),
             modules
                 .iter()

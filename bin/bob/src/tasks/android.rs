@@ -301,10 +301,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
             format!("--output {}", bobje.out_dir()),
             "--pg-compat".to_string(),
             format!("--pg-conf {proguard_config_path}"),
-            format!(
-                "$(find {} -name '*.class' | grep -v 'META-INF')",
-                &classes_dir
-            ),
+            format!("$(find {} -name *.class)", &classes_dir),
         ];
         executor.add_task_cmd(
             format!(
@@ -325,10 +322,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
             format!("--min-api {}", vars.android_metadata.min_sdk_version),
             format!("--lib {}", vars.platform_jar),
             format!("--output {}", bobje.out_dir()),
-            format!(
-                "$(find {} -name '*.class' | grep -v 'META-INF')",
-                &classes_dir
-            ),
+            format!("$(find {} -name *.class)", &classes_dir),
         ];
         executor.add_task_cmd(
             format!(
