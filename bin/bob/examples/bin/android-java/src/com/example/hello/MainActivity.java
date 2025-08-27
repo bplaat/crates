@@ -1,11 +1,13 @@
 package com.example.hello;
 
-import android.app.Activity;
-import android.os.Bundle;
-import android.widget.TextView;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.widget.TextView;
+
 import com.example.popup.Popup;
 
 public class MainActivity extends Activity {

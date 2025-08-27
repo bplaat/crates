@@ -4,12 +4,9 @@
 {
     "recommendations": [
         "EditorConfig.EditorConfig",
-        // Rust extensions
         "rust-lang.rust-analyzer",
         "tamasfe.even-better-toml",
-        // Web extensions
         "esbenp.prettier-vscode",
-        // C/C++/Obj-C/Obj-C++ extensions
         "xaver.clang-format"
     ],
     "search.exclude": {
@@ -59,6 +56,28 @@
     },
     "[yaml]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+
+    // Clang-format extension
+    "[c]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": true
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": true
+    },
+    "[objective-c]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": true
+    },
+    "[objective-cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": true
+    },
+    "[java]": {
+        "editor.defaultFormatter": "xaver.clang-format",
         "editor.formatOnSave": true
     }
 }

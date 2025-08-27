@@ -5,5 +5,13 @@ ColumnLimit: 120
 DerivePointerAlignment: false
 PointerAlignment: Left
 AllowShortFunctionsOnASingleLine: Empty
+SpaceAfterCStyleCast: false
+
+# C++
 AccessModifierOffset: -4
+
+# Obj-C
 ObjCBlockIndentWidth: 4
+
+# Java
+JavaImportGroups: [java, android, com, nl, org]

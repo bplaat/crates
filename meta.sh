@@ -30,6 +30,12 @@ function check_web() {
     npx --prefer-offline --yes prettier@2.8.8 --check --write $(find bin examples lib -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" | grep -v "node_modules" | grep -v "dist")
 }
 
+function check_bob_examples() {
+    # Format
+    echo "Checking Bob examples formatting..."
+    clang-format --dry-run --Werror $(find bin/bob/examples -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.m" -o -name "*.mm" -o -name "*.java" | grep -v "src-gen")
+}
+
 function check_rust() {
     # Format
     echo "Checking Rust formatting..."
@@ -49,6 +55,7 @@ function check_rust() {
 function check() {
     check_copyright
     check_web
+    check_bob_examples
     check_rust
 }
 

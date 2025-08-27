@@ -633,9 +633,9 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
         r#"    CU_basic_set_mode(CU_BRM_VERBOSE);
     CU_basic_run_tests();
 
-    #define ANSI_COLOR_RED "\x1b[31m"
-    #define ANSI_COLOR_GREEN "\x1b[32m"
-    #define ANSI_COLOR_RESET "\x1b[0m"
+#define ANSI_COLOR_RED "\x1b[31m"
+#define ANSI_COLOR_GREEN "\x1b[32m"
+#define ANSI_COLOR_RESET "\x1b[0m"
     int number_of_failures = CU_get_number_of_failures();
     if (number_of_failures == 0) {{
         printf(ANSI_COLOR_GREEN "All tests passed!" ANSI_COLOR_RESET "\n");
