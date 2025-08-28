@@ -9,6 +9,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::sync::{LazyLock, OnceLock};
 use std::{env, fs};
 
 use crate::args::{Args, Profile, Subcommand, parse_args, subcommand_help};
@@ -83,6 +84,39 @@ fn subcommand_version() {
     println!("bob v{}", env!("CARGO_PKG_VERSION"));
 }
 
+fn subcommand_tree(bobjes: Vec<Bobje>) {
+    let mut sorted_bobjes = bobjes.clone();
+    sorted_bobjes.sort_by_key(|bobje| bobje.name.clone());
+    for (i, bobje) in sorted_bobjes.iter().enumerate() {
+        println!("{} v{} ({})", bobje.name, bobje.version, bobje.manifest_dir);
+        fn print_deps(bobje: &Bobje, prefix: &str) {
+            let mut sorted_deps = bobje.dependencies.values().cloned().collect::<Vec<_>>();
+            sorted_deps.sort_by_key(|dep| dep.name.clone());
+            for (i, dep) in sorted_deps.iter().enumerate() {
+                let is_last = i == sorted_deps.len() - 1;
+                let branch = if is_last { "└── " } else { "├── " };
+                if *USE_ANSI {
+                    print!("\x1b[90m{prefix}{branch}\x1b[0m");
+                } else {
+                    print!("{prefix}{branch}");
+                }
+                println!("{} v{} ({})", dep.name, dep.version, dep.manifest_dir);
+
+                let new_prefix = if is_last {
+                    format!("{prefix}    ")
+                } else {
+                    format!("{prefix}│   ")
+                };
+                print_deps(dep, &new_prefix);
+            }
+        }
+        print_deps(bobje, "");
+        if i != sorted_bobjes.len() - 1 {
+            println!()
+        }
+    }
+}
+
 // MARK: Bobje
 #[derive(Copy, Clone)]
 pub(crate) enum PackageType {
@@ -116,13 +150,13 @@ pub(crate) struct Bobje {
     target: Option<String>,
     manifest_dir: String,
     manifest: Manifest,
-    jar: Option<JarDependency>,
     source_files: Vec<String>,
     dependencies: HashMap<String, Bobje>,
+    jar: Option<JarDependency>,
 }
 
 impl Bobje {
-    fn new(args: &Args, manifest_dir: &str, executor: &mut Executor) -> Self {
+    fn new(args: &Args, manifest_dir: &str) -> Self {
         // Read manifest
         let manifest_path = format!("{manifest_dir}/bob.toml");
         let mut manifest: Manifest =
@@ -135,6 +169,9 @@ impl Bobje {
                 exit(1);
             });
         let source_files = index_files(&format!("{manifest_dir}/src/"));
+
+        // Read .env file
+        _ = read_env_file(&format!("{manifest_dir}/.env"));
 
         // Merge platform specific build config
         if cfg!(target_os = "macos")
@@ -221,7 +258,7 @@ impl Bobje {
         let mut dependencies = HashMap::new();
         for (dep_name, dep) in &manifest.dependencies {
             if let Dependency::Path { path } = &dep {
-                let dep_bobje = Bobje::new(args, &format!("{manifest_dir}/{path}"), executor);
+                let dep_bobje = Bobje::new(args, &format!("{manifest_dir}/{path}"));
                 if !dep_bobje.r#type.is_library() {
                     eprintln!("Dependency '{dep_name}' in {path} is not a library");
                     exit(1);
@@ -230,7 +267,7 @@ impl Bobje {
             }
 
             if let Dependency::Jar { jar } = &dep {
-                let dep_bobje = Bobje::new_external_jar(args, dep_name, jar, executor);
+                let dep_bobje = Bobje::new_external_jar(args, dep_name, jar);
                 dependencies.insert(dep_bobje.name.clone(), dep_bobje);
             }
 
@@ -258,7 +295,7 @@ impl Bobje {
                     path: None,
                     url: Some(url),
                 };
-                let dep_bobje = Bobje::new_external_jar(args, dep_name, &jar, executor);
+                let dep_bobje = Bobje::new_external_jar(args, dep_name, &jar);
                 dependencies.insert(dep_bobje.name.clone(), dep_bobje);
             }
         }
@@ -281,8 +318,7 @@ impl Bobje {
             target = Some(args_target.clone());
         }
 
-        // Generate tasks
-        let mut bobje = Self {
+        Self {
             target_dir: args.target_dir.clone(),
             profile: args.profile,
             // ...
@@ -296,13 +332,39 @@ impl Bobje {
             name: manifest.package.name.clone(),
             version: manifest.package.version.clone(),
             target,
-            manifest_dir: manifest_dir.to_string(),
+            manifest_dir: PathBuf::from(manifest_dir)
+                .canonicalize()
+                .expect("Should be some")
+                .to_str()
+                .expect("Should be some")
+                .to_string(),
             manifest,
             jar: None,
             source_files,
             dependencies,
-        };
+        }
+    }
 
+    fn new_external_jar(args: &Args, name: &str, jar: &JarDependency) -> Self {
+        let bobje = Self {
+            target_dir: args.target_dir.clone(),
+            profile: args.profile,
+            // ...
+            r#type: PackageType::ExternalJar,
+            name: name.to_string(),
+            version: jar.version.clone(),
+            target: args.target.clone(),
+            manifest_dir: "".to_string(),
+            manifest: Manifest::default(),
+            source_files: vec![],
+            dependencies: HashMap::new(),
+            jar: Some(jar.clone()),
+        };
+        // download_extract_jar_tasks(&bobje, executor, jar);
+        bobje
+    }
+
+    fn generate_tasks(&mut self, executor: &mut Executor) {
         fn generate_bobje_tasks(bobje: &mut Bobje, executor: &mut Executor) {
             if detect_template(&bobje.source_files) {
                 process_templates(bobje, executor);
@@ -355,46 +417,20 @@ impl Bobje {
             }
         }
 
-        if bobje.r#type.is_binary() && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
-            let mut bobje_x86_64 = bobje.clone();
+        if self.r#type.is_binary() && detect_bundle(self) && bundle_is_lipo(self) {
+            let mut bobje_x86_64 = self.clone();
             bobje_x86_64.target = Some("x86_64-apple-darwin".to_string());
             generate_bobje_tasks(&mut bobje_x86_64, executor);
 
-            let mut bobje_aarch64 = bobje.clone();
+            let mut bobje_aarch64 = self.clone();
             bobje_aarch64.target = Some("aarch64-apple-darwin".to_string());
             generate_bobje_tasks(&mut bobje_aarch64, executor);
         } else {
-            generate_bobje_tasks(&mut bobje, executor);
+            generate_bobje_tasks(self, executor);
         }
-        if bobje.r#type.is_binary() && detect_bundle(&bobje) {
-            generate_bundle_tasks(&bobje, executor);
+        if self.r#type.is_binary() && detect_bundle(self) {
+            generate_bundle_tasks(self, executor);
         }
-
-        bobje
-    }
-
-    fn new_external_jar(
-        args: &Args,
-        name: &str,
-        jar: &JarDependency,
-        executor: &mut Executor,
-    ) -> Self {
-        let bobje = Self {
-            target_dir: args.target_dir.clone(),
-            profile: args.profile,
-            // ...
-            r#type: PackageType::ExternalJar,
-            name: name.to_string(),
-            version: jar.version.clone(),
-            target: args.target.clone(),
-            manifest_dir: "".to_string(),
-            manifest: Manifest::default(),
-            jar: Some(jar.clone()),
-            source_files: vec![],
-            dependencies: HashMap::new(),
-        };
-        download_extract_jar_tasks(&bobje, executor, jar);
-        bobje
     }
 
     fn out_dir(&self) -> String {
@@ -409,6 +445,101 @@ impl Bobje {
         }
     }
 }
+
+fn find_bobje_dir(current_dir: &str) -> Option<PathBuf> {
+    let mut bob_dir = PathBuf::from(current_dir).canonicalize().ok()?;
+    while !bob_dir.join("bob.toml").exists() {
+        if let Some(parent) = bob_dir.parent() {
+            bob_dir = parent.to_path_buf();
+        } else {
+            return None;
+        }
+    }
+    Some(bob_dir)
+}
+
+fn bobje_manifest_read(path: &str) -> Manifest {
+    basic_toml::from_str(&fs::read_to_string(path).unwrap_or_else(|err| {
+        eprintln!("Can't read {path} file: {err}");
+        exit(1);
+    }))
+    .unwrap_or_else(|err| {
+        eprintln!("Can't parse {path} file: {err}");
+        exit(1);
+    })
+}
+
+fn index_bobjes(args: &Args) -> (String, Vec<Bobje>) {
+    // Try first time
+    let mut bobje_dir = find_bobje_dir(&args.manifest_dir).unwrap_or_else(|| {
+        eprintln!("Can't find bob.toml from {}", args.manifest_dir);
+        exit(1);
+    });
+    let bobje_manifest =
+        bobje_manifest_read(bobje_dir.join("bob.toml").to_str().expect("Should be some"));
+
+    let mut workspace_manifest = if !bobje_manifest.workspace.members.is_empty() {
+        env::set_current_dir(&bobje_dir).expect("Failed to change working directory");
+        Some(bobje_manifest.clone())
+    } else {
+        None
+    };
+
+    // Try second time
+    if let Some(workspace_bobje_dir) = find_bobje_dir(
+        bobje_dir
+            .parent()
+            .expect("Should be some")
+            .to_str()
+            .expect("Should be some"),
+    ) {
+        bobje_dir = workspace_bobje_dir;
+        workspace_manifest = Some(bobje_manifest_read(
+            bobje_dir.join("bob.toml").to_str().expect("Should be some"),
+        ));
+    }
+    (
+        format!("{}/{}", bobje_dir.display(), args.target_dir),
+        if let Some(workspace_manifest) = workspace_manifest {
+            let mut bobjes = Vec::new();
+
+            for member in workspace_manifest.workspace.members {
+                if member.ends_with("*") {
+                    let member_glob = member.trim_end_matches('*');
+                    let member_dir = bobje_dir.join(member_glob);
+                    if member_dir.exists() && member_dir.is_dir() {
+                        for entry in
+                            fs::read_dir(&member_dir).expect("Failed to read member directory")
+                        {
+                            let entry = entry.expect("Failed to read directory entry");
+                            let path = entry.path();
+                            if path.is_dir() && path.join("bob.toml").exists() {
+                                bobjes
+                                    .push(Bobje::new(args, path.to_str().expect("Should be some")));
+                            }
+                        }
+                    }
+                } else {
+                    let member_path = bobje_dir.join(member);
+                    bobjes.push(Bobje::new(
+                        args,
+                        member_path.to_str().expect("Should be some"),
+                    ));
+                }
+            }
+
+            bobjes
+        } else {
+            vec![Bobje::new(
+                args,
+                bobje_dir.to_str().expect("Should be some"),
+            )]
+        },
+    )
+}
+
+pub(crate) static USE_ANSI: LazyLock<bool> =
+    LazyLock::new(|| env::var("NO_COLOR").is_err() && env::var("CI").is_err());
 
 // MARK: Main
 fn main() {
@@ -429,85 +560,70 @@ fn main() {
         return;
     }
 
-    // Find bob.toml and change directory to its location
-    let mut bob_dir = PathBuf::from(&args.manifest_dir)
-        .canonicalize()
-        .unwrap_or_else(|_| {
-            eprintln!(
-                "Can't find or access manifest directory: {}",
-                &args.manifest_dir
-            );
-            exit(1);
-        });
-    while !bob_dir.join("bob.toml").exists() {
-        if let Some(parent) = bob_dir.parent() {
-            bob_dir = parent.to_path_buf();
-        } else {
-            eprintln!(
-                "Can't find bob.toml in current or any parent directory (starting from {})",
-                args.manifest_dir
-            );
-            exit(1);
-        }
-    }
-    env::set_current_dir(bob_dir).expect("Failed to change working directory");
-
-    // Read .env file
-    _ = read_env_file(".env");
+    // Index manifests
+    let (target_dir, bobjes) = index_bobjes(&args);
 
     // Clean build artifacts
     if args.subcommand == Subcommand::Clean {
-        subcommand_clean(&args.target_dir, true);
+        subcommand_clean(&target_dir, true);
         return;
     }
 
     // Rebuild artifacts
     if args.subcommand == Subcommand::Rebuild {
-        subcommand_clean(&args.target_dir, false);
+        subcommand_clean(&target_dir, false);
+    }
+
+    // Print dependency tree
+    if args.subcommand == Subcommand::Tree {
+        subcommand_tree(bobjes);
+        return;
     }
 
     // Check target directory
-    if !Path::new(&args.target_dir).exists() {
-        fs::create_dir(&args.target_dir).expect("Failed to create target directory");
+    if !Path::new(&target_dir).exists() {
+        fs::create_dir(&target_dir).expect("Failed to create target directory");
     }
 
     // Build main bobje
     let mut executor = Executor::new();
-    let bobje = Bobje::new(&args, ".", &mut executor);
+    for mut bobje in bobjes {
+        bobje.generate_tasks(&mut executor);
+    }
     executor.execute(
-        &format!("{}/bob.log", &args.target_dir),
+        &format!("{}/bob.log", &target_dir),
         args.verbose,
         args.thread_count,
     );
 
-    // Run build artifact
-    if args.subcommand == Subcommand::Run {
-        if detect_bundle(&bobje) {
-            run_bundle(&bobje);
-        }
-        if detect_jar(&bobje) {
-            run_jar(&bobje);
-        }
-        if detect_android(&bobje) {
-            run_android_apk(&bobje);
-        }
-        if detect_cx(&bobje.source_files) {
-            run_ld(&bobje);
-        }
-        if detect_java_kotlin(&bobje.source_files) {
-            run_java_class(&bobje);
-        }
-        eprintln!("No build artifact to run");
-    }
+    // // Run build artifact
+    // if args.subcommand == Subcommand::Run {
+    //     if detect_bundle(&bobje) {
+    //         run_bundle(&bobje);
+    //     }
+    //     if detect_jar(&bobje) {
+    //         run_jar(&bobje);
+    //     }
+    //     if detect_android(&bobje) {
+    //         run_android_apk(&bobje);
+    //     }
+    //     if detect_cx(&bobje.source_files) {
+    //         run_ld(&bobje);
+    //     }
+    //     if detect_java_kotlin(&bobje.source_files) {
+    //         run_java_class(&bobje);
+    //     }
+    //     eprintln!("No build artifact to run");
+    // }
 
-    // Run unit tests
-    if args.subcommand == Subcommand::Test {
-        if detect_cx(&bobje.source_files) {
-            run_ld_cunit_tests(&bobje);
-        }
-        if detect_java_kotlin(&bobje.source_files) {
-            run_junit_tests(&bobje);
-        }
-        eprintln!("No test artifact to run");
-    }
+    // // Run unit tests
+    // if args.subcommand == Subcommand::Test {
+    //     if detect_cx(&bobje.source_files) {
+    //         run_ld_cunit_tests(&bobje);
+    //     }
+    //     if detect_java_kotlin(&bobje.source_files) {
+    //         run_junit_tests(&bobje);
+    //     }
+    //     eprintln!("No test artifact to run");
+    // }
 }

@@ -17,6 +17,7 @@ pub(crate) enum Subcommand {
     Rebuild,
     Run,
     Test,
+    Tree,
     Version,
 }
 
@@ -45,6 +46,7 @@ pub(crate) struct Args {
     pub target: Option<String>,
     pub verbose: bool,
     pub thread_count: usize,
+    pub package: Option<String>,
 }
 
 impl Default for Args {
@@ -57,6 +59,7 @@ impl Default for Args {
             target: None,
             verbose: false,
             thread_count: thread::available_parallelism().map_or(1, |n| n.get()),
+            package: None,
         }
     }
 }
@@ -76,6 +79,7 @@ pub(crate) fn parse_args() -> Args {
                 args.subcommand = Subcommand::Test;
                 args.profile = Profile::Test;
             }
+            "tree" => args.subcommand = Subcommand::Tree,
             "version" | "--version" => args.subcommand = Subcommand::Version,
             "-C" | "--manifest-dir" => {
                 args.manifest_dir = args_iter.next().expect("Invalid argument")
@@ -95,6 +99,9 @@ pub(crate) fn parse_args() -> Args {
                     .and_then(|s| s.parse().ok())
                     .expect("Invalid argument")
             }
+            "-p" | "--package" => {
+                args.package = Some(args_iter.next().expect("Invalid argument"));
+            }
             _ => {
                 eprintln!("Unknown argument: {arg}");
                 exit(1);
@@ -113,6 +120,7 @@ Options:
   -T <dir>, --target-dir      Write artifacts to directory <dir>
   -r, --release               Build artifacts in release mode
   -v, --verbose               Print verbose output
+  -p, --package               Select specific package in workspace
   --target <target>           Build for the specified target (e.g., x86_64-unknown-linux-gnu)
   --single-threaded           Run tasks single threaded
   --thread-count <count>      Use <count> threads for building (default: number of available cores)
@@ -125,6 +133,7 @@ Subcommands:
   rebuild                     Clean and build the project
   run                         Run the build artifact after building
   test                        Run the unit tests
+  tree                        Print dependency tree
   version                     Print the version number"
     );
 }

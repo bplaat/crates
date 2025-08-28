@@ -14,6 +14,7 @@ use std::{env, fs, thread};
 use sha1::{Digest, Sha1};
 use threadpool::ThreadPool;
 
+use crate::USE_ANSI;
 use crate::log::{Log, LogEntry};
 
 // MARK: Task
@@ -178,7 +179,7 @@ impl Executor {
             Arc::new(Mutex::new(Vec::new())),
             Arc::new(Mutex::new(log)),
             Arc::new(task_counter),
-            !verbose && env::var("NO_COLOR").is_err() && env::var("CI").is_err(),
+            !verbose && *USE_ANSI,
         );
         pool.join();
     }

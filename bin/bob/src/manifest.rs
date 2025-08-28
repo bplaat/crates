@@ -11,11 +11,19 @@ use serde::Deserialize;
 #[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct Manifest {
+    pub workspace: Workspace,
     pub package: Package,
     #[serde(rename = "lib")]
     pub library: Option<Library>,
     pub build: Build,
     pub dependencies: HashMap<String, Dependency>,
+}
+
+// MARK: Workspace
+#[derive(Default, Clone, Deserialize)]
+#[serde(default)]
+pub(crate) struct Workspace {
+    pub members: Vec<String>,
 }
 
 // MARK: Package
