@@ -7,7 +7,7 @@
 #![doc = include_str!("../README.md")]
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::{env, fs};
 
@@ -412,12 +412,10 @@ impl Bobje {
 
 // MARK: Main
 fn main() {
-    let args = parse_args();
     #[cfg(windows)]
-    if !args.verbose && env::var("NO_COLOR").is_err() && env::var("CI").is_err() {
-        enable_ansi_support::enable_ansi_support().expect("Can't enable ANSI support");
-    }
+    enable_ansi_support::enable_ansi_support().expect("Can't enable ANSI support");
 
+    let args = parse_args();
     if args.subcommand == Subcommand::CleanCache {
         subcommand_clean_cache();
         return;
@@ -431,17 +429,28 @@ fn main() {
         return;
     }
 
-    // Change working directory to manifest_dir
-    if env::set_current_dir(&args.manifest_dir).is_err() {
-        eprintln!("Can't change directory to: {}", args.manifest_dir);
-        exit(1);
+    // Find bob.toml and change directory to its location
+    let mut bob_dir = PathBuf::from(&args.manifest_dir)
+        .canonicalize()
+        .unwrap_or_else(|_| {
+            eprintln!(
+                "Can't find or access manifest directory: {}",
+                &args.manifest_dir
+            );
+            exit(1);
+        });
+    while !bob_dir.join("bob.toml").exists() {
+        if let Some(parent) = bob_dir.parent() {
+            bob_dir = parent.to_path_buf();
+        } else {
+            eprintln!(
+                "Can't find bob.toml in current or any parent directory (starting from {})",
+                args.manifest_dir
+            );
+            exit(1);
+        }
     }
-
-    // Check if bob.toml exists
-    if !Path::new("bob.toml").exists() {
-        eprintln!("Can't find bob.toml file");
-        exit(1);
-    }
+    env::set_current_dir(bob_dir).expect("Failed to change working directory");
 
     // Read .env file
     _ = read_env_file(".env");
