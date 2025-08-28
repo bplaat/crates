@@ -46,14 +46,16 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                 )
                 .expect("Invalid attribute");
             for item in list {
-                if let Meta::List(meta_list) = item {
-                    if meta_list.path.is_ident("context") {
-                        let list = meta_list
-                            .parse_args_with(syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated)
-                            .expect("Invalid attribute");
-                        if let Meta::Path(path) = &list[0] {
-                            context = Some(path.get_ident().expect("Invalid attribute").clone());
-                        }
+                if let Meta::List(meta_list) = item
+                    && meta_list.path.is_ident("context")
+                {
+                    let list = meta_list
+                        .parse_args_with(
+                            syn::punctuated::Punctuated::<_, syn::token::Comma>::parse_terminated,
+                        )
+                        .expect("Invalid attribute");
+                    if let Meta::Path(path) = &list[0] {
+                        context = Some(path.get_ident().expect("Invalid attribute").clone());
                     }
                 }
             }

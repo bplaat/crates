@@ -394,10 +394,10 @@ impl<'a> WebviewBuilder<'a> {
                         path = format!("{path}index.html");
                     }
 
-                    if let Some(handle) = self.internal_http_server_handle {
-                        if let Some(response) = handle(req) {
-                            return response;
-                        }
+                    if let Some(handle) = self.internal_http_server_handle
+                        && let Some(response) = handle(req)
+                    {
+                        return response;
                     }
 
                     if let Some(file) = assets_get(path.trim_start_matches('/')) {

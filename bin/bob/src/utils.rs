@@ -34,10 +34,10 @@ pub(crate) fn create_file_and_parent_dirs(path: impl AsRef<Path>) -> io::Result<
 }
 
 pub(crate) fn write_file_when_different(path: &str, contents: &str) -> io::Result<()> {
-    if let Ok(existing_contents) = fs::read_to_string(path) {
-        if existing_contents == contents {
-            return Ok(());
-        }
+    if let Ok(existing_contents) = fs::read_to_string(path)
+        && existing_contents == contents
+    {
+        return Ok(());
     }
     let mut f = create_file_and_parent_dirs(path)?;
     f.write_all(contents.as_bytes())?;

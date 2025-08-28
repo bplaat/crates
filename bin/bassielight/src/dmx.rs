@@ -97,26 +97,24 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
             let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
             dmx.fill(0);
 
-            if let Some(toggle_speed) = dmx_state.toggle_speed {
-                if SystemTime::now()
+            if let Some(toggle_speed) = dmx_state.toggle_speed
+                && SystemTime::now()
                     .duration_since(toggle_color_time)
                     .expect("Time went backwards")
                     > toggle_speed
-                {
-                    dmx_state.is_toggle_color = !dmx_state.is_toggle_color;
-                    toggle_color_time = SystemTime::now();
-                }
+            {
+                dmx_state.is_toggle_color = !dmx_state.is_toggle_color;
+                toggle_color_time = SystemTime::now();
             }
 
-            if let Some(strobe_speed) = dmx_state.strobe_speed {
-                if SystemTime::now()
+            if let Some(strobe_speed) = dmx_state.strobe_speed
+                && SystemTime::now()
                     .duration_since(strobe_time)
                     .expect("Time went backwards")
                     > strobe_speed
-                {
-                    dmx_state.is_strobe = !dmx_state.is_strobe;
-                    strobe_time = SystemTime::now();
-                }
+            {
+                dmx_state.is_strobe = !dmx_state.is_strobe;
+                strobe_time = SystemTime::now();
             }
 
             for fixture in &config.fixtures {

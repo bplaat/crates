@@ -124,12 +124,10 @@ pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
             continue;
         }
         if char == '*' {
-            if let Some(c) = chars.peek() {
-                if *c == '*' {
-                    chars.next();
-                    tokens.push(Token::Exp);
-                    continue;
-                }
+            if let Some('*') = chars.peek() {
+                chars.next();
+                tokens.push(Token::Exp);
+                continue;
             }
             tokens.push(Token::Mul);
             continue;
@@ -158,25 +156,25 @@ pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
             tokens.push(Token::BitwiseNot);
             continue;
         }
-        if char == '<' {
-            if let Some('<') = chars.peek() {
-                chars.next();
-                chars.next();
-                tokens.push(Token::LeftShift);
-                continue;
-            }
+        if char == '<'
+            && let Some('<') = chars.peek()
+        {
+            chars.next();
+            chars.next();
+            tokens.push(Token::LeftShift);
+            continue;
         }
-        if char == '>' {
+        if char == '>'
+            && let Some('>') = chars.peek()
+        {
+            chars.next();
             if let Some('>') = chars.peek() {
                 chars.next();
-                if let Some('>') = chars.peek() {
-                    chars.next();
-                    tokens.push(Token::UnsignedRightShift);
-                    continue;
-                } else {
-                    tokens.push(Token::SignedRightShift);
-                    continue;
-                }
+                tokens.push(Token::UnsignedRightShift);
+                continue;
+            } else {
+                tokens.push(Token::SignedRightShift);
+                continue;
             }
         }
 

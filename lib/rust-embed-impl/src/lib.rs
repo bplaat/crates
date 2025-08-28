@@ -25,13 +25,12 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     let mut folder_path = None;
     for attr in input.attrs {
         if attr.path().is_ident("folder") {
-            if let Meta::NameValue(meta) = &attr.meta {
-                if let Expr::Lit(expr) = &meta.value {
-                    if let Lit::Str(lit_str) = &expr.lit {
-                        folder_path = Some(lit_str.value());
-                        break;
-                    }
-                }
+            if let Meta::NameValue(meta) = &attr.meta
+                && let Expr::Lit(expr) = &meta.value
+                && let Lit::Str(lit_str) = &expr.lit
+            {
+                folder_path = Some(lit_str.value());
+                break;
             }
             panic!("Invalid #[folder = \"...\"] attribute");
         }

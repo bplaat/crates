@@ -380,14 +380,13 @@ pub(crate) fn find_modules(bobje: &Bobje) -> Vec<Module> {
     }
 
     // Sort module with main class to be last
-    if let Some(main_class) = find_main_class(bobje) {
-        if let Some(pos) = modules
+    if let Some(main_class) = find_main_class(bobje)
+        && let Some(pos) = modules
             .iter()
             .position(|m| m.name == get_module_name(&main_class))
-        {
-            let main_module = modules.remove(pos);
-            modules.push(main_module);
-        }
+    {
+        let main_module = modules.remove(pos);
+        modules.push(main_module);
     }
 
     modules
@@ -422,19 +421,17 @@ fn find_main_class(bobje: &Bobje) -> Option<String> {
         Regex::new(r"(public\s+)?static\s+void\s+main\s*\(").expect("Failed to compile regex");
     let kotlin_re = Regex::new(r"fun\s+main\s*\(").expect("Failed to compile regex");
     for source_file in &bobje.source_files {
-        if source_file.ends_with(".java") {
-            if let Ok(contents) = fs::read_to_string(source_file) {
-                if java_re.is_match(&contents) {
-                    return Some(get_class_name(source_file));
-                }
-            }
+        if source_file.ends_with(".java")
+            && let Ok(contents) = fs::read_to_string(source_file)
+            && java_re.is_match(&contents)
+        {
+            return Some(get_class_name(source_file));
         }
-        if source_file.ends_with(".kt") {
-            if let Ok(contents) = fs::read_to_string(source_file) {
-                if kotlin_re.is_match(&contents) {
-                    return Some(get_class_name(source_file) + "Kt");
-                }
-            }
+        if source_file.ends_with(".kt")
+            && let Ok(contents) = fs::read_to_string(source_file)
+            && kotlin_re.is_match(&contents)
+        {
+            return Some(get_class_name(source_file) + "Kt");
         }
     }
     None

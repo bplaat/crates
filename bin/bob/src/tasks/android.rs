@@ -56,13 +56,11 @@ impl AndroidVars {
                     if let Some((major, minor)) = file_name_str
                         .split_once('.')
                         .and_then(|(maj, min)| maj.parse::<u32>().ok().zip(min.parse::<u32>().ok()))
-                    {
-                        if highest_version
+                        && highest_version
                             .as_ref()
                             .is_none_or(|(h_maj, h_min, _)| (major, minor) > (*h_maj, *h_min))
-                        {
-                            highest_version = Some((major, minor, file_name_str.to_string()));
-                        }
+                    {
+                        highest_version = Some((major, minor, file_name_str.to_string()));
                     }
                 }
             }

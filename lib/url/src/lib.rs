@@ -129,10 +129,10 @@ impl FromStr for Url {
                         .parse()
                         .map_err(|_| ParseError("Can't parse port".to_string()))?,
                 );
-                if let Some(port) = port {
-                    if port == 0 {
-                        return Err(ParseError("Port cannot be 0".to_string()));
-                    }
+                if let Some(port) = port
+                    && port == 0
+                {
+                    return Err(ParseError("Port cannot be 0".to_string()));
                 }
             }
 
