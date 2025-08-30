@@ -16,7 +16,7 @@ class MainActivity : Activity() {
         // Read the name from assets/name.txt and display it in the label
         try {
             BufferedReader(InputStreamReader(assets.open("name.txt"))).use { reader ->
-                findViewById<TextView>(R.id.label).text = "Hello ${reader.readLine()}!"
+                findViewById<TextView>(R.id.label).text = "Hello ${reader.readLine()} from Kotlin!"
             }
         } catch (e: IOException) {
             e.printStackTrace()
