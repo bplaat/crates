@@ -226,6 +226,11 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
             vars.android_metadata.min_sdk_version.to_string(),
             "--target-sdk-version".to_string(),
             vars.android_metadata.target_sdk_version.to_string(),
+            if bobje.profile != Profile::Release {
+                "--debug-mode".to_string()
+            } else {
+                "".to_string()
+            },
             "-I".to_string(),
             vars.platform_jar.clone(),
             "-o".to_string(),
