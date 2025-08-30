@@ -4,5 +4,7 @@ node_modules/
 dist/
 *.db*
 *.jks
+!android-dummy-keystore.jks
+.env
 .DS_Store
 config.json

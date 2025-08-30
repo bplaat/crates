@@ -14,6 +14,8 @@ use crate::tasks::jvm::{find_modules, get_class_name};
 use crate::utils::{index_files, write_file_when_different};
 use crate::{Bobje, Profile};
 
+const ANDROID_DUMMY_KEYSTORE_JKS: &[u8] = include_bytes!("android-dummy-keystore.jks");
+
 // MARK: Android vars
 struct AndroidVars {
     id: String,
@@ -344,35 +346,16 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
 pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Executor) {
     let vars = AndroidVars::new(bobje);
 
-    // Generate dummy keystore if it doesn't exist
-    let target_keystore = format!(
+    // Copy dummy keystore if it doesn't exist
+    let target_dummy_keystore = format!(
         "{}/{}",
         bobje.target_dir, vars.android_metadata.keystore_file
     );
     if fs::metadata(&vars.android_metadata.keystore_file).is_err()
-        && fs::metadata(&target_keystore).is_err()
+        && fs::metadata(&target_dummy_keystore).is_err()
     {
-        let mut cmd = Command::new("sh");
-        let mut cmd_str = format!(
-            "keytool -genkey -keystore {} -storetype JKS -keyalg RSA -keysize 4096 -validity 7120",
-            &target_keystore
-        );
-        if !vars.android_metadata.key_alias.is_empty() {
-            cmd_str.push_str(&format!(" -alias {}", &vars.android_metadata.key_alias));
-        }
-        cmd_str.push_str(&format!(
-            " -storepass {} -keypass {} -dname \"CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, S=Unknown, C=Unknown\"",
-            &vars.android_metadata.keystore_password,
-            &vars.android_metadata.key_password
-        ));
-        let status = cmd
-            .arg("-c")
-            .arg(format!("{cmd_str} &> /dev/null"))
-            .status()
-            .expect("Failed to execute keytool");
-        if !status.success() {
-            exit(status.code().unwrap_or(1));
-        }
+        fs::write(&target_dummy_keystore, ANDROID_DUMMY_KEYSTORE_JKS)
+            .expect("Failed to write dummy keystore");
     }
 
     // zipalign
@@ -393,24 +376,27 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
         "apksigner sign --min-sdk-version {} --v4-signing-enabled false --ks {} ",
         vars.android_metadata.min_sdk_version,
         if fs::metadata(&vars.android_metadata.keystore_file).is_ok() {
-            vars.android_metadata.keystore_file
+            &vars.android_metadata.keystore_file
         } else {
-            target_keystore
+            &target_dummy_keystore
         }
     );
-    if !vars.android_metadata.key_alias.is_empty() {
+    if fs::metadata(&vars.android_metadata.keystore_file).is_ok() {
+        if !vars.android_metadata.key_alias.is_empty() {
+            apksigner_cmd.push_str(&format!(
+                "--ks-key-alias {} ",
+                vars.android_metadata.key_alias
+            ));
+        }
         apksigner_cmd.push_str(&format!(
-            "--ks-key-alias {} ",
-            vars.android_metadata.key_alias
+            "--ks-pass pass:{} --key-pass pass:{} ",
+            vars.android_metadata.keystore_password, vars.android_metadata.key_password
         ));
+    } else {
+        apksigner_cmd
+            .push_str("--ks-key-alias android --ks-pass pass:android --key-pass pass:android ");
     }
-    apksigner_cmd.push_str(&format!(
-        "--ks-pass pass:{} --key-pass pass:{} --in {} --out {}",
-        vars.android_metadata.keystore_password,
-        vars.android_metadata.key_password,
-        unsigned_apk,
-        signed_apk
-    ));
+    apksigner_cmd.push_str(&format!("--in {unsigned_apk} --out {signed_apk}"));
     executor.add_task_cmd(
         apksigner_cmd,
         vec![unsigned_apk.clone()],
