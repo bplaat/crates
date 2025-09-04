@@ -8,15 +8,7 @@
 
 use std::path::PathBuf;
 
-#[cfg(not(any(
-    target_os = "linux",
-    target_os = "freebsd",
-    target_os = "dragonfly",
-    target_os = "openbsd",
-    target_os = "netbsd",
-    target_os = "macos",
-    windows
-)))]
+#[cfg(not(any(unix, windows)))]
 compile_error!("Unsupported platform");
 
 #[cfg(windows)]
@@ -81,13 +73,7 @@ pub(crate) mod windows {
 
 /// Get user's cache directory
 pub fn cache_dir() -> Option<PathBuf> {
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    ))]
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let path = std::env::var("XDG_CACHE_HOME").unwrap_or_else(|_| {
             format!("{}/.cache", std::env::var("HOME").expect("$HOME not set"))
@@ -111,13 +97,7 @@ pub fn cache_dir() -> Option<PathBuf> {
 
 /// Get user's audio directory
 pub fn config_dir() -> Option<PathBuf> {
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    ))]
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let path = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
             format!("{}/.config", std::env::var("HOME").expect("$HOME not set"))
@@ -141,13 +121,7 @@ pub fn config_dir() -> Option<PathBuf> {
 
 /// Get user's audio directory
 pub fn audio_dir() -> Option<PathBuf> {
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    ))]
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let path = std::env::var("XDG_MUSIC_DIR")
             .unwrap_or_else(|_| format!("{}/Music", std::env::var("HOME").expect("$HOME not set")));
