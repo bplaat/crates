@@ -6,9 +6,11 @@
 
 //! A Todo GUI example
 
+use std::fs;
 use std::path::Path;
 use std::process::Command;
-use std::{env, fs};
+
+use copy_dir::copy_dir;
 
 fn main() {
     #[cfg(windows)]
@@ -52,28 +54,7 @@ fn main() {
         .expect("Failed to run npm run build");
 
     // Copy all files from web/dist to OUT_DIR
-    let out_dir = env::var("OUT_DIR").expect("Should be some");
-    let dest_path = Path::new(&out_dir).join("web");
-    if dest_path.exists() {
-        fs::remove_dir_all(&dest_path).expect("Failed to remove old web dir");
-    }
-    fs::create_dir_all(&dest_path).expect("Failed to create web dir");
-
-    // Recursively copy directory
-    fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-        fs::create_dir_all(dst)?;
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
-            let ty = entry.file_type()?;
-            let dst_path = dst.join(entry.file_name());
-            if ty.is_dir() {
-                copy_dir_all(&entry.path(), &dst_path)?;
-            } else {
-                fs::copy(entry.path(), dst_path)?;
-            }
-        }
-        Ok(())
-    }
-    copy_dir_all(Path::new("web/dist"), &dest_path)
+    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
+    copy_dir("web/dist", Path::new(&out_dir).join("web"))
         .expect("Failed to copy web/dist files to $OUT_DIR");
 }
