@@ -119,7 +119,7 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
 
             for fixture in &config.fixtures {
                 match fixture.r#type {
-                    FixtureType::P56Led
+                    FixtureType::AmericanDJP56Led
                     | FixtureType::AmericanDJMegaTripar
                     | FixtureType::AyraCompar10 => {
                         let base_addr = fixture.addr - 1;
@@ -132,18 +132,21 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                         };
 
                         if dmx_state.mode == Mode::Manual {
+                            if fixture.r#type == FixtureType::AmericanDJP56Led
+                                || fixture.r#type == FixtureType::AmericanDJMegaTripar
+                            {
+                                dmx[base_addr] = color.r;
+                                dmx[base_addr + 1] = color.g;
+                                dmx[base_addr + 2] = color.b;
+                            }
                             if fixture.r#type == FixtureType::AyraCompar10 {
                                 dmx[base_addr] = 255;
                                 dmx[base_addr + 2] = color.r;
                                 dmx[base_addr + 3] = color.g;
                                 dmx[base_addr + 4] = color.b;
-                            } else {
-                                dmx[base_addr] = color.r;
-                                dmx[base_addr + 1] = color.g;
-                                dmx[base_addr + 2] = color.b;
                             }
                         } else if dmx_state.mode == Mode::Auto {
-                            if fixture.r#type == FixtureType::P56Led {
+                            if fixture.r#type == FixtureType::AmericanDJP56Led {
                                 dmx[base_addr + 5] = 225;
                             }
                             if fixture.r#type == FixtureType::AmericanDJMegaTripar {
@@ -154,19 +157,20 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                             }
                         }
                     }
-                    FixtureType::MultiDimMKII => {
+
+                    FixtureType::ShowtecMultidimMKII => {
                         let base_addr = fixture.addr - 1;
                         if dmx_state.mode == Mode::Manual {
                             for i in 0..DMX_SWITCHES_LENGTH {
                                 if dmx_state.switches_toggle[i] || dmx_state.switches_press[i] {
-                                    dmx[base_addr + i] = 255; // Switch is on
+                                    dmx[base_addr + i] = 255;
                                 } else {
-                                    dmx[base_addr + i] = 0; // Switch is off
+                                    dmx[base_addr + i] = 0;
                                 }
                             }
                         } else {
                             for i in 0..DMX_SWITCHES_LENGTH {
-                                dmx[base_addr + i] = 0; // All switches off
+                                dmx[base_addr + i] = 0;
                             }
                         }
                     }

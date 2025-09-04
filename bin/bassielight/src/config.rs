@@ -17,14 +17,14 @@ pub(crate) const DMX_SWITCHES_LENGTH: usize = 4;
 /// Types of DMX fixtures.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum FixtureType {
-    #[serde(rename = "p56led")]
-    P56Led,
+    #[serde(rename = "american_dj_p56led")]
+    AmericanDJP56Led,
     #[serde(rename = "american_dj_mega_tripar")]
     AmericanDJMegaTripar,
     #[serde(rename = "ayra_compar_10")]
     AyraCompar10,
-    #[serde(rename = "multidim_mkii")]
-    MultiDimMKII,
+    #[serde(rename = "showtec_multidim_mkii")]
+    ShowtecMultidimMKII,
 }
 
 /// DMX fixture configuration.

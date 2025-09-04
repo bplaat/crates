@@ -24,6 +24,9 @@
 
 -   [uDMX USB DMX512 dongle](https://www.anyma.ch/research/udmx/)
 -   [American DJ P56P LED](https://www.manualslib.com/manual/530185/American-Dj-P56p-Led.html)
+-   [American DJ Mega Tripar](https://www.manualslib.com/manual/530164/American-Dj-Mega-Tripar-Profile.html)
+-   [Ayra Compar 10](https://www.manualslib.com/manual/1061771/Ayra-Compar-10.html)
+-   [SHOWTEC Multidim MKII](https://www.manualslib.com/manual/2115423/Showtec-Multidim-Mkii.html)
 
 ## License
 
