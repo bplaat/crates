@@ -6,7 +6,6 @@
 
 //! An user agent parser library
 
-use std::env;
 use std::fs::File;
 use std::io::Write;
 
@@ -44,11 +43,9 @@ fn main() {
         .expect("Can't parse regexes.yaml");
 
     // Write rules_data.rs
-    let mut f = File::create(format!(
-        "{}/rules_data.rs",
-        env::var("OUT_DIR").expect("OUT_DIR not set")
-    ))
-    .expect("Can't create rules_data.rs");
+    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
+    let mut f =
+        File::create(format!("{out_dir}/rules_data.rs",)).expect("Can't create rules_data.rs");
 
     let user_agent_parsers = rules
         .user_agent_parsers

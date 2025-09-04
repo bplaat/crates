@@ -15,8 +15,11 @@ impl HeaderMap {
     }
 
     /// Get header value
-    pub fn get(&self, name: &str) -> Option<&String> {
-        self.0.iter().find(|(n, _)| n == name).map(|(_, v)| v)
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.as_str())
     }
 
     /// Insert header
@@ -25,7 +28,7 @@ impl HeaderMap {
     }
 
     /// Iterate over headers
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
-        self.0.iter().map(|(n, v)| (n, v))
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.0.iter().map(|(n, v)| (n.as_str(), v.as_str()))
     }
 }

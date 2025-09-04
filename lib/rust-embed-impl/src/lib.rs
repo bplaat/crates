@@ -94,7 +94,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     // Create consts for all files
     let embed_files: Vec<_> = files
         .iter()
-        .map(|path: &String| {
+        .map(|path| {
             let (_, const_ident) = to_const_name(path);
             quote! {
                 const #const_ident: &[u8] = include_bytes!(#path);

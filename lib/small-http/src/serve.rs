@@ -106,7 +106,7 @@ where
 
                     // Close connection if HTTP/1.0 or Connection: close
                     if request.version == crate::enums::Version::Http1_0
-                        || request.headers.get("Connection").map(|v| v.as_str()) == Some("close")
+                        || request.headers.get("Connection") == Some("close")
                     {
                         return;
                     }

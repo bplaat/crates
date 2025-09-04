@@ -45,7 +45,7 @@ fn main() {
 
         // Get host
         let host = match req.headers.get("X-Forwarded-Host") {
-            Some(host) => host.as_str(),
+            Some(host) => host,
             None => req.url.host().unwrap_or("localhost"),
         };
         println!("Host: {host}");
@@ -59,10 +59,7 @@ fn main() {
         // FIXME: Validate secret
 
         // Get X-GitHub-Event
-        let event = match req.headers.get("X-GitHub-Event") {
-            Some(event) => event,
-            None => "push",
-        };
+        let event = req.headers.get("X-GitHub-Event").unwrap_or("push");
         if event != "push" {
             println!("Ignoring event: {event}");
             return Response::with_status(Status::Ok);

@@ -8,9 +8,7 @@
 
 fn main() {
     // Minify app.html
-    minify_html::minify_file(
-        "app.html",
-        std::env::var("OUT_DIR").expect("Should be some") + "/app.min.html",
-    )
-    .expect("Should minify html");
+    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
+    minify_html::minify_file("app.html", format!("{out_dir}/app.min.html"))
+        .expect("Should minify html");
 }

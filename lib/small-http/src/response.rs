@@ -218,7 +218,7 @@ impl Response {
         self.headers
             .insert("Content-Length".to_string(), self.body.len().to_string());
         if req.version == Version::Http1_1 {
-            if keep_alive && req.headers.get("Connection").map(|v| v.as_str()) != Some("close") {
+            if keep_alive && req.headers.get("Connection") != Some("close") {
                 if self.headers.get("Connection").is_none() {
                     self.headers
                         .insert("Connection".to_string(), "keep-alive".to_string());

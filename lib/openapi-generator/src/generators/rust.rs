@@ -47,7 +47,7 @@ fn schema_generate_code(
         for variant in r#enum {
             _ = writeln!(
                 code,
-                "    #[serde(rename = \"{}\")]\n    {},\n",
+                "    #[serde(rename = \"{}\")]\n    {},",
                 variant.to_snake_case(),
                 variant.to_student_case()
             );
