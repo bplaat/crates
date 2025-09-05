@@ -1,0 +1,19 @@
+[package]
+name = "berde"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+berde_derive = { path = "../berde_derive", optional = true }
+
+[features]
+default = ["derive"]
+derive = ["dep:berde_derive"]
+json = []
+urlencoded = []
+yaml = []

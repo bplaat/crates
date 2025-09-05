@@ -43,6 +43,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "berde"
+version = "0.1.0"
+dependencies = [
+ "berde_derive",
+]
+
+[[package]]
+name = "berde_derive"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "block2"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
