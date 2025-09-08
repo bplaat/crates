@@ -1,8 +1,0 @@
-# Example configuration for webhook-puller
-
-["example.com"]
-path = "/var/www/html/example.com"
-secret = "cd3185d38425def931ac774fa58077388628c9c7c2591aa5cc5a0148aebb7b6d"
-cloudflare_purge_everything = true
-cloudflare_api_token = "y1foddavshbjc9w5h2i6i566ih7a97t9"
-cloudflare_zone_id = "9flppl4l60wknfi4o0diiq5trka7181t"

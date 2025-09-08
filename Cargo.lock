@@ -262,6 +262,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ini"
+version = "0.1.0"
+
+[[package]]
 name = "itoa"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -788,9 +792,7 @@ dependencies = [
 name = "webhook-puller"
 version = "0.1.0"
 dependencies = [
- "basic-toml",
- "serde",
- "serde_urlencoded",
+ "ini",
  "small-http",
 ]
 

@@ -7,35 +7,17 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
-use std::collections::HashMap;
 use std::net::{Ipv4Addr, TcpListener};
 use std::process::Command;
 use std::time::Duration;
 use std::{env, thread};
 
-use serde::Deserialize;
+use ini::ConfigFile;
 use small_http::{Method, Request, Response, Status};
-
-// MARK: Config
-type Config = HashMap<String, Service>;
-
-#[derive(Clone, Deserialize)]
-#[allow(dead_code)]
-struct Service {
-    path: String,
-    secret: String,
-    #[serde(default)]
-    cloudflare_purge_everything: bool,
-    #[serde(default)]
-    cloudflare_api_token: String,
-    #[serde(default)]
-    cloudflare_zone_id: String,
-}
 
 fn main() {
     // Read config
-    let config_str = std::fs::read_to_string("config.toml").expect("Can't read config.toml");
-    let config: Config = basic_toml::from_str(&config_str).expect("Can't parse config.toml");
+    let config = ConfigFile::load_from_path("config.ini").expect("Can't read config.ini");
 
     // Server handler
     let handler = move |req: &Request| -> Response {
@@ -54,11 +36,10 @@ fn main() {
         };
         println!("Host: {host}");
 
-        // Get service
-        let service = match config.get(host) {
-            Some(service) => service,
-            None => return Response::with_status(Status::NotFound),
-        };
+        // Check if service exists
+        if !config.groups().any(|group| group == host) {
+            return Response::with_status(Status::NotFound);
+        }
 
         // FIXME: Validate secret
 
@@ -71,7 +52,10 @@ fn main() {
         println!("GitHub Webhook Event: {event}");
 
         // Spawn git task thread
-        let service_path = service.path.clone();
+        let service_path = config
+            .read_string(host, "path")
+            .unwrap_or_else(|| panic!("No path configured for host: {host}"))
+            .to_string();
         thread::spawn(move || {
             // Sleep for 10 seconds
             thread::sleep(Duration::from_secs(10));
@@ -96,9 +80,18 @@ fn main() {
         });
 
         // Spawn Cloudflare purge thread
-        if service.cloudflare_purge_everything {
-            let api_token = service.cloudflare_api_token.clone();
-            let zone_id = service.cloudflare_zone_id.clone();
+        if config
+            .read_bool(host, "cloudflare_purge_everything")
+            .unwrap_or(false)
+        {
+            let api_token = config
+                .read_string(host, "cloudflare_api_token")
+                .unwrap_or_else(|| panic!("No Cloudflare API token configured for host: {host}"))
+                .to_string();
+            let zone_id = config
+                .read_string(host, "cloudflare_zone_id")
+                .unwrap_or_else(|| panic!("No Cloudflare zone ID configured for host: {host}"))
+                .to_string();
             thread::spawn(move || {
                 println!("Purging Cloudflare cache...");
                 let output = Command::new("curl")
