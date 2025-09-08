@@ -100,16 +100,33 @@ fn main() {
             let api_token = service.cloudflare_api_token.clone();
             let zone_id = service.cloudflare_zone_id.clone();
             thread::spawn(move || {
-                println!("Purging Cloudflare cache");
-                Request::post(format!(
-                    "https://api.cloudflare.com/client/v4/zones/{}/purge_cache",
-                    zone_id
-                ))
-                .header("Authorization", format!("Bearer {}", api_token))
-                .header("Content-Type", "application/json")
-                .body(r#"{"purge_everything":true}"#)
-                .fetch()
-                .unwrap_or_else(|_| panic!("Failed to purge Cloudflare cache"));
+                println!("Purging Cloudflare cache...");
+                let output = Command::new("curl")
+                    .arg("-X")
+                    .arg("POST")
+                    .arg(format!(
+                        "https://api.cloudflare.com/client/v4/zones/{}/purge_cache",
+                        zone_id
+                    ))
+                    .arg("-H")
+                    .arg(format!("Authorization: Bearer {}", api_token))
+                    .arg("-H")
+                    .arg("Content-Type: application/json")
+                    .arg("-d")
+                    .arg(r#"{"purge_everything":true}"#)
+                    .output()
+                    .unwrap_or_else(|_| panic!("Failed to purge Cloudflare cache"));
+                if output.status.code() == Some(0) {
+                    println!(
+                        "Cloudflare cache purged: {}",
+                        String::from_utf8_lossy(&output.stdout)
+                    );
+                } else {
+                    println!(
+                        "Failed to purge Cloudflare cache: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
             });
         }
 
