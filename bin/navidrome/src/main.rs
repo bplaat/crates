@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A [navidrome.plaatsoft.nl](https://navidrome.plaatsoft.nl/) webview wrapper
+//! A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
@@ -28,9 +28,7 @@ fn main() {
         webview_builder =
             webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
     }
-    let mut webview = webview_builder
-        .load_url("https://navidrome.plaatsoft.nl/")
-        .build();
+    let mut webview = webview_builder.load_url("https://music.bplaat.nl/").build();
 
     event_loop.run(move |event| {
         if let Event::PageLoadFinished = event {

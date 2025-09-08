@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A [navidrome.plaatsoft.nl](https://navidrome.plaatsoft.nl/) webview wrapper
+//! A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 
 fn main() {
     // Compile Windows resources
