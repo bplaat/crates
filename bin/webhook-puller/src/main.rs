@@ -17,23 +17,27 @@ use serde::Deserialize;
 use small_http::{Method, Request, Response, Status};
 
 // MARK: Config
-#[derive(Clone, Deserialize)]
-struct Config {
-    services: HashMap<String, Service>,
-}
+type Config = HashMap<String, Service>;
 
 #[derive(Clone, Deserialize)]
 #[allow(dead_code)]
 struct Service {
     path: String,
     secret: String,
+    #[serde(default)]
+    cloudflare_purge_everything: bool,
+    #[serde(default)]
+    cloudflare_api_token: String,
+    #[serde(default)]
+    cloudflare_zone_id: String,
 }
 
 fn main() {
     // Read config
-    let config_str = std::fs::read_to_string("config.yml").expect("Can't read config.yml");
-    let config: Config = serde_yaml::from_str(&config_str).expect("Can't parse config.yml");
+    let config_str = std::fs::read_to_string("config.toml").expect("Can't read config.toml");
+    let config: Config = basic_toml::from_str(&config_str).expect("Can't parse config.toml");
 
+    // Server handler
     let handler = move |req: &Request| -> Response {
         let path = req.url.path();
         println!("{} {}", req.method, path);
@@ -51,7 +55,7 @@ fn main() {
         println!("Host: {host}");
 
         // Get service
-        let service = match config.services.get(host) {
+        let service = match config.get(host) {
             Some(service) => service,
             None => return Response::with_status(Status::NotFound),
         };
@@ -64,7 +68,7 @@ fn main() {
             println!("Ignoring event: {event}");
             return Response::with_status(Status::Ok);
         }
-        println!("Event: {event}");
+        println!("GitHub Webhook Event: {event}");
 
         // Spawn git task thread
         let service_path = service.path.clone();
@@ -90,6 +94,24 @@ fn main() {
                 .output()
                 .unwrap_or_else(|_| panic!("Failed to run git reset in: {service_path}"));
         });
+
+        // Spawn Cloudflare purge thread
+        if service.cloudflare_purge_everything {
+            let api_token = service.cloudflare_api_token.clone();
+            let zone_id = service.cloudflare_zone_id.clone();
+            thread::spawn(move || {
+                println!("Purging Cloudflare cache");
+                Request::post(format!(
+                    "https://api.cloudflare.com/client/v4/zones/{}/purge_cache",
+                    zone_id
+                ))
+                .header("Authorization", format!("Bearer {}", api_token))
+                .header("Content-Type", "application/json")
+                .body(r#"{"purge_everything":true}"#)
+                .fetch()
+                .unwrap_or_else(|_| panic!("Failed to purge Cloudflare cache"));
+            });
+        }
 
         Response::with_status(Status::Ok)
     };

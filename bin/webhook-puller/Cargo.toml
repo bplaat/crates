@@ -11,6 +11,6 @@ workspace = true
 [dependencies]
 small-http = { version = "0.2.0", features = ["json"] }
 
+basic-toml = "0.1.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_urlencoded = "0.7.1"
-serde_yaml = "0.9.34"

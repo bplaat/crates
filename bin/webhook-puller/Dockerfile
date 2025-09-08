@@ -1,5 +1,5 @@
 # Build container
-FROM rust:1.88.0-slim-bookworm AS builder
+FROM rust:1.89.0-slim-bookworm AS builder
 
 WORKDIR /src
 
