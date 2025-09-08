@@ -4,4 +4,4 @@ A brick laying robot simulator
 
 ## Demo
 
-[bplaat.github.io/crates/baksteen/](https://bplaat.github.io/crates/baksteen/)
+[crates.bplaat.nl/baksteen/](https://crates.bplaat.nl/baksteen/)

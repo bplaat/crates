@@ -31,7 +31,7 @@ These libraries are not published to [crates.io](https://crates.io) and are more
 
 ### Tools / Websites
 
-Various tools and websites, for the live deployed sites go to [bplaat.github.io/crates/](https://bplaat.github.io/crates/)
+Various tools and websites, for the live deployed sites go to [crates.bplaat.nl](https://crates.bplaat.nl/)
 
 -   [baksteen](bin/baksteen/) A brick laying robot simulator
 -   [bassielight](bin/bassielight) A simple lights controller with GUI
