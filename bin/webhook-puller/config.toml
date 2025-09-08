@@ -1,6 +1,6 @@
 # Example configuration for webhook-puller
 
-[example.com]
+["example.com"]
 path = "/var/www/html/example.com"
 secret = "cd3185d38425def931ac774fa58077388628c9c7c2591aa5cc5a0148aebb7b6d"
 cloudflare_purge_everything = true
