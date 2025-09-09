@@ -82,6 +82,11 @@ function build_bundle() {
     cargo bundle --path bin/navidrome
 }
 
+function install() {
+    cargo install --force --path bin/bob
+    cargo install --force --path bin/music-dl
+}
+
 case "${1:-check}" in
     build-pages)
         build_pages
@@ -98,8 +103,11 @@ case "${1:-check}" in
     coverage)
         coverage
         ;;
+    install)
+        install
+        ;;
     *)
-        echo "Usage: $0 {build-pages|build-bundle|clean|check|coverage}"
+        echo "Usage: $0 {build-pages|build-bundle|clean|check|coverage|install}"
         exit 1
         ;;
 esac
