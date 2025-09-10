@@ -462,7 +462,7 @@ fn main() {
     }
 
     // Rebuild artifacts
-    if args.subcommand == Subcommand::Rebuild {
+    if args.subcommand == Subcommand::Rebuild || args.subcommand == Subcommand::Rerun {
         subcommand_clean(&args.target_dir, false);
     }
 
@@ -481,7 +481,7 @@ fn main() {
     );
 
     // Run build artifact
-    if args.subcommand == Subcommand::Run {
+    if args.subcommand == Subcommand::Run || args.subcommand == Subcommand::Rerun {
         if detect_bundle(&bobje) {
             run_bundle(&bobje);
         }

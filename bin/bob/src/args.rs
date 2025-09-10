@@ -16,6 +16,7 @@ pub(crate) enum Subcommand {
     Help,
     Rebuild,
     Run,
+    Rerun,
     Test,
     Version,
 }
@@ -69,9 +70,10 @@ pub(crate) fn parse_args() -> Args {
             "clean" => args.subcommand = Subcommand::Clean,
             "clean-cache" => args.subcommand = Subcommand::CleanCache,
             "build" => args.subcommand = Subcommand::Build,
+            "rebuild" => args.subcommand = Subcommand::Rebuild,
             "help" | "-h" | "--help" => args.subcommand = Subcommand::Help,
             "run" => args.subcommand = Subcommand::Run,
-            "rebuild" => args.subcommand = Subcommand::Rebuild,
+            "rerun" => args.subcommand = Subcommand::Rerun,
             "test" => {
                 args.subcommand = Subcommand::Test;
                 args.profile = Profile::Test;
@@ -121,9 +123,10 @@ Subcommands:
   clean                       Remove build artifacts
   clean-cache                 Clean global bob cache
   build                       Build the project
-  help                        Print this help message
   rebuild                     Clean and build the project
-  run                         Run the build artifact after building
+  help                        Print this help message
+  run                         Build and run the build artifact
+  rerun                       Clean, build and run the build artifact
   test                        Run the unit tests
   version                     Print the version number"
     );

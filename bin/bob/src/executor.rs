@@ -18,6 +18,14 @@ use crate::log::{Log, LogEntry};
 
 // MARK: Task
 #[derive(Debug, Clone)]
+pub(crate) struct Task {
+    id: usize,
+    action: TaskAction,
+    inputs: Vec<String>,
+    outputs: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) enum TaskAction {
     Phony(String),
     Copy(String, String),
@@ -89,14 +97,6 @@ impl TaskAction {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct Task {
-    id: usize,
-    action: TaskAction,
-    inputs: Vec<String>,
-    outputs: Vec<String>,
-}
-
 // MARK: Executor
 #[derive(Debug)]
 pub(crate) struct Executor {
@@ -112,12 +112,7 @@ impl Executor {
         }
     }
 
-    pub(crate) fn add_task(
-        &mut self,
-        action: TaskAction,
-        inputs: Vec<String>,
-        outputs: Vec<String>,
-    ) {
+    fn add_task(&mut self, action: TaskAction, inputs: Vec<String>, outputs: Vec<String>) {
         if !self.tasks.iter().any(|task| task.outputs == outputs) {
             self.tasks.push(Task {
                 id: self.tasks_id_counter,

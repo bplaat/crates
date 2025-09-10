@@ -35,7 +35,7 @@ fn main() {
             .to_string();
 
         if env::var("CI").is_ok() {
-            // Skip Objective-C tests on non macOS  GitHub runners
+            // Skip Objective-C tests on non macOS GitHub runners
             if !cfg!(target_os = "macos") && dir_name.starts_with("objc") {
                 continue;
             }
