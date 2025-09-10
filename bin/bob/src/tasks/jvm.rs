@@ -224,7 +224,7 @@ pub(crate) fn download_extract_jar_tasks(
     // Add extract task
     let classes_dir = format!("{}/classes", bobje.out_dir());
     executor.add_task_cmd(
-        format!("cd {classes_dir} && unzip {downloaded_jar} *.class -x META-INF/* > /dev/null"),
+        format!("cd {classes_dir} && unzip {downloaded_jar} *.class -x META-INF/* > /dev/null 2> /dev/null"),
         vec![downloaded_jar],
         vec![format!(
             "{}/{}",
