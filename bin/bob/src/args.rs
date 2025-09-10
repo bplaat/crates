@@ -14,9 +14,7 @@ pub(crate) enum Subcommand {
     Clean,
     CleanCache,
     Help,
-    Rebuild,
     Run,
-    Rerun,
     Test,
     Version,
 }
@@ -46,6 +44,7 @@ pub(crate) struct Args {
     pub target: Option<String>,
     pub verbose: bool,
     pub thread_count: usize,
+    pub clean_first: bool,
 }
 
 impl Default for Args {
@@ -58,6 +57,7 @@ impl Default for Args {
             target: None,
             verbose: false,
             thread_count: thread::available_parallelism().map_or(1, |n| n.get()),
+            clean_first: false,
         }
     }
 }
@@ -70,13 +70,24 @@ pub(crate) fn parse_args() -> Args {
             "clean" => args.subcommand = Subcommand::Clean,
             "clean-cache" => args.subcommand = Subcommand::CleanCache,
             "build" => args.subcommand = Subcommand::Build,
-            "rebuild" => args.subcommand = Subcommand::Rebuild,
+            "rebuild" => {
+                args.subcommand = Subcommand::Build;
+                args.clean_first = true;
+            }
             "help" | "-h" | "--help" => args.subcommand = Subcommand::Help,
             "run" => args.subcommand = Subcommand::Run,
-            "rerun" => args.subcommand = Subcommand::Rerun,
+            "rerun" => {
+                args.subcommand = Subcommand::Run;
+                args.clean_first = true;
+            }
             "test" => {
                 args.subcommand = Subcommand::Test;
                 args.profile = Profile::Test;
+            }
+            "retest" => {
+                args.subcommand = Subcommand::Test;
+                args.profile = Profile::Test;
+                args.clean_first = true;
             }
             "version" | "--version" => args.subcommand = Subcommand::Version,
             "-C" | "--manifest-dir" => {
@@ -127,7 +138,8 @@ Subcommands:
   help                        Print this help message
   run                         Build and run the build artifact
   rerun                       Clean, build and run the build artifact
-  test                        Run the unit tests
+  test                        Build and run the unit tests
+  retest                      Clean, build and run the unit tests
   version                     Print the version number"
     );
 }

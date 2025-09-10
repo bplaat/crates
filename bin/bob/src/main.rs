@@ -461,8 +461,8 @@ fn main() {
         return;
     }
 
-    // Rebuild artifacts
-    if args.subcommand == Subcommand::Rebuild || args.subcommand == Subcommand::Rerun {
+    // Clean first if requested
+    if args.clean_first {
         subcommand_clean(&args.target_dir, false);
     }
 
@@ -481,7 +481,7 @@ fn main() {
     );
 
     // Run build artifact
-    if args.subcommand == Subcommand::Run || args.subcommand == Subcommand::Rerun {
+    if args.subcommand == Subcommand::Run {
         if detect_bundle(&bobje) {
             run_bundle(&bobje);
         }
