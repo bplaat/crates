@@ -14,11 +14,7 @@ use small_router::RouterBuilder;
 /// Pre-layer that processes CORS requests
 fn cors_pre_layer(req: &Request, _: &mut ()) -> Option<Response> {
     if req.method == Method::Options {
-        Some(
-            Response::with_header("Access-Control-Allow-Origin", "*")
-                .header("Access-Control-Allow-Methods", "GET")
-                .header("Access-Control-Max-Age", "86400"),
-        )
+        Some(Response::new())
     } else {
         None
     }

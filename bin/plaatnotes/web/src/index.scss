@@ -1,0 +1,40 @@
+/*
+ * Copyright (c) 2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+@use 'bulma/sass/base';
+@use 'bulma/sass/themes';
+@use 'bulma/sass/elements/box';
+@use 'bulma/sass/elements/button';
+@use 'bulma/sass/elements/delete';
+@use 'bulma/sass/elements/title';
+@use 'bulma/sass/helpers';
+@use 'bulma/sass/form';
+@use 'bulma/sass/grid';
+
+:root {
+    --bulma-body-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji';
+}
+
+.container {
+    max-width: 60rem;
+    padding: 2rem;
+    margin: 0 auto;
+}
+
+.icon {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+.button > .icon {
+    margin-right: 0.35rem !important;
+}
+
+.textarea {
+    font-family: monospace;
+}

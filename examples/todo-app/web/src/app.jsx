@@ -53,7 +53,7 @@ export function App() {
             ) : (
                 <ul>
                     {todos.map((todo, i) => (
-                        <li key={i} className={todo.completed ? 'is-completed' : ''} onClick={() => completeTodo(i)}>
+                        <li key={i} class={todo.completed ? 'is-completed' : ''} onClick={() => completeTodo(i)}>
                             <input type="checkbox" checked={todo.completed} onChange={() => completeTodo(i)} />
                             {todo.text}
                         </li>

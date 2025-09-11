@@ -130,11 +130,7 @@ mod layers {
 
     pub(crate) fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
         if req.method == Method::Options {
-            Some(
-                Response::with_header("Access-Control-Allow-Origin", "*")
-                    .header("Access-Control-Allow-Methods", "GET, POST")
-                    .header("Access-Control-Max-Age", "86400"),
-            )
+            Some(Response::new())
         } else {
             None
         }
@@ -142,7 +138,7 @@ mod layers {
 
     pub(crate) fn cors_post_layer(_: &Request, _: &mut Context, res: Response) -> Response {
         res.header("Access-Control-Allow-Origin", "*")
-            .header("Access-Control-Allow-Methods", "GET, POST")
+            .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
             .header("Access-Control-Max-Age", "86400")
     }
 }
@@ -457,7 +453,7 @@ mod test {
         assert_eq!(res.headers.get("Access-Control-Allow-Origin"), Some("*"));
         assert_eq!(
             res.headers.get("Access-Control-Allow-Methods"),
-            Some("GET, POST")
+            Some("GET, POST, PUT, DELETE")
         );
         assert_eq!(res.headers.get("Access-Control-Max-Age"), Some("86400"));
     }

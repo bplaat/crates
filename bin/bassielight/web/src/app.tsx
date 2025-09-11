@@ -58,8 +58,8 @@ function useIpcState(key: string): [any, (value: any, isUserInitiated?: boolean)
 
 function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
     return (
-        <div className="qr-modal" onClick={onClose}>
-            <div className="qr-image" dangerouslySetInnerHTML={{ __html: encodeQR(url, 'svg') }} />
+        <div class="qr-modal" onClick={onClose}>
+            <div class="qr-image" dangerouslySetInnerHTML={{ __html: encodeQR(url, 'svg') }} />
             <p>
                 <a href={url} target="_blank">
                     {url}
@@ -116,11 +116,11 @@ export function App() {
     return (
         <>
             <h2>Color</h2>
-            <div className="button-grid">
+            <div class="button-grid">
                 {COLORS.map((color) => (
                     <button
                         key={color}
-                        className={`color-button${color === selectedColor ? ' selected' : ''}`}
+                        class={`color-button${color === selectedColor ? ' selected' : ''}`}
                         style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
                         onClick={() => setSelectedColor(color)}
                     />
@@ -128,11 +128,11 @@ export function App() {
             </div>
 
             <h2>Toggle Colors</h2>
-            <div className="button-grid">
+            <div class="button-grid">
                 {COLORS.map((color) => (
                     <button
                         key={color}
-                        className={`color-button${color === selectedToggleColor ? ' selected' : ''}`}
+                        class={`color-button${color === selectedToggleColor ? ' selected' : ''}`}
                         style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
                         onClick={() => setSelectedToggleColor(color)}
                     />
@@ -140,11 +140,11 @@ export function App() {
             </div>
 
             <h2>Toggle Speeds</h2>
-            <div className="button-grid">
+            <div class="button-grid">
                 {SPEEDS.map((speed) => (
                     <button
                         key={speed}
-                        className={`text-button${speed === selectedToggleSpeed ? ' selected' : ''}`}
+                        class={`text-button${speed === selectedToggleSpeed ? ' selected' : ''}`}
                         onClick={() => setSelectedToggleSpeed(speed)}
                     >
                         {speed == null ? 'Off' : `${speed}ms`}
@@ -153,11 +153,11 @@ export function App() {
             </div>
 
             <h2>Strobe Speeds</h2>
-            <div className="button-grid">
+            <div class="button-grid">
                 {SPEEDS.map((speed) => (
                     <button
                         key={speed}
-                        className={`text-button${speed === selectedStrobeSpeed ? ' selected' : ''}`}
+                        class={`text-button${speed === selectedStrobeSpeed ? ' selected' : ''}`}
                         onClick={() => setSelectedStrobeSpeed(speed)}
                     >
                         {speed == null ? 'Off' : `${speed}ms`}
@@ -168,12 +168,12 @@ export function App() {
             {switchesLabels && (
                 <>
                     <h2>Switches</h2>
-                    <div className="button-grid">
+                    <div class="button-grid">
                         Toggle
                         {switchesLabels.map((label, index) => (
                             <button
                                 key={`toggle-${index}`}
-                                className={`text-button${switchesToggle[index] ? ' selected' : ''}`}
+                                class={`text-button${switchesToggle[index] ? ' selected' : ''}`}
                                 onClick={() => {
                                     const newToggles = [...switchesToggle];
                                     newToggles[index] = !newToggles[index];
@@ -184,12 +184,12 @@ export function App() {
                             </button>
                         ))}
                     </div>
-                    <div className="button-grid">
+                    <div class="button-grid">
                         Press
                         {switchesLabels.map((label, index) => (
                             <button
                                 key={`press-${index}`}
-                                className={`text-button${switchesPress[index] ? ' selected' : ''}`}
+                                class={`text-button${switchesPress[index] ? ' selected' : ''}`}
                                 onMouseDown={() => {
                                     const newPresses = [...switchesPress];
                                     newPresses[index] = true;
@@ -209,14 +209,14 @@ export function App() {
                 </>
             )}
 
-            <div className="bottom-controls-container">
+            <div class="bottom-controls-container">
                 {MODES.map((mode) => (
                     <button
                         key={mode}
-                        className={`control-button ${mode.type === selectedMode ? ' selected' : ''}`}
+                        class={`control-button ${mode.type === selectedMode ? ' selected' : ''}`}
                         onClick={() => setSelectedMode(mode.type)}
                     >
-                        <svg className="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                             {mode.icon}
                         </svg>
                         {capitalize(mode.type)}
@@ -225,7 +225,7 @@ export function App() {
             </div>
 
             <button class="qr-button" onClick={() => setShowQrCode(true)}>
-                <svg className="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                     <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z" />
                 </svg>
             </button>

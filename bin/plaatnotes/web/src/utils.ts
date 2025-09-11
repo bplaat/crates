@@ -6,5 +6,5 @@
 
 export function noteExtractTile(body: string): string | undefined {
     const match = body.match(/^#\s*(.+)$/m);
-    return match ? match[1].trim() : undefined;
+    return match ? match[1].trim().replace(/\n.*/s, '') : undefined;
 }
