@@ -39,7 +39,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
         Note,
         ctx.database,
         formatcp!(
-            "SELECT {} FROM notes WHERE body LIKE :search_query LIMIT :limit OFFSET :offset",
+            "SELECT {} FROM notes WHERE body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
             Note::columns()
         ),
         Args {
