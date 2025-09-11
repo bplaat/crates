@@ -380,6 +380,20 @@ mod test {
     }
 
     #[test]
+    fn test_read_from_stream_with_body_lowercase_headers() {
+        let raw_request =
+            b"POST / HTTP/1.1\r\nhost: localhost\r\ncontent-Length: 13\r\n\r\nHello, world!";
+        let mut stream = &raw_request[..];
+        let request =
+            Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
+        assert_eq!(request.method, Method::Post);
+        assert_eq!(request.url.to_string(), "http://localhost/");
+        assert_eq!(request.version, Version::Http1_1);
+        assert_eq!(request.headers.get("Host").unwrap(), "localhost");
+        assert_eq!(request.body.unwrap(), b"Hello, world!");
+    }
+
+    #[test]
     fn test_invalid_request_error() {
         let raw_request = b"INVALID REQUEST";
         let mut stream = &raw_request[..];
