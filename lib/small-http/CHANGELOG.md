@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 _Placeholder_
 
+## [0.2.1] - 2025-09-11
+
+### Changed
+
+-   Don't return `&String` types, return `&str` instead
+-   Fix bug where headers where not case insensitive compared correctly
+
 ## [0.2.0] - 2025-06-27
 
 ### Added
@@ -27,6 +34,7 @@ _Placeholder_
 
 _Initial release_
 
-[Unreleased]: https://github.com/bplaat/crates/compare/small-http%2Fv0.2.0...HEAD
+[Unreleased]: https://github.com/bplaat/crates/compare/small-http%2Fv0.2.1...HEAD
+[0.2.1]: https://github.com/bplaat/crates/releases/tag/small-http%2Fv0.2.1
 [0.2.0]: https://github.com/bplaat/crates/releases/tag/small-http%2Fv0.2.0
 [0.1.0]: https://github.com/bplaat/crates/releases/tag/small-http%2Fv0.1.0
