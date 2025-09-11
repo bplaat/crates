@@ -1,0 +1,218 @@
+openapi: 3.0.0
+info:
+  title: PlaatNotes API
+  description: A simple note-taking app
+  version: 0.1.0
+
+servers:
+  - url: http://localhost:8080/api
+  - url: https://notes.bplaat.nl/api
+
+paths:
+  # MARK: Misc
+  /:
+    get:
+      tags: [Misc]
+      summary: Home route
+      responses:
+        '200':
+          description: Name and version of the API
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # MARK: Notes
+  /notes:
+    get:
+      tags: [Notes]
+      summary: Get all notes
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteIndexResponse'
+    post:
+      tags: [Notes]
+      summary: Create a new note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Note'
+      responses:
+        '200':
+          description: Note created
+          content:
+            application/x-www-form-urlencoded:
+              schema:
+                $ref: '#/components/schemas/NoteCreateUpdateBody'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+
+  /notes/{id}:
+    get:
+      tags: [Notes]
+      summary: Get a note by ID
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: A single note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '404':
+          description: Note not found
+    put:
+      tags: [Notes]
+      summary: Update a note by ID
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteCreateUpdateBody'
+      responses:
+        '200':
+          description: Note updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '404':
+          description: Note not found
+    delete:
+      tags: [Notes]
+      summary: Delete a note by ID
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Note deleted
+        '404':
+          description: Note not found
+
+components:
+  # MARK: Parameters
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    Query:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+
+  # MARK: Schemas
+  schemas:
+    Report:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+      required:
+        - page
+        - limit
+        - total
+
+    # MARK: Models
+    Note:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - body
+        - createdAt
+        - updatedAt
+
+    # MARK: Bodies
+    NoteCreateUpdateBody:
+      type: object
+      properties:
+        body:
+          type: string
+      required:
+        - body
+
+    # MARK: Responses
+    NoteIndexResponse:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Note'
+      required:
+        - pagination
+        - data

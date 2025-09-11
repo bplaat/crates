@@ -35,16 +35,20 @@ impl FromStr for Generator {
 }
 
 /// Generate schemas for build.rs
-pub fn generate_schemas_build(spec_path: impl AsRef<Path>, output_path: impl AsRef<Path>) {
-    generate_schemas(spec_path.as_ref(), Generator::Rust, output_path.as_ref());
+pub fn generate_schemas_build(
+    spec_path: impl AsRef<Path>,
+    output_path: impl AsRef<Path>,
+    generator: Generator,
+) {
+    generate_schemas(spec_path.as_ref(), output_path.as_ref(), generator);
     println!("cargo::rerun-if-changed={}", spec_path.as_ref().display());
 }
 
 /// Generate schemas
 pub fn generate_schemas(
     spec_path: impl AsRef<Path>,
-    generator: Generator,
     output_path: impl AsRef<Path>,
+    generator: Generator,
 ) {
     fn inner(spec_path: &Path, generator: Generator, output_path: &Path) {
         // Read spec file

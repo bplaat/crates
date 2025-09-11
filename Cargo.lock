@@ -427,6 +427,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
+name = "plaatnotes"
+version = "0.1.0"
+dependencies = [
+ "bsqlite",
+ "chrono",
+ "const_format",
+ "copy_dir",
+ "mime_guess",
+ "openapi-generator",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "small-http",
+ "small-router",
+ "uuid",
+ "validate",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"

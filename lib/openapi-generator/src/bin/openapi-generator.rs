@@ -51,5 +51,5 @@ fn parse_args() -> Args {
 
 fn main() {
     let args = parse_args();
-    generate_schemas(&args.input, args.generator, &args.output);
+    generate_schemas(&args.input, &args.output, args.generator);
 }

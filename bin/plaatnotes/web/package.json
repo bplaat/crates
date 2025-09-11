@@ -1,0 +1,18 @@
+{
+    "name": "plaatnotes",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "build-debug": "vite build --mode debug --minify=false",
+        "build-release": "vite build --mode release"
+    },
+    "dependencies": {
+        "@preact/signals": "^2.3.1",
+        "preact": "^10.26.9"
+    },
+    "devDependencies": {
+        "@preact/preset-vite": "^2.10.1",
+        "vite": "^7.0.0"
+    }
+}

@@ -39,6 +39,7 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 -   [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
 -   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 -   [navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
+-   [plaatnotes](bin/plaatnotes) A simple note-taking app
 -   [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook
 
 ### Replacement libraries
