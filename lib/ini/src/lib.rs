@@ -36,11 +36,6 @@ impl ConfigFile {
         let mut current_group = String::new();
 
         for line in s.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-                continue;
-            }
-
             // Remove inline comments (after ';' or '#')
             let line = match line.find([';', '#']) {
                 Some(idx) => &line[..idx],
@@ -55,12 +50,10 @@ impl ConfigFile {
                 current_group = line[1..line.len() - 1].trim().to_string();
                 config.groups.entry(current_group.clone()).or_default();
             } else if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim().to_string();
-                let mut value = value.trim().to_string();
-
                 // Escape quotes
-                if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
-                    value = value[1..value.len() - 1].to_string();
+                let mut value = value.trim();
+                if value.starts_with('"') && value.ends_with('"') {
+                    value = &value[1..value.len() - 1];
                 }
 
                 config
@@ -68,7 +61,7 @@ impl ConfigFile {
                     .entry(current_group.clone())
                     .or_default()
                     .properties
-                    .insert(key, value);
+                    .insert(key.trim().to_string(), value.to_string());
             }
         }
 
