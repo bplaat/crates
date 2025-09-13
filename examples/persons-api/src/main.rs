@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+use std::env;
 use std::net::{Ipv4Addr, TcpListener};
 
 use bsqlite::{Connection, FromRow, FromValue, execute_args, query_args};
@@ -395,8 +396,6 @@ fn persons_delete(req: &Request, ctx: &Context) -> Response {
 }
 
 // MARK: Main
-const HTTP_PORT: u16 = 8080;
-
 fn router(ctx: Context) -> Router<Context> {
     RouterBuilder::<Context>::with(ctx)
         .pre_layer(layers::log_pre_layer)
@@ -413,10 +412,22 @@ fn router(ctx: Context) -> Router<Context> {
 }
 
 fn main() {
-    let router = router(Context::with_database("database.db"));
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
-        .unwrap_or_else(|_| panic!("Can't bind to port: {HTTP_PORT}"));
-    println!("Server is listening on: http://localhost:{HTTP_PORT}/");
+    // Load environment variables
+    _ = dotenv::dotenv();
+    let http_port = env::var("PORT")
+        .ok()
+        .and_then(|port| port.parse::<u16>().ok())
+        .unwrap_or(8000);
+
+    // Load database
+    let context = Context::with_database("database.db");
+
+    // Start server
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, http_port))
+        .unwrap_or_else(|_| panic!("Can't bind to port: {http_port}"));
+    println!("Server is listening on: http://localhost:{http_port}/");
+
+    let router = router(context);
     small_http::serve(listener, move |req| router.handle(req));
 }
 

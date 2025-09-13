@@ -30,7 +30,7 @@ use crate::tasks::jvm::{
     generate_javac_kotlinc_tasks, run_jar, run_java_class, run_junit_tests,
 };
 use crate::tasks::template::{detect_template, process_templates};
-use crate::utils::{format_bytes, index_files, read_env_file};
+use crate::utils::{format_bytes, index_files};
 
 mod args;
 mod executor;
@@ -453,7 +453,7 @@ fn main() {
     env::set_current_dir(bob_dir).expect("Failed to change working directory");
 
     // Read .env file
-    _ = read_env_file(".env");
+    _ = dotenv::dotenv();
 
     // Clean build artifacts
     if args.subcommand == Subcommand::Clean {

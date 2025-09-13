@@ -57,6 +57,7 @@ version = "0.1.0"
 dependencies = [
  "basic-toml",
  "dirs",
+ "dotenv",
  "enable-ansi-support",
  "regex",
  "serde",
@@ -163,6 +164,10 @@ name = "dirs"
 version = "6.0.0+patch"
 
 [[package]]
+name = "dotenv"
+version = "0.15.0+patch"
+
+[[package]]
 name = "enable-ansi-support"
 version = "0.2.1+patch"
 
@@ -199,6 +204,7 @@ dependencies = [
  "bsqlite",
  "chrono",
  "const_format",
+ "dotenv",
  "from_enum",
  "openapi-generator",
  "serde",

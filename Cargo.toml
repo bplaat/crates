@@ -33,6 +33,7 @@ small-router = { path = "lib/small-router" }
 chrono = { path = "lib/chrono" }
 copy_dir = { path = "lib/copy_dir" }
 dirs = { path = "lib/dirs" }
+dotenv = { path = "lib/dotenv" }
 enable-ansi-support = { path = "lib/enable-ansi-support" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
