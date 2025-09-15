@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::{Command, exit};
 use std::{env, fs};
 
-use crate::executor::Executor;
+use crate::executor::ExecutorBuilder;
 use crate::manifest::AndroidMetadata;
 use crate::tasks::jvm::{find_modules, get_class_name};
 use crate::utils::{index_files, write_file_when_different};
@@ -100,7 +100,7 @@ pub(crate) fn detect_android(bobje: &Bobje) -> bool {
 }
 
 // MARK: Android resources
-pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Executor) {
+pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut ExecutorBuilder) {
     let vars = AndroidVars::new(bobje);
 
     let res_dir = format!(
@@ -250,7 +250,7 @@ pub(crate) fn link_android_classpath(bobje: &mut Bobje) {
 }
 
 // MARK: Android classes.dex
-pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = AndroidVars::new(bobje);
     let classes_dir = format!("{}/classes", bobje.out_dir());
     let modules = find_modules(bobje);
@@ -309,12 +309,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
             format!("$(find {} -name *.class)", &classes_dir),
         ];
         executor.add_task_cmd(
-            format!(
-                "{} && cd {} && zip {}-unaligned.apk classes.dex > /dev/null",
-                r8_command.join(" "),
-                bobje.out_dir(),
-                bobje.name
-            ),
+            r8_command.join(" "),
             inputs,
             vec![format!("{}/classes.dex", bobje.out_dir())],
         );
@@ -330,12 +325,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
             format!("$(find {} -name *.class)", &classes_dir),
         ];
         executor.add_task_cmd(
-            format!(
-                "{} && cd {} && zip {}-unaligned.apk classes.dex > /dev/null",
-                d8_command.join(" "),
-                bobje.out_dir(),
-                bobje.name
-            ),
+            d8_command.join(" "),
             inputs,
             vec![format!("{}/classes.dex", bobje.out_dir())],
         );
@@ -343,7 +333,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut Executor)
 }
 
 // MARK: Android APK
-pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = AndroidVars::new(bobje);
 
     // Copy dummy keystore if it doesn't exist
@@ -358,15 +348,29 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
             .expect("Failed to write dummy keystore");
     }
 
-    // zipalign
+    // Add classes.dex to zip
     let unaligned_apk = format!("{}/{}-unaligned.apk", bobje.out_dir(), bobje.name);
-    let unsigned_apk = format!("{}/{}-unsigned.apk", bobje.out_dir(), bobje.name);
+    let apk_with_classes = format!("{}/{}-with-classes.apk", bobje.out_dir(), bobje.name);
     executor.add_task_cmd(
-        format!("zipalign -f -p 4 {unaligned_apk} {unsigned_apk}"),
+        format!(
+            "cp {} {} && cd {} && zip -j {}-with-classes.apk classes.dex > /dev/null",
+            unaligned_apk,
+            apk_with_classes,
+            bobje.out_dir(),
+            bobje.name
+        ),
         vec![
             unaligned_apk.clone(),
             format!("{}/classes.dex", bobje.out_dir()),
         ],
+        vec![apk_with_classes.clone()],
+    );
+
+    // zipalign
+    let unsigned_apk = format!("{}/{}-unsigned.apk", bobje.out_dir(), bobje.name);
+    executor.add_task_cmd(
+        format!("zipalign -f -p 4 {apk_with_classes} {unsigned_apk}"),
+        vec![apk_with_classes.clone()],
         vec![unsigned_apk.clone()],
     );
 

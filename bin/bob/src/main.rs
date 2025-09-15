@@ -12,7 +12,7 @@ use std::process::exit;
 use std::{env, fs};
 
 use crate::args::{Args, Profile, Subcommand, parse_args, subcommand_help};
-use crate::executor::Executor;
+use crate::executor::ExecutorBuilder;
 use crate::manifest::{Dependency, JarDependency, LibraryType, Manifest};
 use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
@@ -110,6 +110,7 @@ pub(crate) struct Bobje {
     target_dir: String,
     profile: Profile,
     // ...
+    is_main: bool,
     r#type: PackageType,
     name: String,
     version: String,
@@ -122,7 +123,7 @@ pub(crate) struct Bobje {
 }
 
 impl Bobje {
-    fn new(args: &Args, manifest_dir: &str, executor: &mut Executor) -> Self {
+    fn new(args: &Args, manifest_dir: &str, executor: &mut ExecutorBuilder, is_main: bool) -> Self {
         // Read manifest
         let manifest_path = format!("{manifest_dir}/bob.toml");
         let mut manifest: Manifest =
@@ -221,7 +222,8 @@ impl Bobje {
         let mut dependencies = HashMap::new();
         for (dep_name, dep) in &manifest.dependencies {
             if let Dependency::Path { path } = &dep {
-                let dep_bobje = Bobje::new(args, &format!("{manifest_dir}/{path}"), executor);
+                let dep_bobje =
+                    Bobje::new(args, &format!("{manifest_dir}/{path}"), executor, false);
                 if !dep_bobje.r#type.is_library() {
                     eprintln!("Dependency '{dep_name}' in {path} is not a library");
                     exit(1);
@@ -286,6 +288,7 @@ impl Bobje {
             target_dir: args.target_dir.clone(),
             profile: args.profile,
             // ...
+            is_main,
             r#type: if let Some(library) = &manifest.library {
                 PackageType::Library {
                     r#type: library.r#type,
@@ -303,11 +306,11 @@ impl Bobje {
             dependencies,
         };
 
-        fn generate_bobje_tasks(bobje: &mut Bobje, executor: &mut Executor) {
+        fn generate_bobje_tasks(bobje: &mut Bobje, executor: &mut ExecutorBuilder) {
             if detect_template(&bobje.source_files) {
                 process_templates(bobje, executor);
             }
-            if bobje.profile == Profile::Test && detect_cx(&bobje.source_files) {
+            if bobje.is_main && bobje.profile == Profile::Test && detect_cx(&bobje.source_files) {
                 generate_cx_test_main(bobje);
             }
             if detect_cx(&bobje.source_files) {
@@ -377,12 +380,13 @@ impl Bobje {
         args: &Args,
         name: &str,
         jar: &JarDependency,
-        executor: &mut Executor,
+        executor: &mut ExecutorBuilder,
     ) -> Self {
         let bobje = Self {
             target_dir: args.target_dir.clone(),
             profile: args.profile,
             // ...
+            is_main: false,
             r#type: PackageType::ExternalJar,
             name: name.to_string(),
             version: jar.version.clone(),
@@ -472,13 +476,10 @@ fn main() {
     }
 
     // Build main bobje
-    let mut executor = Executor::new();
-    let bobje = Bobje::new(&args, ".", &mut executor);
-    executor.execute(
-        &format!("{}/bob.log", &args.target_dir),
-        args.verbose,
-        args.thread_count,
-    );
+    let mut executor = ExecutorBuilder::new();
+    let bobje = Bobje::new(&args, ".", &mut executor, true);
+    let mut executor = executor.build(&format!("{}/bob.log", &args.target_dir));
+    executor.execute(args.verbose, args.thread_count);
 
     // Run build artifact
     if args.subcommand == Subcommand::Run {

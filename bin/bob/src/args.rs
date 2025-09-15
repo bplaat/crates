@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::env;
 use std::fmt::{self, Display, Formatter};
 use std::process::exit;
-use std::{env, thread};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Subcommand {
@@ -43,7 +43,7 @@ pub(crate) struct Args {
     pub profile: Profile,
     pub target: Option<String>,
     pub verbose: bool,
-    pub thread_count: usize,
+    pub thread_count: Option<usize>,
     pub clean_first: bool,
 }
 
@@ -56,7 +56,7 @@ impl Default for Args {
             profile: Profile::Debug,
             target: None,
             verbose: false,
-            thread_count: thread::available_parallelism().map_or(1, |n| n.get()),
+            thread_count: None,
             clean_first: false,
         }
     }
@@ -101,12 +101,9 @@ pub(crate) fn parse_args() -> Args {
             }
             "-r" | "--release" => args.profile = Profile::Release,
             "-v" | "--verbose" => args.verbose = true,
-            "--single-threaded" => args.thread_count = 1,
-            "--thread-count" => {
-                args.thread_count = args_iter
-                    .next()
-                    .and_then(|s| s.parse().ok())
-                    .expect("Invalid argument")
+            "-1" | "--single-threaded" => args.thread_count = Some(1),
+            "-j" | "--jobs" | "--thread-count" => {
+                args.thread_count = args_iter.next().and_then(|s| s.parse::<usize>().ok());
             }
             _ => {
                 eprintln!("Unknown argument: {arg}");
@@ -122,24 +119,24 @@ pub(crate) fn subcommand_help() {
         r"Usage: bob [SUBCOMMAND] [OPTIONS]
 
 Options:
-  -C <dir>, --manifest-dir    Change to directory <dir> before doing anything
-  -T <dir>, --target-dir      Write artifacts to directory <dir>
-  -r, --release               Build artifacts in release mode
-  -v, --verbose               Print verbose output
-  --target <target>           Build for the specified target (e.g., x86_64-unknown-linux-gnu)
-  --single-threaded           Run tasks single threaded
-  --thread-count <count>      Use <count> threads for building (default: number of available cores)
+  -C <dir>, --manifest-dir              Change to directory <dir> before doing anything
+  -T <dir>, --target-dir                Write artifacts to directory <dir>
+  -r, --release                         Build artifacts in release mode
+  -v, --verbose                         Print verbose output
+  --target <target>                     Build for the specified target (e.g., x86_64-unknown-linux-gnu)
+  -1, --single-threaded                 Run tasks single threaded
+  -j, --jobs, --thread-count <count>    Use <count> threads for building (default: number of available cores)
 
 Subcommands:
-  clean                       Remove build artifacts
-  clean-cache                 Clean global bob cache
-  build                       Build the project
-  rebuild                     Clean and build the project
-  help                        Print this help message
-  run                         Build and run the build artifact
-  rerun                       Clean, build and run the build artifact
-  test                        Build and run the unit tests
-  retest                      Clean, build and run the unit tests
-  version                     Print the version number"
+  clean                                 Remove build artifacts
+  clean-cache                           Clean global bob cache
+  build                                 Build the project
+  rebuild                               Clean and build the project
+  help                                  Print this help message
+  run                                   Build and run the build artifact
+  rerun                                 Clean, build and run the build artifact
+  test                                  Build and run the unit tests
+  retest                                Clean, build and run the unit tests
+  version                               Print the version number"
     );
 }

@@ -32,14 +32,149 @@ pub(crate) enum TaskAction {
     Command(String),
 }
 
-static FIRST_LINE: Mutex<bool> = Mutex::new(true);
+impl Task {
+    fn have_inputs_change(&self, log: &Log) -> bool {
+        // Check if inputs have changed
+        for input in &self.inputs {
+            // Get input modified time
+            let metadata = match fs::metadata(input) {
+                Ok(metadata) => metadata,
+                Err(_) => return true,
+            };
+            let mtime = metadata
+                .modified()
+                .expect("Failed to get modified time")
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("Time went backwards");
+
+            // Get input hash
+            let hash = if !metadata.is_dir() {
+                // Calculate input hash
+                let buffer = fs::read(input).unwrap_or_else(|_| {
+                    eprintln!("Can't read input file: {input}");
+                    exit(1)
+                });
+                if !buffer.is_empty() {
+                    let mut hasher = Sha1::new();
+                    hasher.update(buffer);
+                    Some(hasher.finalize().to_vec())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // Check if the input has changed
+            if log
+                .get(input)
+                .is_none_or(|entry| entry.mtime != mtime || entry.hash != hash)
+            {
+                return true;
+            }
+        }
+
+        // Check if outputs are missing
+        for output in &self.outputs {
+            if !Path::new(output).exists() {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn execute(
+        &self,
+        log: Arc<Mutex<Log>>,
+        task_counter: Arc<AtomicUsize>,
+        total_tasks: usize,
+        pretty_print: bool,
+    ) {
+        // Update log entries of inputs
+        {
+            let mut log: std::sync::MutexGuard<'_, Log> = log.lock().expect("Could not lock mutex");
+            for input in &self.inputs {
+                // Get input modified time
+                let metadata = fs::metadata(input).unwrap_or_else(|_| {
+                    eprintln!("Can't open input file: {input}");
+                    exit(1)
+                });
+                let mtime = metadata
+                    .modified()
+                    .expect("Failed to get modified time")
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("Time went backwards");
+
+                // Get input hash
+                let hash = if !metadata.is_dir() {
+                    // Calculate input hash
+                    let buffer = fs::read(input).unwrap_or_else(|_| {
+                        eprintln!("Can't read input file: {input}");
+                        exit(1)
+                    });
+                    if !buffer.is_empty() {
+                        let mut hasher = Sha1::new();
+                        hasher.update(buffer);
+                        Some(hasher.finalize().to_vec())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                if log
+                    .get(input)
+                    .is_none_or(|entry| entry.mtime != mtime || entry.hash != hash)
+                {
+                    log.add(LogEntry {
+                        path: input.clone(),
+                        mtime,
+                        hash,
+                    });
+                }
+            }
+        }
+
+        // Create output directories
+        for output in &self.outputs {
+            if let Some(parent) = Path::new(output).parent() {
+                fs::create_dir_all(parent).unwrap_or_else(|e| {
+                    eprintln!("Can't create output directory: {} {}", parent.display(), e);
+                    exit(1)
+                });
+            }
+        }
+
+        // Execute command
+        self.action.execute(task_counter, total_tasks, pretty_print);
+
+        // Update log entries of output dirs
+        {
+            let mut log = log.lock().expect("Could not lock mutex");
+            for output in &self.outputs {
+                let metadata = fs::metadata(output).unwrap_or_else(|_| {
+                    eprintln!("Can't open output file: {output}");
+                    exit(1)
+                });
+                if metadata.is_dir() {
+                    log.add(LogEntry {
+                        path: output.clone(),
+                        mtime: SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .expect("Time went backwards")
+                            - Duration::from_nanos(1),
+                        hash: None,
+                    });
+                }
+            }
+        }
+    }
+}
 
 impl TaskAction {
     fn execute(&self, task_counter: Arc<AtomicUsize>, total_tasks: usize, pretty_print: bool) {
-        let mut first_line_mutex = FIRST_LINE.lock().expect("Could not lock mutex");
-        let first_line = *first_line_mutex;
-        *first_line_mutex = false;
-
         let line = match self {
             TaskAction::Phony(dest) => dest.clone(),
             TaskAction::Copy(src, dst) => {
@@ -80,11 +215,8 @@ impl TaskAction {
             let term_width = terminal_size::terminal_size()
                 .map(|(w, _)| w.0 as usize)
                 .unwrap_or(80);
-            if !first_line {
-                print!("\x1B[1A\x1B[2K");
-            }
             println!(
-                "{}",
+                "\x1B[1A\x1B[2K{}",
                 if line.len() > term_width {
                     format!("{}...", &line[..term_width - 3])
                 } else {
@@ -97,14 +229,13 @@ impl TaskAction {
     }
 }
 
-// MARK: Executor
-#[derive(Debug)]
-pub(crate) struct Executor {
+// MARK: ExecutorBuilder
+pub(crate) struct ExecutorBuilder {
     tasks_id_counter: usize,
     tasks: Vec<Task>,
 }
 
-impl Executor {
+impl ExecutorBuilder {
     pub(crate) fn new() -> Self {
         Self {
             tasks_id_counter: 0,
@@ -145,47 +276,91 @@ impl Executor {
         );
     }
 
-    fn remove_orphans(&mut self) {
-        let tasks = self.tasks.clone();
-        self.tasks.retain(|task| {
-            tasks.iter().any(|other_task| {
-                other_task
-                    .inputs
-                    .iter()
-                    .any(|input| task.outputs.contains(input))
-            }) || tasks.last().is_some_and(|last| last.id == task.id)
-        });
+    pub(crate) fn build(self, log_path: &str) -> Executor {
+        Executor::new(self.tasks, log_path)
+    }
+}
+
+// MARK: Executor
+pub(crate) struct Executor {
+    log: Arc<Mutex<Log>>,
+    tasks: Vec<Task>,
+}
+
+impl Executor {
+    fn new(tasks: Vec<Task>, log_path: &str) -> Self {
+        let log = Log::new(log_path);
+
+        // Create new task tree with all needed tasks
+        fn visit_task(
+            task: &Task,
+            all_tasks: &[Task],
+            new_tasks: &mut Vec<Task>,
+            log: &Log,
+        ) -> bool {
+            if new_tasks.iter().any(|t| t.id == task.id) {
+                return false;
+            }
+
+            let mut inputs_changed = task.have_inputs_change(log);
+            for input in &task.inputs {
+                for other_task in all_tasks {
+                    if other_task.outputs.contains(input) {
+                        inputs_changed |= visit_task(other_task, all_tasks, new_tasks, log);
+                    }
+                }
+            }
+
+            if inputs_changed {
+                new_tasks.push(task.clone());
+            }
+            inputs_changed
+        }
+        let last_task = tasks.last().expect("No tasks to execute");
+        let mut new_tasks = Vec::new();
+        visit_task(last_task, &tasks, &mut new_tasks, &log);
+
+        Self {
+            log: Arc::new(Mutex::new(log)),
+            tasks: new_tasks,
+        }
     }
 
-    pub(crate) fn execute(&mut self, log_path: &str, verbose: bool, thread_count: usize) {
-        self.remove_orphans();
+    pub(crate) fn execute(&mut self, verbose: bool, thread_count: Option<usize>) {
+        // Print task tree
         if verbose {
             println!("{:#?}", self.tasks);
         }
 
-        let log = Log::new(log_path);
-        let pool = ThreadPool::new(thread_count);
-        let task_counter = AtomicUsize::new(1);
-        self.execute_task(
-            self.tasks.last().expect("No tasks provided"),
-            &pool,
-            Arc::new(Mutex::new(Vec::new())),
-            Arc::new(Mutex::new(Vec::new())),
-            Arc::new(Mutex::new(log)),
-            Arc::new(task_counter),
-            !verbose && env::var("NO_COLOR").is_err() && env::var("CI").is_err(),
-        );
-        pool.join();
+        // Start execution if there is a last task
+        if let Some(last_task) = self.tasks.last() {
+            let pretty_print = !verbose && env::var("NO_COLOR").is_err() && env::var("CI").is_err();
+            if pretty_print {
+                println!();
+            }
+
+            let pool = ThreadPool::new(
+                thread_count
+                    .unwrap_or_else(|| thread::available_parallelism().map_or(1, |n| n.get())),
+            );
+            self.execute_task(
+                last_task,
+                &pool,
+                Arc::new(Mutex::new(Vec::new())),
+                Arc::new(Mutex::new(Vec::new())),
+                Arc::new(AtomicUsize::new(1)),
+                pretty_print,
+            );
+            pool.join();
+        }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn execute_task(
         &self,
         task: &Task,
         pool: &ThreadPool,
         scheduled_task_ids: Arc<Mutex<Vec<usize>>>,
         done_task_ids: Arc<Mutex<Vec<usize>>>,
-        log: Arc<Mutex<Log>>,
         task_counter: Arc<AtomicUsize>,
         pretty_print: bool,
     ) {
@@ -209,7 +384,6 @@ impl Executor {
                         pool,
                         scheduled_task_ids.clone(),
                         done_task_ids.clone(),
-                        log.clone(),
                         task_counter.clone(),
                         pretty_print,
                     );
@@ -217,9 +391,10 @@ impl Executor {
             }
         }
 
+        let task = task.clone();
+        let log = self.log.clone();
         let task_counter: Arc<AtomicUsize> = task_counter.clone();
         let total_tasks = self.tasks.len();
-        let task = task.clone();
         pool.execute(move || {
             // Wait for dependencies to finish
             if !dependency_ids.is_empty() {
@@ -233,105 +408,8 @@ impl Executor {
                 }
             }
 
-            // Check if inputs have changed
-            let mut inputs_changed = false;
-            for input in &task.inputs {
-                // Get input modified time
-                let metadata = fs::metadata(input).unwrap_or_else(|_| {
-                    eprintln!("{task:?}\nCan't open input file: {input}");
-                    exit(1)
-                });
-                let mtime = metadata
-                    .modified()
-                    .expect("Failed to get modified time")
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .expect("Time went backwards");
-
-                // Get input hash
-                let is_dir = fs::metadata(input)
-                    .map(|metadata| metadata.is_dir())
-                    .expect("Failed to check input metadata");
-                let hash = if is_dir {
-                    None
-                } else {
-                    // Calculate input hash
-                    let buffer = fs::read(input).unwrap_or_else(|_| {
-                        eprintln!("Can't read input file: {input}");
-                        exit(1)
-                    });
-                    if !buffer.is_empty() {
-                        let mut hasher = Sha1::new();
-                        hasher.update(buffer);
-                        Some(hasher.finalize().to_vec())
-                    } else {
-                        None
-                    }
-                };
-
-                // Check if the input has changed
-                {
-                    let mut log = log.lock().expect("Could not lock mutex");
-                    if log
-                        .get(input)
-                        .is_none_or(|entry| entry.mtime != mtime || entry.hash != hash)
-                    {
-                        log.add(LogEntry {
-                            path: input.clone(),
-                            mtime,
-                            hash,
-                        });
-                        inputs_changed = true;
-                    }
-                }
-            }
-
-            // Check if outputs are missing
-            let mut outputs_missing = false;
-            for output in &task.outputs {
-                if !Path::new(output).exists() {
-                    outputs_missing = true;
-                    break;
-                }
-            }
-
-            // Execute command if inputs have changed or outputs are missing
-            if inputs_changed || outputs_missing {
-                // Create output directories
-                for output in &task.outputs {
-                    if let Some(parent) = Path::new(output).parent() {
-                        fs::create_dir_all(parent).unwrap_or_else(|e| {
-                            eprintln!("Can't create output directory: {} {}", parent.display(), e);
-                            exit(1)
-                        });
-                    }
-                }
-
-                // Execute command
-                task.action.execute(task_counter, total_tasks, pretty_print);
-
-                // Update log entries of output dirs
-                {
-                    let mut log = log.lock().expect("Could not lock mutex");
-                    for output in &task.outputs {
-                        let metadata = fs::metadata(output).unwrap_or_else(|_| {
-                            eprintln!("Can't open output file: {output}");
-                            exit(1)
-                        });
-                        if metadata.is_dir() {
-                            log.add(LogEntry {
-                                path: output.clone(),
-                                mtime: SystemTime::now()
-                                    .duration_since(SystemTime::UNIX_EPOCH)
-                                    .expect("Time went backwards")
-                                    - Duration::from_nanos(1),
-                                hash: None,
-                            });
-                        }
-                    }
-                }
-            } else {
-                _ = task_counter.fetch_add(1, Ordering::SeqCst);
-            }
+            // Execute task
+            task.execute(log, task_counter, total_tasks, pretty_print);
 
             // Mark task as done
             {

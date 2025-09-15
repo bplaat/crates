@@ -12,7 +12,7 @@ use regex::Regex;
 
 use crate::Bobje;
 use crate::args::Profile;
-use crate::executor::Executor;
+use crate::executor::ExecutorBuilder;
 use crate::manifest::JarDependency;
 
 // MARK: Java/Kotlin tasks
@@ -28,7 +28,7 @@ pub(crate) fn detect_kotlin(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".kt"))
 }
 
-pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let classes_dir = format!("{}/classes", bobje.out_dir());
     let modules = find_modules(bobje);
     let module_deps = find_dependencies(&modules);
@@ -189,7 +189,7 @@ pub(crate) fn detect_jar(bobje: &Bobje) -> bool {
 
 pub(crate) fn download_extract_jar_tasks(
     bobje: &Bobje,
-    executor: &mut Executor,
+    executor: &mut ExecutorBuilder,
     jar: &JarDependency,
 ) {
     // Add download task
@@ -237,7 +237,7 @@ pub(crate) fn download_extract_jar_tasks(
     );
 }
 
-pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let classes_dir = format!("{}/classes", bobje.out_dir());
     let modules = find_modules(bobje);
 

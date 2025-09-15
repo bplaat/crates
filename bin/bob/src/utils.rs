@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 use std::process::exit;
 use std::{fs, io};
@@ -25,22 +23,17 @@ pub(crate) fn format_bytes(bytes: u64) -> String {
     }
 }
 
-pub(crate) fn create_file_and_parent_dirs(path: impl AsRef<Path>) -> io::Result<File> {
-    let path = path.as_ref();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    File::create(path)
-}
-
 pub(crate) fn write_file_when_different(path: &str, contents: &str) -> io::Result<()> {
     if let Ok(existing_contents) = fs::read_to_string(path)
         && existing_contents == contents
     {
         return Ok(());
     }
-    let mut f = create_file_and_parent_dirs(path)?;
-    f.write_all(contents.as_bytes())?;
+
+    if let Some(parent) = Path::new(path).parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, contents)?;
     Ok(())
 }
 

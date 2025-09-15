@@ -10,7 +10,7 @@ use std::process::{Command, exit};
 
 use regex::Regex;
 
-use crate::executor::Executor;
+use crate::executor::ExecutorBuilder;
 use crate::manifest::{Dependency, LibraryType};
 use crate::utils::write_file_when_different;
 use crate::{Bobje, PackageType, Profile};
@@ -174,7 +174,7 @@ impl CxVars {
 }
 
 // MARK: Copy headers
-pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut Executor) {
+pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut ExecutorBuilder) {
     for source_file in &bobje.source_files {
         if source_file.ends_with(".h")
             || source_file.ends_with(".hh")
@@ -205,7 +205,7 @@ pub(crate) fn detect_asm(source_files: &[String]) -> bool {
         .any(|path| path.ends_with(".s") || path.ends_with(".S"))
 }
 
-pub(crate) fn generate_asm_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_asm_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = CxVars::new(bobje);
     let asm_source_files = bobje
         .source_files
@@ -229,7 +229,7 @@ pub(crate) fn detect_c(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".c"))
 }
 
-pub(crate) fn generate_c_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_c_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = CxVars::new(bobje);
     let c_source_files = bobje
         .source_files
@@ -254,7 +254,7 @@ pub(crate) fn detect_cpp(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".cpp"))
 }
 
-pub(crate) fn generate_cpp_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_cpp_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = CxVars::new(bobje);
     let cpp_source_files = bobje
         .source_files
@@ -279,7 +279,7 @@ pub(crate) fn detect_objc(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".m"))
 }
 
-pub(crate) fn generate_objc_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_objc_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = CxVars::new(bobje);
     let m_source_files = bobje
         .source_files
@@ -304,7 +304,7 @@ pub(crate) fn detect_objcpp(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".mm"))
 }
 
-pub(crate) fn generate_objcpp_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_objcpp_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = CxVars::new(bobje);
     let mm_source_files = bobje
         .source_files
@@ -333,7 +333,7 @@ pub(crate) fn detect_cx(source_files: &[String]) -> bool {
         || detect_objcpp(source_files)
 }
 
-pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = CxVars::new(bobje);
 
     let dylib_ext = if cfg!(target_os = "macos") {
@@ -514,7 +514,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut Executor) {
     }
 }
 
-pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = CxVars::new(bobje);
 
     // Gather inputs

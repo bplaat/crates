@@ -8,7 +8,7 @@ use std::path::Path;
 use std::{env, fs};
 
 use crate::Bobje;
-use crate::executor::Executor;
+use crate::executor::ExecutorBuilder;
 use crate::utils::write_file_when_different;
 
 // MARK: Template tasks
@@ -16,7 +16,7 @@ pub(crate) fn detect_template(source_files: &[String]) -> bool {
     source_files.iter().any(|path| path.ends_with(".in"))
 }
 
-pub(crate) fn process_templates(bobje: &mut Bobje, _executor: &mut Executor) {
+pub(crate) fn process_templates(bobje: &mut Bobje, _executor: &mut ExecutorBuilder) {
     let regex = regex::Regex::new(r"@([A-Z0-9_]+)@").expect("Can't compile regex");
     let template_paths = bobje
         .source_files

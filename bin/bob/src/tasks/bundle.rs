@@ -11,7 +11,7 @@ use std::process::{Command, exit};
 use regex::Regex;
 
 use crate::Bobje;
-use crate::executor::Executor;
+use crate::executor::ExecutorBuilder;
 use crate::manifest::BundleMetadata;
 use crate::utils::{index_files, write_file_when_different};
 
@@ -30,7 +30,7 @@ pub(crate) fn bundle_is_lipo(bobje: &Bobje) -> bool {
         .is_some_and(|b| b.lipo)
 }
 
-pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut Executor) {
+pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let bundle_metadata = &bobje
         .manifest
         .package
