@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::{Command, exit};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use std::{env, fs, thread};
 
 use sha1::{Digest, Sha1};
@@ -241,12 +241,11 @@ impl Executor {
                     eprintln!("{task:?}\nCan't open input file: {input}");
                     exit(1)
                 });
-                let modified_time = metadata
+                let mtime = metadata
                     .modified()
                     .expect("Failed to get modified time")
                     .duration_since(SystemTime::UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs();
+                    .expect("Time went backwards");
 
                 // Get input hash
                 let is_dir = fs::metadata(input)
@@ -272,12 +271,13 @@ impl Executor {
                 // Check if the input has changed
                 {
                     let mut log = log.lock().expect("Could not lock mutex");
-                    if log.get(input).is_none_or(|entry| {
-                        entry.modified_time != modified_time || entry.hash != hash
-                    }) {
+                    if log
+                        .get(input)
+                        .is_none_or(|entry| entry.mtime != mtime || entry.hash != hash)
+                    {
                         log.add(LogEntry {
-                            input: input.clone(),
-                            modified_time,
+                            path: input.clone(),
+                            mtime,
                             hash,
                         });
                         inputs_changed = true;
@@ -319,12 +319,11 @@ impl Executor {
                         });
                         if metadata.is_dir() {
                             log.add(LogEntry {
-                                input: output.clone(),
-                                modified_time: SystemTime::now()
+                                path: output.clone(),
+                                mtime: SystemTime::now()
                                     .duration_since(SystemTime::UNIX_EPOCH)
                                     .expect("Time went backwards")
-                                    .as_secs()
-                                    - 1,
+                                    - Duration::from_nanos(1),
                                 hash: None,
                             });
                         }

@@ -8,11 +8,12 @@ use std::fmt::{self, Display, Formatter};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::str::FromStr;
+use std::time::Duration;
 
 // MARK: LogEntry
 pub(crate) struct LogEntry {
-    pub input: String,
-    pub modified_time: u64,
+    pub path: String,
+    pub mtime: Duration,
     pub hash: Option<Vec<u8>>,
 }
 
@@ -20,18 +21,21 @@ impl FromStr for LogEntry {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split(' ').collect();
-        if parts.len() != 2 && parts.len() != 3 {
+        if parts.len() != 3 && parts.len() != 4 {
             return Err("Invalid log entry format".to_string());
         }
 
-        let input = parts[0].to_string();
+        let path = parts[0].to_string();
 
-        let modified_time = parts[1]
+        let mtime_secs = parts[1]
             .parse::<u64>()
             .map_err(|_| "Invalid modified time".to_string())?;
+        let mtime_nanos = parts[2]
+            .parse::<u32>()
+            .map_err(|_| "Invalid modified time".to_string())?;
 
-        let hash = if parts.len() == 3 {
-            let hash_str = parts[2];
+        let hash = if parts.len() == 4 {
+            let hash_str = parts[3];
             let mut hash = Vec::with_capacity(hash_str.len() / 2);
             for i in (0..hash_str.len()).step_by(2) {
                 hash.push(
@@ -45,8 +49,8 @@ impl FromStr for LogEntry {
         };
 
         Ok(LogEntry {
-            input,
-            modified_time,
+            path,
+            mtime: Duration::new(mtime_secs, mtime_nanos),
             hash,
         })
     }
@@ -54,7 +58,13 @@ impl FromStr for LogEntry {
 
 impl Display for LogEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.input, self.modified_time)?;
+        write!(
+            f,
+            "{} {} {}",
+            self.path,
+            self.mtime.as_secs(),
+            self.mtime.subsec_nanos()
+        )?;
         if let Some(hash) = &self.hash {
             write!(f, " ")?;
             for byte in hash {
@@ -100,8 +110,8 @@ impl Log {
         Log { file, entries }
     }
 
-    pub(crate) fn get(&self, input: &str) -> Option<&LogEntry> {
-        self.entries.iter().rev().find(|entry| entry.input == input)
+    pub(crate) fn get(&self, path: &str) -> Option<&LogEntry> {
+        self.entries.iter().rev().find(|entry| entry.path == path)
     }
 
     pub(crate) fn add(&mut self, entry: LogEntry) {
