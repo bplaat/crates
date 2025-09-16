@@ -217,7 +217,7 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
         s.push_str(&format!("\t<key>{key}</key>\n\t<string>{value}</string>\n"));
     }
     if let Some(extra) = extra_keys {
-        s.push_str(&format!("\t{}\n", extra));
+        s.push_str(&format!("\t{extra}\n"));
     }
     s.push_str("</dict>\n</plist>\n");
 

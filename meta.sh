@@ -42,7 +42,7 @@ function check_rust() {
     cargo +nightly fmt -- --check
     # Lint
     echo "Linting Rust code..."
-    cargo clippy --locked --all-targets --all-features -- -D warnings
+    cargo clippy --locked --all-targets --all-features -- -D warnings -W clippy::uninlined_format_args
     # Dependencies
     echo "Checking Rust dependencies..."
     cargo deny check --hide-inclusion-graph

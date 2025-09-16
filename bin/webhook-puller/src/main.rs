@@ -98,11 +98,10 @@ fn main() {
                     .arg("-X")
                     .arg("POST")
                     .arg(format!(
-                        "https://api.cloudflare.com/client/v4/zones/{}/purge_cache",
-                        zone_id
+                        "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache"
                     ))
                     .arg("-H")
-                    .arg(format!("Authorization: Bearer {}", api_token))
+                    .arg(format!("Authorization: Bearer {api_token}"))
                     .arg("-H")
                     .arg("Content-Type: application/json")
                     .arg("-d")
