@@ -327,13 +327,13 @@ impl Executor {
     }
 
     pub(crate) fn execute(&mut self, verbose: bool, thread_count: Option<usize>) {
-        // Print task tree
-        if verbose {
-            println!("{:#?}", self.tasks);
-        }
-
         // Start execution if there is a last task
         if let Some(last_task) = self.tasks.last() {
+            // Print task tree
+            if verbose {
+                println!("{:#?}", self.tasks);
+            }
+
             let pretty_print = !verbose && env::var("NO_COLOR").is_err() && env::var("CI").is_err();
             if pretty_print {
                 println!();

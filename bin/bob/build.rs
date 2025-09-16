@@ -80,15 +80,9 @@ fn test_bob_{}() {{
             if dir_name.contains("-with-tests") {
                 format!(
                     r#"
-    // Test example
-    std::process::Command::new(env!("CARGO_BIN_EXE_bob"))
-        .arg("clean")
-        .current_dir("{entry}")
-        .output()
-        .expect("Failed to execute bob clean command");
-
+    // Retest example
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_bob"))
-        .arg("test")
+        .arg("retest")
         .current_dir("{entry}")
         .output()
         .expect("Failed to execute bob test command");
