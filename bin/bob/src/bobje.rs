@@ -255,7 +255,7 @@ impl Bobje {
             dependencies,
         };
 
-        fn generate_bobje_tasks(bobje: &mut Bobje, executor: &mut ExecutorBuilder) {
+        let mut visit_bobje = |bobje: &mut Bobje| {
             if detect_template(&bobje.source_files) {
                 process_templates(bobje, executor);
             }
@@ -305,18 +305,18 @@ impl Bobje {
                     generate_jar_tasks(bobje, executor);
                 }
             }
-        }
+        };
 
         if bobje.r#type.is_binary() && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
             let mut bobje_x86_64 = bobje.clone();
             bobje_x86_64.target = Some("x86_64-apple-darwin".to_string());
-            generate_bobje_tasks(&mut bobje_x86_64, executor);
+            visit_bobje(&mut bobje_x86_64);
 
             let mut bobje_aarch64 = bobje.clone();
             bobje_aarch64.target = Some("aarch64-apple-darwin".to_string());
-            generate_bobje_tasks(&mut bobje_aarch64, executor);
+            visit_bobje(&mut bobje_aarch64);
         } else {
-            generate_bobje_tasks(&mut bobje, executor);
+            visit_bobje(&mut bobje);
         }
         if bobje.r#type.is_binary() && detect_bundle(&bobje) {
             generate_bundle_tasks(&bobje, executor);

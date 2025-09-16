@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::collections::HashSet;
 use std::fmt::Write;
 use std::fs::{self};
 use std::process::{Command, exit};
@@ -238,13 +239,14 @@ pub(crate) fn generate_c_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
         .filter(|source_file| source_file.ends_with(".c"));
     for source_file in c_source_files {
         let object_file = get_object_path(bobje, source_file);
-        // FIXME: Add support for depfiles -MD -MF $out.d
+        let mut inputs = find_included_header_files(bobje, source_file);
+        inputs.push(source_file.clone());
         executor.add_task_cmd(
             format!(
                 "{} -c {} --std=c11 {} -o {}",
                 vars.cc, vars.cflags, source_file, object_file
             ),
-            vec![source_file.clone()],
+            inputs,
             vec![object_file],
         );
     }
@@ -263,13 +265,14 @@ pub(crate) fn generate_cpp_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) 
         .filter(|source_file| source_file.ends_with(".cpp"));
     for source_file in cpp_source_files {
         let object_file = get_object_path(bobje, source_file);
-        // FIXME: Add support for depfiles -MD -MF $out.d
+        let mut inputs = find_included_header_files(bobje, source_file);
+        inputs.push(source_file.clone());
         executor.add_task_cmd(
             format!(
                 "{} -c {} --std=c++17 {} -o {}",
                 vars.cxx, vars.cflags, source_file, object_file
             ),
-            vec![source_file.clone()],
+            inputs,
             vec![object_file],
         );
     }
@@ -288,13 +291,14 @@ pub(crate) fn generate_objc_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder)
         .filter(|source_file| source_file.ends_with(".m"));
     for source_file in m_source_files {
         let object_file = get_object_path(bobje, source_file);
-        // FIXME: Add support for depfiles -MD -MF $out.d
+        let mut inputs = find_included_header_files(bobje, source_file);
+        inputs.push(source_file.clone());
         executor.add_task_cmd(
             format!(
                 "{} -x objective-c -c {} --std=c11 {} -o {}",
                 vars.cc, vars.cflags, source_file, object_file
             ),
-            vec![source_file.clone()],
+            inputs,
             vec![object_file],
         );
     }
@@ -313,13 +317,14 @@ pub(crate) fn generate_objcpp_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
         .filter(|source_file| source_file.ends_with(".mm"));
     for source_file in mm_source_files {
         let object_file = get_object_path(bobje, source_file);
-        // FIXME: Add support for depfiles -MD -MF $out.d
+        let mut inputs = find_included_header_files(bobje, source_file);
+        inputs.push(source_file.clone());
         executor.add_task_cmd(
             format!(
                 "{} -x objective-c++ -c {} --std=c++17 {} -o {}",
                 vars.cxx, vars.cflags, source_file, object_file
             ),
-            vec![source_file.clone()],
+            inputs,
             vec![object_file],
         );
     }
@@ -364,14 +369,14 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     }
 
     // Add dependencies
-    fn add_dependency_inputs(
+    fn visit_bobje(
         bobje: &Bobje,
         dylib_ext: &str,
         inputs: &mut Vec<String>,
         contains_cpp: &mut bool,
     ) {
         for dependency_bobje in bobje.dependencies.values() {
-            add_dependency_inputs(dependency_bobje, dylib_ext, inputs, contains_cpp);
+            visit_bobje(dependency_bobje, dylib_ext, inputs, contains_cpp);
         }
         for source_file in &bobje.source_files {
             if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
@@ -392,7 +397,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
         }
     }
     for dependency_bobje in bobje.dependencies.values() {
-        add_dependency_inputs(dependency_bobje, dylib_ext, &mut inputs, &mut contains_cpp);
+        visit_bobje(dependency_bobje, dylib_ext, &mut inputs, &mut contains_cpp);
     }
 
     // Link library
@@ -636,6 +641,35 @@ fn pkg_config_libs(package: &str) -> String {
         );
         exit(1);
     }
+}
+
+fn find_included_header_files(bobje: &Bobje, source_file: &str) -> Vec<String> {
+    fn visit_file(
+        bobje: &Bobje,
+        source_file: &str,
+        visited: &mut HashSet<String>,
+        re: &Regex,
+    ) -> Vec<String> {
+        let mut included_files = Vec::new();
+        if let Ok(contents) = fs::read_to_string(source_file) {
+            for cap in re.captures_iter(&contents) {
+                let header_path = cap[1].to_string();
+                if let Some(full_path) = bobje
+                    .source_files
+                    .iter()
+                    .find(|f| f.ends_with(&header_path))
+                    && visited.insert(full_path.clone())
+                {
+                    included_files.push(full_path.clone());
+                    included_files.extend(visit_file(bobje, full_path, visited, re));
+                }
+            }
+        }
+        included_files
+    }
+    let re = Regex::new(r#"#include\s+"([^"]+)""#).expect("Can't compile regex");
+    let mut visited = HashSet::new();
+    visit_file(bobje, source_file, &mut visited, &re)
 }
 
 struct TestFunction {

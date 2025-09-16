@@ -145,14 +145,14 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
         let mut link_inputs = vec![format!("{}/AndroidManifest.xml", bobje.manifest_dir)];
         let mut link_outputs = vec![dest.clone(), r_java_path.clone()];
 
-        fn add_bobje_resources(
+        fn visit_bobje(
             bobje: &Bobje,
             link_command: &mut Vec<String>,
             link_inputs: &mut Vec<String>,
             link_outputs: &mut Vec<String>,
         ) {
             for dependency_bobje in bobje.dependencies.values() {
-                add_bobje_resources(dependency_bobje, link_command, link_inputs, link_outputs);
+                visit_bobje(dependency_bobje, link_command, link_inputs, link_outputs);
             }
             if detect_android(bobje) {
                 let android_metadata = bobje
@@ -208,7 +208,7 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
                 }
             }
         }
-        add_bobje_resources(
+        visit_bobje(
             bobje,
             &mut link_command,
             &mut link_inputs,

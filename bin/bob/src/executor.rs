@@ -289,9 +289,6 @@ pub(crate) struct Executor {
 
 impl Executor {
     fn new(tasks: Vec<Task>, log_path: &str) -> Self {
-        let log = Log::new(log_path);
-
-        // Create new task tree with all needed tasks
         fn visit_task(
             task: &Task,
             all_tasks: &[Task],
@@ -316,8 +313,11 @@ impl Executor {
             }
             inputs_changed
         }
-        let last_task = tasks.last().expect("No tasks to execute");
+
+        // Create new task tree with all needed tasks
+        let log = Log::new(log_path);
         let mut new_tasks = Vec::new();
+        let last_task = tasks.last().expect("No tasks to execute");
         visit_task(last_task, &tasks, &mut new_tasks, &log);
 
         Self {
