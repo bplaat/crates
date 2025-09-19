@@ -74,7 +74,7 @@ impl Bobje {
         executor: &mut ExecutorBuilder,
         is_main: bool,
     ) -> Self {
-        // Read manifest
+        // MARK: Read manifest
         let manifest_path = format!("{manifest_dir}/bob.toml");
         let mut manifest: Manifest =
             basic_toml::from_str(&fs::read_to_string(&manifest_path).unwrap_or_else(|err| {
@@ -104,6 +104,13 @@ impl Bobje {
             manifest.build.merge(*windows_build.clone());
         }
 
+        // Build target triple
+        let target = args
+            .target
+            .clone()
+            .or_else(|| manifest.build.target.clone());
+
+        // MARK: Auto dependencies
         // Add libSystem dep when Cx on macOS
         if cfg!(target_os = "macos") && detect_cx(&source_files) {
             manifest.dependencies.insert(
@@ -168,7 +175,7 @@ impl Bobje {
             }
         }
 
-        // Build dependencies
+        // MARK: Build dependencies
         let mut dependencies = HashMap::new();
         for (dep_name, dep) in &manifest.dependencies {
             if let Dependency::Path { path } = &dep {
@@ -215,25 +222,7 @@ impl Bobje {
             }
         }
 
-        // Build target triple
-        let mut target = None;
-        if let Some(manifest_target) = &manifest.build.target {
-            target = Some(manifest_target.clone());
-        }
-        if let Some(arch) = &manifest.build.arch {
-            if cfg!(target_os = "macos") {
-                target = Some(format!("{arch}-apple-darwin"));
-            } else if cfg!(target_os = "linux") {
-                target = Some(format!("{arch}-unknown-linux-gnu"));
-            } else {
-                panic!("Unsupported custom arch target triple");
-            }
-        }
-        if let Some(args_target) = &args.target {
-            target = Some(args_target.clone());
-        }
-
-        // Generate tasks
+        // MARK: Generate tasks
         let mut bobje = Self {
             target_dir: args.target_dir.clone(),
             profile: args.profile,

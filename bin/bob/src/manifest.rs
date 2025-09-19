@@ -124,7 +124,6 @@ pub(crate) struct Build {
     pub cflags: String,
     pub ldflags: String,
     pub target: Option<String>,
-    pub arch: Option<String>,
     pub entry: Option<String>,
     pub javac_flags: String,
     pub kotlinc_flags: String,
@@ -144,9 +143,6 @@ impl Build {
         }
         if other_build.target.is_some() {
             self.target = other_build.target;
-        }
-        if other_build.arch.is_some() {
-            self.arch = other_build.arch;
         }
         if other_build.entry.is_some() {
             self.entry = other_build.entry;
