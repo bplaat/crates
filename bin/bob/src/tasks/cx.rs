@@ -17,6 +17,16 @@ use crate::executor::ExecutorBuilder;
 use crate::manifest::{Dependency, LibraryType};
 use crate::utils::write_file_when_different;
 
+// MARK: Constants
+const DYLIB_EXT: &str = if cfg!(target_os = "macos") {
+    "dylib"
+} else if cfg!(windows) {
+    "dll"
+} else {
+    "so"
+};
+const EXECUTABLE_EXT: &str = if cfg!(windows) { ".exe" } else { "" };
+
 // MARK: Cx vars
 struct CxVars {
     asflags: String,
@@ -84,6 +94,8 @@ impl CxVars {
         let mut libs = format!("-L{}", bobje.out_dir_with_target());
         if cfg!(target_os = "macos") {
             let sdk_path = Command::new("xcrun")
+                .arg("-sdk")
+                .arg("macosx")
                 .arg("--show-sdk-path")
                 .output()
                 .map(|output| {
@@ -94,17 +106,8 @@ impl CxVars {
                     }
                 })
                 .unwrap_or_default();
+            libs.push_str(&format!(" -syslibroot {sdk_path}"));
 
-            libs.push_str(&format!(" -L{sdk_path}/usr/lib"));
-
-            if bobje
-                .manifest
-                .dependencies
-                .values()
-                .any(|dep| matches!(dep, Dependency::Framework { .. }))
-            {
-                libs.push_str(&format!(" -F{sdk_path}/System/Library/Frameworks"));
-            }
             for dep in bobje.manifest.dependencies.values() {
                 if let Dependency::Framework { framework } = &dep {
                     libs.push_str(&format!(" -framework {framework}"));
@@ -191,7 +194,6 @@ pub(crate) fn copy_cx_headers(bobje: &Bobje, _executor: &mut ExecutorBuilder) {
                     .nth(1)
                     .or_else(|| source_file.split("src-gen/").nth(1))
                     .expect("Should be some")
-                    .replace('\\', "/")
             );
             fs::create_dir_all(dest.rsplit_once('/').expect("Should be some").0)
                 .expect("Failed to create include directory");
@@ -342,14 +344,6 @@ pub(crate) fn detect_cx(source_files: &[String]) -> bool {
 pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let vars = CxVars::new(bobje);
 
-    let dylib_ext = if cfg!(target_os = "macos") {
-        "dylib"
-    } else if cfg!(windows) {
-        "dll"
-    } else {
-        "so"
-    };
-
     // Gather inputs
     let mut inputs = Vec::new();
     let mut contains_cpp = false;
@@ -369,14 +363,9 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     }
 
     // Add dependencies
-    fn visit_bobje(
-        bobje: &Bobje,
-        dylib_ext: &str,
-        inputs: &mut Vec<String>,
-        contains_cpp: &mut bool,
-    ) {
+    fn visit_bobje(bobje: &Bobje, inputs: &mut Vec<String>, contains_cpp: &mut bool) {
         for dependency_bobje in bobje.dependencies.values() {
-            visit_bobje(dependency_bobje, dylib_ext, inputs, contains_cpp);
+            visit_bobje(dependency_bobje, inputs, contains_cpp);
         }
         for source_file in &bobje.source_files {
             if source_file.ends_with(".cpp") || source_file.ends_with(".mm") {
@@ -391,13 +380,13 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                 bobje.name,
                 match r#type {
                     LibraryType::Static => "a",
-                    LibraryType::Dynamic => dylib_ext,
+                    LibraryType::Dynamic => DYLIB_EXT,
                 }
             ));
         }
     }
     for dependency_bobje in bobje.dependencies.values() {
-        visit_bobje(dependency_bobje, dylib_ext, &mut inputs, &mut contains_cpp);
+        visit_bobje(dependency_bobje, &mut inputs, &mut contains_cpp);
     }
 
     // Link library
@@ -429,7 +418,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                     "{}/lib{}.{}",
                     bobje.out_dir_with_target(),
                     bobje.name,
-                    dylib_ext
+                    DYLIB_EXT
                 );
                 executor.add_task_cmd(
                     format!(
@@ -444,7 +433,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                         input_objects,
                         vars.libs,
                         if cfg!(target_os = "macos") {
-                            format!("-install_name @rpath/lib{}.{}", bobje.name, dylib_ext)
+                            format!("-install_name @rpath/lib{}.{}", bobje.name, DYLIB_EXT)
                         } else {
                             String::new()
                         },
@@ -460,8 +449,6 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     // Link executable
     if bobje.r#type.is_binary() {
         let executable_file = format!("{}/{}", bobje.out_dir_with_target(), bobje.name);
-        let ext = if cfg!(windows) { ".exe" } else { "" };
-
         let input_objects = inputs
             .iter()
             .filter(|f| f.ends_with(".o") || f.ends_with(".a"))
@@ -470,7 +457,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
             .join(" ");
         let mut libs = vars.libs.clone();
         for input in &inputs {
-            if input.ends_with(dylib_ext) {
+            if input.ends_with(DYLIB_EXT) {
                 libs.push_str(&format!(
                     " -l{}",
                     input
@@ -479,7 +466,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                         .1
                         .strip_prefix("lib")
                         .expect("Failed to strip prefix")
-                        .strip_suffix(&format!(".{dylib_ext}"))
+                        .strip_suffix(&format!(".{DYLIB_EXT}"))
                         .expect("Failed to strip suffix")
                 ));
             }
@@ -491,8 +478,8 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
         };
 
         if bobje.profile == Profile::Release {
-            let unstripped_path = format!("{executable_file}-unstripped{ext}");
-            let stripped_path = format!("{executable_file}{ext}");
+            let unstripped_path = format!("{executable_file}-unstripped{EXECUTABLE_EXT}");
+            let stripped_path = format!("{executable_file}{EXECUTABLE_EXT}");
             executor.add_task_cmd(
                 format!(
                     "{} {} {} {} {} -o {}",
@@ -507,7 +494,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                 vec![stripped_path],
             );
         } else {
-            let out_path = format!("{executable_file}{ext}");
+            let out_path = format!("{executable_file}{EXECUTABLE_EXT}");
             executor.add_task_cmd(
                 format!(
                     "{} {} {} {} {} -o {}",
@@ -537,8 +524,8 @@ pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut ExecutorBuil
 
     // Link test executable
     let executable_file = format!("{}/test_{}", bobje.out_dir_with_target(), bobje.name);
-    let ext = if cfg!(windows) { ".exe" } else { "" };
-    let out_path = format!("{executable_file}{ext}");
+
+    let out_path = format!("{executable_file}{EXECUTABLE_EXT}");
     executor.add_task_cmd(
         format!(
             "{} {} {} {} -o {}",
@@ -560,12 +547,11 @@ pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut ExecutorBuil
 }
 
 pub(crate) fn run_ld(bobje: &Bobje) -> ! {
-    let ext = if cfg!(windows) { ".exe" } else { "" };
     let status = Command::new(format!(
         "{}/{}{}",
         bobje.out_dir_with_target(),
         bobje.name,
-        ext
+        EXECUTABLE_EXT
     ))
     .status()
     .expect("Failed to execute executable");
@@ -573,12 +559,11 @@ pub(crate) fn run_ld(bobje: &Bobje) -> ! {
 }
 
 pub(crate) fn run_ld_cunit_tests(bobje: &Bobje) -> ! {
-    let ext = if cfg!(windows) { ".exe" } else { "" };
     let status = Command::new(format!(
         "{}/test_{}{}",
         bobje.out_dir_with_target(),
         bobje.name,
-        ext
+        EXECUTABLE_EXT
     ))
     .status()
     .expect("Failed to execute executable");
