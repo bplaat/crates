@@ -126,7 +126,14 @@ pub(crate) fn generate_android_res_tasks(bobje: &mut Bobje, executor: &mut Execu
             compiled_res_file = compiled_res_file.replace(".xml", ".arsc");
         }
         executor.add_task_cmd(
-            format!("aapt2 compile --no-crunch {res_file} -o {compiled_res_dir}"),
+            format!(
+                "aapt2 compile {}{res_file} -o {compiled_res_dir}",
+                if bobje.profile != Profile::Release && res_file.contains(".png") {
+                    "--no-crunch "
+                } else {
+                    ""
+                }
+            ),
             vec![res_file],
             vec![compiled_res_file.clone()],
         );
