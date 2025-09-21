@@ -326,6 +326,10 @@ impl Executor {
         }
     }
 
+    pub(crate) fn total_tasks(&self) -> usize {
+        self.tasks.len()
+    }
+
     pub(crate) fn execute(&mut self, verbose: bool, thread_count: Option<usize>) {
         // Start execution if there is a last task
         if let Some(last_task) = self.tasks.last() {

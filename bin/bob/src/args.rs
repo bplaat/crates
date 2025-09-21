@@ -45,6 +45,7 @@ pub(crate) struct Args {
     pub verbose: bool,
     pub thread_count: Option<usize>,
     pub clean_first: bool,
+    pub show_time: bool,
 }
 
 impl Default for Args {
@@ -58,6 +59,7 @@ impl Default for Args {
             verbose: false,
             thread_count: None,
             clean_first: false,
+            show_time: false,
         }
     }
 }
@@ -93,6 +95,7 @@ pub(crate) fn parse_args() -> Args {
             "-C" | "--manifest-dir" => {
                 args.manifest_dir = args_iter.next().expect("Invalid argument")
             }
+            "-t" | "--time" => args.show_time = true,
             "-T" | "--target-dir" => {
                 args.target_dir = args_iter.next().expect("Invalid argument");
             }
@@ -122,6 +125,7 @@ Options:
   -C <dir>, --manifest-dir              Change to directory <dir> before doing anything
   -T <dir>, --target-dir                Write artifacts to directory <dir>
   -r, --release                         Build artifacts in release mode
+  -t, --time                            Show time taken for the build
   -v, --verbose                         Print verbose output
   --target <target>                     Build for the specified target (e.g., x86_64-unknown-linux-gnu)
   -1, --single-threaded                 Run tasks single threaded

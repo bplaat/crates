@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::time::Instant;
 use std::{env, fs};
 
 use crate::args::{Profile, Subcommand, parse_args, subcommand_help};
@@ -76,6 +77,8 @@ fn main() {
     #[cfg(windows)]
     enable_ansi_support::enable_ansi_support().expect("Can't enable ANSI support");
 
+    let start_time = Instant::now();
+
     let args = parse_args();
     if args.subcommand == Subcommand::CleanCache {
         subcommand_clean_cache();
@@ -137,6 +140,16 @@ fn main() {
     let bobje = Bobje::new(&args, ".", &mut executor, true);
     let mut executor = executor.build(&format!("{}/bob.log", &args.target_dir));
     executor.execute(args.verbose, args.thread_count);
+
+    // Show time taken
+    if executor.total_tasks() > 0 && args.show_time {
+        println!(
+            "[{}/{}] Execute time: {:.2?}",
+            executor.total_tasks(),
+            executor.total_tasks(),
+            Instant::now().duration_since(start_time)
+        );
+    }
 
     // Run build artifact
     if args.subcommand == Subcommand::Run {
