@@ -18,6 +18,4 @@ fun main(args: Array<String>) {
     cat.greet()
     val dog = Dog("Rover")
     dog.greet()
-    val house = House("My House")
-    house.greet()
 }
