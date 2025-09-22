@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#![allow(unused_variables)]
+
 use std::path::Path;
 use std::process::{Command, exit};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -30,6 +32,8 @@ pub(crate) enum TaskAction {
     Phony(String),
     Copy(String, String),
     Command(String),
+    SendMsg(String, String),
+    Multiple(Vec<TaskAction>),
 }
 
 impl Task {
@@ -148,7 +152,24 @@ impl Task {
         }
 
         // Execute command
-        self.action.execute(task_counter, total_tasks, pretty_print);
+        let line = self.action.execute();
+        let current_task = task_counter.fetch_add(1, Ordering::SeqCst);
+        let line = format!("[{current_task}/{total_tasks}] {line}");
+        if pretty_print {
+            let term_width = terminal_size::terminal_size()
+                .map(|(w, _)| w.0 as usize)
+                .unwrap_or(80);
+            println!(
+                "\x1B[1A\x1B[2K{}",
+                if line.len() > term_width {
+                    format!("{}...", &line[..term_width - 3])
+                } else {
+                    line.to_string()
+                }
+            );
+        } else {
+            println!("{line}");
+        }
 
         // Update log entries of output dirs
         {
@@ -174,8 +195,8 @@ impl Task {
 }
 
 impl TaskAction {
-    fn execute(&self, task_counter: Arc<AtomicUsize>, total_tasks: usize, pretty_print: bool) {
-        let line = match self {
+    fn execute(&self) -> String {
+        match self {
             TaskAction::Phony(dest) => dest.clone(),
             TaskAction::Copy(src, dst) => {
                 fs::copy(src, dst).unwrap_or_else(|_| {
@@ -186,14 +207,8 @@ impl TaskAction {
             }
             TaskAction::Command(command) => {
                 let status = if cfg!(windows) {
-                    if command.contains("&&") {
-                        let mut parts = command.split(' ').collect::<Vec<_>>();
-                        parts.insert(0, "/c");
-                        Command::new("cmd").args(parts).status()
-                    } else {
-                        let parts = command.split(' ').collect::<Vec<_>>();
-                        Command::new(parts[0]).args(&parts[1..]).status()
-                    }
+                    let parts = command.split(' ').collect::<Vec<_>>();
+                    Command::new(parts[0]).args(&parts[1..]).status()
                 } else {
                     Command::new("sh").arg("-c").arg(command).status()
                 }
@@ -207,24 +222,40 @@ impl TaskAction {
                 }
                 command.clone()
             }
-        };
-        let current_task = task_counter.fetch_add(1, Ordering::SeqCst);
-        let line = format!("[{current_task}/{total_tasks}] {line}");
+            TaskAction::SendMsg(socket_path, line) => {
+                #[cfg(unix)]
+                {
+                    use std::io::{Read, Write};
+                    let mut stream = std::os::unix::net::UnixStream::connect(socket_path)
+                        .expect("Failed to connect to socket");
+                    _ = stream.write_all(line.as_bytes());
+                    _ = stream.flush();
 
-        if pretty_print {
-            let term_width = terminal_size::terminal_size()
-                .map(|(w, _)| w.0 as usize)
-                .unwrap_or(80);
-            println!(
-                "\x1B[1A\x1B[2K{}",
-                if line.len() > term_width {
-                    format!("{}...", &line[..term_width - 3])
-                } else {
-                    line.to_string()
+                    let mut response = Vec::new();
+                    _ = stream.read_to_end(&mut response);
+
+                    let read_line = String::from_utf8_lossy(&response);
+                    let (exit_code, stderr) = read_line.split_once('\n').expect("Invalid response");
+                    if exit_code.parse::<i32>().expect("Invalid exit code") != 0 {
+                        eprintln!("Command failed: {line}\n{stderr}");
+                        exit(1);
+                    }
+
+                    line.clone()
                 }
-            );
-        } else {
-            println!("{line}");
+                #[cfg(not(unix))]
+                {
+                    eprintln!("SendMsg is only supported on Unix systems");
+                    exit(1);
+                }
+            }
+            TaskAction::Multiple(actions) => {
+                let mut lines = Vec::new();
+                for action in actions {
+                    lines.push(action.execute());
+                }
+                lines.join(" && ")
+            }
         }
     }
 }
@@ -243,7 +274,12 @@ impl ExecutorBuilder {
         }
     }
 
-    fn add_task(&mut self, action: TaskAction, inputs: Vec<String>, outputs: Vec<String>) {
+    pub(crate) fn add_task(
+        &mut self,
+        action: TaskAction,
+        inputs: Vec<String>,
+        outputs: Vec<String>,
+    ) {
         if !self.tasks.iter().any(|task| task.outputs == outputs) {
             self.tasks.push(Task {
                 id: self.tasks_id_counter,

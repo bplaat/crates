@@ -5,7 +5,7 @@
  */
 
 use std::path::Path;
-use std::process::exit;
+use std::process::{Command, Stdio, exit};
 use std::{fs, io};
 
 pub(crate) fn format_bytes(bytes: u64) -> String {
@@ -59,4 +59,33 @@ pub(crate) fn index_files(dir: &str) -> Vec<String> {
         }
     }
     files
+}
+
+pub(crate) fn spawn_service(program: &str, args: &[&str]) -> io::Result<()> {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .stdin(Stdio::null()) // Detach stdin
+        .stdout(Stdio::null()) // Detach stdout
+        .stderr(Stdio::null()); // Detach stderr
+
+    #[cfg(unix)]
+    {
+        // On Unix, use `setsid` to create a new session, detaching from the parent terminal
+        use std::os::unix::process::CommandExt;
+        command.process_group(0); // Set process group ID to 0 to start a new session
+    }
+
+    #[cfg(windows)]
+    {
+        // On Windows, use creation flags to detach the process
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        const DETACHED_PROCESS: u32 = 0x00000008;
+        command.creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+    }
+
+    // Spawn the process and forget it (do not wait for it)
+    command.spawn()?;
+    Ok(())
 }
