@@ -374,6 +374,14 @@ impl PlatformWebview {
             );
             g_signal_connect_data(
                 webview as *mut c_void,
+                c"notify::title".as_ptr(),
+                webview_on_title_changed as *const c_void,
+                webview_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                webview as *mut c_void,
                 c"decide-policy".as_ptr(),
                 webview_on_navigation_policy_decision as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -653,6 +661,16 @@ extern "C" fn webview_on_load_changed(
     if event == WEBKIT_LOAD_FINISHED {
         send_event(Event::PageLoadFinished)
     }
+}
+
+extern "C" fn webview_on_title_changed(
+    webview: *mut WebKitWebView,
+    _pspec: *const c_void,
+    _self: &mut WebviewData,
+) {
+    let title = unsafe { webkit_web_view_get_title(webview) };
+    let title = unsafe { CStr::from_ptr(title) }.to_string_lossy();
+    send_event(Event::TitleChanged(title.to_string()));
 }
 
 extern "C" fn webview_on_navigation_policy_decision(
