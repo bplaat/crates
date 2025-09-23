@@ -5,6 +5,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+@import url(minireset.css);
+
+/* Colors */
 :root {
     --background-color: #1a1a1a;
     --text-color: #e0e0e0;
@@ -15,9 +18,10 @@
     --button-active-bg: #555;
 }
 
+/* Base */
 html {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji';
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+        'Open Sans', 'Helvetica Neue', sans-serif;
     font-size: 16px;
     line-height: 1.6;
 
@@ -34,69 +38,74 @@ html {
 body {
     background-color: var(--background-color);
     color: var(--text-color);
-    margin: 0;
     padding: 2rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
 
-    /* Adjust for .bottom-controls-container */
+    /* Adjust for .buttons.is-bottom */
     margin-bottom: 4rem;
 }
 
-h2 {
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    margin-top: 2.5rem;
-    margin-bottom: 1rem;
-    color: #ffffff;
-    font-size: 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.5rem;
-}
-h2:first-child {
-    margin-top: 0;
-}
-
 p {
-    max-width: 60ch;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-i {
-    color: #aaa;
+    margin: 1rem 0;
 }
 
 a {
     color: currentColor;
     text-decoration: none;
 }
+a:hover,
+a:focus {
+    text-decoration: underline;
+}
 
+/* Icon */
 .icon {
+    display: block;
     width: 24px;
     height: 24px;
     fill: currentColor;
-    margin-right: 0.5rem;
 }
 
-/* --- Button Containers --- */
-.button-grid {
+/* Subtitle */
+.subtitle {
+    font-weight: 700;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+.subtitle:first-child {
+    margin-top: 0;
+}
+
+/* Buttons Containers */
+.buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 0.5rem;
     align-items: center;
     justify-content: center;
-    margin-bottom: 1rem;
+    margin: 1rem 0;
 }
 
-/* --- General Button Styling --- */
-button,
+.buttons.is-bottom {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+}
+
+/* Button */
 .button {
     padding: 0;
     border: 2px solid transparent;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     font-size: 1rem;
     font-weight: 500;
     font-family: inherit;
@@ -110,103 +119,59 @@ button,
     outline: none;
 }
 
-button:hover,
-button:focus,
 .button:hover,
 .button:focus {
     background-color: var(--button-hover-bg);
     border-color: var(--primary-color);
 }
-
-button:active,
 .button:active {
     background-color: var(--button-active-bg);
     transform: scale(0.96);
 }
-
-button:focus-visible,
 .button:focus-visible {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px var(--background-color), 0 0 0 4px var(--primary-color);
 }
 
-/* --- Specific Button Types --- */
-.color-button {
-    width: 56px;
-    height: 56px;
+.button.is-color {
+    width: 3.5rem;
+    height: 3.5rem;
     border: 2px solid rgba(255, 255, 255, 0.1);
 }
-
-.color-button:hover {
+.button.is-color:hover {
     border-color: #fff;
 }
 
-.text-button {
-    min-width: 80px;
-    height: 48px;
-    padding: 0 16px;
+.button.is-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 6rem;
+    height: 3rem;
+    padding: 0 1rem;
+}
+.button.is-text > .icon {
+    margin-right: 0.5rem;
 }
 
-button.selected,
-button.selected:hover {
+.button.is-large {
+    flex-grow: 1;
+    max-width: 12rem;
+}
+
+.button.is-selected,
+.button.is-selected:hover {
     border-color: var(--primary-color);
 }
 
-/* --- Bottom Controls --- */
-.bottom-controls-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 1rem;
-}
-
-.control-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px 0;
-    border: 2px solid #555;
-    border-radius: 8px;
-    background-color: #3e3e3e;
-    color: #e0e0e0;
-    cursor: pointer;
-    font-size: 16px;
-    font-family: inherit;
-    flex-grow: 1;
-    margin: 0 8px;
-    max-width: 200px;
-    transition: background-color 0.2s, transform 0.1s;
-}
-
-.control-button:hover {
-    background-color: #4a4a4a;
-}
-
-.control-button:active {
-    background-color: #555555;
-    transform: scale(0.98);
-}
-
-/* Small buttons */
+/* QR modal */
 .qr-button {
     position: fixed;
     bottom: 1rem;
     right: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     padding: 0.5rem;
 }
 
-.qr-button .icon {
-    margin: 0;
-}
-
-/* QR modal */
 .qr-modal {
     position: fixed;
     top: 0px;

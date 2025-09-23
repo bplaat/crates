@@ -115,36 +115,36 @@ export function App() {
 
     return (
         <>
-            <h2>Color</h2>
-            <div class="button-grid">
+            <h2 class="subtitle">Color</h2>
+            <div class="buttons">
                 {COLORS.map((color) => (
                     <button
                         key={color}
-                        class={`color-button${color === selectedColor ? ' selected' : ''}`}
+                        class={`button is-color ${color === selectedColor ? 'is-selected' : ''}`}
                         style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
                         onClick={() => setSelectedColor(color)}
                     />
                 ))}
             </div>
 
-            <h2>Toggle Colors</h2>
-            <div class="button-grid">
+            <h2 class="subtitle">Toggle Colors</h2>
+            <div class="buttons">
                 {COLORS.map((color) => (
                     <button
                         key={color}
-                        class={`color-button${color === selectedToggleColor ? ' selected' : ''}`}
+                        class={`button is-color ${color === selectedToggleColor ? 'is-selected' : ''}`}
                         style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
                         onClick={() => setSelectedToggleColor(color)}
                     />
                 ))}
             </div>
 
-            <h2>Toggle Speeds</h2>
-            <div class="button-grid">
+            <h2 class="subtitle">Toggle Speeds</h2>
+            <div class="buttons">
                 {SPEEDS.map((speed) => (
                     <button
                         key={speed}
-                        class={`text-button${speed === selectedToggleSpeed ? ' selected' : ''}`}
+                        class={`button is-text ${speed === selectedToggleSpeed ? 'is-selected' : ''}`}
                         onClick={() => setSelectedToggleSpeed(speed)}
                     >
                         {speed == null ? 'Off' : `${speed}ms`}
@@ -152,12 +152,12 @@ export function App() {
                 ))}
             </div>
 
-            <h2>Strobe Speeds</h2>
-            <div class="button-grid">
+            <h2 class="subtitle">Strobe Speeds</h2>
+            <div class="buttons">
                 {SPEEDS.map((speed) => (
                     <button
                         key={speed}
-                        class={`text-button${speed === selectedStrobeSpeed ? ' selected' : ''}`}
+                        class={`button is-text ${speed === selectedStrobeSpeed ? 'is-selected' : ''}`}
                         onClick={() => setSelectedStrobeSpeed(speed)}
                     >
                         {speed == null ? 'Off' : `${speed}ms`}
@@ -167,13 +167,13 @@ export function App() {
 
             {switchesLabels && (
                 <>
-                    <h2>Switches</h2>
-                    <div class="button-grid">
+                    <h2 class="subtitle">Switches</h2>
+                    <div class="buttons">
                         Toggle
                         {switchesLabels.map((label, index) => (
                             <button
                                 key={`toggle-${index}`}
-                                class={`text-button${switchesToggle[index] ? ' selected' : ''}`}
+                                class={`button is-text ${switchesToggle[index] ? 'is-selected' : ''}`}
                                 onClick={() => {
                                     const newToggles = [...switchesToggle];
                                     newToggles[index] = !newToggles[index];
@@ -184,12 +184,12 @@ export function App() {
                             </button>
                         ))}
                     </div>
-                    <div class="button-grid">
+                    <div class="buttons">
                         Press
                         {switchesLabels.map((label, index) => (
                             <button
                                 key={`press-${index}`}
-                                class={`text-button${switchesPress[index] ? ' selected' : ''}`}
+                                class={`button is-text ${switchesPress[index] ? 'is-selected' : ''}`}
                                 onMouseDown={() => {
                                     const newPresses = [...switchesPress];
                                     newPresses[index] = true;
@@ -209,11 +209,11 @@ export function App() {
                 </>
             )}
 
-            <div class="bottom-controls-container">
+            <div class="buttons is-bottom">
                 {MODES.map((mode) => (
                     <button
                         key={mode}
-                        class={`control-button ${mode.type === selectedMode ? ' selected' : ''}`}
+                        class={`button is-text is-large ${mode.type === selectedMode ? 'is-selected' : ''}`}
                         onClick={() => setSelectedMode(mode.type)}
                     >
                         <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -224,7 +224,7 @@ export function App() {
                 ))}
             </div>
 
-            <button class="qr-button" onClick={() => setShowQrCode(true)}>
+            <button class="button qr-button" onClick={() => setShowQrCode(true)}>
                 <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                     <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z" />
                 </svg>
