@@ -12,23 +12,10 @@ use serde::{Deserialize, Serialize};
 use small_websocket::{Message, WebSocket};
 
 use crate::CONFIG;
-use crate::config::{Config, DMX_SWITCHES_LENGTH};
+use crate::config::FixtureType;
 use crate::dmx::{Color, DMX_STATE, Mode};
 
 // MARK: IpcMessage
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct State {
-    pub config: Config,
-    pub color: Color,
-    pub toggle_color: Color,
-    pub toggle_speed: Option<u64>,
-    pub strobe_speed: Option<u64>,
-    pub mode: Mode,
-    pub switches_toggle: [bool; DMX_SWITCHES_LENGTH],
-    pub switches_press: [bool; DMX_SWITCHES_LENGTH],
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub(crate) enum IpcMessage {
@@ -62,6 +49,19 @@ pub(crate) enum IpcMessage {
     SetMode {
         mode: Mode,
     },
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct State {
+    pub color: Color,
+    pub toggle_color: Color,
+    pub toggle_speed: Option<u64>,
+    pub strobe_speed: Option<u64>,
+    pub mode: Mode,
+    pub switches_labels: Option<Vec<String>>,
+    pub switches_toggle: Vec<bool>,
+    pub switches_press: Vec<bool>,
 }
 
 // MARK: IpcConnection
@@ -116,19 +116,21 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
     println!("[RUST] Received IPC message: {message:?}");
     match message {
         IpcMessage::GetState => {
+            let config = CONFIG.lock().expect("Failed to lock config");
             let state = State {
-                config: CONFIG
-                    .lock()
-                    .expect("Failed to lock config")
-                    .clone()
-                    .expect("Config is not set"),
                 color: dmx_state.color,
                 toggle_color: dmx_state.toggle_color,
                 toggle_speed: dmx_state.toggle_speed.map(|d| d.as_millis() as u64),
                 strobe_speed: dmx_state.strobe_speed.map(|d| d.as_millis() as u64),
                 mode: dmx_state.mode,
-                switches_toggle: dmx_state.switches_toggle,
-                switches_press: dmx_state.switches_press,
+                switches_labels: config.as_ref().and_then(|c| {
+                    c.fixtures
+                        .iter()
+                        .find(|f| f.r#type == FixtureType::ShowtecMultidimMKII)
+                        .and_then(|f| f.switches.clone())
+                }),
+                switches_toggle: dmx_state.switches_toggle.to_vec(),
+                switches_press: dmx_state.switches_press.to_vec(),
             };
             connection.send(
                 serde_json::to_string(&IpcMessage::GetStateResponse { state })

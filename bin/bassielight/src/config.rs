@@ -5,7 +5,7 @@
  */
 
 use std::fs::File;
-use std::path::Path;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,6 @@ pub(crate) const DMX_LENGTH: usize = 512;
 pub(crate) const DMX_FPS: u64 = 44;
 pub(crate) const DMX_SWITCHES_LENGTH: usize = 4;
 
-/// Types of DMX fixtures.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum FixtureType {
     #[serde(rename = "american_dj_p56led")]
@@ -27,7 +26,6 @@ pub(crate) enum FixtureType {
     ShowtecMultidimMKII,
 }
 
-/// DMX fixture configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Fixture {
     pub name: String,
@@ -38,7 +36,6 @@ pub(crate) struct Fixture {
     pub switches: Option<Vec<String>>,
 }
 
-/// Application configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Config {
     pub fixtures: Vec<Fixture>,
@@ -56,18 +53,32 @@ impl Default for Config {
     }
 }
 
-/// Loads the configuration from `path`. If the file does not exist, creates it with default values.
-pub(crate) fn load_config(path: impl AsRef<Path>) -> Config {
-    if let Ok(file) = File::open(path.as_ref()) {
-        serde_json::from_reader(file).expect("Can't read and/or parse config.json")
-    } else {
-        if let Some(parent) = path.as_ref().parent() {
-            std::fs::create_dir_all(parent).expect("Can't create directories");
+impl Config {
+    fn default_path() -> PathBuf {
+        if cfg!(not(debug_assertions)) {
+            dirs::config_dir()
+                .expect("Can't find config directory")
+                .join("BassieLight")
+                .join("config.json")
+        } else {
+            PathBuf::from("config.json")
         }
+    }
 
-        let default_conf = Config::default();
-        let mut file = File::create(path).expect("Can't open config.json");
-        serde_json::to_writer_pretty(&mut file, &default_conf).expect("Can't write config.json");
-        default_conf
+    pub(crate) fn load() -> Config {
+        let path = Config::default_path();
+        if let Ok(file) = File::open(&path) {
+            serde_json::from_reader(file).expect("Can't read and/or parse config.json")
+        } else {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).expect("Can't create directories");
+            }
+
+            let default_conf = Config::default();
+            let mut file = File::create(&path).expect("Can't open config.json");
+            serde_json::to_writer_pretty(&mut file, &default_conf)
+                .expect("Can't write config.json");
+            default_conf
+        }
     }
 }

@@ -37,11 +37,11 @@ function useIpcState(key: string): [any, (value: any, isUserInitiated?: boolean)
 }
 
 export function StagePage() {
-    const [switchesLabels, setSwitchesLabels] = useState<string[] | undefined>(undefined);
     const [selectedColor, setSelectedColor] = useIpcState('color');
     const [selectedToggleColor, setSelectedToggleColor] = useIpcState('toggleColor');
     const [selectedToggleSpeed, setSelectedToggleSpeed] = useIpcState('toggleSpeed');
     const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useIpcState('strobeSpeed');
+    const [switchesLabels, setSwitchesLabels] = useState<string[] | null>(null);
     const [switchesToggle, setSwitchesToggle] = useIpcState('switchesToggle');
     const [switchesPress, setSwitchesPress] = useIpcState('switchesPress');
     const [selectedMode, setSelectedMode] = useIpcState('mode');
@@ -50,30 +50,22 @@ export function StagePage() {
         (async () => {
             const { state } = (await ipc.request('getState')) as {
                 state: {
-                    config: {
-                        fixtures: {
-                            type: string;
-                            switches?: string[];
-                        }[];
-                    };
                     color: number;
                     toggleColor: number;
                     toggleSpeed: number | null;
                     strobeSpeed: number | null;
                     mode: string;
+                    switchesLabels: string[] | null;
                     switchesToggle: boolean[];
                     switchesPress: boolean[];
                 };
             };
-            const switchFixture = state.config.fixtures.find((fixture) => fixture.type === 'multidim_mkii');
-            if (switchFixture?.switches) {
-                setSwitchesLabels(switchFixture.switches);
-            }
             setSelectedColor(state.color, false);
             setSelectedToggleColor(state.toggleColor, false);
             setSelectedToggleSpeed(state.toggleSpeed, false);
             setSelectedStrobeSpeed(state.strobeSpeed, false);
             setSelectedMode(state.mode, false);
+            setSwitchesLabels(state.switchesLabels);
             setSwitchesToggle(state.switchesToggle, false);
             setSwitchesPress(state.switchesPress, false);
         })();
@@ -152,8 +144,8 @@ export function StagePage() {
                 {switchesLabels && (
                     <>
                         <h2 class="subtitle">Switches</h2>
+                        <p>Toggle</p>
                         <div class="buttons">
-                            Toggle
                             {switchesLabels.map((label, index) => (
                                 <button
                                     key={`toggle-${index}`}
@@ -168,8 +160,9 @@ export function StagePage() {
                                 </button>
                             ))}
                         </div>
+
+                        <p>Press</p>
                         <div class="buttons">
-                            Press
                             {switchesLabels.map((label, index) => (
                                 <button
                                     key={`press-${index}`}

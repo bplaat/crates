@@ -25,6 +25,7 @@ mod dmx;
 mod ipc;
 mod usb;
 
+// MARK: Internal HTTP server
 const PORT: u16 = 39027;
 pub(crate) static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 
@@ -72,17 +73,8 @@ fn internal_http_server_handle(req: &Request) -> Option<Response> {
 #[allow(unused_mut)]
 fn main() {
     // Load config
-    let config_path = if cfg!(not(debug_assertions)) {
-        format!(
-            "{}/BassieLight/config.json",
-            dirs::config_dir()
-                .expect("Can't find config directory")
-                .display()
-        )
-    } else {
-        "config.json".to_string()
-    };
-    let config = config::load_config(config_path);
+    let config = Config::load();
+    println!("[RUST] Config: {config:?}");
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
 
     // Create webview
