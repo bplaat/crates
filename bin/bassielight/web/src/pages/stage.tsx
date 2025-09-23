@@ -36,7 +36,7 @@ function useIpcState(key: string): [any, (value: any, isUserInitiated?: boolean)
     return [value, setIpcValue];
 }
 
-export function Stage() {
+export function StagePage() {
     const [switchesLabels, setSwitchesLabels] = useState<string[] | undefined>(undefined);
     const [selectedColor, setSelectedColor] = useIpcState('color');
     const [selectedToggleColor, setSelectedToggleColor] = useIpcState('toggleColor');
@@ -80,113 +80,119 @@ export function Stage() {
     }, []);
 
     return (
-        <div class="main" style="text-align: center;">
-            <h2 class="subtitle">Color</h2>
-            <div class="buttons">
-                {COLORS.map((color) => (
-                    <button
-                        key={color}
-                        class={`button is-color ${color === selectedColor ? 'is-selected' : ''}`}
-                        style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
-                        onClick={() => setSelectedColor(color)}
-                    />
-                ))}
+        <>
+            <div class="main">
+                <div class="flex"></div>
+
+                <div class="buttons is-centered">
+                    {MODES.map((mode) => (
+                        <button
+                            key={mode}
+                            class={`button is-text is-large ${mode.type === selectedMode ? 'is-selected' : ''}`}
+                            onClick={() => setSelectedMode(mode.type)}
+                        >
+                            <mode.icon />
+                            {capitalize(mode.type)}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            <h2 class="subtitle">Toggle Colors</h2>
-            <div class="buttons">
-                {COLORS.map((color) => (
-                    <button
-                        key={color}
-                        class={`button is-color ${color === selectedToggleColor ? 'is-selected' : ''}`}
-                        style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
-                        onClick={() => setSelectedToggleColor(color)}
-                    />
-                ))}
-            </div>
+            <div class="sidebar">
+                <h2 class="subtitle">Color</h2>
+                <div class="buttons">
+                    {COLORS.map((color) => (
+                        <button
+                            key={color}
+                            class={`button is-color ${color === selectedColor ? 'is-selected' : ''}`}
+                            style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
+                            onClick={() => setSelectedColor(color)}
+                        />
+                    ))}
+                </div>
 
-            <h2 class="subtitle">Toggle Speeds</h2>
-            <div class="buttons">
-                {SPEEDS.map((speed) => (
-                    <button
-                        key={speed}
-                        class={`button is-text ${speed === selectedToggleSpeed ? 'is-selected' : ''}`}
-                        onClick={() => setSelectedToggleSpeed(speed)}
-                    >
-                        {speed == null ? 'Off' : `${speed}ms`}
-                    </button>
-                ))}
-            </div>
+                <h2 class="subtitle">Toggle Colors</h2>
+                <div class="buttons">
+                    {COLORS.map((color) => (
+                        <button
+                            key={color}
+                            class={`button is-color ${color === selectedToggleColor ? 'is-selected' : ''}`}
+                            style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
+                            onClick={() => setSelectedToggleColor(color)}
+                        />
+                    ))}
+                </div>
 
-            <h2 class="subtitle">Strobe Speeds</h2>
-            <div class="buttons">
-                {SPEEDS.map((speed) => (
-                    <button
-                        key={speed}
-                        class={`button is-text ${speed === selectedStrobeSpeed ? 'is-selected' : ''}`}
-                        onClick={() => setSelectedStrobeSpeed(speed)}
-                    >
-                        {speed == null ? 'Off' : `${speed}ms`}
-                    </button>
-                ))}
-            </div>
+                <h2 class="subtitle">Toggle Speeds</h2>
+                <div class="buttons">
+                    {SPEEDS.map((speed) => (
+                        <button
+                            key={speed}
+                            class={`button is-text ${speed === selectedToggleSpeed ? 'is-selected' : ''}`}
+                            onClick={() => setSelectedToggleSpeed(speed)}
+                        >
+                            {speed == null ? 'Off' : `${speed}ms`}
+                        </button>
+                    ))}
+                </div>
 
-            {switchesLabels && (
-                <>
-                    <h2 class="subtitle">Switches</h2>
-                    <div class="buttons">
-                        Toggle
-                        {switchesLabels.map((label, index) => (
-                            <button
-                                key={`toggle-${index}`}
-                                class={`button is-text ${switchesToggle[index] ? 'is-selected' : ''}`}
-                                onClick={() => {
-                                    const newToggles = [...switchesToggle];
-                                    newToggles[index] = !newToggles[index];
-                                    setSwitchesToggle(newToggles);
-                                }}
-                            >
-                                {label || `Toggle ${index + 1}`}
-                            </button>
-                        ))}
-                    </div>
-                    <div class="buttons">
-                        Press
-                        {switchesLabels.map((label, index) => (
-                            <button
-                                key={`press-${index}`}
-                                class={`button is-text ${switchesPress[index] ? 'is-selected' : ''}`}
-                                onMouseDown={() => {
-                                    const newPresses = [...switchesPress];
-                                    newPresses[index] = true;
-                                    setSwitchesPress(newPresses);
-                                }}
-                                onMouseUp={(event: MouseEvent) => {
-                                    const newPresses = [...switchesPress];
-                                    newPresses[index] = false;
-                                    setSwitchesPress(newPresses);
-                                    (event.currentTarget as HTMLElement).blur();
-                                }}
-                            >
-                                {label || `Press ${index + 1}`}
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
+                <h2 class="subtitle">Strobe Speeds</h2>
+                <div class="buttons">
+                    {SPEEDS.map((speed) => (
+                        <button
+                            key={speed}
+                            class={`button is-text ${speed === selectedStrobeSpeed ? 'is-selected' : ''}`}
+                            onClick={() => setSelectedStrobeSpeed(speed)}
+                        >
+                            {speed == null ? 'Off' : `${speed}ms`}
+                        </button>
+                    ))}
+                </div>
 
-            <div class="buttons is-bottom">
-                {MODES.map((mode) => (
-                    <button
-                        key={mode}
-                        class={`button is-text is-large ${mode.type === selectedMode ? 'is-selected' : ''}`}
-                        onClick={() => setSelectedMode(mode.type)}
-                    >
-                        <mode.icon />
-                        {capitalize(mode.type)}
-                    </button>
-                ))}
+                {switchesLabels && (
+                    <>
+                        <h2 class="subtitle">Switches</h2>
+                        <div class="buttons">
+                            Toggle
+                            {switchesLabels.map((label, index) => (
+                                <button
+                                    key={`toggle-${index}`}
+                                    class={`button is-text ${switchesToggle[index] ? 'is-selected' : ''}`}
+                                    onClick={() => {
+                                        const newToggles = [...switchesToggle];
+                                        newToggles[index] = !newToggles[index];
+                                        setSwitchesToggle(newToggles);
+                                    }}
+                                >
+                                    {label || `Toggle ${index + 1}`}
+                                </button>
+                            ))}
+                        </div>
+                        <div class="buttons">
+                            Press
+                            {switchesLabels.map((label, index) => (
+                                <button
+                                    key={`press-${index}`}
+                                    class={`button is-text ${switchesPress[index] ? 'is-selected' : ''}`}
+                                    onMouseDown={() => {
+                                        const newPresses = [...switchesPress];
+                                        newPresses[index] = true;
+                                        setSwitchesPress(newPresses);
+                                    }}
+                                    onMouseUp={(event: MouseEvent) => {
+                                        const newPresses = [...switchesPress];
+                                        newPresses[index] = false;
+                                        setSwitchesPress(newPresses);
+                                        (event.currentTarget as HTMLElement).blur();
+                                    }}
+                                >
+                                    {label || `Press ${index + 1}`}
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
-        </div>
+        </>
     );
 }

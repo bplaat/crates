@@ -6,7 +6,7 @@
 
 import { useState } from 'preact/hooks';
 import { QrModal } from './qrmodal.tsx';
-import { CogIcon, MotionPlayOutlineIcon, QrcodeIcon } from './icons.tsx';
+import { CogIcon, MotionPlayOutlineIcon, QrcodeIcon, SquareEditOutlineIcon } from './icons.tsx';
 import { Link } from '../router.tsx';
 
 const classes = css`
@@ -44,6 +44,10 @@ export function Menubar() {
                 <Link class="button is-text" href="/">
                     <MotionPlayOutlineIcon />
                     Stage
+                </Link>
+                <Link class="button is-text" href="/editor">
+                    <SquareEditOutlineIcon />
+                    Editor
                 </Link>
                 <Link class="button is-text" href="/settings">
                     <CogIcon />

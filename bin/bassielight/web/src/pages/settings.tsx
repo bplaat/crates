@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function Settings() {
+export function SettingsPage() {
     return (
-        <div class="main">
+        <div class="main has-content">
             <h2 class="subtitle">Settings</h2>
             <p>
                 Made by{' '}

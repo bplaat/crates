@@ -5,10 +5,11 @@
  */
 
 import { Route, Router } from './router.tsx';
-import { Stage } from './pages/stage.tsx';
-import { Settings } from './pages/settings.tsx';
-import { NotFound } from './pages/notfound.tsx';
+import { StagePage } from './pages/stage.tsx';
+import { SettingsPage } from './pages/settings.tsx';
+import { NotFoundPage } from './pages/notfound.tsx';
 import { Menubar } from './components/menubar.tsx';
+import { EditorPage } from './pages/editor.tsx';
 
 export function App() {
     return (
@@ -16,9 +17,10 @@ export function App() {
             <Menubar />
 
             <Router>
-                <Route path="/" component={Stage} />
-                <Route path="/settings" component={Settings} />
-                <Route fallback component={NotFound} />
+                <Route path="/" component={StagePage} />
+                <Route path="/editor" component={EditorPage} />
+                <Route path="/settings" component={SettingsPage} />
+                <Route fallback component={NotFoundPage} />
             </Router>
         </>
     );
