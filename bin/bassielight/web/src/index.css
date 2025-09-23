@@ -11,6 +11,7 @@
 :root {
     --background-color: #1a1a1a;
     --text-color: #e0e0e0;
+    --sidebar-bg: #222;
     --primary-color: #007bff;
     --border-color: #444;
     --button-bg: #333;
@@ -38,14 +39,6 @@ html {
 body {
     background-color: var(--background-color);
     color: var(--text-color);
-    padding: 2rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-
-    /* Adjust for .buttons.is-bottom */
-    margin-bottom: 4rem;
 }
 
 p {
@@ -55,10 +48,29 @@ p {
 a {
     color: currentColor;
     text-decoration: none;
+    font-weight: 500;
 }
 a:hover,
 a:focus {
     text-decoration: underline;
+}
+
+/* App */
+#app {
+    display: flex;
+    height: 100vh;
+}
+
+/* Main */
+.main {
+    position: relative;
+    flex: 1;
+    padding: 2rem;
+}
+
+/* Flex */
+.flex {
+    flex: 1;
 }
 
 /* Subtitle */
@@ -85,12 +97,11 @@ a:focus {
 }
 
 .buttons.is-bottom {
-    position: fixed;
+    position: absolute;
     left: 0;
     bottom: 0;
-    width: 100vw;
+    width: 100%;
     display: flex;
-    justify-content: center;
 }
 
 /* Button */
@@ -98,16 +109,14 @@ a:focus {
     padding: 0;
     border: 2px solid transparent;
     border-radius: 0.5rem;
-    font-size: 1rem;
-    font-weight: 500;
     font-family: inherit;
+    font-size: inherit;
+    font-weight: 500;
     background-color: var(--button-bg);
     color: var(--text-color);
-    text-decoration: none;
+    text-decoration: none !important;
     cursor: pointer;
     transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
-    -webkit-user-select: none;
-    user-select: none;
     outline: none;
 }
 
@@ -144,7 +153,7 @@ a:focus {
     justify-content: center;
     min-width: 6rem;
     height: 3rem;
-    padding: 0 1rem;
+    padding: 0 0.5rem;
 }
 .button.is-text > .icon {
     margin-right: 0.5rem;

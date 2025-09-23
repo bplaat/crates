@@ -14,6 +14,7 @@ const classes = css`
         left: 0px;
         width: 100vw;
         height: 100vh;
+        z-index: 999;
         background-color: rgba(0, 0, 0, 0.8);
         display: flex;
         flex-direction: column;

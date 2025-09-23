@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { signal } from '@preact/signals';
+import { signal, useSignal } from '@preact/signals';
+import { useLiveSignal } from '@preact/signals/utils';
 import { useEffect } from 'preact/hooks';
 
 export const $route = signal(window.location.pathname);
