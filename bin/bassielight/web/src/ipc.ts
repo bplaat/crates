@@ -27,7 +27,7 @@ export enum IpcType {
     WebSocket = 'websocket',
 }
 
-export default class Ipc {
+export class Ipc {
     type: IpcType;
     ws?: WebSocket;
 

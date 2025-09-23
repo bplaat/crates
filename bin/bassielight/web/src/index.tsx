@@ -6,7 +6,11 @@
 
 import { render } from 'preact';
 import './index.css';
+import { Ipc } from './ipc.ts';
 import { App } from './app.tsx';
+
+const ipc = new Ipc();
+export { ipc };
 
 if (import.meta.env.MODE === 'release') {
     window.addEventListener('contextmenu', (event) => event.preventDefault());

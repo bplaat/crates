@@ -8,9 +8,8 @@ const IpcType = {
     Ipc: 'ipc',
     WebSocket: 'websocket',
 };
-export { IpcType };
 
-export default class Ipc {
+export class Ipc {
     constructor() {
         if ('ipc' in window) {
             this.type = IpcType.Ipc;

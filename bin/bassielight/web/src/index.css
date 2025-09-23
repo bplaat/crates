@@ -61,14 +61,6 @@ a:focus {
     text-decoration: underline;
 }
 
-/* Icon */
-.icon {
-    display: block;
-    width: 24px;
-    height: 24px;
-    fill: currentColor;
-}
-
 /* Subtitle */
 .subtitle {
     font-weight: 700;
@@ -142,6 +134,10 @@ a:focus {
     border-color: #fff;
 }
 
+.button.is-icon {
+    padding: 0.5rem;
+}
+
 .button.is-text {
     display: flex;
     align-items: center;
@@ -162,31 +158,4 @@ a:focus {
 .button.is-selected,
 .button.is-selected:hover {
     border-color: var(--primary-color);
-}
-
-/* QR modal */
-.qr-button {
-    position: fixed;
-    bottom: 1rem;
-    right: 1rem;
-    padding: 0.5rem;
-}
-
-.qr-modal {
-    position: fixed;
-    top: 0px;
-    left: 0px;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.8);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.qr-image {
-    width: 60vw;
-    max-width: 60vh;
-    background-color: #fff;
 }

@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'preact/hooks';
-import Ipc from './ipc.js';
+import { Ipc } from './ipc.js';
 
 const ipc = new Ipc();
 
