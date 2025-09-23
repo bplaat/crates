@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function noteExtractTile(body: string): string | undefined {
+export function noteExtractTile(body: string): string {
     const match = body.match(/^#\s*(.+)$/m);
-    return match ? match[1].trim().replace(/\n.*/s, '') : undefined;
+    return match ? match[1].trim().replace(/\n.*/s, '') : 'Untitled';
 }

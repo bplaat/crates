@@ -4,11 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { useEffect } from 'preact/hooks';
+
 export function NotFoundPage() {
+    useEffect(() => {
+        document.title = 'BassieLight - Not Found';
+    }, []);
+
     return (
         <div class="main has-content">
             <h2 class="subtitle">404 Not Found</h2>
-            <p>Don't know how you got here 🤷‍♂️</p>
+            <p>No idea how you got here 🤷‍♂️</p>
         </div>
     );
 }

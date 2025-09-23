@@ -46,29 +46,30 @@ export function StagePage() {
     const [switchesPress, setSwitchesPress] = useIpcState('switchesPress');
     const [selectedMode, setSelectedMode] = useIpcState('mode');
 
-    useEffect(() => {
-        (async () => {
-            const { state } = (await ipc.request('getState')) as {
-                state: {
-                    color: number;
-                    toggleColor: number;
-                    toggleSpeed: number | null;
-                    strobeSpeed: number | null;
-                    mode: string;
-                    switchesLabels: string[] | null;
-                    switchesToggle: boolean[];
-                    switchesPress: boolean[];
-                };
+    // @ts-ignore
+    useEffect(async () => {
+        document.title = 'BassieLight - Stage';
+
+        const { state } = (await ipc.request('getState')) as {
+            state: {
+                color: number;
+                toggleColor: number;
+                toggleSpeed: number | null;
+                strobeSpeed: number | null;
+                mode: string;
+                switchesLabels: string[] | null;
+                switchesToggle: boolean[];
+                switchesPress: boolean[];
             };
-            setSelectedColor(state.color, false);
-            setSelectedToggleColor(state.toggleColor, false);
-            setSelectedToggleSpeed(state.toggleSpeed, false);
-            setSelectedStrobeSpeed(state.strobeSpeed, false);
-            setSelectedMode(state.mode, false);
-            setSwitchesLabels(state.switchesLabels);
-            setSwitchesToggle(state.switchesToggle, false);
-            setSwitchesPress(state.switchesPress, false);
-        })();
+        };
+        setSelectedColor(state.color, false);
+        setSelectedToggleColor(state.toggleColor, false);
+        setSelectedToggleSpeed(state.toggleSpeed, false);
+        setSelectedStrobeSpeed(state.strobeSpeed, false);
+        setSelectedMode(state.mode, false);
+        setSwitchesLabels(state.switchesLabels);
+        setSwitchesToggle(state.switchesToggle, false);
+        setSwitchesPress(state.switchesPress, false);
     }, []);
 
     return (

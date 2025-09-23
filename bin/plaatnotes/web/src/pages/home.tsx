@@ -13,10 +13,13 @@ import { API_URL } from '../consts.ts';
 export function Home() {
     const [notes, setNotes] = useState<Note[]>([]);
 
-    useEffect(() => {
-        fetch(`${API_URL}/notes`)
-            .then((res) => res.json())
-            .then(({ data }: NoteIndexResponse) => setNotes(data));
+    // @ts-ignore
+    useEffect(async () => {
+        document.title = 'PlaatNotes';
+
+        const res = await fetch(`${API_URL}/notes`);
+        const { data }: NoteIndexResponse = await res.json();
+        setNotes(data);
     }, []);
 
     async function deleteNote(id: string) {
@@ -39,7 +42,7 @@ export function Home() {
                 <div class="grid">
                     {notes.map((note) => (
                         <Link href={`/notes/${note.id}`} class="box" key={note.id}>
-                            <b>{noteExtractTile(note.body) || 'Untitled'}</b>
+                            <b>{noteExtractTile(note.body)}</b>
 
                             <button
                                 class="delete is-pulled-right"

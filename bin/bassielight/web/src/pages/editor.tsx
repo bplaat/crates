@@ -4,9 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { useEffect } from 'preact/hooks';
 import { LightbulbIcon, RectangleOutlineIcon } from '../components/icons.tsx';
 
 export function EditorPage() {
+    useEffect(() => {
+        document.title = 'BassieLight - Editor';
+    }, []);
+
     return (
         <>
             <div class="main">

@@ -4,12 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Link, route } from '../../router.tsx';
 import { API_URL } from '../../consts.ts';
 
 export function NotesCreate() {
     const [body, setBody] = useState<string>('');
+
+    useEffect(() => {
+        document.title = 'PlaatNotes - Create Note';
+    }, []);
 
     async function saveNote(event: SubmitEvent) {
         event.preventDefault();

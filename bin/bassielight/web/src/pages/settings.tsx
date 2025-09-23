@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { useEffect } from 'preact/hooks';
+
 export function SettingsPage() {
+    useEffect(() => {
+        document.title = 'BassieLight - Settings';
+    }, []);
+
     return (
         <div class="main has-content">
             <h2 class="subtitle">Settings</h2>
