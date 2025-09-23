@@ -61,7 +61,8 @@ impl Default for Args {
             thread_count: None,
             clean_first: false,
             show_time: false,
-            disable_javac_server: cfg!(windows),
+            // Disable javac server on Windows and CI environments
+            disable_javac_server: cfg!(windows) || env::var("CI").is_ok(),
         }
     }
 }
