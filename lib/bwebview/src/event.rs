@@ -22,6 +22,8 @@ pub enum Event {
     PageLoadStarted,
     /// Page load finished
     PageLoadFinished,
+    /// Title changed
+    TitleChanged(String),
     /// Ipc message received
     PageMessageReceived(String),
 

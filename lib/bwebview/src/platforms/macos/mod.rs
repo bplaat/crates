@@ -263,13 +263,6 @@ extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notificati
 
             // Send window created event
             send_event(Event::WindowCreated);
-
-            // Send window resized event
-            let frame: NSRect = msg_send![window, frame];
-            send_event(Event::WindowResized(LogicalSize::new(
-                frame.size.width as f32,
-                frame.size.height as f32,
-            )));
         }
     }
 }
@@ -376,6 +369,10 @@ impl PlatformWebview {
                 decl.add_method(
                     sel!(webView:didFinishNavigation:),
                     webview_did_finish_navigation as extern "C" fn(_, _, _, _),
+                );
+                decl.add_method(
+                    sel!(observeValueForKeyPath:ofObject:change:context:),
+                    webview_observe_value_for_key_path as extern "C" fn(_, _, _, _, _, _),
                 );
                 decl.add_method(
                     sel!(webView:decidePolicyForNavigationAction:decisionHandler:),
@@ -496,6 +493,13 @@ impl PlatformWebview {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
                 let _: () = msg_send![webview, setValue:value, forKey:NSString::from_str("drawsBackground")];
             }
+            let _: () = msg_send![
+                webview,
+                addObserver:window_delegate,
+                forKeyPath:NSString::from_str("title"),
+                options:NS_KEY_VALUE_OBSERVING_OPTION_NEW,
+                context:null::<c_void>()
+            ];
             if let Some(url) = builder.should_load_url {
                 let url: *mut Object =
                     msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
@@ -696,6 +700,21 @@ extern "C" fn webview_did_finish_navigation(
 ) {
     // Send page load finished event
     send_event(Event::PageLoadFinished);
+}
+
+extern "C" fn webview_observe_value_for_key_path(
+    _this: *mut Object,
+    _sel: Sel,
+    key_path: NSString,
+    _of_object: *mut Object,
+    change: *mut Object,
+    _context: *mut c_void,
+) {
+    let key_path = key_path.to_string();
+    if key_path == "title" {
+        let change: NSString = unsafe { msg_send![change, objectForKey:NSKeyValueChangeNewKey] };
+        send_event(Event::TitleChanged(change.to_string()));
+    }
 }
 
 extern "C" fn webview_decide_policy_for_navigation_action(

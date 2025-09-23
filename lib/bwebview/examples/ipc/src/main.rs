@@ -62,6 +62,10 @@ fn main() {
                 serde_json::to_string(&message).expect("Should serialize message"),
             );
         }
+        Event::TitleChanged(title) => {
+            println!("Title changed: {title}");
+            webview.set_title(title);
+        }
         Event::PageMessageReceived(message) => {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::Hello { name } => {
@@ -70,6 +74,6 @@ fn main() {
             }
         }
 
-        _ => {}
+        _ => unimplemented!(),
     });
 }

@@ -8,7 +8,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>BassieTest</title>
+        <title>Webview IPC Example</title>
         <style>
             html {
                 font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
@@ -83,7 +83,9 @@
                     document.getElementById('name').textContent = message.name;
                 }
             });
+            let counter = 0;
             document.getElementById('button').addEventListener('click', () => {
+                document.title = `Webview IPC Example (Clicked ${++counter} times)`;
                 window.ipc.postMessage(JSON.stringify({ type: 'hello', name: 'Rust' }));
             });
         </script>
