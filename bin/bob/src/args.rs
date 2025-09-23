@@ -61,7 +61,7 @@ impl Default for Args {
             thread_count: None,
             clean_first: false,
             show_time: false,
-            disable_javac_server: false,
+            disable_javac_server: cfg!(windows),
         }
     }
 }
