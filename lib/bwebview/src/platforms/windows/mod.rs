@@ -20,8 +20,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
-    NavigationCompletedEventHandler, NavigationStartingEventHandler,
-    NewWindowRequestedEventHandler,
+    DocumentTitleChangedEventHandler, NavigationCompletedEventHandler,
+    NavigationStartingEventHandler, NewWindowRequestedEventHandler,
 };
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
@@ -464,6 +464,17 @@ impl PlatformWebview {
             _ = webview.add_NavigationCompleted(
                 &NavigationCompletedEventHandler::create(Box::new(move |_sender, _args| {
                     send_event(Event::PageLoadFinished);
+                    Ok(())
+                })),
+                null_mut(),
+            );
+            _ = webview.add_DocumentTitleChanged(
+                &DocumentTitleChangedEventHandler::create(Box::new(move |sender, _args| {
+                    let mut title = PWSTR::default();
+                    _ = sender.expect("Should be valid").DocumentTitle(&mut title);
+                    send_event(Event::PageTitleChanged(
+                        title.to_string().expect("Should be valid"),
+                    ));
                     Ok(())
                 })),
                 null_mut(),
