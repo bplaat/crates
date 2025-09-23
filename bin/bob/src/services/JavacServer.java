@@ -24,12 +24,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.tools.ToolProvider;
 
 public class JavacServer {
-    private static final String SOCKET_PATH = "/tmp/.bob/javac";
     private static final long TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
     public static void main(String[] args) throws Exception {
         // Check if server is already running
-        var socketPath = Paths.get(SOCKET_PATH);
+        var socketPath = Paths.get(System.getProperty("java.io.tmpdir"), "bob", "javac");
         Files.createDirectories(socketPath.getParent());
         if (Files.exists(socketPath)) {
             System.out.println("Server is already running");
@@ -49,7 +48,7 @@ public class JavacServer {
         // Start listening on unix socket
         var serverChannel = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
         serverChannel.bind(UnixDomainSocketAddress.of(socketPath));
-        System.out.println("Server listening at: " + SOCKET_PATH);
+        System.out.println("Server listening at: " + socketPath);
 
         // Close server after inactivity
         var lastMessageTime = new AtomicLong(System.currentTimeMillis());

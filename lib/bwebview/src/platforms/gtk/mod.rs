@@ -397,8 +397,12 @@ impl PlatformWebview {
 
     #[cfg(feature = "remember_window_state")]
     fn settings_path() -> String {
-        let config_dir = env::var("XDG_CONFIG_HOME")
-            .unwrap_or_else(|_| format!("{}/.config", env::var("HOME").expect("$HOME not set")));
+        let config_dir = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
+            format!(
+                "{}/.config",
+                env::home_dir().expect("Can't find home dir").display()
+            )
+        });
         format!(
             "{}/{}/settings.ini",
             config_dir,

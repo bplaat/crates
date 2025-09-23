@@ -13,6 +13,8 @@ compile_error!("Unsupported platform");
 
 #[cfg(windows)]
 pub(crate) mod windows {
+    use super::*;
+
     #[repr(C)]
     pub(crate) struct Guid {
         data1: u32,
@@ -54,7 +56,7 @@ pub(crate) mod windows {
         data4: [0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43],
     };
 
-    pub(crate) fn get_known_folder_path(folder_id: &Guid) -> String {
+    pub(crate) fn get_known_folder_path(folder_id: &Guid) -> PathBuf {
         let mut path_ptr: *mut u16 = std::ptr::null_mut();
         unsafe {
             SHGetKnownFolderPath(folder_id, KF_FLAG_DEFAULT, std::ptr::null(), &mut path_ptr)
@@ -67,7 +69,7 @@ pub(crate) mod windows {
         }
         let path = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(path_ptr, len) });
         unsafe { CoTaskMemFree(path_ptr as *mut std::ffi::c_void) };
-        path
+        PathBuf::from(path)
     }
 }
 
@@ -75,23 +77,23 @@ pub(crate) mod windows {
 pub fn cache_dir() -> Option<PathBuf> {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let path = std::env::var("XDG_CACHE_HOME").unwrap_or_else(|_| {
-            format!("{}/.cache", std::env::var("HOME").expect("$HOME not set"))
-        });
-        Some(PathBuf::from(path))
+        let xdg_cache = std::env::var("XDG_CACHE_HOME").map(PathBuf::from);
+        Some(xdg_cache.unwrap_or_else(|_| {
+            std::env::home_dir()
+                .expect("Can't find home dir")
+                .join(".cache")
+        }))
     }
-
     #[cfg(target_os = "macos")]
     {
-        let path = std::env::var("HOME").unwrap_or_else(|_| panic!("$HOME not set"));
-        Some(PathBuf::from(format!("{path}/Library/Caches")))
+        let home = std::env::home_dir().expect("Can't find home dir");
+        Some(home.join("Library").join("Caches"))
     }
-
     #[cfg(windows)]
     {
-        Some(PathBuf::from(windows::get_known_folder_path(
+        Some(windows::get_known_folder_path(
             &windows::FOLDERID_LOCAL_APPDATA,
-        )))
+        ))
     }
 }
 
@@ -99,23 +101,23 @@ pub fn cache_dir() -> Option<PathBuf> {
 pub fn config_dir() -> Option<PathBuf> {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let path = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
-            format!("{}/.config", std::env::var("HOME").expect("$HOME not set"))
-        });
-        Some(PathBuf::from(path))
+        let xdg_config = std::env::var("XDG_CONFIG_HOME").map(PathBuf::from);
+        Some(xdg_config.unwrap_or_else(|_| {
+            std::env::home_dir()
+                .expect("Can't find home dir")
+                .join(".config")
+        }))
     }
-
     #[cfg(target_os = "macos")]
     {
-        let path = std::env::var("HOME").unwrap_or_else(|_| panic!("$HOME not set"));
-        Some(PathBuf::from(format!("{path}/Library/Application Support")))
+        let home = std::env::home_dir().expect("Can't find home dir");
+        Some(home.join("Library").join("Application Support"))
     }
-
     #[cfg(windows)]
     {
-        Some(PathBuf::from(windows::get_known_folder_path(
+        Some(windows::get_known_folder_path(
             &windows::FOLDERID_ROAMING_APPDATA,
-        )))
+        ))
     }
 }
 
@@ -123,21 +125,20 @@ pub fn config_dir() -> Option<PathBuf> {
 pub fn audio_dir() -> Option<PathBuf> {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let path = std::env::var("XDG_MUSIC_DIR")
-            .unwrap_or_else(|_| format!("{}/Music", std::env::var("HOME").expect("$HOME not set")));
-        Some(PathBuf::from(path))
+        let xdg_music = std::env::var("XDG_MUSIC_DIR").map(PathBuf::from);
+        Some(xdg_music.unwrap_or_else(|_| {
+            std::env::home_dir()
+                .expect("Can't find home dir")
+                .join("Music")
+        }))
     }
-
     #[cfg(target_os = "macos")]
     {
-        let path = std::env::var("HOME").unwrap_or_else(|_| panic!("$HOME not set"));
-        Some(PathBuf::from(format!("{path}/Music")))
+        let home = std::env::home_dir().expect("Can't find home dir");
+        Some(home.join("Music"))
     }
-
     #[cfg(windows)]
     {
-        Some(PathBuf::from(windows::get_known_folder_path(
-            &windows::FOLDERID_MUSIC,
-        )))
+        Some(windows::get_known_folder_path(&windows::FOLDERID_MUSIC))
     }
 }

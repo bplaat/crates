@@ -15,7 +15,7 @@ use crate::Bobje;
 use crate::args::Profile;
 use crate::executor::{ExecutorBuilder, TaskAction};
 use crate::manifest::JarDependency;
-use crate::services::javac::JAVAC_SERVER_SOCKET;
+use crate::services::javac::javac_server_socket;
 
 const CLASSPATH_SEPARATOR: &str = if cfg!(windows) { ";" } else { ":" };
 
@@ -138,7 +138,7 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
         if !java_files.is_empty() {
             if bobje.use_javac_server {
                 actions.push(TaskAction::SendMsg(
-                    JAVAC_SERVER_SOCKET.to_string(),
+                    javac_server_socket().display().to_string(),
                     format!(
                         "javac {} -cp {} -d {} {}",
                         javac_flags,
