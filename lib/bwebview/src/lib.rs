@@ -404,6 +404,9 @@ impl<'a> WebviewBuilder<'a> {
                         let mime = mime_guess::from_path(&path).first_or_octet_stream();
                         small_http::Response::with_header("Content-Type", mime.to_string())
                             .body(file.data)
+                    } else if let Some(file) = assets_get("index.html") {
+                        small_http::Response::with_header("Content-Type", "text/html")
+                            .body(file.data)
                     } else {
                         small_http::Response::with_status(small_http::Status::NotFound)
                             .body(b"404 Not Found".to_vec())
