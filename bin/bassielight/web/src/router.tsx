@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { signal, useSignal } from '@preact/signals';
-import { useLiveSignal } from '@preact/signals/utils';
+import { signal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 
 export const $route = signal(window.location.pathname);
@@ -27,7 +26,7 @@ export function Router({ children }: { children: any }) {
 
 export function Route({ path, component, fallback }: { path?: string; fallback?: boolean; component: any }) {
     const Component = component;
-    const route = $route.value;
+    const currentRoute = $route.value;
 
     if (fallback) {
         if (!matches) {
@@ -38,7 +37,7 @@ export function Route({ path, component, fallback }: { path?: string; fallback?:
     }
 
     const paramNames = path!.match(/:([^/]+)/g) || [];
-    const match = route.match(new RegExp(`^${path!.replace(/:([^/]+)/g, '([^/]+)')}$`));
+    const match = currentRoute.match(new RegExp(`^${path!.replace(/:([^/]+)/g, '([^/]+)')}$`));
     if (match && !matches) {
         const params: { [key: string]: string } = {};
         for (let i = 0; i < paramNames.length; i++) {
@@ -50,13 +49,15 @@ export function Route({ path, component, fallback }: { path?: string; fallback?:
     return null;
 }
 
-export function Link({ href, ...props }: { href: string; [key: string]: any }) {
+export function Link({ href, class: className, ...props }: { href: string; class?: string; [key: string]: any }) {
     const open = (event: MouseEvent) => {
         event.preventDefault();
         event.stopPropagation();
         route(href);
     };
-    return <a {...props} href={href} onClick={open} />;
+    return (
+        <a {...props} href={href} class={`${className} ${$route.value === href ? 'is-selected' : ''}`} onClick={open} />
+    );
 }
 
 // MARK: Utils
