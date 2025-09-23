@@ -479,7 +479,6 @@ impl PlatformWebview {
                 })),
                 null_mut(),
             );
-
             _ = webview.AddScriptToExecuteOnDocumentCreated(
                     w!("window.ipc = new EventTarget();\
                         window.ipc.postMessage = message => window.chrome.webview.postMessage(`ipc${typeof message !== 'string' ? JSON.stringify(message) : message}`);\

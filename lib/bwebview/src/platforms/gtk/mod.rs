@@ -670,7 +670,7 @@ extern "C" fn webview_on_title_changed(
 ) {
     let title = unsafe { webkit_web_view_get_title(webview) };
     let title = unsafe { CStr::from_ptr(title) }.to_string_lossy();
-    send_event(Event::TitleChanged(title.to_string()));
+    send_event(Event::PageTitleChanged(title.to_string()));
 }
 
 extern "C" fn webview_on_navigation_policy_decision(

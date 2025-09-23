@@ -115,7 +115,7 @@ fn main() {
                 }
             });
         }
-        Event::TitleChanged(title) => webview.set_title(title),
+        Event::PageTitleChanged(title) => webview.set_title(title),
         Event::PageMessageReceived(message) => ipc_message_handler(
             IpcConnection::WebviewIpc(event_loop_proxy.clone()),
             &message,

@@ -713,7 +713,7 @@ extern "C" fn webview_observe_value_for_key_path(
     let key_path = key_path.to_string();
     if key_path == "title" {
         let change: NSString = unsafe { msg_send![change, objectForKey:NSKeyValueChangeNewKey] };
-        send_event(Event::TitleChanged(change.to_string()));
+        send_event(Event::PageTitleChanged(change.to_string()));
     }
 }
 

@@ -62,7 +62,7 @@ fn main() {
                 serde_json::to_string(&message).expect("Should serialize message"),
             );
         }
-        Event::TitleChanged(title) => {
+        Event::PageTitleChanged(title) => {
             println!("Title changed: {title}");
             webview.set_title(title);
         }
