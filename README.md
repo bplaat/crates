@@ -65,7 +65,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 
 ## Repo organization
 
-This repo is organized as a monorepo with `Cargo` as the main build system. My personal vision is that monorepo's work vary well when theres only one main build system, that is a single organization point for the whole project with all it's submodules.
+This repo is organized as a monorepo with `Cargo` as the main build system. My personal vision is that monorepo's work vary well when there's only one main build system, that acts a single organization point for the whole project with all it's submodules.
 
 So this all Rust code is contained in a single `Cargo` workspace, that builds everything. Some crates have custom build steps that can run other build scripts / systems like `npm` and `vite`.
 
@@ -73,8 +73,8 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 
 ## Getting Started
 
--   Install Rust with [rustup](https://rustup.rs/)
--   Install [Node.js](https://nodejs.org/)
+-   Open a posix shell environment when you are on Windows (e.g. Git Bash)
+-   Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [OpenJDK 17+](https://adoptium.net/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
 -   Install Rust nightly `rustfmt`:
 
     ```sh
