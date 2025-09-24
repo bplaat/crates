@@ -19,6 +19,9 @@ use crate::dmx::{Color, DMX_STATE, Mode};
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub(crate) enum IpcMessage {
+    // State
+    Start,
+    Stop,
     GetState,
     GetStateResponse {
         state: State,
@@ -115,6 +118,19 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
     let message = serde_json::from_str(message).expect("Failed to parse IPC message");
     println!("[RUST] Received IPC message: {message:?}");
     match message {
+        // State
+        IpcMessage::Start => {
+            dmx_state.is_running = true;
+            connection.broadcast(
+                serde_json::to_string(&IpcMessage::Start).expect("Failed to serialize IPC message"),
+            );
+        }
+        IpcMessage::Stop => {
+            dmx_state.is_running = false;
+            connection.broadcast(
+                serde_json::to_string(&IpcMessage::Stop).expect("Failed to serialize IPC message"),
+            );
+        }
         IpcMessage::GetState => {
             let config = CONFIG.lock().expect("Failed to lock config");
             let state = State {

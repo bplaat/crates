@@ -5,10 +5,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useContext } from 'preact/hooks';
 import { AccountIcon, LightbulbOffIcon, MusicIcon } from '../components/icons.tsx';
 import { capitalize } from '../utils.ts';
-import { ipc } from '../index.tsx';
+import { IpcContext } from '../app.tsx';
+import { $dmxLive } from '../components/menubar.tsx';
 
 const COLORS = [0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff];
 const SPEEDS = [null, 22, 50, 100, 200, 250, 500, 750, 1000];
@@ -19,6 +20,7 @@ const MODES = [
 ];
 
 function useIpcState(key: string): [any, (value: any, isUserInitiated?: boolean) => void] {
+    const ipc = useContext(IpcContext)!;
     const [value, setValue] = useState(undefined);
     const setMessageType = `set${capitalize(key)}`;
     useEffect(() => {
@@ -37,6 +39,8 @@ function useIpcState(key: string): [any, (value: any, isUserInitiated?: boolean)
 }
 
 export function StagePage() {
+    const ipc = useContext(IpcContext)!;
+
     const [selectedColor, setSelectedColor] = useIpcState('color');
     const [selectedToggleColor, setSelectedToggleColor] = useIpcState('toggleColor');
     const [selectedToggleSpeed, setSelectedToggleSpeed] = useIpcState('toggleSpeed');
@@ -46,30 +50,40 @@ export function StagePage() {
     const [switchesPress, setSwitchesPress] = useIpcState('switchesPress');
     const [selectedMode, setSelectedMode] = useIpcState('mode');
 
-    // @ts-ignore
-    useEffect(async () => {
+    useEffect(() => {
         document.title = 'BassieLight - Stage';
 
-        const { state } = (await ipc.request('getState')) as {
-            state: {
-                color: number;
-                toggleColor: number;
-                toggleSpeed: number | null;
-                strobeSpeed: number | null;
-                mode: string;
-                switchesLabels: string[] | null;
-                switchesToggle: boolean[];
-                switchesPress: boolean[];
+        // Load initial state
+        (async () => {
+            const { state } = (await ipc.request('getState')) as {
+                state: {
+                    color: number;
+                    toggleColor: number;
+                    toggleSpeed: number | null;
+                    strobeSpeed: number | null;
+                    mode: string;
+                    switchesLabels: string[] | null;
+                    switchesToggle: boolean[];
+                    switchesPress: boolean[];
+                };
             };
+            setSelectedColor(state.color, false);
+            setSelectedToggleColor(state.toggleColor, false);
+            setSelectedToggleSpeed(state.toggleSpeed, false);
+            setSelectedStrobeSpeed(state.strobeSpeed, false);
+            setSelectedMode(state.mode, false);
+            setSwitchesLabels(state.switchesLabels);
+            setSwitchesToggle(state.switchesToggle, false);
+            setSwitchesPress(state.switchesPress, false);
+        })();
+
+        // Start DMX on mount, stop on unmount
+        ipc.send('start');
+        $dmxLive.value = true;
+        return () => {
+            ipc.send('stop');
+            $dmxLive.value = false;
         };
-        setSelectedColor(state.color, false);
-        setSelectedToggleColor(state.toggleColor, false);
-        setSelectedToggleSpeed(state.toggleSpeed, false);
-        setSelectedStrobeSpeed(state.strobeSpeed, false);
-        setSelectedMode(state.mode, false);
-        setSwitchesLabels(state.switchesLabels);
-        setSwitchesToggle(state.switchesToggle, false);
-        setSwitchesPress(state.switchesPress, false);
     }, []);
 
     return (

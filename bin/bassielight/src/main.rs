@@ -77,6 +77,15 @@ fn main() {
     println!("[RUST] Config: {config:?}");
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
 
+    // Start DMX thread
+    thread::spawn(move || {
+        if let Some(device) = usb::find_udmx_device() {
+            dmx::dmx_thread(device);
+        } else {
+            eprintln!("[RUST] No uDMX device found");
+        }
+    });
+
     // Create webview
     let event_loop = EventLoopBuilder::build();
 
@@ -101,26 +110,13 @@ fn main() {
 
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {
-        Event::PageLoadFinished => {
+        Event::PageTitleChanged(title) => webview.set_title(title),
+        Event::PageLoadStarted => {
             IPC_CONNECTIONS
                 .lock()
                 .expect("Failed to lock IPC connections")
                 .push(IpcConnection::WebviewIpc(event_loop_proxy.clone()));
-
-            thread::spawn(move || {
-                if let Some(device) = usb::find_udmx_device() {
-                    let config = CONFIG
-                        .lock()
-                        .expect("Failed to lock config")
-                        .clone()
-                        .expect("Config is not set");
-                    dmx::dmx_thread(device, config);
-                } else {
-                    eprintln!("[RUST] No uDMX device found");
-                }
-            });
         }
-        Event::PageTitleChanged(title) => webview.set_title(title),
         Event::PageMessageReceived(message) => ipc_message_handler(
             IpcConnection::WebviewIpc(event_loop_proxy.clone()),
             &message,

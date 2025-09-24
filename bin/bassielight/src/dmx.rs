@@ -11,7 +11,8 @@ use std::time::{Duration, SystemTime};
 use rusb::{Context, Device};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Config, DMX_SWITCHES_LENGTH, FixtureType};
+use crate::CONFIG;
+use crate::config::{DMX_SWITCHES_LENGTH, FixtureType};
 
 // MARK: Color
 #[derive(Debug, Copy, Clone)]
@@ -60,6 +61,7 @@ pub(crate) enum Mode {
 
 // MARK: DmxState
 pub(crate) struct DmxState {
+    pub is_running: bool,
     pub mode: Mode,
     pub color: Color,
     pub toggle_color: Color,
@@ -72,6 +74,7 @@ pub(crate) struct DmxState {
 }
 
 pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
+    is_running: false,
     mode: Mode::Manual,
     color: Color::BLACK,
     toggle_color: Color::BLACK,
@@ -85,7 +88,13 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
 
 // MARK: DMX Thread
 /// Starts the DMX output thread for the given device using the given configuration.
-pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
+pub(crate) fn dmx_thread(device: Device<Context>) {
+    let config = CONFIG
+        .lock()
+        .expect("Failed to lock config")
+        .clone()
+        .expect("Config is not set");
+
     let handle = device.open().expect("Can't open uDMX device");
 
     let mut dmx = vec![0u8; config.dmx_length];
@@ -95,8 +104,13 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
     loop {
         {
             let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
-            dmx.fill(0);
+            if !dmx_state.is_running {
+                // FIXME: Create async framework don't do micro sleeps
+                sleep(Duration::from_millis(100));
+                continue;
+            }
 
+            // Update timers
             if let Some(toggle_speed) = dmx_state.toggle_speed
                 && SystemTime::now()
                     .duration_since(toggle_color_time)
@@ -106,7 +120,6 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                 dmx_state.is_toggle_color = !dmx_state.is_toggle_color;
                 toggle_color_time = SystemTime::now();
             }
-
             if let Some(strobe_speed) = dmx_state.strobe_speed
                 && SystemTime::now()
                     .duration_since(strobe_time)
@@ -117,6 +130,8 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                 strobe_time = SystemTime::now();
             }
 
+            // Update DMX data
+            dmx.fill(0);
             for fixture in &config.fixtures {
                 match fixture.r#type {
                     FixtureType::AmericanDJP56Led
@@ -178,6 +193,7 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
             }
         }
 
+        // Send DMX data
         let _ = handle.write_control(
             rusb::request_type(
                 rusb::Direction::Out,

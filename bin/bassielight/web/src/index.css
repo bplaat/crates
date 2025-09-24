@@ -17,6 +17,8 @@
     --button-bg: #333;
     --button-hover-bg: #444;
     --button-active-bg: #555;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
 }
 
 /* Base */
