@@ -80,7 +80,7 @@ fn main() {
     // Create webview
     let event_loop = EventLoopBuilder::build();
 
-    let mut webview = WebviewBuilder::new()
+    let mut webview_builder = WebviewBuilder::new()
         .title("BassieLight")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
@@ -91,8 +91,13 @@ fn main() {
         .load_rust_embed::<WebAssets>()
         .internal_http_server_port(PORT)
         .internal_http_server_expose()
-        .internal_http_server_handle(internal_http_server_handle)
-        .build();
+        .internal_http_server_handle(internal_http_server_handle);
+    #[cfg(target_os = "macos")]
+    {
+        webview_builder =
+            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
+    }
+    let mut webview = webview_builder.build();
 
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {

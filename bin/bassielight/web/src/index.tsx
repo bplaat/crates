@@ -12,6 +12,9 @@ import { App } from './app.tsx';
 const ipc = new Ipc();
 export { ipc };
 
+if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {
+    document.body.classList.add('is-bwebview-macos');
+}
 if (import.meta.env.MODE === 'release') {
     window.addEventListener('contextmenu', (event) => event.preventDefault());
 }

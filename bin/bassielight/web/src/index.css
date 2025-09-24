@@ -84,6 +84,9 @@ a:focus {
 .main {
     flex: 1;
 }
+body.is-bwebview-macos .main {
+    padding-top: 28px;
+}
 .main:not(.has-content) {
     display: flex;
     flex-direction: column;

@@ -17,6 +17,10 @@ const classes = css`
         padding: 1rem;
     }
 
+    :global(body.is-bwebview-macos) .menubar {
+        padding-top: 28px;
+    }
+
     .logo {
         font-size: 1.2rem;
         font-weight: bold;
