@@ -7,6 +7,7 @@
         "rust-lang.rust-analyzer",
         "tamasfe.even-better-toml",
         "esbenp.prettier-vscode",
+        "bashmish.es6-string-css",
         "xaver.clang-format"
     ],
     "search.exclude": {
