@@ -17,6 +17,9 @@ pub enum Event {
     WindowResized(LogicalSize),
     /// Window closed
     WindowClosed,
+    /// macOS Window fullscreen changed
+    #[cfg(target_os = "macos")]
+    MacosWindowFullscreenChanged(bool),
 
     /// Page load started
     PageLoadStarted,

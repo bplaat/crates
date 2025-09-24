@@ -363,6 +363,14 @@ impl PlatformWebview {
                     window_will_close as extern "C" fn(_, _, _),
                 );
                 decl.add_method(
+                    sel!(windowWillEnterFullScreen:),
+                    window_will_enter_fullscreen as extern "C" fn(_, _, _),
+                );
+                decl.add_method(
+                    sel!(windowWillExitFullScreen:),
+                    window_will_exit_fullscreen as extern "C" fn(_, _, _),
+                );
+                decl.add_method(
                     sel!(webView:didStartProvisionalNavigation:),
                     webview_did_start_provisional_navigation as extern "C" fn(_, _, _, _),
                 );
@@ -681,11 +689,26 @@ extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mu
 }
 
 extern "C" fn window_will_close(_this: *mut Object, _sel: Sel, _notification: *mut Object) {
-    // Send window closed event
     send_event(Event::WindowClosed);
 
     // Terminate the application
     let _: () = unsafe { msg_send![NSApp, terminate:null::<Object>()] };
+}
+
+extern "C" fn window_will_enter_fullscreen(
+    _this: *mut Object,
+    _sel: Sel,
+    _notification: *mut Object,
+) {
+    send_event(Event::MacosWindowFullscreenChanged(true));
+}
+
+extern "C" fn window_will_exit_fullscreen(
+    _this: *mut Object,
+    _sel: Sel,
+    _notification: *mut Object,
+) {
+    send_event(Event::MacosWindowFullscreenChanged(false));
 }
 
 extern "C" fn webview_did_start_provisional_navigation(

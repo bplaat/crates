@@ -86,7 +86,7 @@ a:focus {
 .main {
     flex: 1;
 }
-body.is-bwebview-macos .main {
+body.is-bwebview-macos:not(.is-fullscreen) .main {
     padding-top: 28px;
 }
 .main:not(.has-content) {

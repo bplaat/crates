@@ -48,6 +48,10 @@ fn main() {
         Event::WindowClosed => {
             println!("Window closed");
         }
+        #[cfg(target_os = "macos")]
+        Event::MacosWindowFullscreenChanged(is_fullscreen) => {
+            println!("Window fullscreen changed: {is_fullscreen}");
+        }
 
         // Page events
         Event::PageLoadStarted => {

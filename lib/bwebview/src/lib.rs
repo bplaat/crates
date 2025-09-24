@@ -143,7 +143,7 @@ pub enum Theme {
     Dark,
 }
 
-/// MacOS Titlebar style
+/// macOS Titlebar style
 #[cfg(target_os = "macos")]
 #[derive(PartialEq, Eq)]
 pub enum MacosTitlebarStyle {

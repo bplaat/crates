@@ -22,7 +22,7 @@ const classes = css`
         padding: 1rem;
     }
 
-    :global(body.is-bwebview-macos) .menubar {
+    :global(body.is-bwebview-macos:not(.is-fullscreen)) .menubar {
         padding-top: 28px;
     }
 

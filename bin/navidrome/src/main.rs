@@ -30,8 +30,16 @@ fn main() {
     }
     let mut webview = webview_builder.load_url("https://music.bplaat.nl/").build();
 
-    event_loop.run(move |event| {
-        if let Event::PageLoadFinished = event {
+    event_loop.run(move |event| match event {
+        #[cfg(target_os = "macos")]
+        Event::MacosWindowFullscreenChanged(is_fullscreen) => {
+            if is_fullscreen {
+                webview.evaluate_script("document.body.classList.add('is-fullscreen');");
+            } else {
+                webview.evaluate_script("document.body.classList.remove('is-fullscreen');");
+            }
+        }
+        Event::PageLoadFinished => {
             // Inject some styles to make the player look better
             let scrollbar_style = r#"
                 html {
@@ -61,10 +69,10 @@ fn main() {
                     const style = document.createElement('style');
                     style.innerHTML = `
                         {scrollbar_style}
-                        body {{
+                        body:not(.is-fullscreen) {{
                             padding-top: 28px;
                         }}
-                        header.MuiAppBar-root {{
+                        body:not(.is-fullscreen) header.MuiAppBar-root {{
                             padding-top: 28px;
                         }}
                     `;
@@ -83,5 +91,7 @@ fn main() {
                 ));
             }
         }
+
+        _ => {}
     });
 }

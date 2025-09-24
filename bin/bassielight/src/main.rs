@@ -110,7 +110,18 @@ fn main() {
 
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {
+        // Window events
         Event::PageTitleChanged(title) => webview.set_title(title),
+        #[cfg(target_os = "macos")]
+        Event::MacosWindowFullscreenChanged(is_fullscreen) => {
+            if is_fullscreen {
+                webview.evaluate_script("document.body.classList.add('is-fullscreen');");
+            } else {
+                webview.evaluate_script("document.body.classList.remove('is-fullscreen');");
+            }
+        }
+
+        // IPC events
         Event::PageLoadStarted => {
             IPC_CONNECTIONS
                 .lock()
@@ -122,6 +133,7 @@ fn main() {
             &message,
         ),
         Event::UserEvent(data) => webview.send_ipc_message(&data),
+
         _ => {}
     });
 }
