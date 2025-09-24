@@ -87,6 +87,12 @@ install() {
     cargo install --force --path bin/music-dl
 }
 
+install_bundle() {
+    build_bundle
+    cp -r target/bundle/bassielight/BassieLight.app /Applications
+    cp -r target/bundle/navidrome/Navidrome.app /Applications
+}
+
 case "${1:-check}" in
     build-pages)
         build_pages
@@ -106,8 +112,11 @@ case "${1:-check}" in
     install)
         install
         ;;
+    install-bundle)
+        install_bundle
+        ;;
     *)
-        echo "Usage: $0 {build-pages|build-bundle|clean|check|coverage|install}"
+        echo "Usage: $0 {build-pages|build-bundle|clean|check|coverage|install|install-bundle}"
         exit 1
         ;;
 esac
