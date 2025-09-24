@@ -353,10 +353,14 @@ impl PlatformWebview {
                 webkit_web_view_set_background_color(webview, &rgba);
             }
 
-            // FIXME: This is inaccurate not always Linux.
             let useragent = CString::new(format!(
-                "Mozilla/5.0 ({}; Linux {}) bwebview/{}",
+                "Mozilla/5.0 ({}; {} {}) bwebview/{}",
                 if is_wayland { "Wayland" } else { "X11" },
+                if env::consts::OS == "linux" {
+                    "Linux"
+                } else {
+                    env::consts::OS
+                },
                 env::consts::ARCH,
                 env!("CARGO_PKG_VERSION"),
             ))
