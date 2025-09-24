@@ -19,13 +19,11 @@ pub fn enable_ansi_support() -> Result<(), std::io::Error> {
         const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
         #[link(name = "kernel32")]
         unsafe extern "C" {
-            unsafe fn GetStdHandle(nStdHandle: i32) -> *mut std::ffi::c_void;
-            unsafe fn GetConsoleMode(
-                hConsoleHandle: *mut std::ffi::c_void,
-                lpMode: *mut u32,
-            ) -> i32;
-            unsafe fn SetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, dwMode: u32) -> i32;
+            fn GetStdHandle(nStdHandle: i32) -> *mut std::ffi::c_void;
+            fn GetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, lpMode: *mut u32) -> i32;
+            fn SetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, dwMode: u32) -> i32;
         }
+
         let h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
         let mut mode: u32 = 0;
         if GetConsoleMode(h_stdout, &mut mode) == 0 {

@@ -6,6 +6,8 @@
 
 //! A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
 
+#![allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
+
 /// Represents the width of a terminal in characters.
 pub struct Width(pub u16);
 
@@ -16,7 +18,29 @@ pub struct Height(pub u16);
 pub fn terminal_size() -> Option<(Width, Height)> {
     #[cfg(unix)]
     {
-        use libc::{STDOUT_FILENO, TIOCGWINSZ, ioctl, winsize};
+        #[repr(C)]
+        struct winsize {
+            ws_row: u16,
+            ws_col: u16,
+            ws_xpixel: u16,
+            ws_ypixel: u16,
+        }
+        const STDOUT_FILENO: i32 = 1;
+        const TIOCGWINSZ: i32 = if cfg!(any(
+            target_os = "macos",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd"
+        )) {
+            0x40087468
+        } else {
+            0x5413
+        };
+        unsafe extern "C" {
+            fn ioctl(fd: i32, op: i32, ...) -> i32;
+        }
+
         let mut size: winsize = unsafe { std::mem::zeroed() };
         if unsafe { ioctl(STDOUT_FILENO, TIOCGWINSZ, &mut size) } == -1 {
             return None;
@@ -25,7 +49,6 @@ pub fn terminal_size() -> Option<(Width, Height)> {
     }
 
     #[cfg(windows)]
-    #[allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
     {
         #[repr(C)]
         struct COORD {
@@ -50,8 +73,8 @@ pub fn terminal_size() -> Option<(Width, Height)> {
         const STD_OUTPUT_HANDLE: i32 = -11;
         #[link(name = "kernel32")]
         unsafe extern "C" {
-            unsafe fn GetStdHandle(nStdHandle: i32) -> *mut std::ffi::c_void;
-            unsafe fn GetConsoleScreenBufferInfo(
+            fn GetStdHandle(nStdHandle: i32) -> *mut std::ffi::c_void;
+            fn GetConsoleScreenBufferInfo(
                 hConsoleOutput: *mut std::ffi::c_void,
                 lpConsoleScreenBufferInfo: *mut CONSOLE_SCREEN_BUFFER_INFO,
             ) -> i32;
