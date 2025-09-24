@@ -352,10 +352,21 @@ impl PlatformWebview {
                 };
                 webkit_web_view_set_background_color(webview, &rgba);
             }
+
+            // FIXME: This is inaccurate not always Linux.
+            let useragent = CString::new(format!(
+                "Mozilla/5.0 ({}; Linux {}) bwebview/{}",
+                if is_wayland { "Wayland" } else { "X11" },
+                env::consts::ARCH,
+                env!("CARGO_PKG_VERSION"),
+            ))
+            .expect("Can't convert to CString");
+            let webview_settings = webkit_web_view_get_settings(webview);
+            webkit_settings_set_user_agent(webview_settings, useragent.as_ptr());
             if cfg!(debug_assertions) {
-                let webview_settings = webkit_web_view_get_settings(webview);
                 webkit_settings_set_enable_developer_extras(webview_settings, true);
             }
+
             if let Some(should_load_url) = builder.should_load_url {
                 let url = CString::new(should_load_url).expect("Can't convert to CString");
                 webkit_web_view_load_uri(webview, url.as_ptr());
@@ -364,6 +375,7 @@ impl PlatformWebview {
                 let html = CString::new(should_load_html).expect("Can't convert to CString");
                 webkit_web_view_load_html(webview, html.as_ptr(), null());
             }
+
             g_signal_connect_data(
                 webview as *mut c_void,
                 c"load-changed".as_ptr(),

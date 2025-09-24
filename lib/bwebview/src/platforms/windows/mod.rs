@@ -16,7 +16,7 @@ use std::{env, mem};
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_COLOR, CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
-    ICoreWebView2Controller2,
+    ICoreWebView2Controller2, ICoreWebView2Settings2,
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
@@ -453,6 +453,17 @@ impl PlatformWebview {
             }
 
             let webview = controller.CoreWebView2().expect("Should be some");
+
+            let useragent = format!(
+                "Mozilla/5.0 (Windows NT; {}) bwebview/{}",
+                env::consts::ARCH,
+                env!("CARGO_PKG_VERSION"),
+            );
+            let settings = webview.Settings().expect("Should be some");
+            let settings2 = settings
+                .cast::<ICoreWebView2Settings2>()
+                .expect("Should be some");
+            _ = settings2.SetUserAgent(&HSTRING::from(useragent));
 
             _ = webview.add_NavigationStarting(
                 &NavigationStartingEventHandler::create(Box::new(move |_sender, _args| {

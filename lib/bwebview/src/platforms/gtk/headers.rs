@@ -218,6 +218,10 @@ unsafe extern "C" {
     pub(crate) fn webkit_javascript_result_get_js_value(
         result: *mut WebKitJavascriptResult,
     ) -> *mut c_void;
+    pub(crate) fn webkit_settings_set_user_agent(
+        settings: *mut WebkitSettings,
+        user_agent: *const c_char,
+    );
     pub(crate) fn webkit_settings_set_enable_developer_extras(
         settings: *mut WebkitSettings,
         enable: bool,

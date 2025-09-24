@@ -493,6 +493,12 @@ impl PlatformWebview {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
                 let _: () = msg_send![webview, setValue:value, forKey:NSString::from_str("drawsBackground")];
             }
+            let useragent = format!(
+                "Mozilla/5.0 (Macintosh; {}) bwebview/{}",
+                std::env::consts::ARCH,
+                env!("CARGO_PKG_VERSION"),
+            );
+            let _: () = msg_send![webview, setCustomUserAgent:NSString::from_str(&useragent)];
             let _: () = msg_send![
                 webview,
                 addObserver:window_delegate,
