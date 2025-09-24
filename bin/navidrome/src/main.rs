@@ -34,7 +34,7 @@ fn main() {
         if let Event::PageLoadFinished = event {
             // Inject some styles to make the player look better
             let scrollbar_style = r#"
-                html, body {
+                html {
                     overscroll-behavior: none;
                     cursor: default;
                     -webkit-user-select: none;
@@ -55,8 +55,7 @@ fn main() {
                     background-color: #555;
                 }
                 "#;
-            #[cfg(target_os = "macos")]
-            {
+            if cfg!(target_os = "macos") {
                 webview.evaluate_script(format!(
                     r#"
                     const style = document.createElement('style');
@@ -73,9 +72,7 @@ fn main() {
                     window.addEventListener('contextmenu', (e) => e.preventDefault());
                     "#
                 ));
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
+            } else {
                 webview.evaluate_script(format!(
                     r#"
                     const style = document.createElement('style');

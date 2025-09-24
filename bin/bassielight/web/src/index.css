@@ -31,6 +31,7 @@ html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 
+    overscroll-behavior: none;
     cursor: default;
     -webkit-user-select: none;
     user-select: none;
