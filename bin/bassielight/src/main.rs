@@ -104,7 +104,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         webview_builder =
-            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
+            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
     }
     let mut webview = webview_builder.build();
 
