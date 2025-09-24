@@ -655,9 +655,6 @@ dependencies = [
 [[package]]
 name = "terminal_size"
 version = "0.4.2+patch"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "thiserror"

@@ -19,12 +19,26 @@ mod sizes;
 
 // MARK: EventLoopBuilder
 /// EventLoop builder
-pub struct EventLoopBuilder;
+#[derive(Default)]
+pub struct EventLoopBuilder {
+    app_id: Option<String>,
+}
 
 impl EventLoopBuilder {
+    /// Create new webview builder
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// App id used in GtkApplication on Linux, on macOS the Info.plist identifier is used
+    pub fn app_id(mut self, app_id: impl AsRef<str>) -> Self {
+        self.app_id = Some(app_id.as_ref().to_string());
+        self
+    }
+
     /// Create new event loop
-    pub fn build() -> EventLoop {
-        EventLoop::new(PlatformEventLoop::new())
+    pub fn build(self) -> EventLoop {
+        EventLoop::new(PlatformEventLoop::new(self))
     }
 }
 

@@ -5,14 +5,16 @@
  */
 
 use std::ffi::{CStr, CString, c_char, c_void};
+use std::fs::File;
 use std::mem::MaybeUninit;
+use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
 use std::ptr::{null, null_mut};
 use std::{env, fs, iter};
 
 use self::headers::*;
-use crate::{Event, LogicalPoint, LogicalSize, WebviewBuilder};
+use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, WebviewBuilder};
 
 mod headers;
 
@@ -22,7 +24,20 @@ pub(crate) struct PlatformEventLoop;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
 impl PlatformEventLoop {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(builder: EventLoopBuilder) -> Self {
+        // Ensure single instance
+        if let Some(app_id) = builder.app_id {
+            let lock_file = env::temp_dir().join(app_id).join(".lock");
+            if let Some(parent) = lock_file.parent() {
+                fs::create_dir_all(parent).expect("Failed to create lock file directory");
+            }
+            let file = File::create(&lock_file).expect("Failed to open lock file");
+            if unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) } != 0 {
+                exit(0);
+            }
+            std::mem::forget(file);
+        }
+
         // Init GTK
         unsafe {
             let args = env::args()
@@ -183,7 +198,7 @@ impl PlatformWebview {
             unsafe {
                 let settings = gtk_settings_get_default();
                 g_object_set(
-                    settings as *mut c_void,
+                    settings as *mut GObject,
                     c"gtk-application-prefer-dark-theme".as_ptr(),
                     if theme == crate::Theme::Dark { 1 } else { 0 } as *const c_void,
                     null::<c_void>(),
@@ -268,7 +283,7 @@ impl PlatformWebview {
             }
 
             g_signal_connect_data(
-                window as *mut c_void,
+                window as *mut GObject,
                 c"destroy".as_ptr(),
                 gtk_main_quit as *const c_void,
                 null(),
@@ -277,7 +292,7 @@ impl PlatformWebview {
             );
             if !is_wayland {
                 g_signal_connect_data(
-                    window as *mut c_void,
+                    window as *mut GObject,
                     c"configure-event".as_ptr(),
                     window_on_move as *const c_void,
                     webview_data.as_mut() as *mut _ as *const c_void,
@@ -286,7 +301,7 @@ impl PlatformWebview {
                 );
             }
             g_signal_connect_data(
-                window as *mut c_void,
+                window as *mut GObject,
                 c"size-allocate".as_ptr(),
                 window_on_resize as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -294,7 +309,7 @@ impl PlatformWebview {
                 G_CONNECT_DEFAULT,
             );
             g_signal_connect_data(
-                window as *mut c_void,
+                window as *mut GObject,
                 c"delete-event".as_ptr(),
                 window_on_close as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -318,7 +333,7 @@ impl PlatformWebview {
                 );
             webkit_user_content_manager_add_script(user_content_controller, user_script);
             g_signal_connect_data(
-                user_content_controller as *mut c_void,
+                user_content_controller as *mut GObject,
                 c"script-message-received::ipc".as_ptr(),
                 webview_on_message_ipc as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -326,7 +341,7 @@ impl PlatformWebview {
                 G_CONNECT_DEFAULT,
             );
             g_signal_connect_data(
-                user_content_controller as *mut c_void,
+                user_content_controller as *mut GObject,
                 c"script-message-received::console".as_ptr(),
                 webview_on_message_console as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -381,7 +396,7 @@ impl PlatformWebview {
             }
 
             g_signal_connect_data(
-                webview as *mut c_void,
+                webview as *mut GObject,
                 c"load-changed".as_ptr(),
                 webview_on_load_changed as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -389,7 +404,7 @@ impl PlatformWebview {
                 G_CONNECT_DEFAULT,
             );
             g_signal_connect_data(
-                webview as *mut c_void,
+                webview as *mut GObject,
                 c"notify::title".as_ptr(),
                 webview_on_title_changed as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -397,7 +412,7 @@ impl PlatformWebview {
                 G_CONNECT_DEFAULT,
             );
             g_signal_connect_data(
-                webview as *mut c_void,
+                webview as *mut GObject,
                 c"decide-policy".as_ptr(),
                 webview_on_navigation_policy_decision as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -562,7 +577,7 @@ impl crate::WebviewInterface for PlatformWebview {
         unsafe {
             let settings = gtk_settings_get_default();
             g_object_set(
-                settings as *mut c_void,
+                settings as *mut GObject,
                 c"gtk-application-prefer-dark-theme".as_ptr(),
                 if theme == crate::Theme::Dark { 1 } else { 0 } as *const c_void,
                 null::<c_void>(),

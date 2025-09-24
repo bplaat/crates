@@ -9,7 +9,7 @@
 use bwebview::{EventLoopBuilder, LogicalPoint, LogicalSize, WebviewBuilder};
 
 fn main() {
-    let event_loop = EventLoopBuilder::build();
+    let event_loop = EventLoopBuilder::new().build();
 
     let mut _webview_a = WebviewBuilder::new()
         .title("Window A")

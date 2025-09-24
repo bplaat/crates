@@ -5,6 +5,9 @@
  */
 
 use std::ffi::{CString, c_void};
+use std::fs::File;
+use std::os::unix::io::AsRawFd;
+use std::process::exit;
 use std::ptr::null;
 
 use block2::Block;
@@ -13,9 +16,12 @@ use objc2::{class, msg_send, sel};
 
 use self::cocoa::*;
 use self::webkit::*;
-use crate::{Event, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WebviewBuilder};
+use crate::{
+    Event, EventLoopBuilder, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WebviewBuilder,
+};
 
 mod cocoa;
+mod libc;
 mod webkit;
 
 const IVAR_SELF: &str = "_self";
@@ -27,7 +33,20 @@ pub(crate) struct PlatformEventLoop {
 }
 
 impl PlatformEventLoop {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(builder: EventLoopBuilder) -> Self {
+        // Ensure single instance
+        if let Some(app_id) = builder.app_id {
+            let lock_file = std::env::temp_dir().join(app_id).join(".lock");
+            if let Some(parent) = lock_file.parent() {
+                std::fs::create_dir_all(parent).expect("Failed to create lock file directory");
+            }
+            let file = File::create(&lock_file).expect("Failed to open lock file");
+            if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+                exit(0);
+            }
+            std::mem::forget(file);
+        }
+
         // Register AppDelegate class
         let mut decl = ClassBuilder::new(c"AppDelegate", class!(NSObject))
             .expect("Can't create AppDelegate class");
@@ -37,6 +56,10 @@ impl PlatformEventLoop {
             decl.add_method(
                 sel!(applicationDidFinishLaunching:),
                 app_did_finish_launching as extern "C" fn(_, _, _),
+            );
+            decl.add_method(
+                sel!(applicationShouldTerminateAfterLastWindowClosed:),
+                app_should_terminate_after_last_window_closed as extern "C" fn(_, _, _) -> Bool,
             );
             decl.add_method(sel!(sendEvent:), app_send_event as extern "C" fn(_, _, _));
             decl.add_method(
@@ -265,6 +288,14 @@ extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notificati
             send_event(Event::WindowCreated);
         }
     }
+}
+
+extern "C" fn app_should_terminate_after_last_window_closed(
+    _this: *mut Object,
+    _sel: Sel,
+    _sender: *mut Object,
+) -> Bool {
+    Bool::YES
 }
 
 extern "C" fn app_send_event(_this: *mut Object, _sel: Sel, value: *mut Object) {
@@ -690,9 +721,6 @@ extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mu
 
 extern "C" fn window_will_close(_this: *mut Object, _sel: Sel, _notification: *mut Object) {
     send_event(Event::WindowClosed);
-
-    // Terminate the application
-    let _: () = unsafe { msg_send![NSApp, terminate:null::<Object>()] };
 }
 
 extern "C" fn window_will_enter_fullscreen(

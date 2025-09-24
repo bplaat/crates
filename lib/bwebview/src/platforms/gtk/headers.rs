@@ -8,13 +8,22 @@
 
 use std::ffi::{c_char, c_void};
 
+// MARK: Libc
+pub(crate) const LOCK_EX: i32 = 2;
+pub(crate) const LOCK_NB: i32 = 4;
+unsafe extern "C" {
+    pub(crate) fn flock(fd: i32, op: i32) -> i32;
+}
+
 // MARK: GObject
+#[repr(C)]
+pub(crate) struct GObject(u8);
 pub(crate) const G_CONNECT_DEFAULT: i32 = 0;
 #[link(name = "gobject-2.0")]
 unsafe extern "C" {
-    pub(crate) fn g_object_set(instance: *mut c_void, first_property_name: *const c_char, ...);
+    pub(crate) fn g_object_set(instance: *mut GObject, first_property_name: *const c_char, ...);
     pub(crate) fn g_signal_connect_data(
-        instance: *mut c_void,
+        instance: *mut GObject,
         detailed_signal: *const c_char,
         c_handler: *const c_void,
         data: *const c_void,
@@ -108,6 +117,8 @@ unsafe extern "C" {
 }
 
 // MARK: GTK
+#[repr(C)]
+pub(crate) struct GtkApplication(u8);
 #[repr(C)]
 pub(crate) struct GtkWidget(u8);
 #[repr(C)]

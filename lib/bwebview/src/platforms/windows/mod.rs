@@ -51,7 +51,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::{BOOL, HSTRING, Interface, PCSTR, PWSTR, w};
 
 use self::utils::*;
-use crate::{Event, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
+use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
 
 mod utils;
 
@@ -62,7 +62,8 @@ static mut FIRST_HWND: Option<HWND> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
 impl PlatformEventLoop {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(_builder: EventLoopBuilder) -> Self {
+        // FIXME: Add basic single instance support
         // Enable PerMonitorV2 high DPI awareness
         _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
         Self

@@ -9,7 +9,7 @@
 use bwebview::{EventLoopBuilder, WebviewBuilder};
 
 fn main() {
-    let event_loop = EventLoopBuilder::build();
+    let event_loop = EventLoopBuilder::new().build();
 
     let mut _webview = WebviewBuilder::new()
         .title("Webview Simple Fullscreen Example")

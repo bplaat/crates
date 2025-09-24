@@ -72,6 +72,10 @@ fn internal_http_server_handle(req: &Request) -> Option<Response> {
 // MARK: Main
 #[allow(unused_mut)]
 fn main() {
+    let event_loop = EventLoopBuilder::new()
+        .app_id("nl.bplaat.BassieLight")
+        .build();
+
     // Load config
     let config = Config::load();
     println!("[RUST] Config: {config:?}");
@@ -87,8 +91,6 @@ fn main() {
     });
 
     // Create webview
-    let event_loop = EventLoopBuilder::build();
-
     let mut webview_builder = WebviewBuilder::new()
         .title("BassieLight")
         .size(LogicalSize::new(1024.0, 768.0))

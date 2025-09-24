@@ -13,7 +13,9 @@ use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
 #[allow(unused_mut, unused_variables)]
 fn main() {
-    let event_loop = EventLoopBuilder::build();
+    let event_loop = EventLoopBuilder::new()
+        .app_id("nl.bplaat.Navidrome")
+        .build();
 
     let mut webview_builder = WebviewBuilder::new()
         .title("Navidrome")

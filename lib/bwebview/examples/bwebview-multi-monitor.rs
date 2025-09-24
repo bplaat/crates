@@ -9,7 +9,7 @@
 use bwebview::{EventLoopBuilder, WebviewBuilder};
 
 fn main() {
-    let event_loop = EventLoopBuilder::build();
+    let event_loop = EventLoopBuilder::new().build();
 
     // Print monitors information
     let mut monitors = event_loop.available_monitors();
