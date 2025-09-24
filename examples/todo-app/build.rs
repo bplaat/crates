@@ -6,7 +6,6 @@
 
 //! A Todo GUI example
 
-use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -28,19 +27,22 @@ fn main() {
             .expect("Failed to run npm install");
     }
 
-    // Run npm run build
-    fn print_rerun_if_changed(dir: &Path) {
-        for entry in fs::read_dir(dir).expect("Failed to read dir") {
+    // Invalidate build when web assets change
+    fn print_rerun(dir: &Path) {
+        for entry in std::fs::read_dir(dir).expect("Failed to read dir") {
             let path = entry.expect("Failed to read entry").path();
             if path.is_dir() {
-                print_rerun_if_changed(&path);
+                let file_name = path.file_name().expect("Should have a file name");
+                if file_name == "dist" || file_name == "node_modules" {
+                    continue;
+                }
+                print_rerun(&path);
             } else {
                 println!("cargo:rerun-if-changed={}", path.display());
             }
         }
     }
-    println!("cargo:rerun-if-changed=web/index.html");
-    print_rerun_if_changed(Path::new("web/src"));
+    print_rerun(Path::new("web"));
 
     Command::new(NPM)
         .arg("run")

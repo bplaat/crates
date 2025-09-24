@@ -31,14 +31,17 @@ fn main() {
         for entry in std::fs::read_dir(dir).expect("Failed to read dir") {
             let path = entry.expect("Failed to read entry").path();
             if path.is_dir() {
+                let file_name = path.file_name().expect("Should have a file name");
+                if file_name == "dist" || file_name == "node_modules" {
+                    continue;
+                }
                 print_rerun(&path);
             } else {
                 println!("cargo:rerun-if-changed={}", path.display());
             }
         }
     }
-    println!("cargo:rerun-if-changed=web/index.html");
-    print_rerun(Path::new("web/src"));
+    print_rerun(Path::new("web"));
 
     // Build frontend
     std::process::Command::new(NPM)
