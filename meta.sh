@@ -79,6 +79,7 @@ build_pages_baksteen() {
 build_bundle() {
     cargo install --path bin/cargo-bundle
     cargo bundle --path bin/bassielight
+    cargo bundle --path bin/manexplorer
     cargo bundle --path bin/navidrome
 }
 
@@ -90,6 +91,7 @@ install() {
 install_bundle() {
     build_bundle
     cp -r target/bundle/bassielight/BassieLight.app /Applications
+    cp -r target/bundle/manexplorer/ManExplorer.app /Applications
     cp -r target/bundle/navidrome/Navidrome.app /Applications
 }
 

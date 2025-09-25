@@ -1,0 +1,98 @@
+<!--
+    Copyright (c) 2025 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Man Explorer</title>
+        <link rel="stylesheet" href="/style.css" />
+    </head>
+
+    <body>
+        <div class="app">
+            <div id="pages" class="sidebar"></div>
+            <div id="entries" class="sidebar">
+                <div class="placeholder">Select page...</div>
+            </div>
+            <div id="content" class="content hidden"></div>
+            <div id="content-empty" class="placeholder">Select page and item...</div>
+            <div id="content-loading" class="placeholder hidden">Loading...</div>
+        </div>
+
+        <script>
+            window.addEventListener('contextmenu', (event) => event.preventDefault());
+
+            const pagesElement = document.getElementById('pages');
+            const entriesElement = document.getElementById('entries');
+            const contentElement = document.getElementById('content');
+            const contentEmptyElement = document.getElementById('content-empty');
+            const contentLoadingElement = document.getElementById('content-loading');
+
+            const pageNames = {
+                1: 'User Commands',
+                2: 'System Calls',
+                3: 'C Library Functions',
+                4: 'Devices and Special Files',
+                5: 'File Formats and Conventions',
+                6: 'Games et. Al.',
+                7: 'Miscellanea',
+                8: 'System Administration',
+                9: 'Kernel Routines',
+            };
+            let pages = [];
+
+            async function loadPages() {
+                const res = await fetch('/man');
+                pages = await res.json();
+                pagesElement.innerHTML = `<ul>${pages
+                    .map((page) => `<li><a href="#${page.page}">${page.page}. ${pageNames[page.page]}</a></li>`)
+                    .join('')}</ul>`;
+            }
+
+            async function loadPage(page, name) {
+                document.title = `Man Explorer - ${page} - ${name}`;
+                contentElement.classList.add('hidden');
+                contentEmptyElement.classList.add('hidden');
+                contentLoadingElement.classList.remove('hidden');
+
+                const res = await fetch(`/man/${page}/${name}`);
+                const text = await res.text();
+
+                contentLoadingElement.classList.add('hidden');
+                contentElement.classList.remove('hidden');
+                contentElement.textContent = text;
+            }
+
+            window.addEventListener('hashchange', () => {
+                const hash = window.location.hash.substring(1);
+                const [page, name] = hash.split('/');
+                const currentPage = pages.find((entry) => entry.page == page);
+
+                entriesElement.innerHTML = `<ul>${currentPage.names
+                    .map((name) => `<li><a href="#${currentPage.page}/${name}">${name}</a></li>`)
+                    .join('')}</ul>`;
+
+                const links = document.querySelectorAll('a');
+                for (const link of links) {
+                    link.classList.remove('is-active');
+                    if (
+                        (link.href.split('#')[1].split('/').length === 1 &&
+                            window.location.href.startsWith(link.href)) ||
+                        link.href === window.location.href
+                    ) {
+                        link.classList.add('is-active');
+                    }
+                }
+
+                if (name) {
+                    loadPage(currentPage.page, name);
+                }
+            });
+            loadPages();
+        </script>
+    </body>
+</html>

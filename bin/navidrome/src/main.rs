@@ -54,7 +54,8 @@ fn main() {
                     width: 8px;
                     height: 8px;
                 }
-                ::-webkit-scrollbar-track {
+                ::-webkit-scrollbar-track,
+                ::-webkit-scrollbar-corner {
                     background-color: #131313;
                 }
                 ::-webkit-scrollbar-thumb {

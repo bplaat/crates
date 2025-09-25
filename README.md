@@ -37,6 +37,7 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 -   [bassielight](bin/bassielight) A simple lights controller with GUI
 -   [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
 -   [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
+-   [manexplorer](bin/manexplorer) A simple man page explorer tool
 -   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 -   [navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 -   [plaatnotes](bin/plaatnotes) A simple note-taking app
