@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=BassieLight
+Exec=/home/$USER/.local/bin/BassieLight
+Icon=/home/$USER/.local/share/icons/BassieLight.svg
+Terminal=false
+Categories=Utility;

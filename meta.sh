@@ -83,6 +83,15 @@ build_bundle() {
     cargo bundle --path bin/navidrome
 }
 
+build_install_freedesktop() {
+    lowercase=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    cargo build --release --bin "$lowercase"
+    cp "target/release/$lowercase" "$HOME/.local/bin/$1"
+    cp "bin/$lowercase/meta/freedesktop/.desktop" "$HOME/.local/share/applications/$1.desktop"
+    sed -i "s|\$USER|$USER|g" "$HOME/.local/share/applications/$1.desktop"
+    cp "bin/$lowercase/docs/images/icon.svg" "$HOME/.local/share/icons/$1.svg"
+}
+
 install() {
     cargo install --force --path bin/bob
     cargo install --force --path bin/music-dl
@@ -92,6 +101,11 @@ install() {
         cp -r target/bundle/bassielight/BassieLight.app /Applications
         cp -r target/bundle/manexplorer/ManExplorer.app /Applications
         cp -r target/bundle/navidrome/Navidrome.app /Applications
+    else
+        mkdir -p ~/.local/bin ~/.local/share/applications ~/.local/share/icons
+        build_install_freedesktop BassieLight
+        build_install_freedesktop ManExplorer
+        build_install_freedesktop Navidrome
     fi
 }
 

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ManExplorer
+Exec=/home/$USER/.local/bin/ManExplorer
+Icon=/home/$USER/.local/share/icons/ManExplorer.svg
+Terminal=false
+Categories=Utility;
