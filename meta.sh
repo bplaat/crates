@@ -86,13 +86,13 @@ build_bundle() {
 install() {
     cargo install --force --path bin/bob
     cargo install --force --path bin/music-dl
-}
 
-install_bundle() {
-    build_bundle
-    cp -r target/bundle/bassielight/BassieLight.app /Applications
-    cp -r target/bundle/manexplorer/ManExplorer.app /Applications
-    cp -r target/bundle/navidrome/Navidrome.app /Applications
+    if [ "$(uname)" = "Darwin" ]; then
+        build_bundle
+        cp -r target/bundle/bassielight/BassieLight.app /Applications
+        cp -r target/bundle/manexplorer/ManExplorer.app /Applications
+        cp -r target/bundle/navidrome/Navidrome.app /Applications
+    fi
 }
 
 case "${1:-check}" in
@@ -114,11 +114,8 @@ case "${1:-check}" in
     install)
         install
         ;;
-    install-bundle)
-        install_bundle
-        ;;
     *)
-        echo "Usage: $0 {build-pages|build-bundle|clean|check|coverage|install|install-bundle}"
+        echo "Usage: $0 {build-pages|build-bundle|clean|check|coverage|install}"
         exit 1
         ;;
 esac
