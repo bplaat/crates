@@ -8,7 +8,7 @@
 
 use std::process::Command;
 
-use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
+use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
 use rust_embed::Embed;
 use serde::Serialize;
 use small_http::{Request, Response, Status};
@@ -109,7 +109,6 @@ fn main() {
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state()
-        .theme(Theme::Dark)
         .load_rust_embed::<WebAssets>()
         .internal_http_server_handle(internal_http_server_handle)
         .build();

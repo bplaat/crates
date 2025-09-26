@@ -4,6 +4,32 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* Colors */
+:root {
+    --color-background: #fff;
+    --color-text-primary: #111;
+    --color-text-secondary: #555;
+    --color-text-link: #333;
+    --color-border: #ccc;
+    --color-icon-disabled: #888;
+    --color-sidebar-background: #f6f6f6;
+    --color-scrollbar: rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-background: #222;
+        --color-text-primary: #fff;
+        --color-text-secondary: #aaa;
+        --color-text-link: #ccc;
+        --color-border: #444;
+        --color-icon-disabled: #666;
+        --color-sidebar-background: #222;
+        --color-scrollbar: rgba(255, 255, 255, 0.1);
+    }
+}
+
+/* General */
 * {
     margin: 0;
     padding: 0;
@@ -30,7 +56,7 @@ html {
     -webkit-user-select: none;
     user-select: none;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    scrollbar-color: var(--color-scrollbar) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -42,20 +68,20 @@ html {
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--color-scrollbar);
     border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--color-scrollbar);
 }
 
 body {
-    background-color: #111;
-    color: #fff;
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
 }
 
 a {
-    color: #ccc;
+    color: var(--color-text-link);
     font-weight: 500;
     text-decoration: none;
 }
@@ -64,7 +90,7 @@ a:focus {
     text-decoration: underline;
 }
 a.is-active {
-    color: #fff;
+    color: var(--color-text-primary);
     font-weight: 700;
 }
 
@@ -75,17 +101,19 @@ li {
     padding: 0.25rem 1rem;
 }
 
+/* App */
 .app {
     display: flex;
     height: 100vh;
 }
 
+/* Sidebar */
 .sidebar {
     display: flex;
     flex-direction: column;
     width: 28rem;
-    background-color: #222;
-    border-right: 1px solid #333;
+    background-color: var(--color-sidebar-background);
+    border-right: 1px solid var(--color-border);
 }
 .sidebar-content {
     flex: 1;
@@ -98,7 +126,7 @@ li {
     padding: 0.25rem 0;
 }
 .sidebar-container.has-border {
-    border-left: 1px solid #333;
+    border-left: 1px solid var(--color-border);
 }
 #pages {
     width: 12rem;
@@ -113,34 +141,42 @@ li {
     align-items: center;
     padding: 0 0.5rem 0 1rem;
     border: none;
-    border-bottom: 1px solid #333;
-    background-color: #222;
-    color: #fff;
+    border-bottom: 1px solid var(--color-border);
+}
+.search-input,
+.icon-button {
+    padding: 0;
+    border: none;
+    background-color: transparent;
+    color: inherit;
+    outline: none;
 }
 .search-input {
     flex: 1;
     padding: 0.5rem 1rem;
-    border: none;
-    background-color: #222;
-    color: #fff;
-    outline: none;
 }
 
 .icon-button {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
-    background: none;
-    color: #ccc;
     cursor: pointer;
-    padding: 0;
 }
 .icon-button:disabled {
-    color: #666;
+    color: var(--color-icon-disabled);
     cursor: default;
 }
 
+.placeholder {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+/* Content */
 .content {
     flex: 1;
     padding: 1rem;
@@ -153,15 +189,7 @@ li {
     user-select: text;
 }
 
-.placeholder {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-    color: #666;
-    font-style: italic;
-}
-
+/* Utils */
 .icon {
     width: 24px;
     height: 24px;
