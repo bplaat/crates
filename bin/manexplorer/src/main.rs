@@ -103,19 +103,32 @@ fn main() {
         .app_id("nl.bplaat.ManExplorer")
         .build();
 
-    let mut webview = WebviewBuilder::new()
+    #[allow(unused_mut)]
+    let mut webview_builder = WebviewBuilder::new()
         .title("Man Explorer")
         .size(LogicalSize::new(1024.0, 768.0))
-        .min_size(LogicalSize::new(640.0, 480.0))
+        .min_size(LogicalSize::new(800.0, 480.0))
         .center()
         .remember_window_state()
         .load_rust_embed::<WebAssets>()
-        .internal_http_server_handle(internal_http_server_handle)
-        .build();
+        .internal_http_server_handle(internal_http_server_handle);
+    #[cfg(target_os = "macos")]
+    {
+        webview_builder =
+            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+    }
+    let mut webview = webview_builder.build();
 
-    event_loop.run(move |event| {
-        if let Event::PageTitleChanged(title) = event {
-            webview.set_title(title)
+    event_loop.run(move |event| match event {
+        Event::PageTitleChanged(title) => webview.set_title(title),
+        #[cfg(target_os = "macos")]
+        Event::MacosWindowFullscreenChanged(is_fullscreen) => {
+            if is_fullscreen {
+                webview.evaluate_script("document.body.classList.add('is-fullscreen');");
+            } else {
+                webview.evaluate_script("document.body.classList.remove('is-fullscreen');");
+            }
         }
+        _ => {}
     });
 }

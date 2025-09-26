@@ -15,6 +15,7 @@
     <body>
         <div class="app">
             <div class="sidebar">
+                <div id="sidebar-title" class="sidebar-title">Man Explorer</div>
                 <div class="search-field">
                     <button id="search-button" class="icon-button">
                         <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -54,6 +55,11 @@
         </div>
 
         <script>
+            if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {
+                document.body.classList.add('is-bwebview-macos');
+            }
+
+            const sidebarTitle = document.getElementById('sidebar-title');
             const searchButton = document.getElementById('search-button');
             const searchInput = document.getElementById('search-input');
             const searchClearButton = document.getElementById('search-clear-button');
@@ -139,6 +145,7 @@
 
             async function loadPage(page, name) {
                 document.title = `Man Explorer - ${page} - ${name}`;
+                sidebarTitle.textContent = document.title;
                 showContentContainer(contentLoadingElement);
 
                 const res = await fetch(`/man/${page}/${name}`);
@@ -172,8 +179,6 @@
                 updateLinksActive();
             }
 
-            // window.addEventListener('contextmenu', (event) => event.preventDefault());
-
             searchButton.addEventListener('click', () => searchInput.focus());
             searchInput.addEventListener('input', (event) => handleSearchChange(event.target.value));
             searchClearButton.addEventListener('click', () => {
@@ -181,6 +186,7 @@
                 handleSearchChange('');
             });
 
+            window.addEventListener('contextmenu', (event) => event.preventDefault());
             window.addEventListener('hashchange', () => {
                 const hash = window.location.hash.substring(1);
                 const [page, name] = hash.split('/');

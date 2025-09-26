@@ -70,7 +70,6 @@ fn internal_http_server_handle(req: &Request) -> Option<Response> {
 }
 
 // MARK: Main
-#[allow(unused_mut)]
 fn main() {
     let event_loop = EventLoopBuilder::new()
         .app_id("nl.bplaat.BassieLight")
@@ -91,6 +90,7 @@ fn main() {
     });
 
     // Create webview
+    #[allow(unused_mut)]
     let mut webview_builder = WebviewBuilder::new()
         .title("BassieLight")
         .size(LogicalSize::new(1024.0, 768.0))

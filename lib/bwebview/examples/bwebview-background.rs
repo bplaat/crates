@@ -8,10 +8,10 @@
 
 use bwebview::{EventLoopBuilder, Theme, WebviewBuilder};
 
-#[allow(unused_mut)]
 fn main() {
     let event_loop = EventLoopBuilder::new().build();
 
+    #[allow(unused_mut)]
     let mut webview_builder = WebviewBuilder::new()
         .title("Webview Background Example")
         .background_color(0x05445e)
