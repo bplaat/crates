@@ -2,7 +2,7 @@
 Version=1.0
 Type=Application
 Name=Navidrome
-Exec=/home/$USER/.local/bin/Navidrome
-Icon=/home/$USER/.local/share/icons/Navidrome.svg
+Exec=Navidrome
+Icon=Navidrome
 Terminal=false
 Categories=AudioVideo;Player;

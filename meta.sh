@@ -88,7 +88,6 @@ build_install_freedesktop() {
     cargo build --release --bin "$lowercase"
     cp "target/release/$lowercase" "$HOME/.local/bin/$1"
     cp "bin/$lowercase/meta/freedesktop/.desktop" "$HOME/.local/share/applications/$1.desktop"
-    sed -i "s|\$USER|$USER|g" "$HOME/.local/share/applications/$1.desktop"
     cp "bin/$lowercase/docs/images/icon.svg" "$HOME/.local/share/icons/$1.svg"
 }
 
