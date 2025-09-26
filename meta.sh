@@ -101,6 +101,11 @@ install() {
         cp -r target/bundle/bassielight/BassieLight.app /Applications
         cp -r target/bundle/manexplorer/ManExplorer.app /Applications
         cp -r target/bundle/navidrome/Navidrome.app /Applications
+    elif [ -n "$USERPROFILE" ]; then
+        cargo build --release --bin bassielight
+        cargo build --release --bin navidrome
+        cp target/release/bassielight.exe "$USERPROFILE/Desktop/BassieLight.exe"
+        cp target/release/navidrome.exe "$USERPROFILE/Desktop/Navidrome.exe"
     else
         mkdir -p ~/.local/bin ~/.local/share/applications ~/.local/share/icons
         build_install_freedesktop BassieLight
