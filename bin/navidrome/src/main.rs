@@ -11,12 +11,12 @@
 
 use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 
-#[allow(unused_mut, unused_variables)]
 fn main() {
     let event_loop = EventLoopBuilder::new()
         .app_id("nl.bplaat.Navidrome")
         .build();
 
+    #[allow(unused_mut)]
     let mut webview_builder = WebviewBuilder::new()
         .title("Navidrome")
         .size(LogicalSize::new(1024.0, 768.0))
@@ -43,56 +43,42 @@ fn main() {
         }
         Event::PageLoadFinished => {
             // Inject some styles to make the player look better
-            let scrollbar_style = r#"
-                html {
-                    overscroll-behavior: none;
-                    cursor: default;
-                    -webkit-user-select: none;
-                    user-select: none;
-                }
-                ::-webkit-scrollbar {
-                    width: 8px;
-                    height: 8px;
-                }
-                ::-webkit-scrollbar-track,
-                ::-webkit-scrollbar-corner {
-                    background-color: #131313;
-                }
-                ::-webkit-scrollbar-thumb {
-                    background-color: #444;
-                    border-radius: 4px;
-                }
-                ::-webkit-scrollbar-thumb:hover {
-                    background-color: #555;
-                }
-                "#;
-            if cfg!(target_os = "macos") {
-                webview.evaluate_script(format!(
-                    r#"
+            webview.evaluate_script(
+                r#"
                     const style = document.createElement('style');
                     style.innerHTML = `
-                        {scrollbar_style}
-                        body:not(.is-fullscreen) {{
+                       html {
+                            overscroll-behavior: none;
+                            cursor: default;
+                            -webkit-user-select: none;
+                            user-select: none;
+                        }
+                        ::-webkit-scrollbar {
+                            width: 8px;
+                            height: 8px;
+                        }
+                        ::-webkit-scrollbar-track,
+                        ::-webkit-scrollbar-corner {
+                            background-color: #131313;
+                        }
+                        ::-webkit-scrollbar-thumb {
+                            background-color: #444;
+                            border-radius: 4px;
+                        }
+                        ::-webkit-scrollbar-thumb:hover {
+                            background-color: #555;
+                        }
+                        body:not(.is-fullscreen) {
                             padding-top: 28px;
-                        }}
-                        body:not(.is-fullscreen) header.MuiAppBar-root {{
+                        }
+                        body:not(.is-fullscreen) header.MuiAppBar-root {
                             padding-top: 28px;
-                        }}
+                        }
                     `;
                     document.head.appendChild(style);
                     window.addEventListener('contextmenu', (e) => e.preventDefault());
-                    "#
-                ));
-            } else {
-                webview.evaluate_script(format!(
-                    r#"
-                    const style = document.createElement('style');
-                    style.innerHTML = `{scrollbar_style}`;
-                    document.head.appendChild(style);
-                    window.addEventListener('contextmenu', (e) => e.preventDefault());
-                    "#
-                ));
-            }
+                    "#,
+            );
         }
 
         _ => {}
