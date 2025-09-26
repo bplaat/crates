@@ -11,6 +11,7 @@
 }
 
 html,
+input,
 .empty {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
         'Open Sans', 'Helvetica Neue', sans-serif;
@@ -80,16 +81,64 @@ li {
 }
 
 .sidebar {
-    padding: 0.25rem 0;
+    display: flex;
+    flex-direction: column;
+    width: 28rem;
     background-color: #222;
     border-right: 1px solid #333;
+}
+.sidebar-content {
+    flex: 1;
     overflow-y: auto;
+}
+.sidebar-container {
+    float: left;
+    width: 100%;
+    min-height: 100%;
+    padding: 0.25rem 0;
+}
+.sidebar-container.has-border {
+    border-left: 1px solid #333;
 }
 #pages {
     width: 12rem;
 }
-#entries {
-    width: 20rem;
+#entries,
+#entries-empty {
+    width: calc(100% - 12rem);
+}
+
+.search-field {
+    display: flex;
+    align-items: center;
+    padding: 0 0.5rem 0 1rem;
+    border: none;
+    border-bottom: 1px solid #333;
+    background-color: #222;
+    color: #fff;
+}
+.search-input {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    border: none;
+    background-color: #222;
+    color: #fff;
+    outline: none;
+}
+
+.icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    color: #ccc;
+    cursor: pointer;
+    padding: 0;
+}
+.icon-button:disabled {
+    color: #666;
+    cursor: default;
 }
 
 .content {
@@ -107,11 +156,16 @@ li {
 .placeholder {
     display: flex;
     flex: 1;
-    height: 100%;
     align-items: center;
     justify-content: center;
     color: #666;
     font-style: italic;
+}
+
+.icon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
 }
 
 .hidden {

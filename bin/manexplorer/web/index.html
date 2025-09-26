@@ -14,20 +14,54 @@
 
     <body>
         <div class="app">
-            <div id="pages" class="sidebar"></div>
-            <div id="entries" class="sidebar">
-                <div class="placeholder">Select page...</div>
+            <div class="sidebar">
+                <div class="search-field">
+                    <button id="search-button" class="icon-button">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                            <path
+                                d="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z"
+                            />
+                        </svg>
+                    </button>
+                    <input
+                        id="search-input"
+                        class="search-input"
+                        type="text"
+                        placeholder="Search man page..."
+                        autocorrect="off"
+                    />
+                    <button id="search-clear-button" class="icon-button" disabled>
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                            <path
+                                d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
+                            />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="sidebar-content">
+                    <div id="pages" class="sidebar-container"></div>
+                    <div id="entries" class="sidebar-container has-border hidden"></div>
+                    <div id="entries-empty" class="sidebar-container has-border placeholder">Select page...</div>
+                    <div id="search-results" class="sidebar-container hidden"></div>
+                    <div id="search-results-empty" class="sidebar-container placeholder hidden">No results found</div>
+                </div>
             </div>
+
             <div id="content" class="content hidden"></div>
-            <div id="content-empty" class="placeholder">Select page and item...</div>
             <div id="content-loading" class="placeholder hidden">Loading...</div>
+            <div id="content-empty" class="placeholder">Select page and item...</div>
         </div>
 
         <script>
-            window.addEventListener('contextmenu', (event) => event.preventDefault());
-
+            const searchButton = document.getElementById('search-button');
+            const searchInput = document.getElementById('search-input');
+            const searchClearButton = document.getElementById('search-clear-button');
             const pagesElement = document.getElementById('pages');
             const entriesElement = document.getElementById('entries');
+            const entriesEmptyElement = document.getElementById('entries-empty');
+            const searchResultsElement = document.getElementById('search-results');
+            const searchResultsEmptyElement = document.getElementById('search-results-empty');
             const contentElement = document.getElementById('content');
             const contentEmptyElement = document.getElementById('content-empty');
             const contentLoadingElement = document.getElementById('content-loading');
@@ -45,37 +79,20 @@
             };
             let pages = [];
 
-            async function loadPages() {
-                const res = await fetch('/man');
-                pages = await res.json();
-                pagesElement.innerHTML = `<ul>${pages
-                    .map((page) => `<li><a href="#${page.page}">${page.page}. ${pageNames[page.page]}</a></li>`)
-                    .join('')}</ul>`;
+            function searchPages(query) {
+                const results = [];
+                for (const page of pages) {
+                    for (const name of page.names) {
+                        if (name.toLowerCase().includes(query.toLowerCase())) {
+                            results.push({ page: page.page, name });
+                        }
+                    }
+                }
+                results.sort((a, b) => a.name.localeCompare(b.name));
+                return results;
             }
 
-            async function loadPage(page, name) {
-                document.title = `Man Explorer - ${page} - ${name}`;
-                contentElement.classList.add('hidden');
-                contentEmptyElement.classList.add('hidden');
-                contentLoadingElement.classList.remove('hidden');
-
-                const res = await fetch(`/man/${page}/${name}`);
-                const text = await res.text();
-
-                contentLoadingElement.classList.add('hidden');
-                contentElement.classList.remove('hidden');
-                contentElement.textContent = text;
-            }
-
-            window.addEventListener('hashchange', () => {
-                const hash = window.location.hash.substring(1);
-                const [page, name] = hash.split('/');
-                const currentPage = pages.find((entry) => entry.page == page);
-
-                entriesElement.innerHTML = `<ul>${currentPage.names
-                    .map((name) => `<li><a href="#${currentPage.page}/${name}">${name}</a></li>`)
-                    .join('')}</ul>`;
-
+            function updateLinksActive() {
                 const links = document.querySelectorAll('a');
                 for (const link of links) {
                     link.classList.remove('is-active');
@@ -87,8 +104,98 @@
                         link.classList.add('is-active');
                     }
                 }
+            }
 
-                if (name) {
+            function showSidebarContainer(el) {
+                pagesElement.classList.add('hidden');
+                entriesElement.classList.add('hidden');
+                entriesEmptyElement.classList.add('hidden');
+                searchResultsElement.classList.add('hidden');
+                searchResultsEmptyElement.classList.add('hidden');
+                if (el == pagesElement) {
+                    pagesElement.classList.remove('hidden');
+                    entriesElement.classList.remove('hidden');
+                }
+                if (el == searchResultsElement) searchResultsElement.classList.remove('hidden');
+                if (el == searchResultsEmptyElement) searchResultsEmptyElement.classList.remove('hidden');
+            }
+
+            function showContentContainer(el) {
+                contentElement.classList.add('hidden');
+                contentEmptyElement.classList.add('hidden');
+                contentLoadingElement.classList.add('hidden');
+                if (el == contentElement) contentElement.classList.remove('hidden');
+                if (el == contentEmptyElement) contentEmptyElement.classList.remove('hidden');
+                if (el == contentLoadingElement) contentLoadingElement.classList.remove('hidden');
+            }
+
+            async function loadPages() {
+                const res = await fetch('/man');
+                pages = await res.json();
+                pagesElement.innerHTML = `<ul>${pages
+                    .map((page) => `<li><a href="#${page.page}">${page.page}. ${pageNames[page.page]}</a></li>`)
+                    .join('')}</ul>`;
+            }
+
+            async function loadPage(page, name) {
+                document.title = `Man Explorer - ${page} - ${name}`;
+                showContentContainer(contentLoadingElement);
+
+                const res = await fetch(`/man/${page}/${name}`);
+                const text = await res.text();
+
+                showContentContainer(contentElement);
+                contentElement.textContent = text;
+                contentElement.scrollTop = 0;
+            }
+
+            function handleSearchChange(value) {
+                const query = value.trim();
+                if (query.length === 0) {
+                    searchClearButton.disabled = true;
+                    showSidebarContainer(pagesElement);
+                    return;
+                }
+                searchClearButton.disabled = false;
+
+                const results = searchPages(query);
+                if (results.length === 0) {
+                    showSidebarContainer(searchResultsEmptyElement);
+                    return;
+                }
+
+                searchResultsElement.innerHTML = `<ul>${results
+                    .map((result) => `<li><a href="#${result.page}/${result.name}">${result.name}</a></li>`)
+                    .join('')}</ul>`;
+
+                showSidebarContainer(searchResultsElement);
+                updateLinksActive();
+            }
+
+            // window.addEventListener('contextmenu', (event) => event.preventDefault());
+
+            searchButton.addEventListener('click', () => searchInput.focus());
+            searchInput.addEventListener('input', (event) => handleSearchChange(event.target.value));
+            searchClearButton.addEventListener('click', () => {
+                searchInput.value = '';
+                handleSearchChange('');
+            });
+
+            window.addEventListener('hashchange', () => {
+                const hash = window.location.hash.substring(1);
+                const [page, name] = hash.split('/');
+                const currentPage = pages.find((entry) => entry.page == page);
+
+                entriesElement.innerHTML = `<ul>${currentPage.names
+                    .map((name) => `<li><a href="#${currentPage.page}/${name}">${name}</a></li>`)
+                    .join('')}</ul>`;
+
+                if (searchInput.value.trim().length == 0) {
+                    showSidebarContainer(pagesElement);
+                }
+                updateLinksActive();
+
+                if (name != undefined) {
                     loadPage(currentPage.page, name);
                 }
             });

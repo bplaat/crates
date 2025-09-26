@@ -49,13 +49,17 @@ fn internal_http_server_handle(req: &Request) -> Option<Response> {
                                         .next()
                                         .unwrap_or(file_name)
                                         .to_string();
-                                    if !names.contains(&name) {
+                                    if !name.is_empty() && !names.contains(&name) {
                                         names.push(name);
                                     }
                                 }
                             }
                         }
-                        names.sort();
+                        names.sort_by(|a, b| {
+                            a.to_lowercase()
+                                .cmp(&b.to_lowercase())
+                                .then_with(|| a.cmp(b))
+                        });
                         pages.push(ManPage {
                             page: page_num,
                             names,
