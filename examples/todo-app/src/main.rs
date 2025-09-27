@@ -44,7 +44,6 @@ fn main() {
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state()
-        .background_color(0x222222)
         .load_rust_embed::<WebAssets>()
         .build();
 

@@ -59,7 +59,13 @@ impl PlatformEventLoop {
 
 impl crate::EventLoopInterface for PlatformEventLoop {
     fn primary_monitor(&self) -> PlatformMonitor {
-        unsafe { PlatformMonitor::new(gdk_display_get_primary_monitor(gdk_display_get_default())) }
+        unsafe {
+            let mut primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+            if primary_monitor.is_null() {
+                primary_monitor = gdk_display_get_monitor(gdk_display_get_default(), 0);
+            }
+            PlatformMonitor::new(primary_monitor)
+        }
     }
 
     fn available_monitors(&self) -> Vec<PlatformMonitor> {
@@ -146,7 +152,10 @@ impl crate::MonitorInterface for PlatformMonitor {
         // The GTK monitors are not offset by primary monitor position,
         // so we need to calculate the position relative to the primary monitor.
         let primary_monitor_rect = unsafe {
-            let primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+            let mut primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+            if primary_monitor.is_null() {
+                primary_monitor = gdk_display_get_monitor(gdk_display_get_default(), 0);
+            }
             let mut primary_monitor_rect = MaybeUninit::<GdkRectangle>::uninit();
             gdk_monitor_get_geometry(primary_monitor, primary_monitor_rect.as_mut_ptr());
             primary_monitor_rect.assume_init()
@@ -250,7 +259,11 @@ impl PlatformWebview {
                 gdk_monitor_get_geometry(monitor.monitor, rect.as_mut_ptr());
                 rect.assume_init()
             } else {
-                let primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+                let mut primary_monitor =
+                    gdk_display_get_primary_monitor(gdk_display_get_default());
+                if primary_monitor.is_null() {
+                    primary_monitor = gdk_display_get_monitor(gdk_display_get_default(), 0);
+                }
                 let mut rect = MaybeUninit::<GdkRectangle>::uninit();
                 gdk_monitor_get_geometry(primary_monitor, rect.as_mut_ptr());
                 rect.assume_init()
@@ -422,15 +435,16 @@ impl PlatformWebview {
             webview
         };
 
+        // Fill webview data
+        webview_data.window = window;
+        webview_data.webview = webview;
+
         // Show window
-        unsafe { gtk_widget_show_all(window) };
+        unsafe { gtk_widget_show_all(webview_data.window) };
 
         // Send window created event
         send_event(Event::WindowCreated);
 
-        // Fill webview data and return
-        webview_data.window = window;
-        webview_data.webview = webview;
         Self(webview_data)
     }
 
@@ -541,7 +555,10 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn set_position(&mut self, point: LogicalPoint) {
         let primary_monitor_rect = unsafe {
-            let primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+            let mut primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+            if primary_monitor.is_null() {
+                primary_monitor = gdk_display_get_monitor(gdk_display_get_default(), 0);
+            }
             let mut primary_monitor_rect = MaybeUninit::<GdkRectangle>::uninit();
             gdk_monitor_get_geometry(primary_monitor, primary_monitor_rect.as_mut_ptr());
             primary_monitor_rect.assume_init()
