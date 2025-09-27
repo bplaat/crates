@@ -9,7 +9,7 @@
 use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 use serde::{Deserialize, Serialize};
 
-const APP_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/app.min.html"));
+const APP_HTML: &str = include_str!("../app.html");
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]

@@ -183,7 +183,6 @@ name = "example-bwebview-ipc"
 version = "0.1.0"
 dependencies = [
  "bwebview",
- "minify-html",
  "serde",
  "serde_json",
 ]
@@ -365,13 +364,6 @@ name = "mime_guess"
 version = "2.0.5+patch"
 dependencies = [
  "mime",
-]
-
-[[package]]
-name = "minify-html"
-version = "0.1.0"
-dependencies = [
- "regex",
 ]
 
 [[package]]

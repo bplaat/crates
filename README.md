@@ -22,7 +22,6 @@ These libraries are not published to [crates.io](https://crates.io) and are more
 -   [from_enum](lib/from_enum) A FromEnum derive macro library
 -   [ini](lib/ini) A simple INI file parser library
 -   [js](lib/js) A WIP JavaScript interpreter
--   [minify-html](lib/minify-html) A simple HTML minifier library
 -   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 -   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
 -   [small-websocket](lib/small-websocket) A simple and small websocket library for the [small-http](lib/small-http) library
