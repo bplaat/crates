@@ -524,8 +524,15 @@ impl PlatformWebview {
             } else {
                 msg_send![content_view, frame]
             };
+
+            let webview_config: *mut Object = msg_send![class!(WKWebViewConfiguration), new];
+            let website_data_store: *mut Object =
+                msg_send![class!(WKWebsiteDataStore), defaultDataStore];
+            let _: () = msg_send![webview_config, setWebsiteDataStore:website_data_store];
+
             let webview: *mut Object = msg_send![class!(WKWebView), alloc];
-            let webview: *mut Object = msg_send![webview, initWithFrame:webview_rect];
+            let webview: *mut Object =
+                msg_send![webview, initWithFrame:webview_rect, configuration:webview_config];
             let _: () = msg_send![webview, setNavigationDelegate:window_delegate];
             let _: () = msg_send![content_view, addSubview:webview];
             if builder.background_color.is_some() {
