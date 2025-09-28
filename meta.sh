@@ -81,14 +81,21 @@ build_bundle() {
     cargo bundle --path bin/bassielight
     cargo bundle --path bin/manexplorer
     cargo bundle --path bin/navidrome
+    cargo bundle --path bin/game2048
 }
-
+build_install_windows() {
+    package=$1
+    name=$2
+    cargo build --release --bin "$package"
+    cp target/release/$package.exe "$USERPROFILE/Desktop/$name.exe"
+}
 build_install_freedesktop() {
-    lowercase=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    cargo build --release --bin "$lowercase"
-    cp "target/release/$lowercase" "$HOME/.local/bin/$1"
-    cp "bin/$lowercase/meta/freedesktop/.desktop" "$HOME/.local/share/applications/$1.desktop"
-    cp "bin/$lowercase/docs/images/icon.svg" "$HOME/.local/share/icons/$1.svg"
+    package=$1
+    name=$2
+    cargo build --release --bin "$package"
+    cp "target/release/$package" "$HOME/.local/bin/$name"
+    cp "bin/$package/meta/freedesktop/.desktop" "$HOME/.local/share/applications/$name.desktop"
+    cp "bin/$package/docs/images/icon.svg" "$HOME/.local/share/icons/$name.svg"
 }
 
 install() {
@@ -100,16 +107,17 @@ install() {
         cp -r target/bundle/bassielight/BassieLight.app /Applications
         cp -r target/bundle/manexplorer/ManExplorer.app /Applications
         cp -r target/bundle/navidrome/Navidrome.app /Applications
+        cp -r target/bundle/game2048/2048.app /Applications
     elif [ -n "$USERPROFILE" ]; then
-        cargo build --release --bin bassielight
-        cargo build --release --bin navidrome
-        cp target/release/bassielight.exe "$USERPROFILE/Desktop/BassieLight.exe"
-        cp target/release/navidrome.exe "$USERPROFILE/Desktop/Navidrome.exe"
+        build_install_windows bassielight BassieLight
+        build_install_windows navidrome Navidrome
+        build_install_windows game2048 2048
     else
         mkdir -p ~/.local/bin ~/.local/share/applications ~/.local/share/icons
-        build_install_freedesktop BassieLight
-        build_install_freedesktop ManExplorer
-        build_install_freedesktop Navidrome
+        build_install_freedesktop bassielight BassieLight
+        build_install_freedesktop manexplorer ManExplorer
+        build_install_freedesktop navidrome Navidrome
+        build_install_freedesktop game2048 2048
     fi
 }
 

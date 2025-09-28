@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=2048
+Exec=2048
+Icon=2048
+Terminal=false
+Categories=Game;

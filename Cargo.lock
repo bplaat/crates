@@ -253,6 +253,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "game2048"
+version = "0.1.0"
+dependencies = [
+ "bwebview",
+ "rust-embed",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.3.0+patch"
 
