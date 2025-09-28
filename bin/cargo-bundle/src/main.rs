@@ -33,7 +33,7 @@ fn generate_resources(path: &str, target_dir: &str, bundle: &manifest::BundleMet
     // Generate resources for macOS bundle
     fs::create_dir_all(target_dir).expect("Failed to create target directory");
 
-    // Create icon.icns
+    // Compile iconset to icns if needed
     if let Some(iconset) = &bundle.iconset {
         Command::new("iconutil")
             .args([
@@ -45,6 +45,12 @@ fn generate_resources(path: &str, target_dir: &str, bundle: &manifest::BundleMet
             ])
             .output()
             .expect("Failed to create icon.icns");
+    }
+
+    // Copy icns if provided
+    if let Some(icns) = &bundle.icns {
+        fs::copy(format!("{path}/{icns}"), format!("{target_dir}/icon.icns"))
+            .expect("Failed to copy icon.icns");
     }
 
     // Create Info.plist
@@ -61,7 +67,7 @@ fn generate_resources(path: &str, target_dir: &str, bundle: &manifest::BundleMet
         ("CFBundleExecutable", bundle.name.clone()),
         ("LSMinimumSystemVersion", "11.0".to_string()),
     ];
-    if bundle.iconset.is_some() {
+    if bundle.iconset.is_some() || bundle.icns.is_some() {
         plist.push(("CFBundleIconFile", "icon".to_string()));
     }
     if let Some(copyright) = &bundle.copyright {
