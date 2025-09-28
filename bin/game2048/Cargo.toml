@@ -11,7 +11,7 @@ workspace = true
 [package.metadata.bundle]
 name = "2048"
 identifier = "nl.bplaat.2048"
-copyright = "Copyright © 2025 Bastiaan van der Plaat"
+copyright = "Copyright © 2014 Gabriele Cirulli\nCopyright © 2025 Bastiaan van der Plaat"
 iconset = "meta/macos/icon.iconset"
 
 [dependencies]
