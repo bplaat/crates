@@ -84,7 +84,12 @@ fn generate_resources(path: &str, target_dir: &str, bundle: &manifest::BundleMet
     fs::write(format!("{target_dir}/Info.plist"), info_plist).expect("Failed to write Info.plist");
 }
 
-fn compile_lipo(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) {
+fn compile_lipo(
+    path: &str,
+    target_dir: &str,
+    package: &manifest::Package,
+    bundle: &manifest::BundleMetadata,
+) {
     for target in ["x86_64-apple-darwin", "aarch64-apple-darwin"] {
         let status = Command::new("cargo")
             .args([
@@ -102,8 +107,8 @@ fn compile_lipo(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata)
     let lipo_status = Command::new("lipo")
         .args([
             "-create",
-            &format!("target/x86_64-apple-darwin/release/{}", bundle.name),
-            &format!("target/aarch64-apple-darwin/release/{}", bundle.name),
+            &format!("target/x86_64-apple-darwin/release/{}", package.name),
+            &format!("target/aarch64-apple-darwin/release/{}", package.name),
             "-output",
             &format!("{target_dir}/{}", bundle.name),
         ])
@@ -160,15 +165,15 @@ fn main() {
 
     // Read Cargo.toml manifest
     let manifest = read_manifest(&args.path);
-    let bundle = manifest.package.metadata.bundle;
+    let bundle = &manifest.package.metadata.bundle;
 
     // Generate resource
     let target_dir = format!("target/bundle/{}", manifest.package.name);
-    generate_resources(&args.path, &target_dir, &bundle);
+    generate_resources(&args.path, &target_dir, bundle);
 
     // Compile lipo executable
-    compile_lipo(&args.path, &target_dir, &bundle);
+    compile_lipo(&args.path, &target_dir, &manifest.package, bundle);
 
     // Create bundle folder structure
-    create_bundle(&args.path, &target_dir, &bundle);
+    create_bundle(&args.path, &target_dir, bundle);
 }
