@@ -68,14 +68,17 @@ fn main() {
                         ::-webkit-scrollbar-thumb:hover {
                             background-color: #555;
                         }
-                        body:not(.is-fullscreen) {
-                            padding-top: 28px;
+                        body.is-bwebview-macos:not(.is-fullscreen) #main-content {
+                            padding-top: 28px !important;
                         }
-                        body:not(.is-fullscreen) header.MuiAppBar-root {
+                        body.is-bwebview-macos:not(.is-fullscreen) header.MuiAppBar-root {
                             padding-top: 28px;
                         }
                     `;
                     document.head.appendChild(style);
+                    if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {
+                        document.body.classList.add('is-bwebview-macos');
+                    }
                     window.addEventListener('contextmenu', (e) => e.preventDefault());
                     "#,
             );
