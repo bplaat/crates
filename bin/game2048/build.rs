@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A local version of the 2048 game
+//! An offline desktop 2048 game app
 
 fn main() {
     // Compile Windows resources

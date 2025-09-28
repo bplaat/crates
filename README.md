@@ -61,7 +61,7 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 </tr>
 </table>
 
--   [2048](bin/game2048) A local version of the 2048 game
+-   [2048](bin/game2048) An offline desktop 2048 game app
 -   [BassieLight](bin/bassielight) A simple lights controller with GUI
 -   [ManExplorer](bin/manexplorer) A simple man page explorer tool
 -   [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
