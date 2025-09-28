@@ -34,25 +34,25 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 
 <table>
 <tr>
-<td align="center">
+<td width="100" align="center">
     <a href="bin/game2048">
         <img src="bin/game2048/docs/images/icon.svg" alt="2048 icon" width="48" height="48"/><br/>
         2048
     </a>
 </td>
-<td align="center">
+<td width="100" align="center">
     <a href="bin/bassielight">
         <img src="bin/bassielight/docs/images/icon.svg" alt="BassieLight icon" width="48" height="48"/><br/>
         BassieLight
     </a>
 </td>
-<td align="center">
+<td width="100" align="center">
     <a href="bin/manexplorer">
         <img src="bin/manexplorer/docs/images/icon.svg" alt="ManExplorer icon" width="48" height="48"/><br/>
         ManExplorer
     </a>
 </td>
-<td align="center">
+<td width="100" align="center">
     <a href="bin/navidrome">
         <img src="bin/navidrome/docs/images/icon.svg" alt="Navidrome icon" width="48" height="48"/><br/>
         Navidrome
