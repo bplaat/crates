@@ -28,18 +28,52 @@ These libraries are not published to [crates.io](https://crates.io) and are more
 -   [validate](lib/validate) A simple struct validation library
 -   [validate_derive](lib/validate_derive) Validation derive macro's library
 
+### Apps
+
+Some desktop apps written with the [bwebview](lib/bwebview) library
+
+<table>
+<tr>
+<td align="center">
+    <a href="bin/game2048">
+        <img src="bin/game2048/docs/images/icon.svg" alt="2048 icon" width="48" height="48"/><br/>
+        2048
+    </a>
+</td>
+<td align="center">
+    <a href="bin/bassielight">
+        <img src="bin/bassielight/docs/images/icon.svg" alt="BassieLight icon" width="48" height="48"/><br/>
+        BassieLight
+    </a>
+</td>
+<td align="center">
+    <a href="bin/manexplorer">
+        <img src="bin/manexplorer/docs/images/icon.svg" alt="ManExplorer icon" width="48" height="48"/><br/>
+        ManExplorer
+    </a>
+</td>
+<td align="center">
+    <a href="bin/navidrome">
+        <img src="bin/navidrome/docs/images/icon.svg" alt="Navidrome icon" width="48" height="48"/><br/>
+        Navidrome
+    </a>
+</td>
+</tr>
+</table>
+
+-   [2048](bin/game2048) A local version of the 2048 game
+-   [BassieLight](bin/bassielight) A simple lights controller with GUI
+-   [ManExplorer](bin/manexplorer) A simple man page explorer tool
+-   [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
+
 ### Tools / Websites
 
 Various tools and websites, for the live deployed sites go to [crates.bplaat.nl](https://crates.bplaat.nl/)
 
 -   [baksteen](bin/baksteen/) A brick laying robot simulator
--   [bassielight](bin/bassielight) A simple lights controller with GUI
 -   [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
 -   [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
--   [game2048](bin/game2048) A local version of the 2048 game
--   [manexplorer](bin/manexplorer) A simple man page explorer tool
 -   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
--   [navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 -   [plaatnotes](bin/plaatnotes) A simple note-taking app
 -   [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook
 
