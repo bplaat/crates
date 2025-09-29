@@ -580,7 +580,7 @@ impl PlatformWebview {
             let user_script: *mut Object = msg_send![user_script,
                     initWithSource:NSString::from_str("window.ipc = new EventTarget();\
                         window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);\
-                        console.log = message => window.webkit.messageHandlers.console.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);"),
+                        console.log = (...args) => window.webkit.messageHandlers.console.postMessage(args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));"),
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
                     forMainFrameOnly:true];
             let _: () = msg_send![user_content_controller, addUserScript:user_script];

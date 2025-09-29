@@ -505,7 +505,7 @@ impl PlatformWebview {
             _ = webview.AddScriptToExecuteOnDocumentCreated(
                     w!("window.ipc = new EventTarget();\
                         window.ipc.postMessage = message => window.chrome.webview.postMessage(`ipc${typeof message !== 'string' ? JSON.stringify(message) : message}`);\
-                        console.log = message => window.chrome.webview.postMessage(`console${typeof message !== 'string' ? JSON.stringify(message) : message}`);"),
+                        console.log = (..args) => window.chrome.webview.postMessage(`console${args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' ')}`);"),
                     &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_sender, _args| {
                         Ok(())
                     })));

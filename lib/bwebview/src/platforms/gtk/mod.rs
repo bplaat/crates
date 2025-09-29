@@ -337,8 +337,8 @@ impl PlatformWebview {
             let user_content_controller = webkit_user_content_manager_new();
             let user_script = webkit_user_script_new(
                     c"window.ipc = new EventTarget();\
-                            window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);\
-                            console.log = message => window.webkit.messageHandlers.console.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);".as_ptr(),
+                    window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);\
+                    console.log = (...args) => window.webkit.messageHandlers.console.postMessage(args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));".as_ptr(),
                     WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
                     WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
                     null(),
