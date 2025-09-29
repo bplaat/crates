@@ -11,7 +11,7 @@
 
 use std::{env, fs};
 
-use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
+use bwebview::{Event, EventLoop, LogicalSize, WebviewBuilder};
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -36,7 +36,7 @@ enum IpcMessage {
 struct WebAssets;
 
 fn main() {
-    let event_loop = EventLoopBuilder::new().build();
+    let event_loop = EventLoop::new();
 
     let mut webview = WebviewBuilder::new()
         .title("Todo App")

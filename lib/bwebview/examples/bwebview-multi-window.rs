@@ -6,10 +6,10 @@
 
 //! A simple bwebview multi-window example
 
-use bwebview::{EventLoopBuilder, LogicalPoint, LogicalSize, WebviewBuilder};
+use bwebview::{EventLoop, LogicalPoint, LogicalSize, WebviewBuilder};
 
 fn main() {
-    let event_loop = EventLoopBuilder::new().build();
+    let event_loop = EventLoop::new();
 
     let mut _webview_a = WebviewBuilder::new()
         .title("Window A")

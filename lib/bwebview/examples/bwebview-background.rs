@@ -6,10 +6,10 @@
 
 //! A bwebview background example
 
-use bwebview::{EventLoopBuilder, Theme, WebviewBuilder};
+use bwebview::{EventLoop, Theme, WebviewBuilder};
 
 fn main() {
-    let event_loop = EventLoopBuilder::new().build();
+    let event_loop = EventLoop::new();
 
     #[allow(unused_mut)]
     let mut webview_builder = WebviewBuilder::new()

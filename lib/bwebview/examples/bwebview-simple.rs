@@ -6,10 +6,10 @@
 
 //! A simple bwebview example
 
-use bwebview::{EventLoopBuilder, WebviewBuilder};
+use bwebview::{EventLoop, WebviewBuilder};
 
 fn main() {
-    let event_loop = EventLoopBuilder::new().build();
+    let event_loop = EventLoop::new();
 
     let mut _webview = WebviewBuilder::new()
         .title("Webview Simple Example")

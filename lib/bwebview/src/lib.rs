@@ -38,7 +38,7 @@ impl EventLoopBuilder {
 
     /// Create new event loop
     pub fn build(self) -> EventLoop {
-        EventLoop::new(PlatformEventLoop::new(self))
+        EventLoop::from_platform(PlatformEventLoop::new(self))
     }
 }
 
@@ -54,8 +54,14 @@ pub(crate) trait EventLoopInterface {
 pub struct EventLoop(PlatformEventLoop);
 
 impl EventLoop {
-    fn new(event_loop: PlatformEventLoop) -> Self {
+    fn from_platform(event_loop: PlatformEventLoop) -> Self {
         Self(event_loop)
+    }
+
+    /// Create new event loop
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        EventLoopBuilder::new().build()
     }
 
     /// Get primary monitor
