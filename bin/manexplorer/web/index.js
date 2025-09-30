@@ -52,8 +52,8 @@ function updateLinksActive() {
     for (const link of links) {
         link.classList.remove('is-active');
         if (
-            (link.href.split('#')[1].split('/').length === 1 && window.location.href.startsWith(link.href)) ||
-            link.href === window.location.href
+            (link.href.split('#')[1].split('/').length == 1 && window.location.href.startsWith(link.href)) ||
+            link.href == window.location.href
         ) {
             link.classList.add('is-active');
         }
@@ -89,6 +89,16 @@ async function loadPages() {
     pagesElement.innerHTML = `<ul>${pages
         .map((page) => `<li><a href="#${page.page}">${page.page}. ${pageNames[page.page]}</a></li>`)
         .join('')}</ul>`;
+
+    if (localStorage.getItem('lastPage')) {
+        const lastPage = localStorage.getItem('lastPage');
+        const lastName = localStorage.getItem('lastName');
+        if (lastName != null) {
+            window.location.hash = `#${lastPage}/${lastName}`;
+        } else {
+            window.location.hash = `#${lastPage}`;
+        }
+    }
 }
 
 async function loadPage(page, name) {
@@ -106,7 +116,7 @@ async function loadPage(page, name) {
 
 function handleSearchChange(value) {
     const query = value.trim();
-    if (query.length === 0) {
+    if (query.length == 0) {
         searchClearButton.disabled = true;
         showSidebarContainer(pagesElement);
         return;
@@ -114,7 +124,7 @@ function handleSearchChange(value) {
     searchClearButton.disabled = false;
 
     const results = searchPages(query);
-    if (results.length === 0) {
+    if (results.length == 0) {
         showSidebarContainer(searchResultsEmptyElement);
         return;
     }
@@ -147,6 +157,9 @@ window.addEventListener('hashchange', () => {
     if (searchInput.value.trim().length == 0) {
         showSidebarContainer(pagesElement);
     }
+
+    localStorage.setItem('lastPage', page);
+    localStorage.setItem('lastName', name || null);
     updateLinksActive();
 
     if (name != undefined) {
