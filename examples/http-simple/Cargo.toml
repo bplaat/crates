@@ -9,8 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-simple-useragent = { version = "0.1.2", features = ["serde"] }
-small-http = { version = "0.2.0", features = ["json"] }
-
 serde = { version = "1.0", features = ["derive"] }
 serde_urlencoded = "0.7.1"
+simple-useragent = { version = "0.1.2", features = ["serde"] }
+small-http = { version = "0.2.0", features = ["json"] }

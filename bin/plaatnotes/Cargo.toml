@@ -10,10 +10,6 @@ workspace = true
 
 [dependencies]
 bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
-small-http = { version = "0.2.0", features = ["json"] }
-small-router = "0.2.0"
-validate = { path = "../../lib/validate", features = ["serde"] }
-
 chrono = { version = "0.4", default-features = false, features = [
     "now",
     "serde",
@@ -24,7 +20,10 @@ rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.1"
+small-http = { version = "0.2.0", features = ["json"] }
+small-router = "0.2.0"
 uuid = { version = "1.0", features = ["v7", "serde"] }
+validate = { path = "../../lib/validate", features = ["serde"] }
 
 [build-dependencies]
 openapi-generator = { path = "../../lib/openapi-generator" }

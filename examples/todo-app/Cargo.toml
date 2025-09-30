@@ -10,7 +10,6 @@ workspace = true
 
 [dependencies]
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
-
 dirs = "6.0"
 rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }
 serde = { version = "1.0", features = ["derive"] }
