@@ -277,7 +277,6 @@ impl TryFrom<Value> for Option<chrono::NaiveDate> {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(Some(
-                #[allow(deprecated)]
                 chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0)
                     .expect("Should be some")
                     .naive_utc()
