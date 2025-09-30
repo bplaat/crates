@@ -10,7 +10,7 @@ use std::str::FromStr;
 
 // MARK: Version
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum Version {
+pub enum Version {
     Http1_0,
     #[default]
     Http1_1,

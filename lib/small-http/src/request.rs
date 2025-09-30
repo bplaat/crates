@@ -23,7 +23,7 @@ use crate::KEEP_ALIVE_TIMEOUT;
 #[derive(Clone)]
 pub struct Request {
     /// HTTP version
-    pub(crate) version: Version,
+    pub version: Version,
     /// URL
     pub url: Url,
     /// Method
@@ -75,7 +75,7 @@ impl Request {
     }
 
     /// Create new request with specific method and URL
-    fn with_method_and_url(method: Method, url: impl AsRef<str>) -> Self {
+    pub fn with_method_and_url(method: Method, url: impl AsRef<str>) -> Self {
         Self {
             method,
             url: url.as_ref().parse().expect("Invalid url"),
