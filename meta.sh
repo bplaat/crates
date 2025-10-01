@@ -12,7 +12,7 @@ clean() {
 check_copyright() {
     echo "Checking copyright headers..."
     exit=0
-    for file in $(find bin examples lib -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" | grep -v "node_modules" | grep -v "dist" | grep -v "api.ts"); do
+    for file in $(find bin examples lib -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -name "api.ts"); do
         if ! grep -E -q "Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+" "$file"; then
             echo "Bad copyright header in: $file"
             exit=1
@@ -27,13 +27,13 @@ check_web() {
     # Format
     echo "Checking web formatting..."
     # This is the default Prettier version, in the VSCode extension :|
-    npx --prefer-offline --yes prettier@2.8.8 --check --write $(find bin examples lib -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" | grep -v "node_modules" | grep -v "dist")
+    npx --prefer-offline --yes prettier@2.8.8 --check --write $(find bin examples lib -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*")
 }
 
 check_bob_examples() {
     # Format
     echo "Checking Bob examples formatting..."
-    clang-format --dry-run --Werror $(find bin/bob/examples -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.m" -o -name "*.mm" -o -name "*.java" | grep -v "src-gen")
+    clang-format --dry-run --Werror $(find bin/bob/examples -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.m" -o -name "*.mm" -o -name "*.java" \) ! -path "*/src-gen/*")
 }
 
 check_rust() {
