@@ -14,6 +14,7 @@ small-http = { version = "0.2.0", optional = true, default-features = false }
 mime_guess = { version = "2.0", default-features = false, optional = true }
 rust-embed = { version = "8.7", optional = true }
 local-ip-address = { version = "0.6.5", optional = true }
+log = { version = "0.4.28", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"
@@ -31,7 +32,8 @@ windows = { version = "0.61.3", features = [
 webview2-com = "0.37.0"
 
 [features]
-default = ["remember_window_state"]
+default = ["log", "remember_window_state"]
+log = ["dep:log"]
 remember_window_state = []
 rust-embed = [
     "dep:rust-embed",

@@ -502,13 +502,23 @@ impl PlatformWebview {
                 })),
                 null_mut(),
             );
+
+            const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
+                window.ipc.postMessage = message => window.chrome.webview.postMessage('i' + (typeof message !== 'string' ? JSON.stringify(message) : message));";
+            #[cfg(feature = "log")]
+            const CONSOLE_SCRIPT: &str = "for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log'])\
+                window.console[level] = (...args) => window.chrome.webview.postMessage('c' + level.charAt(0) + args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));";
+            #[cfg(not(feature = "log"))]
+            let script = IPC_SCRIPT;
+            #[cfg(feature = "log")]
+            let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
             _ = webview.AddScriptToExecuteOnDocumentCreated(
-                    w!("window.ipc = new EventTarget();\
-                        window.ipc.postMessage = message => window.chrome.webview.postMessage(`ipc${typeof message !== 'string' ? JSON.stringify(message) : message}`);\
-                        console.log = (..args) => window.chrome.webview.postMessage(`console${args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' ')}`);"),
-                    &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_sender, _args| {
-                        Ok(())
-                    })));
+                &HSTRING::from(script),
+                &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(
+                    Box::new(|_sender, _args| Ok(())),
+                ),
+            );
+
             _ = webview.add_WebMessageReceived(
                 &webview2_com::WebMessageReceivedEventHandler::create(Box::new(
                     move |_sender, args| {
@@ -516,12 +526,22 @@ impl PlatformWebview {
                         let mut message = PWSTR::default();
                         _ = args.TryGetWebMessageAsString(&mut message);
                         let message = convert_pwstr_to_string(message);
-                        if message.starts_with("ipc") {
-                            let message = message.trim_start_matches("ipc");
+                        let (r#type, message) = message.split_at(1);
+
+                        #[cfg(feature = "log")]
+                        if r#type == "c" {
+                            let (level, message) = message.split_at(1);
+                            match level {
+                                "e" => log::error!("{message}"),
+                                "w" => log::warn!("{message}"),
+                                "i" | "l" => log::info!("{message}"),
+                                "d" => log::debug!("{message}"),
+                                "t" => log::trace!("{message}"),
+                                _ => unimplemented!(),
+                            }
+                        }
+                        if r#type == "i" {
                             send_event(Event::PageMessageReceived(message.to_string()));
-                        } else if message.starts_with("console") {
-                            let message = message.trim_start_matches("console");
-                            println!("{message}");
                         }
                         Ok(())
                     },

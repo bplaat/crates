@@ -99,6 +99,7 @@ version = "0.1.0"
 dependencies = [
  "block2",
  "local-ip-address",
+ "log",
  "mime_guess",
  "objc2",
  "rust-embed",

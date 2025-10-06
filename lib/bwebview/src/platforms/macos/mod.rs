@@ -573,18 +573,27 @@ impl PlatformWebview {
 
         // Create ipc handler
         unsafe {
+            const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
+                window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);";
+            #[cfg(feature = "log")]
+            const CONSOLE_SCRIPT: &str = "for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log'])\
+                window.console[level] = (...args) => window.webkit.messageHandlers.console.postMessage(level.charAt(0) + args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));";
+            #[cfg(not(feature = "log"))]
+            let script = IPC_SCRIPT;
+            #[cfg(feature = "log")]
+            let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
+
             let webview_configuration: *mut Object = msg_send![webview, configuration];
             let user_content_controller: *mut Object =
                 msg_send![webview_configuration, userContentController];
             let user_script: *mut Object = msg_send![class!(WKUserScript), alloc];
             let user_script: *mut Object = msg_send![user_script,
-                    initWithSource:NSString::from_str("window.ipc = new EventTarget();\
-                        window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);\
-                        console.log = (...args) => window.webkit.messageHandlers.console.postMessage(args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));"),
+                    initWithSource:NSString::from_str(script),
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
                     forMainFrameOnly:true];
             let _: () = msg_send![user_content_controller, addUserScript:user_script];
             let _: () = msg_send![user_content_controller, addScriptMessageHandler:window_delegate, name:NSString::from_str("ipc")];
+            #[cfg(feature = "log")]
             let _: () = msg_send![user_content_controller, addScriptMessageHandler:window_delegate, name:NSString::from_str("console")];
         }
 
@@ -813,11 +822,20 @@ extern "C" fn webview_did_receive_script_message(
     let body: NSString = unsafe { msg_send![message, body] };
     let body = body.to_string();
 
+    #[cfg(feature = "log")]
+    if name == "console" {
+        let (level, message) = body.split_at(1);
+        match level {
+            "e" => log::error!("{message}"),
+            "w" => log::warn!("{message}"),
+            "i" | "l" => log::info!("{message}"),
+            "d" => log::debug!("{message}"),
+            "t" => log::trace!("{message}"),
+            _ => unimplemented!(),
+        }
+    }
     if name == "ipc" {
         // Send ipc message received event
         send_event(Event::PageMessageReceived(body));
-    } else if name == "console" {
-        // Print console message
-        println!("{body}");
     }
 }

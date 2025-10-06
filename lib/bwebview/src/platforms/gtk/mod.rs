@@ -334,16 +334,25 @@ impl PlatformWebview {
 
         // Create webview
         let webview = unsafe {
+            const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
+                window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);";
+            #[cfg(feature = "log")]
+            const CONSOLE_SCRIPT: &str = "for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log'])\
+                window.console[level] = (...args) => window.webkit.messageHandlers.console.postMessage(level.charAt(0) + args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));";
+            #[cfg(not(feature = "log"))]
+            let script = IPC_SCRIPT;
+            #[cfg(feature = "log")]
+            let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
+
             let user_content_controller = webkit_user_content_manager_new();
+            let script = CString::new(script).expect("Can't convert to CString");
             let user_script = webkit_user_script_new(
-                    c"window.ipc = new EventTarget();\
-                    window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);\
-                    console.log = (...args) => window.webkit.messageHandlers.console.postMessage(args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));".as_ptr(),
-                    WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-                    WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-                    null(),
-                    null(),
-                );
+                script.as_ptr(),
+                WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+                null(),
+                null(),
+            );
             webkit_user_content_manager_add_script(user_content_controller, user_script);
             g_signal_connect_data(
                 user_content_controller as *mut GObject,
@@ -353,22 +362,25 @@ impl PlatformWebview {
                 null(),
                 G_CONNECT_DEFAULT,
             );
-            g_signal_connect_data(
-                user_content_controller as *mut GObject,
-                c"script-message-received::console".as_ptr(),
-                webview_on_message_console as *const c_void,
-                webview_data.as_mut() as *mut _ as *const c_void,
-                null(),
-                G_CONNECT_DEFAULT,
-            );
             webkit_user_content_manager_register_script_message_handler(
                 user_content_controller,
                 c"ipc".as_ptr(),
             );
-            webkit_user_content_manager_register_script_message_handler(
-                user_content_controller,
-                c"console".as_ptr(),
-            );
+            #[cfg(feature = "log")]
+            {
+                g_signal_connect_data(
+                    user_content_controller as *mut GObject,
+                    c"script-message-received::console".as_ptr(),
+                    webview_on_message_console as *const c_void,
+                    webview_data.as_mut() as *mut _ as *const c_void,
+                    null(),
+                    G_CONNECT_DEFAULT,
+                );
+                webkit_user_content_manager_register_script_message_handler(
+                    user_content_controller,
+                    c"console".as_ptr(),
+                );
+            }
             let webview = webkit_web_view_new_with_user_content_manager(user_content_controller);
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
             if builder.background_color.is_some() {
@@ -747,6 +759,7 @@ extern "C" fn webview_on_message_ipc(
     send_event(Event::PageMessageReceived(message.to_string()));
 }
 
+#[cfg(feature = "log")]
 extern "C" fn webview_on_message_console(
     _manager: *mut WebKitUserContentManager,
     _message: *mut WebKitJavascriptResult,
@@ -754,6 +767,17 @@ extern "C" fn webview_on_message_console(
 ) {
     let message = unsafe { webkit_javascript_result_get_js_value(_message) };
     let message = unsafe { jsc_value_to_string(message) };
-    let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
-    println!("{message}");
+    let message = unsafe { CStr::from_ptr(message) }
+        .to_string_lossy()
+        .to_string();
+
+    let (level, message) = message.split_at(1);
+    match level {
+        "e" => log::error!("{message}"),
+        "w" => log::warn!("{message}"),
+        "i" | "l" => log::info!("{message}"),
+        "d" => log::debug!("{message}"),
+        "t" => log::trace!("{message}"),
+        _ => unimplemented!(),
+    }
 }
