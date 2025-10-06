@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-bsqlite = { version = "0.1.2", features = ["uuid", "chrono"] }
+bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
 chrono = { version = "0.4", default-features = false, features = [
     "now",
     "serde",
@@ -27,7 +27,3 @@ validate = { path = "../../lib/validate", features = ["serde"] }
 
 [build-dependencies]
 openapi-generator = { path = "../../lib/openapi-generator" }
-
-# Bundle sqlite3 on platforms that don't have it
-[target.'cfg(any(target_env = "musl", windows))'.dependencies]
-bsqlite = { version = "0.1.2", features = ["bundled", "uuid", "chrono"] }
