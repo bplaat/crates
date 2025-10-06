@@ -40,6 +40,12 @@ sudo dnf install gtk3-devel webkit2gtk4.1-devel
 </tr>
 </table>
 
+## Features
+
+-   **log** Enables logging support by forwarding `console.*` calls to the `log` crate (default).
+-   **remember_window_state** Adds remembers window position and size between launches options (default).
+-   **rust-embed** Adds support for serving embedded assets using the `rust-embed` crate.
+
 ## License
 
 Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
