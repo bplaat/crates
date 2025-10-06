@@ -33,10 +33,12 @@ dependencies = [
  "bwebview",
  "copy_dir",
  "dirs",
+ "log",
  "rusb",
  "rust-embed",
  "serde",
  "serde_json",
+ "simple_logger",
  "small-http",
  "small-websocket",
  "winres",
@@ -207,10 +209,12 @@ dependencies = [
  "const_format",
  "dotenv",
  "from_enum",
+ "log",
  "openapi-generator",
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "simple_logger",
  "small-http",
  "small-router",
  "uuid",
@@ -461,12 +465,14 @@ dependencies = [
  "chrono",
  "const_format",
  "copy_dir",
+ "log",
  "mime_guess",
  "openapi-generator",
  "rust-embed",
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "simple_logger",
  "small-http",
  "small-router",
  "uuid",
@@ -639,6 +645,15 @@ dependencies = [
  "regex",
  "serde",
  "serde_yaml",
+]
+
+[[package]]
+name = "simple_logger"
+version = "5.0.0+patch"
+dependencies = [
+ "chrono",
+ "enable-ansi-support",
+ "log",
 ]
 
 [[package]]
@@ -849,6 +864,8 @@ name = "webhook-puller"
 version = "0.1.0"
 dependencies = [
  "ini",
+ "log",
+ "simple_logger",
  "small-http",
 ]
 

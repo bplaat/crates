@@ -93,6 +93,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 -   [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 -   [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 -   [sha1](lib/sha1) A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
+-   [simple_logger](lib/simple_logger) A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
 -   [terminal_size](lib/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
 -   [threadpool](lib/threadpool) A minimal replacement for the [threadpool](https://crates.io/crates/threadpool) crate
 -   [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate

@@ -15,6 +15,7 @@ use bsqlite::{Connection, FromRow, FromValue, execute_args, query_args};
 use chrono::{DateTime, Utc};
 use const_format::formatcp;
 use from_enum::FromEnum;
+use log::info;
 use serde::Deserialize;
 use small_http::{Method, Request, Response, Status};
 use small_router::{Router, RouterBuilder};
@@ -125,7 +126,7 @@ mod layers {
     use super::*;
 
     pub(crate) fn log_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
-        println!("{} {}", req.method, req.url.path());
+        info!("{} {}", req.method, req.url.path());
         None
     }
 
@@ -412,6 +413,9 @@ fn router(ctx: Context) -> Router<Context> {
 }
 
 fn main() {
+    // Init logger
+    simple_logger::init().expect("Failed to init logger");
+
     // Load environment variables
     _ = dotenv::dotenv();
     let http_port = env::var("PORT")
@@ -425,7 +429,7 @@ fn main() {
     // Start server
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, http_port))
         .unwrap_or_else(|_| panic!("Can't bind to port: {http_port}"));
-    println!("Server is listening on: http://localhost:{http_port}/");
+    info!("Server is listening on: http://localhost:{http_port}/");
 
     let router = router(context);
     small_http::serve(listener, move |req| router.handle(req));
