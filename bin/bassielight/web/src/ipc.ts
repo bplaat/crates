@@ -42,7 +42,7 @@ export class Ipc {
 
     send(type: string, data: { [key: string]: any } = {}) {
         const message = JSON.stringify({ type, ...data });
-        console.log(`[WEBV] Send ${message}`);
+        console.debug(`Send ${message}`);
         return new Promise((resolve) => {
             if (this.type === IpcType.Ipc) {
                 window.ipc.postMessage(message);
@@ -70,7 +70,7 @@ export class Ipc {
         const listener = (event: MessageEvent) => {
             const { type: receivedType, ...data } = JSON.parse(event.data);
             if (receivedType === type) {
-                console.log(`[WEBV] Recv ${event.data}`);
+                console.debug(`Recv ${event.data}`);
                 callback(data);
             }
         };
