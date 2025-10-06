@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CString, c_void};
+use std::ffi::{CStr, c_void};
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
 use std::process::exit;
@@ -25,6 +25,7 @@ mod libc;
 mod webkit;
 
 const IVAR_SELF: &str = "_self";
+const IVAR_SELF_CSTR: &CStr = c"_self";
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
@@ -50,8 +51,7 @@ impl PlatformEventLoop {
         // Register AppDelegate class
         let mut decl = ClassBuilder::new(c"AppDelegate", class!(NSObject))
             .expect("Can't create AppDelegate class");
-        let ivar_self = CString::new(IVAR_SELF).expect("Should be some");
-        decl.add_ivar::<*const c_void>(&ivar_self);
+        decl.add_ivar::<*const c_void>(IVAR_SELF_CSTR);
         unsafe {
             decl.add_method(
                 sel!(applicationDidFinishLaunching:),
@@ -526,9 +526,37 @@ impl PlatformWebview {
             };
 
             let webview_config: *mut Object = msg_send![class!(WKWebViewConfiguration), new];
+            let webview_config: *mut Object = msg_send![webview_config, autorelease];
             let website_data_store: *mut Object =
                 msg_send![class!(WKWebsiteDataStore), defaultDataStore];
             let _: () = msg_send![webview_config, setWebsiteDataStore:website_data_store];
+
+            #[cfg(feature = "custom_protocol")]
+            for custom_protocol in builder.custom_protocols {
+                let url_scheme = NSString::from_str(&custom_protocol.scheme);
+
+                let class_name = std::ffi::CString::new(format!(
+                    "{}_CustomProtocolDelegate",
+                    custom_protocol.scheme
+                ))
+                .expect("Can't create CString");
+                let mut decl = ClassBuilder::new(class_name.as_c_str(), class!(NSObject))
+                    .expect("Can't create custom protocol delegate class");
+                decl.add_ivar::<*const c_void>(IVAR_SELF_CSTR);
+                decl.add_method(
+                    sel!(webView:startURLSchemeTask:),
+                    custom_protocol_start_url_scheme_task as extern "C" fn(_, _, _, _),
+                );
+                let class = decl.register();
+
+                let delegate: *mut Object = msg_send![class, new];
+                #[allow(deprecated)]
+                let self_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_SELF);
+                *self_ptr = Box::leak(Box::new(custom_protocol)) as *mut crate::CustomProtocol
+                    as *const c_void;
+
+                let _: () = msg_send![webview_config, setURLSchemeHandler:delegate, forURLScheme:url_scheme];
+            }
 
             let webview: *mut Object = msg_send![class!(WKWebView), alloc];
             let webview: *mut Object =
@@ -838,4 +866,87 @@ extern "C" fn webview_did_receive_script_message(
         // Send ipc message received event
         send_event(Event::PageMessageReceived(body));
     }
+}
+
+#[cfg(feature = "custom_protocol")]
+extern "C" fn custom_protocol_start_url_scheme_task(
+    this: *mut Object,
+    _sel: Sel,
+    _webview: *mut Object,
+    url_scheme_task: *mut Object,
+) {
+    let _self = unsafe {
+        #[allow(deprecated)]
+        &mut *(*(*this).get_ivar::<*const c_void>(IVAR_SELF) as *mut crate::CustomProtocol)
+    };
+
+    let ns_request: *mut Object = unsafe { msg_send![url_scheme_task, request] };
+    let req = ns_request_to_http_request(ns_request);
+
+    let res = (_self.handler)(&req);
+
+    let (ns_response, ns_data) = http_response_to_ns_response(&res, &req);
+    unsafe {
+        let _: () = msg_send![url_scheme_task, didReceiveResponse:ns_response];
+        let _: () = msg_send![url_scheme_task, didReceiveData:ns_data];
+        let _: () = msg_send![url_scheme_task, didFinish];
+    }
+}
+
+#[cfg(feature = "custom_protocol")]
+fn ns_request_to_http_request(ns_request: *mut Object) -> small_http::Request {
+    use std::str::FromStr;
+
+    let method: NSString = unsafe { msg_send![ns_request, HTTPMethod] };
+    let method_string = method.to_string();
+    let url: *mut Object = unsafe { msg_send![ns_request, URL] };
+    let url: NSString = unsafe { msg_send![url, absoluteString] };
+    let url_string = url.to_string();
+    let mut req = small_http::Request::with_method_and_url(
+        small_http::Method::from_str(method_string.as_str()).unwrap_or(small_http::Method::Get),
+        &url_string,
+    );
+
+    let body: *mut Object = unsafe { msg_send![ns_request, HTTPBody] };
+    if !body.is_null() {
+        let length: usize = unsafe { msg_send![body, length] };
+        let bytes: *const u8 = unsafe { msg_send![body, bytes] };
+        let mut post_data = Vec::with_capacity(length);
+        post_data.extend_from_slice(unsafe { std::slice::from_raw_parts(bytes, length) });
+        req = req.body(post_data)
+    }
+    req
+}
+
+#[cfg(feature = "custom_protocol")]
+fn http_response_to_ns_response(
+    res: &small_http::Response,
+    req: &small_http::Request,
+) -> (*mut Object, *mut Object) {
+    let ns_response: *mut Object = unsafe {
+        let url: *mut Object =
+            msg_send![class!(NSURL), URLWithString:NSString::from_str(req.url.to_string())];
+
+        let headers: *mut Object = msg_send![class!(NSMutableDictionary), dictionary];
+        for (key, value) in res.headers.iter() {
+            let key: NSString = NSString::from_str(key);
+            let value: NSString = NSString::from_str(value);
+            let _: () = msg_send![headers, setObject:value, forKey:key];
+        }
+
+        let ns_response: *mut Object = msg_send![class!(NSHTTPURLResponse), alloc];
+        let ns_response: *mut Object = msg_send![ns_response, autorelease];
+        let ns_response: *mut Object = msg_send![
+            ns_response,
+            initWithURL:url,
+            statusCode:res.status as i64,
+            HTTPVersion:NSString::from_str(req.version.to_string()),
+            headerFields:headers
+        ];
+        ns_response
+    };
+    let ns_data: *mut Object = unsafe {
+        msg_send![class!(NSData), dataWithBytes:res.body.as_ptr() as *const c_void, length:res.body.len()]
+    };
+    (ns_response, ns_data)
 }
