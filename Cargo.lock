@@ -110,6 +110,7 @@ name = "cargo-bundle"
 version = "0.1.0"
 dependencies = [
  "basic-toml",
+ "copy_dir",
  "serde",
 ]
 

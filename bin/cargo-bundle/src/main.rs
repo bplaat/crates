@@ -10,12 +10,12 @@
 use std::fs;
 use std::process::{Command, exit};
 
+use copy_dir::copy_dir;
+
 use crate::manifest::Manifest;
-use crate::utils::copy_dir;
 
 mod args;
 mod manifest;
-mod utils;
 
 fn read_manifest(path: &str) -> Manifest {
     let manifest_path = format!("{path}/Cargo.toml");
@@ -138,9 +138,10 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
 
     if let Some(resources_dir) = &bundle.resources_dir {
         copy_dir(
-            &format!("{path}/{resources_dir}"),
-            &format!("{bundle_dir}/Resources"),
-        );
+            format!("{path}/{resources_dir}"),
+            format!("{bundle_dir}/Resources"),
+        )
+        .expect("Failed to copy resources directory");
     }
 
     fs::copy(
