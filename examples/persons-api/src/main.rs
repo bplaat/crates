@@ -417,7 +417,7 @@ fn main() {
     let http_port = env::var("PORT")
         .ok()
         .and_then(|port| port.parse::<u16>().ok())
-        .unwrap_or(8000);
+        .unwrap_or(8080);
 
     // Load database
     let context = Context::with_database("database.db");
