@@ -1,0 +1,16 @@
+[package]
+name = "simple_logger"
+version = "5.0.0+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["now"] }
+log = { version = "0.4.28", features = ["std"] }
+
+[target.'cfg(windows)'.dependencies]
+enable-ansi-support = "0.2.1"

@@ -17,10 +17,12 @@ workspace = true
 [dependencies]
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
 dirs = "6.0.0"
+log = "0.4.28"
 rusb = { version = "0.9", features = ["vendored"] }
 rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+simple_logger = "5.0.0"
 small-http = { version = "0.2.0", default-features = false }
 small-websocket = { path = "../../lib/small-websocket", default-features = false }
 

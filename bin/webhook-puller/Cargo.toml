@@ -9,5 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-small-http = { version = "0.2.0", features = ["json"] }
 ini = { path = "../../lib/ini" }
+log = "0.4.28"
+simple_logger = "5.0.0"
+small-http = { version = "0.2.0", features = ["json"] }

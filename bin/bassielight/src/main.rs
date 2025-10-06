@@ -13,6 +13,7 @@ use std::thread;
 use std::time::Duration;
 
 use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
+use log::{error, info};
 use rust_embed::Embed;
 use small_http::{Request, Response};
 use small_websocket::Message;
@@ -71,13 +72,17 @@ fn internal_http_server_handle(req: &Request) -> Option<Response> {
 
 // MARK: Main
 fn main() {
+    // Init logger
+    simple_logger::init_with_level(log::LevelFilter::Debug).expect("Failed to init logger");
+
+    // Create event loop
     let event_loop = EventLoopBuilder::new()
         .app_id("nl.bplaat.BassieLight")
         .build();
 
     // Load config
     let config = Config::load();
-    println!("[RUST] Config: {config:?}");
+    info!("Config: {config:?}");
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
 
     // Start DMX thread
@@ -85,7 +90,7 @@ fn main() {
         if let Some(device) = usb::find_udmx_device() {
             dmx::dmx_thread(device);
         } else {
-            eprintln!("[RUST] No uDMX device found");
+            error!("No uDMX device found");
         }
     });
 

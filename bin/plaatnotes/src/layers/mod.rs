@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use log::info;
 use small_http::{Method, Request, Response};
 
 pub(crate) use self::spa_file_server::spa_file_server_pre_layer;
@@ -13,7 +14,7 @@ mod spa_file_server;
 
 // MARK: Log layer
 pub(crate) fn log_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
-    println!("{} {}", req.method, req.url.path());
+    info!("{} {}", req.method, req.url.path());
     None
 }
 

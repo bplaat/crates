@@ -10,6 +10,7 @@
 
 use std::net::{Ipv4Addr, TcpListener};
 
+use log::info;
 use small_router::{Router, RouterBuilder};
 
 use crate::context::Context;
@@ -41,6 +42,8 @@ fn router(ctx: Context) -> Router<Context> {
 }
 
 fn main() {
+    simple_logger::init().expect("Failed to init logger");
+
     let context = Context::with_database(if let Ok(path) = std::env::var("DATABASE_PATH") {
         path
     } else {
@@ -49,7 +52,7 @@ fn main() {
 
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
         .unwrap_or_else(|_| panic!("Can't bind to port: {HTTP_PORT}"));
-    println!("Server is listening on: http://localhost:{HTTP_PORT}/");
+    info!("Server is listening on: http://localhost:{HTTP_PORT}/");
 
     let router = router(context);
     small_http::serve(listener, move |req| router.handle(req));

@@ -13,16 +13,20 @@ use std::time::Duration;
 use std::{env, thread};
 
 use ini::ConfigFile;
+use log::{info, warn};
 use small_http::{Method, Request, Response, Status};
 
 fn main() {
+    // Init logger
+    simple_logger::init().expect("Failed to init logger");
+
     // Read config
     let config = ConfigFile::load_from_path("config.ini").expect("Can't read config.ini");
 
     // Server handler
     let handler = move |req: &Request| -> Response {
         let path = req.url.path();
-        println!("{} {}", req.method, path);
+        info!("{} {}", req.method, path);
 
         // Check if method is POST
         if req.method != Method::Post {
@@ -34,7 +38,6 @@ fn main() {
             Some(host) => host,
             None => req.url.host().unwrap_or("localhost"),
         };
-        println!("Host: {host}");
 
         // Check if service exists
         if !config.groups().any(|group| group == host) {
@@ -46,10 +49,10 @@ fn main() {
         // Get X-GitHub-Event
         let event = req.headers.get("X-GitHub-Event").unwrap_or("push");
         if event != "push" {
-            println!("Ignoring event: {event}");
+            info!("Ignoring GitHub Webhook event: {event}");
             return Response::with_status(Status::Ok);
         }
-        println!("GitHub Webhook Event: {event}");
+        info!("GitHub Webhook Event: {event}");
 
         // Spawn git task thread
         let service_path = config
@@ -61,7 +64,7 @@ fn main() {
             thread::sleep(Duration::from_secs(10));
 
             // Run git commands
-            println!("Running `git fetch origin` in: {service_path}");
+            info!("Running `git fetch origin` in: {service_path}");
             Command::new("git")
                 .arg("fetch")
                 .arg("origin")
@@ -69,7 +72,7 @@ fn main() {
                 .output()
                 .unwrap_or_else(|_| panic!("Failed to run git pull in: {service_path}"));
 
-            println!("Running `git reset --hard origin/master` in: {service_path}");
+            info!("Running `git reset --hard origin/master` in: {service_path}");
             Command::new("git")
                 .arg("reset")
                 .arg("--hard")
@@ -93,7 +96,7 @@ fn main() {
                 .unwrap_or_else(|| panic!("No Cloudflare zone ID configured for host: {host}"))
                 .to_string();
             thread::spawn(move || {
-                println!("Purging Cloudflare cache...");
+                info!("Purging Cloudflare cache...");
                 let output = Command::new("curl")
                     .arg("-X")
                     .arg("POST")
@@ -109,12 +112,12 @@ fn main() {
                     .output()
                     .unwrap_or_else(|_| panic!("Failed to purge Cloudflare cache"));
                 if output.status.code() == Some(0) {
-                    println!(
+                    info!(
                         "Cloudflare cache purged: {}",
                         String::from_utf8_lossy(&output.stdout)
                     );
                 } else {
-                    println!(
+                    warn!(
                         "Failed to purge Cloudflare cache: {}",
                         String::from_utf8_lossy(&output.stderr)
                     );
@@ -132,6 +135,6 @@ fn main() {
         .unwrap_or(8080);
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))
         .unwrap_or_else(|_| panic!("Can't bind to port: {port}"));
-    println!("Server is listening on: http://localhost:{port}/");
+    info!("Server is listening on: http://localhost:{port}/");
     small_http::serve(listener, handler);
 }
