@@ -16,9 +16,10 @@ use objc2::{class, msg_send, sel};
 
 use self::cocoa::*;
 use self::webkit::*;
-use crate::{
-    Event, EventLoopBuilder, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WebviewBuilder,
-};
+use crate::dpi::{LogicalPoint, LogicalSize};
+use crate::event::Event;
+use crate::event_loop::{EventLoopBuilder, EventLoopHandler};
+use crate::webview::{MacosTitlebarStyle, Theme, WebviewBuilder};
 
 mod cocoa;
 mod libc;
@@ -27,13 +28,13 @@ mod webkit;
 const IVAR_SELF: &str = "_self";
 
 // MARK: EventLoop
-pub(crate) struct PlatformEventLoop {
+pub(crate) struct PlatformEventLoop<'a> {
     application: *mut Object,
-    event_handler: Option<Box<dyn FnMut(Event) + 'static>>,
+    event_handler: Option<&'a mut dyn EventLoopHandler>,
 }
 
-impl PlatformEventLoop {
-    pub(crate) fn new(builder: EventLoopBuilder) -> Self {
+impl<'a> PlatformEventLoop<'a> {
+    pub(crate) fn new(builder: EventLoopBuilder<'a>) -> Self {
         // Ensure single instance
         if let Some(app_id) = builder.app_id {
             let lock_file = std::env::temp_dir().join(app_id).join(".lock");
@@ -75,6 +76,7 @@ impl PlatformEventLoop {
         // Get application
         let application = unsafe {
             let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
+            let _: Bool = msg_send![application, setActivationPolicy:NS_APPLICATION_ACTIVATION_POLICY_REGULAR];
             let _: () = msg_send![application, setDelegate:app_delegate];
             application
         };
@@ -215,12 +217,12 @@ impl PlatformEventLoop {
 
         Self {
             application,
-            event_handler: None,
+            event_handler: builder.handler,
         }
     }
 }
 
-impl crate::EventLoopInterface for PlatformEventLoop {
+impl crate::event_loop::EventLoopInterface for PlatformEventLoop<'_> {
     fn primary_monitor(&self) -> PlatformMonitor {
         unsafe {
             let screen: *mut Object = msg_send![class!(NSScreen), mainScreen];
@@ -241,8 +243,8 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         monitors
     }
 
-    fn run(mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
-        self.event_handler = Some(Box::new(event_handler));
+    fn run(mut self) -> ! {
+        // self.event_handler = Some(Box::new(event_handler));
         unsafe {
             let delegate: *mut Object = msg_send![self.application, delegate];
             #[allow(deprecated)]
@@ -265,17 +267,25 @@ fn send_event(event: Event) {
         &mut *(*(*app_delegate).get_ivar::<*const c_void>(IVAR_SELF) as *mut PlatformEventLoop)
     };
 
-    if let Some(handler) = _self.event_handler.as_mut() {
-        handler(event);
-    }
+    // if let Some(handler) = _self.event_handler.as_mut() {
+    //     handler(event);
+    // }
 }
 
 extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notification: *mut Object) {
+    let _self = unsafe {
+        let app_delegate: *mut Object = msg_send![NSApp, delegate];
+        #[allow(deprecated)]
+        &mut *(*(*app_delegate).get_ivar::<*const c_void>(IVAR_SELF) as *mut PlatformEventLoop)
+    };
+
+    _self.event_handler.as_mut().map(|h| h.activate(_self));
+
     // Focus windows
     unsafe {
         let application: *mut Object = msg_send![notification, object];
-        let _: Bool =
-            msg_send![application, setActivationPolicy:NS_APPLICATION_ACTIVATION_POLICY_REGULAR];
+
+        // Force activate app
         let _: () = msg_send![application, activateIgnoringOtherApps:true];
 
         let windows: *mut Object = msg_send![application, windows];
@@ -317,7 +327,7 @@ impl PlatformEventLoopProxy {
     }
 }
 
-impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
+impl crate::event_loop::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
         unsafe {
             let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
@@ -341,7 +351,7 @@ impl PlatformMonitor {
     }
 }
 
-impl crate::MonitorInterface for PlatformMonitor {
+impl crate::monitor::MonitorInterface for PlatformMonitor {
     fn name(&self) -> String {
         let name: NSString = unsafe { msg_send![self.screen, localizedName] };
         name.to_string()
@@ -601,7 +611,7 @@ impl PlatformWebview {
     }
 }
 
-impl crate::WebviewInterface for PlatformWebview {
+impl crate::webview::WebviewInterface for PlatformWebview {
     fn set_title(&mut self, title: impl AsRef<str>) {
         unsafe { msg_send![self.window, setTitle:NSString::from_str(title)] }
     }
