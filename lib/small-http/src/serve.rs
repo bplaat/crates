@@ -14,7 +14,7 @@ use crate::response::Response;
 /// Start HTTP server single threaded
 pub fn serve_single_threaded(
     listener: TcpListener,
-    handler: impl Fn(&Request) -> Response + Send + 'static,
+    handler: impl Fn(&Request) -> Response + 'static,
 ) {
     // Listen for incoming tcp clients
     for stream in listener.incoming() {
