@@ -12,10 +12,10 @@ use crate::request::Request;
 use crate::response::Response;
 
 /// Start HTTP server single threaded
-pub fn serve_single_threaded<F>(listener: TcpListener, handler: F)
-where
-    F: Fn(&Request) -> Response + Send + 'static,
-{
+pub fn serve_single_threaded(
+    listener: TcpListener,
+    handler: impl Fn(&Request) -> Response + Send + 'static,
+) {
     // Listen for incoming tcp clients
     for stream in listener.incoming() {
         let mut stream = stream.expect("Failed to accept connection");
@@ -54,10 +54,10 @@ where
 
 /// Start HTTP server
 #[cfg(feature = "multi-threaded")]
-pub fn serve<F>(listener: TcpListener, handler: F)
-where
-    F: Fn(&Request) -> Response + Clone + Send + 'static,
-{
+pub fn serve(
+    listener: TcpListener,
+    handler: impl Fn(&Request) -> Response + Clone + Send + 'static,
+) {
     // Create thread pool with workers
     let num_threads = std::thread::available_parallelism().map_or(1, |n| n.get());
     let pool = threadpool::ThreadPool::new(num_threads * 64);
