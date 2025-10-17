@@ -111,16 +111,11 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 
 -   Open a posix shell environment when you are on Windows (e.g. Git Bash)
 -   Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [OpenJDK 21](https://adoptium.net/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
--   Install Rust nightly `rustfmt`:
+-   Install Rust nightly `rustfmt`, `cargo-binstall`, `cargo-deny` and `cargo-nextest`:
 
     ```sh
     rustup toolchain add nightly --component rustfmt
-    ```
-
--   Install `cargo-binstall` see [documentation](https://github.com/cargo-bins/cargo-binstall#quickly)
--   Install `cargo-deny` and `cargo-nextest`:
-
-    ```sh
+    curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
     cargo binstall -y cargo-deny cargo-nextest
     ```
 
@@ -132,12 +127,35 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
     cargo run --bin example-todo-app
     ```
 
+### Additional tools
+
 -   For coverage reports, install the `llvm-tools` and `cargo-llvm-cov` tool:
 
     ```sh
     rustup component add llvm-tools
     cargo binstall -y cargo-llvm-cov
     ./meta.sh coverage
+    ```
+
+-   To build pages, install a wasm target and the `wasm-bindgen-cli` tool:
+
+    ```sh
+    rustup target add wasm32-unknown-unknown
+    cargo binstall -y wasm-bindgen-cli --version 0.2.104
+    ./meta.sh build-pages
+    ```
+
+-   To build macOS app bundles, only on macOS, install targets:
+
+    ```sh
+    rustup target add aarch64-apple-darwin x86_64-apple-darwin
+    ./meta.sh build-bundle
+    ```
+
+-   To build and install bins and GUI applications to your system:
+
+    ```sh
+    ./meta.sh install
     ```
 
 ## License

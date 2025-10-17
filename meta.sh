@@ -83,12 +83,14 @@ build_bundle() {
     cargo bundle --path bin/navidrome
     cargo bundle --path bin/game2048
 }
+
 build_install_windows() {
     package=$1
     name=$2
     cargo build --release --bin "$package"
     cp target/release/$package.exe "$USERPROFILE/Desktop/$name.exe"
 }
+
 build_install_freedesktop() {
     package=$1
     name=$2
