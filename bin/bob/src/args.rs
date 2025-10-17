@@ -46,6 +46,7 @@ pub(crate) struct Args {
     pub thread_count: Option<usize>,
     pub clean_first: bool,
     pub show_time: bool,
+    #[cfg(feature = "javac-server")]
     pub disable_javac_server: bool,
 }
 
@@ -62,6 +63,7 @@ impl Default for Args {
             clean_first: false,
             show_time: false,
             // Disable javac server on Windows and CI environments
+            #[cfg(feature = "javac-server")]
             disable_javac_server: cfg!(windows) || env::var("CI").is_ok(),
         }
     }
@@ -111,6 +113,7 @@ pub(crate) fn parse_args() -> Args {
             "-j" | "--jobs" | "--thread-count" => {
                 args.thread_count = args_iter.next().and_then(|s| s.parse::<usize>().ok());
             }
+            #[cfg(feature = "javac-server")]
             "--disable-javac-server" => args.disable_javac_server = true,
             _ => {
                 eprintln!("Unknown argument: {arg}");
@@ -133,9 +136,16 @@ Options:
   -v, --verbose                         Print verbose output
   --target <target>                     Build for the specified target (e.g., x86_64-unknown-linux-gnu)
   -1, --single-threaded                 Run tasks single threaded
-  -j, --jobs, --thread-count <count>    Use <count> threads for building (default: number of available cores)
-  --disable-javac-server                Disable the spawning and use of the javac server for faster Java compilation
+  -j, --jobs, --thread-count <count>    Use <count> threads for building (default: number of available cores)"
+    );
 
+    #[cfg(feature = "javac-server")]
+    println!(
+        "  --disable-javac-server                Disable the spawning and use of the javac server for faster Java compilation"
+    );
+
+    println!(
+        r"
 Subcommands:
   clean                                 Remove build artifacts
   clean-cache                           Clean global bob cache

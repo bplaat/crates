@@ -61,6 +61,7 @@ pub(crate) fn index_files(dir: &str) -> Vec<String> {
     files
 }
 
+#[allow(dead_code)]
 pub(crate) fn spawn_service(program: &str, args: &[&str]) -> io::Result<()> {
     let mut command = Command::new(program);
     command

@@ -14,31 +14,33 @@ fn main() {
     let out_dir = env::var("OUT_DIR").expect("Should be some");
 
     // MARK: Compile JavacServer.java
-    println!("cargo:rerun-if-changed=src/services/JavacServer.java");
-    let status = Command::new("javac")
-        .arg("src/services/JavacServer.java")
-        .arg("-d")
-        .arg(&out_dir)
-        .status()
-        .expect("Failed to run javac");
-    if !status.success() {
-        panic!("javac failed to compile JavacServer.java");
-    }
+    if cfg!(feature = "javac-server") {
+        println!("cargo:rerun-if-changed=src/services/JavacServer.java");
+        let status = Command::new("javac")
+            .arg("src/services/JavacServer.java")
+            .arg("-d")
+            .arg(&out_dir)
+            .status()
+            .expect("Failed to run javac");
+        if !status.success() {
+            panic!("javac failed to compile JavacServer.java");
+        }
 
-    let class_files: Vec<_> = fs::read_dir(&out_dir)
-        .expect("Failed to read OUT_DIR")
-        .filter_map(|entry| {
-            let entry = entry.ok()?;
-            let path = entry.path();
-            if path.extension()? == "class" {
-                Some(path)
-            } else {
-                None
-            }
-        })
-        .collect();
-    if class_files.len() > 1 {
-        panic!("JavacServer.java should compile to a single class file");
+        let class_files: Vec<_> = fs::read_dir(&out_dir)
+            .expect("Failed to read OUT_DIR")
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let path = entry.path();
+                if path.extension()? == "class" {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if class_files.len() > 1 {
+            panic!("JavacServer.java should compile to a single class file");
+        }
     }
 
     // MARK: Generate tests from examples

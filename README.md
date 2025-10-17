@@ -110,7 +110,7 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 ## Getting Started
 
 -   Open a posix shell environment when you are on Windows (e.g. Git Bash)
--   Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [OpenJDK 17+](https://adoptium.net/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
+-   Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [OpenJDK 21](https://adoptium.net/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
 -   Install Rust nightly `rustfmt`:
 
     ```sh

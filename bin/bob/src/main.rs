@@ -14,13 +14,10 @@ use std::{env, fs};
 use crate::args::{Profile, Subcommand, parse_args, subcommand_help};
 use crate::bobje::Bobje;
 use crate::executor::ExecutorBuilder;
-use crate::services::javac::start_javac_server;
 use crate::tasks::android::{detect_android, run_android_apk};
 use crate::tasks::bundle::{detect_bundle, run_bundle};
 use crate::tasks::cx::{detect_cx, run_ld, run_ld_cunit_tests};
-use crate::tasks::jvm::{
-    detect_jar, detect_java, detect_java_kotlin, run_jar, run_java_class, run_junit_tests,
-};
+use crate::tasks::jvm::{detect_jar, detect_java_kotlin, run_jar, run_java_class, run_junit_tests};
 use crate::utils::{format_bytes, index_files};
 
 mod args;
@@ -143,9 +140,12 @@ fn main() {
     let mut executor = ExecutorBuilder::new();
     let bobje = Bobje::new(&args, ".", &mut executor, true);
     let mut executor = executor.build(&format!("{}/bob.log", &args.target_dir));
-    if detect_java(&bobje.source_files) && !args.disable_javac_server {
-        start_javac_server();
+
+    #[cfg(feature = "javac-server")]
+    if tasks::jvm::detect_java(&bobje.source_files) && !args.disable_javac_server {
+        services::javac::start_javac_server();
     }
+
     executor.execute(args.verbose, args.thread_count);
 
     // Show time taken

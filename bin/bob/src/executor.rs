@@ -28,6 +28,7 @@ pub(crate) struct Task {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(crate) enum TaskAction {
     Phony(String),
     Copy(String, String),

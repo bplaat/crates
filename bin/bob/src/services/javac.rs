@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#![cfg(feature = "javac-server")]
+
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};

@@ -15,7 +15,6 @@ use crate::Bobje;
 use crate::args::Profile;
 use crate::executor::{ExecutorBuilder, TaskAction};
 use crate::manifest::JarDependency;
-use crate::services::javac::javac_server_socket;
 
 const CLASSPATH_SEPARATOR: &str = if cfg!(windows) { ";" } else { ":" };
 
@@ -35,6 +34,7 @@ pub(crate) fn detect_kotlin(source_files: &[String]) -> bool {
 pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let classes_dir = format!("{}/classes", bobje.out_dir());
     fs::create_dir_all(&classes_dir).expect("Failed to create classes directory");
+    #[cfg(feature = "javac-server")]
     let absolute_classes_dir = fs::canonicalize(&classes_dir)
         .expect("Can't canonicalize classes dir")
         .display()
@@ -59,11 +59,15 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
     }
 
     let mut classpath = String::new();
+    #[cfg(feature = "javac-server")]
     classpath.push_str(if bobje.use_javac_server {
         &absolute_classes_dir
     } else {
         &classes_dir
     });
+    #[cfg(not(feature = "javac-server"))]
+    classpath.push_str(&classes_dir);
+
     if !bobje.manifest.build.classpath.is_empty() {
         for path in &bobje.manifest.build.classpath {
             if !Path::new(path).exists() {
@@ -71,6 +75,7 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
                 exit(1);
             }
             classpath.push_str(CLASSPATH_SEPARATOR);
+            #[cfg(feature = "javac-server")]
             classpath.push_str(&if bobje.use_javac_server {
                 fs::canonicalize(path)
                     .expect("Should be some")
@@ -79,6 +84,8 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
             } else {
                 path.to_string()
             });
+            #[cfg(not(feature = "javac-server"))]
+            classpath.push_str(path);
         }
     }
 
@@ -118,6 +125,7 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
             .iter()
             .filter(|f| f.ends_with(".java"))
             .map(|f| {
+                #[cfg(feature = "javac-server")]
                 if bobje.use_javac_server {
                     if !Path::new(f).exists() {
                         fs::create_dir_all(
@@ -133,12 +141,17 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
                 } else {
                     f.to_string()
                 }
+                #[cfg(not(feature = "javac-server"))]
+                f.to_string()
             })
             .collect::<Vec<_>>();
         if !java_files.is_empty() {
+            #[cfg(feature = "javac-server")]
             if bobje.use_javac_server {
                 actions.push(TaskAction::SendMsg(
-                    javac_server_socket().display().to_string(),
+                    crate::services::javac::javac_server_socket()
+                        .display()
+                        .to_string(),
                     format!(
                         "javac {} -cp {} -d {} {}",
                         javac_flags,
@@ -156,6 +169,15 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
                     java_files.join(" ")
                 )));
             }
+
+            #[cfg(not(feature = "javac-server"))]
+            actions.push(TaskAction::Command(format!(
+                "javac {} -cp {} -d {} {}",
+                javac_flags,
+                classpath,
+                classes_dir,
+                java_files.join(" ")
+            )));
         }
 
         // Kotlinc

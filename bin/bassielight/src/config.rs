@@ -55,7 +55,7 @@ impl Default for Config {
 
 impl Config {
     fn default_path() -> PathBuf {
-        if cfg!(not(debug_assertions)) {
+        if !cfg!(debug_assertions) {
             dirs::config_dir()
                 .expect("Can't find config directory")
                 .join("BassieLight")

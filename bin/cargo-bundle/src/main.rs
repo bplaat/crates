@@ -221,7 +221,7 @@ fn create_dmg(target_dir: &str, bundle: &manifest::BundleMetadata) {
 }
 
 fn main() {
-    if cfg!(not(target_os = "macos")) {
+    if !cfg!(target_os = "macos") {
         eprintln!("cargo-bundle can only be run on macOS");
         exit(1);
     }
