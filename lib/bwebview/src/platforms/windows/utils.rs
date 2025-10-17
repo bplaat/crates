@@ -7,15 +7,6 @@
 #![allow(non_snake_case)]
 
 use windows::Win32::Foundation::HWND;
-use windows::core::PWSTR;
-
-pub(crate) fn convert_pwstr_to_string(pwstr: PWSTR) -> String {
-    let mut len = 0;
-    while unsafe { *pwstr.0.add(len) } != 0 {
-        len += 1;
-    }
-    String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(pwstr.0, len) })
-}
 
 #[cfg(target_pointer_width = "32")]
 pub(crate) unsafe fn GetWindowLong(

@@ -30,6 +30,7 @@ use windows::Win32::Graphics::Gdi::{
     InvalidateRect, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MONITORINFOEXA, MonitorFromPoint,
     UpdateWindow,
 };
+use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameA, GetModuleHandleA};
 use windows::Win32::UI::HiDpi::{
     AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForMonitor,
@@ -525,7 +526,7 @@ impl PlatformWebview {
                         let args = args.expect("Should be some");
                         let mut message = PWSTR::default();
                         _ = args.TryGetWebMessageAsString(&mut message);
-                        let message = convert_pwstr_to_string(message);
+                        let message = message.to_string().expect("Should be valid");
                         let (r#type, message) = message.split_at(1);
 
                         #[cfg(feature = "log")]
@@ -586,10 +587,11 @@ impl PlatformWebview {
 
     fn userdata_folder() -> String {
         unsafe {
-            let appdata_path = convert_pwstr_to_string(
+            let appdata_path_pwstr =
                 SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
-                    .expect("Should be some"),
-            );
+                    .expect("Should be some");
+            let appdata_path = appdata_path_pwstr.to_string().expect("Should be valid");
+            CoTaskMemFree(Some(appdata_path_pwstr.0 as *mut c_void));
             format!(
                 "{}/{}",
                 appdata_path,
@@ -700,7 +702,7 @@ impl crate::WebviewInterface for PlatformWebview {
                 let webview = controller.CoreWebView2().expect("Should be some");
                 let mut uri = PWSTR::default();
                 _ = webview.Source(&mut uri);
-                Some(convert_pwstr_to_string(uri))
+                Some(uri.to_string().expect("Should be valid"))
             } else {
                 None
             }
