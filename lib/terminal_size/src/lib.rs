@@ -8,6 +8,8 @@
 
 #![allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
 
+use std::mem::MaybeUninit;
+
 /// Represents the width of a terminal in characters.
 pub struct Width(pub u16);
 
@@ -41,10 +43,11 @@ pub fn terminal_size() -> Option<(Width, Height)> {
             fn ioctl(fd: i32, op: i32, ...) -> i32;
         }
 
-        let mut size: winsize = unsafe { std::mem::zeroed() };
-        if unsafe { ioctl(STDOUT_FILENO, TIOCGWINSZ, &mut size) } == -1 {
+        let mut size = MaybeUninit::<winsize>::uninit();
+        if unsafe { ioctl(STDOUT_FILENO, TIOCGWINSZ, size.as_mut_ptr()) } == -1 {
             return None;
         }
+        let size = unsafe { size.assume_init() };
         Some((Width(size.ws_col), Height(size.ws_row)))
     }
 
@@ -80,8 +83,10 @@ pub fn terminal_size() -> Option<(Width, Height)> {
             ) -> i32;
         }
 
-        let mut csbi: CONSOLE_SCREEN_BUFFER_INFO = unsafe { std::mem::zeroed() };
-        _ = unsafe { GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &mut csbi) };
+        let stdout = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+        let mut csbi = MaybeUninit::<CONSOLE_SCREEN_BUFFER_INFO>::uninit();
+        _ = unsafe { GetConsoleScreenBufferInfo(stdout, csbi.as_mut_ptr()) };
+        let csbi = unsafe { csbi.assume_init() };
         Some((Width(csbi.dwSize.X as u16), Height(csbi.dwSize.Y as u16)))
     }
 
