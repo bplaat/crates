@@ -6,8 +6,8 @@
 
 //! A Todo GUI example
 
-#![forbid(unsafe_code)]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![forbid(unsafe_code)]
 
 use std::{env, fs};
 

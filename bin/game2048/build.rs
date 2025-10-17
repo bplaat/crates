@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! An offline desktop 2048 game app
+#![doc = include_str!("README.md")]
 
 fn main() {
     // Compile Windows resources

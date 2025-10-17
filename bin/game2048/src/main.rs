@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! An offline desktop 2048 game app
+#![doc = include_str!("../README.md")]
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![forbid(unsafe_code)]
 
 use bwebview::{EventLoopBuilder, LogicalSize, WebviewBuilder};
 use rust_embed::Embed;

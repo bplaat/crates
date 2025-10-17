@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple man page explorer tool
+#![doc = include_str!("../README.md")]
+#![forbid(unsafe_code)]
 
 use std::process::Command;
 

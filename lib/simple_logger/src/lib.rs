@@ -6,6 +6,8 @@
 
 //! A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
 
+#![forbid(unsafe_code)]
+
 use std::env;
 
 use chrono::Utc;

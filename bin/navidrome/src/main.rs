@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
-
+#![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 

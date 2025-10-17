@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![doc = "A simple Cargo plugin the builds macOS app bundles"]
+//! A simple Cargo plugin the builds macOS app bundles
+
 #![forbid(unsafe_code)]
 
 use std::fs;

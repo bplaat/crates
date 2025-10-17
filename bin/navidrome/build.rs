@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
+#![doc = include_str!("README.md")]
 
 fn main() {
     // Compile Windows resources
