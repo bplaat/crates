@@ -6,13 +6,13 @@
 
 #![allow(clippy::upper_case_acronyms)]
 
+use std::env;
 use std::ffi::{CString, c_void};
 use std::fs::File;
 use std::io::Read;
 use std::process::exit;
 use std::ptr::null_mut;
 use std::sync::mpsc;
-use std::{env, mem};
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_COLOR, CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
@@ -822,7 +822,7 @@ unsafe extern "system" fn window_proc(
                         min_size.width as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
                     let min_height =
                         min_size.height as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
-                    let minmax_info: *mut MINMAXINFO = mem::transmute(l_param);
+                    let minmax_info: *mut MINMAXINFO = l_param.0 as *mut MINMAXINFO;
                     (*minmax_info).ptMinTrackSize.x = min_width;
                     (*minmax_info).ptMinTrackSize.y = min_height;
                 }

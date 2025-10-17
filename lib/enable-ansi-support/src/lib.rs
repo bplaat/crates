@@ -14,7 +14,7 @@ pub fn enable_ansi_support() -> Result<(), std::io::Error> {
     }
 
     #[cfg(windows)]
-    unsafe {
+    {
         const STD_OUTPUT_HANDLE: i32 = -11;
         const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
         #[link(name = "kernel32")]
@@ -24,13 +24,13 @@ pub fn enable_ansi_support() -> Result<(), std::io::Error> {
             fn SetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, dwMode: u32) -> i32;
         }
 
-        let h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+        let stdout = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
         let mut mode: u32 = 0;
-        if GetConsoleMode(h_stdout, &mut mode) == 0 {
+        if unsafe { GetConsoleMode(stdout, &mut mode) } == 0 {
             return Err(std::io::Error::last_os_error());
         }
         mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        if SetConsoleMode(h_stdout, mode) == 0 {
+        if unsafe { SetConsoleMode(stdout, mode) } == 0 {
             return Err(std::io::Error::last_os_error());
         }
         Ok(())
