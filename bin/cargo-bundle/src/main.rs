@@ -175,7 +175,6 @@ fn create_zip(target_dir: &str, bundle: &manifest::BundleMetadata) {
     assert!(status.success(), "zip command failed");
 }
 
-#[cfg(target_os = "macos")]
 fn create_dmg(target_dir: &str, bundle: &manifest::BundleMetadata) {
     let disk_dir = format!("{target_dir}/disk");
     let app_name = format!("{}.app", bundle.name);
@@ -194,6 +193,7 @@ fn create_dmg(target_dir: &str, bundle: &manifest::BundleMetadata) {
         fs::remove_file(&applications_link)
             .expect("Failed to remove existing Applications symlink");
     }
+    #[cfg(unix)]
     std::os::unix::fs::symlink("/Applications", &applications_link)
         .expect("Failed to create Applications symlink");
 
@@ -221,9 +221,13 @@ fn create_dmg(target_dir: &str, bundle: &manifest::BundleMetadata) {
 }
 
 fn main() {
-    let args = args::parse_args();
+    if cfg!(not(target_os = "macos")) {
+        eprintln!("cargo-bundle can only be run on macOS");
+        exit(1);
+    }
 
     // Subcommands
+    let args = args::parse_args();
     if args.help {
         args::help();
         return;
@@ -251,8 +255,5 @@ fn main() {
     create_zip(&target_dir, bundle);
 
     // Create dmg installer
-    #[cfg(target_os = "macos")]
-    {
-        create_dmg(&target_dir, bundle);
-    }
+    create_dmg(&target_dir, bundle);
 }
