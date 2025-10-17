@@ -71,6 +71,11 @@
             </p>
         </div>
 
+        <script>
+            if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {
+                document.body.classList.add('is-bwebview-macos');
+            }
+        </script>
         <script src="/js/keyboard_input_manager.js"></script>
         <script src="/js/html_actuator.js"></script>
         <script src="/js/grid.js"></script>

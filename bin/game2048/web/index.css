@@ -30,6 +30,9 @@ html {
 body {
     overflow: hidden;
 }
+body.is-bwebview-macos {
+    padding-top: 28px;
+}
 
 .heading:after {
     content: '';
