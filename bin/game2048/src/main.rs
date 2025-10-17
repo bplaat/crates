@@ -21,7 +21,7 @@ fn main() {
     #[allow(unused_mut)]
     let mut webview_builder = WebviewBuilder::new()
         .title("2048")
-        .size(LogicalSize::new(600.0, 840.0))
+        .size(LogicalSize::new(600.0, 850.0))
         .resizable(false)
         .background_color(0xfaf8ef)
         .center()

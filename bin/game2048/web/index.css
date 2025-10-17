@@ -28,7 +28,6 @@ html {
 }
 
 body {
-    margin: 40px 0;
     overflow: hidden;
 }
 
@@ -164,6 +163,7 @@ hr {
 .container {
     width: 500px;
     margin: 0 auto;
+    padding: 20px 0;
 }
 
 @-webkit-keyframes fade-in {
