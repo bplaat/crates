@@ -50,7 +50,7 @@ impl Sha256 {
             self.buffer[buffer_len..buffer_len + to_copy].copy_from_slice(&data[..to_copy]);
             self.length += to_copy as u64;
             data = &data[to_copy..];
-            if self.length % 64 == 0 {
+            if self.length.is_multiple_of(64) {
                 self.process_block();
             }
         }

@@ -16,7 +16,7 @@ pub(crate) static DAY_NAMES: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fr
 
 // MARK: Utils
 pub(crate) fn is_leap_year(year: u32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+    (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
 }
 
 pub(crate) fn timestamp_to_ymd(timestamp: i64) -> (u32, u32, u32) {
