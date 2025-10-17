@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 use std::fs;
+use std::path::Path;
 use std::process::{Command, exit};
 
 use copy_dir::copy_dir;
@@ -157,6 +158,68 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
     .expect("Failed to copy Info.plist");
 }
 
+fn create_zip(target_dir: &str, bundle: &manifest::BundleMetadata) {
+    let zip_name = format!("{}/{}.zip", target_dir, bundle.name);
+    if Path::new(&zip_name).exists() {
+        fs::remove_file(&zip_name).expect("Failed to remove existing zip");
+    }
+    let status = Command::new("zip")
+        .args([
+            "-r",
+            &format!("{}.zip", bundle.name),
+            &format!("{}.app", bundle.name),
+        ])
+        .current_dir(target_dir)
+        .status()
+        .expect("Failed to run zip");
+    assert!(status.success(), "zip command failed");
+}
+
+#[cfg(target_os = "macos")]
+fn create_dmg(target_dir: &str, bundle: &manifest::BundleMetadata) {
+    let disk_dir = format!("{target_dir}/disk");
+    let app_name = format!("{}.app", bundle.name);
+
+    // Create disk directory
+    fs::create_dir_all(&disk_dir).expect("Failed to create disk directory");
+
+    // Copy .app bundle into disk directory
+    let src_app = format!("{target_dir}/{app_name}");
+    let dst_app = format!("{disk_dir}/{app_name}");
+    copy_dir(&src_app, &dst_app).expect("Failed to copy .app bundle to disk");
+
+    // Create Applications symlink
+    let applications_link = format!("{disk_dir}/Applications");
+    if Path::new(&applications_link).exists() {
+        fs::remove_file(&applications_link)
+            .expect("Failed to remove existing Applications symlink");
+    }
+    std::os::unix::fs::symlink("/Applications", &applications_link)
+        .expect("Failed to create Applications symlink");
+
+    // Create DMG using hdiutil
+    let dmg_name = format!("{}/{}.dmg", target_dir, bundle.name);
+    if Path::new(&dmg_name).exists() {
+        fs::remove_file(&dmg_name).expect("Failed to remove existing DMG");
+    }
+    let status = Command::new("hdiutil")
+        .args([
+            "create",
+            "-srcfolder",
+            &disk_dir,
+            "-volname",
+            &bundle.name,
+            "-fs",
+            "HFS+",
+            "-format",
+            "UDZO",
+            &dmg_name,
+        ])
+        .status()
+        .expect("Failed to run hdiutil");
+    assert!(status.success(), "hdiutil failed to create DMG");
+}
+
 fn main() {
     let args = args::parse_args();
 
@@ -183,4 +246,13 @@ fn main() {
 
     // Create bundle folder structure
     create_bundle(&args.path, &target_dir, bundle);
+
+    // Create zip
+    create_zip(&target_dir, bundle);
+
+    // Create dmg installer
+    #[cfg(target_os = "macos")]
+    {
+        create_dmg(&target_dir, bundle);
+    }
 }
