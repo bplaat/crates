@@ -49,21 +49,19 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
                         addr as *const u8,
                         addr_in.as_mut_ptr() as *mut u8,
                         size_of::<libc::sockaddr_in>(),
-                    );
-                    let addr_in = addr_in.assume_init();
-                    result = Ok(IpAddr::V4(std::net::Ipv4Addr::from(u32::from_be(
-                        addr_in.sin_addr.s_addr,
-                    ))));
-                    break;
-                }
+                    )
+                };
+                let addr_in = unsafe { addr_in.assume_init() };
+                result = Ok(IpAddr::V4(std::net::Ipv4Addr::from(u32::from_be(
+                    addr_in.sin_addr.s_addr,
+                ))));
+                break;
             }
             current = unsafe { (*current).ifa_next };
         }
 
-        unsafe {
-            libc::freeifaddrs(ifaddrs);
-            libc::close(socket);
-        }
+        unsafe { libc::freeifaddrs(ifaddrs) };
+        unsafe { libc::close(socket) };
         result
     }
 
