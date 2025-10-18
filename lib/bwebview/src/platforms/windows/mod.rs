@@ -30,15 +30,12 @@ use windows::Win32::Graphics::Gdi::{
     InvalidateRect, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MONITORINFOEXA, MonitorFromPoint,
     UpdateWindow,
 };
-use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameA, GetModuleHandleA};
 use windows::Win32::UI::HiDpi::{
     AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForMonitor,
     GetDpiForSystem, MDT_EFFECTIVE_DPI, SetProcessDpiAwarenessContext,
 };
-use windows::Win32::UI::Shell::{
-    ExtractIconExA, FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath, ShellExecuteW,
-};
+use windows::Win32::UI::Shell::{ExtractIconExA, ShellExecuteW};
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, GWL_STYLE,
     GWL_USERDATA, GetClassInfoExA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect,
@@ -586,24 +583,19 @@ impl PlatformWebview {
     }
 
     fn userdata_folder() -> String {
-        unsafe {
-            let appdata_path_pwstr =
-                SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None)
-                    .expect("Should be some");
-            let appdata_path = appdata_path_pwstr.to_string().expect("Should be valid");
-            CoTaskMemFree(Some(appdata_path_pwstr.0 as *mut c_void));
-            format!(
-                "{}/{}",
-                appdata_path,
-                env::current_exe()
-                    .expect("Can't get current process name")
-                    .file_name()
-                    .expect("Can't get current process name")
-                    .to_string_lossy()
-                    .strip_suffix(".exe")
-                    .expect("Should strip .exe")
-            )
-        }
+        format!(
+            "{}/{}",
+            dirs::config_dir()
+                .expect("Can't get config directory")
+                .display(),
+            env::current_exe()
+                .expect("Can't get current process name")
+                .file_name()
+                .expect("Can't get current process name")
+                .to_string_lossy()
+                .strip_suffix(".exe")
+                .expect("Should strip .exe")
+        )
     }
 }
 

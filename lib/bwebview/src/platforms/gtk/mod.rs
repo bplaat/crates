@@ -462,15 +462,11 @@ impl PlatformWebview {
 
     #[cfg(feature = "remember_window_state")]
     fn settings_path() -> String {
-        let config_dir = env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
-            format!(
-                "{}/.config",
-                env::home_dir().expect("Can't find home dir").display()
-            )
-        });
         format!(
             "{}/{}/settings.ini",
-            config_dir,
+            dirs::config_dir()
+                .expect("Can't get config directory")
+                .display(),
             env::current_exe()
                 .expect("Can't get current process name")
                 .file_name()

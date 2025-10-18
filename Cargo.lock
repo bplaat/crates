@@ -98,6 +98,7 @@ name = "bwebview"
 version = "0.1.0"
 dependencies = [
  "block2",
+ "dirs",
  "local-ip-address",
  "log",
  "mime_guess",
