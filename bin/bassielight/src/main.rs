@@ -15,7 +15,7 @@ use std::time::Duration;
 use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 use log::{error, info};
 use rust_embed::Embed;
-use small_http::{Request, Response};
+use small_http::Response;
 use small_websocket::Message;
 
 use crate::config::Config;
@@ -33,42 +33,6 @@ pub(crate) static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 #[derive(Embed)]
 #[folder = "$OUT_DIR/web"]
 struct WebAssets;
-
-fn internal_http_server_handle(req: &Request) -> Option<Response> {
-    if req.url.path() == "/ipc" {
-        return Some(small_websocket::upgrade(req, |mut ws| {
-            IPC_CONNECTIONS
-                .lock()
-                .expect("Failed to lock IPC connections")
-                .push(IpcConnection::WebSocket(ws.clone()));
-            loop {
-                let message = match ws.recv_non_blocking() {
-                    Ok(message) => message,
-                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                        continue;
-                    }
-                    Err(err) => panic!("WebSocket recv error: {err}"),
-                };
-                match message {
-                    Some(Message::Close(_, _)) => break,
-                    Some(Message::Text(text)) => {
-                        ipc_message_handler(IpcConnection::WebSocket(ws.clone()), &text);
-                    }
-                    None => {
-                        // FIXME: Create async framework don't do micro sleeps
-                        thread::sleep(Duration::from_millis(100));
-                    }
-                    _ => {}
-                }
-            }
-            IPC_CONNECTIONS
-                .lock()
-                .expect("Failed to lock IPC connections")
-                .retain(|conn| conn != &IpcConnection::WebSocket(ws.clone()));
-        }));
-    }
-    None
-}
 
 // MARK: Main
 fn main() {
@@ -88,10 +52,75 @@ fn main() {
     // Start DMX thread
     thread::spawn(move || {
         if let Some(device) = usb::find_udmx_device() {
+            info!("uDMX device found: {device:?}");
             dmx::dmx_thread(device);
         } else {
             error!("No uDMX device found");
         }
+    });
+
+    // Try to get local IP address, fallback to localhost if it fails
+    let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, PORT))
+        .unwrap_or_else(|_| panic!("Can't start local http server"));
+    let local_addr = listener
+        .local_addr()
+        .expect("Can't get local http server port");
+    let url = if let Ok(ip) = local_ip_address::local_ip() {
+        format!("http://{}:{}", ip, local_addr.port())
+    } else {
+        format!("http://{local_addr}")
+    };
+
+    // Start internal http server thread
+    info!("Starting internal HTTP server at {url}");
+    thread::spawn(move || {
+        small_http::serve_single_threaded(listener, move |req| {
+            let mut path = req.url.path().to_string();
+            if path.ends_with('/') {
+                path = format!("{path}index.html");
+            }
+
+            if req.url.path() == "/ipc" {
+                return small_websocket::upgrade(req, |mut ws| {
+                    IPC_CONNECTIONS
+                        .lock()
+                        .expect("Failed to lock IPC connections")
+                        .push(IpcConnection::WebSocket(ws.clone()));
+                    loop {
+                        let message = match ws.recv_non_blocking() {
+                            Ok(message) => message,
+                            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                                continue;
+                            }
+                            Err(err) => panic!("WebSocket recv error: {err}"),
+                        };
+                        match message {
+                            Some(Message::Close(_, _)) => break,
+                            Some(Message::Text(text)) => {
+                                ipc_message_handler(IpcConnection::WebSocket(ws.clone()), &text);
+                            }
+                            None => {
+                                // FIXME: Create async framework don't do micro sleeps
+                                thread::sleep(Duration::from_millis(100));
+                            }
+                            _ => {}
+                        }
+                    }
+                    IPC_CONNECTIONS
+                        .lock()
+                        .expect("Failed to lock IPC connections")
+                        .retain(|conn| conn != &IpcConnection::WebSocket(ws.clone()));
+                });
+            }
+
+            if let Some(file) = WebAssets::get(path.trim_start_matches('/')) {
+                let mime = mime_guess::from_path(&path).first_or_octet_stream();
+                Response::with_header("Content-Type", mime.to_string()).body(file.data)
+            } else {
+                let file = WebAssets::get("index.html").expect("Should be some");
+                Response::with_header("Content-Type", "text/html").body(file.data)
+            }
+        });
     });
 
     // Create webview
@@ -104,10 +133,7 @@ fn main() {
         .remember_window_state()
         .theme(Theme::Dark)
         .background_color(0x1a1a1a)
-        .load_rust_embed::<WebAssets>()
-        .internal_http_server_port(PORT)
-        .internal_http_server_expose()
-        .internal_http_server_handle(internal_http_server_handle);
+        .load_url(&url);
     #[cfg(target_os = "macos")]
     {
         webview_builder =
