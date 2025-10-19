@@ -27,6 +27,16 @@ impl HeaderMap {
         self.0.push((name, value));
     }
 
+    /// Get number of headers
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Is empty
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Iterate over headers
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0.iter().map(|(n, v)| (n.as_str(), v.as_str()))
