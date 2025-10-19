@@ -1,0 +1,9 @@
+[package]
+name = "mime"
+version = "0.3.17+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
