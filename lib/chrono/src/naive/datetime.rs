@@ -9,7 +9,8 @@ use std::ops::{Add, Sub};
 use std::str::FromStr;
 use std::time::Duration;
 
-use crate::utils::{SECS_IN_DAY, timestamp_to_ymd};
+use crate::consts::{SECS_IN_DAY, SECS_IN_HOUR, SECS_IN_MIN};
+use crate::utils::timestamp_to_ymd;
 use crate::{DateTime, NaiveDate, ParseError, Utc};
 
 // MARK: NaiveDateTime
@@ -19,6 +20,7 @@ pub struct NaiveDateTime(i64);
 
 impl NaiveDateTime {
     /// Create a [NaiveDateTime] from a unix timestamp
+    #[deprecated]
     #[allow(unused_variables)]
     pub fn from_timestamp(secs: i64, nsecs: u32) -> Option<Self> {
         Some(Self(secs))
@@ -31,10 +33,11 @@ impl NaiveDateTime {
 
     /// Get the [DateTime] in UTC timezone
     pub fn and_utc(&self) -> DateTime<Utc> {
-        DateTime::<Utc>::from_timestamp(self.0, 0).expect("Should be some")
+        DateTime::<Utc>::from_timestamp_secs(self.0).expect("Should be some")
     }
 
     /// Get the unix timestamp of the [NaiveDateTime]
+    #[deprecated]
     pub fn timestamp(&self) -> i64 {
         self.0
     }
@@ -44,6 +47,7 @@ impl Add<Duration> for NaiveDateTime {
     type Output = Self;
 
     fn add(self, duration: Duration) -> Self::Output {
+        #[allow(deprecated)]
         Self::from_timestamp(self.0 + duration.as_secs() as i64, 0).expect("Should be some")
     }
 }
@@ -52,6 +56,7 @@ impl Sub<Duration> for NaiveDateTime {
     type Output = Self;
 
     fn sub(self, duration: Duration) -> Self::Output {
+        #[allow(deprecated)]
         Self::from_timestamp(self.0 - duration.as_secs() as i64, 0).expect("Should be some")
     }
 }
@@ -103,9 +108,9 @@ impl Display for NaiveDateTime {
             year,
             month,
             day,
-            day_sec / 3600,
-            (day_sec % 3600) / 60,
-            day_sec % 60
+            day_sec / SECS_IN_HOUR,
+            (day_sec % SECS_IN_HOUR) / SECS_IN_MIN,
+            day_sec % SECS_IN_MIN
         )
     }
 }
@@ -135,6 +140,7 @@ impl<'de> serde::Deserialize<'de> for NaiveDateTime {
 
 // MARK: Tests
 #[cfg(test)]
+#[allow(deprecated)]
 mod test {
     use super::*;
 

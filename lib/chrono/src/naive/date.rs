@@ -9,9 +9,8 @@ use std::ops::{Add, Sub};
 use std::str::FromStr;
 use std::time::Duration;
 
-use crate::utils::{
-    DAYS_IN_MONTHS, DAYS_IN_MONTHS_LEAP, SECS_IN_DAY, is_leap_year, timestamp_to_ymd,
-};
+use crate::consts::{EPOCH_YEAR, MONTHS_IN_YEAR, SECS_IN_DAY, SECS_IN_HOUR, SECS_IN_MIN};
+use crate::utils::{days_in_year, days_in_year_month, timestamp_to_ymd};
 use crate::{NaiveDateTime, ParseError};
 
 // MARK: NaiveDate
@@ -26,29 +25,24 @@ impl NaiveDate {
 
     /// Create a [NaiveDate] from year, month and day
     pub fn from_ymd_opt(year: u32, month: u32, day: u32) -> Option<Self> {
-        let days_in_months = if is_leap_year(year) {
-            DAYS_IN_MONTHS_LEAP
-        } else {
-            DAYS_IN_MONTHS
-        };
-        if !(1..=12).contains(&month)
-            || !(1..=days_in_months[(month - 1) as usize]).contains(&(day as u8))
+        if !(1..=MONTHS_IN_YEAR as u32).contains(&month)
+            || !(1..=days_in_year_month(year, month) as u32).contains(&day)
         {
             return None;
         }
 
         let mut days_epoch_diff = 0;
-        if year >= 1970 {
-            for year in 1970..year {
-                days_epoch_diff += if is_leap_year(year) { 366 } else { 365 };
+        if year >= EPOCH_YEAR as u32 {
+            for year in (EPOCH_YEAR as u32)..year {
+                days_epoch_diff += days_in_year(year);
             }
         } else {
-            for year in (year..1970).rev() {
-                days_epoch_diff -= if is_leap_year(year) { 366 } else { 365 };
+            for year in (year..(EPOCH_YEAR as u32)).rev() {
+                days_epoch_diff -= days_in_year(year);
             }
         }
-        for month in 0..(month - 1) {
-            days_epoch_diff += days_in_months[month as usize] as i64;
+        for month in 1..month {
+            days_epoch_diff += days_in_year_month(year, month);
         }
         days_epoch_diff += day as i64 - 1;
 
@@ -57,12 +51,13 @@ impl NaiveDate {
 
     /// Create a [NaiveDateTime] from date with hour, minute and second
     pub fn and_hms_opt(&self, hour: u32, minute: u32, second: u32) -> Option<NaiveDateTime> {
-        let secs = (hour as i64) * 3600 + (minute as i64) * 60 + (second as i64);
+        let secs = (hour as i64) * SECS_IN_HOUR + (minute as i64) * SECS_IN_MIN + (second as i64);
+        #[allow(deprecated)]
         NaiveDateTime::from_timestamp(self.0 + secs, 0)
     }
 
-    /// Get the unix timestamp of the [NaiveDate]
-    pub fn timestamp(&self) -> i64 {
+    #[cfg(test)]
+    fn timestamp(&self) -> i64 {
         self.0
     }
 }

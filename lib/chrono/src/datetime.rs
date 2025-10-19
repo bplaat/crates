@@ -10,7 +10,8 @@ use std::ops::{Add, Sub};
 use std::str::FromStr;
 use std::time::Duration;
 
-use crate::utils::{DAY_NAMES, MONTH_NAMES, SECS_IN_DAY, timestamp_to_ymd};
+use crate::consts::{DAY_NAMES, DAYS_IN_WEEK, MONTH_NAMES, SECS_IN_DAY, SECS_IN_HOUR, SECS_IN_MIN};
+use crate::utils::timestamp_to_ymd;
 use crate::{NaiveDate, NaiveDateTime, ParseError, TimeZone};
 
 // MARK: DateTime
@@ -19,14 +20,14 @@ use crate::{NaiveDate, NaiveDateTime, ParseError, TimeZone};
 pub struct DateTime<T: TimeZone>(i64, PhantomData<T>);
 
 impl<T: TimeZone> DateTime<T> {
-    /// Create a DateTime from a timestamp
-    #[allow(unused_variables)]
-    pub fn from_timestamp(secs: i64, nsecs: u32) -> Option<Self> {
+    /// Create a [DateTime] from a unix timestamp
+    pub fn from_timestamp_secs(secs: i64) -> Option<Self> {
         Some(Self(secs, PhantomData))
     }
 
     /// Get the NaiveDateTime
     pub fn naive_utc(&self) -> NaiveDateTime {
+        #[allow(deprecated)]
         NaiveDateTime::from_timestamp(self.0, 0).expect("Should be some")
     }
 
@@ -38,7 +39,7 @@ impl<T: TimeZone> DateTime<T> {
     /// Format to RFC 2822 string
     pub fn to_rfc2822(&self) -> String {
         let (year, month, day) = timestamp_to_ymd(self.0);
-        let week_day = (self.0.div_euclid(SECS_IN_DAY) + 4).rem_euclid(7); // 1970-01-01 was a Thursday
+        let week_day = (self.0.div_euclid(SECS_IN_DAY) + 4).rem_euclid(DAYS_IN_WEEK); // 1970-01-01 was a Thursday
         let day_sec = self.0.rem_euclid(SECS_IN_DAY);
         format!(
             "{}, {:02} {} {} {:02}:{:02}:{:02} GMT",
@@ -46,9 +47,9 @@ impl<T: TimeZone> DateTime<T> {
             day,
             MONTH_NAMES[month as usize - 1],
             year,
-            day_sec / 3600,
-            (day_sec % 3600) / 60,
-            day_sec % 60
+            day_sec / SECS_IN_HOUR,
+            (day_sec % SECS_IN_HOUR) / SECS_IN_MIN,
+            day_sec % SECS_IN_MIN
         )
     }
 }
@@ -100,12 +101,12 @@ impl<T: TimeZone> FromStr for DateTime<T> {
             return Err(ParseError);
         }
 
-        Self::from_timestamp(
+        Self::from_timestamp_secs(
             NaiveDate::from_str(date_part)?
                 .and_hms_opt(hour, minute, second)
                 .ok_or(ParseError)?
+                .and_utc()
                 .timestamp(),
-            0,
         )
         .ok_or(ParseError)
     }
@@ -121,9 +122,9 @@ impl<T: TimeZone> Display for DateTime<T> {
             year,
             month,
             day,
-            day_sec / 3600,
-            (day_sec % 3600) / 60,
-            day_sec % 60
+            day_sec / SECS_IN_HOUR,
+            (day_sec % SECS_IN_HOUR) / SECS_IN_MIN,
+            day_sec % SECS_IN_MIN
         )
     }
 }
@@ -159,17 +160,17 @@ mod test {
 
     #[test]
     fn test_timestamp() {
-        let datetime = DateTime::<Utc>::from_timestamp(1609459345, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1609459345).unwrap();
         assert_eq!(datetime.timestamp(), 1609459345);
     }
 
     #[test]
     fn test_to_rfc2822() {
-        let datetime = DateTime::<Utc>::from_timestamp(1000000, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1000000).unwrap();
         assert_eq!(datetime.to_rfc2822(), "Mon, 12 Jan 1970 13:46:40 GMT");
-        let datetime = DateTime::<Utc>::from_timestamp(1582977600, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1582977600).unwrap();
         assert_eq!(datetime.to_rfc2822(), "Sat, 29 Feb 2020 12:00:00 GMT");
-        let datetime = DateTime::<Utc>::from_timestamp(-1000000, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(-1000000).unwrap();
         assert_eq!(datetime.to_rfc2822(), "Sat, 20 Dec 1969 10:13:20 GMT");
     }
 
@@ -196,24 +197,24 @@ mod test {
 
     #[test]
     fn test_display() {
-        let datetime = DateTime::<Utc>::from_timestamp(1551355200, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1551355200).unwrap();
         assert_eq!(datetime.to_string(), "2019-02-28T12:00:00Z");
-        let datetime = DateTime::<Utc>::from_timestamp(1582977600, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1582977600).unwrap();
         assert_eq!(datetime.to_string(), "2020-02-29T12:00:00Z");
-        let datetime = DateTime::<Utc>::from_timestamp(-1000000, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(-1000000).unwrap();
         assert_eq!(datetime.to_string(), "1969-12-20T10:13:20Z");
     }
 
     #[test]
     fn test_add_duration() {
-        let datetime = DateTime::<Utc>::from_timestamp(1609459200, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1609459200).unwrap();
         let new_datetime = datetime + Duration::from_secs(1);
         assert_eq!(new_datetime.timestamp(), 1609459201);
     }
 
     #[test]
     fn test_sub_duration() {
-        let datetime = DateTime::<Utc>::from_timestamp(1609459200, 0).unwrap();
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1609459200).unwrap();
         let new_datetime = datetime - Duration::from_secs(1);
         assert_eq!(new_datetime.timestamp(), 1609459199);
     }

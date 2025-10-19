@@ -20,7 +20,6 @@ impl Utc {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .expect("Time went backwards");
-        crate::DateTime::<Self>::from_timestamp(now.as_secs() as i64, now.subsec_nanos())
-            .expect("Should be some")
+        crate::DateTime::<Self>::from_timestamp_secs(now.as_secs() as i64).expect("Should be some")
     }
 }

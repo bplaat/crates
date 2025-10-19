@@ -213,7 +213,7 @@ impl TryFrom<Value> for Option<uuid::Uuid> {
     }
 }
 
-// MARK: From time
+// MARK: From NaiveDate
 #[cfg(feature = "chrono")]
 impl From<chrono::NaiveDate> for Value {
     fn from(value: chrono::NaiveDate) -> Self {
@@ -231,27 +231,10 @@ impl TryFrom<Value> for chrono::NaiveDate {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0)
+            Value::Integer(i) => Ok(chrono::DateTime::<chrono::Utc>::from_timestamp_secs(i)
                 .expect("Should be some")
                 .naive_utc()
                 .date()),
-            _ => Err(ValueError),
-        }
-    }
-}
-
-#[cfg(feature = "chrono")]
-impl From<chrono::DateTime<chrono::Utc>> for Value {
-    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
-        Value::Integer(value.timestamp())
-    }
-}
-#[cfg(feature = "chrono")]
-impl TryFrom<Value> for chrono::DateTime<chrono::Utc> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(i) => Ok(Self::from_timestamp(i, 0).expect("Should be some")),
             _ => Err(ValueError),
         }
     }
@@ -277,13 +260,30 @@ impl TryFrom<Value> for Option<chrono::NaiveDate> {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(i) => Ok(Some(
-                #[allow(deprecated)]
-                chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0)
+                chrono::DateTime::<chrono::Utc>::from_timestamp_secs(i)
                     .expect("Should be some")
                     .naive_utc()
                     .date(),
             )),
             Value::Null => Ok(None),
+            _ => Err(ValueError),
+        }
+    }
+}
+
+// MARK: From DateTime<Utc>
+#[cfg(feature = "chrono")]
+impl From<chrono::DateTime<chrono::Utc>> for Value {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+        Value::Integer(value.timestamp())
+    }
+}
+#[cfg(feature = "chrono")]
+impl TryFrom<Value> for chrono::DateTime<chrono::Utc> {
+    type Error = ValueError;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Integer(i) => Ok(Self::from_timestamp_secs(i).expect("Should be some")),
             _ => Err(ValueError),
         }
     }
@@ -303,7 +303,7 @@ impl TryFrom<Value> for Option<chrono::DateTime<chrono::Utc>> {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Integer(i) => Ok(chrono::DateTime::<chrono::Utc>::from_timestamp(i, 0)),
+            Value::Integer(i) => Ok(chrono::DateTime::<chrono::Utc>::from_timestamp_secs(i)),
             Value::Null => Ok(None),
             _ => Err(ValueError),
         }
