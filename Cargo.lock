@@ -33,7 +33,9 @@ dependencies = [
  "bwebview",
  "copy_dir",
  "dirs",
+ "local-ip-address",
  "log",
+ "mime_guess",
  "rusb",
  "rust-embed",
  "serde",
@@ -100,7 +102,6 @@ version = "0.1.0"
 dependencies = [
  "block2",
  "dirs",
- "local-ip-address",
  "log",
  "mime_guess",
  "objc2",

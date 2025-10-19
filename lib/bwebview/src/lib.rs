@@ -175,6 +175,16 @@ pub enum MacosTitlebarStyle {
     Hidden,
 }
 
+#[cfg(feature = "custom_protocol")]
+struct CustomProtocol {
+    scheme: String,
+    handler: Box<dyn Fn(&small_http::Request) -> small_http::Response + Send + 'static>,
+}
+
+#[cfg(feature = "rust-embed")]
+type EmbedCustomHandler =
+    dyn Fn(&small_http::Request) -> Option<small_http::Response> + Send + 'static;
+
 /// Webview builder
 pub struct WebviewBuilder<'a> {
     title: String,
@@ -191,16 +201,12 @@ pub struct WebviewBuilder<'a> {
     should_fullscreen: bool,
     should_load_url: Option<String>,
     should_load_html: Option<String>,
-
+    #[cfg(feature = "custom_protocol")]
+    custom_protocols: Vec<CustomProtocol>,
     #[cfg(feature = "rust-embed")]
     embed_assets_get: Option<fn(&str) -> Option<rust_embed::EmbeddedFile>>,
     #[cfg(feature = "rust-embed")]
-    internal_http_server_port: Option<u16>,
-    #[cfg(feature = "rust-embed")]
-    internal_http_server_expose: bool,
-    #[cfg(feature = "rust-embed")]
-    internal_http_server_handle: Option<fn(&small_http::Request) -> Option<small_http::Response>>,
-
+    embed_custom_handler: Option<Box<EmbedCustomHandler>>,
     #[cfg(target_os = "macos")]
     macos_titlebar_style: MacosTitlebarStyle,
 }
@@ -225,16 +231,12 @@ impl<'a> Default for WebviewBuilder<'a> {
             should_fullscreen: false,
             should_load_url: None,
             should_load_html: None,
-
+            #[cfg(feature = "custom_protocol")]
+            custom_protocols: Vec::new(),
             #[cfg(feature = "rust-embed")]
             embed_assets_get: None,
             #[cfg(feature = "rust-embed")]
-            internal_http_server_port: None,
-            #[cfg(feature = "rust-embed")]
-            internal_http_server_expose: false,
-            #[cfg(feature = "rust-embed")]
-            internal_http_server_handle: None,
-
+            embed_custom_handler: None,
             #[cfg(target_os = "macos")]
             macos_titlebar_style: MacosTitlebarStyle::Default,
         }
@@ -314,6 +316,20 @@ impl<'a> WebviewBuilder<'a> {
         self
     }
 
+    /// Add custom protocol
+    #[cfg(feature = "custom_protocol")]
+    pub fn with_custom_protocol(
+        mut self,
+        scheme: impl Into<String>,
+        handler: impl Fn(&small_http::Request) -> small_http::Response + Send + 'static,
+    ) -> Self {
+        self.custom_protocols.push(CustomProtocol {
+            scheme: scheme.into(),
+            handler: Box::new(handler),
+        });
+        self
+    }
+
     /// Load URL
     pub fn load_url(mut self, url: impl Into<String>) -> Self {
         self.should_load_url = Some(url.into());
@@ -333,27 +349,14 @@ impl<'a> WebviewBuilder<'a> {
         self
     }
 
-    /// Set internal http server port
+    /// Load rust-embed folder with options
     #[cfg(feature = "rust-embed")]
-    pub fn internal_http_server_port(mut self, port: u16) -> Self {
-        self.internal_http_server_port = Some(port);
-        self
-    }
-
-    /// Expose internal http server to other devices in the network
-    #[cfg(feature = "rust-embed")]
-    pub fn internal_http_server_expose(mut self) -> Self {
-        self.internal_http_server_expose = true;
-        self
-    }
-
-    /// Set internal http server handler
-    #[cfg(feature = "rust-embed")]
-    pub fn internal_http_server_handle(
+    pub fn load_rust_embed_with_custom_handler<A: rust_embed::RustEmbed>(
         mut self,
-        handle: fn(&small_http::Request) -> Option<small_http::Response>,
+        handler: impl Fn(&small_http::Request) -> Option<small_http::Response> + Send + 'static,
     ) -> Self {
-        self.internal_http_server_handle = Some(handle);
+        self.embed_assets_get = Some(A::get);
+        self.embed_custom_handler = Some(Box::new(handler));
         self
     }
 
@@ -367,74 +370,34 @@ impl<'a> WebviewBuilder<'a> {
     /// Build webview
     #[allow(unused_mut)]
     pub fn build(mut self) -> Webview {
-        // Spawn a local http server when assets_get is set
         #[cfg(feature = "rust-embed")]
         if let Some(assets_get) = self.embed_assets_get.take() {
-            let port = self.internal_http_server_port.unwrap_or(0);
-            let listener = if self.internal_http_server_expose {
-                // Try to get local IP address, fallback to localhost if it fails
-                let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, port))
-                    .unwrap_or_else(|_| panic!("Can't start local http server"));
-                let local_addr = listener
-                    .local_addr()
-                    .expect("Can't get local http server port");
-                if let Ok(ip) = local_ip_address::local_ip() {
-                    self.should_load_url = Some(format!(
-                        "http://{}:{}{}",
-                        ip,
-                        local_addr.port(),
-                        self.should_load_url.as_deref().unwrap_or("/")
-                    ));
-                } else {
-                    self.should_load_url = Some(format!(
-                        "http://{}{}",
-                        local_addr,
-                        self.should_load_url.as_deref().unwrap_or("/")
-                    ));
+            let handler = self.embed_custom_handler.take();
+            self = self.with_custom_protocol("app", move |req| {
+                let mut path = req.url.path().to_string();
+                if path.ends_with('/') {
+                    path = format!("{path}index.html");
                 }
-                listener
-            } else {
-                // Start a local HTTP server
-                let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
-                    .unwrap_or_else(|_| panic!("Can't start local http server"));
-                self.should_load_url = Some(format!(
-                    "http://{}{}",
-                    listener
-                        .local_addr()
-                        .expect("Can't get local http server addr"),
-                    self.should_load_url.as_deref().unwrap_or("/")
-                ));
-                listener
-            };
 
-            std::thread::spawn(move || {
-                small_http::serve_single_threaded(listener, move |req| {
-                    let mut path = req.url.path().to_string();
-                    if path.ends_with('/') {
-                        path = format!("{path}index.html");
-                    }
+                if let Some(handle) = &handler
+                    && let Some(response) = handle(req)
+                {
+                    return response;
+                }
 
-                    if let Some(handle) = self.internal_http_server_handle
-                        && let Some(response) = handle(req)
-                    {
-                        return response;
-                    }
-
-                    if let Some(file) = assets_get(path.trim_start_matches('/')) {
-                        let mime = mime_guess::from_path(&path).first_or_octet_stream();
-                        small_http::Response::with_header("Content-Type", mime.to_string())
-                            .body(file.data)
-                    } else if let Some(file) = assets_get("index.html") {
-                        small_http::Response::with_header("Content-Type", "text/html")
-                            .body(file.data)
-                    } else {
-                        small_http::Response::with_status(small_http::Status::NotFound)
-                            .body(b"404 Not Found".to_vec())
-                    }
-                });
+                if let Some(file) = assets_get(path.trim_start_matches('/')) {
+                    let mime = mime_guess::from_path(&path).first_or_octet_stream();
+                    small_http::Response::with_header("Content-Type", mime.to_string())
+                        .body(file.data)
+                } else if let Some(file) = assets_get("index.html") {
+                    small_http::Response::with_header("Content-Type", "text/html").body(file.data)
+                } else {
+                    small_http::Response::with_status(small_http::Status::NotFound)
+                        .body(b"404 Not Found".to_vec())
+                }
             });
+            self = self.load_url("app://index.html");
         }
-
         Webview::new(PlatformWebview::new(self))
     }
 }

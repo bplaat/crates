@@ -16,6 +16,6 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = "1.0"
 
 [features]
+serde = ["dep:serde"]
 v4 = ["dep:getrandom"]
 v7 = ["dep:getrandom"]
-serde = ["dep:serde"]
