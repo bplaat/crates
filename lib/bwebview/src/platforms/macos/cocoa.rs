@@ -85,7 +85,7 @@ pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
 pub(crate) const NS_KEY_VALUE_OBSERVING_OPTION_NEW: u64 = 0x1;
 
 #[repr(transparent)]
-pub(crate) struct NSString(*mut Object);
+pub(crate) struct NSString(pub *mut Object);
 
 unsafe impl Encode for NSString {
     const ENCODING: Encoding = Encoding::Object;

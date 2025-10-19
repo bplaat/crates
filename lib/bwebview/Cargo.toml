@@ -11,7 +11,6 @@ workspace = true
 [dependencies]
 dirs = { version = "6.0.0", optional = true }
 mime_guess = { version = "2.0", default-features = false, optional = true }
-local-ip-address = { version = "0.6.5", optional = true }
 log = { version = "0.4.28", optional = true }
 rust-embed = { version = "8.7", optional = true }
 small-http = { version = "0.2.0", optional = true, default-features = false }
@@ -22,11 +21,7 @@ objc2 = "0.6"
 
 [features]
 default = ["log", "remember_window_state"]
+custom_protocol = ["dep:small-http"]
 log = ["dep:log"]
 remember_window_state = ["dep:dirs"]
-rust-embed = [
-    "dep:rust-embed",
-    "dep:small-http",
-    "dep:mime_guess",
-    "dep:local-ip-address",
-]
+rust-embed = ["custom_protocol", "dep:rust-embed", "dep:mime_guess"]

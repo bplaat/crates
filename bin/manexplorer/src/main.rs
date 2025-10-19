@@ -111,8 +111,7 @@ fn main() {
         .min_size(LogicalSize::new(800.0, 480.0))
         .center()
         .remember_window_state()
-        .load_rust_embed::<WebAssets>()
-        .internal_http_server_handle(internal_http_server_handle);
+        .load_rust_embed_with_custom_handler::<WebAssets>(internal_http_server_handle);
     #[cfg(target_os = "macos")]
     {
         webview_builder =

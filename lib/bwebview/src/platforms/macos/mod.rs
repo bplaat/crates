@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CString, c_void};
+use std::ffi::{CStr, c_void};
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
 use std::process::exit;
@@ -24,7 +24,8 @@ mod cocoa;
 mod libc;
 mod webkit;
 
-const IVAR_SELF: &str = "_self";
+const IVAR_PTR: &str = "_ptr";
+const IVAR_PTR_CSTR: &CStr = c"_ptr";
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
@@ -50,8 +51,7 @@ impl PlatformEventLoop {
         // Register AppDelegate class
         let mut decl = ClassBuilder::new(c"AppDelegate", class!(NSObject))
             .expect("Can't create AppDelegate class");
-        let ivar_self = CString::new(IVAR_SELF).expect("Should be some");
-        decl.add_ivar::<*const c_void>(&ivar_self);
+        decl.add_ivar::<*const c_void>(IVAR_PTR_CSTR);
         unsafe {
             decl.add_method(
                 sel!(applicationDidFinishLaunching:),
@@ -246,8 +246,8 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         unsafe {
             let delegate: *mut Object = msg_send![self.application, delegate];
             #[allow(deprecated)]
-            let self_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_SELF);
-            *self_ptr = &mut self as *mut Self as *const c_void;
+            let prt_to_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_PTR);
+            *prt_to_ptr = &mut self as *mut Self as *const c_void;
         };
         let _: () = unsafe { msg_send![self.application, run] };
         unreachable!();
@@ -262,7 +262,8 @@ fn send_event(event: Event) {
     let _self = unsafe {
         let app_delegate: *mut Object = msg_send![NSApp, delegate];
         #[allow(deprecated)]
-        &mut *(*(*app_delegate).get_ivar::<*const c_void>(IVAR_SELF) as *mut PlatformEventLoop)
+        let ptr = *(*app_delegate).get_ivar::<*const c_void>(IVAR_PTR);
+        &mut *(ptr as *mut PlatformEventLoop)
     };
 
     if let Some(handler) = _self.event_handler.as_mut() {
@@ -513,6 +514,40 @@ impl PlatformWebview {
 
         // Create webview
         let webview = unsafe {
+            // Create webview configuration
+            let webview_config: *mut Object = msg_send![class!(WKWebViewConfiguration), new];
+            let webview_config: *mut Object = msg_send![webview_config, autorelease];
+            let website_data_store: *mut Object =
+                msg_send![class!(WKWebsiteDataStore), defaultDataStore];
+            let _: () = msg_send![webview_config, setWebsiteDataStore:website_data_store];
+
+            #[cfg(feature = "custom_protocol")]
+            for custom_protocol in builder.custom_protocols {
+                let url_scheme = NSString::from_str(&custom_protocol.scheme);
+
+                let class_name = std::ffi::CString::new(format!(
+                    "{}_CustomProtocolDelegate",
+                    custom_protocol.scheme
+                ))
+                .expect("Can't create CString");
+                let mut decl = ClassBuilder::new(class_name.as_c_str(), class!(NSObject))
+                    .expect("Can't create custom protocol delegate class");
+                decl.add_ivar::<*const c_void>(IVAR_PTR_CSTR);
+                decl.add_method(
+                    sel!(webView:startURLSchemeTask:),
+                    custom_protocol_start_url_scheme_task as extern "C" fn(_, _, _, _),
+                );
+                let class = decl.register();
+
+                let delegate: *mut Object = msg_send![class, new];
+                #[allow(deprecated)]
+                let ptr_to_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_PTR);
+                *ptr_to_ptr = Box::leak(Box::new(custom_protocol)) as *mut _ as *const c_void;
+
+                let _: () = msg_send![webview_config, setURLSchemeHandler:delegate, forURLScheme:url_scheme];
+            }
+
+            // Get content view rect
             let content_view: *mut Object = msg_send![window, contentView];
             let webview_rect = if builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
                 || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden
@@ -525,11 +560,7 @@ impl PlatformWebview {
                 msg_send![content_view, frame]
             };
 
-            let webview_config: *mut Object = msg_send![class!(WKWebViewConfiguration), new];
-            let website_data_store: *mut Object =
-                msg_send![class!(WKWebsiteDataStore), defaultDataStore];
-            let _: () = msg_send![webview_config, setWebsiteDataStore:website_data_store];
-
+            // Create webview
             let webview: *mut Object = msg_send![class!(WKWebView), alloc];
             let webview: *mut Object =
                 msg_send![webview, initWithFrame:webview_rect, configuration:webview_config];
@@ -838,4 +869,95 @@ extern "C" fn webview_did_receive_script_message(
         // Send ipc message received event
         send_event(Event::PageMessageReceived(body));
     }
+}
+
+#[cfg(feature = "custom_protocol")]
+extern "C" fn custom_protocol_start_url_scheme_task(
+    this: *mut Object,
+    _sel: Sel,
+    _webview: *mut Object,
+    url_scheme_task: *mut Object,
+) {
+    let custom_protocol = unsafe {
+        #[allow(deprecated)]
+        let ptr = *(*this).get_ivar::<*mut c_void>(IVAR_PTR);
+        &mut *(ptr as *mut crate::CustomProtocol)
+    };
+
+    let ns_request: *mut Object = unsafe { msg_send![url_scheme_task, request] };
+    let req = ns_request_to_http_request(ns_request);
+
+    let res = (custom_protocol.handler)(&req);
+
+    let (ns_response, ns_data) = http_response_to_ns_response(&res, &req);
+    unsafe {
+        let _: () = msg_send![url_scheme_task, didReceiveResponse:ns_response];
+        let _: () = msg_send![url_scheme_task, didReceiveData:ns_data];
+        let _: () = msg_send![url_scheme_task, didFinish];
+    }
+}
+
+#[cfg(feature = "custom_protocol")]
+fn ns_request_to_http_request(ns_request: *mut Object) -> small_http::Request {
+    use std::str::FromStr;
+
+    let method: NSString = unsafe { msg_send![ns_request, HTTPMethod] };
+    let method = method.to_string();
+    let url: *mut Object = unsafe { msg_send![ns_request, URL] };
+    let url: NSString = unsafe { msg_send![url, absoluteString] };
+    let url = url.to_string();
+    let mut req = small_http::Request::with_method_and_url(
+        small_http::Method::from_str(&method).unwrap_or(small_http::Method::Get),
+        &url,
+    );
+
+    let headers: *mut Object = unsafe { msg_send![ns_request, allHTTPHeaderFields] };
+    let keys: *mut Object = unsafe { msg_send![headers, allKeys] };
+    let count: usize = unsafe { msg_send![keys, count] };
+    for i in 0..count {
+        let key: NSString = unsafe { msg_send![keys, objectAtIndex:i] };
+        let value: NSString = unsafe { msg_send![headers, objectForKey:key.0] };
+        req = req.header(key.to_string(), value.to_string());
+    }
+
+    let body: *mut Object = unsafe { msg_send![ns_request, HTTPBody] };
+    if !body.is_null() {
+        let length: usize = unsafe { msg_send![body, length] };
+        let bytes: *const u8 = unsafe { msg_send![body, bytes] };
+        let mut post_data = Vec::with_capacity(length);
+        post_data.extend_from_slice(unsafe { std::slice::from_raw_parts(bytes, length) });
+        req = req.body(post_data)
+    }
+    req
+}
+
+#[cfg(feature = "custom_protocol")]
+fn http_response_to_ns_response(
+    res: &small_http::Response,
+    req: &small_http::Request,
+) -> (*mut Object, *mut Object) {
+    let ns_response: *mut Object = unsafe {
+        let url: *mut Object =
+            msg_send![class!(NSURL), URLWithString:NSString::from_str(req.url.to_string())];
+
+        let headers: *mut Object = msg_send![class!(NSMutableDictionary), dictionary];
+        for (key, value) in &res.headers {
+            let _: () = msg_send![headers, setObject:NSString::from_str(value), forKey:NSString::from_str(key)];
+        }
+
+        let ns_response: *mut Object = msg_send![class!(NSHTTPURLResponse), alloc];
+        let ns_response: *mut Object = msg_send![ns_response, autorelease];
+        let ns_response: *mut Object = msg_send![
+            ns_response,
+            initWithURL:url,
+            statusCode:res.status as i64,
+            HTTPVersion:NSString::from_str(req.version.to_string()),
+            headerFields:headers
+        ];
+        ns_response
+    };
+    let ns_data: *mut Object = unsafe {
+        msg_send![class!(NSData), dataWithBytes:res.body.as_ptr() as *const c_void, length:res.body.len()]
+    };
+    (ns_response, ns_data)
 }
