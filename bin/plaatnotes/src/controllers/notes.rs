@@ -26,7 +26,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Response::with_status(Status::BadRequest).json(report);
+        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
     }
 
     // Get notes
@@ -83,7 +83,7 @@ pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Response {
         Err(_) => return Response::with_status(Status::BadRequest),
     };
     if let Err(report) = body.validate() {
-        return Response::with_status(Status::BadRequest).json(report);
+        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
     }
 
     // Create note
@@ -144,7 +144,7 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
         Err(_) => return Response::with_status(Status::BadRequest),
     };
     if let Err(report) = body.validate() {
-        return Response::with_status(Status::BadRequest).json(report);
+        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
     }
 
     // Update note

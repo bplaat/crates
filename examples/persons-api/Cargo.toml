@@ -25,7 +25,7 @@ simple_logger = "5.0.0"
 small-http = { version = "0.2.0", features = ["json"] }
 small-router = "0.2.0"
 uuid = { version = "1.0", features = ["v7", "serde"] }
-validate = { path = "../../lib/validate", features = ["serde"] }
+validate = { path = "../../lib/validate" }
 
 [build-dependencies]
 openapi-generator = { path = "../../lib/openapi-generator" }

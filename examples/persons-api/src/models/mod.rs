@@ -7,10 +7,10 @@
 use serde::Deserialize;
 use validate::Validate;
 
-pub(crate) use self::note::Note;
+pub(crate) use self::person::*;
 use crate::api;
 
-mod note;
+mod person;
 
 // MARK: IndexQuery
 #[derive(Deserialize, Validate)]
