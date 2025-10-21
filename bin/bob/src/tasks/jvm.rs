@@ -286,7 +286,7 @@ pub(crate) fn download_extract_jar_tasks(
                 done; \
                 touch {lock_file}; \
                 if [ ! -f {downloaded_jar} ]; then \
-                    wget {url} -O {downloaded_jar} 2> /dev/null; \
+                    curl -o {downloaded_jar} {url} 2> /dev/null; \
                 fi; \
                 rm -f {lock_file}"
             ),
