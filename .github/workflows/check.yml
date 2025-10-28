@@ -104,3 +104,24 @@ jobs:
           cargo binstall -y cargo-deny cargo-nextest
       - run: ./meta.sh check
         shell: bash
+
+  # MARK: Windows aarch64
+  check-windows-aarch64:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache-rust-toolchain
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+          key: windows-aarch64-rust-with-tools-toolchain
+      - name: Install extra Rust tooling
+        if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain add nightly --component rustfmt
+          iex (iwr "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.ps1").Content
+          cargo binstall -y cargo-deny cargo-nextest
+      - run: ./meta.sh check
+        shell: bash
