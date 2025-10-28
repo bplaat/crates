@@ -143,7 +143,15 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache-rust-toolchain
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+          key: build-deploy-pages-rust-with-tools-toolchain
       - name: Install extra Rust tooling
+        if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
         run: |
           rustup target add wasm32-unknown-unknown
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
