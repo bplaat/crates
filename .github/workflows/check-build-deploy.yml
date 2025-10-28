@@ -1,4 +1,4 @@
-name: check
+name: check-build-deploy
 
 on:
   push:
@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -125,3 +127,33 @@ jobs:
           cargo binstall -y cargo-deny cargo-nextest
       - run: ./meta.sh check
         shell: bash
+
+  # MARK: Build deploy pages
+  build-deploy-pages:
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs:
+      - check-linux-x86_64
+      - check-linux-aarch64
+      - check-macos-aarch64
+      - check-windows-x86_64
+      - check-windows-aarch64
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install extra Rust tooling
+        run: |
+          rustup target add wasm32-unknown-unknown
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y wasm-bindgen-cli --version 0.2.104
+      - name: Build pages
+        run: ./meta.sh build-pages
+      - name: Upload pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './target/pages'
+      - id: deployment
+        name: Deploy pages
+        uses: actions/deploy-pages@v4
