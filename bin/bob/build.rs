@@ -73,10 +73,10 @@ fn main() {
                 continue;
             }
 
-            // Skip some tests on Linux aarch64 GitHub runner
+            // Skip Android tests on Linux aarch64 GitHub runner
             if cfg!(target_os = "linux")
                 && cfg!(target_arch = "aarch64")
-                && (dir_name.starts_with("android") || dir_name == "asm")
+                && dir_name.starts_with("android")
             {
                 continue;
             }
