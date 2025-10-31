@@ -12,7 +12,7 @@ clean() {
 check_copyright() {
     echo "Checking copyright headers..."
     exit=0
-    for file in $(find bin examples lib -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -name "api.ts"); do
+    for file in $(find . -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*"); do
         if ! grep -E -q "Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+" "$file"; then
             echo "Bad copyright header in: $file"
             exit=1
@@ -23,17 +23,13 @@ check_copyright() {
     fi
 }
 
-check_web() {
-    # Format
-    echo "Checking web formatting..."
+check_formatting() {
+    echo "Checking prettier formatting..."
     # This is the default Prettier version, in the VSCode extension :|
-    npx --prefer-offline --yes prettier@2.8.8 --check --write $(find bin examples lib -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*")
-}
+    npx --prefer-offline --yes prettier@2.8.8 --check $(find . -type f \( -name "*.md" -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*")
 
-check_bob_examples() {
-    # Format
-    echo "Checking Bob examples formatting..."
-    clang-format --dry-run --Werror $(find bin/bob/examples -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.m" -o -name "*.mm" -o -name "*.java" \) ! -path "*/src-gen/*")
+    echo "Checking clang-format formatting..."
+    clang-format --dry-run --Werror $(find bin/bob/examples -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.m" -o -name "*.mm" -o -name "*.java" \) ! -path "*/target/*")
 }
 
 check_rust() {
@@ -54,8 +50,7 @@ check_rust() {
 
 check() {
     check_copyright
-    check_web
-    check_bob_examples
+    check_formatting
     check_rust
 }
 

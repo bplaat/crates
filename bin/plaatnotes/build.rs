@@ -21,7 +21,7 @@ fn main() {
     );
     openapi_generator::generate_schemas_build(
         "openapi.yaml",
-        "web/src/api.ts",
+        "web/src-gen/api.ts",
         openapi_generator::Generator::TypeScript,
     );
 

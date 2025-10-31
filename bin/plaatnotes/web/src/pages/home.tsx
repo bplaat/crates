@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
-import { type Note, type NoteIndexResponse } from '../api.ts';
+import { type Note, type NoteIndexResponse } from '../../src-gen/api.ts';
 import { noteExtractTile } from '../utils.ts';
 import { Link } from '../router.tsx';
 import { API_URL } from '../consts.ts';

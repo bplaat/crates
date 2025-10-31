@@ -56,6 +56,11 @@ pub fn generate_schemas(
         let spec =
             serde_yaml::from_str::<openapi::OpenApi>(&text).expect("Failed to deserialize yaml");
 
+        // Generate dirs if needed
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent).expect("Failed to create output dir");
+        }
+
         // Run generator
         match generator {
             Generator::Rust => {

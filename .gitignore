@@ -2,10 +2,10 @@
 target/
 node_modules/
 dist/
+src-gen/
 *.db*
 *.jks
 !android-dummy-keystore.jks
 .env
 .DS_Store
-api.ts
 config.json
