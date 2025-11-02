@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::path::Path;
 use std::{env, fs};
 
 use crate::Bobje;
@@ -29,11 +28,14 @@ pub(crate) fn process_templates(bobje: &mut Bobje, _executor: &mut ExecutorBuild
         let processed = regex.replace_all(&contents, |caps: &regex::Captures| {
             env::var(&caps[1]).unwrap_or_default()
         });
-        let file_name = Path::new(&path)
-            .file_stem()
-            .expect("Can't get file stem")
-            .to_string_lossy();
-        let dest = format!("{}/src-gen/{}", bobje.out_dir_with_target(), file_name);
+        let dest = format!(
+            "{}/src-gen/{}",
+            bobje.out_dir_with_target(),
+            path.rsplit("src/")
+                .next()
+                .expect("Can't get file stem")
+                .trim_end_matches(".in")
+        );
         write_file_when_different(&dest, &processed).expect("Can't write processed template");
         bobje.source_files.push(dest);
     }
