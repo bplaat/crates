@@ -1,0 +1,8 @@
+[package]
+name = "hello"
+version = "0.1.0"
+
+[package.metadata.jar]
+
+[dependencies]
+json = { maven = "org.json:json:20250517" }

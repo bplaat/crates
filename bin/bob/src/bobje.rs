@@ -9,8 +9,9 @@ use std::fs;
 use std::process::exit;
 
 use crate::args::{Args, Profile};
+use crate::bobje;
 use crate::executor::ExecutorBuilder;
-use crate::manifest::{Dependency, JarDependency, LibraryType, Manifest};
+use crate::manifest::{Dependency, LibraryType, Manifest};
 use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
     generate_android_res_tasks, link_android_classpath,
@@ -22,7 +23,7 @@ use crate::tasks::cx::{
     generate_ld_cunit_tests, generate_ld_tasks, generate_objc_tasks, generate_objcpp_tasks,
 };
 use crate::tasks::jvm::{
-    detect_jar, detect_java_kotlin, detect_kotlin, download_extract_jar_tasks, generate_jar_tasks,
+    CLASSPATH_SEPARATOR, detect_jar, detect_java_kotlin, detect_kotlin, generate_jar_tasks,
     generate_javac_kotlinc_tasks,
 };
 use crate::tasks::template::{detect_template, process_templates};
@@ -62,11 +63,11 @@ pub(crate) struct Bobje {
     pub target: Option<String>,
     pub manifest_dir: String,
     pub manifest: Manifest,
-    pub jar: Option<JarDependency>,
     #[cfg(feature = "javac-server")]
     pub use_javac_server: bool,
     pub source_files: Vec<String>,
     pub dependencies: HashMap<String, Bobje>,
+    pub dependencies_classpath: Vec<String>,
 }
 
 impl Bobje {
@@ -179,6 +180,7 @@ impl Bobje {
 
         // MARK: Build dependencies
         let mut dependencies = HashMap::new();
+        let mut dependencies_classpath = Vec::new();
         for (dep_name, dep) in &manifest.dependencies {
             if let Dependency::Path { path } = &dep {
                 let dep_bobje =
@@ -190,37 +192,57 @@ impl Bobje {
                 dependencies.insert(dep_bobje.name.clone(), dep_bobje);
             }
 
-            if let Dependency::Jar { jar } = &dep {
-                let dep_bobje = Bobje::new_external_jar(args, dep_name, jar, executor);
-                dependencies.insert(dep_bobje.name.clone(), dep_bobje);
-            }
-
             if let Dependency::Maven { maven } = &dep {
                 let mut parts = maven.split(':');
                 let package = parts.next().expect("Can't parse maven string").to_string();
                 let name = parts.next().expect("Can't parse maven string").to_string();
                 let version = parts.next().expect("Can't parse maven string").to_string();
 
-                // NOTE: Fix for kotlin stdlib package
-                let package_override = if package == "org.jetbrains.kotlin" {
-                    Some("kotlin".to_string())
-                } else {
-                    None
-                };
+                // Write dummy pom.xml file
+                let tmpdir = std::env::var("TMPDIR").unwrap_or_else(|_| "/tmp".to_string());
+                let bob_tmp_dir = format!("{}/bob", tmpdir);
+                fs::create_dir_all(&bob_tmp_dir).expect("Failed to create bob tmp directory");
 
-                let url = format!(
-                    "https://repo1.maven.org/maven2/{}/{name}/{version}/{name}-{version}.jar",
-                    package.replace(".", "/")
+                let pom_path = format!("{}/pom.xml", bob_tmp_dir);
+                let pom_contents = format!(
+                    r#"<?xml version="1.0" encoding="UTF-8"?>
+                <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+                    <modelVersion>4.0.0</modelVersion>
+                    <groupId>com.example</groupId>
+                    <artifactId>simple</artifactId>
+                    <version>1.0</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>{package}</groupId>
+                            <artifactId>{name}</artifactId>
+                            <version>{version}</version>
+                        </dependency>
+                    </dependencies>
+                </project>
+                "#,
                 );
-                let jar = JarDependency {
-                    package,
-                    package_override,
-                    version,
-                    path: None,
-                    url: Some(url),
-                };
-                let dep_bobje = Bobje::new_external_jar(args, dep_name, &jar, executor);
-                dependencies.insert(dep_bobje.name.clone(), dep_bobje);
+                fs::write(&pom_path, pom_contents).expect("Failed to write temporary pom.xml file");
+
+                let classpath_path = format!("{}/classpath", bob_tmp_dir);
+                let status = std::process::Command::new("mvn")
+                    .args([
+                        "dependency:build-classpath",
+                        "-f",
+                        &pom_path,
+                        &format!("-Dmdep.outputFile={}", classpath_path),
+                    ])
+                    .status()
+                    .expect("Failed to run mvn");
+                if !status.success() {
+                    eprintln!("Failed to build maven classpath for {maven}");
+                    exit(1);
+                }
+
+                let classpath =
+                    fs::read_to_string(&classpath_path).expect("Failed to read classpath output");
+                for path in classpath.trim().split(CLASSPATH_SEPARATOR) {
+                    dependencies_classpath.push(path.to_string());
+                }
             }
         }
 
@@ -241,11 +263,11 @@ impl Bobje {
             target,
             manifest_dir: manifest_dir.to_string(),
             manifest,
-            jar: None,
             #[cfg(feature = "javac-server")]
             use_javac_server: !args.disable_javac_server,
             source_files,
             dependencies,
+            dependencies_classpath,
         };
 
         let mut visit_bobje = |bobje: &mut Bobje| {
@@ -315,32 +337,6 @@ impl Bobje {
             generate_bundle_tasks(&bobje, executor);
         }
 
-        bobje
-    }
-
-    fn new_external_jar(
-        args: &Args,
-        name: &str,
-        jar: &JarDependency,
-        executor: &mut ExecutorBuilder,
-    ) -> Self {
-        let bobje = Self {
-            target_dir: args.target_dir.clone(),
-            profile: args.profile,
-            is_main: false,
-            r#type: PackageType::ExternalJar,
-            name: name.to_string(),
-            version: jar.version.clone(),
-            target: args.target.clone(),
-            manifest_dir: "".to_string(),
-            manifest: Manifest::default(),
-            jar: Some(jar.clone()),
-            #[cfg(feature = "javac-server")]
-            use_javac_server: !args.disable_javac_server,
-            source_files: vec![],
-            dependencies: HashMap::new(),
-        };
-        download_extract_jar_tasks(&bobje, executor, jar);
         bobje
     }
 

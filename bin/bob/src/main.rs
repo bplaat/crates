@@ -57,18 +57,6 @@ fn subcommand_clean(target_dir: &str, print: bool) {
     fs::remove_dir_all(target_dir).expect("Can't remove target directory");
 }
 
-fn subcommand_clean_cache() {
-    let cache_dir = dirs::cache_dir().expect("Failed to get cache directory");
-    let global_bob_cache_dir = format!("{}/bob", cache_dir.display());
-    if !Path::new(&global_bob_cache_dir).exists() {
-        println!("Removed 0 files");
-        return;
-    }
-
-    print_dir_remove_stats(&global_bob_cache_dir);
-    fs::remove_dir_all(global_bob_cache_dir).expect("Can't remove bob directory");
-}
-
 fn subcommand_version() {
     println!("bob v{}", env!("CARGO_PKG_VERSION"));
 }
@@ -81,10 +69,6 @@ fn main() {
     let start_time = Instant::now();
 
     let args = parse_args();
-    if args.subcommand == Subcommand::CleanCache {
-        subcommand_clean_cache();
-        return;
-    }
     if args.subcommand == Subcommand::Help {
         subcommand_help();
         return;

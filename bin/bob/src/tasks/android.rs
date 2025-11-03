@@ -266,19 +266,19 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut ExecutorB
         .iter()
         .map(|module| format!("{}/{}", classes_dir, module.name.replace('.', "/")))
         .collect::<Vec<_>>();
-    for dependency_bobje in bobje.dependencies.values() {
-        if dependency_bobje.r#type.is_external_jar() {
-            let jar = dependency_bobje.jar.as_ref().expect("Should be some");
-            inputs.push(format!(
-                "{}/{}",
-                classes_dir,
-                jar.package_override
-                    .as_ref()
-                    .unwrap_or(&jar.package)
-                    .replace('.', "/")
-            ));
-        }
-    }
+    // for dependency_bobje in bobje.dependencies.values() {
+    //     if dependency_bobje.r#type.is_external_jar() {
+    //         let jar = dependency_bobje.jar.as_ref().expect("Should be some");
+    //         inputs.push(format!(
+    //             "{}/{}",
+    //             classes_dir,
+    //             jar.package_override
+    //                 .as_ref()
+    //                 .unwrap_or(&jar.package)
+    //                 .replace('.', "/")
+    //         ));
+    //     }
+    // }
 
     // Compile classes.dex with r8 task
     if bobje.profile == Profile::Release {

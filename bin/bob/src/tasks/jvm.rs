@@ -14,9 +14,8 @@ use regex::Regex;
 use crate::Bobje;
 use crate::args::Profile;
 use crate::executor::{ExecutorBuilder, TaskAction};
-use crate::manifest::JarDependency;
 
-const CLASSPATH_SEPARATOR: &str = if cfg!(windows) { ";" } else { ":" };
+pub(crate) const CLASSPATH_SEPARATOR: &str = if cfg!(windows) { ";" } else { ":" };
 
 // MARK: Java/Kotlin tasks
 pub(crate) fn detect_java_kotlin(source_files: &[String]) -> bool {
@@ -67,6 +66,10 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
     });
     #[cfg(not(feature = "javac-server"))]
     classpath.push_str(&classes_dir);
+    for dep in &bobje.dependencies_classpath {
+        classpath.push_str(CLASSPATH_SEPARATOR);
+        classpath.push_str(dep);
+    }
 
     if !bobje.manifest.build.classpath.is_empty() {
         for path in &bobje.manifest.build.classpath {
@@ -103,19 +106,19 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
                 }
             }
         }
-        for dependency_bobje in bobje.dependencies.values() {
-            if dependency_bobje.r#type.is_external_jar() {
-                let jar = dependency_bobje.jar.as_ref().expect("Should be some");
-                inputs.push(format!(
-                    "{}/{}",
-                    classes_dir,
-                    jar.package_override
-                        .as_ref()
-                        .unwrap_or(&jar.package)
-                        .replace('.', "/")
-                ));
-            }
-        }
+        // for dependency_bobje in bobje.dependencies.values() {
+        //     if dependency_bobje.r#type.is_external_jar() {
+        //         let jar = dependency_bobje.jar.as_ref().expect("Should be some");
+        //         inputs.push(format!(
+        //             "{}/{}",
+        //             classes_dir,
+        //             jar.package_override
+        //                 .as_ref()
+        //                 .unwrap_or(&jar.package)
+        //                 .replace('.', "/")
+        //         ));
+        //     }
+        // }
 
         let mut actions = Vec::new();
 
@@ -231,7 +234,11 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
 pub(crate) fn run_java_class(bobje: &Bobje) -> ! {
     let status = Command::new("java")
         .arg("-cp")
-        .arg(format!("{}/classes", bobje.out_dir()))
+        .arg({
+            let mut classpath = bobje.dependencies_classpath.clone();
+            classpath.push(format!("{}/classes", bobje.out_dir()));
+            classpath.join(CLASSPATH_SEPARATOR)
+        })
         .arg(find_main_class(bobje).unwrap_or_else(|| {
             eprintln!("Can't find main class");
             exit(1);
@@ -259,56 +266,6 @@ pub(crate) fn run_junit_tests(bobje: &Bobje) -> ! {
 // MARK: Jar tasks
 pub(crate) fn detect_jar(bobje: &Bobje) -> bool {
     bobje.manifest.package.metadata.jar.is_some()
-}
-
-pub(crate) fn download_extract_jar_tasks(
-    bobje: &Bobje,
-    executor: &mut ExecutorBuilder,
-    jar: &JarDependency,
-) {
-    // Add download task
-    let cache_dir = dirs::cache_dir().expect("Failed to get cache directory");
-    let lock_file = format!("{}/bob/.lock", cache_dir.display());
-    let downloaded_jar = format!(
-        "{}/bob/jar-cache/{}-{}.jar",
-        cache_dir.display(),
-        bobje.name,
-        bobje.version
-    );
-    if let Some(path) = &jar.path {
-        executor.add_task_cp(path.clone(), downloaded_jar.clone());
-    }
-    if let Some(url) = &jar.url {
-        executor.add_task_cmd(
-            format!(
-                "while [ -f {lock_file} ]; do \
-                    sleep 0.1; \
-                done; \
-                touch {lock_file}; \
-                if [ ! -f {downloaded_jar} ]; then \
-                    wget {url} -O {downloaded_jar} 2> /dev/null; \
-                fi; \
-                rm -f {lock_file}"
-            ),
-            vec![],
-            vec![downloaded_jar.clone()],
-        );
-    }
-
-    // Add extract task
-    let classes_dir = format!("{}/classes", bobje.out_dir());
-    executor.add_task_cmd(
-        format!("cd {classes_dir} && unzip {downloaded_jar} *.class -x META-INF/* > /dev/null 2> /dev/null"),
-        vec![downloaded_jar],
-        vec![format!(
-            "{}/{}",
-            classes_dir,
-            jar.package_override
-                .as_ref()
-                .unwrap_or(&jar.package)
-                .replace('.', "/")
-        )],
-    );
 }
 
 pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
@@ -343,7 +300,7 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) 
 
         executor.add_task_cmd(
             format!(
-                "proguard -injars {}\\(!META-INF/**\\) -outjars {} -libraryjars {}/jmods/java.base.jmod {} > /dev/null",
+                "proguard -injars {}\\(!META-INF/**\\) -outjars {} -libraryjars {}/jmods/java.base.jmod {}",
                 classes_dir, optimized_classes_dir, java_home,
                 keeps
                     .iter()

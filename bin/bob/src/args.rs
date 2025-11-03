@@ -12,10 +12,10 @@ use std::process::exit;
 pub(crate) enum Subcommand {
     Build,
     Clean,
-    CleanCache,
     Help,
     Run,
     Test,
+    Tree,
     Version,
 }
 
@@ -75,7 +75,6 @@ pub(crate) fn parse_args() -> Args {
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
             "clean" => args.subcommand = Subcommand::Clean,
-            "clean-cache" => args.subcommand = Subcommand::CleanCache,
             "build" => args.subcommand = Subcommand::Build,
             "rebuild" => {
                 args.subcommand = Subcommand::Build;
@@ -96,6 +95,7 @@ pub(crate) fn parse_args() -> Args {
                 args.profile = Profile::Test;
                 args.clean_first = true;
             }
+            "tree" => args.subcommand = Subcommand::Tree,
             "version" | "--version" => args.subcommand = Subcommand::Version,
             "-C" | "--manifest-dir" => {
                 args.manifest_dir = args_iter.next().expect("Invalid argument")
@@ -148,7 +148,6 @@ Options:
         r"
 Subcommands:
   clean                                 Remove build artifacts
-  clean-cache                           Clean global bob cache
   build                                 Build the project
   rebuild                               Clean and build the project
   help                                  Print this help message
@@ -156,6 +155,7 @@ Subcommands:
   rerun                                 Clean, build and run the build artifact
   test                                  Build and run the unit tests
   retest                                Clean, build and run the unit tests
+  tree                                  Print the dependency tree
   version                               Print the version number"
     );
 }
