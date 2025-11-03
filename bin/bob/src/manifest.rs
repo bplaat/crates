@@ -16,6 +16,7 @@ pub(crate) struct Manifest {
     pub library: Option<Library>,
     pub build: Build,
     pub dependencies: HashMap<String, Dependency>,
+    pub dev_dependencies: HashMap<String, Dependency>,
 }
 
 // MARK: Package

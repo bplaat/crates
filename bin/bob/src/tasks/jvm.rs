@@ -44,8 +44,30 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
     let module_deps = find_dependencies(&modules);
 
     let mut javac_flags = "-Xlint -Werror".to_string();
+
+    let cache_dir = dirs::cache_dir().expect("Failed to get cache directory");
+    let jar_cache = format!("{}/bob/jar-cache", cache_dir.display());
+    javac_flags.push_str(&format!(
+        " -J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED \
+            -J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED \
+            -J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED \
+            -J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED \
+            -J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED \
+            -J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED \
+            -J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED \
+            -J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED \
+            -J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED \
+            -J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED \
+            -XDcompilePolicy=simple \
+          --should-stop=ifError=FLOW \
+          -processorpath {jar_cache}/error_prone_core-2.43.0.jar:{jar_cache}/dataflow-errorprone-3.51.1.jar \
+          \"-Xplugin:ErrorProne\""
+    ));
     if bobje.profile == Profile::Debug {
         javac_flags.push_str(" -g");
+    }
+    if bobje.profile == Profile::Release {
+        javac_flags.push_str(" -g:none");
     }
     if !bobje.manifest.build.javac_flags.is_empty() {
         javac_flags.push(' ');

@@ -22,8 +22,8 @@ use crate::tasks::cx::{
     generate_ld_cunit_tests, generate_ld_tasks, generate_objc_tasks, generate_objcpp_tasks,
 };
 use crate::tasks::jvm::{
-    detect_jar, detect_java_kotlin, detect_kotlin, download_extract_jar_tasks, generate_jar_tasks,
-    generate_javac_kotlinc_tasks,
+    detect_jar, detect_java, detect_java_kotlin, detect_kotlin, download_extract_jar_tasks,
+    generate_jar_tasks, generate_javac_kotlinc_tasks,
 };
 use crate::tasks::template::{detect_template, process_templates};
 use crate::utils::index_files;
@@ -132,6 +132,22 @@ impl Bobje {
             );
         }
 
+        // Add error_prone_core dependency for Java
+        if detect_java(&source_files) {
+            manifest.dev_dependencies.insert(
+                "error_prone_core".to_string(),
+                Dependency::Maven {
+                    maven: "com.google.errorprone:error_prone_core:2.43.0".to_string(),
+                },
+            );
+            manifest.dev_dependencies.insert(
+                "dataflow_errorprone".to_string(),
+                Dependency::Maven {
+                    maven: "io.github.dataflowerrorprone:dataflow-errorprone:3.51.1".to_string(),
+                },
+            );
+        }
+
         // Add Kotlin stdlib when Kotlin is used
         if detect_kotlin(&source_files) {
             // Manual dependency in https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.0.0/kotlin-stdlib-2.0.0.pom
@@ -179,7 +195,11 @@ impl Bobje {
 
         // MARK: Build dependencies
         let mut dependencies = HashMap::new();
-        for (dep_name, dep) in &manifest.dependencies {
+        for (dep_name, dep) in manifest
+            .dependencies
+            .iter()
+            .chain(manifest.dev_dependencies.iter())
+        {
             if let Dependency::Path { path } = &dep {
                 let dep_bobje =
                     Bobje::new(args, &format!("{manifest_dir}/{path}"), executor, false);
@@ -207,9 +227,14 @@ impl Bobje {
                 } else {
                     None
                 };
+                let extra = if detect_kotlin(&source_files) && name == "error_prone_core" {
+                    "-with-dependencies"
+                } else {
+                    ""
+                };
 
                 let url = format!(
-                    "https://repo1.maven.org/maven2/{}/{name}/{version}/{name}-{version}.jar",
+                    "https://repo1.maven.org/maven2/{}/{name}/{version}/{name}-{version}{extra}.jar",
                     package.replace(".", "/")
                 );
                 let jar = JarDependency {
@@ -220,7 +245,11 @@ impl Bobje {
                     url: Some(url),
                 };
                 let dep_bobje = Bobje::new_external_jar(args, dep_name, &jar, executor);
-                dependencies.insert(dep_bobje.name.clone(), dep_bobje);
+
+                // Only insert into dependencies if not from dev_dependencies
+                if !manifest.dev_dependencies.contains_key(dep_name) {
+                    dependencies.insert(dep_bobje.name.clone(), dep_bobje);
+                }
             }
         }
 

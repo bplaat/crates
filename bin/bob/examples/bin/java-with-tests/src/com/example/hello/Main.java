@@ -14,5 +14,7 @@ public class Main {
         cat.greet();
         var dog = new Dog("Rover");
         dog.greet();
+
+        new Exception();
     }
 }
