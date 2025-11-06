@@ -34,6 +34,9 @@ pub(crate) enum IpcMessage {
         #[serde(rename = "toggleColor")]
         toggle_color: Color,
     },
+    SetIntensity {
+        intensity: u8,
+    },
     SetToggleSpeed {
         #[serde(rename = "toggleSpeed")]
         toggle_speed: Option<u64>,
@@ -60,6 +63,7 @@ pub(crate) enum IpcMessage {
 pub(crate) struct State {
     pub color: Color,
     pub toggle_color: Color,
+    pub intensity: u8,
     pub toggle_speed: Option<u64>,
     pub strobe_speed: Option<u64>,
     pub mode: Mode,
@@ -137,6 +141,7 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             let state = State {
                 color: dmx_state.color,
                 toggle_color: dmx_state.toggle_color,
+                intensity: dmx_state.intensity,
                 toggle_speed: dmx_state.toggle_speed.map(|d| d.as_millis() as u64),
                 strobe_speed: dmx_state.strobe_speed.map(|d| d.as_millis() as u64),
                 mode: dmx_state.mode,

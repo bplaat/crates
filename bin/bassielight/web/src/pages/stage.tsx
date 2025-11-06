@@ -43,6 +43,7 @@ export function StagePage() {
 
     const [selectedColor, setSelectedColor] = useIpcState('color');
     const [selectedToggleColor, setSelectedToggleColor] = useIpcState('toggleColor');
+    const [intensity, setIntensity] = useIpcState('intensity');
     const [selectedToggleSpeed, setSelectedToggleSpeed] = useIpcState('toggleSpeed');
     const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useIpcState('strobeSpeed');
     const [switchesLabels, setSwitchesLabels] = useState<string[] | null>(null);
@@ -59,6 +60,7 @@ export function StagePage() {
                 state: {
                     color: number;
                     toggleColor: number;
+                    intensity: number;
                     toggleSpeed: number | null;
                     strobeSpeed: number | null;
                     mode: string;
@@ -69,6 +71,7 @@ export function StagePage() {
             };
             setSelectedColor(state.color, false);
             setSelectedToggleColor(state.toggleColor, false);
+            setIntensity(state.intensity, false);
             setSelectedToggleSpeed(state.toggleSpeed, false);
             setSelectedStrobeSpeed(state.strobeSpeed, false);
             setSelectedMode(state.mode, false);
@@ -129,6 +132,16 @@ export function StagePage() {
                         />
                     ))}
                 </div>
+
+                <h2 class="subtitle">Intensity</h2>
+                <input
+                    class="slider is-fullwidth"
+                    type="range"
+                    min="0"
+                    max="255"
+                    value={intensity ?? 0}
+                    onInput={(e) => setIntensity(parseInt((e.target as HTMLInputElement).value, 10))}
+                />
 
                 <h2 class="subtitle">Toggle Speeds</h2>
                 <div class="buttons">

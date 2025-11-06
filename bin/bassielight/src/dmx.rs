@@ -65,6 +65,7 @@ pub(crate) struct DmxState {
     pub mode: Mode,
     pub color: Color,
     pub toggle_color: Color,
+    pub intensity: u8,
     pub toggle_speed: Option<Duration>,
     pub is_toggle_color: bool,
     pub strobe_speed: Option<Duration>,
@@ -78,6 +79,7 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
     mode: Mode::Manual,
     color: Color::BLACK,
     toggle_color: Color::BLACK,
+    intensity: 0xff,
     toggle_speed: None,
     is_toggle_color: false,
     strobe_speed: None,
@@ -150,15 +152,15 @@ pub(crate) fn dmx_thread(device: Device<Context>) {
                             if fixture.r#type == FixtureType::AmericanDJP56Led
                                 || fixture.r#type == FixtureType::AmericanDJMegaTripar
                             {
-                                dmx[base_addr] = color.r;
-                                dmx[base_addr + 1] = color.g;
-                                dmx[base_addr + 2] = color.b;
+                                dmx[base_addr] = color.r * dmx_state.intensity / 255;
+                                dmx[base_addr + 1] = color.g * dmx_state.intensity / 255;
+                                dmx[base_addr + 2] = color.b * dmx_state.intensity / 255;
                             }
                             if fixture.r#type == FixtureType::AyraCompar10 {
                                 dmx[base_addr] = 255;
-                                dmx[base_addr + 2] = color.r;
-                                dmx[base_addr + 3] = color.g;
-                                dmx[base_addr + 4] = color.b;
+                                dmx[base_addr + 2] = color.r * dmx_state.intensity / 255;
+                                dmx[base_addr + 3] = color.g * dmx_state.intensity / 255;
+                                dmx[base_addr + 4] = color.b * dmx_state.intensity / 255;
                             }
                         } else if dmx_state.mode == Mode::Auto {
                             if fixture.r#type == FixtureType::AmericanDJP56Led {
