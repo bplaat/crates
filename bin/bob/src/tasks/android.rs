@@ -73,10 +73,43 @@ impl AndroidVars {
                 exit(1);
             }
         };
-        let build_tools_path = format!(
-            "{}/build-tools/{}.0.0",
-            android_home, android_metadata.target_sdk_version
-        );
+
+        // Find highest build-tools version matching the target_sdk_version
+        let build_tools_dir = format!("{android_home}/build-tools");
+        let mut highest_version: Option<(u32, u32, u32, String)> = None;
+        if let Ok(entries) = fs::read_dir(&build_tools_dir) {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name();
+                let file_name_str = file_name.to_string_lossy();
+                let parts: Vec<_> = file_name_str.split('.').collect();
+                if parts.len() == 3
+                    && let (Ok(major), Ok(minor), Ok(patch)) = (
+                        parts[0].parse::<u32>(),
+                        parts[1].parse::<u32>(),
+                        parts[2].parse::<u32>(),
+                    )
+                    && major == android_metadata.target_sdk_version
+                    && highest_version
+                        .as_ref()
+                        .is_none_or(|(h_maj, h_min, h_pat, _)| {
+                            (major, minor, patch) > (*h_maj, *h_min, *h_pat)
+                        })
+                {
+                    highest_version = Some((major, minor, patch, file_name_str.to_string()));
+                }
+            }
+        }
+        let build_tools_path = if let Some((_, _, _, folder)) = highest_version {
+            format!("{build_tools_dir}/{folder}")
+        } else {
+            eprintln!(
+                "No build-tools found for target_sdk_version {} in {build_tools_dir}",
+                android_metadata.target_sdk_version
+            );
+            exit(1);
+        };
+
+        // Platform tools path
         let platform_tools_path = format!("{android_home}/platform-tools");
 
         // Extend current path
