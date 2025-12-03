@@ -17,7 +17,7 @@ unsafe extern "C" {
 
 // MARK: GObject
 #[repr(C)]
-pub(crate) struct GObject(u8);
+pub(crate) struct GObject([u8; 0]);
 pub(crate) const G_CONNECT_DEFAULT: i32 = 0;
 #[link(name = "gobject-2.0")]
 unsafe extern "C" {
@@ -34,9 +34,9 @@ unsafe extern "C" {
 
 // MARK: Glib
 #[repr(C)]
-pub(crate) struct GError(u8);
+pub(crate) struct GError([u8; 0]);
 #[repr(C)]
-pub(crate) struct GKeyFile(u8);
+pub(crate) struct GKeyFile([u8; 0]);
 #[link(name = "glib-2.0")]
 unsafe extern "C" {
     pub(crate) fn g_error_free(error: *mut GError);
@@ -83,9 +83,9 @@ unsafe extern "C" {
 
 // MARK: GDK
 #[repr(C)]
-pub(crate) struct GdkDisplay(u8);
+pub(crate) struct GdkDisplay([u8; 0]);
 #[repr(C)]
-pub(crate) struct GdkMonitor(u8);
+pub(crate) struct GdkMonitor([u8; 0]);
 #[repr(C)]
 pub(crate) struct GdkRectangle {
     pub x: i32,
@@ -118,13 +118,13 @@ unsafe extern "C" {
 
 // MARK: GTK
 #[repr(C)]
-pub(crate) struct GtkApplication(u8);
+pub(crate) struct GtkApplication([u8; 0]);
 #[repr(C)]
-pub(crate) struct GtkWidget(u8);
+pub(crate) struct GtkWidget([u8; 0]);
 #[repr(C)]
-pub(crate) struct GtkWindow(u8);
+pub(crate) struct GtkWindow([u8; 0]);
 #[repr(C)]
-pub(crate) struct GtkSettings(u8);
+pub(crate) struct GtkSettings([u8; 0]);
 pub(crate) const GTK_WINDOW_TOPLEVEL: i32 = 0;
 pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
 pub(crate) const GTK_STATE_FLAG_NORMAL: i32 = 0;
@@ -163,19 +163,19 @@ unsafe extern "C" {
 
 // MARK: WebKitGtk
 #[repr(C)]
-pub(crate) struct WebKitWebView(u8);
+pub(crate) struct WebKitWebView([u8; 0]);
 #[repr(C)]
-pub(crate) struct WebkitSettings(u8);
+pub(crate) struct WebkitSettings([u8; 0]);
 #[repr(C)]
-pub(crate) struct WebKitNavigationPolicyDecision(u8);
+pub(crate) struct WebKitNavigationPolicyDecision([u8; 0]);
 #[repr(C)]
-pub(crate) struct WebKitURIRequest(u8);
+pub(crate) struct WebKitURIRequest([u8; 0]);
 #[repr(C)]
-pub(crate) struct WebKitUserContentManager(u8);
+pub(crate) struct WebKitUserContentManager([u8; 0]);
 #[repr(C)]
-pub(crate) struct WebKitUserScript(u8);
+pub(crate) struct WebKitUserScript([u8; 0]);
 #[repr(C)]
-pub(crate) struct WebKitJavascriptResult(u8);
+pub(crate) struct WebKitJavascriptResult([u8; 0]);
 pub(crate) const WEBKIT_LOAD_STARTED: i32 = 1;
 pub(crate) const WEBKIT_LOAD_FINISHED: i32 = 3;
 pub(crate) const WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION: i32 = 1;
