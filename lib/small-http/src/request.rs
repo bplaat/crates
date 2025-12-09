@@ -297,7 +297,7 @@ impl Request {
             path.to_string()
         };
         _ = write!(stream, "{} {} HTTP/1.1\r\n", self.method, path);
-        for (name, value) in self.headers.iter() {
+        for (name, value) in &self.headers {
             _ = write!(stream, "{name}: {value}\r\n");
         }
         _ = write!(stream, "\r\n");

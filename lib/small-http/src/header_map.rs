@@ -26,9 +26,16 @@ impl HeaderMap {
     pub fn insert(&mut self, name: String, value: String) {
         self.0.push((name, value));
     }
+}
 
-    /// Iterate over headers
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+impl<'a> IntoIterator for &'a HeaderMap {
+    type Item = (&'a str, &'a str);
+    type IntoIter = std::iter::Map<
+        std::slice::Iter<'a, (String, String)>,
+        fn(&(String, String)) -> (&str, &str),
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.0.iter().map(|(n, v)| (n.as_str(), v.as_str()))
     }
 }

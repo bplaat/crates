@@ -68,7 +68,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         for field in data.fields {
             let is_option = field.ty.to_token_stream().to_string().starts_with("Option");
             let mut rules = Vec::new();
-            for attr in field.attrs.iter() {
+            for attr in &field.attrs {
                 if attr.path().is_ident("validate") {
                     let list = attr
                         .parse_args_with(

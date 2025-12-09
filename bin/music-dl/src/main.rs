@@ -169,10 +169,10 @@ fn download_track(
                 println!("Updating metadata {path}...");
                 let mut tag = mp4ameta::Tag::default();
                 tag.set_title(&track.title);
-                for artist in album.contributors.iter() {
+                for artist in &album.contributors {
                     tag.add_artist(artist.name.as_str());
                 }
-                for artist in track.contributors.iter() {
+                for artist in &track.contributors {
                     if album
                         .contributors
                         .iter()
@@ -183,10 +183,10 @@ fn download_track(
                     tag.add_artist(artist.name.as_str());
                 }
                 tag.set_album(&album.title);
-                for artist in album.contributors.iter() {
+                for artist in &album.contributors {
                     tag.add_album_artist(artist.name.as_str());
                 }
-                for genre in album.genres.data.iter() {
+                for genre in &album.genres.data {
                     tag.add_genre(genre.name.as_str());
                 }
                 tag.set_track(track.track_position as u16, album.nb_tracks as u16);

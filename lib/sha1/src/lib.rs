@@ -143,9 +143,9 @@ mod test {
             ("hello world", "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed"),
         ];
 
-        for (input, expected) in test_cases.iter() {
+        for (input, expected) in test_cases {
             let hash = Sha1::digest(input.as_bytes());
-            assert_eq!(to_hex(&hash), *expected, "Failed for input: {input}");
+            assert_eq!(to_hex(&hash), expected, "Failed for input: {input}");
         }
     }
 }

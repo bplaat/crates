@@ -36,7 +36,7 @@ impl Client {
     /// Fetch a request
     pub fn fetch(&mut self, mut request: Request) -> Result<Response, FetchError> {
         // Add client headers to request
-        for (name, value) in self.headers.iter() {
+        for (name, value) in &self.headers {
             request = request.header(name, value);
         }
 
