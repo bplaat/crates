@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use std::{env, fs, thread};
 
-use sha1::{Digest, Sha1};
+use sha1::Sha1;
 use threadpool::ThreadPool;
 
 use crate::log::{Log, LogEntry};
@@ -60,9 +60,7 @@ impl Task {
                     exit(1)
                 });
                 if !buffer.is_empty() {
-                    let mut hasher = Sha1::new();
-                    hasher.update(buffer);
-                    Some(hasher.finalize().to_vec())
+                    Some(Sha1::digest(buffer))
                 } else {
                     None
                 }
@@ -119,9 +117,7 @@ impl Task {
                         exit(1)
                     });
                     if !buffer.is_empty() {
-                        let mut hasher = Sha1::new();
-                        hasher.update(buffer);
-                        Some(hasher.finalize().to_vec())
+                        Some(Sha1::digest(buffer))
                     } else {
                         None
                     }

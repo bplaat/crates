@@ -23,6 +23,15 @@ pub struct Sha1 {
     buffer: Vec<u8>,
 }
 
+impl Sha1 {
+    /// Compute the SHA1 digest of the given data
+    pub fn digest(data: impl AsRef<[u8]>) -> Vec<u8> {
+        let mut hasher = Sha1::new();
+        hasher.update(data);
+        hasher.finalize()
+    }
+}
+
 impl Digest for Sha1 {
     fn new() -> Self {
         Sha1 { buffer: Vec::new() }
@@ -135,9 +144,7 @@ mod test {
         ];
 
         for (input, expected) in test_cases.iter() {
-            let mut sha1 = Sha1::new();
-            sha1.update(input);
-            let hash = sha1.finalize();
+            let hash = Sha1::digest(input.as_bytes());
             assert_eq!(to_hex(&hash), *expected, "Failed for input: {input}");
         }
     }
