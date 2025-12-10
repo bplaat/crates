@@ -16,6 +16,7 @@ regex = { version = "1.11", default-features = false, features = [
     "unicode-perl",
 ] }
 serde = { version = "1.0", features = ["derive"] }
+semver = "1.0"
 sha1 = "0.10.6"
 terminal_size = "0.4.2"
 threadpool = "1.8"

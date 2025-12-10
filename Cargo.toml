@@ -42,9 +42,11 @@ mime = { path = "lib/mime" }
 mime_guess = { path = "lib/mime_guess" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
+semver = { path = "lib/semver" }
 sha1 = { path = "lib/sha1" }
 simple_logger = { path = "lib/simple_logger" }
 terminal_size = { path = "lib/terminal_size" }
 threadpool = { path = "lib/threadpool" }
 url = { path = "lib/url" }
 uuid = { path = "lib/uuid" }
+winres = { path = "lib/winres" }

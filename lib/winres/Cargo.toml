@@ -1,0 +1,12 @@
+[package]
+name = "winres"
+version = "0.1.12+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+semver = "1.0"

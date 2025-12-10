@@ -66,8 +66,8 @@ pub(crate) struct JarMetadata {
 #[derive(Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct AndroidMetadata {
-    pub min_sdk_version: u32,
-    pub target_sdk_version: u32,
+    pub min_sdk_version: u16,
+    pub target_sdk_version: u16,
     pub main_activity: String,
     pub keystore_file: String,
     pub key_alias: String,

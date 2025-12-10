@@ -76,31 +76,25 @@ impl AndroidVars {
 
         // Find highest build-tools version matching the target_sdk_version
         let build_tools_dir = format!("{android_home}/build-tools");
-        let mut highest_version: Option<(u32, u32, u32, String)> = None;
+        let mut highest_version: Option<semver::Version> = None;
         if let Ok(entries) = fs::read_dir(&build_tools_dir) {
             for entry in entries.flatten() {
                 let file_name = entry.file_name();
                 let file_name_str = file_name.to_string_lossy();
-                let parts: Vec<_> = file_name_str.split('.').collect();
-                if parts.len() == 3
-                    && let (Ok(major), Ok(minor), Ok(patch)) = (
-                        parts[0].parse::<u32>(),
-                        parts[1].parse::<u32>(),
-                        parts[2].parse::<u32>(),
-                    )
-                    && major == android_metadata.target_sdk_version
+
+                let version =
+                    semver::Version::parse(&file_name_str).expect("Can't parse dir semver");
+                if version.major == android_metadata.target_sdk_version
                     && highest_version
                         .as_ref()
-                        .is_none_or(|(h_maj, h_min, h_pat, _)| {
-                            (major, minor, patch) > (*h_maj, *h_min, *h_pat)
-                        })
+                        .is_none_or(|highest_version| &version > highest_version)
                 {
-                    highest_version = Some((major, minor, patch, file_name_str.to_string()));
+                    highest_version = Some(version);
                 }
             }
         }
-        let build_tools_path = if let Some((_, _, _, folder)) = highest_version {
-            format!("{build_tools_dir}/{folder}")
+        let build_tools_path = if let Some(version) = highest_version {
+            format!("{build_tools_dir}/{version}")
         } else {
             eprintln!(
                 "No build-tools found for target_sdk_version {} in {build_tools_dir}",
@@ -482,12 +476,6 @@ pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
 
 // MARK: Utils
 fn parse_version_to_code(version: &str) -> u32 {
-    let version_parts: Vec<u32> = version
-        .split('.')
-        .map(|part| part.parse().expect("Version must be in semver format"))
-        .collect();
-    if version_parts.len() != 3 {
-        panic!("Version must be in semver format");
-    }
-    version_parts[0] * 1_000_000 + version_parts[1] * 1_000 + version_parts[2]
+    let version = semver::Version::parse(version).expect("Can't parse version semver");
+    (version.major as u32) * 1_000_000 + (version.minor as u32) * 1_000 + (version.patch as u32)
 }
