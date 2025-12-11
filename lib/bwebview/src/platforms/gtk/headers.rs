@@ -21,6 +21,11 @@ pub(crate) struct GObject([u8; 0]);
 pub(crate) const G_CONNECT_DEFAULT: i32 = 0;
 #[link(name = "gobject-2.0")]
 unsafe extern "C" {
+    pub(crate) fn g_object_new(
+        object_type: *mut c_void,
+        first_property_name: *const c_char,
+        ...
+    ) -> *mut GObject;
     pub(crate) fn g_object_set(instance: *mut GObject, first_property_name: *const c_char, ...);
     pub(crate) fn g_signal_connect_data(
         instance: *mut GObject,
@@ -30,6 +35,7 @@ unsafe extern "C" {
         destroy_data: *const c_void,
         connect_flags: i32,
     );
+    pub(crate) fn g_object_unref(object: *mut GObject);
 }
 
 // MARK: Glib
@@ -79,6 +85,26 @@ unsafe extern "C" {
     pub(crate) fn g_key_file_free(key_file: *mut GKeyFile);
     pub(crate) fn g_idle_add(function: extern "C" fn(*mut c_void) -> i32, data: *mut c_void)
     -> u32;
+}
+
+// MARK: GIO
+#[repr(C)]
+pub(crate) struct GInputStream([u8; 0]);
+#[link(name = "gio-2.0")]
+unsafe extern "C" {
+    pub(crate) fn g_memory_input_stream_new_from_data(
+        data: *const c_void,
+        len: usize,
+        destroy: *const c_void,
+    ) -> *mut GInputStream;
+    pub(crate) fn g_input_stream_read_all(
+        stream: *mut GInputStream,
+        buffer: *mut c_void,
+        count: usize,
+        bytes_read: *mut usize,
+        cancellable: *mut c_void,
+        error: *mut *mut GError,
+    ) -> bool;
 }
 
 // MARK: GDK
@@ -161,7 +187,28 @@ unsafe extern "C" {
     );
 }
 
+// MARK: Soup
+#[repr(C)]
+pub(crate) struct SoupMessageHeaders([u8; 0]);
+pub(crate) const SOUP_MESSAGE_HEADERS_RESPONSE: i32 = 1;
+#[link(name = "soup-3.0")]
+unsafe extern "C" {
+    pub(crate) fn soup_message_headers_new(r#type: i32) -> *mut SoupMessageHeaders;
+    pub(crate) fn soup_message_headers_foreach(
+        headers: *mut SoupMessageHeaders,
+        func: extern "C" fn(name: *const c_char, value: *const c_char, user_data: *mut c_void),
+        user_data: *mut c_void,
+    );
+    pub(crate) fn soup_message_headers_append(
+        headers: *mut SoupMessageHeaders,
+        name: *const c_char,
+        value: *const c_char,
+    );
+}
+
 // MARK: WebKitGtk
+#[repr(C)]
+pub(crate) struct WebKitWebContext([u8; 0]);
 #[repr(C)]
 pub(crate) struct WebKitWebView([u8; 0]);
 #[repr(C)]
@@ -176,6 +223,10 @@ pub(crate) struct WebKitUserContentManager([u8; 0]);
 pub(crate) struct WebKitUserScript([u8; 0]);
 #[repr(C)]
 pub(crate) struct WebKitJavascriptResult([u8; 0]);
+#[repr(C)]
+pub(crate) struct WebKitURISchemeResponse([u8; 0]);
+#[repr(C)]
+pub(crate) struct WebKitURISchemeRequest([u8; 0]);
 pub(crate) const WEBKIT_LOAD_STARTED: i32 = 1;
 pub(crate) const WEBKIT_LOAD_FINISHED: i32 = 3;
 pub(crate) const WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION: i32 = 1;
@@ -183,6 +234,51 @@ pub(crate) const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
 pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
 #[link(name = "webkit2gtk-4.1")]
 unsafe extern "C" {
+    pub(crate) fn webkit_web_context_get_default() -> *mut WebKitWebContext;
+    pub(crate) fn webkit_web_context_register_uri_scheme(
+        context: *mut WebKitWebContext,
+        scheme: *const c_char,
+        callback: *const c_void,
+        user_data: *mut c_void,
+        user_data_destroy_func: *const c_void,
+    );
+
+    pub(crate) fn webkit_uri_scheme_response_new(
+        input_stream: *mut GInputStream,
+        stream_length: i64,
+    ) -> *mut WebKitURISchemeResponse;
+    pub(crate) fn webkit_uri_scheme_response_set_status(
+        response: *mut WebKitURISchemeResponse,
+        status_code: u32,
+        reason_phrase: *const c_char,
+    );
+    pub(crate) fn webkit_uri_scheme_response_set_http_headers(
+        response: *mut WebKitURISchemeResponse,
+        headers: *mut SoupMessageHeaders,
+    );
+    pub(crate) fn webkit_uri_scheme_response_set_content_type(
+        response: *mut WebKitURISchemeResponse,
+        content_type: *const c_char,
+    );
+
+    pub(crate) fn webkit_uri_scheme_request_get_http_method(
+        request: *mut WebKitURISchemeRequest,
+    ) -> *const c_char;
+    pub(crate) fn webkit_uri_scheme_request_get_uri(
+        request: *mut WebKitURISchemeRequest,
+    ) -> *const c_char;
+    pub(crate) fn webkit_uri_scheme_request_get_http_headers(
+        request: *mut WebKitURISchemeRequest,
+    ) -> *mut SoupMessageHeaders;
+    pub(crate) fn webkit_uri_scheme_request_get_http_body(
+        request: *mut WebKitURISchemeRequest,
+    ) -> *mut GInputStream;
+    pub(crate) fn webkit_uri_scheme_request_finish_with_response(
+        request: *mut WebKitURISchemeRequest,
+        response: *mut WebKitURISchemeResponse,
+    );
+
+    pub(crate) fn webkit_web_view_get_type() -> *mut c_void;
     pub(crate) fn webkit_web_view_get_settings(web_view: *mut WebKitWebView)
     -> *mut WebkitSettings;
     pub(crate) fn webkit_web_view_load_uri(web_view: *mut WebKitWebView, uri: *const c_char);
@@ -223,9 +319,6 @@ unsafe extern "C" {
         manager: *mut WebKitUserContentManager,
         name: *const c_char,
     );
-    pub(crate) fn webkit_web_view_new_with_user_content_manager(
-        manager: *mut WebKitUserContentManager,
-    ) -> *mut WebKitWebView;
     pub(crate) fn webkit_javascript_result_get_js_value(
         result: *mut WebKitJavascriptResult,
     ) -> *mut c_void;

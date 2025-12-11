@@ -332,8 +332,34 @@ impl PlatformWebview {
             window
         };
 
-        // Create webview
-        let webview = unsafe {
+        // Create webview web context
+        let web_context = unsafe {
+            let web_context = webkit_web_context_get_default();
+
+            #[cfg(feature = "custom_protocol")]
+            for custom_protocol in builder.custom_protocols {
+                extern "C" fn custom_protocol_destroy(data: *mut c_void) {
+                    drop(unsafe {
+                        use crate::CustomProtocol;
+                        Box::from_raw(data as *mut CustomProtocol)
+                    });
+                }
+                let scheme =
+                    CString::new(custom_protocol.scheme.clone()).expect("Can't convert to CString");
+                webkit_web_context_register_uri_scheme(
+                    web_context,
+                    scheme.as_ptr(),
+                    webview_custom_uri_scheme as *const c_void,
+                    Box::leak(Box::new(custom_protocol)) as *mut _ as *mut c_void,
+                    custom_protocol_destroy as *const c_void,
+                );
+            }
+
+            web_context
+        };
+
+        // Create webview user content manager
+        let user_content_manager = unsafe {
             const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
                 window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);";
             #[cfg(feature = "log")]
@@ -344,7 +370,7 @@ impl PlatformWebview {
             #[cfg(feature = "log")]
             let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
 
-            let user_content_controller = webkit_user_content_manager_new();
+            let user_content_manager = webkit_user_content_manager_new();
             let script = CString::new(script).expect("Can't convert to CString");
             let user_script = webkit_user_script_new(
                 script.as_ptr(),
@@ -353,9 +379,9 @@ impl PlatformWebview {
                 null(),
                 null(),
             );
-            webkit_user_content_manager_add_script(user_content_controller, user_script);
+            webkit_user_content_manager_add_script(user_content_manager, user_script);
             g_signal_connect_data(
-                user_content_controller as *mut GObject,
+                user_content_manager as *mut GObject,
                 c"script-message-received::ipc".as_ptr(),
                 webview_on_message_ipc as *const c_void,
                 webview_data.as_mut() as *mut _ as *const c_void,
@@ -363,13 +389,13 @@ impl PlatformWebview {
                 G_CONNECT_DEFAULT,
             );
             webkit_user_content_manager_register_script_message_handler(
-                user_content_controller,
+                user_content_manager,
                 c"ipc".as_ptr(),
             );
             #[cfg(feature = "log")]
             {
                 g_signal_connect_data(
-                    user_content_controller as *mut GObject,
+                    user_content_manager as *mut GObject,
                     c"script-message-received::console".as_ptr(),
                     webview_on_message_console as *const c_void,
                     webview_data.as_mut() as *mut _ as *const c_void,
@@ -377,11 +403,24 @@ impl PlatformWebview {
                     G_CONNECT_DEFAULT,
                 );
                 webkit_user_content_manager_register_script_message_handler(
-                    user_content_controller,
+                    user_content_manager,
                     c"console".as_ptr(),
                 );
             }
-            let webview = webkit_web_view_new_with_user_content_manager(user_content_controller);
+
+            user_content_manager
+        };
+
+        // Create webview
+        let webview = unsafe {
+            let webview = g_object_new(
+                webkit_web_view_get_type(),
+                c"web-context".as_ptr(),
+                web_context,
+                c"user-content-manager".as_ptr(),
+                user_content_manager,
+                null::<c_void>(),
+            ) as *mut WebKitWebView;
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
             if builder.background_color.is_some() {
                 let rgba = GdkRGBA {
@@ -776,4 +815,125 @@ extern "C" fn webview_on_message_console(
         "t" => log::trace!("{message}"),
         _ => unimplemented!(),
     }
+}
+
+#[cfg(feature = "custom_protocol")]
+extern "C" fn webview_custom_uri_scheme(
+    uri_scheme_request: *mut WebKitURISchemeRequest,
+    custom_protocol: *mut crate::CustomProtocol,
+) {
+    let custom_protocol = unsafe { &mut *custom_protocol };
+
+    let req = webkit_uri_scheme_request_to_http_request(uri_scheme_request);
+    let res = (custom_protocol.handler)(&req);
+
+    let uri_scheme_response = http_response_to_webkit_uri_scheme_response(res);
+    unsafe {
+        webkit_uri_scheme_request_finish_with_response(uri_scheme_request, uri_scheme_response);
+        g_object_unref(uri_scheme_response as *mut GObject);
+    };
+}
+
+#[cfg(feature = "custom_protocol")]
+fn webkit_uri_scheme_request_to_http_request(
+    uri_scheme_request: *mut WebKitURISchemeRequest,
+) -> small_http::Request {
+    use std::str::FromStr;
+
+    let method = unsafe { webkit_uri_scheme_request_get_http_method(uri_scheme_request) };
+    let method = unsafe { CStr::from_ptr(method) }.to_string_lossy();
+
+    let uri = unsafe { webkit_uri_scheme_request_get_uri(uri_scheme_request) };
+    let uri = unsafe { CStr::from_ptr(uri) }.to_string_lossy();
+
+    let mut req = small_http::Request::with_method_and_url(
+        small_http::Method::from_str(&method).unwrap_or(small_http::Method::Get),
+        &uri,
+    );
+
+    let headers = unsafe { webkit_uri_scheme_request_get_http_headers(uri_scheme_request) };
+    extern "C" fn headers_foreach(
+        key: *const c_char,
+        value: *const c_char,
+        user_data: *mut c_void,
+    ) {
+        let req = unsafe { &mut *(user_data as *mut small_http::Request) };
+        let key = unsafe { CStr::from_ptr(key) }.to_string_lossy();
+        let value = unsafe { CStr::from_ptr(value) }.to_string_lossy();
+        req.headers.insert(key.to_string(), value.to_string());
+    }
+    unsafe {
+        soup_message_headers_foreach(headers, headers_foreach, &mut req as *mut _ as *mut c_void)
+    };
+
+    let body = unsafe { webkit_uri_scheme_request_get_http_body(uri_scheme_request) };
+    if !body.is_null() {
+        let mut body_data = Vec::new();
+        let mut bytes_read = 0;
+        let mut buffer = [0u8; 4096];
+        loop {
+            let result = unsafe {
+                g_input_stream_read_all(
+                    body,
+                    buffer.as_mut_ptr() as *mut c_void,
+                    buffer.len(),
+                    &mut bytes_read,
+                    null_mut(),
+                    null_mut(),
+                )
+            };
+            if result || bytes_read == 0 {
+                break;
+            }
+            body_data.extend_from_slice(&buffer[..bytes_read]);
+            if bytes_read < buffer.len() {
+                break;
+            }
+        }
+        req = req.body(body_data);
+    }
+
+    req
+}
+
+#[cfg(feature = "custom_protocol")]
+fn http_response_to_webkit_uri_scheme_response(
+    res: small_http::Response,
+) -> *mut WebKitURISchemeResponse {
+    extern "C" fn body_data_destroy(data: *mut c_void) {
+        drop(unsafe { Box::from_raw(data as *mut u8) });
+    }
+    let stream = unsafe {
+        g_memory_input_stream_new_from_data(
+            Box::into_raw(res.body.clone().into_boxed_slice()) as *const c_void,
+            res.body.len(),
+            body_data_destroy as *const c_void,
+        )
+    };
+
+    let uri_scheme_response =
+        unsafe { webkit_uri_scheme_response_new(stream, res.body.len() as i64) };
+    unsafe {
+        webkit_uri_scheme_response_set_status(uri_scheme_response, res.status as u32, null())
+    };
+
+    let headers = unsafe {
+        let headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+        for (key, value) in &res.headers {
+            let key = CString::new(key.as_str()).expect("Can't convert to CString");
+            let value = CString::new(value.as_str()).expect("Can't convert to CString");
+            soup_message_headers_append(headers, key.as_ptr(), value.as_ptr());
+        }
+        headers
+    };
+    unsafe { webkit_uri_scheme_response_set_http_headers(uri_scheme_response, headers) };
+
+    if let Some(content_type) = res.headers.get("Content-Type") {
+        let content_type = CString::new(content_type).expect("Can't convert to CString");
+        unsafe {
+            webkit_uri_scheme_response_set_content_type(uri_scheme_response, content_type.as_ptr())
+        };
+    }
+
+    uri_scheme_response
 }
