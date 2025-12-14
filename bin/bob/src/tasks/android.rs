@@ -8,6 +8,8 @@ use std::path::Path;
 use std::process::{Command, exit};
 use std::{env, fs};
 
+use semver::Version;
+
 use crate::executor::ExecutorBuilder;
 use crate::manifest::AndroidMetadata;
 use crate::tasks::jvm::{find_modules, get_class_name};
@@ -49,24 +51,21 @@ impl AndroidVars {
             latest_path
         } else {
             // Find highest x.x versioned folder
-            let mut highest_version: Option<(u32, u32, String)> = None;
+            let mut highest_version: Option<(Version, String)> = None;
             if let Ok(entries) = fs::read_dir(&cmdline_tools_dir) {
                 for entry in entries.flatten() {
                     let file_name = entry.file_name();
                     let file_name_str = file_name.to_string_lossy();
-                    // Match folders like "10.0" or "8.1"
-                    if let Some((major, minor)) = file_name_str
-                        .split_once('.')
-                        .and_then(|(maj, min)| maj.parse::<u32>().ok().zip(min.parse::<u32>().ok()))
+                    if let Ok(version) = Version::parse(&file_name_str)
                         && highest_version
                             .as_ref()
-                            .is_none_or(|(h_maj, h_min, _)| (major, minor) > (*h_maj, *h_min))
+                            .is_none_or(|(highest_version, _)| &version > highest_version)
                     {
-                        highest_version = Some((major, minor, file_name_str.to_string()));
+                        highest_version = Some((version, file_name_str.to_string()));
                     }
                 }
             }
-            if let Some((_, _, folder)) = highest_version {
+            if let Some((_, folder)) = highest_version {
                 format!("{cmdline_tools_dir}/{folder}/bin")
             } else {
                 eprintln!("No valid cmdline-tools found in {cmdline_tools_dir}");
@@ -76,15 +75,13 @@ impl AndroidVars {
 
         // Find highest build-tools version matching the target_sdk_version
         let build_tools_dir = format!("{android_home}/build-tools");
-        let mut highest_version: Option<semver::Version> = None;
+        let mut highest_version: Option<Version> = None;
         if let Ok(entries) = fs::read_dir(&build_tools_dir) {
             for entry in entries.flatten() {
                 let file_name = entry.file_name();
                 let file_name_str = file_name.to_string_lossy();
-
-                let version =
-                    semver::Version::parse(&file_name_str).expect("Can't parse dir semver");
-                if version.major == android_metadata.target_sdk_version
+                if let Ok(version) = Version::parse(&file_name_str)
+                    && version.major == android_metadata.target_sdk_version
                     && highest_version
                         .as_ref()
                         .is_none_or(|highest_version| &version > highest_version)
@@ -476,6 +473,6 @@ pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
 
 // MARK: Utils
 fn parse_version_to_code(version: &str) -> u32 {
-    let version = semver::Version::parse(version).expect("Can't parse version semver");
+    let version = Version::parse(version).expect("Can't parse version semver");
     (version.major as u32) * 1_000_000 + (version.minor as u32) * 1_000 + (version.patch as u32)
 }

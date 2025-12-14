@@ -35,20 +35,32 @@ impl Version {
 
     /// Parse a version string
     pub fn parse(version: &str) -> Result<Self, String> {
+        let version = version.to_string();
         let parts: Vec<&str> = version.split('.').collect();
-        if parts.len() != 3 {
+        if parts.len() != 1 && parts.len() != 2 && parts.len() != 3 {
             return Err("Invalid semver string".to_string());
         }
 
         let major = parts[0]
             .parse::<u16>()
             .map_err(|_| "Invalid major version".to_string())?;
-        let minor = parts[1]
-            .parse::<u16>()
-            .map_err(|_| "Invalid minor version".to_string())?;
-        let patch = parts[2]
-            .parse::<u16>()
-            .map_err(|_| "Invalid patch version".to_string())?;
+
+        let minor = if parts.len() >= 2 {
+            parts[1]
+                .parse::<u16>()
+                .map_err(|_| "Invalid minor version".to_string())?
+        } else {
+            0
+        };
+
+        let patch = if parts.len() == 3 {
+            parts[2]
+                .parse::<u16>()
+                .map_err(|_| "Invalid patch version".to_string())?
+        } else {
+            0
+        };
+
         Ok(Self::new(major, minor, patch))
     }
 }
@@ -186,17 +198,18 @@ mod test {
 
         // leading zeros are allowed by parse::<u32>()
         let v2 = Version::parse("01.02.03").unwrap();
-        assert_eq!(
-            v2,
-            Version {
-                major: 1,
-                minor: 2,
-                patch: 3
-            }
-        );
+        assert_eq!(v2, Version::new(1, 2, 3));
+
+        // missing patch version defaults to 0
+        let v3 = Version::parse("1.2").unwrap();
+        assert_eq!(v3, Version::new(1, 2, 0));
+
+        // missing minor and patch version defaults to 0
+        let v4 = Version::parse("1").unwrap();
+        assert_eq!(v4, Version::new(1, 0, 0));
 
         // invalid inputs
-        assert!(Version::parse("1.2").is_err());
+        assert!(Version::parse("1.2.").is_err());
         assert!(Version::parse("1.2.3.4").is_err());
         assert!(Version::parse("a.b.c").is_err());
         assert!(Version::parse("").is_err());
@@ -205,12 +218,8 @@ mod test {
 
     #[test]
     fn display_format() {
-        let v = Version {
-            major: 0,
-            minor: 10,
-            patch: 5,
-        };
-        assert_eq!(v.to_string(), "0.10.5");
+        let v = Version::new(1, 10, 5);
+        assert_eq!(v.to_string(), "1.10.5");
     }
 
     #[test]
@@ -264,12 +273,7 @@ mod test {
 
     #[test]
     fn microsoft_display_format() {
-        let v = MicrosoftVersion {
-            major: 10,
-            minor: 0,
-            build: 2,
-            revision: 5,
-        };
+        let v = MicrosoftVersion::new(10, 0, 2, 5);
         assert_eq!(v.to_string(), "10.0.2.5");
     }
 
