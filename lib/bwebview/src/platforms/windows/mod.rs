@@ -4,54 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![allow(clippy::upper_case_acronyms)]
-
-use std::env;
 use std::ffi::{CString, c_void};
 use std::fs::File;
 use std::io::Read;
 use std::process::exit;
-use std::ptr::null_mut;
-use std::sync::mpsc;
+use std::ptr::{null, null_mut};
+use std::{env, mem};
 
-use webview2_com::Microsoft::Web::WebView2::Win32::{
-    COREWEBVIEW2_COLOR, CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
-    ICoreWebView2Controller2, ICoreWebView2Settings2,
-};
-use webview2_com::{
-    CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
-    DocumentTitleChangedEventHandler, NavigationCompletedEventHandler,
-    NavigationStartingEventHandler, NewWindowRequestedEventHandler,
-};
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, MAX_PATH, POINT, RECT, WPARAM};
-use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
-use windows::Win32::Graphics::Gdi::{
-    CreateSolidBrush, EnumDisplayMonitors, FillRect, GetMonitorInfoA, HDC, HMONITOR,
-    InvalidateRect, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MONITORINFOEXA, MonitorFromPoint,
-    UpdateWindow,
-};
-use windows::Win32::System::LibraryLoader::{GetModuleFileNameA, GetModuleHandleA};
-use windows::Win32::UI::HiDpi::{
-    AdjustWindowRectExForDpi, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForMonitor,
-    GetDpiForSystem, MDT_EFFECTIVE_DPI, SetProcessDpiAwarenessContext,
-};
-use windows::Win32::UI::Shell::{ExtractIconExA, ShellExecuteW};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CW_USEDEFAULT, CreateWindowExA, DefWindowProcA, DestroyWindow, DispatchMessageA, GWL_STYLE,
-    GWL_USERDATA, GetClassInfoExA, GetClientRect, GetMessageA, GetSystemMetrics, GetWindowRect,
-    HICON, MINMAXINFO, MSG, PostMessageA, PostQuitMessage, RegisterClassExA, SM_CXSCREEN,
-    SM_CYSCREEN, SW_SHOWDEFAULT, SW_SHOWNORMAL, SWP_NOACTIVATE, SWP_NOREPOSITION, SWP_NOSIZE,
-    SWP_NOZORDER, SetWindowPos, SetWindowTextA, ShowWindow, TranslateMessage,
-    USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_CREATE, WM_DESTROY,
-    WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_MOVE, WM_SIZE, WM_USER, WNDCLASSEXA,
-    WS_OVERLAPPEDWINDOW, WS_POPUP, WS_THICKFRAME,
-};
-use windows::core::{BOOL, HSTRING, Interface, PCSTR, PWSTR, w};
-
-use self::utils::*;
+use self::webview2::*;
+use self::win32::*;
 use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
 
-mod utils;
+mod webview2;
+mod win32;
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop;
@@ -61,10 +26,20 @@ static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
 impl PlatformEventLoop {
     pub(crate) fn new(_builder: EventLoopBuilder) -> Self {
-        // FIXME: Add basic single instance support
-        // Enable PerMonitorV2 high DPI awareness
-        _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-        Self
+        unsafe {
+            // FIXME: Add basic single instance support
+
+            // Initialize COM
+            CoInitializeEx(
+                null_mut(),
+                COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE,
+            );
+
+            // Enable PerMonitorV2 high DPI awareness
+            _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+            Self
+        }
     }
 }
 
@@ -78,9 +53,9 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         static mut MONITORS: Option<Vec<PlatformMonitor>> = None;
         unsafe extern "system" fn monitor_enum_proc(
             hmonitor: HMONITOR,
-            _hdc: HDC,
-            _lprc_clip: *mut RECT,
-            _lparam: LPARAM,
+            _hdc_monitor: HDC,
+            _lprc_monitor: *const RECT,
+            _dw_data: LPARAM,
         ) -> BOOL {
             unsafe {
                 #[allow(static_mut_refs)]
@@ -92,7 +67,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         }
         unsafe {
             MONITORS = Some(Vec::new());
-            _ = EnumDisplayMonitors(None, None, Some(monitor_enum_proc), LPARAM(0));
+            _ = EnumDisplayMonitors(null_mut(), null_mut(), monitor_enum_proc, 0);
             #[allow(static_mut_refs)]
             MONITORS.take().unwrap_or_default()
         }
@@ -103,12 +78,13 @@ impl crate::EventLoopInterface for PlatformEventLoop {
 
         // Start message loop
         unsafe {
-            let mut msg = MSG::default();
-            while GetMessageA(&mut msg, None, 0, 0).into() {
+            let mut msg = mem::zeroed();
+            while GetMessageA(&mut msg, null_mut(), 0, 0) != 0 {
                 _ = TranslateMessage(&msg);
                 DispatchMessageA(&msg);
             }
-            exit(msg.wParam.0 as i32);
+            CoUninitialize();
+            exit(msg.wParam as i32);
         }
     }
 
@@ -141,9 +117,7 @@ impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
         if let Some(hwnd) = unsafe { FIRST_HWND } {
             let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
-            _ = unsafe {
-                PostMessageA(Some(hwnd), WM_SEND_MESSAGE, WPARAM(ptr as usize), LPARAM(0))
-            };
+            _ = unsafe { PostMessageA(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
         }
     }
 }
@@ -157,10 +131,7 @@ pub(crate) struct PlatformMonitor {
 impl PlatformMonitor {
     pub(crate) fn new(hmonitor: HMONITOR) -> Self {
         let mut info = MONITORINFOEXA {
-            monitorInfo: MONITORINFO {
-                cbSize: size_of::<MONITORINFOEXA>() as u32,
-                ..Default::default()
-            },
+            cbSize: size_of::<MONITORINFOEXA>() as u32,
             ..Default::default()
         };
         unsafe {
@@ -184,15 +155,15 @@ impl crate::MonitorInterface for PlatformMonitor {
 
     fn position(&self) -> LogicalPoint {
         LogicalPoint::new(
-            self.info.monitorInfo.rcMonitor.left as f32,
-            self.info.monitorInfo.rcMonitor.top as f32,
+            self.info.rcMonitor.left as f32,
+            self.info.rcMonitor.top as f32,
         )
     }
 
     fn size(&self) -> LogicalSize {
         LogicalSize::new(
-            (self.info.monitorInfo.rcMonitor.right - self.info.monitorInfo.rcMonitor.left) as f32,
-            (self.info.monitorInfo.rcMonitor.bottom - self.info.monitorInfo.rcMonitor.top) as f32,
+            (self.info.rcMonitor.right - self.info.rcMonitor.left) as f32,
+            (self.info.rcMonitor.bottom - self.info.rcMonitor.top) as f32,
         )
     }
 
@@ -201,7 +172,7 @@ impl crate::MonitorInterface for PlatformMonitor {
             let mut dpi_x = USER_DEFAULT_SCREEN_DPI;
             let mut dpi_y = USER_DEFAULT_SCREEN_DPI;
             let result = GetDpiForMonitor(self.hmonitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
-            if result.is_ok() {
+            if result == S_OK {
                 dpi_x as f32 / USER_DEFAULT_SCREEN_DPI as f32
             } else {
                 1.0
@@ -210,7 +181,7 @@ impl crate::MonitorInterface for PlatformMonitor {
     }
 
     fn is_primary(&self) -> bool {
-        self.info.monitorInfo.rcMonitor.left == 0 && self.info.monitorInfo.rcMonitor.top == 0
+        self.info.rcMonitor.left == 0 && self.info.rcMonitor.top == 0
     }
 }
 
@@ -220,9 +191,12 @@ struct WebviewData {
     dpi: u32,
     min_size: Option<LogicalSize>,
     background_color: Option<u32>,
+    should_load_url: Option<String>,
+    should_load_html: Option<String>,
     #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
-    controller: Option<ICoreWebView2Controller>,
+    controller: Option<*mut ICoreWebView2Controller>,
+    webview: Option<*mut ICoreWebView2>,
 }
 
 pub(crate) struct PlatformWebview(Box<WebviewData>);
@@ -232,22 +206,26 @@ impl PlatformWebview {
         let dpi = unsafe { GetDpiForSystem() };
 
         // Check if window class is already registered
-        let instance = unsafe { GetModuleHandleA(None) }.expect("Can't get module handle");
-        let class_name = PCSTR(c"window".as_ptr() as _);
+        let instance = unsafe { GetModuleHandleA(null_mut()) };
+        let class_name = c"window".as_ptr();
         unsafe {
-            let mut wndclass = WNDCLASSEXA::default();
-            if GetClassInfoExA(Some(instance.into()), class_name, &mut wndclass as *mut _).is_err()
-            {
+            let mut wndclass: WNDCLASSEXA = mem::zeroed();
+            if GetClassInfoExA(instance, class_name, &mut wndclass as *mut _) != TRUE {
                 // Get executable icons
-                let mut module_path = [0u8; MAX_PATH as usize];
-                _ = GetModuleFileNameA(instance.into(), &mut module_path);
+                let executable_path = CString::new(
+                    env::current_exe()
+                        .expect("Can't get current exe path")
+                        .display()
+                        .to_string(),
+                )
+                .expect("Can't convert to CString");
                 let mut large_icon = HICON::default();
                 let mut small_icon = HICON::default();
                 ExtractIconExA(
-                    PCSTR::from_raw(module_path.as_ptr()),
+                    executable_path.as_ptr(),
                     0,
-                    Some(&mut large_icon),
-                    Some(&mut small_icon),
+                    &mut large_icon,
+                    &mut small_icon,
                     1,
                 );
 
@@ -255,7 +233,7 @@ impl PlatformWebview {
                 let wndclass = WNDCLASSEXA {
                     cbSize: size_of::<WNDCLASSEXA>() as u32,
                     lpfnWndProc: Some(window_proc),
-                    hInstance: instance.into(),
+                    hInstance: instance,
                     hIcon: large_icon,
                     lpszClassName: class_name,
                     hIconSm: small_icon,
@@ -277,7 +255,7 @@ impl PlatformWebview {
 
             // Calculate window rect based on size and position
             let monitor_rect = if let Some(monitor) = builder.monitor {
-                monitor.info.monitorInfo.rcMonitor
+                monitor.info.rcMonitor.clone()
             } else {
                 RECT {
                     left: 0,
@@ -322,13 +300,13 @@ impl PlatformWebview {
                 right: x + width,
                 bottom: y + height,
             };
-            _ = AdjustWindowRectExForDpi(&mut rect, style, false, WINDOW_EX_STYLE(0), dpi);
+            _ = AdjustWindowRectExForDpi(&mut rect, style, FALSE, 0, dpi);
 
             let title = CString::new(builder.title).expect("Can't convert to CString");
             let hwnd = CreateWindowExA(
-                WINDOW_EX_STYLE(0),
+                0,
                 class_name,
-                PCSTR(title.as_ptr() as _),
+                title.as_ptr(),
                 style,
                 if position_set {
                     rect.left
@@ -342,12 +320,11 @@ impl PlatformWebview {
                 },
                 rect.right - rect.left,
                 rect.bottom - rect.top,
-                None,
-                None,
-                Some(instance.into()),
-                None,
-            )
-            .expect("Can't create window");
+                null_mut(),
+                null_mut(),
+                instance,
+                0,
+            );
             if let Some(theme) = builder.theme {
                 let enabled: BOOL = (theme == Theme::Dark).into();
                 _ = DwmSetWindowAttribute(
@@ -362,15 +339,11 @@ impl PlatformWebview {
             let should_show_window = if builder.remember_window_state {
                 let window_placement_path = format!("{}/window.bin", Self::userdata_folder());
                 if let Ok(mut file) = File::open(window_placement_path) {
-                    let size =
-                        size_of::<windows::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT>();
+                    let size = size_of::<WINDOWPLACEMENT>();
                     let mut buffer = vec![0u8; size];
                     if file.read_exact(&mut buffer).is_ok() {
                         let window_placement = std::ptr::read(buffer.as_ptr() as *const _);
-                        _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPlacement(
-                            hwnd,
-                            &window_placement,
-                        );
+                        _ = SetWindowPlacement(hwnd, &window_placement);
                         false
                     } else {
                         true
@@ -390,174 +363,9 @@ impl PlatformWebview {
             hwnd
         };
 
-        // Create Webview2
-        let controller = unsafe {
-            if let Some(color) = builder.background_color {
-                env::set_var(
-                    "WEBVIEW2_DEFAULT_BACKGROUND_COLOR",
-                    format!("0xFF{:06X}", color & 0xFFFFFF),
-                );
-            }
-            let environment = {
-                let (tx, rx) = mpsc::channel();
-                _ = CreateCoreWebView2EnvironmentWithOptions(
-                    PWSTR::default(),
-                    &HSTRING::from(Self::userdata_folder()),
-                    None,
-                    &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(
-                        move |error_code, environment| {
-                            if let Err(e) = error_code {
-                                panic!("Failed to create WebView2 environment: {e:?}");
-                            }
-                            tx.send(environment.expect("Should be some"))
-                                .expect("Should send environment");
-                            Ok(())
-                        },
-                    )),
-                );
-                rx.recv().expect("Should receive environment")
-            };
-
-            let controller = {
-                let (tx, rx) = mpsc::channel();
-                CreateCoreWebView2ControllerCompletedHandler::wait_for_async_operation(
-                    Box::new(move |handler| {
-                        _ = environment.CreateCoreWebView2Controller(hwnd, &handler);
-                        Ok(())
-                    }),
-                    Box::new(move |error_code, controller| {
-                        error_code?;
-                        tx.send(controller.expect("WebView2 controller"))
-                            .expect("Should send controller");
-                        Ok(())
-                    }),
-                )
-                .expect("Failed to create WebView2 controller");
-                rx.recv().expect("Should receive controller")
-            };
-
-            let mut rect = RECT::default();
-            _ = GetClientRect(hwnd, &mut rect);
-            _ = controller.SetBounds(rect);
-            if builder.background_color.is_some() {
-                let controller2 = controller
-                    .cast::<ICoreWebView2Controller2>()
-                    .expect("Should be some");
-                _ = controller2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR {
-                    A: 0x0,
-                    R: 0x0,
-                    G: 0x0,
-                    B: 0x0,
-                });
-            }
-
-            let webview = controller.CoreWebView2().expect("Should be some");
-
-            let useragent = format!(
-                "Mozilla/5.0 (Windows NT; {}) bwebview/{}",
-                env::consts::ARCH,
-                env!("CARGO_PKG_VERSION"),
-            );
-            let settings = webview.Settings().expect("Should be some");
-            let settings2 = settings
-                .cast::<ICoreWebView2Settings2>()
-                .expect("Should be some");
-            _ = settings2.SetUserAgent(&HSTRING::from(useragent));
-
-            _ = webview.add_NavigationStarting(
-                &NavigationStartingEventHandler::create(Box::new(move |_sender, _args| {
-                    send_event(Event::PageLoadStarted);
-                    Ok(())
-                })),
-                null_mut(),
-            );
-            _ = webview.add_NavigationCompleted(
-                &NavigationCompletedEventHandler::create(Box::new(move |_sender, _args| {
-                    send_event(Event::PageLoadFinished);
-                    Ok(())
-                })),
-                null_mut(),
-            );
-            _ = webview.add_DocumentTitleChanged(
-                &DocumentTitleChangedEventHandler::create(Box::new(move |sender, _args| {
-                    let mut title = PWSTR::default();
-                    _ = sender.expect("Should be valid").DocumentTitle(&mut title);
-                    send_event(Event::PageTitleChanged(
-                        title.to_string().expect("Should be valid"),
-                    ));
-                    Ok(())
-                })),
-                null_mut(),
-            );
-            _ = webview.add_NewWindowRequested(
-                &NewWindowRequestedEventHandler::create(Box::new(|_sender, args| {
-                    let args = args.expect("Should be some");
-                    _ = args.SetHandled(true);
-                    let mut uri = PWSTR::default();
-                    _ = args.Uri(&mut uri);
-                    _ = ShellExecuteW(None, w!("open"), uri, None, None, SW_SHOWNORMAL);
-                    Ok(())
-                })),
-                null_mut(),
-            );
-
-            const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
-                window.ipc.postMessage = message => window.chrome.webview.postMessage('i' + (typeof message !== 'string' ? JSON.stringify(message) : message));";
-            #[cfg(feature = "log")]
-            const CONSOLE_SCRIPT: &str = "for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log'])\
-                window.console[level] = (...args) => window.chrome.webview.postMessage('c' + level.charAt(0) + args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));";
-            #[cfg(not(feature = "log"))]
-            let script = IPC_SCRIPT;
-            #[cfg(feature = "log")]
-            let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
-            _ = webview.AddScriptToExecuteOnDocumentCreated(
-                &HSTRING::from(script),
-                &webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(
-                    Box::new(|_sender, _args| Ok(())),
-                ),
-            );
-
-            _ = webview.add_WebMessageReceived(
-                &webview2_com::WebMessageReceivedEventHandler::create(Box::new(
-                    move |_sender, args| {
-                        let args = args.expect("Should be some");
-                        let mut message = PWSTR::default();
-                        _ = args.TryGetWebMessageAsString(&mut message);
-                        let message = message.to_string().expect("Should be valid");
-                        let (r#type, message) = message.split_at(1);
-
-                        #[cfg(feature = "log")]
-                        if r#type == "c" {
-                            let (level, message) = message.split_at(1);
-                            match level {
-                                "e" => log::error!("{message}"),
-                                "w" => log::warn!("{message}"),
-                                "i" | "l" => log::info!("{message}"),
-                                "d" => log::debug!("{message}"),
-                                "t" => log::trace!("{message}"),
-                                _ => unimplemented!(),
-                            }
-                        }
-                        if r#type == "i" {
-                            send_event(Event::PageMessageReceived(message.to_string()));
-                        }
-                        Ok(())
-                    },
-                )),
-                null_mut(),
-            );
-
-            if let Some(url) = &builder.should_load_url {
-                _ = webview.Navigate(&HSTRING::from(url));
-            }
-            if let Some(html) = &builder.should_load_html {
-                _ = webview.NavigateToString(&HSTRING::from(html));
-            }
-            controller
-        };
-
-        #[allow(static_mut_refs)]
+        // Alloc Webview data
         unsafe {
+            #[allow(static_mut_refs)]
             if FIRST_HWND.is_none() {
                 FIRST_HWND = Some(hwnd);
             }
@@ -568,9 +376,12 @@ impl PlatformWebview {
             dpi,
             min_size: builder.min_size,
             background_color: builder.background_color,
+            should_load_url: builder.should_load_url,
+            should_load_html: builder.should_load_html,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
-            controller: Some(controller),
+            controller: None,
+            webview: None,
         });
         unsafe {
             SetWindowLong(
@@ -579,6 +390,61 @@ impl PlatformWebview {
                 webview_data.as_ref() as *const _ as isize,
             )
         };
+
+        // Init Webview2 creation
+        unsafe {
+            if let Some(color) = builder.background_color {
+                env::set_var(
+                    "WEBVIEW2_DEFAULT_BACKGROUND_COLOR",
+                    format!("0xFF{:06X}", color & 0xFFFFFF),
+                );
+            }
+
+            let exectuable_path = env::current_exe().expect("Can't get current exe path");
+            let executable_path = exectuable_path
+                .file_name()
+                .expect("Can't get current exe file name")
+                .to_string_lossy();
+            let executable_name = executable_path
+                .rsplit_once('.')
+                .expect("Should strip .exe")
+                .0;
+            let data_folder = dirs::config_dir()
+                .expect("Can't find config dir")
+                .join(executable_name)
+                .display()
+                .to_string();
+
+            static VTBL: ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl =
+                ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl {
+                    QueryInterface: unimplemented_query_interface,
+                    AddRef: unimplemented_add_ref,
+                    Release: unimplemented_release,
+                    Invoke: environment_created,
+                };
+            let completed_handler = Box::into_raw(Box::new(
+                ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler {
+                    lpVtbl: &VTBL,
+                    user_data: webview_data.as_ref() as *const _ as *mut _,
+                },
+            ));
+            if CreateCoreWebView2EnvironmentWithOptions(
+                null(),
+                str_to_wchar(&data_folder).as_ptr(),
+                null_mut(),
+                completed_handler,
+            ) != S_OK
+            {
+                MessageBoxA(
+                    null_mut(),
+                    c"Failed to create WebView2 environment".as_ptr(),
+                    c"Error".as_ptr(),
+                    MB_OK,
+                );
+                exit(1);
+            }
+        }
+
         Self(webview_data)
     }
 
@@ -602,7 +468,7 @@ impl PlatformWebview {
 impl crate::WebviewInterface for PlatformWebview {
     fn set_title(&mut self, title: impl AsRef<str>) {
         let title = CString::new(title.as_ref()).expect("Can't convert to CString");
-        _ = unsafe { SetWindowTextA(self.0.hwnd, PCSTR(title.as_ptr() as _)) };
+        _ = unsafe { SetWindowTextA(self.0.hwnd, title.as_ptr()) };
     }
 
     fn position(&self) -> LogicalPoint {
@@ -627,7 +493,7 @@ impl crate::WebviewInterface for PlatformWebview {
         _ = unsafe {
             SetWindowPos(
                 self.0.hwnd,
-                None,
+                null_mut(),
                 point.x as i32 * self.0.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
                 point.y as i32 * self.0.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
                 0,
@@ -641,7 +507,7 @@ impl crate::WebviewInterface for PlatformWebview {
         _ = unsafe {
             SetWindowPos(
                 self.0.hwnd,
-                None,
+                null_mut(),
                 0,
                 0,
                 size.width as i32 * self.0.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32,
@@ -657,7 +523,7 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn set_resizable(&mut self, resizable: bool) {
         unsafe {
-            let style = WINDOW_STYLE(GetWindowLong(self.0.hwnd, GWL_STYLE) as u32);
+            let style = GetWindowLong(self.0.hwnd, GWL_STYLE) as u32;
             SetWindowLong(
                 self.0.hwnd,
                 GWL_STYLE,
@@ -665,8 +531,7 @@ impl crate::WebviewInterface for PlatformWebview {
                     style & !WS_THICKFRAME
                 } else {
                     style | WS_THICKFRAME
-                }
-                .0 as isize,
+                } as isize,
             );
         }
     }
@@ -685,16 +550,15 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn set_background_color(&mut self, color: u32) {
         self.0.background_color = Some(color);
-        _ = unsafe { InvalidateRect(Some(self.0.hwnd), None, true) };
+        _ = unsafe { InvalidateRect(self.0.hwnd, null_mut(), TRUE) };
     }
 
     fn url(&self) -> Option<String> {
         unsafe {
-            if let Some(controller) = &self.0.controller {
-                let webview = controller.CoreWebView2().expect("Should be some");
-                let mut uri = PWSTR::default();
-                _ = webview.Source(&mut uri);
-                Some(uri.to_string().expect("Should be valid"))
+            if let Some(webview) = self.0.webview {
+                let mut uri = null_mut();
+                _ = (*webview).get_Source(&mut uri);
+                Some(wchar_to_string(uri))
             } else {
                 None
             }
@@ -703,27 +567,24 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
-            if let Some(controller) = &self.0.controller {
-                let webview = controller.CoreWebView2().expect("Should be some");
-                _ = webview.Navigate(&HSTRING::from(url.as_ref()));
+            if let Some(webview) = self.0.webview {
+                _ = (*webview).Navigate(str_to_wchar(url.as_ref()).as_ptr());
             }
         }
     }
 
     fn load_html(&mut self, html: impl AsRef<str>) {
         unsafe {
-            if let Some(controller) = &self.0.controller {
-                let webview = controller.CoreWebView2().expect("Should be some");
-                _ = webview.NavigateToString(&HSTRING::from(html.as_ref()));
+            if let Some(webview) = self.0.webview {
+                _ = (*webview).NavigateToString(str_to_wchar(html.as_ref()).as_ptr());
             }
         }
     }
 
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         unsafe {
-            if let Some(controller) = &self.0.controller {
-                let webview = controller.CoreWebView2().expect("Should be some");
-                _ = webview.ExecuteScript(&HSTRING::from(script.as_ref()), None);
+            if let Some(webview) = self.0.webview {
+                _ = (*webview).ExecuteScript(str_to_wchar(script.as_ref()).as_ptr(), null_mut());
             }
         }
     }
@@ -745,43 +606,43 @@ unsafe extern "system" fn window_proc(
     match msg {
         WM_CREATE => {
             send_event(Event::WindowCreated);
-            LRESULT(0)
+            0
         }
         WM_ERASEBKGND => {
             if let Some(color) = _self.background_color {
-                let hdc = HDC(w_param.0 as *mut c_void);
+                let hdc = w_param as HDC;
                 let mut client_rect = RECT::default();
                 _ = unsafe { GetClientRect(hwnd, &mut client_rect) };
                 let brush = unsafe {
-                    CreateSolidBrush(COLORREF(
+                    CreateSolidBrush(
                         ((color & 0xFF) << 16) | (color & 0xFF00) | ((color >> 16) & 0xFF),
-                    ))
+                    )
                 };
                 _ = unsafe { FillRect(hdc, &client_rect, brush) };
-                LRESULT(1)
+                1
             } else {
-                LRESULT(0)
+                0
             }
         }
         WM_MOVE => {
-            let x = l_param.0 as u16 as i32;
-            let y = (l_param.0 >> 16) as u16 as i32;
+            let x = l_param as u16 as i32;
+            let y = (l_param >> 16) as u16 as i32;
             send_event(Event::WindowMoved(LogicalPoint::new(
                 (x * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
                 (y * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
             )));
-            LRESULT(0)
+            0
         }
         WM_SIZE => {
-            let width = (l_param.0 as u16) as i32;
-            let height = ((l_param.0 >> 16) as u16) as i32;
+            let width = (l_param as u16) as i32;
+            let height = ((l_param >> 16) as u16) as i32;
             send_event(Event::WindowResized(LogicalSize::new(
                 (width * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
                 (height * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
             )));
-            if let Some(controller) = &_self.controller {
+            if let Some(controller) = _self.controller {
                 _ = unsafe {
-                    controller.SetBounds(RECT {
+                    (*controller).put_Bounds(RECT {
                         left: 0,
                         top: 0,
                         right: width,
@@ -789,15 +650,15 @@ unsafe extern "system" fn window_proc(
                     })
                 };
             }
-            LRESULT(0)
+            0
         }
         WM_DPICHANGED => {
-            _self.dpi = (w_param.0 >> 16) as u32;
-            let window_rect = unsafe { &*(l_param.0 as *const RECT) };
+            _self.dpi = (w_param >> 16) as u32;
+            let window_rect = unsafe { &*(l_param as *const RECT) };
             _ = unsafe {
                 SetWindowPos(
                     hwnd,
-                    None,
+                    null_mut(),
                     window_rect.left,
                     window_rect.top,
                     window_rect.right - window_rect.left,
@@ -805,7 +666,7 @@ unsafe extern "system" fn window_proc(
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 )
             };
-            LRESULT(0)
+            0
         }
         WM_GETMINMAXINFO => {
             unsafe {
@@ -814,29 +675,26 @@ unsafe extern "system" fn window_proc(
                         min_size.width as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
                     let min_height =
                         min_size.height as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
-                    let minmax_info: *mut MINMAXINFO = l_param.0 as *mut MINMAXINFO;
+                    let minmax_info: *mut MINMAXINFO = l_param as *mut MINMAXINFO;
                     (*minmax_info).ptMinTrackSize.x = min_width;
                     (*minmax_info).ptMinTrackSize.y = min_height;
                 }
             }
-            LRESULT(0)
+            0
         }
         WM_SEND_MESSAGE => {
-            let ptr = w_param.0 as *mut c_void;
+            let ptr = w_param as *mut c_void;
             let event = unsafe { Box::from_raw(ptr as *mut Event) };
             send_event(*event);
-            LRESULT(0)
+            0
         }
         WM_CLOSE => {
             #[cfg(feature = "remember_window_state")]
             if _self.remember_window_state {
                 unsafe {
                     use std::io::Write;
-                    let mut window_placement = Default::default();
-                    _ = windows::Win32::UI::WindowsAndMessaging::GetWindowPlacement(
-                        hwnd,
-                        &mut window_placement,
-                    );
+                    let mut window_placement = mem::zeroed();
+                    _ = GetWindowPlacement(hwnd, &mut window_placement);
                     let window_placement_path =
                         format!("{}/window.bin", PlatformWebview::userdata_folder());
                     if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -847,7 +705,7 @@ unsafe extern "system" fn window_proc(
                     {
                         _ = file.write_all(std::slice::from_raw_parts(
                             &window_placement as *const _ as *const u8,
-                            size_of::<windows::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT>(),
+                            size_of::<WINDOWPLACEMENT>(),
                         ));
                     }
                 }
@@ -855,16 +713,277 @@ unsafe extern "system" fn window_proc(
 
             send_event(Event::WindowClosed);
             _ = unsafe { DestroyWindow(hwnd) };
-            LRESULT(0)
+            0
         }
         WM_DESTROY => {
             unsafe { PostQuitMessage(0) };
-            LRESULT(0)
+            0
         }
         _ => unsafe { DefWindowProcA(hwnd, msg, w_param, l_param) },
     }
 }
 
-// Also link to advapi32.dll for WebView2
-#[link(name = "advapi32")]
-unsafe extern "C" {}
+extern "system" fn unimplemented_query_interface(
+    _this: *mut c_void,
+    _riid: *const GUID,
+    _ppv_object: *mut *mut c_void,
+) -> HRESULT {
+    E_NOINTERFACE
+}
+extern "system" fn unimplemented_add_ref(_this: *mut c_void) -> HRESULT {
+    E_NOTIMPL
+}
+extern "system" fn unimplemented_release(_this: *mut c_void) -> HRESULT {
+    E_NOTIMPL
+}
+
+extern "system" fn environment_created(
+    _this: *mut ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
+    _result: HRESULT,
+    environment: *mut ICoreWebView2Environment,
+) -> HRESULT {
+    unsafe {
+        let _self = &mut *((*_this).user_data as *mut WebviewData);
+
+        static VTBL: ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl =
+            ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl {
+                QueryInterface: unimplemented_query_interface,
+                AddRef: unimplemented_add_ref,
+                Release: unimplemented_release,
+                Invoke: controller_created,
+            };
+        let creation_completed_handler = Box::into_raw(Box::new(
+            ICoreWebView2CreateCoreWebView2ControllerCompletedHandler {
+                lpVtbl: &VTBL,
+                user_data: (*_this).user_data,
+            },
+        ));
+        (*environment).CreateCoreWebView2Controller(_self.hwnd, creation_completed_handler);
+
+        S_OK
+    }
+}
+
+extern "system" fn controller_created(
+    _this: *mut ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
+    _result: HRESULT,
+    controller: *mut ICoreWebView2Controller,
+) -> HRESULT {
+    unsafe {
+        let _self = &mut *((*_this).user_data as *mut WebviewData);
+        (*controller).AddRef();
+        _self.controller = Some(controller);
+
+        // Set bounds
+        let mut rect: RECT = mem::zeroed();
+        GetClientRect(_self.hwnd, &mut rect);
+        (*controller).put_Bounds(rect);
+
+        // Get webview
+        let mut webview: *mut ICoreWebView2 = null_mut();
+        (*controller).get_CoreWebView2(&mut webview);
+        _self.webview = Some(webview);
+
+        // Set transparent background if needed
+        if _self.background_color.is_some() {
+            let mut controller2: *mut ICoreWebView2Controller2 = null_mut();
+            (*controller).QueryInterface(
+                &IID_ICoreWebView2Controller2,
+                &mut controller2 as *mut _ as *mut *mut c_void,
+            );
+            (*controller2).put_DefaultBackgroundColor(0x00000000);
+        }
+
+        // Set user agent
+        let useragent = format!(
+            "Mozilla/5.0 (Windows NT; {}) bwebview/{}",
+            env::consts::ARCH,
+            env!("CARGO_PKG_VERSION"),
+        );
+        let mut settings = null_mut();
+        (*webview).get_Settings(&mut settings);
+
+        let mut settings2: *mut ICoreWebView2Settings2 = null_mut();
+        (*settings).QueryInterface(
+            &IID_ICoreWebView2Settings2,
+            &mut settings2 as *mut _ as *mut *mut c_void,
+        );
+        (*settings2).put_UserAgent(str_to_wchar(&useragent).as_ptr());
+
+        // Setup event handlers
+        {
+            static VTBL: ICoreWebView2NavigationStartingEventHandlerVtbl =
+                ICoreWebView2NavigationStartingEventHandlerVtbl {
+                    QueryInterface: unimplemented_query_interface,
+                    AddRef: unimplemented_add_ref,
+                    Release: unimplemented_release,
+                    Invoke: navigation_starting,
+                };
+            let navigation_starting_handler =
+                Box::into_raw(Box::new(ICoreWebView2NavigationStartingEventHandler {
+                    lpVtbl: &VTBL,
+                }));
+            (*webview).add_NavigationStarting(navigation_starting_handler, null_mut());
+        }
+        {
+            static VTBL: ICoreWebView2NavigationCompletedEventHandlerVtbl =
+                ICoreWebView2NavigationCompletedEventHandlerVtbl {
+                    QueryInterface: unimplemented_query_interface,
+                    AddRef: unimplemented_add_ref,
+                    Release: unimplemented_release,
+                    Invoke: navigation_completed,
+                };
+            let navigation_completed_handler =
+                Box::into_raw(Box::new(ICoreWebView2NavigationCompletedEventHandler {
+                    lpVtbl: &VTBL,
+                }));
+            (*webview).add_NavigationCompleted(navigation_completed_handler, null_mut());
+        }
+        {
+            static VTBL: ICoreWebView2DocumentTitleChangedEventHandlerVtbl =
+                ICoreWebView2DocumentTitleChangedEventHandlerVtbl {
+                    QueryInterface: unimplemented_query_interface,
+                    AddRef: unimplemented_add_ref,
+                    Release: unimplemented_release,
+                    Invoke: document_title_changed,
+                };
+            let document_title_changed_handler =
+                Box::into_raw(Box::new(ICoreWebView2DocumentTitleChangedEventHandler {
+                    lpVtbl: &VTBL,
+                }));
+            (*webview).add_DocumentTitleChanged(document_title_changed_handler, null_mut());
+        }
+        {
+            static VTBL: ICoreWebView2NewWindowRequestedEventHandlerVtbl =
+                ICoreWebView2NewWindowRequestedEventHandlerVtbl {
+                    QueryInterface: unimplemented_query_interface,
+                    AddRef: unimplemented_add_ref,
+                    Release: unimplemented_release,
+                    Invoke: new_window_requested,
+                };
+            let new_window_requested_handler =
+                Box::into_raw(Box::new(ICoreWebView2NewWindowRequestedEventHandler {
+                    lpVtbl: &VTBL,
+                }));
+            (*webview).add_NewWindowRequested(new_window_requested_handler, null_mut());
+        }
+
+        // Setup ipc and console logging
+        const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
+            window.ipc.postMessage = message => window.chrome.webview.postMessage('i' + (typeof message !== 'string' ? JSON.stringify(message) : message));";
+        #[cfg(feature = "log")]
+        const CONSOLE_SCRIPT: &str = "for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log'])\
+            window.console[level] = (...args) => window.chrome.webview.postMessage('c' + level.charAt(0) + args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));";
+        #[cfg(not(feature = "log"))]
+        let script = IPC_SCRIPT;
+        #[cfg(feature = "log")]
+        let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
+        _ = (*webview)
+            .AddScriptToExecuteOnDocumentCreated(str_to_wchar(&script).as_ptr(), null_mut());
+
+        static VTBL: ICoreWebView2WebMessageReceivedEventHandlerVtbl =
+            ICoreWebView2WebMessageReceivedEventHandlerVtbl {
+                QueryInterface: unimplemented_query_interface,
+                AddRef: unimplemented_add_ref,
+                Release: unimplemented_release,
+                Invoke: web_message_received,
+            };
+        let message_received_handler =
+            Box::into_raw(Box::new(ICoreWebView2WebMessageReceivedEventHandler {
+                lpVtbl: &VTBL,
+            }));
+        (*webview).add_WebMessageReceived(message_received_handler, null_mut());
+
+        // Load initial contents
+        if let Some(url) = &_self.should_load_url {
+            _ = (*webview).Navigate(str_to_wchar(url).as_ptr());
+        }
+        if let Some(html) = &_self.should_load_html {
+            _ = (*webview).NavigateToString(str_to_wchar(html).as_ptr());
+        }
+
+        S_OK
+    }
+}
+
+extern "system" fn navigation_starting(
+    _this: *mut ICoreWebView2NavigationStartingEventHandler,
+    _sender: *mut ICoreWebView2,
+    _args: *mut c_void,
+) -> HRESULT {
+    send_event(Event::PageLoadStarted);
+    S_OK
+}
+
+extern "system" fn navigation_completed(
+    _this: *mut ICoreWebView2NavigationCompletedEventHandler,
+    _sender: *mut ICoreWebView2,
+    _args: *mut c_void,
+) -> HRESULT {
+    send_event(Event::PageLoadFinished);
+    S_OK
+}
+
+extern "system" fn document_title_changed(
+    _this: *mut ICoreWebView2DocumentTitleChangedEventHandler,
+    _sender: *mut ICoreWebView2,
+    _args: *mut c_void,
+) -> HRESULT {
+    unsafe {
+        let mut title = null_mut();
+        _ = (*_sender).get_DocumentTitle(&mut title);
+        send_event(Event::PageTitleChanged(wchar_to_string(title)));
+    }
+    S_OK
+}
+
+extern "system" fn new_window_requested(
+    _this: *mut ICoreWebView2NewWindowRequestedEventHandler,
+    _sender: *mut ICoreWebView2,
+    args: *mut ICoreWebView2NewWindowRequestedEventArgs,
+) -> HRESULT {
+    unsafe {
+        (*args).put_Handled(TRUE);
+        let mut uri = null_mut();
+        _ = (*args).get_Uri(&mut uri);
+        let uri = CString::new(wchar_to_string(uri)).expect("Can't convert to CString");
+        ShellExecuteA(
+            null_mut(),
+            c"open".as_ptr(),
+            uri.as_ptr(),
+            null_mut(),
+            null_mut(),
+            SW_SHOWNORMAL,
+        );
+    }
+    S_OK
+}
+
+extern "system" fn web_message_received(
+    _this: *mut ICoreWebView2WebMessageReceivedEventHandler,
+    _sender: *mut ICoreWebView2,
+    args: *mut ICoreWebView2WebMessageReceivedEventArgs,
+) -> HRESULT {
+    let mut message = null_mut();
+    unsafe { (*args).TryGetWebMessageAsString(&mut message) };
+    let message = wchar_to_string(message);
+    let (r#type, message) = message.split_at(1);
+
+    #[cfg(feature = "log")]
+    if r#type == "c" {
+        let (level, message) = message.split_at(1);
+        match level {
+            "e" => log::error!("{message}"),
+            "w" => log::warn!("{message}"),
+            "i" | "l" => log::info!("{message}"),
+            "d" => log::debug!("{message}"),
+            "t" => log::trace!("{message}"),
+            _ => unimplemented!(),
+        }
+    }
+    if r#type == "i" {
+        send_event(Event::PageMessageReceived(message.to_string()));
+    }
+
+    S_OK
+}

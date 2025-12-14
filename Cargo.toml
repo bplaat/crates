@@ -1,6 +1,5 @@
 [workspace]
 members = ["bin/*", "examples/*", "lib/*", "lib/*/examples/*"]
-exclude = ["examples/windows-webview2"]
 resolver = "2"
 
 [workspace.package]
