@@ -29,6 +29,16 @@ impl HeaderMap {
         self.0.push((name, value));
     }
 
+    /// Get number of headers
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Is empty
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Get iterator
     pub fn iter(&self) -> Iter<'_, (String, String)> {
         self.0.iter()
