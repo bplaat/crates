@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::slice::{Iter, IterMut};
+
 /// HeaderMap
 #[derive(Default, Clone)]
 pub struct HeaderMap(Vec<(String, String)>);
@@ -26,16 +28,36 @@ impl HeaderMap {
     pub fn insert(&mut self, name: String, value: String) {
         self.0.push((name, value));
     }
+
+    /// Get iterator
+    pub fn iter(&self) -> Iter<'_, (String, String)> {
+        self.0.iter()
+    }
+}
+
+impl IntoIterator for HeaderMap {
+    type Item = (String, String);
+    type IntoIter = std::vec::IntoIter<(String, String)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }
 
 impl<'a> IntoIterator for &'a HeaderMap {
-    type Item = (&'a str, &'a str);
-    type IntoIter = std::iter::Map<
-        std::slice::Iter<'a, (String, String)>,
-        fn(&(String, String)) -> (&str, &str),
-    >;
+    type Item = &'a (String, String);
+    type IntoIter = Iter<'a, (String, String)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.iter().map(|(n, v)| (n.as_str(), v.as_str()))
+        self.0.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut HeaderMap {
+    type Item = &'a mut (String, String);
+    type IntoIter = IterMut<'a, (String, String)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
     }
 }
