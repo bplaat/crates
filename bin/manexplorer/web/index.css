@@ -125,6 +125,10 @@ li {
     min-height: 100%;
     padding: 0.25rem 0;
 }
+.sidebar-container.fixed {
+    position: sticky;
+    top: 0;
+}
 .sidebar-container.has-border {
     border-left: 1px solid var(--color-border);
 }
