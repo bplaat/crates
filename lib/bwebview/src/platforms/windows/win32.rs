@@ -316,7 +316,7 @@ unsafe extern "system" {
     ) -> i32;
 }
 
-// MARK: COM
+// MARK: ole32.dll
 pub(crate) type HRESULT = i32;
 
 #[repr(C)]
@@ -338,21 +338,55 @@ pub(crate) const E_NOTIMPL: HRESULT = 0x80004001u32 as HRESULT;
 unsafe extern "system" {
     pub(crate) fn CoInitializeEx(pvReserved: *mut c_void, dwCoInit: u32) -> HRESULT;
     pub(crate) fn CoUninitialize();
+    pub(crate) fn CoTaskMemFree(pv: *mut c_void);
 }
 
-// Utils
-pub(crate) fn str_to_wchar(s: &str) -> Vec<u16> {
-    let mut v: Vec<u16> = s.encode_utf16().collect();
-    v.push(0);
-    v
+// MARK: Utils
+pub(crate) trait ToWideString {
+    fn to_wide_string(&self) -> Vec<u16>;
+}
+impl ToWideString for &str {
+    fn to_wide_string(&self) -> Vec<u16> {
+        let mut v: Vec<u16> = self.encode_utf16().collect();
+        v.push(0);
+        v
+    }
+}
+impl ToWideString for String {
+    fn to_wide_string(&self) -> Vec<u16> {
+        let mut v: Vec<u16> = self.encode_utf16().collect();
+        v.push(0);
+        v
+    }
 }
 
-pub(crate) fn wchar_to_string(ptr: *const u16) -> String {
-    unsafe {
-        let mut len = 0;
-        while *ptr.add(len) != 0 {
-            len += 1;
+pub(crate) struct LPWSTR(*mut w_char);
+impl Default for LPWSTR {
+    fn default() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+impl LPWSTR {
+    pub(crate) fn as_mut_ptr(&mut self) -> *mut *mut w_char {
+        &mut self.0
+    }
+    pub(crate) fn to_string(&self) -> String {
+        if self.0.is_null() {
+            return String::new();
         }
-        String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len))
+        let mut len = 0;
+        unsafe {
+            while *self.0.add(len) != 0 {
+                len += 1;
+            }
+        }
+        String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) })
+    }
+}
+impl Drop for LPWSTR {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe { CoTaskMemFree(self.0 as *mut c_void) };
+        }
     }
 }

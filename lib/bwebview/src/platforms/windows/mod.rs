@@ -430,7 +430,7 @@ impl PlatformWebview {
             ));
             if CreateCoreWebView2EnvironmentWithOptions(
                 null(),
-                str_to_wchar(&data_folder).as_ptr(),
+                data_folder.to_wide_string().as_ptr(),
                 null_mut(),
                 completed_handler,
             ) != S_OK
@@ -556,9 +556,9 @@ impl crate::WebviewInterface for PlatformWebview {
     fn url(&self) -> Option<String> {
         unsafe {
             if let Some(webview) = self.0.webview {
-                let mut uri = null_mut();
-                _ = (*webview).get_Source(&mut uri);
-                Some(wchar_to_string(uri))
+                let mut uri = LPWSTR::default();
+                _ = (*webview).get_Source(uri.as_mut_ptr());
+                Some(uri.to_string())
             } else {
                 None
             }
@@ -568,7 +568,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                _ = (*webview).Navigate(str_to_wchar(url.as_ref()).as_ptr());
+                _ = (*webview).Navigate(url.as_ref().to_wide_string().as_ptr());
             }
         }
     }
@@ -576,7 +576,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn load_html(&mut self, html: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                _ = (*webview).NavigateToString(str_to_wchar(html.as_ref()).as_ptr());
+                _ = (*webview).NavigateToString(html.as_ref().to_wide_string().as_ptr());
             }
         }
     }
@@ -584,7 +584,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                _ = (*webview).ExecuteScript(str_to_wchar(script.as_ref()).as_ptr(), null_mut());
+                _ = (*webview).ExecuteScript(script.as_ref().to_wide_string().as_ptr(), null_mut());
             }
         }
     }
@@ -808,7 +808,7 @@ extern "system" fn controller_created(
             &IID_ICoreWebView2Settings2,
             &mut settings2 as *mut _ as *mut *mut c_void,
         );
-        (*settings2).put_UserAgent(str_to_wchar(&useragent).as_ptr());
+        (*settings2).put_UserAgent(useragent.to_wide_string().as_ptr());
 
         // Setup event handlers
         {
@@ -879,7 +879,7 @@ extern "system" fn controller_created(
         #[cfg(feature = "log")]
         let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
         _ = (*webview)
-            .AddScriptToExecuteOnDocumentCreated(str_to_wchar(&script).as_ptr(), null_mut());
+            .AddScriptToExecuteOnDocumentCreated(script.to_wide_string().as_ptr(), null_mut());
 
         static VTBL: ICoreWebView2WebMessageReceivedEventHandlerVtbl =
             ICoreWebView2WebMessageReceivedEventHandlerVtbl {
@@ -896,10 +896,10 @@ extern "system" fn controller_created(
 
         // Load initial contents
         if let Some(url) = &_self.should_load_url {
-            _ = (*webview).Navigate(str_to_wchar(url).as_ptr());
+            _ = (*webview).Navigate(url.to_wide_string().as_ptr());
         }
         if let Some(html) = &_self.should_load_html {
-            _ = (*webview).NavigateToString(str_to_wchar(html).as_ptr());
+            _ = (*webview).NavigateToString(html.to_wide_string().as_ptr());
         }
 
         S_OK
@@ -930,9 +930,9 @@ extern "system" fn document_title_changed(
     _args: *mut c_void,
 ) -> HRESULT {
     unsafe {
-        let mut title = null_mut();
-        _ = (*_sender).get_DocumentTitle(&mut title);
-        send_event(Event::PageTitleChanged(wchar_to_string(title)));
+        let mut title = LPWSTR::default();
+        _ = (*_sender).get_DocumentTitle(title.as_mut_ptr());
+        send_event(Event::PageTitleChanged(title.to_string()));
     }
     S_OK
 }
@@ -944,9 +944,9 @@ extern "system" fn new_window_requested(
 ) -> HRESULT {
     unsafe {
         (*args).put_Handled(TRUE);
-        let mut uri = null_mut();
-        _ = (*args).get_Uri(&mut uri);
-        let uri = CString::new(wchar_to_string(uri)).expect("Can't convert to CString");
+        let mut uri = LPWSTR::default();
+        _ = (*args).get_Uri(uri.as_mut_ptr());
+        let uri = CString::new(uri.to_string()).expect("Can't convert to CString");
         ShellExecuteA(
             null_mut(),
             c"open".as_ptr(),
@@ -964,9 +964,9 @@ extern "system" fn web_message_received(
     _sender: *mut ICoreWebView2,
     args: *mut ICoreWebView2WebMessageReceivedEventArgs,
 ) -> HRESULT {
-    let mut message = null_mut();
-    unsafe { (*args).TryGetWebMessageAsString(&mut message) };
-    let message = wchar_to_string(message);
+    let mut message = LPWSTR::default();
+    unsafe { (*args).TryGetWebMessageAsString(message.as_mut_ptr()) };
+    let message = message.to_string();
     let (r#type, message) = message.split_at(1);
 
     #[cfg(feature = "log")]

@@ -22,6 +22,43 @@ pub(crate) mod windows {
         data3: u16,
         data4: [u8; 8],
     }
+
+    #[link(name = "ole32")]
+    unsafe extern "system" {
+        fn CoTaskMemFree(pv: *mut std::ffi::c_void);
+    }
+
+    pub(crate) struct LPWSTR(*mut u16);
+    impl Default for LPWSTR {
+        fn default() -> Self {
+            Self(std::ptr::null_mut())
+        }
+    }
+    impl LPWSTR {
+        pub(crate) fn as_mut_ptr(&mut self) -> *mut *mut u16 {
+            &mut self.0
+        }
+        pub(crate) fn to_string(&self) -> String {
+            if self.0.is_null() {
+                return String::new();
+            }
+            let mut len = 0;
+            unsafe {
+                while *self.0.add(len) != 0 {
+                    len += 1;
+                }
+            }
+            String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) })
+        }
+    }
+    impl Drop for LPWSTR {
+        fn drop(&mut self) {
+            if !self.0.is_null() {
+                unsafe { CoTaskMemFree(self.0 as *mut std::ffi::c_void) };
+            }
+        }
+    }
+
     const KF_FLAG_DEFAULT: u32 = 0x00000000;
     #[link(name = "shell32")]
     unsafe extern "system" {
@@ -31,10 +68,6 @@ pub(crate) mod windows {
             hToken: *const std::ffi::c_void,
             ppszPath: *mut *mut u16,
         ) -> i32;
-    }
-    #[link(name = "ole32")]
-    unsafe extern "system" {
-        fn CoTaskMemFree(pv: *mut std::ffi::c_void);
     }
 
     pub(crate) const FOLDERID_LOCAL_APPDATA: Guid = Guid {
@@ -57,19 +90,16 @@ pub(crate) mod windows {
     };
 
     pub(crate) fn get_known_folder_path(folder_id: &Guid) -> PathBuf {
-        let mut path_ptr: *mut u16 = std::ptr::null_mut();
+        let mut path = LPWSTR::default();
         unsafe {
-            SHGetKnownFolderPath(folder_id, KF_FLAG_DEFAULT, std::ptr::null(), &mut path_ptr)
+            SHGetKnownFolderPath(
+                folder_id,
+                KF_FLAG_DEFAULT,
+                std::ptr::null(),
+                path.as_mut_ptr(),
+            )
         };
-        let mut len = 0;
-        unsafe {
-            while *path_ptr.add(len) != 0 {
-                len += 1;
-            }
-        }
-        let path = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(path_ptr, len) });
-        unsafe { CoTaskMemFree(path_ptr as *mut std::ffi::c_void) };
-        PathBuf::from(path)
+        PathBuf::from(path.to_string())
     }
 }
 
