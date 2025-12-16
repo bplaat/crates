@@ -255,7 +255,7 @@ impl PlatformWebview {
             } else if builder.resizable {
                 WS_OVERLAPPEDWINDOW
             } else {
-                WS_OVERLAPPEDWINDOW & !WS_THICKFRAME
+                WS_OVERLAPPEDWINDOW & !WS_THICKFRAME & !WS_MAXIMIZEBOX
             };
 
             // Calculate window rect based on size and position
@@ -1148,7 +1148,7 @@ fn http_response_to_webview2_response(
             response
                 .headers
                 .iter()
-                .map(|(name, value)| format!("{}: {}", name, value))
+                .map(|(name, value)| format!("{name}: {value}"))
                 .collect::<Vec<_>>()
                 .join("\n")
                 .to_wide_string()
