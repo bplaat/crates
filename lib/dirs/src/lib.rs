@@ -28,6 +28,7 @@ pub(crate) mod windows {
         fn CoTaskMemFree(pv: *mut std::ffi::c_void);
     }
 
+    #[allow(clippy::upper_case_acronyms)]
     pub(crate) struct LPWSTR(*mut u16);
     impl Default for LPWSTR {
         fn default() -> Self {
@@ -38,9 +39,11 @@ pub(crate) mod windows {
         pub(crate) fn as_mut_ptr(&mut self) -> *mut *mut u16 {
             &mut self.0
         }
-        pub(crate) fn to_string(&self) -> String {
+    }
+    impl std::fmt::Display for LPWSTR {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             if self.0.is_null() {
-                return String::new();
+                return Ok(());
             }
             let mut len = 0;
             unsafe {
@@ -48,7 +51,8 @@ pub(crate) mod windows {
                     len += 1;
                 }
             }
-            String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) })
+            let str = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) });
+            write!(f, "{}", str)
         }
     }
     impl Drop for LPWSTR {

@@ -13,6 +13,8 @@ use std::{env, mem};
 
 use self::webview2::*;
 use self::win32::*;
+#[cfg(feature = "custom_protocol")]
+use crate::CustomProtocol;
 use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
 
 mod webview2;
@@ -193,8 +195,11 @@ struct WebviewData {
     background_color: Option<u32>,
     should_load_url: Option<String>,
     should_load_html: Option<String>,
+    #[cfg(feature = "custom_protocol")]
+    custom_protocols: Vec<CustomProtocol>,
     #[cfg(feature = "remember_window_state")]
     remember_window_state: bool,
+    environment: Option<*mut ICoreWebView2Environment>,
     controller: Option<*mut ICoreWebView2Controller>,
     webview: Option<*mut ICoreWebView2>,
 }
@@ -378,8 +383,11 @@ impl PlatformWebview {
             background_color: builder.background_color,
             should_load_url: builder.should_load_url,
             should_load_html: builder.should_load_html,
+            #[cfg(feature = "custom_protocol")]
+            custom_protocols: builder.custom_protocols,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
+            environment: None,
             controller: None,
             webview: None,
         });
@@ -568,7 +576,11 @@ impl crate::WebviewInterface for PlatformWebview {
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                (*webview).Navigate(url.as_ref().to_wide_string().as_ptr());
+                #[cfg(feature = "custom_protocol")]
+                let url = replace_custom_protocol_in_url(url.as_ref(), &self.0.custom_protocols);
+                #[cfg(not(feature = "custom_protocol"))]
+                let url: &str = url.as_ref();
+                (*webview).Navigate(url.to_wide_string().as_ptr());
             }
         }
     }
@@ -619,7 +631,7 @@ unsafe extern "system" fn window_proc(
                     )
                 };
                 unsafe { FillRect(hdc, &client_rect, brush) };
-                unsafe { DeleteObject(brush as *mut c_void) };
+                unsafe { DeleteObject(brush) };
                 1
             } else {
                 0
@@ -746,6 +758,9 @@ extern "system" fn environment_created(
     unsafe {
         let _self = &mut *((*_this).user_data as *mut WebviewData);
 
+        (*environment).AddRef();
+        _self.environment = Some(environment);
+
         static VTBL: ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl =
             ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl {
                 QueryInterface: unimplemented_query_interface,
@@ -810,6 +825,33 @@ extern "system" fn controller_created(
             &mut settings2 as *mut _ as *mut *mut c_void,
         );
         (*settings2).put_UserAgent(useragent.to_wide_string().as_ptr());
+
+        // Set custom protocols
+        #[cfg(feature = "custom_protocol")]
+        {
+            for custom_protocol in &_self.custom_protocols {
+                (*webview).AddWebResourceRequestedFilter(
+                    format!("http://{}.localhost/*", custom_protocol.scheme)
+                        .to_wide_string()
+                        .as_ptr(),
+                    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+                );
+            }
+
+            static VTBL: ICoreWebView2WebResourceRequestedEventHandlerVtbl =
+                ICoreWebView2WebResourceRequestedEventHandlerVtbl {
+                    QueryInterface: unimplemented_query_interface,
+                    AddRef: unimplemented_add_ref,
+                    Release: unimplemented_release,
+                    Invoke: web_resource_requested,
+                };
+            let web_resource_requested_handler =
+                Box::into_raw(Box::new(ICoreWebView2WebResourceRequestedEventHandler {
+                    lpVtbl: &VTBL,
+                    user_data: (*_this).user_data,
+                }));
+            (*webview).add_WebResourceRequested(web_resource_requested_handler, null_mut());
+        }
 
         // Setup event handlers
         {
@@ -897,6 +939,10 @@ extern "system" fn controller_created(
 
         // Load initial contents
         if let Some(url) = &_self.should_load_url {
+            #[cfg(feature = "custom_protocol")]
+            let url = replace_custom_protocol_in_url(url, &_self.custom_protocols);
+            #[cfg(not(feature = "custom_protocol"))]
+            let url: &str = url.as_ref();
             (*webview).Navigate(url.to_wide_string().as_ptr());
         }
         if let Some(html) = &_self.should_load_html {
@@ -987,4 +1033,129 @@ extern "system" fn web_message_received(
     }
 
     S_OK
+}
+
+#[cfg(feature = "custom_protocol")]
+extern "system" fn web_resource_requested(
+    _this: *mut ICoreWebView2WebResourceRequestedEventHandler,
+    _sender: *mut ICoreWebView2,
+    args: *mut ICoreWebView2WebResourceRequestedEventArgs,
+) -> HRESULT {
+    let _self = unsafe { &mut *((*_this).user_data as *mut WebviewData) };
+
+    let mut webview2_request = null_mut();
+    unsafe { (*args).get_Request(&mut webview2_request) };
+    let http_request = webview2_request_to_http_request(webview2_request);
+    unsafe { (*webview2_request).Release() };
+
+    for custom_protocol in &_self.custom_protocols {
+        if http_request.url.host() == Some(&format!("{}.localhost", &custom_protocol.scheme)) {
+            let response = (custom_protocol.handler)(&http_request);
+
+            let webview2_response = http_response_to_webview2_response(
+                response,
+                _self.environment.expect("Should be some"),
+            );
+            unsafe { (*args).put_Response(webview2_response) };
+            unsafe { (*webview2_response).Release() };
+
+            return S_OK;
+        }
+    }
+    panic!("No handler found for custom protocol");
+}
+
+#[cfg(feature = "custom_protocol")]
+fn replace_custom_protocol_in_url(url: &str, custom_protocols: &[CustomProtocol]) -> String {
+    for custom_protocol in custom_protocols {
+        if url.starts_with(&format!("{}://", &custom_protocol.scheme)) {
+            return url.replace(
+                &format!("{}://", &custom_protocol.scheme),
+                &format!("http://{}.localhost/", &custom_protocol.scheme),
+            );
+        }
+    }
+    url.to_string()
+}
+
+#[cfg(feature = "custom_protocol")]
+fn webview2_request_to_http_request(
+    request: *mut ICoreWebView2WebResourceRequest,
+) -> small_http::Request {
+    unsafe {
+        use std::str::FromStr;
+
+        let mut method = LPWSTR::default();
+        (*request).get_Method(method.as_mut_ptr());
+        let method = method.to_string();
+
+        let mut uri = LPWSTR::default();
+        (*request).get_Uri(uri.as_mut_ptr());
+        let uri = uri.to_string();
+
+        let mut req = small_http::Request::with_method_and_url(
+            small_http::Method::from_str(&method).unwrap_or(small_http::Method::Get),
+            &uri,
+        );
+        {
+            let mut headers = null_mut();
+            (*request).get_Headers(&mut headers);
+            let mut iterator = null_mut();
+            (*headers).GetIterator(&mut iterator);
+            let mut has_current: BOOL = FALSE;
+            (*iterator).get_HasCurrentHeader(&mut has_current);
+            while has_current == TRUE {
+                let mut name = LPWSTR::default();
+                let mut value = LPWSTR::default();
+                (*iterator).GetCurrentHeader(name.as_mut_ptr(), value.as_mut_ptr());
+                req = req.header(name.to_string(), value.to_string());
+                (*iterator).MoveNext(&mut has_current);
+            }
+            (*iterator).Release();
+            (*headers).Release();
+        }
+        {
+            let mut body_stream = null_mut();
+            (*request).get_Content(&mut body_stream);
+            if !body_stream.is_null() {
+                let mut stat: STATSTG = mem::zeroed();
+                (*body_stream).Stat(&mut stat as *mut _, STATFLAG_NONAME);
+                let size = stat.cbSize as usize;
+                let mut buffer = vec![0u8; size];
+                let mut read: u32 = 0;
+                (*body_stream).Read(buffer.as_mut_ptr() as *mut c_void, size as u32, &mut read);
+                req = req.body(buffer);
+                (*body_stream).Release();
+            }
+        }
+        req
+    }
+}
+
+#[cfg(feature = "custom_protocol")]
+fn http_response_to_webview2_response(
+    response: small_http::Response,
+    environment: *mut ICoreWebView2Environment,
+) -> *mut ICoreWebView2WebResourceResponse {
+    unsafe {
+        let body_stream = SHCreateMemStream(response.body.as_ptr(), response.body.len() as u32);
+
+        let mut webview2_response = null_mut();
+        (*environment).CreateWebResourceResponse(
+            body_stream,
+            response.status as u32,
+            response.status.to_string().to_wide_string().as_ptr(),
+            response
+                .headers
+                .iter()
+                .map(|(name, value)| format!("{}: {}", name, value))
+                .collect::<Vec<_>>()
+                .join("\n")
+                .to_wide_string()
+                .as_ptr(),
+            &mut webview2_response,
+        );
+        (*body_stream).Release();
+        webview2_response
+    }
 }
