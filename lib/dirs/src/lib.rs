@@ -52,7 +52,7 @@ pub(crate) mod windows {
                 }
             }
             let str = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) });
-            write!(f, "{}", str)
+            write!(f, "{str}")
         }
     }
     impl Drop for LPWSTR {

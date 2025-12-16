@@ -136,6 +136,7 @@ pub(crate) struct WINDOWPLACEMENT {
 pub(crate) const WS_POPUP: u32 = 0x80000000;
 pub(crate) const WS_THICKFRAME: u32 = 0x00040000;
 pub(crate) const WS_OVERLAPPEDWINDOW: u32 = 0x00CF0000;
+pub(crate) const WS_MAXIMIZEBOX: u32 = 0x00010000;
 
 pub(crate) const CW_USEDEFAULT: i32 = 0x80000000u32 as i32;
 
@@ -453,7 +454,7 @@ impl std::fmt::Display for LPWSTR {
             }
         }
         let str = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) });
-        write!(f, "{}", str)
+        write!(f, "{str}")
     }
 }
 impl Drop for LPWSTR {
