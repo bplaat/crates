@@ -19,6 +19,9 @@ small-http = { version = "0.2.0", optional = true, default-features = false }
 block2 = "0.6"
 objc2 = "0.6"
 
+[target.'cfg(windows)'.build-dependencies]
+windows-metadata = "0.59.0"
+
 [features]
 default = ["log", "remember_window_state"]
 custom_protocol = ["dep:small-http"]

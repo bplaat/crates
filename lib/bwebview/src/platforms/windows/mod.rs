@@ -17,8 +17,10 @@ use self::win32::*;
 use crate::CustomProtocol;
 use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
 
-mod webview2;
 mod win32;
+mod webview2 {
+    include!(concat!(env!("OUT_DIR"), "/webview2_bindings.rs"));
+}
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop;
@@ -743,11 +745,11 @@ extern "system" fn unimplemented_query_interface(
 ) -> HRESULT {
     E_NOINTERFACE
 }
-extern "system" fn unimplemented_add_ref(_this: *mut c_void) -> HRESULT {
-    E_NOTIMPL
+extern "system" fn unimplemented_add_ref(_this: *mut c_void) -> u32 {
+    0
 }
-extern "system" fn unimplemented_release(_this: *mut c_void) -> HRESULT {
-    E_NOTIMPL
+extern "system" fn unimplemented_release(_this: *mut c_void) -> u32 {
+    0
 }
 
 extern "system" fn environment_created(
@@ -763,7 +765,7 @@ extern "system" fn environment_created(
 
         static VTBL: ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl =
             ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl {
-                QueryInterface: unimplemented_query_interface,
+                QueryInterface: unimplemented_query_interface as _,
                 AddRef: unimplemented_add_ref,
                 Release: unimplemented_release,
                 Invoke: controller_created,
@@ -865,6 +867,7 @@ extern "system" fn controller_created(
             let navigation_starting_handler =
                 Box::into_raw(Box::new(ICoreWebView2NavigationStartingEventHandler {
                     lpVtbl: &VTBL,
+                    user_data: null_mut(),
                 }));
             (*webview).add_NavigationStarting(navigation_starting_handler, null_mut());
         }
@@ -879,6 +882,7 @@ extern "system" fn controller_created(
             let navigation_completed_handler =
                 Box::into_raw(Box::new(ICoreWebView2NavigationCompletedEventHandler {
                     lpVtbl: &VTBL,
+                    user_data: null_mut(),
                 }));
             (*webview).add_NavigationCompleted(navigation_completed_handler, null_mut());
         }
@@ -893,6 +897,7 @@ extern "system" fn controller_created(
             let document_title_changed_handler =
                 Box::into_raw(Box::new(ICoreWebView2DocumentTitleChangedEventHandler {
                     lpVtbl: &VTBL,
+                    user_data: null_mut(),
                 }));
             (*webview).add_DocumentTitleChanged(document_title_changed_handler, null_mut());
         }
@@ -907,6 +912,7 @@ extern "system" fn controller_created(
             let new_window_requested_handler =
                 Box::into_raw(Box::new(ICoreWebView2NewWindowRequestedEventHandler {
                     lpVtbl: &VTBL,
+                    user_data: null_mut(),
                 }));
             (*webview).add_NewWindowRequested(new_window_requested_handler, null_mut());
         }
@@ -934,6 +940,7 @@ extern "system" fn controller_created(
         let message_received_handler =
             Box::into_raw(Box::new(ICoreWebView2WebMessageReceivedEventHandler {
                 lpVtbl: &VTBL,
+                user_data: null_mut(),
             }));
         (*webview).add_WebMessageReceived(message_received_handler, null_mut());
 
@@ -956,7 +963,7 @@ extern "system" fn controller_created(
 extern "system" fn navigation_starting(
     _this: *mut ICoreWebView2NavigationStartingEventHandler,
     _sender: *mut ICoreWebView2,
-    _args: *mut c_void,
+    _args: *mut ICoreWebView2NavigationStartingEventArgs,
 ) -> HRESULT {
     send_event(Event::PageLoadStarted);
     S_OK
@@ -965,7 +972,7 @@ extern "system" fn navigation_starting(
 extern "system" fn navigation_completed(
     _this: *mut ICoreWebView2NavigationCompletedEventHandler,
     _sender: *mut ICoreWebView2,
-    _args: *mut c_void,
+    _args: *mut ICoreWebView2NavigationCompletedEventArgs,
 ) -> HRESULT {
     send_event(Event::PageLoadFinished);
     S_OK
@@ -974,7 +981,7 @@ extern "system" fn navigation_completed(
 extern "system" fn document_title_changed(
     _this: *mut ICoreWebView2DocumentTitleChangedEventHandler,
     _sender: *mut ICoreWebView2,
-    _args: *mut c_void,
+    _args: *mut IDocumentTitleChangedEventArgs,
 ) -> HRESULT {
     unsafe {
         let mut title = LPWSTR::default();
@@ -1143,7 +1150,7 @@ fn http_response_to_webview2_response(
         let mut webview2_response = null_mut();
         (*environment).CreateWebResourceResponse(
             body_stream,
-            response.status as u32,
+            response.status as i32,
             response.status.to_string().to_wide_string().as_ptr(),
             response
                 .headers

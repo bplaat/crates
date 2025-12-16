@@ -107,6 +107,7 @@ dependencies = [
  "objc2",
  "rust-embed",
  "small-http",
+ "windows-metadata",
 ]
 
 [[package]]
@@ -843,6 +844,12 @@ dependencies = [
  "simple_logger",
  "small-http",
 ]
+
+[[package]]
+name = "windows-metadata"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70aa58b9e48ffc2d7c2f2f5209448a8c3bb2c4b2f77f2df9505253caf27fcc31"
 
 [[package]]
 name = "winres"

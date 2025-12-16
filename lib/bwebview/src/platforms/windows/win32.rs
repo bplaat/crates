@@ -370,7 +370,7 @@ pub(crate) struct IStream {
 }
 
 impl IStream {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 
@@ -390,8 +390,8 @@ pub(crate) struct IStream_Vtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut IStream) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut IStream) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut IStream) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut IStream) -> u32,
     pub(crate) Read: unsafe extern "system" fn(
         This: *mut IStream,
         pv: *mut c_void,
