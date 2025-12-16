@@ -8,6 +8,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 #![allow(clippy::upper_case_acronyms)]
+#![allow(unused)]
 
 use std::ffi::{c_char, c_void};
 
@@ -16,6 +17,12 @@ pub(crate) type BOOL = i32;
 pub(crate) const TRUE: BOOL = 1;
 pub(crate) const FALSE: BOOL = 0;
 pub(crate) type w_char = u16;
+
+#[repr(C)]
+pub(crate) struct FILETIME {
+    pub(crate) dwLowDateTime: u32,
+    pub(crate) dwHighDateTime: u32,
+}
 
 // MARK: kernel32.dll
 pub(crate) type HMODULE = *const c_void;
@@ -226,13 +233,9 @@ unsafe extern "system" {
         lpCaption: *const c_char,
         uType: u32,
     ) -> i32;
-    #[allow(dead_code)]
     pub(crate) fn GetWindowLongA(hwnd: HWND, index: i32) -> i32;
-    #[allow(dead_code)]
     pub(crate) fn GetWindowLongPtrA(hwnd: HWND, index: i32) -> isize;
-    #[allow(dead_code)]
     pub(crate) fn SetWindowLongA(hwnd: HWND, index: i32, value: i32) -> i32;
-    #[allow(dead_code)]
     pub(crate) fn SetWindowLongPtrA(hwnd: HWND, index: i32, value: isize) -> isize;
     pub(crate) fn MonitorFromPoint(pt: POINT, dwFlags: u32) -> *mut c_void;
     pub(crate) fn EnumDisplayMonitors(
@@ -328,6 +331,21 @@ pub(crate) struct GUID {
     pub(crate) data4: [u8; 8],
 }
 
+#[repr(C)]
+pub(crate) struct STATSTG {
+    pub(crate) pwcsName: *mut u16,
+    pub(crate) type_: u32,
+    pub(crate) cbSize: u64,
+    pub(crate) mtime: FILETIME,
+    pub(crate) ctime: FILETIME,
+    pub(crate) atime: FILETIME,
+    pub(crate) grfMode: u32,
+    pub(crate) grfLocksSupported: u32,
+    pub(crate) clsid: GUID,
+    pub(crate) grfStateBits: u32,
+    pub(crate) reserved: u32,
+}
+
 pub(crate) const COINIT_APARTMENTTHREADED: u32 = 0x2;
 pub(crate) const COINIT_DISABLE_OLE1DDE: u32 = 0x4;
 
@@ -340,6 +358,57 @@ unsafe extern "system" {
     pub(crate) fn CoInitializeEx(pvReserved: *mut c_void, dwCoInit: u32) -> HRESULT;
     pub(crate) fn CoUninitialize();
     pub(crate) fn CoTaskMemFree(pv: *mut c_void);
+}
+
+// MARK: IStream
+pub(crate) const STATFLAG_NONAME: u32 = 1;
+
+#[repr(C)]
+pub(crate) struct IStream {
+    pub(crate) lpVtbl: *const IStream_Vtbl,
+}
+
+impl IStream {
+    pub(crate) unsafe fn Release(&self) -> HRESULT {
+        unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
+    }
+
+    pub(crate) unsafe fn Read(&self, pv: *mut c_void, cb: u32, pcbRead: *mut u32) -> HRESULT {
+        unsafe { ((*self.lpVtbl).Read)(self as *const _ as *mut _, pv, cb, pcbRead) }
+    }
+
+    pub(crate) unsafe fn Stat(&self, pstatstg: *mut STATSTG, grfStatFlag: u32) -> HRESULT {
+        unsafe { ((*self.lpVtbl).Stat)(self as *const _ as *mut _, pstatstg, grfStatFlag) }
+    }
+}
+
+#[repr(C)]
+pub(crate) struct IStream_Vtbl {
+    pub(crate) QueryInterface: unsafe extern "system" fn(
+        This: *mut IStream,
+        riid: *const GUID,
+        ppvObject: *mut *mut c_void,
+    ) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut IStream) -> HRESULT,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut IStream) -> HRESULT,
+    pub(crate) Read: unsafe extern "system" fn(
+        This: *mut IStream,
+        pv: *mut c_void,
+        cb: u32,
+        pcbRead: *mut u32,
+    ) -> HRESULT,
+    padding1: [usize; 8],
+    pub(crate) Stat: unsafe extern "system" fn(
+        This: *mut IStream,
+        pstatstg: *mut STATSTG,
+        grfStatFlag: u32,
+    ) -> HRESULT,
+}
+
+// shlwapi.dll
+#[link(name = "shlwapi")]
+unsafe extern "system" {
+    pub(crate) fn SHCreateMemStream(pInit: *const u8, cbInit: u32) -> *mut IStream;
 }
 
 // MARK: Utils
@@ -371,9 +440,11 @@ impl LPWSTR {
     pub(crate) fn as_mut_ptr(&mut self) -> *mut *mut w_char {
         &mut self.0
     }
-    pub(crate) fn to_string(&self) -> String {
+}
+impl std::fmt::Display for LPWSTR {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.0.is_null() {
-            return String::new();
+            return Ok(());
         }
         let mut len = 0;
         unsafe {
@@ -381,7 +452,8 @@ impl LPWSTR {
                 len += 1;
             }
         }
-        String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) })
+        let str = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) });
+        write!(f, "{}", str)
     }
 }
 impl Drop for LPWSTR {
