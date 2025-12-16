@@ -33,6 +33,7 @@ pub(crate) type HDC = *mut c_void;
 unsafe extern "system" {
     pub(crate) fn FillRect(hdc: HDC, lprc: *const RECT, hbr: HBRUSH) -> i32;
     pub(crate) fn CreateSolidBrush(color: u32) -> HBRUSH;
+    pub(crate) fn DeleteObject(ho: *mut c_void) -> BOOL;
 }
 
 // MARK: user32.dll

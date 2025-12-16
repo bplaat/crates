@@ -36,7 +36,7 @@ impl PlatformEventLoop {
             );
 
             // Enable PerMonitorV2 high DPI awareness
-            _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
             Self
         }
@@ -67,7 +67,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         }
         unsafe {
             MONITORS = Some(Vec::new());
-            _ = EnumDisplayMonitors(null_mut(), null_mut(), monitor_enum_proc, 0);
+            EnumDisplayMonitors(null_mut(), null_mut(), monitor_enum_proc, 0);
             #[allow(static_mut_refs)]
             MONITORS.take().unwrap_or_default()
         }
@@ -80,7 +80,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         unsafe {
             let mut msg = mem::zeroed();
             while GetMessageA(&mut msg, null_mut(), 0, 0) != 0 {
-                _ = TranslateMessage(&msg);
+                TranslateMessage(&msg);
                 DispatchMessageA(&msg);
             }
             CoUninitialize();
@@ -117,7 +117,7 @@ impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
         if let Some(hwnd) = unsafe { FIRST_HWND } {
             let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
-            _ = unsafe { PostMessageA(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
+            unsafe { PostMessageA(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
         }
     }
 }
@@ -135,7 +135,7 @@ impl PlatformMonitor {
             ..Default::default()
         };
         unsafe {
-            _ = GetMonitorInfoA(hmonitor, &mut info as *mut _ as *mut _);
+            GetMonitorInfoA(hmonitor, &mut info as *mut _ as *mut _);
         }
         Self { hmonitor, info }
     }
@@ -300,7 +300,7 @@ impl PlatformWebview {
                 right: x + width,
                 bottom: y + height,
             };
-            _ = AdjustWindowRectExForDpi(&mut rect, style, FALSE, 0, dpi);
+            AdjustWindowRectExForDpi(&mut rect, style, FALSE, 0, dpi);
 
             let title = CString::new(builder.title).expect("Can't convert to CString");
             let hwnd = CreateWindowExA(
@@ -327,7 +327,7 @@ impl PlatformWebview {
             );
             if let Some(theme) = builder.theme {
                 let enabled: BOOL = (theme == Theme::Dark).into();
-                _ = DwmSetWindowAttribute(
+                DwmSetWindowAttribute(
                     hwnd,
                     DWMWA_USE_IMMERSIVE_DARK_MODE,
                     &enabled as *const _ as *const _,
@@ -343,7 +343,7 @@ impl PlatformWebview {
                     let mut buffer = vec![0u8; size];
                     if file.read_exact(&mut buffer).is_ok() {
                         let window_placement = std::ptr::read(buffer.as_ptr() as *const _);
-                        _ = SetWindowPlacement(hwnd, &window_placement);
+                        SetWindowPlacement(hwnd, &window_placement);
                         false
                     } else {
                         true
@@ -357,9 +357,9 @@ impl PlatformWebview {
             #[cfg(not(feature = "remember_window_state"))]
             let should_show_window = true;
             if should_show_window {
-                _ = ShowWindow(hwnd, SW_SHOWDEFAULT);
+                ShowWindow(hwnd, SW_SHOWDEFAULT);
             }
-            _ = UpdateWindow(hwnd);
+            UpdateWindow(hwnd);
             hwnd
         };
 
@@ -468,12 +468,12 @@ impl PlatformWebview {
 impl crate::WebviewInterface for PlatformWebview {
     fn set_title(&mut self, title: impl AsRef<str>) {
         let title = CString::new(title.as_ref()).expect("Can't convert to CString");
-        _ = unsafe { SetWindowTextA(self.0.hwnd, title.as_ptr()) };
+        unsafe { SetWindowTextA(self.0.hwnd, title.as_ptr()) };
     }
 
     fn position(&self) -> LogicalPoint {
         let mut rect = RECT::default();
-        _ = unsafe { GetWindowRect(self.0.hwnd, &mut rect) };
+        unsafe { GetWindowRect(self.0.hwnd, &mut rect) };
         LogicalPoint::new(
             (rect.left * USER_DEFAULT_SCREEN_DPI as i32 / self.0.dpi as i32) as f32,
             (rect.top * USER_DEFAULT_SCREEN_DPI as i32 / self.0.dpi as i32) as f32,
@@ -482,7 +482,7 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn size(&self) -> LogicalSize {
         let mut rect = RECT::default();
-        _ = unsafe { GetWindowRect(self.0.hwnd, &mut rect) };
+        unsafe { GetWindowRect(self.0.hwnd, &mut rect) };
         LogicalSize::new(
             ((rect.right - rect.left) * USER_DEFAULT_SCREEN_DPI as i32 / self.0.dpi as i32) as f32,
             ((rect.bottom - rect.top) * USER_DEFAULT_SCREEN_DPI as i32 / self.0.dpi as i32) as f32,
@@ -490,7 +490,7 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 
     fn set_position(&mut self, point: LogicalPoint) {
-        _ = unsafe {
+        unsafe {
             SetWindowPos(
                 self.0.hwnd,
                 null_mut(),
@@ -504,7 +504,7 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 
     fn set_size(&mut self, size: LogicalSize) {
-        _ = unsafe {
+        unsafe {
             SetWindowPos(
                 self.0.hwnd,
                 null_mut(),
@@ -539,7 +539,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn set_theme(&mut self, theme: Theme) {
         unsafe {
             let enabled: BOOL = (theme == Theme::Dark).into();
-            _ = DwmSetWindowAttribute(
+            DwmSetWindowAttribute(
                 self.0.hwnd,
                 DWMWA_USE_IMMERSIVE_DARK_MODE,
                 &enabled as *const _ as *const _,
@@ -550,14 +550,14 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn set_background_color(&mut self, color: u32) {
         self.0.background_color = Some(color);
-        _ = unsafe { InvalidateRect(self.0.hwnd, null_mut(), TRUE) };
+        unsafe { InvalidateRect(self.0.hwnd, null_mut(), TRUE) };
     }
 
     fn url(&self) -> Option<String> {
         unsafe {
             if let Some(webview) = self.0.webview {
                 let mut uri = LPWSTR::default();
-                _ = (*webview).get_Source(uri.as_mut_ptr());
+                (*webview).get_Source(uri.as_mut_ptr());
                 Some(uri.to_string())
             } else {
                 None
@@ -568,7 +568,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                _ = (*webview).Navigate(url.as_ref().to_wide_string().as_ptr());
+                (*webview).Navigate(url.as_ref().to_wide_string().as_ptr());
             }
         }
     }
@@ -576,7 +576,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn load_html(&mut self, html: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                _ = (*webview).NavigateToString(html.as_ref().to_wide_string().as_ptr());
+                (*webview).NavigateToString(html.as_ref().to_wide_string().as_ptr());
             }
         }
     }
@@ -584,7 +584,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                _ = (*webview).ExecuteScript(script.as_ref().to_wide_string().as_ptr(), null_mut());
+                (*webview).ExecuteScript(script.as_ref().to_wide_string().as_ptr(), null_mut());
             }
         }
     }
@@ -612,13 +612,14 @@ unsafe extern "system" fn window_proc(
             if let Some(color) = _self.background_color {
                 let hdc = w_param as HDC;
                 let mut client_rect = RECT::default();
-                _ = unsafe { GetClientRect(hwnd, &mut client_rect) };
+                unsafe { GetClientRect(hwnd, &mut client_rect) };
                 let brush = unsafe {
                     CreateSolidBrush(
                         ((color & 0xFF) << 16) | (color & 0xFF00) | ((color >> 16) & 0xFF),
                     )
                 };
-                _ = unsafe { FillRect(hdc, &client_rect, brush) };
+                unsafe { FillRect(hdc, &client_rect, brush) };
+                unsafe { DeleteObject(brush as *mut c_void) };
                 1
             } else {
                 0
@@ -641,7 +642,7 @@ unsafe extern "system" fn window_proc(
                 (height * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
             )));
             if let Some(controller) = _self.controller {
-                _ = unsafe {
+                unsafe {
                     (*controller).put_Bounds(RECT {
                         left: 0,
                         top: 0,
@@ -655,7 +656,7 @@ unsafe extern "system" fn window_proc(
         WM_DPICHANGED => {
             _self.dpi = (w_param >> 16) as u32;
             let window_rect = unsafe { &*(l_param as *const RECT) };
-            _ = unsafe {
+            unsafe {
                 SetWindowPos(
                     hwnd,
                     null_mut(),
@@ -669,12 +670,12 @@ unsafe extern "system" fn window_proc(
             0
         }
         WM_GETMINMAXINFO => {
-            unsafe {
-                if let Some(min_size) = _self.min_size {
-                    let min_width =
-                        min_size.width as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
-                    let min_height =
-                        min_size.height as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
+            if let Some(min_size) = _self.min_size {
+                let min_width =
+                    min_size.width as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
+                let min_height =
+                    min_size.height as i32 * _self.dpi as i32 / USER_DEFAULT_SCREEN_DPI as i32;
+                unsafe {
                     let minmax_info: *mut MINMAXINFO = l_param as *mut MINMAXINFO;
                     (*minmax_info).ptMinTrackSize.x = min_width;
                     (*minmax_info).ptMinTrackSize.y = min_height;
@@ -694,7 +695,7 @@ unsafe extern "system" fn window_proc(
                 unsafe {
                     use std::io::Write;
                     let mut window_placement = mem::zeroed();
-                    _ = GetWindowPlacement(hwnd, &mut window_placement);
+                    GetWindowPlacement(hwnd, &mut window_placement);
                     let window_placement_path =
                         format!("{}/window.bin", PlatformWebview::userdata_folder());
                     if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -712,7 +713,7 @@ unsafe extern "system" fn window_proc(
             }
 
             send_event(Event::WindowClosed);
-            _ = unsafe { DestroyWindow(hwnd) };
+            unsafe { DestroyWindow(hwnd) };
             0
         }
         WM_DESTROY => {
@@ -878,7 +879,7 @@ extern "system" fn controller_created(
         let script = IPC_SCRIPT;
         #[cfg(feature = "log")]
         let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
-        _ = (*webview)
+        (*webview)
             .AddScriptToExecuteOnDocumentCreated(script.to_wide_string().as_ptr(), null_mut());
 
         static VTBL: ICoreWebView2WebMessageReceivedEventHandlerVtbl =
@@ -896,10 +897,10 @@ extern "system" fn controller_created(
 
         // Load initial contents
         if let Some(url) = &_self.should_load_url {
-            _ = (*webview).Navigate(url.to_wide_string().as_ptr());
+            (*webview).Navigate(url.to_wide_string().as_ptr());
         }
         if let Some(html) = &_self.should_load_html {
-            _ = (*webview).NavigateToString(html.to_wide_string().as_ptr());
+            (*webview).NavigateToString(html.to_wide_string().as_ptr());
         }
 
         S_OK
@@ -931,7 +932,7 @@ extern "system" fn document_title_changed(
 ) -> HRESULT {
     unsafe {
         let mut title = LPWSTR::default();
-        _ = (*_sender).get_DocumentTitle(title.as_mut_ptr());
+        (*_sender).get_DocumentTitle(title.as_mut_ptr());
         send_event(Event::PageTitleChanged(title.to_string()));
     }
     S_OK
@@ -945,7 +946,7 @@ extern "system" fn new_window_requested(
     unsafe {
         (*args).put_Handled(TRUE);
         let mut uri = LPWSTR::default();
-        _ = (*args).get_Uri(uri.as_mut_ptr());
+        (*args).get_Uri(uri.as_mut_ptr());
         let uri = CString::new(uri.to_string()).expect("Can't convert to CString");
         ShellExecuteA(
             null_mut(),
