@@ -52,6 +52,11 @@ impl<T: TimeZone> DateTime<T> {
             day_sec % SECS_IN_MIN
         )
     }
+
+    /// Format to RFC 3339 string
+    pub fn to_rfc3339(&self) -> String {
+        self.to_string()
+    }
 }
 
 impl<T: TimeZone> Add<Duration> for DateTime<T> {
@@ -172,6 +177,16 @@ mod test {
         assert_eq!(datetime.to_rfc2822(), "Sat, 29 Feb 2020 12:00:00 GMT");
         let datetime = DateTime::<Utc>::from_timestamp_secs(-1000000).unwrap();
         assert_eq!(datetime.to_rfc2822(), "Sat, 20 Dec 1969 10:13:20 GMT");
+    }
+
+    #[test]
+    fn test_to_rfc3339() {
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1609459345).unwrap();
+        assert_eq!(datetime.to_rfc3339(), "2021-01-01T00:02:25Z");
+        let datetime = DateTime::<Utc>::from_timestamp_secs(1582977600).unwrap();
+        assert_eq!(datetime.to_rfc3339(), "2020-02-29T12:00:00Z");
+        let datetime = DateTime::<Utc>::from_timestamp_secs(-1000000).unwrap();
+        assert_eq!(datetime.to_rfc3339(), "1969-12-20T10:13:20Z");
     }
 
     #[test]

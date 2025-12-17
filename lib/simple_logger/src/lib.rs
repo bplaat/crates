@@ -82,7 +82,7 @@ impl log::Log for SimpleLogger {
 
             println!(
                 "{} {} {}: {}",
-                Utc::now(),
+                Utc::now().to_rfc3339(),
                 level,
                 record.target(),
                 record.args()
