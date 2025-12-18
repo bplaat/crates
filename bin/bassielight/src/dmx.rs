@@ -148,28 +148,40 @@ pub(crate) fn dmx_thread(device: Device<Context>) {
                             dmx_state.color
                         };
 
-                        if dmx_state.mode == Mode::Manual {
-                            if fixture.r#type == FixtureType::AmericanDJP56Led
-                                || fixture.r#type == FixtureType::AmericanDJMegaTripar
-                            {
+                        // American DJ P56 LED
+                        if fixture.r#type == FixtureType::AmericanDJP56Led {
+                            if dmx_state.mode == Mode::Manual {
                                 dmx[base_addr] = color.r * dmx_state.intensity / 255;
                                 dmx[base_addr + 1] = color.g * dmx_state.intensity / 255;
                                 dmx[base_addr + 2] = color.b * dmx_state.intensity / 255;
                             }
-                            if fixture.r#type == FixtureType::AyraCompar10 {
-                                dmx[base_addr] = 255;
-                                dmx[base_addr + 2] = color.r * dmx_state.intensity / 255;
-                                dmx[base_addr + 3] = color.g * dmx_state.intensity / 255;
-                                dmx[base_addr + 4] = color.b * dmx_state.intensity / 255;
+                            if dmx_state.mode == Mode::Auto {
+                                dmx[base_addr + 5] = 224;
                             }
-                        } else if dmx_state.mode == Mode::Auto {
-                            if fixture.r#type == FixtureType::AmericanDJP56Led {
-                                dmx[base_addr + 5] = 225;
+                        }
+
+                        // American DJ Mega Tripar
+                        if fixture.r#type == FixtureType::AmericanDJMegaTripar {
+                            if dmx_state.mode == Mode::Manual {
+                                dmx[base_addr] = color.r;
+                                dmx[base_addr + 1] = color.g;
+                                dmx[base_addr + 2] = color.b;
+                                dmx[base_addr + 6] = dmx_state.intensity;
                             }
-                            if fixture.r#type == FixtureType::AmericanDJMegaTripar {
-                                dmx[base_addr + 6] = 240;
+                            if dmx_state.mode == Mode::Auto {
+                                dmx[base_addr + 5] = 240;
                             }
-                            if fixture.r#type == FixtureType::AyraCompar10 {
+                        }
+
+                        // Ayra Compar 10
+                        if fixture.r#type == FixtureType::AyraCompar10 {
+                            if dmx_state.mode == Mode::Manual {
+                                dmx[base_addr] = dmx_state.intensity;
+                                dmx[base_addr + 2] = color.r;
+                                dmx[base_addr + 3] = color.g;
+                                dmx[base_addr + 4] = color.b;
+                            }
+                            if dmx_state.mode == Mode::Auto {
                                 dmx[base_addr + 7] = 221;
                             }
                         }
