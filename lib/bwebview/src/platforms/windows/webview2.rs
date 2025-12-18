@@ -25,7 +25,7 @@ unsafe extern "system" {
 }
 
 #[cfg_attr(target_env = "msvc", link(name = "advapi32"))]
-unsafe extern "C" {}
+unsafe extern "system" {}
 
 // ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
 #[repr(C)]

@@ -47,7 +47,7 @@ impl SimpleLogger {
     pub fn init(self) -> Result<(), log::SetLoggerError> {
         #[cfg(windows)]
         if self.use_colors {
-            enable_ansi_support::enable_ansi_support().expect("Can't enable ANSI support");
+            _ = enable_ansi_support::enable_ansi_support();
         }
 
         log::set_max_level(self.max_level);

@@ -74,8 +74,9 @@ pub fn terminal_size() -> Option<(Width, Height)> {
             dwMaximumWindowSize: COORD,
         }
         const STD_OUTPUT_HANDLE: i32 = -11;
+        const INVALID_HANDLE_VALUE: *mut std::ffi::c_void = (-1isize) as *mut std::ffi::c_void;
         #[link(name = "kernel32")]
-        unsafe extern "C" {
+        unsafe extern "system" {
             fn GetStdHandle(nStdHandle: i32) -> *mut std::ffi::c_void;
             fn GetConsoleScreenBufferInfo(
                 hConsoleOutput: *mut std::ffi::c_void,
@@ -84,8 +85,13 @@ pub fn terminal_size() -> Option<(Width, Height)> {
         }
 
         let stdout = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+        if stdout == INVALID_HANDLE_VALUE {
+            return None;
+        }
         let mut csbi = MaybeUninit::<CONSOLE_SCREEN_BUFFER_INFO>::uninit();
-        _ = unsafe { GetConsoleScreenBufferInfo(stdout, csbi.as_mut_ptr()) };
+        if unsafe { GetConsoleScreenBufferInfo(stdout, csbi.as_mut_ptr()) } == 0 {
+            return None;
+        }
         let csbi = unsafe { csbi.assume_init() };
         Some((Width(csbi.dwSize.X as u16), Height(csbi.dwSize.Y as u16)))
     }

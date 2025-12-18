@@ -76,7 +76,9 @@ fn subcommand_version() {
 // MARK: Main
 fn main() {
     #[cfg(windows)]
-    enable_ansi_support::enable_ansi_support().expect("Can't enable ANSI support");
+    {
+        _ = enable_ansi_support::enable_ansi_support();
+    }
 
     let start_time = Instant::now();
 
