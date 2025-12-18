@@ -23,13 +23,28 @@ mod win32;
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop;
 
-static mut FIRST_HWND: Option<HWND> = None;
+static mut APP_ID: Option<String> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
+static mut FIRST_HWND: Option<HWND> = None;
 
 impl PlatformEventLoop {
-    pub(crate) fn new(_builder: EventLoopBuilder) -> Self {
+    pub(crate) fn new(builder: EventLoopBuilder) -> Self {
         unsafe {
-            // FIXME: Add basic single instance support
+            // Ensure single instance
+            if let Some(app_id) = builder.app_id {
+                let mutex_name = format!("bwebview-{app_id}");
+                let mutex_name_c = CString::new(mutex_name).expect("Can't convert to CString");
+                CreateMutexA(null_mut(), TRUE, mutex_name_c.as_ptr());
+                if GetLastError() == ERROR_ALREADY_EXISTS {
+                    let hwnd = FindWindowA(mutex_name_c.as_ptr(), null_mut());
+                    if !hwnd.is_null() {
+                        ShowWindow(hwnd, SW_RESTORE);
+                        SetForegroundWindow(hwnd);
+                    }
+                    exit(0);
+                }
+                APP_ID = Some(app_id);
+            }
 
             // Initialize COM
             CoInitializeEx(
@@ -212,10 +227,17 @@ impl PlatformWebview {
 
         // Check if window class is already registered
         let instance = unsafe { GetModuleHandleA(null_mut()) };
-        let class_name = c"window".as_ptr();
+        let class_name = unsafe {
+            if let Some(ref app_id) = APP_ID {
+                format!("bwebview-{app_id}")
+            } else {
+                "bwebview".to_string()
+            }
+        };
+        let class_name_c = CString::new(class_name).expect("Can't convert to CString");
         unsafe {
             let mut wndclass: WNDCLASSEXA = mem::zeroed();
-            if GetClassInfoExA(instance, class_name, &mut wndclass as *mut _) != TRUE {
+            if GetClassInfoExA(instance, class_name_c.as_ptr(), &mut wndclass as *mut _) != TRUE {
                 // Get executable icons
                 let executable_path = CString::new(
                     env::current_exe()
@@ -240,7 +262,7 @@ impl PlatformWebview {
                     lpfnWndProc: Some(window_proc),
                     hInstance: instance,
                     hIcon: large_icon,
-                    lpszClassName: class_name,
+                    lpszClassName: class_name_c.as_ptr(),
                     hIconSm: small_icon,
                     ..Default::default()
                 };
@@ -310,7 +332,7 @@ impl PlatformWebview {
             let title = CString::new(builder.title).expect("Can't convert to CString");
             let hwnd = CreateWindowExA(
                 0,
-                class_name,
+                class_name_c.as_ptr(),
                 title.as_ptr(),
                 style,
                 if position_set {

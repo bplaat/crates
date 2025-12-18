@@ -26,6 +26,7 @@ static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 impl PlatformEventLoop {
     pub(crate) fn new(builder: EventLoopBuilder) -> Self {
         // Ensure single instance
+        // FIXME: Use GtkApplication for this
         if let Some(app_id) = builder.app_id {
             let lock_file = env::temp_dir().join(app_id).join(".lock");
             if let Some(parent) = lock_file.parent() {

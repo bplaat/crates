@@ -17,6 +17,7 @@ pub(crate) type BOOL = i32;
 pub(crate) const TRUE: BOOL = 1;
 pub(crate) const FALSE: BOOL = 0;
 pub(crate) type w_char = u16;
+pub(crate) type HANDLE = *mut c_void;
 
 #[repr(C)]
 pub(crate) struct FILETIME {
@@ -27,14 +28,22 @@ pub(crate) struct FILETIME {
 // MARK: kernel32.dll
 pub(crate) type HMODULE = *const c_void;
 
+pub(crate) const ERROR_ALREADY_EXISTS: u32 = 183;
+
 #[link(name = "kernel32")]
 unsafe extern "system" {
     pub(crate) fn GetModuleHandleA(lpModuleName: *const u8) -> HMODULE;
+    pub(crate) fn GetLastError() -> u32;
+    pub(crate) fn CreateMutexA(
+        lpMutexAttributes: *mut c_void,
+        bInitialOwner: BOOL,
+        lpName: *const c_char,
+    ) -> HANDLE;
 }
 
 // MARK: gdi32.dll
-pub(crate) type HBRUSH = *mut c_void;
-pub(crate) type HDC = *mut c_void;
+pub(crate) type HBRUSH = HANDLE;
+pub(crate) type HDC = HANDLE;
 
 #[link(name = "gdi32")]
 unsafe extern "system" {
@@ -44,11 +53,11 @@ unsafe extern "system" {
 }
 
 // MARK: user32.dll
-pub(crate) type HWND = *mut c_void;
-pub(crate) type HCURSOR = *mut c_void;
-pub(crate) type HICON = *mut c_void;
-pub(crate) type HMENU = *mut c_void;
-pub(crate) type HMONITOR = *mut c_void;
+pub(crate) type HWND = HANDLE;
+pub(crate) type HCURSOR = HANDLE;
+pub(crate) type HICON = HANDLE;
+pub(crate) type HMENU = HANDLE;
+pub(crate) type HMONITOR = HANDLE;
 pub(crate) type ATOM = u16;
 pub(crate) type WPARAM = usize;
 pub(crate) type LPARAM = isize;
@@ -150,8 +159,9 @@ pub(crate) const WM_GETMINMAXINFO: u32 = 0x0024;
 pub(crate) const WM_DPICHANGED: u32 = 0x02E0;
 pub(crate) const WM_USER: u32 = 0x0400;
 
-pub(crate) const SW_SHOWDEFAULT: i32 = 10;
 pub(crate) const SW_SHOWNORMAL: i32 = 1;
+pub(crate) const SW_RESTORE: i32 = 9;
+pub(crate) const SW_SHOWDEFAULT: i32 = 10;
 
 pub(crate) const MB_OK: u32 = 0x00000000;
 
@@ -264,6 +274,8 @@ unsafe extern "system" {
     pub(crate) fn DestroyWindow(hWnd: HWND) -> BOOL;
     pub(crate) fn GetWindowPlacement(hWnd: HWND, lpwndpl: *mut WINDOWPLACEMENT) -> BOOL;
     pub(crate) fn SetWindowPlacement(hWnd: HWND, lpwndpl: *const WINDOWPLACEMENT) -> BOOL;
+    pub(crate) fn FindWindowA(lpClassName: *const c_char, lpWindowName: *const c_char) -> HWND;
+    pub(crate) fn SetForegroundWindow(hWnd: HWND) -> BOOL;
 }
 
 #[cfg(target_pointer_width = "32")]
