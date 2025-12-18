@@ -6,17 +6,15 @@
 
 //! A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
 
+#![allow(non_camel_case_types)]
+#![allow(clippy::upper_case_acronyms)]
+
 use std::net::IpAddr;
 
-/// Returns the local IP address of the machine.
+/// Returns the local IPv4 address of the machine.
 pub fn local_ip() -> Result<IpAddr, std::io::Error> {
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    ))]
+    // MARK: Unix
+    #[cfg(unix)]
     {
         let socket = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
         if socket < 0 {
@@ -38,7 +36,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
             let addr = unsafe { (*current).ifa_addr };
             let flags = unsafe { (*current).ifa_flags };
             if !addr.is_null()
-                && unsafe { (*addr).sa_family } == libc::AF_INET as u8
+                && unsafe { (*addr).sa_family } as u16 == libc::AF_INET as u16
                 && (flags & libc::IFF_LOOPBACK as u32 == 0)
                 && (flags & libc::IFF_UP as u32 != 0)
                 && (flags & libc::IFF_RUNNING as u32 != 0)
@@ -65,19 +63,146 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
         result
     }
 
-    #[cfg(not(any(
-        target_os = "macos",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    )))]
+    // MARK: Windows
+    #[cfg(windows)]
     {
-        let socket = std::net::UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))?;
-        socket
-            .connect("1.1.1.1:80")
-            .map_err(std::io::Error::other)?;
-        let local_addr = socket.local_addr().map_err(std::io::Error::other)?;
-        Ok(local_addr.ip())
+        use std::ffi::c_void;
+
+        const AF_INET: u16 = 2;
+        const GAA_FLAG_SKIP_ANYCAST: u32 = 0x0002;
+        const GAA_FLAG_SKIP_MULTICAST: u32 = 0x0004;
+        const GAA_FLAG_SKIP_DNS_SERVER: u32 = 0x0008;
+        const ERROR_BUFFER_OVERFLOW: u32 = 111;
+        const NO_ERROR: u32 = 0;
+
+        #[repr(C)]
+        struct SOCKET_ADDRESS {
+            lp_socket_addr: *mut SOCKADDR,
+            i_socket_addr_length: i32,
+        }
+
+        #[repr(C)]
+        struct SOCKADDR {
+            sa_family: u16,
+            sa_data: [u8; 14],
+        }
+
+        #[repr(C)]
+        struct SOCKADDR_IN {
+            sin_family: u16,
+            sin_port: u16,
+            sin_addr: IN_ADDR,
+            sin_zero: [u8; 8],
+        }
+
+        #[repr(C)]
+        struct IN_ADDR {
+            s_addr: u32,
+        }
+
+        #[repr(C)]
+        struct IP_ADAPTER_UNICAST_ADDRESS {
+            length: u32,
+            flags: u32,
+            next: *mut IP_ADAPTER_UNICAST_ADDRESS,
+            address: SOCKET_ADDRESS,
+            prefix_origin: i32,
+            suffix_origin: i32,
+            dad_state: i32,
+            valid_lifetime: u32,
+            preferred_lifetime: u32,
+            lease_lifetime: u32,
+            on_link_prefix_length: u8,
+        }
+
+        #[repr(C)]
+        struct IP_ADAPTER_ADDRESSES {
+            length: u32,
+            if_index: u32,
+            next: *mut IP_ADAPTER_ADDRESSES,
+            adapter_name: *mut i8,
+            first_unicast_address: *mut IP_ADAPTER_UNICAST_ADDRESS,
+            // ... more fields exist but we don't need them
+        }
+
+        #[link(name = "iphlpapi")]
+        unsafe extern "system" {
+            fn GetAdaptersAddresses(
+                family: u32,
+                flags: u32,
+                reserved: *mut c_void,
+                adapter_addresses: *mut IP_ADAPTER_ADDRESSES,
+                size_pointer: *mut u32,
+            ) -> u32;
+        }
+
+        // First call to get the required buffer size
+        let mut buffer_size: u32 = 0;
+        let result = unsafe {
+            GetAdaptersAddresses(
+                AF_INET,
+                GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut buffer_size,
+            )
+        };
+        if result != ERROR_BUFFER_OVERFLOW && result != NO_ERROR {
+            return Err(std::io::Error::from_raw_os_error(result as i32));
+        }
+
+        // Second call to get the actual data
+        let mut buffer: Vec<u8> = vec![0u8; buffer_size as usize];
+        let adapter_addresses = buffer.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES;
+        let result = unsafe {
+            GetAdaptersAddresses(
+                AF_INET,
+                GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                std::ptr::null_mut(),
+                adapter_addresses,
+                &mut buffer_size,
+            )
+        };
+        if result != NO_ERROR {
+            return Err(std::io::Error::from_raw_os_error(result as i32));
+        }
+
+        // Iterate through adapters
+        let mut current_adapter = adapter_addresses;
+        let mut best_ipv4_addr: Option<IpAddr> = None;
+        while !current_adapter.is_null() {
+            let adapter = unsafe { &*current_adapter };
+
+            // Iterate through unicast addresses
+            let mut current_address = adapter.first_unicast_address;
+            while !current_address.is_null() {
+                let unicast_addr = unsafe { &*current_address };
+                let socket_addr = unicast_addr.address.lp_socket_addr;
+                if !socket_addr.is_null() {
+                    let sockaddr_in = socket_addr as *const SOCKADDR_IN;
+                    let ip_bytes = unsafe { (*sockaddr_in).sin_addr.s_addr.to_ne_bytes() };
+                    // Skip loopback (127.0.0.0/8)
+                    if ip_bytes[0] != 127 {
+                        best_ipv4_addr = Some(IpAddr::from(ip_bytes));
+                    }
+                }
+                current_address = unsafe { (*current_address).next };
+            }
+            current_adapter = adapter.next;
+        }
+
+        if let Some(ipv4) = best_ipv4_addr {
+            return Ok(ipv4);
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No local IP address found",
+        ))
+    }
+
+    // MARK: Others
+    #[cfg(not(any(unix, windows)))]
+    {
+        compile_error!("Unsupported platform");
     }
 }

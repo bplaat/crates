@@ -68,7 +68,7 @@ fn main() {
     let url = if let Ok(ip) = local_ip_address::local_ip() {
         format!("http://{}:{}", ip, local_addr.port())
     } else {
-        format!("http://{local_addr}")
+        format!("http://127.0.0.1:{}", local_addr.port())
     };
 
     // Start internal http server thread
