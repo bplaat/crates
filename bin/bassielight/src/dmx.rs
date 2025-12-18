@@ -11,8 +11,7 @@ use std::time::{Duration, SystemTime};
 use rusb::{Context, Device};
 use serde::{Deserialize, Serialize};
 
-use crate::CONFIG;
-use crate::config::{DMX_SWITCHES_LENGTH, FixtureType};
+use crate::config::{Config, DMX_SWITCHES_LENGTH, FixtureType};
 
 // MARK: Color
 #[derive(Debug, Copy, Clone)]
@@ -60,6 +59,7 @@ pub(crate) enum Mode {
 }
 
 // MARK: DmxState
+#[derive(Clone)]
 pub(crate) struct DmxState {
     pub is_running: bool,
     pub mode: Mode,
@@ -90,13 +90,7 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
 
 // MARK: DMX Thread
 /// Starts the DMX output thread for the given device using the given configuration.
-pub(crate) fn dmx_thread(device: Device<Context>) {
-    let config = CONFIG
-        .lock()
-        .expect("Failed to lock config")
-        .clone()
-        .expect("Config is not set");
-
+pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
     let handle = device.open().expect("Can't open uDMX device");
 
     let mut dmx = vec![0u8; config.dmx_length];
@@ -104,103 +98,101 @@ pub(crate) fn dmx_thread(device: Device<Context>) {
     let mut strobe_time = SystemTime::now();
 
     loop {
+        let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
+        if !dmx_state.is_running {
+            // FIXME: Create async framework don't do micro sleeps
+            sleep(Duration::from_millis(100));
+            continue;
+        }
+
+        // Update timers
+        if let Some(toggle_speed) = dmx_state.toggle_speed
+            && SystemTime::now()
+                .duration_since(toggle_color_time)
+                .expect("Time went backwards")
+                > toggle_speed
         {
-            let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
-            if !dmx_state.is_running {
-                // FIXME: Create async framework don't do micro sleeps
-                sleep(Duration::from_millis(100));
-                continue;
-            }
+            dmx_state.is_toggle_color = !dmx_state.is_toggle_color;
+            toggle_color_time = SystemTime::now();
+        }
+        if let Some(strobe_speed) = dmx_state.strobe_speed
+            && SystemTime::now()
+                .duration_since(strobe_time)
+                .expect("Time went backwards")
+                > strobe_speed
+        {
+            dmx_state.is_strobe = !dmx_state.is_strobe;
+            strobe_time = SystemTime::now();
+        }
 
-            // Update timers
-            if let Some(toggle_speed) = dmx_state.toggle_speed
-                && SystemTime::now()
-                    .duration_since(toggle_color_time)
-                    .expect("Time went backwards")
-                    > toggle_speed
-            {
-                dmx_state.is_toggle_color = !dmx_state.is_toggle_color;
-                toggle_color_time = SystemTime::now();
-            }
-            if let Some(strobe_speed) = dmx_state.strobe_speed
-                && SystemTime::now()
-                    .duration_since(strobe_time)
-                    .expect("Time went backwards")
-                    > strobe_speed
-            {
-                dmx_state.is_strobe = !dmx_state.is_strobe;
-                strobe_time = SystemTime::now();
-            }
+        // Update DMX data
+        dmx.fill(0);
+        for fixture in &config.fixtures {
+            match fixture.r#type {
+                FixtureType::AmericanDJP56Led
+                | FixtureType::AmericanDJMegaTripar
+                | FixtureType::AyraCompar10 => {
+                    let base_addr = fixture.addr - 1;
+                    let color = if dmx_state.is_strobe {
+                        Color::BLACK
+                    } else if dmx_state.is_toggle_color {
+                        dmx_state.toggle_color
+                    } else {
+                        dmx_state.color
+                    };
 
-            // Update DMX data
-            dmx.fill(0);
-            for fixture in &config.fixtures {
-                match fixture.r#type {
-                    FixtureType::AmericanDJP56Led
-                    | FixtureType::AmericanDJMegaTripar
-                    | FixtureType::AyraCompar10 => {
-                        let base_addr = fixture.addr - 1;
-                        let color = if dmx_state.is_strobe {
-                            Color::BLACK
-                        } else if dmx_state.is_toggle_color {
-                            dmx_state.toggle_color
-                        } else {
-                            dmx_state.color
-                        };
-
-                        // American DJ P56 LED
-                        if fixture.r#type == FixtureType::AmericanDJP56Led {
-                            if dmx_state.mode == Mode::Manual {
-                                dmx[base_addr] = color.r * dmx_state.intensity / 255;
-                                dmx[base_addr + 1] = color.g * dmx_state.intensity / 255;
-                                dmx[base_addr + 2] = color.b * dmx_state.intensity / 255;
-                            }
-                            if dmx_state.mode == Mode::Auto {
-                                dmx[base_addr + 5] = 224;
-                            }
+                    // American DJ P56 LED
+                    if fixture.r#type == FixtureType::AmericanDJP56Led {
+                        if dmx_state.mode == Mode::Manual {
+                            dmx[base_addr] = color.r * dmx_state.intensity / 255;
+                            dmx[base_addr + 1] = color.g * dmx_state.intensity / 255;
+                            dmx[base_addr + 2] = color.b * dmx_state.intensity / 255;
                         }
-
-                        // American DJ Mega Tripar
-                        if fixture.r#type == FixtureType::AmericanDJMegaTripar {
-                            if dmx_state.mode == Mode::Manual {
-                                dmx[base_addr] = color.r;
-                                dmx[base_addr + 1] = color.g;
-                                dmx[base_addr + 2] = color.b;
-                                dmx[base_addr + 6] = dmx_state.intensity;
-                            }
-                            if dmx_state.mode == Mode::Auto {
-                                dmx[base_addr + 5] = 240;
-                            }
-                        }
-
-                        // Ayra Compar 10
-                        if fixture.r#type == FixtureType::AyraCompar10 {
-                            if dmx_state.mode == Mode::Manual {
-                                dmx[base_addr] = dmx_state.intensity;
-                                dmx[base_addr + 2] = color.r;
-                                dmx[base_addr + 3] = color.g;
-                                dmx[base_addr + 4] = color.b;
-                            }
-                            if dmx_state.mode == Mode::Auto {
-                                dmx[base_addr + 7] = 221;
-                            }
+                        if dmx_state.mode == Mode::Auto {
+                            dmx[base_addr + 5] = 224;
                         }
                     }
 
-                    FixtureType::ShowtecMultidimMKII => {
-                        let base_addr = fixture.addr - 1;
+                    // American DJ Mega Tripar
+                    if fixture.r#type == FixtureType::AmericanDJMegaTripar {
                         if dmx_state.mode == Mode::Manual {
-                            for i in 0..DMX_SWITCHES_LENGTH {
-                                if dmx_state.switches_toggle[i] || dmx_state.switches_press[i] {
-                                    dmx[base_addr + i] = 255;
-                                } else {
-                                    dmx[base_addr + i] = 0;
-                                }
-                            }
-                        } else {
-                            for i in 0..DMX_SWITCHES_LENGTH {
+                            dmx[base_addr] = color.r;
+                            dmx[base_addr + 1] = color.g;
+                            dmx[base_addr + 2] = color.b;
+                            dmx[base_addr + 6] = dmx_state.intensity;
+                        }
+                        if dmx_state.mode == Mode::Auto {
+                            dmx[base_addr + 5] = 240;
+                        }
+                    }
+
+                    // Ayra Compar 10
+                    if fixture.r#type == FixtureType::AyraCompar10 {
+                        if dmx_state.mode == Mode::Manual {
+                            dmx[base_addr] = dmx_state.intensity;
+                            dmx[base_addr + 2] = color.r;
+                            dmx[base_addr + 3] = color.g;
+                            dmx[base_addr + 4] = color.b;
+                        }
+                        if dmx_state.mode == Mode::Auto {
+                            dmx[base_addr + 7] = 221;
+                        }
+                    }
+                }
+
+                FixtureType::ShowtecMultidimMKII => {
+                    let base_addr = fixture.addr - 1;
+                    if dmx_state.mode == Mode::Manual {
+                        for i in 0..DMX_SWITCHES_LENGTH {
+                            if dmx_state.switches_toggle[i] || dmx_state.switches_press[i] {
+                                dmx[base_addr + i] = 255;
+                            } else {
                                 dmx[base_addr + i] = 0;
                             }
+                        }
+                    } else {
+                        for i in 0..DMX_SWITCHES_LENGTH {
+                            dmx[base_addr + i] = 0;
                         }
                     }
                 }
