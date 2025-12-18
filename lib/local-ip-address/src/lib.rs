@@ -36,7 +36,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
             let addr = unsafe { (*current).ifa_addr };
             let flags = unsafe { (*current).ifa_flags };
             if !addr.is_null()
-                && unsafe { (*addr).sa_family } as u16 == libc::AF_INET as u16
+                && unsafe { (*addr).sa_family } as u32 == libc::AF_INET as u32
                 && (flags & libc::IFF_LOOPBACK as u32 == 0)
                 && (flags & libc::IFF_UP as u32 != 0)
                 && (flags & libc::IFF_RUNNING as u32 != 0)
@@ -68,7 +68,8 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
     {
         use std::ffi::c_void;
 
-        const AF_INET: u16 = 2;
+        const AF_UNSPEC: u32 = 0;
+        const AF_INET: u32 = 2;
         const GAA_FLAG_SKIP_ANYCAST: u32 = 0x0002;
         const GAA_FLAG_SKIP_MULTICAST: u32 = 0x0004;
         const GAA_FLAG_SKIP_DNS_SERVER: u32 = 0x0008;
@@ -140,7 +141,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
         let mut buffer_size: u32 = 0;
         let result = unsafe {
             GetAdaptersAddresses(
-                AF_INET,
+                AF_UNSPEC,
                 GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
@@ -156,7 +157,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
         let adapter_addresses = buffer.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES;
         let result = unsafe {
             GetAdaptersAddresses(
-                AF_INET,
+                AF_UNSPEC,
                 GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
                 std::ptr::null_mut(),
                 adapter_addresses,
@@ -181,8 +182,11 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
                 if !socket_addr.is_null() {
                     let sockaddr_in = socket_addr as *const SOCKADDR_IN;
                     let ip_bytes = unsafe { (*sockaddr_in).sin_addr.s_addr.to_ne_bytes() };
-                    // Skip loopback (127.0.0.0/8)
-                    if ip_bytes[0] != 127 {
+                    let family = unsafe { (*socket_addr).sa_family } as u32;
+                    if family == AF_INET
+                        && ip_bytes[0] != 127
+                        && !(ip_bytes[0] == 169 && ip_bytes[1] == 254)
+                    {
                         best_ipv4_addr = Some(IpAddr::from(ip_bytes));
                     }
                 }
@@ -204,5 +208,17 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
     #[cfg(not(any(unix, windows)))]
     {
         compile_error!("Unsupported platform");
+    }
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_local_ip() {
+        let ip = local_ip().expect("Failed to get local IP address");
+        assert!(matches!(ip, IpAddr::V4(_)));
     }
 }
