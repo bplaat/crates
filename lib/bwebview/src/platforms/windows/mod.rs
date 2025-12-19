@@ -15,7 +15,9 @@ use self::webview2::*;
 use self::win32::*;
 #[cfg(feature = "custom_protocol")]
 use crate::CustomProtocol;
-use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
+use crate::{
+    Event, EventLoopBuilder, InjectionTime, LogicalPoint, LogicalSize, Theme, WebviewBuilder,
+};
 
 mod webview2;
 mod win32;
@@ -619,6 +621,23 @@ impl crate::WebviewInterface for PlatformWebview {
         unsafe {
             if let Some(webview) = self.0.webview {
                 (*webview).ExecuteScript(script.as_ref().to_wide_string().as_ptr(), null_mut());
+            }
+        }
+    }
+
+    fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime) {
+        let mut script = script.as_ref().to_string();
+        unsafe {
+            if let Some(webview) = self.0.webview {
+                if let InjectionTime::DocumentLoaded = injection_time {
+                    script = format!(
+                        "window.addEventListener('DOMContentLoaded', function () {{ {script} }});"
+                    );
+                }
+                (*webview).AddScriptToExecuteOnDocumentCreated(
+                    script.to_wide_string().as_ptr(),
+                    null_mut(),
+                );
             }
         }
     }

@@ -23,7 +23,7 @@ const classes = css`
     }
 
     :global(body.is-bwebview-macos:not(.is-fullscreen)) .menubar {
-        padding-top: 28px;
+        padding-top: var(--macos-titlebar-height);
     }
 
     .logo {

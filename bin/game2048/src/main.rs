@@ -32,7 +32,18 @@ fn main() {
         webview_builder =
             webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
     }
-    let _webview = webview_builder.build();
+    #[allow(unused_mut)]
+    #[allow(unused_variables)]
+    let mut webview = webview_builder.build();
+
+    #[cfg(target_os = "macos")]
+    webview.add_user_script(
+        format!(
+            "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
+            webview.macos_titlebar_size().height
+        ),
+        bwebview::InjectionTime::DocumentStart,
+    );
 
     event_loop.run(move |_event| {});
 }

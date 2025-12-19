@@ -155,7 +155,7 @@ impl Monitor {
 
 // MARK: WebviewBuilder
 /// Theme
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Theme {
     /// Light theme
     Light,
@@ -165,7 +165,7 @@ pub enum Theme {
 
 /// macOS Titlebar style
 #[cfg(target_os = "macos")]
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum MacosTitlebarStyle {
     /// Default titlebar style
     Default,
@@ -403,6 +403,15 @@ impl<'a> WebviewBuilder<'a> {
 }
 
 // MARK: Webview
+/// Injection time for user scripts
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum InjectionTime {
+    /// Inject at document start
+    DocumentStart,
+    /// Inject at document loaded
+    DocumentLoaded,
+}
+
 pub(crate) trait WebviewInterface {
     fn set_title(&mut self, title: impl AsRef<str>);
     fn position(&self) -> LogicalPoint;
@@ -417,6 +426,9 @@ pub(crate) trait WebviewInterface {
     fn load_url(&mut self, url: impl AsRef<str>);
     fn load_html(&mut self, html: impl AsRef<str>);
     fn evaluate_script(&mut self, script: impl AsRef<str>);
+    fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime);
+    #[cfg(target_os = "macos")]
+    fn macos_titlebar_size(&self) -> LogicalSize;
 }
 
 /// Webview
@@ -492,11 +504,22 @@ impl Webview {
         self.0.evaluate_script(script)
     }
 
+    /// Add user script, a script that runs on every page load at injection time.
+    pub fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime) {
+        self.0.add_user_script(script, injection_time)
+    }
+
     /// Send IPC message
     pub fn send_ipc_message(&mut self, message: impl AsRef<str>) {
         self.evaluate_script(format!(
             "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{}`}}));",
             message.as_ref()
         ));
+    }
+
+    /// Get macOS titlebar size
+    #[cfg(target_os = "macos")]
+    pub fn macos_titlebar_size(&self) -> LogicalSize {
+        self.0.macos_titlebar_size()
     }
 }

@@ -14,7 +14,8 @@ use objc2::{class, msg_send, sel};
 use self::cocoa::*;
 use self::webkit::*;
 use crate::{
-    Event, EventLoopBuilder, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WebviewBuilder,
+    Event, EventLoopBuilder, InjectionTime, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme,
+    WebviewBuilder,
 };
 
 mod cocoa;
@@ -708,9 +709,38 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
-        unsafe {
+        let script = script.as_ref();
+        let _: () = unsafe {
             msg_send![self.webview, evaluateJavaScript:NSString::from_str(script), completionHandler:null::<Object>()]
+        };
+    }
+
+    fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime) {
+        let script = script.as_ref();
+        unsafe {
+            let webview_configuration: *mut Object = msg_send![self.webview, configuration];
+            let user_content_controller: *mut Object =
+                msg_send![webview_configuration, userContentController];
+            let user_script: *mut Object = msg_send![class!(WKUserScript), alloc];
+            let user_script: *mut Object = msg_send![user_script,
+                    initWithSource:NSString::from_str(script),
+                    injectionTime: match injection_time {
+                        InjectionTime::DocumentStart => WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
+                        InjectionTime::DocumentLoaded => WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_END,
+                    },
+                    forMainFrameOnly:true];
+            let _: () = msg_send![user_content_controller, addUserScript:user_script];
         }
+    }
+
+    fn macos_titlebar_size(&self) -> LogicalSize {
+        let window_frame: NSRect = unsafe { msg_send![self.window, frame] };
+        let content_rect: NSRect =
+            unsafe { msg_send![self.window, contentRectForFrameRect:window_frame] };
+        LogicalSize::new(
+            window_frame.size.width as f32,
+            (window_frame.size.height - content_rect.size.height) as f32,
+        )
     }
 }
 

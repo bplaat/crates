@@ -14,7 +14,7 @@ use std::ptr::{null, null_mut};
 use std::{env, fs, iter};
 
 use self::headers::*;
-use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, WebviewBuilder};
+use crate::{Event, EventLoopBuilder, InjectionTime, LogicalPoint, LogicalSize, WebviewBuilder};
 
 mod headers;
 
@@ -700,6 +700,24 @@ impl crate::WebviewInterface for PlatformWebview {
                 null(),
                 null(),
             )
+        }
+    }
+
+    fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime) {
+        let script = CString::new(script.as_ref()).expect("Can't convert to CString");
+        unsafe {
+            let user_content_manager = webkit_web_view_get_user_content_manager(self.0.webview);
+            let user_script = webkit_user_script_new(
+                script.as_ptr(),
+                WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                match injection_time {
+                    InjectionTime::DocumentStart => WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+                    InjectionTime::DocumentLoaded => WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+                },
+                null(),
+                null(),
+            );
+            webkit_user_content_manager_add_script(user_content_manager, user_script);
         }
     }
 }

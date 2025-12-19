@@ -31,7 +31,7 @@ body {
     overflow: hidden;
 }
 body.is-bwebview-macos {
-    padding-top: 28px;
+    padding-top: var(--macos-titlebar-height);
 }
 
 .heading:after {

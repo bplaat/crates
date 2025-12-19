@@ -232,6 +232,7 @@ pub(crate) const WEBKIT_LOAD_FINISHED: i32 = 3;
 pub(crate) const WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION: i32 = 1;
 pub(crate) const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
 pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
+pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END: i32 = 1;
 #[link(name = "webkit2gtk-4.1")]
 unsafe extern "C" {
     pub(crate) fn webkit_web_context_get_default() -> *mut WebKitWebContext;
@@ -304,6 +305,9 @@ unsafe extern "C" {
     ) -> *mut WebKitURIRequest;
     pub(crate) fn webkit_uri_request_get_uri(request: *mut WebKitURIRequest) -> *const c_char;
     pub(crate) fn webkit_user_content_manager_new() -> *mut WebKitUserContentManager;
+    pub(crate) fn webkit_web_view_get_user_content_manager(
+        web_view: *mut WebKitWebView,
+    ) -> *mut WebKitUserContentManager;
     pub(crate) fn webkit_user_script_new(
         source: *const c_char,
         injected_frames: i32,

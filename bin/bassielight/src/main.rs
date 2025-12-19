@@ -142,6 +142,15 @@ fn main() {
     }
     let mut webview = webview_builder.build();
 
+    #[cfg(target_os = "macos")]
+    webview.add_user_script(
+        format!(
+            "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
+            webview.macos_titlebar_size().height
+        ),
+        bwebview::InjectionTime::DocumentStart,
+    );
+
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {
         // Window events
