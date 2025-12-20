@@ -58,7 +58,7 @@ impl Config {
         if !cfg!(debug_assertions) {
             dirs::config_dir()
                 .expect("Can't find config directory")
-                .join("BassieLight")
+                .join("nl.bplaat.BassieLight")
                 .join("config.json")
         } else {
             PathBuf::from("config.json")

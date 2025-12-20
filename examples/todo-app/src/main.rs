@@ -47,12 +47,10 @@ fn main() {
         .load_rust_embed::<WebAssets>()
         .build();
 
-    let todos_config_path = format!(
-        "{}/{}/{}",
-        dirs::config_dir().expect("Can't get config dir").display(),
-        env!("CARGO_PKG_NAME"),
-        "todos.json"
-    );
+    let todos_config_path = dirs::config_dir()
+        .expect("Can't get config dir")
+        .join(env!("CARGO_PKG_NAME"))
+        .join("todos.json");
     if let Some(parent) = std::path::Path::new(&todos_config_path).parent() {
         fs::create_dir_all(parent).expect("Can't create config directory");
     }
