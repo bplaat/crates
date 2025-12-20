@@ -144,9 +144,12 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                     // American DJ P56 LED
                     if fixture.r#type == FixtureType::AmericanDJP56Led {
                         if dmx_state.mode == Mode::Manual {
-                            dmx[base_addr] = color.r * dmx_state.intensity / 255;
-                            dmx[base_addr + 1] = color.g * dmx_state.intensity / 255;
-                            dmx[base_addr + 2] = color.b * dmx_state.intensity / 255;
+                            dmx[base_addr] =
+                                (color.r as u32 * dmx_state.intensity as u32 / 255) as u8;
+                            dmx[base_addr + 1] =
+                                (color.g as u32 * dmx_state.intensity as u32 / 255) as u8;
+                            dmx[base_addr + 2] =
+                                (color.b as u32 * dmx_state.intensity as u32 / 255) as u8;
                         }
                         if dmx_state.mode == Mode::Auto {
                             dmx[base_addr + 5] = 224;
