@@ -25,7 +25,7 @@ rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 simple_logger = "5.0.0"
-small-http = { version = "0.2.0", default-features = false }
+small-http = { version = "0.2.1", default-features = false }
 small-websocket = { path = "../../lib/small-websocket", default-features = false }
 
 [build-dependencies]

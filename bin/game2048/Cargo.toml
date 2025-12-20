@@ -16,7 +16,6 @@ iconset = "meta/macos/icon.iconset"
 
 [dependencies]
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
-
 rust-embed = "8.7"
 
 [target.'cfg(windows)'.build-dependencies]

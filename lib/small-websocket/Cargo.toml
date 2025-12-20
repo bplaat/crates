@@ -12,11 +12,11 @@ workspace = true
 base64 = "0.22"
 getrandom = { version = "0.3.0", optional = true }
 sha1 = "0.10.6"
-small-http = { version = "0.2.0", default-features = false }
+small-http = { version = "0.2.1", default-features = false }
 url = { version = "2.5.0", optional = true }
 
 [dev-dependencies]
-small-http = "0.2.0"
+small-http = "0.2.1"
 
 [features]
 default = ["client"]
