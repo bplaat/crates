@@ -84,7 +84,7 @@ function showContentContainer(el) {
 }
 
 async function loadPages() {
-    const res = await fetch('/man');
+    const res = await fetch('/api/man');
     pages = await res.json();
     pagesElement.innerHTML = `<ul>${pages
         .map((page) => `<li><a href="#${page.page}">${page.page}. ${pageNames[page.page]}</a></li>`)
@@ -106,7 +106,7 @@ async function loadPage(page, name) {
     sidebarTitle.textContent = document.title;
     showContentContainer(contentLoadingElement);
 
-    const res = await fetch(`/man/${page}/${name}`);
+    const res = await fetch(`/api/man/${page}/${name}`);
     const text = await res.text();
 
     showContentContainer(contentElement);

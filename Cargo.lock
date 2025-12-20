@@ -361,6 +361,7 @@ dependencies = [
  "serde",
  "serde_json",
  "small-http",
+ "small-router",
 ]
 
 [[package]]
