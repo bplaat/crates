@@ -7,7 +7,7 @@
 #![doc = include_str!("../README.md")]
 
 pub use crate::bind::Bind;
-pub use crate::connection::{Connection, ConnectionError};
+pub use crate::connection::{Connection, ConnectionError, OpenMode};
 pub use crate::from_row::FromRow;
 pub use crate::statement::{RawStatement, Statement};
 pub use crate::value::{Value, ValueError};

@@ -16,12 +16,20 @@ use libsqlite3_sys::*;
 use crate::{Bind, FromRow, Statement};
 
 // MARK: Inner Connection
+/// The mode to open the database in
+pub enum OpenMode {
+    /// Read only
+    ReadOnly,
+    /// Read and write
+    ReadWrite,
+}
+
 struct InnerConnection(*mut sqlite3);
 unsafe impl Send for InnerConnection {}
 unsafe impl Sync for InnerConnection {}
 
 impl InnerConnection {
-    fn open(path: &Path) -> Result<Self, ConnectionError> {
+    fn open(path: &Path, mode: OpenMode) -> Result<Self, ConnectionError> {
         // Open database
         let mut db = ptr::null_mut();
         let path = CString::new(path.to_str().expect("Can't convert to CString").as_bytes())
@@ -30,7 +38,12 @@ impl InnerConnection {
             sqlite3_open_v2(
                 path.as_ptr(),
                 &mut db,
-                SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
+                match mode {
+                    OpenMode::ReadOnly => SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX,
+                    OpenMode::ReadWrite => {
+                        SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
+                    }
+                },
                 ptr::null(),
             )
         };
@@ -98,13 +111,16 @@ pub struct Connection(Arc<InnerConnection>);
 
 impl Connection {
     /// Open a connection to a SQLite database
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
-        Ok(Connection(Arc::new(InnerConnection::open(path.as_ref())?)))
+    pub fn open(path: impl AsRef<Path>, mode: OpenMode) -> Result<Self, ConnectionError> {
+        Ok(Connection(Arc::new(InnerConnection::open(
+            path.as_ref(),
+            mode,
+        )?)))
     }
 
     /// Open a memory database
     pub fn open_memory() -> Result<Self, ConnectionError> {
-        Self::open(":memory:")
+        Self::open(":memory:", OpenMode::ReadWrite)
     }
 
     /// Set the journal mode to Write-Ahead Logging for better concurrency throughput

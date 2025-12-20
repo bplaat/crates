@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use bsqlite::Connection;
+use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
 
 use crate::models::Note;
@@ -18,7 +18,8 @@ pub(crate) struct Context {
 
 impl Context {
     pub(crate) fn with_database(path: impl AsRef<Path>) -> Self {
-        let database = Connection::open(path.as_ref()).expect("Can't open database");
+        let database =
+            Connection::open(path.as_ref(), OpenMode::ReadWrite).expect("Can't open database");
         database.enable_wal_logging();
         database.apply_various_performance_settings();
         database_create_tables(&database);

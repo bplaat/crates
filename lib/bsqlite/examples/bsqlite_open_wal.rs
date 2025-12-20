@@ -6,11 +6,11 @@
 
 //! A example that opens database in file, enables WAL-mode and inserts and reads rows with tuples.
 
-use bsqlite::Connection;
+use bsqlite::{Connection, OpenMode};
 
 fn main() {
     // Connect and create table
-    let db = Connection::open("database.db").expect("Can't open database");
+    let db = Connection::open("database.db", OpenMode::ReadWrite).expect("Can't open database");
     db.enable_wal_logging();
     db.execute(
         "CREATE TABLE IF NOT EXISTS persons (

@@ -15,8 +15,9 @@ pub type sqlite3_stmt = c_void;
 pub type sqlite3_destructor_type = Option<unsafe extern "C" fn(*mut c_void)>;
 
 pub const SQLITE_OK: i32 = 0;
-pub const SQLITE_OPEN_CREATE: i32 = 0x00000004;
+pub const SQLITE_OPEN_READONLY: i32 = 0x00000001;
 pub const SQLITE_OPEN_READWRITE: i32 = 0x00000002;
+pub const SQLITE_OPEN_CREATE: i32 = 0x00000004;
 pub const SQLITE_OPEN_FULLMUTEX: i32 = 0x00010000;
 pub const SQLITE_ROW: i32 = 100;
 pub const SQLITE_DONE: i32 = 101;

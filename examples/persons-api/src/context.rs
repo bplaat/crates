@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use bsqlite::Connection;
+use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
 
 use crate::models::{Person, Relation};
@@ -17,7 +17,7 @@ pub(crate) struct Context {
 
 impl Context {
     pub(crate) fn with_database(path: &str) -> Self {
-        let database = Connection::open(path).expect("Can't open database");
+        let database = Connection::open(path, OpenMode::ReadWrite).expect("Can't open database");
         database.enable_wal_logging();
         database.apply_various_performance_settings();
         database_create_tables(&database);
