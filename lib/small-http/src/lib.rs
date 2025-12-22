@@ -16,6 +16,8 @@ pub use crate::request::Request;
 pub use crate::response::Response;
 #[cfg(feature = "multi-threaded")]
 pub use crate::serve::serve;
+#[cfg(feature = "cgi")]
+pub use crate::serve::serve_cgi;
 pub use crate::serve::serve_single_threaded;
 
 mod client;

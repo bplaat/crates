@@ -27,7 +27,6 @@ pub fn serve_single_threaded(
         let client_addr = stream
             .peer_addr()
             .expect("Can't get tcp stream client addr");
-
         match Request::read_from_stream(&mut stream, client_addr) {
             Ok(request) => {
                 // Handle request and write response
@@ -122,6 +121,23 @@ pub fn serve(
     }
 }
 
+/// Serve CGI requests
+#[cfg(feature = "cgi")]
+pub fn serve_cgi(handler: impl Fn(&Request) -> Response) {
+    let request = match Request::from_cgi_env() {
+        Ok(req) => req,
+        Err(_) => {
+            println!("HTTP/1.0 400 Bad Request\r\n\r\n");
+            _ = std::io::stdout().lock().flush();
+            return;
+        }
+    };
+    let response = handler(&request);
+    let mut stdout = std::io::stdout().lock();
+    response.write_to_cgi_stdout(&mut stdout);
+    _ = stdout.flush();
+}
+
 // MARK: Tests
 #[cfg(test)]
 mod test {
@@ -175,5 +191,22 @@ mod test {
                 .expect("Failed to read from stream");
             assert!(response.starts_with(b"HTTP/1.1 200 OK"));
         }
+    }
+
+    #[test]
+    #[cfg(feature = "cgi")]
+    fn test_parse_cgi_get() {
+        use std::env;
+        env::set_var("GATEWAY_INTERFACE", "CGI/1.1");
+        env::set_var("REQUEST_METHOD", "GET");
+        env::set_var("SERVER_PROTOCOL", "HTTP/1.1");
+        env::set_var("PATH_INFO", "/test.txt");
+        env::set_var("QUERY_STRING", "x=1&y=2");
+        serve_cgi(|req| {
+            assert_eq!(req.method.to_string(), "GET");
+            assert_eq!(req.url.path(), "/test.txt");
+            assert_eq!(req.url.query(), Some("x=1&y=2"));
+            Response::with_status(Status::Ok)
+        });
     }
 }

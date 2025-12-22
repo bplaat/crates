@@ -254,6 +254,96 @@ impl Request {
         })
     }
 
+    #[cfg(feature = "cgi")]
+    pub(crate) fn from_cgi_env() -> Result<Request, InvalidRequestError> {
+        use std::env;
+
+        // Read method, path and version
+        let method = env::var("REQUEST_METHOD")
+            .ok()
+            .and_then(|m| m.parse().ok())
+            .ok_or(InvalidRequestError(
+                "Can't read REQUEST_METHOD from env".to_string(),
+            ))?;
+        let mut path = env::var("PATH_INFO")
+            .map_err(|_| InvalidRequestError("Can't read PATH_INFO from env".to_string()))?;
+        if path.is_empty() {
+            path = "/".to_string();
+        }
+        if let Ok(query_string) = env::var("QUERY_STRING") {
+            if !query_string.is_empty() {
+                path = format!("{path}?{query_string}");
+            }
+        }
+        let version = match env::var("SERVER_PROTOCOL").as_deref() {
+            Ok("HTTP/1.0") => Version::Http1_0,
+            _ => Version::Http1_1,
+        };
+
+        // Read headers
+        let mut headers = HeaderMap::new();
+        for (key, value) in env::vars() {
+            if let Some(key) = key.strip_prefix("HTTP_") {
+                headers.insert(key.replace('_', "-"), value);
+            }
+        }
+
+        // Read body
+        let mut body = None;
+        if let Ok(content_length) = env::var("CONTENT_LENGTH") {
+            if let Ok(content_length) = content_length.parse::<usize>() {
+                if content_length > 0 {
+                    let mut buffer = vec![0; content_length];
+                    std::io::stdin().read_exact(&mut buffer).map_err(|_| {
+                        InvalidRequestError(
+                            "Can't read Content-Length amount of bytes from stdin".to_string(),
+                        )
+                    })?;
+                    body = Some(buffer);
+                }
+            }
+        }
+
+        // Read remote address
+        let client_addr = if let Ok(mut remote_addr) = env::var("REMOTE_ADDR") {
+            if remote_addr.starts_with("::ffff:") {
+                remote_addr = remote_addr.trim_start_matches("::ffff:").to_string();
+            }
+            let remote_port = env::var("REMOTE_PORT").unwrap_or_else(|_| "0".to_string());
+            format!("{remote_addr}:{remote_port}")
+                .parse()
+                .map_err(|_| {
+                    InvalidRequestError("Can't parse REMOTE_ADDR and REMOTE_PORT".to_string())
+                })?
+        } else {
+            (Ipv4Addr::LOCALHOST, 0).into()
+        };
+
+        // Parse URL
+        let url = Url::from_str(&if version == Version::Http1_1 {
+            format!(
+                "http://{}{}",
+                headers.get("Host").ok_or(InvalidRequestError(
+                    "HTTP version is 1.1 but Host header is not set".to_string()
+                ))?,
+                path
+            )
+        } else {
+            format!("http://localhost{path}")
+        })
+        .map_err(|_| InvalidRequestError("Can't parse request url".to_string()))?;
+
+        Ok(Request {
+            version,
+            url,
+            method,
+            headers,
+            params: HashMap::new(),
+            body,
+            client_addr,
+        })
+    }
+
     /// Write request to TCP stream
     pub fn write_to_stream(mut self, stream: &mut dyn Write, keep_alive: bool) {
         // Finish headers

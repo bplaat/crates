@@ -45,24 +45,30 @@ fn router(ctx: Context) -> Router<Context> {
 
 fn main() {
     // Init logger
-    simple_logger::init().expect("Failed to init logger");
+    if env::var("GATEWAY_INTERFACE").is_err() {
+        simple_logger::init().expect("Failed to init logger");
+    }
 
     // Load environment variables
     _ = dotenv::dotenv();
 
-    // Load database
+    // Create router and load database
     let database_path = env::var("DATABASE_PATH").unwrap_or_else(|_| "database.db".to_string());
     let context = Context::with_database(&database_path);
-
-    // Start server
-    let http_port = env::var("PORT")
-        .ok()
-        .and_then(|port| port.parse::<u16>().ok())
-        .unwrap_or(8080);
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, http_port))
-        .unwrap_or_else(|_| panic!("Can't bind to port: {http_port}"));
-    info!("Server is listening on: http://localhost:{http_port}/");
-
     let router = router(context);
-    small_http::serve(listener, move |req| router.handle(req));
+
+    if env::var("GATEWAY_INTERFACE").is_ok() {
+        small_http::serve_cgi(move |req| router.handle(req));
+    } else {
+        // Start server
+        let http_port = env::var("PORT")
+            .ok()
+            .and_then(|port| port.parse::<u16>().ok())
+            .unwrap_or(8080);
+        let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, http_port))
+            .unwrap_or_else(|_| panic!("Can't bind to port: {http_port}"));
+        info!("Server is listening on: http://localhost:{http_port}/");
+
+        small_http::serve(listener, move |req| router.handle(req));
+    }
 }

@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
+bsqlite = { version = "0.1.2", features = ["uuid", "chrono"] }
 chrono = { version = "0.4", default-features = false, features = [
     "now",
     "serde",
@@ -26,6 +26,9 @@ small-http = { version = "0.2.1", features = ["json"] }
 small-router = "0.2.1"
 uuid = { version = "1.0", features = ["v7", "serde"] }
 validate = { path = "../../lib/validate" }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
 
 [build-dependencies]
 openapi-generator = { path = "../../lib/openapi-generator" }

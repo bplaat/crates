@@ -211,6 +211,16 @@ impl Response {
         _ = stream.write_all(&self.body);
     }
 
+    #[cfg(feature = "cgi")]
+    pub(crate) fn write_to_cgi_stdout(&self, stdout: &mut dyn Write) {
+        _ = writeln!(stdout, "Status: {}", self.status);
+        for (name, value) in &self.headers {
+            _ = writeln!(stdout, "{name}: {value}");
+        }
+        _ = writeln!(stdout);
+        _ = stdout.write_all(&self.body);
+    }
+
     fn finish_headers(&mut self, req: &Request, keep_alive: bool) {
         #[cfg(feature = "date")]
         self.headers
