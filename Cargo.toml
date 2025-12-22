@@ -20,6 +20,8 @@ unwrap_used = "deny"
 opt-level = "z"
 lto = "fat"
 strip = true
+panic = "abort"
+overflow-checks = false
 
 [patch.crates-io]
 # Path published libraries with local versions
