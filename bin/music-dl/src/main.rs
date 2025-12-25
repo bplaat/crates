@@ -8,6 +8,7 @@
 #![doc = include_str!("../README.md")]
 
 use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio, exit};
 use std::time::Duration;
 use std::{fs, thread};
@@ -57,16 +58,13 @@ fn download_album(
     let album = metadata_service.get_album(album_id)?;
 
     // Download album cover
-    let album_folder = format!(
-        "{}/{}/{}",
-        args.output_dir,
-        escape_path(&album.contributors[0].name),
-        escape_path(&album.title)
-    );
+    let album_folder = PathBuf::from(&args.output_dir)
+        .join(escape_path(&album.contributors[0].name))
+        .join(escape_path(&album.title));
     let album_cover = if let Some(album_cover_xl) = &album.cover_xl {
         let album_cover = metadata_service.download(album_cover_xl)?;
         if args.with_cover {
-            fs::write(format!("{album_folder}/cover.jpg"), &album_cover)?;
+            fs::write(album_folder.join("cover.jpg"), &album_cover)?;
         }
         Some(album_cover)
     } else {
@@ -94,7 +92,7 @@ fn download_album(
         pool.execute(move || {
             _ = download_track(
                 album,
-                album_folder,
+                &album_folder,
                 album_cover,
                 album_nb_disks,
                 track,
@@ -107,7 +105,7 @@ fn download_album(
 
 fn download_track(
     album: Album,
-    album_folder: String,
+    album_folder: &Path,
     album_cover: Option<Vec<u8>>,
     album_nb_disks: i64,
     track: Track,
@@ -144,15 +142,14 @@ fn download_track(
                 search_process.kill()?;
 
                 // Download video
-                let path = format!(
-                    "{}/{} - {} - {:0track_index_width$} - {}.m4a",
-                    album_folder,
+                let path = album_folder.join(format!(
+                    "{} - {} - {:0track_index_width$} - {}.m4a",
                     escape_path(&album.contributors[0].name),
                     escape_path(&album.title),
                     track_index + 1,
                     escape_path(&track.title),
                     track_index_width = (album.nb_tracks as f64).log10().ceil() as usize
-                );
+                ));
                 let mut download_process = Command::new("yt-dlp")
                     .arg("--newline")
                     .arg("-f")
@@ -162,11 +159,11 @@ fn download_track(
                     .arg(&path)
                     .stdout(Stdio::piped())
                     .spawn()?;
-                println!("Downloading {path}...");
+                println!("Downloading {}...", path.display());
                 download_process.wait()?;
 
                 // Update metadata
-                println!("Updating metadata {path}...");
+                println!("Updating metadata {}...", path.display());
                 let mut tag = mp4ameta::Tag::default();
                 tag.set_title(&track.title);
                 for artist in &album.contributors {

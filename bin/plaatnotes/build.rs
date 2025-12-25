@@ -6,17 +6,18 @@
 
 //! A simple note-taking app
 
-use std::path::Path;
+use std::env;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use copy_dir::copy_dir;
 
 fn main() {
     // Generate openapi file
-    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("Should be some"));
     openapi_generator::generate_schemas_build(
         "openapi.yaml",
-        format!("{out_dir}/api.rs"),
+        out_dir.join("api.rs"),
         openapi_generator::Generator::Rust,
     );
     openapi_generator::generate_schemas_build(
@@ -70,8 +71,6 @@ fn main() {
         .output()
         .expect("Failed to run npm run build");
 
-    // Copy built assets to OUT_DIR/web
-    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
-    copy_dir("web/dist", Path::new(&out_dir).join("web"))
-        .expect("Failed to copy web/dist files to $OUT_DIR");
+    // Copy built assets to OUT_DIR/web);
+    copy_dir("web/dist", out_dir.join("web")).expect("Failed to copy web/dist files to $OUT_DIR");
 }

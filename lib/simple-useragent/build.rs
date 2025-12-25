@@ -6,8 +6,10 @@
 
 //! An user agent parser library
 
+use std::env;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 
 use serde::Deserialize;
 
@@ -43,9 +45,8 @@ fn main() {
         .expect("Can't parse regexes.yaml");
 
     // Write rules_data.rs
-    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
-    let mut f =
-        File::create(format!("{out_dir}/rules_data.rs",)).expect("Can't create rules_data.rs");
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("Should be some"));
+    let mut f = File::create(out_dir.join("rules_data.rs")).expect("Can't create rules_data.rs");
 
     let user_agent_parsers = rules
         .user_agent_parsers
