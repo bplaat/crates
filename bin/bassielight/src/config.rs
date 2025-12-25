@@ -56,10 +56,11 @@ impl Default for Config {
 impl Config {
     fn default_path() -> PathBuf {
         if !cfg!(debug_assertions) {
-            dirs::config_dir()
-                .expect("Can't find config directory")
-                .join("nl.bplaat.BassieLight")
-                .join("config.json")
+            let project_dirs = directories::ProjectDirs::from("nl", "bplaat", "BassieLight")
+                .expect("Can't get dirs");
+            let config_dir = project_dirs.config_dir();
+            std::fs::create_dir_all(&config_dir).expect("Can't create directories");
+            config_dir.join("config.json")
         } else {
             PathBuf::from("config.json")
         }
@@ -70,10 +71,6 @@ impl Config {
         if let Ok(file) = File::open(&path) {
             serde_json::from_reader(file).expect("Can't read and/or parse config.json")
         } else {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent).expect("Can't create directories");
-            }
-
             let default_conf = Config::default();
             let mut file = File::create(&path).expect("Can't open config.json");
             serde_json::to_writer_pretty(&mut file, &default_conf)

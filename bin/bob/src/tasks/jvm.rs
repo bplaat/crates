@@ -15,6 +15,7 @@ use crate::Bobje;
 use crate::args::Profile;
 use crate::executor::{ExecutorBuilder, TaskAction};
 use crate::manifest::JarDependency;
+use crate::utils::cache_dir;
 
 const CLASSPATH_SEPARATOR: &str = if cfg!(windows) { ";" } else { ":" };
 
@@ -267,10 +268,10 @@ pub(crate) fn download_extract_jar_tasks(
     jar: &JarDependency,
 ) {
     // Add download task
-    let cache_dir = dirs::cache_dir().expect("Failed to get cache directory");
-    let lock_file = format!("{}/bob/.lock", cache_dir.display());
+    let cache_dir = cache_dir();
+    let lock_file = format!("{}/.lock", cache_dir.display());
     let downloaded_jar = format!(
-        "{}/bob/jar-cache/{}-{}.jar",
+        "{}/jar-cache/{}-{}.jar",
         cache_dir.display(),
         bobje.name,
         bobje.version

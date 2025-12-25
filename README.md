@@ -83,7 +83,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 
 -   [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 -   [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
--   [dirs](lib/dirs) A minimal replacement for the [dirs](https://crates.io/crates/dirs) crate
+-   [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
 -   [dotenv](lib/dotenv) A minimal replacement for the [dotenv](https://crates.io/crates/dotenv) crate
 -   [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
 -   [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate

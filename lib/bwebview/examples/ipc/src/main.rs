@@ -19,7 +19,7 @@ enum IpcMessage {
 
 fn main() {
     let event_loop = EventLoopBuilder::new()
-        .app_id("nl.bplaat.WebviewIpcExample")
+        .app_id("nl", "bplaat", "WebviewIpcExample")
         .build();
 
     let mut webview = WebviewBuilder::new()

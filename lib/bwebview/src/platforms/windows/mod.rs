@@ -7,6 +7,7 @@
 use std::ffi::{CString, c_void};
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use std::process::exit;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
@@ -16,7 +17,7 @@ use self::win32::*;
 #[cfg(feature = "custom_protocol")]
 use crate::CustomProtocol;
 use crate::{
-    Event, EventLoopBuilder, InjectionTime, LogicalPoint, LogicalSize, Theme, WebviewBuilder,
+    AppId, Event, EventLoopBuilder, InjectionTime, LogicalPoint, LogicalSize, Theme, WebviewBuilder,
 };
 
 mod webview2;
@@ -25,7 +26,7 @@ mod win32;
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop;
 
-static mut APP_ID: Option<String> = None;
+static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 static mut FIRST_HWND: Option<HWND> = None;
 
@@ -34,7 +35,10 @@ impl PlatformEventLoop {
         unsafe {
             // Ensure single instance
             if let Some(app_id) = builder.app_id {
-                let mutex_name = format!("bwebview-{app_id}");
+                let mutex_name = format!(
+                    "bwebview-{}.{}.{}",
+                    app_id.qualifier, app_id.organization, app_id.application
+                );
                 let mutex_name_c = CString::new(mutex_name).expect("Can't convert to CString");
                 CreateMutexA(null_mut(), TRUE, mutex_name_c.as_ptr());
                 if GetLastError() == ERROR_ALREADY_EXISTS {
@@ -231,7 +235,10 @@ impl PlatformWebview {
         let instance = unsafe { GetModuleHandleA(null_mut()) };
         let class_name = unsafe {
             if let Some(ref app_id) = APP_ID {
-                format!("bwebview-{app_id}")
+                format!(
+                    "bwebview-{}.{}.{}",
+                    app_id.qualifier, app_id.organization, app_id.application
+                )
             } else {
                 "bwebview".to_string()
             }
@@ -366,8 +373,7 @@ impl PlatformWebview {
 
             #[cfg(feature = "remember_window_state")]
             let should_show_window = if builder.remember_window_state {
-                let window_placement_path = format!("{}/window.bin", Self::userdata_folder());
-                if let Ok(mut file) = File::open(window_placement_path) {
+                if let Ok(mut file) = File::open(config_dir().join("window.bin")) {
                     let size = size_of::<WINDOWPLACEMENT>();
                     let mut buffer = vec![0u8; size];
                     if file.read_exact(&mut buffer).is_ok() {
@@ -432,21 +438,6 @@ impl PlatformWebview {
                 );
             }
 
-            let exectuable_path = env::current_exe().expect("Can't get current exe path");
-            let executable_path = exectuable_path
-                .file_name()
-                .expect("Can't get current exe file name")
-                .to_string_lossy();
-            let executable_name = executable_path
-                .rsplit_once('.')
-                .expect("Should strip .exe")
-                .0;
-            let data_folder = dirs::config_dir()
-                .expect("Can't find config dir")
-                .join(executable_name)
-                .display()
-                .to_string();
-
             static VTBL: ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl =
                 ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl {
                     QueryInterface: unimplemented_query_interface,
@@ -462,7 +453,7 @@ impl PlatformWebview {
             ));
             if CreateCoreWebView2EnvironmentWithOptions(
                 null(),
-                data_folder.to_wide_string().as_ptr(),
+                config_dir().display().to_string().to_wide_string().as_ptr(),
                 null_mut(),
                 completed_handler,
             ) != S_OK
@@ -478,22 +469,6 @@ impl PlatformWebview {
         }
 
         Self(webview_data)
-    }
-
-    fn userdata_folder() -> String {
-        format!(
-            "{}/{}",
-            dirs::config_dir()
-                .expect("Can't get config directory")
-                .display(),
-            env::current_exe()
-                .expect("Can't get current process name")
-                .file_name()
-                .expect("Can't get current process name")
-                .to_string_lossy()
-                .strip_suffix(".exe")
-                .expect("Should strip .exe")
-        )
     }
 }
 
@@ -749,14 +724,7 @@ unsafe extern "system" fn window_proc(
                     use std::io::Write;
                     let mut window_placement = mem::zeroed();
                     GetWindowPlacement(hwnd, &mut window_placement);
-                    let window_placement_path =
-                        format!("{}/window.bin", PlatformWebview::userdata_folder());
-                    if let Ok(mut file) = std::fs::OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .truncate(true)
-                        .open(window_placement_path)
-                    {
+                    if let Ok(mut file) = File::create(config_dir().join("window.bin")) {
                         _ = file.write_all(std::slice::from_raw_parts(
                             &window_placement as *const _ as *const u8,
                             size_of::<WINDOWPLACEMENT>(),
@@ -1199,4 +1167,28 @@ fn http_response_to_webview2_response(
         (*body_stream).Release();
         webview2_response
     }
+}
+
+fn config_dir() -> PathBuf {
+    let project_dirs = unsafe {
+        if let Some(ref app_id) = APP_ID {
+            directories::ProjectDirs::from(
+                &app_id.qualifier,
+                &app_id.organization,
+                &app_id.application,
+            )
+        } else {
+            directories::ProjectDirs::from_path(PathBuf::from(
+                env::current_exe()
+                    .expect("Can't get current process name")
+                    .file_name()
+                    .expect("Can't get current process name")
+                    .to_string_lossy()
+                    .strip_suffix(".exe")
+                    .expect("Should strip .exe"),
+            ))
+        }
+    }
+    .expect("Can't get dirs");
+    project_dirs.config_dir()
 }

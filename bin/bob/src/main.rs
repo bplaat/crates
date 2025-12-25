@@ -18,7 +18,7 @@ use crate::tasks::android::{detect_android, run_android_apk};
 use crate::tasks::bundle::{detect_bundle, run_bundle};
 use crate::tasks::cx::{detect_cx, run_ld, run_ld_cunit_tests};
 use crate::tasks::jvm::{detect_jar, detect_java_kotlin, run_jar, run_java_class, run_junit_tests};
-use crate::utils::{format_bytes, index_files};
+use crate::utils::{cache_dir, format_bytes, index_files};
 
 mod args;
 mod bobje;
@@ -58,15 +58,14 @@ fn subcommand_clean(target_dir: &str, print: bool) {
 }
 
 fn subcommand_clean_cache() {
-    let cache_dir = dirs::cache_dir().expect("Failed to get cache directory");
-    let global_bob_cache_dir = format!("{}/bob", cache_dir.display());
-    if !Path::new(&global_bob_cache_dir).exists() {
+    let cache_dir = cache_dir();
+    if !Path::new(&cache_dir).exists() {
         println!("Removed 0 files");
         return;
     }
 
-    print_dir_remove_stats(&global_bob_cache_dir);
-    fs::remove_dir_all(global_bob_cache_dir).expect("Can't remove bob directory");
+    print_dir_remove_stats(&cache_dir.display().to_string());
+    fs::remove_dir_all(cache_dir).expect("Can't remove bob directory");
 }
 
 fn subcommand_version() {

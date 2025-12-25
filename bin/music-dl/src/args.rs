@@ -7,6 +7,8 @@
 use std::env;
 use std::process::exit;
 
+use directories::UserDirs;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Subcommand {
     Download,
@@ -27,13 +29,11 @@ pub(crate) struct Args {
 
 impl Default for Args {
     fn default() -> Self {
+        let user_dirs = UserDirs::new().expect("Can't get user dirs");
         Self {
             subcommand: Subcommand::Help,
             query: String::new(),
-            output_dir: dirs::audio_dir()
-                .expect("Can't user music directory")
-                .display()
-                .to_string(),
+            output_dir: user_dirs.audio_dir().display().to_string(),
             is_id: false,
             is_artist: false,
             with_singles: false,

@@ -32,7 +32,7 @@ version = "0.1.0"
 dependencies = [
  "bwebview",
  "copy_dir",
- "dirs",
+ "directories",
  "local-ip-address",
  "log",
  "mime_guess",
@@ -60,7 +60,7 @@ name = "bob"
 version = "0.1.0"
 dependencies = [
  "basic-toml",
- "dirs",
+ "directories",
  "dotenv",
  "enable-ansi-support",
  "regex",
@@ -101,7 +101,7 @@ name = "bwebview"
 version = "0.1.0"
 dependencies = [
  "block2",
- "dirs",
+ "directories",
  "log",
  "mime_guess",
  "objc2",
@@ -166,7 +166,7 @@ name = "copy_dir"
 version = "0.1.3+patch"
 
 [[package]]
-name = "dirs"
+name = "directories"
 version = "6.0.0+patch"
 
 [[package]]
@@ -229,7 +229,7 @@ version = "0.1.0"
 dependencies = [
  "bwebview",
  "copy_dir",
- "dirs",
+ "directories",
  "rust-embed",
  "serde",
  "serde_json",
@@ -391,7 +391,7 @@ checksum = "453e991b2efe96c288cbc2d03a19e353504294559ecb6c03067fff5bd824616d"
 name = "music-dl"
 version = "0.1.0"
 dependencies = [
- "dirs",
+ "directories",
  "mp4ameta",
  "percent-encoding",
  "serde",

@@ -85,7 +85,7 @@ fn man_show(req: &Request, _ctx: &()) -> Response {
 
 fn main() {
     let event_loop = EventLoopBuilder::new()
-        .app_id("nl.bplaat.ManExplorer")
+        .app_id("nl", "bplaat", "ManExplorer")
         .build();
 
     let router = RouterBuilder::new()

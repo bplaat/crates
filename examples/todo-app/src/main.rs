@@ -9,9 +9,10 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 
-use std::{env, fs};
+use std::fs;
 
-use bwebview::{Event, EventLoop, LogicalSize, WebviewBuilder};
+use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
+use directories::ProjectDirs;
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -36,7 +37,9 @@ enum IpcMessage {
 struct WebAssets;
 
 fn main() {
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoopBuilder::new()
+        .app_id("nl", "bplaat", "TodoApp")
+        .build();
 
     let mut webview = WebviewBuilder::new()
         .title("Todo App")
@@ -47,13 +50,10 @@ fn main() {
         .load_rust_embed::<WebAssets>()
         .build();
 
-    let todos_config_path = dirs::config_dir()
-        .expect("Can't get config dir")
-        .join(env!("CARGO_PKG_NAME"))
-        .join("todos.json");
-    if let Some(parent) = std::path::Path::new(&todos_config_path).parent() {
-        fs::create_dir_all(parent).expect("Can't create config directory");
-    }
+    let project_dirs = ProjectDirs::from("nl", "bplaat", "TodoApp").expect("Can't get dirs");
+    let config_dir = project_dirs.config_dir();
+    fs::create_dir_all(&config_dir).expect("Can't create config directory");
+    let todos_config_path = config_dir.join("todos.json");
 
     event_loop.run(move |event| {
         if let Event::PageMessageReceived(message) = event {

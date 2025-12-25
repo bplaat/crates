@@ -41,7 +41,7 @@ fn main() {
 
     // Create event loop
     let event_loop = EventLoopBuilder::new()
-        .app_id("nl.bplaat.BassieLight")
+        .app_id("nl", "bplaat", "BassieLight")
         .build();
 
     // Load config

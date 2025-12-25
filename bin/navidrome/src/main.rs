@@ -12,7 +12,7 @@ use bwebview::{EventLoopBuilder, InjectionTime, LogicalSize, Theme, WebviewBuild
 
 fn main() {
     let event_loop = EventLoopBuilder::new()
-        .app_id("nl.bplaat.Navidrome")
+        .app_id("nl", "bplaat", "Navidrome")
         .build();
 
     #[allow(unused_mut)]

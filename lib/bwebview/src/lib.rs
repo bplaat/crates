@@ -5,6 +5,7 @@
  */
 
 #![doc = include_str!("../README.md")]
+#![allow(unused)]
 
 pub use event::*;
 pub use sizes::*;
@@ -18,10 +19,16 @@ mod platforms;
 mod sizes;
 
 // MARK: EventLoopBuilder
+pub(crate) struct AppId {
+    pub qualifier: String,
+    pub organization: String,
+    pub application: String,
+}
+
 /// EventLoop builder
 #[derive(Default)]
 pub struct EventLoopBuilder {
-    app_id: Option<String>,
+    app_id: Option<AppId>,
 }
 
 impl EventLoopBuilder {
@@ -30,9 +37,18 @@ impl EventLoopBuilder {
         Self::default()
     }
 
-    /// App id used in GtkApplication on Linux, on macOS the Info.plist identifier is used
-    pub fn app_id(mut self, app_id: impl AsRef<str>) -> Self {
-        self.app_id = Some(app_id.as_ref().to_string());
+    /// App id used for storing window state and other platform specific features
+    pub fn app_id(
+        mut self,
+        qualifier: impl AsRef<str>,
+        organization: impl AsRef<str>,
+        application: impl AsRef<str>,
+    ) -> Self {
+        self.app_id = Some(AppId {
+            qualifier: qualifier.as_ref().to_string(),
+            organization: organization.as_ref().to_string(),
+            application: application.as_ref().to_string(),
+        });
         self
     }
 

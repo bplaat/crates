@@ -34,7 +34,7 @@ small-router = { path = "lib/small-router" }
 # Patch some popular crates with my minimal alternatives
 chrono = { path = "lib/chrono" }
 copy_dir = { path = "lib/copy_dir" }
-dirs = { path = "lib/dirs" }
+directories = { path = "lib/directories" }
 dotenv = { path = "lib/dotenv" }
 enable-ansi-support = { path = "lib/enable-ansi-support" }
 getrandom = { path = "lib/getrandom" }

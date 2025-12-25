@@ -8,19 +8,21 @@ use std::ffi::{CStr, CString, c_char, c_void};
 use std::fs::File;
 use std::mem::MaybeUninit;
 use std::os::unix::io::AsRawFd;
-use std::path::Path;
 use std::process::exit;
 use std::ptr::{null, null_mut};
 use std::{env, fs, iter};
 
 use self::headers::*;
-use crate::{Event, EventLoopBuilder, InjectionTime, LogicalPoint, LogicalSize, WebviewBuilder};
+use crate::{
+    AppId, Event, EventLoopBuilder, InjectionTime, LogicalPoint, LogicalSize, WebviewBuilder,
+};
 
 mod headers;
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop;
 
+static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
 impl PlatformEventLoop {
@@ -28,7 +30,12 @@ impl PlatformEventLoop {
         // Ensure single instance
         // FIXME: Use GtkApplication for this
         if let Some(app_id) = builder.app_id {
-            let lock_file = env::temp_dir().join(app_id).join(".lock");
+            let lock_file = env::temp_dir()
+                .join(format!(
+                    "{}.{}.{}",
+                    app_id.qualifier, app_id.organization, app_id.application
+                ))
+                .join(".lock");
             if let Some(parent) = lock_file.parent() {
                 fs::create_dir_all(parent).expect("Failed to create lock file directory");
             }
@@ -37,6 +44,7 @@ impl PlatformEventLoop {
                 exit(0);
             }
             std::mem::forget(file);
+            unsafe { APP_ID = Some(app_id) };
         }
 
         // Init GTK
@@ -501,25 +509,11 @@ impl PlatformWebview {
     }
 
     #[cfg(feature = "remember_window_state")]
-    fn settings_path() -> String {
-        format!(
-            "{}/{}/settings.ini",
-            dirs::config_dir()
-                .expect("Can't get config directory")
-                .display(),
-            env::current_exe()
-                .expect("Can't get current process name")
-                .file_name()
-                .expect("Can't get current process name")
-                .to_string_lossy()
-        )
-    }
-
-    #[cfg(feature = "remember_window_state")]
     fn load_window_state(window: *mut GtkWindow) {
         unsafe {
             let settings = g_key_file_new();
-            let file = CString::new(Self::settings_path()).expect("Can't convert to CString");
+            let file = CString::new(config_dir().join("settings.ini").display().to_string())
+                .expect("Can't convert to CString");
             let mut err = null_mut();
             g_key_file_load_from_file(settings, file.as_ptr(), 0, &mut err);
             if err.is_null() {
@@ -547,14 +541,8 @@ impl PlatformWebview {
 
     #[cfg(feature = "remember_window_state")]
     fn save_window_state(window: *mut GtkWindow) {
-        let settings_path = Self::settings_path();
-        fs::create_dir_all(
-            Path::new(&settings_path)
-                .parent()
-                .expect("Can't create settings directory"),
-        )
-        .expect("Can't create settings directory");
-
+        fs::create_dir_all(config_dir()).expect("Can't create settings directory");
+        let settings_path = config_dir().join("settings.ini");
         unsafe {
             let settings = g_key_file_new();
             let group = c"window".as_ptr();
@@ -574,7 +562,8 @@ impl PlatformWebview {
             let maximized = gtk_window_is_maximized(window);
             g_key_file_set_boolean(settings, group, c"maximized".as_ptr(), maximized);
 
-            let file = CString::new(settings_path).expect("Can't convert to CString");
+            let file = CString::new(settings_path.display().to_string())
+                .expect("Can't convert to CString");
             g_key_file_save_to_file(settings, file.as_ptr(), null_mut());
             g_key_file_free(settings);
         }
@@ -955,4 +944,28 @@ fn http_response_to_webkit_uri_scheme_response(
     }
 
     uri_scheme_response
+}
+
+#[cfg(feature = "remember_window_state")]
+fn config_dir() -> std::path::PathBuf {
+    let project_dirs = unsafe {
+        if let Some(ref app_id) = APP_ID {
+            directories::ProjectDirs::from(
+                &app_id.qualifier,
+                &app_id.organization,
+                &app_id.application,
+            )
+        } else {
+            directories::ProjectDirs::from_path(std::path::PathBuf::from(
+                env::current_exe()
+                    .expect("Can't get current process name")
+                    .file_name()
+                    .expect("Can't get current process name")
+                    .to_string_lossy()
+                    .into_owned(),
+            ))
+        }
+    }
+    .expect("Can't get dirs");
+    project_dirs.config_dir()
 }

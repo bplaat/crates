@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-dirs = { version = "6.0.0", optional = true }
+directories = { version = "6.0.0", optional = true }
 mime_guess = { version = "2.0", default-features = false, optional = true }
 log = { version = "0.4.28", optional = true }
 rust-embed = { version = "8.7", optional = true }
@@ -23,5 +23,5 @@ objc2 = "0.6"
 default = ["log", "remember_window_state"]
 custom_protocol = ["dep:small-http"]
 log = ["dep:log"]
-remember_window_state = ["dep:dirs"]
+remember_window_state = ["dep:directories"]
 rust-embed = ["custom_protocol", "dep:rust-embed", "dep:mime_guess"]

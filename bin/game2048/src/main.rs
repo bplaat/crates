@@ -16,7 +16,9 @@ use rust_embed::Embed;
 struct WebAssets;
 
 fn main() {
-    let event_loop = EventLoopBuilder::new().app_id("nl.bplaat.2048").build();
+    let event_loop = EventLoopBuilder::new()
+        .app_id("nl", "bplaat", "2048")
+        .build();
 
     #[allow(unused_mut)]
     let mut webview_builder = WebviewBuilder::new()

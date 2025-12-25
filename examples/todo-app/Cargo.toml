@@ -9,8 +9,11 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
-dirs = "6.0"
+bwebview = { path = "../../lib/bwebview", default-features = false, features = [
+    "remember_window_state",
+    "rust-embed",
+] }
+directories = "6.0"
 rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
