@@ -62,8 +62,8 @@ fn test_int_arithmetic() {
     assert_js(Value::Number(9.0), "2 ** 3 + 1");
     assert_js(Value::Number(0.0), "36 / 0");
     assert_js(Value::Number(2.0), "20 % 3");
-    assert_js(Value::Number(34.0), "--34");
-    assert_js(Value::Number(-40.0), "---40");
+    assert_js(Value::Number(34.0), "- -34");
+    assert_js(Value::Number(-40.0), "- - -40");
     assert_js(Value::Number(1.0), "5 & 3");
     assert_js(Value::Number(7.0), "5 | 3");
     assert_js(Value::Number(6.0), "5 ^ 3");
@@ -351,5 +351,130 @@ fn test_switch() {
     assert_js(
         Value::Boolean(true),
         "let a = 1; switch (a) { case 1: true; break; break; case 2: false; break; default: null; }",
+    );
+}
+
+#[test]
+fn test_increment_decrement() {
+    assert_js(Value::Number(1.0), "let a = 0; ++a");
+    assert_js(Value::Number(0.0), "let a = 0; a++");
+    assert_js(Value::Number(1.0), "let a = 1; a");
+    assert_js(Value::Number(-1.0), "let a = 0; --a");
+    assert_js(Value::Number(0.0), "let a = 0; a--");
+    assert_js(Value::Number(-1.0), "let a = -1; a");
+    assert_js(Value::Number(5.0), "let a = 4; ++a; a");
+    assert_js(Value::Number(5.0), "let a = 4; a++; a");
+    assert_js(Value::Number(3.0), "let a = 4; --a; a");
+    assert_js(Value::Number(3.0), "let a = 4; a--; a");
+    assert_js(Value::Number(11.0), "let a = 10; let b = ++a; b");
+    assert_js(Value::Number(10.0), "let a = 10; let b = a++; b");
+    assert_js(Value::Number(9.0), "let a = 10; let b = --a; b");
+    assert_js(Value::Number(10.0), "let a = 10; let b = a--; b");
+}
+
+#[test]
+fn test_loops() {
+    assert_js(Value::Number(4.0), "let i = 0; while (i < 5) { i++; }");
+    assert_js(Value::Number(5.0), "let i = 0; while (i < 5) { i++; } i");
+    assert_js(
+        Value::Number(3.0),
+        "let i = 0; while (i < 10) { if (i == 3) break; i++; } i",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "let i = 0; let sum = 0; while (i < 5) { i++; sum += i; }",
+    );
+    assert_js(
+        Value::Number(2.0),
+        "let i = 0; while (i < 10) { i++; if (i == 2) break; } i",
+    );
+    assert_js(
+        Value::Number(13.0),
+        "let i = 0; let sum = 0; while (i < 5) { i++; if (i == 2) continue; sum += i; }",
+    );
+    assert_js(
+        Value::Number(12.0),
+        "let i = 0; let sum = 0; while (i < 5) { i++; if (i == 3) continue; sum += i; } sum",
+    );
+    assert_js(Value::Number(4.0), "let i = 0; do { i++; } while (i < 5)");
+    assert_js(
+        Value::Number(5.0),
+        "let i = 0; do { i++; } while (i < 5); i",
+    );
+    assert_js(
+        Value::Number(3.0),
+        "let i = 0; do { if (i == 3) break; i++; } while (i < 10); i",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "let i = 0; let sum = 0; do { i++; sum += i; } while (i < 5); sum",
+    );
+    assert_js(
+        Value::Number(1.0),
+        "let i = 0; do { i++; if (i == 2) break } while (i < 10)",
+    );
+    assert_js(
+        Value::Number(13.0),
+        "let i = 0; let sum = 0; do { i++; if (i == 2) continue; sum += i; } while (i < 5); sum",
+    );
+    assert_js(
+        Value::Number(12.0),
+        "let i = 0; let sum = 0; do { i++; if (i == 3) continue; sum += i; } while (i < 5);",
+    );
+    assert_js(
+        Value::Number(20.0),
+        "let i = 0; let sum = 0; while (i < 4) { let j = 0; while (j < 5) { sum++; j++; } i++; } sum",
+    );
+    assert_js(
+        Value::Number(12.0),
+        "let i = 0; let sum = 0; while (i < 3) { let j = 0; while (j < 4) { sum += 1; j++; } i++; } sum",
+    );
+    assert_js(
+        Value::Number(10.0),
+        "let sum = 0; for (let i = 0; i < 5; i++) { sum += i; } sum",
+    );
+    assert_js(
+        Value::Number(5.0),
+        "let i = 0; for (i = 0; i < 5; i++) { } i",
+    );
+    assert_js(
+        Value::Number(3.0),
+        "let i = 0; for (i = 0; i < 10; i++) { if (i == 3) break; } i",
+    );
+    assert_js(
+        Value::Number(8.0),
+        "let sum = 0; for (let i = 0; i < 5; i++) { if (i == 2) continue; sum += i; }",
+    );
+    assert_js(
+        Value::Number(8.0),
+        "let sum = 0; for (let i = 0; i < 5; i++) { if (i == 2) continue; sum += i; } sum",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "let sum = 0; for (let i = 1; i <= 5; i++) { sum += i; } sum",
+    );
+    assert_js(
+        Value::Number(20.0),
+        "let sum = 0; for (let i = 0; i < 4; i++) { for (let j = 0; j < 5; j++) { sum++; } } sum",
+    );
+    assert_js(
+        Value::Number(12.0),
+        "let sum = 0; for (let i = 0; i < 3; i++) { for (let j = 0; j < 4; j++) { sum += 1; } } sum",
+    );
+    assert_js(
+        Value::Number(6.0),
+        "let sum = 0; for (let i = 0; i < 3; i++) { for (let j = 0; j < 2; j++) { sum++; } } sum",
+    );
+    assert_js(
+        Value::Number(9.0),
+        "let sum = 0; for (let i = 0; i < 3; i++) { for (let j = 0; j < 4; j++) { if (j == 2) continue; sum++; } } sum",
+    );
+    assert_js(
+        Value::Number(3.0),
+        "let sum = 0; for (let i = 0; i < 3; i++) { for (let j = 0; j < 4; j++) { if (j == 1) break; sum++; } } sum",
+    );
+    assert_js(
+        Value::Number(6.0),
+        "let sum = 0; for (let i = 0; i < 3; i++) { if (i == 2) break; for (let j = 0; j < 3; j++) { sum++; } } sum",
     );
 }

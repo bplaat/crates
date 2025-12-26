@@ -32,6 +32,10 @@ pub(crate) enum Token {
     Case,
     Default,
     Break,
+    While,
+    Do,
+    Continue,
+    For,
 
     Assign,
     AddAssign,
@@ -48,7 +52,9 @@ pub(crate) enum Token {
     UnsignedRightShiftAssign,
     Typeof,
     Add,
+    Increment,
     Subtract,
+    Decrement,
     Multiply,
     Divide,
     Remainder,
@@ -84,7 +90,7 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 14] = [
+const KEYWORDS: [Keyword; 18] = [
     Keyword::new("undefined", Token::Undefined),
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
@@ -99,10 +105,14 @@ const KEYWORDS: [Keyword; 14] = [
     Keyword::new("case", Token::Case),
     Keyword::new("default", Token::Default),
     Keyword::new("break", Token::Break),
+    Keyword::new("while", Token::While),
+    Keyword::new("do", Token::Do),
+    Keyword::new("continue", Token::Continue),
+    Keyword::new("for", Token::For),
 ];
 
 // NOTE: Sort by length descending to match longest first
-const SYMBOLS: [Keyword; 45] = [
+const SYMBOLS: [Keyword; 47] = [
     Keyword::new(">>>=", Token::UnsignedRightShiftAssign),
     Keyword::new(">>>", Token::UnsignedRightShift),
     Keyword::new("===", Token::StrictEquals),
@@ -127,6 +137,8 @@ const SYMBOLS: [Keyword; 45] = [
     Keyword::new("**", Token::Exponentiation),
     Keyword::new("==", Token::Equals),
     Keyword::new("!=", Token::NotEquals),
+    Keyword::new("++", Token::Increment),
+    Keyword::new("--", Token::Decrement),
     Keyword::new("(", Token::LeftParen),
     Keyword::new(")", Token::RightParen),
     Keyword::new("{", Token::LeftBrace),
