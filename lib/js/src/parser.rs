@@ -12,14 +12,15 @@ pub(crate) enum Node {
     Nodes(Vec<Node>),
     Value(Value),
     Variable(String),
-    Neg(Box<Node>),
     Assign(Box<Node>, Box<Node>),
+
+    UnaryMinus(Box<Node>),
     Add(Box<Node>, Box<Node>),
-    Sub(Box<Node>, Box<Node>),
-    Mul(Box<Node>, Box<Node>),
-    Exp(Box<Node>, Box<Node>),
-    Div(Box<Node>, Box<Node>),
-    Mod(Box<Node>, Box<Node>),
+    Subtract(Box<Node>, Box<Node>),
+    Multiply(Box<Node>, Box<Node>),
+    Divide(Box<Node>, Box<Node>),
+    Remainder(Box<Node>, Box<Node>),
+    Exponentiation(Box<Node>, Box<Node>),
     BitwiseAnd(Box<Node>, Box<Node>),
     BitwiseOr(Box<Node>, Box<Node>),
     BitwiseXor(Box<Node>, Box<Node>),
@@ -27,6 +28,17 @@ pub(crate) enum Node {
     LeftShift(Box<Node>, Box<Node>),
     SignedRightShift(Box<Node>, Box<Node>),
     UnsignedRightShift(Box<Node>, Box<Node>),
+    Equals(Box<Node>, Box<Node>),
+    StrictEquals(Box<Node>, Box<Node>),
+    NotEquals(Box<Node>, Box<Node>),
+    StrictNotEquals(Box<Node>, Box<Node>),
+    LessThen(Box<Node>, Box<Node>),
+    LessThenEquals(Box<Node>, Box<Node>),
+    GreaterThen(Box<Node>, Box<Node>),
+    GreaterThenEquals(Box<Node>, Box<Node>),
+    LogicalAnd(Box<Node>, Box<Node>),
+    LogicalOr(Box<Node>, Box<Node>),
+    LogicalNot(Box<Node>),
 }
 
 pub(crate) struct Parser<'a> {
@@ -84,8 +96,78 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(Node::Assign(Box::new(lhs), Box::new(self.assign()?)))
             }
-            _ => self.shift(),
+            _ => self.logical(),
         }
+    }
+
+    fn logical(&mut self) -> Result<Node, String> {
+        let mut node = self.relational()?;
+        loop {
+            match self.peek() {
+                Token::LogicalAnd => {
+                    self.next();
+                    node = Node::LogicalAnd(Box::new(node), Box::new(self.relational()?));
+                }
+                Token::LogicalOr => {
+                    self.next();
+                    node = Node::LogicalOr(Box::new(node), Box::new(self.relational()?));
+                }
+                _ => break,
+            }
+        }
+        Ok(node)
+    }
+
+    fn relational(&mut self) -> Result<Node, String> {
+        let mut node = self.equality()?;
+        loop {
+            match self.peek() {
+                Token::LessThen => {
+                    self.next();
+                    node = Node::LessThen(Box::new(node), Box::new(self.equality()?));
+                }
+                Token::LessThenEquals => {
+                    self.next();
+                    node = Node::LessThenEquals(Box::new(node), Box::new(self.equality()?));
+                }
+                Token::GreaterThen => {
+                    self.next();
+                    node = Node::GreaterThen(Box::new(node), Box::new(self.equality()?));
+                }
+                Token::GreaterThenEquals => {
+                    self.next();
+                    node = Node::GreaterThenEquals(Box::new(node), Box::new(self.equality()?));
+                }
+                _ => break,
+            }
+        }
+        Ok(node)
+    }
+
+    fn equality(&mut self) -> Result<Node, String> {
+        let mut node = self.shift()?;
+        loop {
+            match self.peek() {
+                Token::Equals => {
+                    self.next();
+                    node = Node::Equals(Box::new(node), Box::new(self.shift()?));
+                }
+                Token::StrictEquals => {
+                    self.next();
+                    node = Node::StrictEquals(Box::new(node), Box::new(self.shift()?));
+                }
+                Token::NotEquals => {
+                    self.next();
+                    node = Node::NotEquals(Box::new(node), Box::new(self.shift()?));
+                }
+                Token::StrictNotEquals => {
+                    self.next();
+                    node = Node::StrictNotEquals(Box::new(node), Box::new(self.shift()?));
+                }
+                _ => break,
+            }
+        }
+        Ok(node)
     }
 
     fn shift(&mut self) -> Result<Node, String> {
@@ -104,9 +186,7 @@ impl<'a> Parser<'a> {
                     self.next();
                     node = Node::UnsignedRightShift(Box::new(node), Box::new(self.bitwise()?));
                 }
-                _ => {
-                    break;
-                }
+                _ => break,
             }
         }
         Ok(node)
@@ -128,9 +208,7 @@ impl<'a> Parser<'a> {
                     self.next();
                     node = Node::BitwiseXor(Box::new(node), Box::new(self.add()?));
                 }
-                _ => {
-                    break;
-                }
+                _ => break,
             }
         }
         Ok(node)
@@ -144,13 +222,11 @@ impl<'a> Parser<'a> {
                     self.next();
                     node = Node::Add(Box::new(node), Box::new(self.mul()?));
                 }
-                Token::Sub => {
+                Token::Subtract => {
                     self.next();
-                    node = Node::Sub(Box::new(node), Box::new(self.mul()?));
+                    node = Node::Subtract(Box::new(node), Box::new(self.mul()?));
                 }
-                _ => {
-                    break;
-                }
+                _ => break,
             }
         }
         Ok(node)
@@ -160,25 +236,23 @@ impl<'a> Parser<'a> {
         let mut node = self.unary()?;
         loop {
             match self.peek() {
-                Token::Mul => {
+                Token::Multiply => {
                     self.next();
-                    node = Node::Mul(Box::new(node), Box::new(self.unary()?));
+                    node = Node::Multiply(Box::new(node), Box::new(self.unary()?));
                 }
-                Token::Exp => {
+                Token::Divide => {
                     self.next();
-                    node = Node::Exp(Box::new(node), Box::new(self.unary()?));
+                    node = Node::Divide(Box::new(node), Box::new(self.unary()?));
                 }
-                Token::Div => {
+                Token::Remainder => {
                     self.next();
-                    node = Node::Div(Box::new(node), Box::new(self.unary()?));
+                    node = Node::Remainder(Box::new(node), Box::new(self.unary()?));
                 }
-                Token::Mod => {
+                Token::Exponentiation => {
                     self.next();
-                    node = Node::Mod(Box::new(node), Box::new(self.unary()?));
+                    node = Node::Exponentiation(Box::new(node), Box::new(self.unary()?));
                 }
-                _ => {
-                    break;
-                }
+                _ => break,
             }
         }
         Ok(node)
@@ -190,13 +264,17 @@ impl<'a> Parser<'a> {
                 self.next();
                 self.unary()
             }
-            Token::Sub => {
+            Token::Subtract => {
                 self.next();
-                Ok(Node::Neg(Box::new(self.unary()?)))
+                Ok(Node::UnaryMinus(Box::new(self.unary()?)))
             }
             Token::BitwiseNot => {
                 self.next();
                 Ok(Node::BitwiseNot(Box::new(self.unary()?)))
+            }
+            Token::LogicalNot => {
+                self.next();
+                Ok(Node::LogicalNot(Box::new(self.unary()?)))
             }
             _ => self.primary(),
         }
@@ -204,7 +282,7 @@ impl<'a> Parser<'a> {
 
     fn primary(&mut self) -> Result<Node, String> {
         match self.peek() {
-            Token::LParen => {
+            Token::LeftParen => {
                 self.next();
                 let node = self.add()?;
                 self.next();

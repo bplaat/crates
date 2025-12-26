@@ -42,7 +42,7 @@ impl<'a> Interpreter<'a> {
                 }
                 Ok(result)
             }
-            Node::Neg(unary) => match self.eval(unary)? {
+            Node::UnaryMinus(unary) => match self.eval(unary)? {
                 Value::Number(n) => Ok(Value::Number(-n)),
                 _ => Err(String::from("Interpreter: negation on non-number")),
             },
@@ -50,27 +50,27 @@ impl<'a> Interpreter<'a> {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
                 _ => Err(String::from("Interpreter: addition on non-numbers")),
             },
-            Node::Sub(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            Node::Subtract(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
                 _ => Err(String::from("Interpreter: subtraction on non-numbers")),
             },
-            Node::Mul(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            Node::Multiply(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
                 _ => Err(String::from("Interpreter: multiplication on non-numbers")),
             },
-            Node::Exp(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
-                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a.pow(b as u32))),
-                _ => Err(String::from("Interpreter: exponentiation on non-numbers")),
-            },
-            Node::Div(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            Node::Divide(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => {
                     Ok(Value::Number(if b != 0 { a / b } else { 0 }))
                 }
                 _ => Err(String::from("Interpreter: division on non-numbers")),
             },
-            Node::Mod(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            Node::Remainder(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a % b)),
                 _ => Err(String::from("Interpreter: modulo on non-numbers")),
+            },
+            Node::Exponentiation(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a.pow(b as u32))),
+                _ => Err(String::from("Interpreter: exponentiation on non-numbers")),
             },
             Node::BitwiseAnd(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a & b)),
@@ -106,6 +106,74 @@ impl<'a> Interpreter<'a> {
                     "Interpreter: unsigned right shift on non-numbers",
                 )),
             },
+
+            Node::Equals(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a == b)),
+                (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
+                (Value::Undefined, Value::Undefined) => Ok(Value::Boolean(true)),
+                (Value::Null, Value::Null) => Ok(Value::Boolean(true)),
+                _ => Ok(Value::Boolean(false)),
+            },
+            Node::StrictEquals(lhs, rhs) => {
+                let (lhs_val, rhs_val) = (self.eval(lhs)?, self.eval(rhs)?);
+                Ok(Value::Boolean(lhs_val == rhs_val))
+            }
+            Node::NotEquals(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a != b)),
+                (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a != b)),
+                (Value::Undefined, Value::Undefined) => Ok(Value::Boolean(false)),
+                (Value::Null, Value::Null) => Ok(Value::Boolean(false)),
+                _ => Ok(Value::Boolean(true)),
+            },
+            Node::StrictNotEquals(lhs, rhs) => {
+                let (lhs_val, rhs_val) = (self.eval(lhs)?, self.eval(rhs)?);
+                Ok(Value::Boolean(lhs_val != rhs_val))
+            }
+            Node::LessThen(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a < b)),
+                _ => Err(String::from("Interpreter: less than on non-numbers")),
+            },
+            Node::LessThenEquals(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a <= b)),
+                _ => Err(String::from("Interpreter: less than equals on non-numbers")),
+            },
+            Node::GreaterThen(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a > b)),
+                _ => Err(String::from("Interpreter: greater than on non-numbers")),
+            },
+            Node::GreaterThenEquals(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a >= b)),
+                _ => Err(String::from(
+                    "Interpreter: greater than equals on non-numbers",
+                )),
+            },
+            Node::LogicalAnd(lhs, rhs) => {
+                let lhs_val = self.eval(lhs)?;
+                if !Self::is_truthy(&lhs_val) {
+                    return Ok(lhs_val);
+                }
+                self.eval(rhs)
+            }
+            Node::LogicalOr(lhs, rhs) => {
+                let lhs_val = self.eval(lhs)?;
+                if Self::is_truthy(&lhs_val) {
+                    return Ok(lhs_val);
+                }
+                self.eval(rhs)
+            }
+            Node::LogicalNot(unary) => {
+                let val = self.eval(unary)?;
+                Ok(Value::Boolean(!Self::is_truthy(&val)))
+            }
+        }
+    }
+
+    fn is_truthy(value: &Value) -> bool {
+        match value {
+            Value::Undefined => false,
+            Value::Null => false,
+            Value::Boolean(b) => *b,
+            Value::Number(n) => *n != 0,
         }
     }
 }

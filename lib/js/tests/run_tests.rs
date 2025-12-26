@@ -6,16 +6,26 @@
 
 //! Run JS test assertions.
 
+#![cfg(test)]
+
 use js::{Context, Value};
 
-#[test]
-fn test_run_tests() {
-    fn assert_js(expected: Value, script: &str) {
-        let mut context = Context::new();
-        let result = context.eval(script).unwrap();
-        assert_eq!(expected, result);
-    }
+fn assert_js(expected: Value, script: &str) {
+    let mut context = Context::new();
+    let result = context.eval(script).unwrap();
+    assert_eq!(expected, result);
+}
 
+#[test]
+fn test_keywords() {
+    assert_js(Value::Undefined, "undefined");
+    assert_js(Value::Null, "null");
+    assert_js(Value::Boolean(true), "true");
+    assert_js(Value::Boolean(false), "false");
+}
+
+#[test]
+fn test_arithmetic() {
     assert_js(Value::Number(0), "0");
     assert_js(Value::Number(42), "42");
     assert_js(Value::Number(21), "5+20-4");
@@ -36,11 +46,38 @@ fn test_run_tests() {
     assert_js(Value::Number(0), "8 >> 4");
     assert_js(Value::Number(4), "8 >>> 1");
     assert_js(Value::Number(0), "8 >>> 4");
-    assert_js(Value::Undefined, "undefined");
-    assert_js(Value::Null, "null");
-    assert_js(Value::Boolean(true), "true");
-    assert_js(Value::Boolean(false), "false");
+}
 
+#[test]
+fn test_comparisons() {
+    assert_js(Value::Boolean(true), "5 < 10");
+    assert_js(Value::Boolean(false), "5 < 3");
+    assert_js(Value::Boolean(true), "5 <= 5");
+    assert_js(Value::Boolean(false), "5 <= 3");
+    assert_js(Value::Boolean(true), "10 > 5");
+    assert_js(Value::Boolean(false), "3 > 5");
+    assert_js(Value::Boolean(true), "5 >= 5");
+    assert_js(Value::Boolean(false), "3 >= 5");
+    assert_js(Value::Boolean(true), "5 == 5");
+    assert_js(Value::Boolean(false), "5 == 3");
+    assert_js(Value::Boolean(true), "5 != 3");
+    assert_js(Value::Boolean(false), "5 != 5");
+    assert_js(Value::Boolean(true), "1 === 1");
+    assert_js(Value::Boolean(false), "1 === true");
+    assert_js(Value::Boolean(true), "1 !== true");
+    assert_js(Value::Boolean(false), "1 !== 1");
+    assert_js(Value::Boolean(true), "true && true");
+    assert_js(Value::Boolean(false), "true && false");
+    assert_js(Value::Boolean(false), "false && true");
+    assert_js(Value::Boolean(true), "true || false");
+    assert_js(Value::Boolean(true), "true || true");
+    assert_js(Value::Boolean(false), "false || false");
+    assert_js(Value::Boolean(false), "!true");
+    assert_js(Value::Boolean(true), "!false");
+}
+
+#[test]
+fn test_statements() {
     assert_js(Value::Number(40), "20;30;40");
     assert_js(Value::Number(91), "34,  48,91");
     assert_js(Value::Number(10), "a = 10");

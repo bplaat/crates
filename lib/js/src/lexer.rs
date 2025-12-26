@@ -7,6 +7,10 @@
 #[derive(Debug, Clone)]
 pub(crate) enum Token {
     Eof,
+    LeftParen,
+    RightParen,
+    Comma,
+    Semicolon,
 
     Undefined,
     Null,
@@ -14,18 +18,13 @@ pub(crate) enum Token {
     Variable(String),
     Boolean(bool),
 
-    LParen,
-    RParen,
-    Comma,
-    Semicolon,
-
     Assign,
     Add,
-    Sub,
-    Mul,
-    Exp,
-    Div,
-    Mod,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
+    Exponentiation,
     BitwiseAnd,
     BitwiseXor,
     BitwiseOr,
@@ -33,6 +32,17 @@ pub(crate) enum Token {
     LeftShift,
     SignedRightShift,
     UnsignedRightShift,
+    LessThen,
+    LessThenEquals,
+    GreaterThen,
+    GreaterThenEquals,
+    Equals,
+    NotEquals,
+    StrictEquals,
+    StrictNotEquals,
+    LogicalAnd,
+    LogicalOr,
+    LogicalNot,
 }
 
 struct Keyword {
@@ -41,21 +51,54 @@ struct Keyword {
 }
 
 impl Keyword {
-    fn new(keyword: &'static str, token: Token) -> Self {
+    const fn new(keyword: &'static str, token: Token) -> Self {
         Keyword { keyword, token }
     }
 }
 
+const KEYWORDS: [Keyword; 4] = [
+    Keyword::new("undefined", Token::Undefined),
+    Keyword::new("null", Token::Null),
+    Keyword::new("true", Token::Boolean(true)),
+    Keyword::new("false", Token::Boolean(false)),
+];
+
+const SYMBOLS: [Keyword; 29] = [
+    Keyword::new(">>>", Token::UnsignedRightShift),
+    Keyword::new("===", Token::StrictEquals),
+    Keyword::new("!==", Token::StrictNotEquals),
+    Keyword::new("<<", Token::LeftShift),
+    Keyword::new(">>", Token::SignedRightShift),
+    Keyword::new("<=", Token::LessThenEquals),
+    Keyword::new(">=", Token::GreaterThenEquals),
+    Keyword::new("&&", Token::LogicalAnd),
+    Keyword::new("||", Token::LogicalOr),
+    Keyword::new("**", Token::Exponentiation),
+    Keyword::new("==", Token::Equals),
+    Keyword::new("!=", Token::NotEquals),
+    Keyword::new("(", Token::LeftParen),
+    Keyword::new(")", Token::RightParen),
+    Keyword::new(",", Token::Comma),
+    Keyword::new(";", Token::Semicolon),
+    Keyword::new("=", Token::Assign),
+    Keyword::new("+", Token::Add),
+    Keyword::new("-", Token::Subtract),
+    Keyword::new("*", Token::Multiply),
+    Keyword::new("/", Token::Divide),
+    Keyword::new("%", Token::Remainder),
+    Keyword::new("&", Token::BitwiseAnd),
+    Keyword::new("|", Token::BitwiseOr),
+    Keyword::new("^", Token::BitwiseXor),
+    Keyword::new("~", Token::BitwiseNot),
+    Keyword::new("<", Token::LessThen),
+    Keyword::new(">", Token::GreaterThen),
+    Keyword::new("!", Token::LogicalNot),
+];
+
 pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
-    let keywords = [
-        Keyword::new("undefined", Token::Undefined),
-        Keyword::new("null", Token::Null),
-        Keyword::new("true", Token::Boolean(true)),
-        Keyword::new("false", Token::Boolean(false)),
-    ];
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
-    while let Some(char) = chars.next() {
+    'char_loop: while let Some(char) = chars.next() {
         if char.is_whitespace() {
             continue;
         }
@@ -81,100 +124,34 @@ pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
                 variable.push(chars.next().expect("Invalid variable"));
             }
 
-            let mut found = false;
-            for keyword in &keywords {
+            for keyword in &KEYWORDS {
                 if keyword.keyword == variable {
                     tokens.push(keyword.token.clone());
-                    found = true;
-                    break;
+                    continue 'char_loop;
                 }
             }
-            if !found {
-                tokens.push(Token::Variable(variable));
-            }
+            tokens.push(Token::Variable(variable));
             continue;
         }
 
-        if char == '(' {
-            tokens.push(Token::LParen);
-            continue;
-        }
-        if char == ')' {
-            tokens.push(Token::RParen);
-            continue;
-        }
-        if char == ',' {
-            tokens.push(Token::Comma);
-            continue;
-        }
-        if char == ';' {
-            tokens.push(Token::Semicolon);
-            continue;
-        }
-        if char == '=' {
-            tokens.push(Token::Assign);
-            continue;
-        }
-        if char == '+' {
-            tokens.push(Token::Add);
-            continue;
-        }
-        if char == '-' {
-            tokens.push(Token::Sub);
-            continue;
-        }
-        if char == '*' {
-            if let Some('*') = chars.peek() {
-                chars.next();
-                tokens.push(Token::Exp);
-                continue;
-            }
-            tokens.push(Token::Mul);
-            continue;
-        }
-        if char == '/' {
-            tokens.push(Token::Div);
-            continue;
-        }
-        if char == '%' {
-            tokens.push(Token::Mod);
-            continue;
-        }
-        if char == '&' {
-            tokens.push(Token::BitwiseAnd);
-            continue;
-        }
-        if char == '|' {
-            tokens.push(Token::BitwiseOr);
-            continue;
-        }
-        if char == '^' {
-            tokens.push(Token::BitwiseXor);
-            continue;
-        }
-        if char == '~' {
-            tokens.push(Token::BitwiseNot);
-            continue;
-        }
-        if char == '<'
-            && let Some('<') = chars.peek()
-        {
-            chars.next();
-            chars.next();
-            tokens.push(Token::LeftShift);
-            continue;
-        }
-        if char == '>'
-            && let Some('>') = chars.peek()
-        {
-            chars.next();
-            if let Some('>') = chars.peek() {
-                chars.next();
-                tokens.push(Token::UnsignedRightShift);
-                continue;
-            } else {
-                tokens.push(Token::SignedRightShift);
-                continue;
+        'symbol_loop: for symbol in &SYMBOLS {
+            let mut symbol_chars = symbol.keyword.chars();
+            if char == symbol_chars.next().expect("Invalid symbol") {
+                for expected_char in symbol_chars {
+                    if let Some(next_char) = chars.peek() {
+                        if *next_char != expected_char {
+                            continue 'symbol_loop;
+                        }
+                    } else {
+                        continue 'char_loop;
+                    }
+                }
+
+                for _ in 0..(symbol.keyword.len() - 1) {
+                    chars.next();
+                }
+                tokens.push(symbol.token.clone());
+                continue 'char_loop;
             }
         }
 
