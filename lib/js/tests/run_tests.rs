@@ -32,6 +32,24 @@ fn test_keywords() {
 }
 
 #[test]
+fn test_number_literals() {
+    assert_js(Value::Number(0.0), "0");
+    assert_js(Value::Number(42.0), "42");
+    assert_js(Value::Number(-7.0), "-7");
+    assert_js(Value::Number(1234567890.0), "1234567890");
+    assert_js(Value::Number(255.0), "0xFF");
+    assert_js(Value::Number(256.0), "0x100");
+    assert_js(Value::Number(8.0), "0o10");
+    assert_js(Value::Number(64.0), "0o100");
+    assert_js(Value::Number(5.0), "0b101");
+    assert_js(Value::Number(16.0), "0b10000");
+    assert_js(Value::Number(1000.0), "1e3");
+    assert_js(Value::Number(0.001), "1e-3");
+    assert_js(Value::Number(12340.0), "1.234e4");
+    assert_js(Value::Number(0.001234), "1.234e-3");
+}
+
+#[test]
 fn test_int_arithmetic() {
     assert_js(Value::Number(0.0), "0");
     assert_js(Value::Number(42.0), "42");

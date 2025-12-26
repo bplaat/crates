@@ -160,13 +160,47 @@ impl Lexer {
                 continue;
             }
 
-            if char.is_ascii_digit() {
-                let mut number = String::from(char);
-                while let Some(char) = self.peek() {
-                    if !char.is_ascii_digit() && *char != '.' {
+            if char == '0'
+                && matches!(
+                    self.peek(),
+                    Some('x') | Some('X') | Some('o') | Some('O') | Some('b') | Some('B')
+                )
+            {
+                self.next();
+                let radix = match self.chars[self.position - 1] {
+                    'x' | 'X' => 16,
+                    'o' | 'O' => 8,
+                    'b' | 'B' => 2,
+                    _ => unreachable!(),
+                };
+                let mut num_str = String::new();
+                while let Some(c) = self.peek() {
+                    if c.is_ascii_alphanumeric() {
+                        num_str.push(self.next().expect("Invalid number"));
+                    } else {
                         break;
                     }
-                    number.push(self.next().expect("Invalid number"));
+                }
+                let num = u64::from_str_radix(&num_str, radix).expect("Invalid number");
+                tokens.push(Token::Number(num as f64));
+                continue;
+            }
+
+            if char == '.' || (char.is_ascii_digit()) {
+                let mut number = String::from(char);
+                while let Some(c) = self.peek() {
+                    if c.is_ascii_digit() || *c == '.' {
+                        number.push(self.next().expect("Invalid number"));
+                    } else if *c == 'e' || *c == 'E' {
+                        number.push(self.next().expect("Invalid number"));
+                        if let Some(sign) = self.peek()
+                            && (*sign == '+' || *sign == '-')
+                        {
+                            number.push(self.next().expect("Invalid number"));
+                        }
+                    } else {
+                        break;
+                    }
                 }
                 tokens.push(Token::Number(number.parse().expect("Invalid number")));
                 continue;
