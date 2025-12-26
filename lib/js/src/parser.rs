@@ -7,7 +7,7 @@
 use crate::Value;
 use crate::lexer::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum Node {
     Nodes(Vec<Node>),
     If {
@@ -36,6 +36,12 @@ pub(crate) enum Node {
     },
     Continue,
     Break,
+    FunctionDefinition {
+        name: String,
+        arguments: Vec<String>,
+        body: Box<Node>,
+    },
+    Return(Option<Box<Node>>),
 
     Value(Value),
     Variable(String),
@@ -364,6 +370,70 @@ impl<'a> Parser<'a> {
             Token::Continue => {
                 self.next();
                 Ok(Node::Continue)
+            }
+            Token::Function => {
+                self.next();
+                let name = if let Token::Variable(var_name) = self.peek() {
+                    let name = var_name.clone();
+                    self.next();
+                    name
+                } else {
+                    return Err(String::from(
+                        "Parser: expected function name after 'function'",
+                    ));
+                };
+
+                if let Token::LeftParen = self.peek() {
+                    self.next();
+                    let mut arguments = Vec::new();
+                    if let Token::RightParen = self.peek() {
+                        // No arguments
+                        self.next();
+                    } else {
+                        loop {
+                            if let Token::Variable(arg_name) = self.peek() {
+                                arguments.push(arg_name.clone());
+                                self.next();
+                            } else {
+                                return Err(String::from(
+                                    "Parser: expected argument name in function definition",
+                                ));
+                            }
+
+                            match self.peek() {
+                                Token::Comma => {
+                                    self.next();
+                                }
+                                Token::RightParen => {
+                                    self.next();
+                                    break;
+                                }
+                                _ => {
+                                    return Err(String::from(
+                                        "Parser: expected ',' or ')' in function arguments",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    let body = self.block()?;
+                    Ok(Node::FunctionDefinition {
+                        name,
+                        arguments,
+                        body: Box::new(body),
+                    })
+                } else {
+                    Err(String::from("Parser: expected '(' after function name"))
+                }
+            }
+            Token::Return => {
+                self.next();
+                let expr = if let Token::Semicolon | Token::RightBrace | Token::Eof = self.peek() {
+                    None
+                } else {
+                    Some(Box::new(self.ternary()?))
+                };
+                Ok(Node::Return(expr))
             }
             _ => self.comma(),
         }

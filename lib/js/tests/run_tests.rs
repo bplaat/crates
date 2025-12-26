@@ -484,3 +484,49 @@ fn test_call_native_function() {
     assert_js(Value::Number(15.0), r#"sum(7, 8);"#);
     assert_js(Value::Number(56.0), r#"sum(20, 30, 1, 2, 3);"#);
 }
+
+#[test]
+fn test_function() {
+    assert_js(
+        Value::Number(25.0),
+        "function add(a, b) { return a + b; } add(10, 15);",
+    );
+    assert_js(
+        Value::Number(120.0),
+        "function multiply(x, y) { return x * y; } multiply(10, 12);",
+    );
+    assert_js(
+        Value::Number(49.0),
+        "function square(n) { return n * n; } square(7);",
+    );
+    assert_js(
+        Value::Number(6.0),
+        "function factorial(n) { if (n <= 1) { return 1; } else { return n * factorial(n - 1); } } factorial(3);",
+    );
+    assert_js(
+        Value::Number(120.0),
+        "function factorial(n) { if (n <= 1) { return 1; } else { return n * factorial(n - 1); } } factorial(5);",
+    );
+    assert_js(
+        Value::Number(55.0),
+        "function fibonacci(n) { if (n <= 1) { return n; } else { return fibonacci(n - 1) + fibonacci(n - 2); } } fibonacci(10);",
+    );
+
+    assert_js(
+        Value::Number(11.0),
+        "const fmul = (a, b, c) => { let x = a * b; x += c; return x; }; fmul(2, 3, 5);",
+    );
+    assert_js(
+        Value::Number(49.0),
+        "const square = (n) => n * n; square(7);",
+    );
+    assert_js(
+        Value::Number(100.0),
+        "const multiply = (x, y) => x * y; multiply(10, 10);",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "const sum = (a, b, c) => a + b + c; sum(3, 5, 7);",
+    );
+    assert_js(Value::Number(5.0), "const identity = x => x; identity(5);");
+}

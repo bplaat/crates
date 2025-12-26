@@ -36,6 +36,8 @@ pub(crate) enum Token {
     Do,
     Continue,
     For,
+    Function,
+    Return,
 
     Assign,
     AddAssign,
@@ -90,7 +92,7 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 18] = [
+const KEYWORDS: [Keyword; 20] = [
     Keyword::new("undefined", Token::Undefined),
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
@@ -109,6 +111,8 @@ const KEYWORDS: [Keyword; 18] = [
     Keyword::new("do", Token::Do),
     Keyword::new("continue", Token::Continue),
     Keyword::new("for", Token::For),
+    Keyword::new("function", Token::Function),
+    Keyword::new("return", Token::Return),
 ];
 
 // NOTE: Sort by length descending to match longest first

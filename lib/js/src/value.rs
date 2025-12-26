@@ -6,8 +6,10 @@
 
 #![allow(unpredictable_function_pointer_comparisons)]
 
+use crate::parser::Node;
+
 /// Value
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Value {
     /// Undefined value
     Undefined,
@@ -19,8 +21,29 @@ pub enum Value {
     Number(f64),
     /// String value
     String(String),
+    /// Function value
+    Function {
+        /// Function argument names
+        arguments: Vec<String>,
+        /// Function body
+        #[allow(private_interfaces)]
+        body: Box<Node>,
+    },
     /// Native function
     NativeFunction(fn(Vec<Value>) -> Result<Value, String>),
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Undefined, Value::Undefined) => true,
+            (Value::Null, Value::Null) => true,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Number(a), Value::Number(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl Value {
@@ -31,7 +54,18 @@ impl Value {
             Value::Boolean(_) => "boolean",
             Value::Number(_) => "number",
             Value::String(_) => "string",
-            Value::NativeFunction(_) => "function",
+            Value::Function { .. } | Value::NativeFunction(_) => "function",
+        }
+    }
+
+    pub(crate) fn is_truthy(&self) -> bool {
+        match self {
+            Value::Undefined => false,
+            Value::Null => false,
+            Value::Boolean(b) => *b,
+            Value::Number(n) => *n != 0.0 && !n.is_nan(),
+            Value::String(s) => !s.is_empty(),
+            Value::Function { .. } | Value::NativeFunction(_) => true,
         }
     }
 }

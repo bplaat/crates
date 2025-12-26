@@ -9,11 +9,17 @@ use std::collections::HashMap;
 use crate::parser::Node;
 use crate::value::Value;
 
-pub(crate) struct Scope {
-    in_switch: bool,
-    in_loop: bool,
-    continue_flag: bool,
-    break_flag: bool,
+enum Scope {
+    Switch {
+        break_flag: bool,
+    },
+    Loop {
+        continue_flag: bool,
+        break_flag: bool,
+    },
+    Function {
+        return_value: Option<Value>,
+    },
 }
 
 pub(crate) struct Interpreter<'a> {
@@ -33,11 +39,26 @@ impl<'a> Interpreter<'a> {
 
     // MARK: Eval node
     pub(crate) fn eval(&mut self, node: &Node) -> Result<Value, String> {
-        if let Some(scope) = self.scopes.last_mut()
-            && (scope.continue_flag || scope.break_flag)
-        {
-            return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
+        if let Some(scope) = self.scopes.last_mut() {
+            match scope {
+                Scope::Loop {
+                    continue_flag,
+                    break_flag,
+                } if *continue_flag || *break_flag => {
+                    return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
+                }
+                Scope::Switch { break_flag } if *break_flag => {
+                    return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
+                }
+                Scope::Function { return_value } => {
+                    if let Some(ret_val) = return_value.take() {
+                        return Ok(ret_val);
+                    }
+                }
+                _ => unimplemented!(),
+            }
         }
+
         match node {
             Node::Nodes(nodes) => {
                 for node in nodes {
@@ -51,7 +72,7 @@ impl<'a> Interpreter<'a> {
                 else_branch,
             } => {
                 let cond_value = self.eval(condition)?;
-                if Self::is_truthy(&cond_value) {
+                if cond_value.is_truthy() {
                     self.eval(then_branch)
                 } else if let Some(else_branch) = else_branch {
                     self.eval(else_branch)
@@ -64,19 +85,16 @@ impl<'a> Interpreter<'a> {
                 cases,
                 default,
             } => {
-                self.scopes.push(Scope {
-                    in_switch: true,
-                    in_loop: false,
-                    continue_flag: false,
-                    break_flag: false,
-                });
+                self.scopes.push(Scope::Switch { break_flag: false });
                 let expr_value = self.eval(expression)?;
                 for (case_value, case_body) in cases {
                     let case_eval = self.eval(case_value)?;
                     if expr_value == case_eval {
                         let value = self.eval(case_body)?;
-                        let scope = self.scopes.last().expect("Should be some");
-                        if scope.break_flag {
+                        if let Scope::Switch { break_flag } =
+                            self.scopes.last().expect("Should be some")
+                            && *break_flag
+                        {
                             self.scopes.pop();
                             return Ok(value);
                         }
@@ -91,35 +109,36 @@ impl<'a> Interpreter<'a> {
                 Ok(Value::Undefined)
             }
             Node::While { condition, body } => {
-                self.scopes.push(Scope {
-                    in_switch: false,
-                    in_loop: true,
+                self.scopes.push(Scope::Loop {
                     continue_flag: false,
                     break_flag: false,
                 });
                 let mut result = Value::Undefined;
                 loop {
                     let cond_value = self.eval(condition)?;
-                    if !Self::is_truthy(&cond_value) {
+                    if !cond_value.is_truthy() {
                         break;
                     }
                     result = self.eval(body)?;
-                    let scope = self.scopes.last_mut().expect("Should be some");
-                    if scope.continue_flag {
-                        scope.continue_flag = false;
-                    }
-                    if scope.break_flag {
-                        scope.break_flag = false;
-                        break;
+                    if let Scope::Loop {
+                        continue_flag,
+                        break_flag,
+                    } = self.scopes.last_mut().expect("Should be some")
+                    {
+                        if *continue_flag {
+                            *continue_flag = false;
+                        }
+                        if *break_flag {
+                            *break_flag = false;
+                            break;
+                        }
                     }
                 }
                 self.scopes.pop();
                 Ok(result)
             }
             Node::DoWhile { body, condition } => {
-                self.scopes.push(Scope {
-                    in_switch: false,
-                    in_loop: true,
+                self.scopes.push(Scope::Loop {
                     continue_flag: false,
                     break_flag: false,
                 });
@@ -127,16 +146,21 @@ impl<'a> Interpreter<'a> {
                 let mut result = Value::Undefined;
                 loop {
                     result = self.eval(body)?;
-                    let scope = self.scopes.last_mut().expect("Should be some");
-                    if scope.continue_flag {
-                        scope.continue_flag = false;
-                    }
-                    if scope.break_flag {
-                        scope.break_flag = false;
-                        break;
+                    if let Scope::Loop {
+                        continue_flag,
+                        break_flag,
+                    } = self.scopes.last_mut().expect("Should be some")
+                    {
+                        if *continue_flag {
+                            *continue_flag = false;
+                        }
+                        if *break_flag {
+                            *break_flag = false;
+                            break;
+                        }
                     }
                     let cond_value = self.eval(condition)?;
-                    if !Self::is_truthy(&cond_value) {
+                    if !cond_value.is_truthy() {
                         break;
                     }
                 }
@@ -149,9 +173,7 @@ impl<'a> Interpreter<'a> {
                 update,
                 body,
             } => {
-                self.scopes.push(Scope {
-                    in_switch: false,
-                    in_loop: true,
+                self.scopes.push(Scope::Loop {
                     continue_flag: false,
                     break_flag: false,
                 });
@@ -162,18 +184,23 @@ impl<'a> Interpreter<'a> {
                 loop {
                     if let Some(cond_node) = condition {
                         let cond_value = self.eval(cond_node)?;
-                        if !Self::is_truthy(&cond_value) {
+                        if !cond_value.is_truthy() {
                             break;
                         }
                     }
                     result = self.eval(body)?;
-                    let scope = self.scopes.last_mut().expect("Should be some");
-                    if scope.continue_flag {
-                        scope.continue_flag = false;
-                    }
-                    if scope.break_flag {
-                        scope.break_flag = false;
-                        break;
+                    if let Scope::Loop {
+                        continue_flag,
+                        break_flag,
+                    } = self.scopes.last_mut().expect("Should be some")
+                    {
+                        if *continue_flag {
+                            *continue_flag = false;
+                        }
+                        if *break_flag {
+                            *break_flag = false;
+                            break;
+                        }
                     }
                     if let Some(update_node) = update {
                         self.eval(update_node)?;
@@ -183,29 +210,52 @@ impl<'a> Interpreter<'a> {
                 Ok(result)
             }
             Node::Continue => match self.scopes.last_mut() {
-                Some(scope) => {
-                    if !scope.in_loop {
-                        return Err(String::from("Interpreter: 'continue' used outside of loop"));
-                    }
-                    scope.continue_flag = true;
+                Some(Scope::Loop { continue_flag, .. }) => {
+                    *continue_flag = true;
                     Ok(self.previous_value.take().unwrap_or(Value::Undefined))
                 }
+                Some(_) => Err(String::from("Interpreter: 'continue' used outside of loop")),
                 None => Err(String::from("Interpreter: 'continue' used outside of loop")),
             },
             Node::Break => match self.scopes.last_mut() {
-                Some(scope) => {
-                    if !scope.in_loop && !scope.in_switch {
-                        return Err(String::from(
-                            "Interpreter: 'break' used outside of loop or switch",
-                        ));
-                    }
-                    scope.break_flag = true;
+                Some(Scope::Loop { break_flag, .. }) | Some(Scope::Switch { break_flag }) => {
+                    *break_flag = true;
                     Ok(self.previous_value.take().unwrap_or(Value::Undefined))
                 }
+                Some(_) => Err(String::from(
+                    "Interpreter: 'break' used outside of loop or switch",
+                )),
                 None => Err(String::from(
                     "Interpreter: 'break' used outside of loop or switch",
                 )),
             },
+            Node::FunctionDefinition {
+                name,
+                arguments,
+                body,
+            } => {
+                let func_value = Value::Function {
+                    arguments: arguments.clone(),
+                    body: body.clone(),
+                };
+                self.env.insert(name.clone(), func_value.clone());
+                Ok(func_value)
+            }
+            Node::Return(value) => {
+                let ret_value = if let Some(ret_node) = value {
+                    self.eval(ret_node)?
+                } else {
+                    Value::Undefined
+                };
+                if let Some(Scope::Function { return_value }) = self.scopes.last_mut() {
+                    *return_value = Some(ret_value);
+                    Ok(self.previous_value.take().unwrap_or(Value::Undefined))
+                } else {
+                    Err(String::from(
+                        "Interpreter: 'return' used outside of function",
+                    ))
+                }
+            }
 
             Node::Value(value) => Ok(value.clone()),
             Node::Variable(variable) => match self.env.get(variable) {
@@ -219,6 +269,23 @@ impl<'a> Interpreter<'a> {
                     arg_values.push(self.eval(arg)?);
                 }
                 match func_value {
+                    Value::Function { arguments, body } => {
+                        let mut func_env = self.env.clone();
+                        for (i, arg_name) in arguments.iter().enumerate() {
+                            let arg_value = arg_values.get(i).cloned().unwrap_or(Value::Undefined);
+                            func_env.insert(arg_name.clone(), arg_value);
+                        }
+                        let mut func_env = self.env.clone();
+                        for (i, arg_name) in arguments.iter().enumerate() {
+                            func_env.insert(arg_name.clone(), arg_values[i].clone());
+                        }
+                        let mut func_interpreter = Interpreter::new(&mut func_env);
+                        func_interpreter
+                            .scopes
+                            .push(Scope::Function { return_value: None });
+                        let result = func_interpreter.eval(&body)?;
+                        Ok(result)
+                    }
                     Value::NativeFunction(func) => func(arg_values),
                     _ => Err(String::from(
                         "Interpreter: trying to call a non-function value",
@@ -270,7 +337,7 @@ impl<'a> Interpreter<'a> {
                 else_branch,
             } => {
                 let cond_value = self.eval(condition)?;
-                if Self::is_truthy(&cond_value) {
+                if cond_value.is_truthy() {
                     self.eval(then_branch)
                 } else {
                     self.eval(else_branch)
@@ -283,7 +350,7 @@ impl<'a> Interpreter<'a> {
             },
             Node::UnaryLogicalNot(unary) => {
                 let val = self.eval(unary)?;
-                Ok(Value::Boolean(!Self::is_truthy(&val)))
+                Ok(Value::Boolean(!val.is_truthy()))
             }
             Node::UnaryPreIncrement(unary) => match &**unary {
                 Node::Variable(var_name) => {
@@ -422,14 +489,14 @@ impl<'a> Interpreter<'a> {
 
             Node::LogicalAnd(lhs, rhs) => {
                 let lhs_val = self.eval(lhs)?;
-                if !Self::is_truthy(&lhs_val) {
+                if !lhs_val.is_truthy() {
                     return Ok(lhs_val);
                 }
                 self.eval(rhs)
             }
             Node::LogicalOr(lhs, rhs) => {
                 let lhs_val = self.eval(lhs)?;
-                if Self::is_truthy(&lhs_val) {
+                if lhs_val.is_truthy() {
                     return Ok(lhs_val);
                 }
                 self.eval(rhs)
@@ -572,16 +639,5 @@ impl<'a> Interpreter<'a> {
             _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
         }
         Ok(result)
-    }
-
-    fn is_truthy(value: &Value) -> bool {
-        match value {
-            Value::Undefined => false,
-            Value::Null => false,
-            Value::Boolean(b) => *b,
-            Value::Number(n) => *n != 0.0,
-            Value::String(s) => !s.is_empty(),
-            Value::NativeFunction(_) => true,
-        }
     }
 }
