@@ -170,6 +170,37 @@ fn test_assingments() {
 }
 
 #[test]
+fn test_ternary() {
+    assert_js(Value::Number(10.0), "true ? 10 : 20");
+    assert_js(Value::Number(20.0), "false ? 10 : 20");
+    assert_js(Value::String(String::from("yes")), "true ? 'yes' : 'no'");
+    assert_js(Value::String(String::from("no")), "false ? 'yes' : 'no'");
+    assert_js(Value::Number(20.0), "false ? 10 : (true ? 20 : 30)");
+    assert_js(Value::Number(20.0), "true ? (false ? 10 : 20) : 30");
+    assert_js(Value::Number(15.0), "true ? (true ? 15 : 10) : 20");
+    assert_js(Value::Number(10.0), "true ? (false ? 15 : 10) : 20");
+    assert_js(Value::Number(20.0), "false ? (true ? 15 : 10) : 20");
+    assert_js(Value::Number(25.0), "true ? (5 > 3 ? 25 : 5) : 10");
+    assert_js(
+        Value::Number(25.0),
+        "true ? (5 > 3 ? 25 : 5) : (5 < 3 ? 15 : 10)",
+    );
+    assert_js(Value::Number(10.0), "5 > 10 ? 20 : (3 < 5 ? 10 : 15)");
+    assert_js(
+        Value::Number(50.0),
+        "true ? (true ? (true ? 50 : 40) : 30) : 20",
+    );
+    assert_js(
+        Value::Boolean(true),
+        "true ? (5 > 3 ? true : false) : false",
+    );
+    assert_js(
+        Value::Number(7.0),
+        "5 > 3 ? (2 < 8 ? 7 : 6) : (1 > 0 ? 5 : 4)",
+    );
+}
+
+#[test]
 fn test_statements() {
     assert_js(Value::Number(40.0), "20;30;40");
     assert_js(Value::Number(91.0), "34,  48,91");

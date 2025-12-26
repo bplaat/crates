@@ -10,6 +10,8 @@ pub(crate) enum Token {
     LeftParen,
     RightParen,
     Comma,
+    Question,
+    Colon,
     Semicolon,
 
     Undefined,
@@ -77,7 +79,7 @@ const KEYWORDS: [Keyword; 4] = [
 ];
 
 // NOTE: Sort by length descending to match longest first
-const SYMBOLS: [Keyword; 41] = [
+const SYMBOLS: [Keyword; 43] = [
     Keyword::new(">>>=", Token::UnsignedRightShiftAssign),
     Keyword::new(">>>", Token::UnsignedRightShift),
     Keyword::new("===", Token::StrictEquals),
@@ -105,6 +107,8 @@ const SYMBOLS: [Keyword; 41] = [
     Keyword::new("(", Token::LeftParen),
     Keyword::new(")", Token::RightParen),
     Keyword::new(",", Token::Comma),
+    Keyword::new("?", Token::Question),
+    Keyword::new(":", Token::Colon),
     Keyword::new(";", Token::Semicolon),
     Keyword::new("=", Token::Assign),
     Keyword::new("+", Token::Add),
