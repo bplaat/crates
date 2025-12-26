@@ -21,6 +21,10 @@ pub(crate) enum Token {
     Variable(String),
     Boolean(bool),
 
+    Var,
+    Let,
+    Const,
+
     Assign,
     AddAssign,
     SubtractAssign,
@@ -72,12 +76,15 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 5] = [
+const KEYWORDS: [Keyword; 8] = [
     Keyword::new("undefined", Token::Undefined),
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
     Keyword::new("false", Token::Boolean(false)),
     Keyword::new("typeof", Token::Typeof),
+    Keyword::new("var", Token::Var),
+    Keyword::new("let", Token::Let),
+    Keyword::new("const", Token::Const),
 ];
 
 // NOTE: Sort by length descending to match longest first
