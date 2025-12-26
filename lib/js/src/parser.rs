@@ -27,7 +27,7 @@ pub(crate) enum Node {
     SignedRightShiftAssign(Box<Node>, Box<Node>),
     UnsignedRightShiftAssign(Box<Node>, Box<Node>),
 
-    Tenary {
+    Ternary {
         condition: Box<Node>,
         if_branch: Box<Node>,
         else_branch: Box<Node>,
@@ -117,17 +117,17 @@ impl<'a> Parser<'a> {
 
         match self.peek_at(1) {
             Some(Token::Assign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::Assign(Box::new(lhs), Box::new(self.assign()?)))
             }
             Some(Token::AddAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::AddAssign(Box::new(lhs), Box::new(self.assign()?)))
             }
             Some(Token::SubtractAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::SubtractAssign(
                     Box::new(lhs),
@@ -135,7 +135,7 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::MultiplyAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::MultiplyAssign(
                     Box::new(lhs),
@@ -143,12 +143,12 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::DivideAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::DivideAssign(Box::new(lhs), Box::new(self.assign()?)))
             }
             Some(Token::RemainderAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::RemainderAssign(
                     Box::new(lhs),
@@ -156,7 +156,7 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::ExponentiationAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::ExponentiationAssign(
                     Box::new(lhs),
@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::BitwiseAndAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::BitwiseAndAssign(
                     Box::new(lhs),
@@ -172,7 +172,7 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::BitwiseOrAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::BitwiseOrAssign(
                     Box::new(lhs),
@@ -180,7 +180,7 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::BitwiseXorAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::BitwiseXorAssign(
                     Box::new(lhs),
@@ -188,7 +188,7 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::LeftShiftAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::LeftShiftAssign(
                     Box::new(lhs),
@@ -196,7 +196,7 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::SignedRightShiftAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::SignedRightShiftAssign(
                     Box::new(lhs),
@@ -204,26 +204,26 @@ impl<'a> Parser<'a> {
                 ))
             }
             Some(Token::UnsignedRightShiftAssign) => {
-                let lhs = self.tenary()?;
+                let lhs = self.ternary()?;
                 self.next();
                 Ok(Node::UnsignedRightShiftAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            _ => self.tenary(),
+            _ => self.ternary(),
         }
     }
 
-    fn tenary(&mut self) -> Result<Node, String> {
+    fn ternary(&mut self) -> Result<Node, String> {
         let condition = self.logical()?;
         if let Token::Question = self.peek() {
             self.next();
-            let if_branch = self.tenary()?;
+            let if_branch = self.ternary()?;
             if let Token::Colon = self.peek() {
                 self.next();
-                let else_branch = self.tenary()?;
-                Ok(Node::Tenary {
+                let else_branch = self.ternary()?;
+                Ok(Node::Ternary {
                     condition: Box::new(condition),
                     if_branch: Box::new(if_branch),
                     else_branch: Box::new(else_branch),
@@ -424,7 +424,7 @@ impl<'a> Parser<'a> {
         match self.peek() {
             Token::LeftParen => {
                 self.next();
-                let node = self.tenary()?;
+                let node = self.ternary()?;
                 self.next();
                 Ok(node)
             }

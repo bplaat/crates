@@ -73,7 +73,7 @@ impl<'a> Interpreter<'a> {
                 "unsigned right shift",
             ),
 
-            Node::Tenary {
+            Node::Ternary {
                 condition,
                 if_branch,
                 else_branch,
