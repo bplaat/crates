@@ -20,6 +20,21 @@ pub(crate) enum Node {
         cases: Vec<(Node, Node)>,
         default: Option<Box<Node>>,
     },
+    While {
+        condition: Box<Node>,
+        body: Box<Node>,
+    },
+    DoWhile {
+        body: Box<Node>,
+        condition: Box<Node>,
+    },
+    For {
+        init: Option<Box<Node>>,
+        condition: Option<Box<Node>>,
+        update: Option<Box<Node>>,
+        body: Box<Node>,
+    },
+    Continue,
     Break,
 
     Value(Value),
@@ -71,6 +86,10 @@ pub(crate) enum Node {
     UnaryMinus(Box<Node>),
     UnaryLogicalNot(Box<Node>),
     UnaryTypeof(Box<Node>),
+    UnaryPreIncrement(Box<Node>),
+    UnaryPreDecrement(Box<Node>),
+    UnaryPostIncrement(Box<Node>),
+    UnaryPostDecrement(Box<Node>),
 }
 
 pub(crate) struct Parser<'a> {
@@ -106,18 +125,22 @@ impl<'a> Parser<'a> {
         let mut nodes = Vec::new();
         loop {
             match self.peek() {
-                Token::Case | Token::Default | Token::RightBrace => break,
+                Token::Case | Token::Default | Token::RightBrace | Token::Eof => break,
                 _ => nodes.push(self.statement()?),
             }
+
+            // Automatic Semicolon Insertion (ASI) rules
             match self.peek() {
-                Token::Comma => {
-                    self.next();
-                }
                 Token::Semicolon => {
                     self.next();
                 }
-                _ => {
+                Token::RightBrace | Token::Eof => {
+                    // ASI: semicolon inserted before }, EOF
                     break;
+                }
+                _ => {
+                    // ASI: semicolon inserted at end of line (we assume line breaks here)
+                    continue;
                 }
             }
         }
@@ -240,11 +263,122 @@ impl<'a> Parser<'a> {
                     Err(String::from("Parser: expected '(' after 'switch'"))
                 }
             }
+            Token::While => {
+                self.next();
+                if let Token::LeftParen = self.peek() {
+                    self.next();
+                    let condition = self.ternary()?;
+                    if let Token::RightParen = self.peek() {
+                        self.next();
+                        let body = self.block()?;
+                        Ok(Node::While {
+                            condition: Box::new(condition),
+                            body: Box::new(body),
+                        })
+                    } else {
+                        Err(String::from("Parser: expected ')' after while condition"))
+                    }
+                } else {
+                    Err(String::from("Parser: expected '(' after 'while'"))
+                }
+            }
+            Token::Do => {
+                self.next();
+                let body = self.block()?;
+                if let Token::While = self.peek() {
+                    self.next();
+                    if let Token::LeftParen = self.peek() {
+                        self.next();
+                        let condition = self.ternary()?;
+                        if let Token::RightParen = self.peek() {
+                            self.next();
+                            Ok(Node::DoWhile {
+                                body: Box::new(body),
+                                condition: Box::new(condition),
+                            })
+                        } else {
+                            Err(String::from(
+                                "Parser: expected ')' after do-while condition",
+                            ))
+                        }
+                    } else {
+                        Err(String::from(
+                            "Parser: expected '(' after 'while' in do-while",
+                        ))
+                    }
+                } else {
+                    Err(String::from("Parser: expected 'while' after do block"))
+                }
+            }
+            Token::For => {
+                self.next();
+                if let Token::LeftParen = self.peek() {
+                    self.next();
+                    let init = if let Token::Semicolon = self.peek() {
+                        None
+                    } else {
+                        Some(self.comma()?)
+                    };
+                    if let Token::Semicolon = self.peek() {
+                        self.next();
+                        let condition = if let Token::Semicolon = self.peek() {
+                            None
+                        } else {
+                            Some(self.comma()?)
+                        };
+                        if let Token::Semicolon = self.peek() {
+                            self.next();
+                            let update = if let Token::RightParen = self.peek() {
+                                None
+                            } else {
+                                Some(self.comma()?)
+                            };
+                            if let Token::RightParen = self.peek() {
+                                self.next();
+                                let body = self.block()?;
+
+                                Ok(Node::For {
+                                    init: init.map(Box::new),
+                                    condition: condition.map(Box::new),
+                                    update: update.map(Box::new),
+                                    body: Box::new(body),
+                                })
+                            } else {
+                                Err(String::from("Parser: expected ')' after for loop"))
+                            }
+                        } else {
+                            Err(String::from("Parser: expected ';' after for condition"))
+                        }
+                    } else {
+                        Err(String::from("Parser: expected ';' after for init"))
+                    }
+                } else {
+                    Err(String::from("Parser: expected '(' after 'for'"))
+                }
+            }
             Token::Break => {
                 self.next();
                 Ok(Node::Break)
             }
-            _ => self.assign(),
+            Token::Continue => {
+                self.next();
+                Ok(Node::Continue)
+            }
+            _ => self.comma(),
+        }
+    }
+
+    fn comma(&mut self) -> Result<Node, String> {
+        let node = self.assign()?;
+        if let Token::Comma = self.peek() {
+            let mut nodes = vec![node];
+            while let Token::Comma = self.peek() {
+                self.next();
+                nodes.push(self.assign()?);
+            }
+            Ok(Node::Nodes(nodes))
+        } else {
+            Ok(node)
         }
     }
 
@@ -551,6 +685,14 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(Node::UnaryLogicalNot(Box::new(self.unary()?)))
             }
+            Token::Increment => {
+                self.next();
+                Ok(Node::UnaryPreIncrement(Box::new(self.unary()?)))
+            }
+            Token::Decrement => {
+                self.next();
+                Ok(Node::UnaryPreDecrement(Box::new(self.unary()?)))
+            }
             Token::Typeof => {
                 self.next();
                 Ok(Node::UnaryTypeof(Box::new(self.unary()?)))
@@ -593,7 +735,15 @@ impl<'a> Parser<'a> {
             Token::Variable(variable) => {
                 let node = Node::Variable(variable.clone());
                 self.next();
-                Ok(node)
+                if let Token::Increment = self.peek() {
+                    self.next();
+                    Ok(Node::UnaryPostIncrement(Box::new(node)))
+                } else if let Token::Decrement = self.peek() {
+                    self.next();
+                    Ok(Node::UnaryPostDecrement(Box::new(node)))
+                } else {
+                    Ok(node)
+                }
             }
             _ => Err(format!("Parser: unknown node type: {:?}", self.peek())),
         }
