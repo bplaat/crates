@@ -273,6 +273,21 @@ impl<'a> Interpreter<'a> {
     {
         let lhs_val = self.eval(lhs)?;
         let rhs_val = self.eval(rhs)?;
+
+        // Handle string concatenation for addition
+        if op_name == "addition"
+            && let (Value::String(a), Value::String(b)) = (&lhs_val, &rhs_val)
+        {
+            let result = Value::String(format!("{}{}", a, b));
+            match lhs {
+                Node::Variable(variable) => {
+                    self.env.insert(variable.to_string(), result.clone());
+                }
+                _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
+            }
+            return Ok(result);
+        }
+
         let result = match (lhs_val, rhs_val) {
             (Value::Number(a), Value::Number(b)) => Value::Number(op(a, b)),
             _ => return Err(format!("Interpreter: {} assign on non-numbers", op_name)),
