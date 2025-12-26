@@ -15,6 +15,12 @@ pub(crate) enum Node {
         then_branch: Box<Node>,
         else_branch: Option<Box<Node>>,
     },
+    Switch {
+        expression: Box<Node>,
+        cases: Vec<(Node, Node)>,
+        default: Option<Box<Node>>,
+    },
+    Break,
 
     Value(Value),
     Variable(String),
@@ -99,7 +105,10 @@ impl<'a> Parser<'a> {
     fn statements(&mut self) -> Result<Node, String> {
         let mut nodes = Vec::new();
         loop {
-            nodes.push(self.statement()?);
+            match self.peek() {
+                Token::Case | Token::Default | Token::RightBrace => break,
+                _ => nodes.push(self.statement()?),
+            }
             match self.peek() {
                 Token::Comma => {
                     self.next();
@@ -115,6 +124,21 @@ impl<'a> Parser<'a> {
         Ok(Node::Nodes(nodes))
     }
 
+    fn block(&mut self) -> Result<Node, String> {
+        if let Token::LeftBrace = self.peek() {
+            self.next();
+            let node = self.statements()?;
+            if let Token::RightBrace = self.peek() {
+                self.next();
+                Ok(node)
+            } else {
+                Err(String::from("Parser: expected '}' at end of block"))
+            }
+        } else {
+            self.statement()
+        }
+    }
+
     fn statement(&mut self) -> Result<Node, String> {
         match self.peek() {
             Token::If => {
@@ -124,28 +148,10 @@ impl<'a> Parser<'a> {
                     let condition = self.ternary()?;
                     if let Token::RightParen = self.peek() {
                         self.next();
-                        let then_branch = if let Token::LeftBrace = self.peek() {
-                            self.next();
-                            let node = self.statements()?;
-                            if let Token::RightBrace = self.peek() {
-                                self.next();
-                            }
-                            node
-                        } else {
-                            self.statement()?
-                        };
+                        let then_branch = self.block()?;
                         let else_branch = if let Token::Else = self.peek() {
                             self.next();
-                            Some(Box::new(if let Token::LeftBrace = self.peek() {
-                                self.next();
-                                let node = self.statements()?;
-                                if let Token::RightBrace = self.peek() {
-                                    self.next();
-                                }
-                                node
-                            } else {
-                                self.statement()?
-                            }))
+                            Some(Box::new(self.block()?))
                         } else {
                             None
                         };
@@ -160,6 +166,83 @@ impl<'a> Parser<'a> {
                 } else {
                     Err(String::from("Parser: expected '(' after 'if'"))
                 }
+            }
+            Token::Switch => {
+                self.next();
+                if let Token::LeftParen = self.peek() {
+                    self.next();
+                    let expression = self.ternary()?;
+                    if let Token::RightParen = self.peek() {
+                        self.next();
+                        if let Token::LeftBrace = self.peek() {
+                            self.next();
+                            let mut cases = Vec::new();
+                            let mut default = None;
+                            loop {
+                                match self.peek() {
+                                    Token::Case => {
+                                        self.next();
+                                        let case_expr = self.ternary()?;
+                                        if let Token::Colon = self.peek() {
+                                            self.next();
+                                            let case_body = if let Token::LeftBrace = self.peek() {
+                                                self.block()?
+                                            } else {
+                                                self.statements()?
+                                            };
+                                            cases.push((case_expr, case_body));
+                                        } else {
+                                            return Err(String::from(
+                                                "Parser: expected ':' after case expression",
+                                            ));
+                                        }
+                                    }
+                                    Token::Default => {
+                                        self.next();
+                                        if let Token::Colon = self.peek() {
+                                            self.next();
+                                            let default_body = if let Token::LeftBrace = self.peek()
+                                            {
+                                                self.block()?
+                                            } else {
+                                                self.statements()?
+                                            };
+                                            default = Some(Box::new(default_body));
+                                        } else {
+                                            return Err(String::from(
+                                                "Parser: expected ':' after default",
+                                            ));
+                                        }
+                                    }
+                                    Token::RightBrace => {
+                                        self.next();
+                                        break;
+                                    }
+                                    _ => {
+                                        return Err(String::from(
+                                            "Parser: expected 'case', 'default', or '}' in switch statement",
+                                        ));
+                                    }
+                                }
+                            }
+                            Ok(Node::Switch {
+                                expression: Box::new(expression),
+                                cases,
+                                default,
+                            })
+                        } else {
+                            Err(String::from("Parser: expected '{' after switch expression"))
+                        }
+                    } else {
+                        Err(String::from("Parser: expected ')' after switch expression"))
+                    }
+                } else {
+                    Err(String::from("Parser: expected '(' after 'switch'"))
+                }
+            }
+            Token::Break => {
+                self.next();
+                Ok(Node::Break)
             }
             _ => self.assign(),
         }
@@ -512,7 +595,7 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(node)
             }
-            _ => Err(String::from("Parser: unknown node type")),
+            _ => Err(format!("Parser: unknown node type: {:?}", self.peek())),
         }
     }
 }

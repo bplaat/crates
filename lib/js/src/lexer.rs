@@ -28,6 +28,10 @@ pub(crate) enum Token {
     Const,
     If,
     Else,
+    Switch,
+    Case,
+    Default,
+    Break,
 
     Assign,
     AddAssign,
@@ -80,7 +84,7 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 10] = [
+const KEYWORDS: [Keyword; 14] = [
     Keyword::new("undefined", Token::Undefined),
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
@@ -91,6 +95,10 @@ const KEYWORDS: [Keyword; 10] = [
     Keyword::new("const", Token::Const),
     Keyword::new("if", Token::If),
     Keyword::new("else", Token::Else),
+    Keyword::new("switch", Token::Switch),
+    Keyword::new("case", Token::Case),
+    Keyword::new("default", Token::Default),
+    Keyword::new("break", Token::Break),
 ];
 
 // NOTE: Sort by length descending to match longest first
