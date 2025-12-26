@@ -237,4 +237,8 @@ fn test_statements() {
     assert_js(Value::Number(40.0), "a = 5,a * 8");
     assert_js(Value::Number(100.0), "a=10;b = 90;a + b");
     assert_js(Value::Number(40.0), "a=  b= 20,  a+b");
+    assert_js(
+        Value::String(String::from("Hello World")),
+        "a='Hello';a+=' World';a",
+    );
 }
