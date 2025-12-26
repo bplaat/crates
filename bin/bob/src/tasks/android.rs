@@ -470,7 +470,8 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
 pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
     let vars = AndroidVars::new(bobje);
 
-    let status = Command::new("adb")
+    // Try to install the APK
+    let output = Command::new("adb")
         .arg("install")
         .arg("-r")
         .arg(format!(
@@ -479,12 +480,39 @@ pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
             bobje.name,
             bobje.version
         ))
-        .status()
+        .output()
         .expect("Failed to execute adb");
-    if !status.success() {
-        exit(status.code().unwrap_or(1));
+
+    // When app signature doesn't match, uninstall and try again
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE") {
+            Command::new("adb")
+                .arg("uninstall")
+                .arg(&vars.id)
+                .status()
+                .expect("Failed to execute adb");
+
+            let status = Command::new("adb")
+                .arg("install")
+                .arg("-r")
+                .arg(format!(
+                    "{}/{}-{}.apk",
+                    bobje.out_dir(),
+                    bobje.name,
+                    bobje.version
+                ))
+                .status()
+                .expect("Failed to execute adb");
+            if !status.success() {
+                exit(status.code().unwrap_or(1));
+            }
+        } else {
+            exit(output.status.code().unwrap_or(1));
+        }
     }
 
+    // Launch the Main Activity
     let status = Command::new("adb")
         .arg("shell")
         .arg("am")
