@@ -10,6 +10,12 @@ use crate::lexer::Token;
 #[derive(Debug)]
 pub(crate) enum Node {
     Nodes(Vec<Node>),
+    If {
+        condition: Box<Node>,
+        then_branch: Box<Node>,
+        else_branch: Option<Box<Node>>,
+    },
+
     Value(Value),
     Variable(String),
 
@@ -29,7 +35,7 @@ pub(crate) enum Node {
 
     Ternary {
         condition: Box<Node>,
-        if_branch: Box<Node>,
+        then_branch: Box<Node>,
         else_branch: Box<Node>,
     },
 
@@ -75,7 +81,7 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn parse(&mut self) -> Result<Node, String> {
-        self.nodes()
+        self.statements()
     }
 
     fn peek(&self) -> &Token {
@@ -90,10 +96,10 @@ impl<'a> Parser<'a> {
         self.position += 1;
     }
 
-    fn nodes(&mut self) -> Result<Node, String> {
+    fn statements(&mut self) -> Result<Node, String> {
         let mut nodes = Vec::new();
         loop {
-            nodes.push(self.assign()?);
+            nodes.push(self.statement()?);
             match self.peek() {
                 Token::Comma => {
                     self.next();
@@ -107,6 +113,56 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(Node::Nodes(nodes))
+    }
+
+    fn statement(&mut self) -> Result<Node, String> {
+        match self.peek() {
+            Token::If => {
+                self.next();
+                if let Token::LeftParen = self.peek() {
+                    self.next();
+                    let condition = self.ternary()?;
+                    if let Token::RightParen = self.peek() {
+                        self.next();
+                        let then_branch = if let Token::LeftBrace = self.peek() {
+                            self.next();
+                            let node = self.statements()?;
+                            if let Token::RightBrace = self.peek() {
+                                self.next();
+                            }
+                            node
+                        } else {
+                            self.statement()?
+                        };
+                        let else_branch = if let Token::Else = self.peek() {
+                            self.next();
+                            Some(Box::new(if let Token::LeftBrace = self.peek() {
+                                self.next();
+                                let node = self.statements()?;
+                                if let Token::RightBrace = self.peek() {
+                                    self.next();
+                                }
+                                node
+                            } else {
+                                self.statement()?
+                            }))
+                        } else {
+                            None
+                        };
+                        Ok(Node::If {
+                            condition: Box::new(condition),
+                            then_branch: Box::new(then_branch),
+                            else_branch,
+                        })
+                    } else {
+                        Err(String::from("Parser: expected ')' after if condition"))
+                    }
+                } else {
+                    Err(String::from("Parser: expected '(' after 'if'"))
+                }
+            }
+            _ => self.assign(),
+        }
     }
 
     fn assign(&mut self) -> Result<Node, String> {
@@ -225,7 +281,7 @@ impl<'a> Parser<'a> {
                 let else_branch = self.ternary()?;
                 Ok(Node::Ternary {
                     condition: Box::new(condition),
-                    if_branch: Box::new(if_branch),
+                    then_branch: Box::new(if_branch),
                     else_branch: Box::new(else_branch),
                 })
             } else {

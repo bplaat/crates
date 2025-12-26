@@ -28,6 +28,20 @@ impl<'a> Interpreter<'a> {
                 }
                 Ok(result)
             }
+            Node::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let cond_value = self.eval(condition)?;
+                if Self::is_truthy(&cond_value) {
+                    self.eval(then_branch)
+                } else if let Some(else_branch) = else_branch {
+                    self.eval(else_branch)
+                } else {
+                    Ok(Value::Undefined)
+                }
+            }
 
             Node::Value(value) => Ok(value.clone()),
             Node::Variable(variable) => match self.env.get(variable) {
@@ -75,12 +89,12 @@ impl<'a> Interpreter<'a> {
 
             Node::Ternary {
                 condition,
-                if_branch,
+                then_branch,
                 else_branch,
             } => {
                 let cond_value = self.eval(condition)?;
                 if Self::is_truthy(&cond_value) {
-                    self.eval(if_branch)
+                    self.eval(then_branch)
                 } else {
                     self.eval(else_branch)
                 }

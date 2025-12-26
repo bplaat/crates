@@ -255,3 +255,25 @@ fn test_var_let_const() {
         "const greeting = 'Hello'; let target = ' JS'; greeting + target",
     );
 }
+
+#[test]
+fn test_if() {
+    assert_js(Value::Number(10.0), "if (true) { 10 } else { 20 }");
+    assert_js(Value::Number(20.0), "if (false) { 10 } else { 20 }");
+    assert_js(
+        Value::Number(15.0),
+        "let a = 15; if (a > 10) { a } else { 10 }",
+    );
+    assert_js(
+        Value::Number(8.0),
+        "let a = 8; if (a > 10) { 10 } else { a }",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "let a = 30; if (a < 20) { 20 } else if (a < 40) { a } else { 50 }",
+    );
+    assert_js(
+        Value::Number(50.0),
+        "let a = 50; if (a < 20) { 20 } else if (a < 40) { 30 } else { a }",
+    );
+}

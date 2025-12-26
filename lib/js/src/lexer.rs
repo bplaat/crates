@@ -9,6 +9,8 @@ pub(crate) enum Token {
     Eof,
     LeftParen,
     RightParen,
+    LeftBrace,
+    RightBrace,
     Comma,
     Question,
     Colon,
@@ -24,6 +26,8 @@ pub(crate) enum Token {
     Var,
     Let,
     Const,
+    If,
+    Else,
 
     Assign,
     AddAssign,
@@ -76,7 +80,7 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 8] = [
+const KEYWORDS: [Keyword; 10] = [
     Keyword::new("undefined", Token::Undefined),
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
@@ -85,10 +89,12 @@ const KEYWORDS: [Keyword; 8] = [
     Keyword::new("var", Token::Var),
     Keyword::new("let", Token::Let),
     Keyword::new("const", Token::Const),
+    Keyword::new("if", Token::If),
+    Keyword::new("else", Token::Else),
 ];
 
 // NOTE: Sort by length descending to match longest first
-const SYMBOLS: [Keyword; 43] = [
+const SYMBOLS: [Keyword; 45] = [
     Keyword::new(">>>=", Token::UnsignedRightShiftAssign),
     Keyword::new(">>>", Token::UnsignedRightShift),
     Keyword::new("===", Token::StrictEquals),
@@ -115,6 +121,8 @@ const SYMBOLS: [Keyword; 43] = [
     Keyword::new("!=", Token::NotEquals),
     Keyword::new("(", Token::LeftParen),
     Keyword::new(")", Token::RightParen),
+    Keyword::new("{", Token::LeftBrace),
+    Keyword::new("}", Token::RightBrace),
     Keyword::new(",", Token::Comma),
     Keyword::new("?", Token::Question),
     Keyword::new(":", Token::Colon),
