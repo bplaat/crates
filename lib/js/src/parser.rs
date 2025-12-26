@@ -39,6 +39,7 @@ pub(crate) enum Node {
 
     Value(Value),
     Variable(String),
+    FunctionCall(Box<Node>, Vec<Node>),
 
     Assign(Box<Node>, Box<Node>),
     AddAssign(Box<Node>, Box<Node>),
@@ -735,7 +736,35 @@ impl<'a> Parser<'a> {
             Token::Variable(variable) => {
                 let node = Node::Variable(variable.clone());
                 self.next();
-                if let Token::Increment = self.peek() {
+
+                if let Token::LeftParen = self.peek() {
+                    // Function call
+                    self.next();
+                    let mut args = Vec::new();
+                    if let Token::RightParen = self.peek() {
+                        // No arguments
+                        self.next();
+                    } else {
+                        loop {
+                            args.push(self.ternary()?);
+                            match self.peek() {
+                                Token::Comma => {
+                                    self.next();
+                                }
+                                Token::RightParen => {
+                                    self.next();
+                                    break;
+                                }
+                                _ => {
+                                    return Err(String::from(
+                                        "Parser: expected ',' or ')' in function call",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    Ok(Node::FunctionCall(Box::new(node), args))
+                } else if let Token::Increment = self.peek() {
                     self.next();
                     Ok(Node::UnaryPostIncrement(Box::new(node)))
                 } else if let Token::Decrement = self.peek() {

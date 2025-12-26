@@ -478,3 +478,9 @@ fn test_loops() {
         "let sum = 0; for (let i = 0; i < 3; i++) { if (i == 2) break; for (let j = 0; j < 3; j++) { sum++; } } sum",
     );
 }
+
+#[test]
+fn test_call_native_function() {
+    assert_js(Value::Number(15.0), r#"sum(7, 8);"#);
+    assert_js(Value::Number(56.0), r#"sum(20, 30, 1, 2, 3);"#);
+}
