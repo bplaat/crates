@@ -32,28 +32,57 @@ fn test_keywords() {
 }
 
 #[test]
-fn test_arithmetic() {
-    assert_js(Value::Number(0), "0");
-    assert_js(Value::Number(42), "42");
-    assert_js(Value::Number(21), "5+20-4");
-    assert_js(Value::Number(41), " 12 + 34 - 5 ");
-    assert_js(Value::Number(47), "5+6*7");
-    assert_js(Value::Number(15), "5*(9-6)");
-    assert_js(Value::Number(4), "(3 + 5) / 2");
-    assert_js(Value::Number(16), "2 ** 4");
-    assert_js(Value::Number(9), "2 ** 3 + 1");
-    assert_js(Value::Number(0), "36 / 0");
-    assert_js(Value::Number(2), "20 % 3");
-    assert_js(Value::Number(34), "--34");
-    assert_js(Value::Number(-40), "---40");
-    assert_js(Value::Number(1), "5 & 3");
-    assert_js(Value::Number(7), "5 | 3");
-    assert_js(Value::Number(6), "5 ^ 3");
-    assert_js(Value::Number(16), "8 << 1");
-    assert_js(Value::Number(4), "8 >> 1");
-    assert_js(Value::Number(0), "8 >> 4");
-    assert_js(Value::Number(4), "8 >>> 1");
-    assert_js(Value::Number(0), "8 >>> 4");
+fn test_int_arithmetic() {
+    assert_js(Value::Number(0.0), "0");
+    assert_js(Value::Number(42.0), "42");
+    assert_js(Value::Number(21.0), "5+20-4");
+    assert_js(Value::Number(41.0), " 12 + 34 - 5 ");
+    assert_js(Value::Number(47.0), "5+6*7");
+    assert_js(Value::Number(15.0), "5*(9-6)");
+    assert_js(Value::Number(4.0), "(3 + 5) / 2");
+    assert_js(Value::Number(16.0), "2 ** 4");
+    assert_js(Value::Number(9.0), "2 ** 3 + 1");
+    assert_js(Value::Number(0.0), "36 / 0");
+    assert_js(Value::Number(2.0), "20 % 3");
+    assert_js(Value::Number(34.0), "--34");
+    assert_js(Value::Number(-40.0), "---40");
+    assert_js(Value::Number(1.0), "5 & 3");
+    assert_js(Value::Number(7.0), "5 | 3");
+    assert_js(Value::Number(6.0), "5 ^ 3");
+    assert_js(Value::Number(16.0), "8 << 1");
+    assert_js(Value::Number(4.0), "8 >> 1");
+    assert_js(Value::Number(0.0), "8 >> 4");
+    assert_js(Value::Number(4.0), "8 >>> 1");
+    assert_js(Value::Number(0.0), "8 >>> 4");
+}
+
+#[test]
+fn test_float_arithmetic() {
+    assert_js(Value::Number(3.19), "3.19");
+    assert_js(Value::Number(2.5), "5.0 / 2.0");
+    assert_js(Value::Number(7.5), "2.5 + 5.0");
+    assert_js(Value::Number(2.5), "7.5 - 5.0");
+    assert_js(Value::Number(15.5), "3.1 * 5.0");
+    assert_js(Value::Number(2.0), "10.0 / 5.0");
+    assert_js(Value::Number(1.5), "6.5 % 2.5");
+    assert_js(Value::Number(8.0), "2.0 ** 3.0");
+    assert_js(Value::Number(0.125), "1.0 / 8.0");
+    assert_js(Value::Number(12.34), "10.0 + 2.34");
+    assert_js(Value::Number(0.1), "0.5 / 5.0");
+    assert_js(Value::Number(-3.5), "-3.5");
+    assert_js(Value::Number(5.5), "2.75 * 2.0");
+    assert_js(Value::Number(99.99), "99.99");
+    assert_js(Value::Number(0.001), "0.001");
+    assert_js(Value::Number(1000.5), "500.25 + 500.25");
+    assert_js(Value::Number(1.0), "1.5 - 0.5");
+    assert_js(Value::Number(10.0), "(2.5 + 2.5) * 2.0");
+    assert_js(Value::Number(3.0), "7.5 / 2.5");
+    assert_js(Value::Number(1.0), "5.7 & 3.2");
+    assert_js(Value::Number(7.0), "5.7 | 3.2");
+    assert_js(Value::Number(6.0), "5.7 ^ 3.2");
+    assert_js(Value::Number(16.0), "8.9 << 1.1");
+    assert_js(Value::Number(4.0), "8.9 >> 1.5");
+    assert_js(Value::Number(4.0), "8.9 >>> 1.5");
 }
 
 #[test]
@@ -108,44 +137,44 @@ fn test_strings() {
 
 #[test]
 fn test_assingments() {
-    assert_js(Value::Number(10), "a = 10");
-    assert_js(Value::Number(15), "a = 5; a += 10");
-    assert_js(Value::Number(5), "a = 15; a -= 10");
-    assert_js(Value::Number(50), "a = 5; a *= 10");
-    assert_js(Value::Number(2), "a = 20; a /= 10");
-    assert_js(Value::Number(2), "a = 20; a %= 6");
-    assert_js(Value::Number(32), "a = 2; a **= 5");
-    assert_js(Value::Number(1), "a = 5; a &= 3");
-    assert_js(Value::Number(7), "a = 5; a |= 3");
-    assert_js(Value::Number(6), "a = 5; a ^= 3");
-    assert_js(Value::Number(16), "a = 8; a <<= 1");
-    assert_js(Value::Number(4), "a = 8; a >>= 1");
-    assert_js(Value::Number(4), "a = 8; a >>>= 1");
-    assert_js(Value::Number(4), "a = 16; a >>= 2");
-    assert_js(Value::Number(15), "a = 5; b = 10; a + b");
-    assert_js(Value::Number(15), "a = 20; b = 5; a - b");
-    assert_js(Value::Number(50), "a = 5; b = 10; a * b");
-    assert_js(Value::Number(4), "a = 20; b = 5; a / b");
-    assert_js(Value::Number(2), "a = 17; b = 5; a % b");
-    assert_js(Value::Number(32), "a = 2; b = 5; a ** b");
-    assert_js(Value::Number(1), "a = 5; b = 3; a & b");
-    assert_js(Value::Number(7), "a = 5; b = 3; a | b");
-    assert_js(Value::Number(6), "a = 5; b = 3; a ^ b");
-    assert_js(Value::Number(20), "a = 5; b = 2; a << b");
-    assert_js(Value::Number(1), "a = 5; b = 2; a >> b");
-    assert_js(Value::Number(1), "a = 5; b = 2; a >>> b");
-    assert_js(Value::Number(30), "a = 10; b = 5; c = 15; a + b + c");
-    assert_js(Value::Number(100), "a = 10; a += 20; a += 30; a += 40");
-    assert_js(Value::Number(24), "a = 6; b = 4; a *= b");
-    assert_js(Value::Number(3), "a = 15; b = 5; a /= b");
+    assert_js(Value::Number(10.0), "a = 10");
+    assert_js(Value::Number(15.0), "a = 5; a += 10");
+    assert_js(Value::Number(5.0), "a = 15; a -= 10");
+    assert_js(Value::Number(50.0), "a = 5; a *= 10");
+    assert_js(Value::Number(2.0), "a = 20; a /= 10");
+    assert_js(Value::Number(2.0), "a = 20; a %= 6");
+    assert_js(Value::Number(32.0), "a = 2; a **= 5");
+    assert_js(Value::Number(1.0), "a = 5; a &= 3");
+    assert_js(Value::Number(7.0), "a = 5; a |= 3");
+    assert_js(Value::Number(6.0), "a = 5; a ^= 3");
+    assert_js(Value::Number(16.0), "a = 8; a <<= 1");
+    assert_js(Value::Number(4.0), "a = 8; a >>= 1");
+    assert_js(Value::Number(4.0), "a = 8; a >>>= 1");
+    assert_js(Value::Number(4.0), "a = 16; a >>= 2");
+    assert_js(Value::Number(15.0), "a = 5; b = 10; a + b");
+    assert_js(Value::Number(15.0), "a = 20; b = 5; a - b");
+    assert_js(Value::Number(50.0), "a = 5; b = 10; a * b");
+    assert_js(Value::Number(4.0), "a = 20; b = 5; a / b");
+    assert_js(Value::Number(2.0), "a = 17; b = 5; a % b");
+    assert_js(Value::Number(32.0), "a = 2; b = 5; a ** b");
+    assert_js(Value::Number(1.0), "a = 5; b = 3; a & b");
+    assert_js(Value::Number(7.0), "a = 5; b = 3; a | b");
+    assert_js(Value::Number(6.0), "a = 5; b = 3; a ^ b");
+    assert_js(Value::Number(20.0), "a = 5; b = 2; a << b");
+    assert_js(Value::Number(1.0), "a = 5; b = 2; a >> b");
+    assert_js(Value::Number(1.0), "a = 5; b = 2; a >>> b");
+    assert_js(Value::Number(30.0), "a = 10; b = 5; c = 15; a + b + c");
+    assert_js(Value::Number(100.0), "a = 10; a += 20; a += 30; a += 40");
+    assert_js(Value::Number(24.0), "a = 6; b = 4; a *= b");
+    assert_js(Value::Number(3.0), "a = 15; b = 5; a /= b");
 }
 
 #[test]
 fn test_statements() {
-    assert_js(Value::Number(40), "20;30;40");
-    assert_js(Value::Number(91), "34,  48,91");
-    assert_js(Value::Number(10), "a = 10");
-    assert_js(Value::Number(40), "a = 5,a * 8");
-    assert_js(Value::Number(100), "a=10;b = 90;a + b");
-    assert_js(Value::Number(40), "a=  b= 20,  a+b");
+    assert_js(Value::Number(40.0), "20;30;40");
+    assert_js(Value::Number(91.0), "34,  48,91");
+    assert_js(Value::Number(10.0), "a = 10");
+    assert_js(Value::Number(40.0), "a = 5,a * 8");
+    assert_js(Value::Number(100.0), "a=10;b = 90;a + b");
+    assert_js(Value::Number(40.0), "a=  b= 20,  a+b");
 }

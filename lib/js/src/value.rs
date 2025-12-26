@@ -5,7 +5,7 @@
  */
 
 /// Value
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// Undefined value
     Undefined,
@@ -14,7 +14,7 @@ pub enum Value {
     /// Boolean value
     Boolean(bool),
     /// Number value
-    Number(i64),
+    Number(f64),
     /// String value
     String(String),
 }

@@ -14,7 +14,7 @@ pub(crate) enum Token {
 
     Undefined,
     Null,
-    Number(i64),
+    Number(f64),
     String(String),
     Variable(String),
     Boolean(bool),
@@ -159,7 +159,7 @@ impl Lexer {
             if char.is_ascii_digit() {
                 let mut number = String::from(char);
                 while let Some(char) = self.peek() {
-                    if !char.is_ascii_digit() {
+                    if !char.is_ascii_digit() && *char != '.' {
                         break;
                     }
                     number.push(self.next().expect("Invalid number"));
