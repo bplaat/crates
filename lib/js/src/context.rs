@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use crate::interpreter::Interpreter;
-use crate::lexer::lexer;
+use crate::lexer::Lexer;
 use crate::parser::Parser;
 use crate::value::Value;
 
@@ -35,7 +35,7 @@ impl Context {
             println!("Text: {text}");
         }
 
-        let tokens = lexer(text)?;
+        let tokens = Lexer::new(text).tokens()?;
         if self.verbose {
             print!("Tokens: ");
             for token in &tokens {
@@ -44,7 +44,7 @@ impl Context {
             println!();
         }
 
-        let node = Parser::new(&tokens).node()?;
+        let node = Parser::new(&tokens).parse()?;
         if self.verbose {
             println!("Node: {node:?}");
         }

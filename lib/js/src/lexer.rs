@@ -19,6 +19,18 @@ pub(crate) enum Token {
     Boolean(bool),
 
     Assign,
+    AddAssign,
+    SubtractAssign,
+    MultiplyAssign,
+    DivideAssign,
+    RemainderAssign,
+    ExponentiationAssign,
+    BitwiseAndAssign,
+    BitwiseOrAssign,
+    BitwiseXorAssign,
+    LeftShiftAssign,
+    SignedRightShiftAssign,
+    UnsignedRightShiftAssign,
     Add,
     Subtract,
     Multiply,
@@ -63,10 +75,23 @@ const KEYWORDS: [Keyword; 4] = [
     Keyword::new("false", Token::Boolean(false)),
 ];
 
-const SYMBOLS: [Keyword; 29] = [
+// NOTE: Sort by length descending to match longest first
+const SYMBOLS: [Keyword; 41] = [
+    Keyword::new(">>>=", Token::UnsignedRightShiftAssign),
     Keyword::new(">>>", Token::UnsignedRightShift),
     Keyword::new("===", Token::StrictEquals),
     Keyword::new("!==", Token::StrictNotEquals),
+    Keyword::new(">>=", Token::SignedRightShiftAssign),
+    Keyword::new("<<=", Token::LeftShiftAssign),
+    Keyword::new("**=", Token::ExponentiationAssign),
+    Keyword::new("+=", Token::AddAssign),
+    Keyword::new("-=", Token::SubtractAssign),
+    Keyword::new("*=", Token::MultiplyAssign),
+    Keyword::new("/=", Token::DivideAssign),
+    Keyword::new("%=", Token::RemainderAssign),
+    Keyword::new("&=", Token::BitwiseAndAssign),
+    Keyword::new("|=", Token::BitwiseOrAssign),
+    Keyword::new("^=", Token::BitwiseXorAssign),
     Keyword::new("<<", Token::LeftShift),
     Keyword::new(">>", Token::SignedRightShift),
     Keyword::new("<=", Token::LessThenEquals),
@@ -95,69 +120,98 @@ const SYMBOLS: [Keyword; 29] = [
     Keyword::new("!", Token::LogicalNot),
 ];
 
-pub(crate) fn lexer(text: &str) -> Result<Vec<Token>, String> {
-    let mut tokens = Vec::new();
-    let mut chars = text.chars().peekable();
-    'char_loop: while let Some(char) = chars.next() {
-        if char.is_whitespace() {
-            continue;
+#[derive(Clone)]
+pub(crate) struct Lexer {
+    chars: Vec<char>,
+    position: usize,
+}
+
+impl Lexer {
+    pub(crate) fn new(text: &str) -> Self {
+        Self {
+            chars: text.chars().collect(),
+            position: 0,
         }
+    }
 
-        if char.is_ascii_digit() {
-            let mut number = String::from(char);
-            while let Some(char) = chars.peek() {
-                if !char.is_ascii_digit() {
-                    break;
-                }
-                number.push(chars.next().expect("Invalid number"));
+    fn peek(&self) -> Option<&char> {
+        self.chars.get(self.position)
+    }
+
+    fn peek_at(&self, n: usize) -> Option<&char> {
+        self.chars.get(self.position + n)
+    }
+
+    fn next(&mut self) -> Option<char> {
+        let ch = self.peek().cloned();
+        self.position += 1;
+        ch
+    }
+
+    pub(crate) fn tokens(&mut self) -> Result<Vec<Token>, String> {
+        let mut tokens = Vec::new();
+        'char_loop: while let Some(char) = self.next() {
+            if char.is_whitespace() {
+                continue;
             }
-            tokens.push(Token::Number(number.parse().expect("Invalid number")));
-            continue;
-        }
 
-        if char.is_alphabetic() {
-            let mut variable = String::from(char);
-            while let Some(char) = chars.peek() {
-                if !char.is_alphanumeric() {
-                    break;
+            if char.is_ascii_digit() {
+                let mut number = String::from(char);
+                while let Some(char) = self.peek() {
+                    if !char.is_ascii_digit() {
+                        break;
+                    }
+                    number.push(self.next().expect("Invalid number"));
                 }
-                variable.push(chars.next().expect("Invalid variable"));
+                tokens.push(Token::Number(number.parse().expect("Invalid number")));
+                continue;
             }
 
-            for keyword in &KEYWORDS {
-                if keyword.keyword == variable {
-                    tokens.push(keyword.token.clone());
-                    continue 'char_loop;
+            if char.is_alphabetic() {
+                let mut variable = String::from(char);
+                while let Some(char) = self.peek() {
+                    if !char.is_alphanumeric() {
+                        break;
+                    }
+                    variable.push(self.next().expect("Invalid variable"));
                 }
-            }
-            tokens.push(Token::Variable(variable));
-            continue;
-        }
 
-        'symbol_loop: for symbol in &SYMBOLS {
-            let mut symbol_chars = symbol.keyword.chars();
-            if char == symbol_chars.next().expect("Invalid symbol") {
-                for expected_char in symbol_chars {
-                    if let Some(next_char) = chars.peek() {
-                        if *next_char != expected_char {
-                            continue 'symbol_loop;
-                        }
-                    } else {
+                for keyword in &KEYWORDS {
+                    if keyword.keyword == variable {
+                        tokens.push(keyword.token.clone());
                         continue 'char_loop;
                     }
                 }
-
-                for _ in 0..(symbol.keyword.len() - 1) {
-                    chars.next();
-                }
-                tokens.push(symbol.token.clone());
-                continue 'char_loop;
+                tokens.push(Token::Variable(variable));
+                continue;
             }
+
+            'symbol_loop: for symbol in &SYMBOLS {
+                let mut symbol_chars = symbol.keyword.chars();
+                let x = symbol_chars.next().expect("Invalid symbol");
+                if char == x {
+                    for (i, expected_char) in symbol_chars.enumerate() {
+                        if let Some(next_char) = self.peek_at(i) {
+                            if *next_char != expected_char {
+                                continue 'symbol_loop;
+                            }
+                        } else {
+                            continue 'char_loop;
+                        }
+                    }
+
+                    for _ in 0..(symbol.keyword.len() - 1) {
+                        self.next();
+                    }
+                    tokens.push(symbol.token.clone());
+                    continue 'char_loop;
+                }
+            }
+
+            return Err(format!("Lexer: unknown character: {char}"));
         }
 
-        return Err(format!("Lexer: unknown character: {char}"));
+        tokens.push(Token::Eof);
+        Ok(tokens)
     }
-
-    tokens.push(Token::Eof);
-    Ok(tokens)
 }
