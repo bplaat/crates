@@ -73,6 +73,19 @@ impl<'a> Interpreter<'a> {
                 "unsigned right shift",
             ),
 
+            Node::Tenary {
+                condition,
+                if_branch,
+                else_branch,
+            } => {
+                let cond_value = self.eval(condition)?;
+                if Self::is_truthy(&cond_value) {
+                    self.eval(if_branch)
+                } else {
+                    self.eval(else_branch)
+                }
+            }
+
             Node::UnaryMinus(unary) => match self.eval(unary)? {
                 Value::Number(n) => Ok(Value::Number(-n)),
                 _ => Err(String::from("Interpreter: negation on non-number")),
