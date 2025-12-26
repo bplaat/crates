@@ -107,6 +107,7 @@ impl<'a> Interpreter<'a> {
             Node::Equals(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a == b)),
                 (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a == b)),
                 (Value::Undefined, Value::Undefined) => Ok(Value::Boolean(true)),
                 (Value::Null, Value::Null) => Ok(Value::Boolean(true)),
                 _ => Ok(Value::Boolean(false)),
@@ -118,6 +119,7 @@ impl<'a> Interpreter<'a> {
             Node::NotEquals(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a != b)),
                 (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a != b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a != b)),
                 (Value::Undefined, Value::Undefined) => Ok(Value::Boolean(false)),
                 (Value::Null, Value::Null) => Ok(Value::Boolean(false)),
                 _ => Ok(Value::Boolean(true)),
@@ -173,7 +175,17 @@ impl<'a> Interpreter<'a> {
     where
         F: Fn(i64, i64) -> i64,
     {
-        match (self.eval(lhs)?, self.eval(rhs)?) {
+        let lhs_val = self.eval(lhs)?;
+        let rhs_val = self.eval(rhs)?;
+
+        // Handle string concatenation for addition
+        if op_name == "addition"
+            && let (Value::String(a), Value::String(b)) = (&lhs_val, &rhs_val)
+        {
+            return Ok(Value::String(format!("{}{}", a, b)));
+        }
+
+        match (lhs_val, rhs_val) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Number(op(a, b))),
             _ => Err(format!("Interpreter: {} on non-numbers", op_name)),
         }
@@ -226,6 +238,7 @@ impl<'a> Interpreter<'a> {
             Value::Null => false,
             Value::Boolean(b) => *b,
             Value::Number(n) => *n != 0,
+            Value::String(s) => !s.is_empty(),
         }
     }
 }

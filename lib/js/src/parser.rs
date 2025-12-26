@@ -409,6 +409,11 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(node)
             }
+            Token::String(string) => {
+                let node = Node::Value(Value::String(string.clone()));
+                self.next();
+                Ok(node)
+            }
             Token::Variable(variable) => {
                 let node = Node::Variable(variable.clone());
                 self.next();
