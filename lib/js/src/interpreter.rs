@@ -94,6 +94,17 @@ impl<'a> Interpreter<'a> {
                 let val = self.eval(unary)?;
                 Ok(Value::Boolean(!Self::is_truthy(&val)))
             }
+            Node::UnaryTypeof(unary) => {
+                let val = self.eval(unary)?;
+                let type_str = match val {
+                    Value::Undefined => "undefined",
+                    Value::Null => "object",
+                    Value::Boolean(_) => "boolean",
+                    Value::Number(_) => "number",
+                    Value::String(_) => "string",
+                };
+                Ok(Value::String(type_str.to_string()))
+            }
 
             Node::Add(lhs, rhs) => self.arithmetic_op(lhs, rhs, |a, b| a + b, "addition"),
             Node::Subtract(lhs, rhs) => self.arithmetic_op(lhs, rhs, |a, b| a - b, "subtraction"),

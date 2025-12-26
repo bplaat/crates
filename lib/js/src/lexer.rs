@@ -34,6 +34,7 @@ pub(crate) enum Token {
     LeftShiftAssign,
     SignedRightShiftAssign,
     UnsignedRightShiftAssign,
+    Typeof,
     Add,
     Subtract,
     Multiply,
@@ -71,11 +72,12 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 4] = [
+const KEYWORDS: [Keyword; 5] = [
     Keyword::new("undefined", Token::Undefined),
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
     Keyword::new("false", Token::Boolean(false)),
+    Keyword::new("typeof", Token::Typeof),
 ];
 
 // NOTE: Sort by length descending to match longest first

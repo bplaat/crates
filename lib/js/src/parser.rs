@@ -58,6 +58,7 @@ pub(crate) enum Node {
     LogicalOr(Box<Node>, Box<Node>),
     UnaryMinus(Box<Node>),
     UnaryLogicalNot(Box<Node>),
+    UnaryTypeof(Box<Node>),
 }
 
 pub(crate) struct Parser<'a> {
@@ -405,6 +406,10 @@ impl<'a> Parser<'a> {
             Token::LogicalNot => {
                 self.next();
                 Ok(Node::UnaryLogicalNot(Box::new(self.unary()?)))
+            }
+            Token::Typeof => {
+                self.next();
+                Ok(Node::UnaryTypeof(Box::new(self.unary()?)))
             }
             _ => self.primary(),
         }

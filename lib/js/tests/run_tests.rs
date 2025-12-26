@@ -219,6 +219,17 @@ fn test_ternary() {
 }
 
 #[test]
+fn test_typeof() {
+    assert_js(Value::String(String::from("undefined")), "typeof undefined");
+    assert_js(Value::String(String::from("object")), "typeof null");
+    assert_js(Value::String(String::from("boolean")), "typeof true");
+    assert_js(Value::String(String::from("boolean")), "typeof false");
+    assert_js(Value::String(String::from("number")), "typeof 42");
+    assert_js(Value::String(String::from("string")), r#"typeof "hello""#);
+    assert_js(Value::String(String::from("string")), "typeof 'world'");
+}
+
+#[test]
 fn test_statements() {
     assert_js(Value::Number(40.0), "20;30;40");
     assert_js(Value::Number(91.0), "34,  48,91");
