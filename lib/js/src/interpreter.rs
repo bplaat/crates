@@ -11,22 +11,30 @@ use crate::value::Value;
 
 pub(crate) struct Interpreter<'a> {
     env: &'a mut HashMap<String, Value>,
+    break_flag: bool,
+    previous_value: Option<Value>,
 }
 
 impl<'a> Interpreter<'a> {
     pub(crate) fn new(env: &'a mut HashMap<String, Value>) -> Self {
-        Interpreter { env }
+        Interpreter {
+            env,
+            break_flag: false,
+            previous_value: None,
+        }
     }
 
     // MARK: Eval node
     pub(crate) fn eval(&mut self, node: &Node) -> Result<Value, String> {
+        if self.break_flag {
+            return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
+        }
         match node {
             Node::Nodes(nodes) => {
-                let mut result = Value::Undefined;
                 for node in nodes {
-                    result = self.eval(node)?;
+                    self.previous_value = Some(self.eval(node)?);
                 }
-                Ok(result)
+                Ok(self.previous_value.take().unwrap_or(Value::Undefined))
             }
             Node::If {
                 condition,
@@ -41,6 +49,33 @@ impl<'a> Interpreter<'a> {
                 } else {
                     Ok(Value::Undefined)
                 }
+            }
+            Node::Switch {
+                expression,
+                cases,
+                default,
+            } => {
+                let expr_value = self.eval(expression)?;
+                for (case_value, case_body) in cases {
+                    let case_eval = self.eval(case_value)?;
+                    if expr_value == case_eval {
+                        let value = self.eval(case_body)?;
+                        if self.break_flag {
+                            self.break_flag = false;
+                            return Ok(value);
+                        }
+                    }
+                }
+                if let Some(default_body) = default {
+                    let value = self.eval(default_body)?;
+                    self.break_flag = false;
+                    return Ok(value);
+                }
+                Ok(Value::Undefined)
+            }
+            Node::Break => {
+                self.break_flag = true;
+                Ok(self.previous_value.take().unwrap_or(Value::Undefined))
             }
 
             Node::Value(value) => Ok(value.clone()),

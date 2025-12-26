@@ -276,4 +276,80 @@ fn test_if() {
         Value::Number(50.0),
         "let a = 50; if (a < 20) { 20 } else if (a < 40) { 30 } else { a }",
     );
+    assert_js(
+        Value::Number(15.0),
+        "let a = 15; if (a > 10) { if (a < 20) { a } else { 20 } } else { 10 }",
+    );
+    assert_js(
+        Value::Number(25.0),
+        "let a = 25; if (a > 10) { if (a > 20) { a } else { 20 } } else { 10 }",
+    );
+    assert_js(
+        Value::Number(10.0),
+        "let a = 5; if (a > 10) { if (a > 20) { a } else { 20 } } else { if (a > 0) { 10 } else { 5 } }",
+    );
+}
+
+#[test]
+fn test_switch() {
+    assert_js(
+        Value::Number(20.0),
+        "let a = 2; switch (a) { case 1: 10; break; case 2: 20; break; default: 30; }",
+    );
+    assert_js(
+        Value::Number(10.0),
+        "let a = 1; switch (a) { case 1: 10; break; case 2: 20; break; default: 30; }",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "let a = 5; switch (a) { case 1: 10; break; case 2: 20; break; default: 30; }",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "let a = 3; switch (a) { case 1: 10; break; case 2: 20; break; default: 30; }",
+    );
+    assert_js(
+        Value::Number(60.0),
+        "let a = 2; switch (a) { case 1: 10; break; case 2: 30 + 30; break; default: 50; }",
+    );
+    assert_js(
+        Value::Number(25.0),
+        "let a = 1; switch (a) { case 1: 5 * 5; break; case 2: 10 + 10; break; default: 30; }",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "let a = 1; let b = 5; switch (a) { case 1: b + 10; break; case 2: b * 2; break; default: 0; }",
+    );
+    assert_js(
+        Value::Number(100.0),
+        "let x = 10; switch (x) { case 10: 100; break; case 20: 200; break; case 30: 300; break; default: 0; }",
+    );
+    assert_js(
+        Value::Number(200.0),
+        "let x = 20; switch (x) { case 10: 100; break; case 20: 200; break; case 30: 300; break; default: 0; }",
+    );
+    assert_js(
+        Value::Number(0.0),
+        "let x = 40; switch (x) { case 10: 100; break; case 20: 200; break; case 30: 300; break; default: 0; }",
+    );
+    assert_js(
+        Value::Number(45.0),
+        "let a = 2; let b = 15; switch (a) { case 1: b + 5; break; case 2: b + 30; break; case 3: b * 3; break; default: 0; }",
+    );
+    assert_js(
+        Value::Number(55.0),
+        "let n = 3; switch (n) { case 1: 10; break; case 2: 25; break; case 3: n * 18 + 1; break; default: 0; }",
+    );
+    assert_js(
+        Value::String(String::from("two")),
+        r#"let a = 2; switch (a) { case 1: "one"; break; case 2: "two"; break; default: "other"; }"#,
+    );
+    assert_js(
+        Value::String(String::from("one")),
+        r#"let a = 1; switch (a) { case 1: "one"; break; case 2: "two"; break; case 3: "three"; break; default: "other"; }"#,
+    );
+    assert_js(
+        Value::Boolean(true),
+        "let a = 1; switch (a) { case 1: true; break; break; case 2: false; break; default: null; }",
+    );
 }
