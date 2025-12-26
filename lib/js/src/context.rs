@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use crate::interpreter::Interpreter;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
+use crate::stdlib::env;
 use crate::value::Value;
 
 /// Context
@@ -21,7 +22,10 @@ pub struct Context {
 impl Context {
     /// Create a new context
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            verbose: false,
+            env: env(),
+        }
     }
 
     /// Set verbose

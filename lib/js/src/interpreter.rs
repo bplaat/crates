@@ -212,6 +212,19 @@ impl<'a> Interpreter<'a> {
                 Some(value) => Ok(value.clone()),
                 None => Err(format!("Interpreter: variable {variable} doesn't exists")),
             },
+            Node::FunctionCall(function, arguments) => {
+                let func_value = self.eval(function)?;
+                let mut arg_values = Vec::new();
+                for arg in arguments {
+                    arg_values.push(self.eval(arg)?);
+                }
+                match func_value {
+                    Value::NativeFunction(func) => func(arg_values),
+                    _ => Err(String::from(
+                        "Interpreter: trying to call a non-function value",
+                    )),
+                }
+            }
 
             Node::Assign(lhs, rhs) => self.assign(lhs, rhs),
             Node::AddAssign(lhs, rhs) => self.op_assign(lhs, rhs, |a, b| a + b, "addition"),
@@ -338,14 +351,7 @@ impl<'a> Interpreter<'a> {
             },
             Node::UnaryTypeof(unary) => {
                 let val = self.eval(unary)?;
-                let type_str = match val {
-                    Value::Undefined => "undefined",
-                    Value::Null => "object",
-                    Value::Boolean(_) => "boolean",
-                    Value::Number(_) => "number",
-                    Value::String(_) => "string",
-                };
-                Ok(Value::String(type_str.to_string()))
+                Ok(Value::String(val.typeof_string().to_string()))
             }
 
             Node::Add(lhs, rhs) => self.arithmetic_op(lhs, rhs, |a, b| a + b, "addition"),
@@ -575,6 +581,7 @@ impl<'a> Interpreter<'a> {
             Value::Boolean(b) => *b,
             Value::Number(n) => *n != 0.0,
             Value::String(s) => !s.is_empty(),
+            Value::NativeFunction(_) => true,
         }
     }
 }

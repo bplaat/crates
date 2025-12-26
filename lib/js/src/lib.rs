@@ -14,4 +14,5 @@ mod context;
 mod interpreter;
 mod lexer;
 mod parser;
+mod stdlib;
 mod value;
