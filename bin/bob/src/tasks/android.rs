@@ -102,12 +102,13 @@ impl AndroidVars {
         let platform_tools_path = format!("{android_home}/platform-tools");
 
         // Extend current path
-        let path = env::var("PATH").expect("Can't read $PATH");
-        let path_ext =
-            format!("{command_line_tools_path}:{build_tools_path}:{platform_tools_path}");
-        if !path.contains(&path_ext) {
-            unsafe { env::set_var("PATH", format!("{path_ext}:{path}")) };
-        }
+        let mut path =
+            env::split_paths(&env::var("PATH").expect("Can't read $PATH")).collect::<Vec<_>>();
+        path.insert(0, command_line_tools_path.into());
+        path.insert(1, build_tools_path.into());
+        path.insert(2, platform_tools_path.into());
+        let new_path_str = env::join_paths(&path).expect("Can't join paths");
+        unsafe { env::set_var("PATH", new_path_str) };
 
         Self {
             id: id.clone(),
