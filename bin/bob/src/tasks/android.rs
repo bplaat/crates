@@ -524,6 +524,26 @@ pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
         ))
         .status()
         .expect("Failed to execute adb");
+    if !status.success() {
+        exit(status.code().unwrap_or(1));
+    }
+
+    // Clear logcat logs
+    let status = Command::new("adb")
+        .arg("logcat")
+        .arg("-c")
+        .status()
+        .expect("Failed to execute adb logcat");
+    if !status.success() {
+        exit(status.code().unwrap_or(1));
+    }
+
+    // Start logcat with app filter
+    let status = Command::new("adb")
+        .arg("logcat")
+        .arg(format!("{}:* *:S", bobje.name))
+        .status()
+        .expect("Failed to execute adb logcat");
     exit(status.code().unwrap_or(1))
 }
 
