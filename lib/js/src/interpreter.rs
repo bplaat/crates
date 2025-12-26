@@ -218,12 +218,12 @@ impl<'a> Interpreter<'a> {
         if op_name == "addition"
             && let (Value::String(a), Value::String(b)) = (&lhs_val, &rhs_val)
         {
-            return Ok(Value::String(format!("{}{}", a, b)));
+            return Ok(Value::String(format!("{a}{b}")));
         }
 
         match (lhs_val, rhs_val) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Number(op(a, b))),
-            _ => Err(format!("Interpreter: {} on non-numbers", op_name)),
+            _ => Err(format!("Interpreter: {op_name} on non-numbers")),
         }
     }
 
@@ -241,7 +241,7 @@ impl<'a> Interpreter<'a> {
             (Value::Number(a), Value::Number(b)) => {
                 Ok(Value::Number(op(a as i32, b as i32) as f64))
             }
-            _ => Err(format!("Interpreter: {} on non-numbers", op_name)),
+            _ => Err(format!("Interpreter: {op_name} on non-numbers")),
         }
     }
 
@@ -257,7 +257,7 @@ impl<'a> Interpreter<'a> {
     {
         match (self.eval(lhs)?, self.eval(rhs)?) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(op(a, b))),
-            _ => Err(format!("Interpreter: {} on non-numbers", op_name)),
+            _ => Err(format!("Interpreter: {op_name} on non-numbers")),
         }
     }
 
@@ -278,7 +278,7 @@ impl<'a> Interpreter<'a> {
         if op_name == "addition"
             && let (Value::String(a), Value::String(b)) = (&lhs_val, &rhs_val)
         {
-            let result = Value::String(format!("{}{}", a, b));
+            let result = Value::String(format!("{a}{b}"));
             match lhs {
                 Node::Variable(variable) => {
                     self.env.insert(variable.to_string(), result.clone());
@@ -290,7 +290,7 @@ impl<'a> Interpreter<'a> {
 
         let result = match (lhs_val, rhs_val) {
             (Value::Number(a), Value::Number(b)) => Value::Number(op(a, b)),
-            _ => return Err(format!("Interpreter: {} assign on non-numbers", op_name)),
+            _ => return Err(format!("Interpreter: {op_name} assign on non-numbers")),
         };
         match lhs {
             Node::Variable(variable) => {
@@ -315,7 +315,7 @@ impl<'a> Interpreter<'a> {
         let rhs_val = self.eval(rhs)?;
         let result = match (lhs_val, rhs_val) {
             (Value::Number(a), Value::Number(b)) => Value::Number(op(a as i32, b as i32) as f64),
-            _ => return Err(format!("Interpreter: {} assign on non-numbers", op_name)),
+            _ => return Err(format!("Interpreter: {op_name} assign on non-numbers")),
         };
         match lhs {
             Node::Variable(variable) => {
