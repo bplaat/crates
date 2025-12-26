@@ -85,6 +85,28 @@ fn test_comparisons() {
 }
 
 #[test]
+fn test_strings() {
+    assert_js(Value::String(String::from("hello")), r#""hello""#);
+    assert_js(Value::String(String::from("world")), r#"'world'"#);
+    assert_js(
+        Value::String(String::from("hello world")),
+        r#""hello " + 'world'"#,
+    );
+    assert_js(
+        Value::String(String::from("hello world!")),
+        r#""hello " + ('world' + "!")"#,
+    );
+    assert_js(Value::Boolean(true), r#""hello" == "hello""#);
+    assert_js(Value::Boolean(false), r#""hello" == "world""#);
+    assert_js(Value::Boolean(false), r#""" != """#);
+    assert_js(Value::Boolean(true), r#""test" && true"#);
+    assert_js(Value::String(String::from("")), r#""" && true"#);
+    assert_js(Value::Boolean(false), r#""" || false"#);
+    assert_js(Value::String(String::from("")), r#""" || """#);
+    assert_js(Value::Boolean(true), r#"!"""#);
+}
+
+#[test]
 fn test_assingments() {
     assert_js(Value::Number(10), "a = 10");
     assert_js(Value::Number(15), "a = 5; a += 10");

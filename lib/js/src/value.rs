@@ -15,4 +15,6 @@ pub enum Value {
     Boolean(bool),
     /// Number value
     Number(i64),
+    /// String value
+    String(String),
 }

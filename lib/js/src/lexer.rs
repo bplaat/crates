@@ -15,6 +15,7 @@ pub(crate) enum Token {
     Undefined,
     Null,
     Number(i64),
+    String(String),
     Variable(String),
     Boolean(bool),
 
@@ -164,6 +165,18 @@ impl Lexer {
                     number.push(self.next().expect("Invalid number"));
                 }
                 tokens.push(Token::Number(number.parse().expect("Invalid number")));
+                continue;
+            }
+
+            if char == '"' || char == '\'' {
+                let mut string = String::new();
+                while let Some(next_char) = self.next() {
+                    if next_char == char {
+                        break;
+                    }
+                    string.push(next_char);
+                }
+                tokens.push(Token::String(string));
                 continue;
             }
 
