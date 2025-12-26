@@ -16,8 +16,6 @@ use crate::tasks::jvm::{find_modules, get_class_name};
 use crate::utils::{index_files, write_file_when_different};
 use crate::{Bobje, Profile};
 
-const ANDROID_DUMMY_KEYSTORE_JKS: &[u8] = include_bytes!("android-dummy-keystore.jks");
-
 // MARK: Android vars
 struct AndroidVars {
     id: String,
@@ -368,15 +366,43 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
     let vars = AndroidVars::new(bobje);
 
     // Copy dummy keystore if it doesn't exist
-    let target_dummy_keystore = format!(
-        "{}/{}",
-        bobje.target_dir, vars.android_metadata.keystore_file
-    );
-    if fs::metadata(&vars.android_metadata.keystore_file).is_err()
-        && fs::metadata(&target_dummy_keystore).is_err()
-    {
-        fs::write(&target_dummy_keystore, ANDROID_DUMMY_KEYSTORE_JKS)
-            .expect("Failed to write dummy keystore");
+    let global_debug_key_store = env::home_dir()
+        .expect("Can't find home dir")
+        .join(".android")
+        .join("debug.keystore");
+    let keystore_configured = fs::metadata(&vars.android_metadata.keystore_file).is_ok();
+    if !keystore_configured && fs::metadata(&global_debug_key_store).is_err() {
+        fs::create_dir_all(
+            global_debug_key_store
+                .parent()
+                .expect("Can't get parent dir"),
+        )
+        .expect("Can't create .android dir");
+
+        let status = Command::new("keytool")
+            .arg("-genkey")
+            .arg("-v")
+            .arg("-keystore")
+            .arg(&global_debug_key_store)
+            .arg("-storepass")
+            .arg("android")
+            .arg("-alias")
+            .arg("androiddebugkey")
+            .arg("-keypass")
+            .arg("android")
+            .arg("-dname")
+            .arg("CN=Android Debug,O=Android,C=US")
+            .arg("-keyalg")
+            .arg("RSA")
+            .arg("-keysize")
+            .arg("2048")
+            .arg("-validity")
+            .arg("10000")
+            .status()
+            .expect("Failed to generate debug keystore");
+        if !status.success() {
+            exit(status.code().unwrap_or(1));
+        }
     }
 
     // Add classes.dex to zip
@@ -410,13 +436,13 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
     let mut apksigner_cmd = format!(
         "apksigner sign --min-sdk-version {} --v4-signing-enabled false --ks {} ",
         vars.android_metadata.min_sdk_version,
-        if fs::metadata(&vars.android_metadata.keystore_file).is_ok() {
-            &vars.android_metadata.keystore_file
+        if keystore_configured {
+            vars.android_metadata.keystore_file.clone()
         } else {
-            &target_dummy_keystore
+            global_debug_key_store.display().to_string()
         }
     );
-    if fs::metadata(&vars.android_metadata.keystore_file).is_ok() {
+    if keystore_configured {
         if !vars.android_metadata.key_alias.is_empty() {
             apksigner_cmd.push_str(&format!(
                 "--ks-key-alias {} ",
@@ -428,8 +454,9 @@ pub(crate) fn generate_android_final_apk_tasks(bobje: &Bobje, executor: &mut Exe
             vars.android_metadata.keystore_password, vars.android_metadata.key_password
         ));
     } else {
-        apksigner_cmd
-            .push_str("--ks-key-alias android --ks-pass pass:android --key-pass pass:android ");
+        apksigner_cmd.push_str(
+            "--ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android ",
+        );
     }
     apksigner_cmd.push_str(&format!("--in {unsigned_apk} --out {signed_apk}"));
     executor.add_task_cmd(
