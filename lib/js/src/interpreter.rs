@@ -18,6 +18,7 @@ impl<'a> Interpreter<'a> {
         Interpreter { env }
     }
 
+    // MARK: Eval node
     pub(crate) fn eval(&mut self, node: &Node) -> Result<Value, String> {
         match node {
             Node::Nodes(nodes) => {
@@ -40,30 +41,35 @@ impl<'a> Interpreter<'a> {
             Node::MultiplyAssign(lhs, rhs) => {
                 self.op_assign(lhs, rhs, |a, b| a * b, "multiplication")
             }
-            Node::DivideAssign(lhs, rhs) => {
-                self.op_assign(lhs, rhs, |a, b| if b != 0 { a / b } else { 0 }, "division")
-            }
-            Node::RemainderAssign(lhs, rhs) => self.op_assign(lhs, rhs, |a, b| a % b, "modulo"),
-            Node::ExponentiationAssign(lhs, rhs) => {
-                self.op_assign(lhs, rhs, |a, b| a.pow(b as u32), "exponentiation")
-            }
-            Node::BitwiseAndAssign(lhs, rhs) => {
-                self.op_assign(lhs, rhs, |a, b| a & b, "bitwise and")
-            }
-            Node::BitwiseOrAssign(lhs, rhs) => self.op_assign(lhs, rhs, |a, b| a | b, "bitwise or"),
-            Node::BitwiseXorAssign(lhs, rhs) => {
-                self.op_assign(lhs, rhs, |a, b| a ^ b, "bitwise xor")
-            }
-            Node::LeftShiftAssign(lhs, rhs) => {
-                self.op_assign(lhs, rhs, |a, b| a << b, "left shift")
-            }
-            Node::SignedRightShiftAssign(lhs, rhs) => {
-                self.op_assign(lhs, rhs, |a, b| a >> b, "signed right shift")
-            }
-            Node::UnsignedRightShiftAssign(lhs, rhs) => self.op_assign(
+            Node::DivideAssign(lhs, rhs) => self.op_assign(
                 lhs,
                 rhs,
-                |a, b| ((a as u64) >> (b as u64)) as i64,
+                |a, b| if b != 0.0 { a / b } else { 0.0 },
+                "division",
+            ),
+            Node::RemainderAssign(lhs, rhs) => self.op_assign(lhs, rhs, |a, b| a % b, "modulo"),
+            Node::ExponentiationAssign(lhs, rhs) => {
+                self.op_assign(lhs, rhs, |a, b| a.powf(b), "exponentiation")
+            }
+            Node::BitwiseAndAssign(lhs, rhs) => {
+                self.binary_op_assign(lhs, rhs, |a, b| a & b, "bitwise and")
+            }
+            Node::BitwiseOrAssign(lhs, rhs) => {
+                self.binary_op_assign(lhs, rhs, |a, b| a | b, "bitwise or")
+            }
+            Node::BitwiseXorAssign(lhs, rhs) => {
+                self.binary_op_assign(lhs, rhs, |a, b| a ^ b, "bitwise xor")
+            }
+            Node::LeftShiftAssign(lhs, rhs) => {
+                self.binary_op_assign(lhs, rhs, |a, b| a << b, "left shift")
+            }
+            Node::SignedRightShiftAssign(lhs, rhs) => {
+                self.binary_op_assign(lhs, rhs, |a, b| a >> b, "signed right shift")
+            }
+            Node::UnsignedRightShiftAssign(lhs, rhs) => self.binary_op_assign(
+                lhs,
+                rhs,
+                |a, b| ((a as u32) >> (b as u32)) as i32,
                 "unsigned right shift",
             ),
 
@@ -76,15 +82,20 @@ impl<'a> Interpreter<'a> {
                 Ok(Value::Boolean(!Self::is_truthy(&val)))
             }
 
-            Node::Add(lhs, rhs) => self.binary_op(lhs, rhs, |a, b| a + b, "addition"),
-            Node::Subtract(lhs, rhs) => self.binary_op(lhs, rhs, |a, b| a - b, "subtraction"),
-            Node::Multiply(lhs, rhs) => self.binary_op(lhs, rhs, |a, b| a * b, "multiplication"),
-            Node::Divide(lhs, rhs) => {
-                self.binary_op(lhs, rhs, |a, b| if b != 0 { a / b } else { 0 }, "division")
+            Node::Add(lhs, rhs) => self.arithmetic_op(lhs, rhs, |a, b| a + b, "addition"),
+            Node::Subtract(lhs, rhs) => self.arithmetic_op(lhs, rhs, |a, b| a - b, "subtraction"),
+            Node::Multiply(lhs, rhs) => {
+                self.arithmetic_op(lhs, rhs, |a, b| a * b, "multiplication")
             }
-            Node::Remainder(lhs, rhs) => self.binary_op(lhs, rhs, |a, b| a % b, "modulo"),
+            Node::Divide(lhs, rhs) => self.arithmetic_op(
+                lhs,
+                rhs,
+                |a, b| if b != 0.0 { a / b } else { 0.0 },
+                "division",
+            ),
+            Node::Remainder(lhs, rhs) => self.arithmetic_op(lhs, rhs, |a, b| a % b, "modulo"),
             Node::Exponentiation(lhs, rhs) => {
-                self.binary_op(lhs, rhs, |a, b| a.pow(b as u32), "exponentiation")
+                self.arithmetic_op(lhs, rhs, |a, b| a.powf(b), "exponentiation")
             }
             Node::BitwiseAnd(lhs, rhs) => self.binary_op(lhs, rhs, |a, b| a & b, "bitwise and"),
             Node::BitwiseOr(lhs, rhs) => self.binary_op(lhs, rhs, |a, b| a | b, "bitwise or"),
@@ -96,11 +107,11 @@ impl<'a> Interpreter<'a> {
             Node::UnsignedRightShift(lhs, rhs) => self.binary_op(
                 lhs,
                 rhs,
-                |a, b| ((a as u64) >> (b as u64)) as i64,
+                |a, b| ((a as u32) >> (b as u32)) as i32,
                 "unsigned right shift",
             ),
             Node::BitwiseNot(unary) => match self.eval(unary)? {
-                Value::Number(n) => Ok(Value::Number(!n)),
+                Value::Number(n) => Ok(Value::Number(!(n as i32) as f64)),
                 _ => Err(String::from("Interpreter: bitwise not on non-number")),
             },
 
@@ -154,6 +165,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    // MARK: Utils
     fn assign(&mut self, lhs: &Node, rhs: &Node) -> Result<Value, String> {
         let result = self.eval(rhs)?;
         match lhs {
@@ -165,7 +177,7 @@ impl<'a> Interpreter<'a> {
         Ok(result)
     }
 
-    fn binary_op<F>(
+    fn arithmetic_op<F>(
         &mut self,
         lhs: &Node,
         rhs: &Node,
@@ -173,7 +185,7 @@ impl<'a> Interpreter<'a> {
         op_name: &str,
     ) -> Result<Value, String>
     where
-        F: Fn(i64, i64) -> i64,
+        F: Fn(f64, f64) -> f64,
     {
         let lhs_val = self.eval(lhs)?;
         let rhs_val = self.eval(rhs)?;
@@ -191,6 +203,40 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    fn binary_op<F>(
+        &mut self,
+        lhs: &Node,
+        rhs: &Node,
+        op: F,
+        op_name: &str,
+    ) -> Result<Value, String>
+    where
+        F: Fn(i32, i32) -> i32,
+    {
+        match (self.eval(lhs)?, self.eval(rhs)?) {
+            (Value::Number(a), Value::Number(b)) => {
+                Ok(Value::Number(op(a as i32, b as i32) as f64))
+            }
+            _ => Err(format!("Interpreter: {} on non-numbers", op_name)),
+        }
+    }
+
+    fn compare_op<F>(
+        &mut self,
+        lhs: &Node,
+        rhs: &Node,
+        op: F,
+        op_name: &str,
+    ) -> Result<Value, String>
+    where
+        F: Fn(f64, f64) -> bool,
+    {
+        match (self.eval(lhs)?, self.eval(rhs)?) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(op(a, b))),
+            _ => Err(format!("Interpreter: {} on non-numbers", op_name)),
+        }
+    }
+
     fn op_assign<F>(
         &mut self,
         lhs: &Node,
@@ -199,7 +245,7 @@ impl<'a> Interpreter<'a> {
         op_name: &str,
     ) -> Result<Value, String>
     where
-        F: Fn(i64, i64) -> i64,
+        F: Fn(f64, f64) -> f64,
     {
         let lhs_val = self.eval(lhs)?;
         let rhs_val = self.eval(rhs)?;
@@ -216,7 +262,7 @@ impl<'a> Interpreter<'a> {
         Ok(result)
     }
 
-    fn compare_op<F>(
+    fn binary_op_assign<F>(
         &mut self,
         lhs: &Node,
         rhs: &Node,
@@ -224,12 +270,21 @@ impl<'a> Interpreter<'a> {
         op_name: &str,
     ) -> Result<Value, String>
     where
-        F: Fn(i64, i64) -> bool,
+        F: Fn(i32, i32) -> i32,
     {
-        match (self.eval(lhs)?, self.eval(rhs)?) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(op(a, b))),
-            _ => Err(format!("Interpreter: {} on non-numbers", op_name)),
+        let lhs_val = self.eval(lhs)?;
+        let rhs_val = self.eval(rhs)?;
+        let result = match (lhs_val, rhs_val) {
+            (Value::Number(a), Value::Number(b)) => Value::Number(op(a as i32, b as i32) as f64),
+            _ => return Err(format!("Interpreter: {} assign on non-numbers", op_name)),
+        };
+        match lhs {
+            Node::Variable(variable) => {
+                self.env.insert(variable.to_string(), result.clone());
+            }
+            _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
         }
+        Ok(result)
     }
 
     fn is_truthy(value: &Value) -> bool {
@@ -237,7 +292,7 @@ impl<'a> Interpreter<'a> {
             Value::Undefined => false,
             Value::Null => false,
             Value::Boolean(b) => *b,
-            Value::Number(n) => *n != 0,
+            Value::Number(n) => *n != 0.0,
             Value::String(s) => !s.is_empty(),
         }
     }
