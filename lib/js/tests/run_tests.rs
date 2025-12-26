@@ -12,8 +12,15 @@ use js::{Context, Value};
 
 fn assert_js(expected: Value, script: &str) {
     let mut context = Context::new();
-    let result = context.eval(script).unwrap();
-    assert_eq!(expected, result);
+    let result = context.eval(script);
+    if result.is_err() || result.as_ref().ok() != Some(&expected) {
+        let mut context = Context::new();
+        context.set_verbose(true);
+        let result = context.eval(script).unwrap();
+        assert_eq!(expected, result);
+    } else {
+        assert_eq!(expected, result.ok().unwrap());
+    }
 }
 
 #[test]
@@ -34,6 +41,7 @@ fn test_arithmetic() {
     assert_js(Value::Number(15), "5*(9-6)");
     assert_js(Value::Number(4), "(3 + 5) / 2");
     assert_js(Value::Number(16), "2 ** 4");
+    assert_js(Value::Number(9), "2 ** 3 + 1");
     assert_js(Value::Number(0), "36 / 0");
     assert_js(Value::Number(2), "20 % 3");
     assert_js(Value::Number(34), "--34");
@@ -74,6 +82,40 @@ fn test_comparisons() {
     assert_js(Value::Boolean(false), "false || false");
     assert_js(Value::Boolean(false), "!true");
     assert_js(Value::Boolean(true), "!false");
+}
+
+#[test]
+fn test_assingments() {
+    assert_js(Value::Number(10), "a = 10");
+    assert_js(Value::Number(15), "a = 5; a += 10");
+    assert_js(Value::Number(5), "a = 15; a -= 10");
+    assert_js(Value::Number(50), "a = 5; a *= 10");
+    assert_js(Value::Number(2), "a = 20; a /= 10");
+    assert_js(Value::Number(2), "a = 20; a %= 6");
+    assert_js(Value::Number(32), "a = 2; a **= 5");
+    assert_js(Value::Number(1), "a = 5; a &= 3");
+    assert_js(Value::Number(7), "a = 5; a |= 3");
+    assert_js(Value::Number(6), "a = 5; a ^= 3");
+    assert_js(Value::Number(16), "a = 8; a <<= 1");
+    assert_js(Value::Number(4), "a = 8; a >>= 1");
+    assert_js(Value::Number(4), "a = 8; a >>>= 1");
+    assert_js(Value::Number(4), "a = 16; a >>= 2");
+    assert_js(Value::Number(15), "a = 5; b = 10; a + b");
+    assert_js(Value::Number(15), "a = 20; b = 5; a - b");
+    assert_js(Value::Number(50), "a = 5; b = 10; a * b");
+    assert_js(Value::Number(4), "a = 20; b = 5; a / b");
+    assert_js(Value::Number(2), "a = 17; b = 5; a % b");
+    assert_js(Value::Number(32), "a = 2; b = 5; a ** b");
+    assert_js(Value::Number(1), "a = 5; b = 3; a & b");
+    assert_js(Value::Number(7), "a = 5; b = 3; a | b");
+    assert_js(Value::Number(6), "a = 5; b = 3; a ^ b");
+    assert_js(Value::Number(20), "a = 5; b = 2; a << b");
+    assert_js(Value::Number(1), "a = 5; b = 2; a >> b");
+    assert_js(Value::Number(1), "a = 5; b = 2; a >>> b");
+    assert_js(Value::Number(30), "a = 10; b = 5; c = 15; a + b + c");
+    assert_js(Value::Number(100), "a = 10; a += 20; a += 30; a += 40");
+    assert_js(Value::Number(24), "a = 6; b = 4; a *= b");
+    assert_js(Value::Number(3), "a = 15; b = 5; a /= b");
 }
 
 #[test]

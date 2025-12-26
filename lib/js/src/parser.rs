@@ -12,9 +12,21 @@ pub(crate) enum Node {
     Nodes(Vec<Node>),
     Value(Value),
     Variable(String),
-    Assign(Box<Node>, Box<Node>),
 
-    UnaryMinus(Box<Node>),
+    Assign(Box<Node>, Box<Node>),
+    AddAssign(Box<Node>, Box<Node>),
+    SubtractAssign(Box<Node>, Box<Node>),
+    MultiplyAssign(Box<Node>, Box<Node>),
+    DivideAssign(Box<Node>, Box<Node>),
+    RemainderAssign(Box<Node>, Box<Node>),
+    ExponentiationAssign(Box<Node>, Box<Node>),
+    BitwiseAndAssign(Box<Node>, Box<Node>),
+    BitwiseOrAssign(Box<Node>, Box<Node>),
+    BitwiseXorAssign(Box<Node>, Box<Node>),
+    LeftShiftAssign(Box<Node>, Box<Node>),
+    SignedRightShiftAssign(Box<Node>, Box<Node>),
+    UnsignedRightShiftAssign(Box<Node>, Box<Node>),
+
     Add(Box<Node>, Box<Node>),
     Subtract(Box<Node>, Box<Node>),
     Multiply(Box<Node>, Box<Node>),
@@ -38,7 +50,8 @@ pub(crate) enum Node {
     GreaterThenEquals(Box<Node>, Box<Node>),
     LogicalAnd(Box<Node>, Box<Node>),
     LogicalOr(Box<Node>, Box<Node>),
-    LogicalNot(Box<Node>),
+    UnaryMinus(Box<Node>),
+    UnaryLogicalNot(Box<Node>),
 }
 
 pub(crate) struct Parser<'a> {
@@ -54,7 +67,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) fn node(&mut self) -> Result<Node, String> {
+    pub(crate) fn parse(&mut self) -> Result<Node, String> {
         self.nodes()
     }
 
@@ -62,8 +75,8 @@ impl<'a> Parser<'a> {
         &self.tokens[self.position]
     }
 
-    fn peek_next(&self) -> Option<&Token> {
-        self.tokens.get(self.position + 1)
+    fn peek_at(&self, n: usize) -> Option<&Token> {
+        self.tokens.get(self.position + n)
     }
 
     fn next(&mut self) {
@@ -90,11 +103,101 @@ impl<'a> Parser<'a> {
     }
 
     fn assign(&mut self) -> Result<Node, String> {
-        match self.peek_next() {
+        match self.peek_at(1) {
             Some(Token::Assign) => {
                 let lhs = self.add()?;
                 self.next();
                 Ok(Node::Assign(Box::new(lhs), Box::new(self.assign()?)))
+            }
+            Some(Token::AddAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::AddAssign(Box::new(lhs), Box::new(self.assign()?)))
+            }
+            Some(Token::SubtractAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::SubtractAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::MultiplyAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::MultiplyAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::DivideAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::DivideAssign(Box::new(lhs), Box::new(self.assign()?)))
+            }
+            Some(Token::RemainderAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::RemainderAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::ExponentiationAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::ExponentiationAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::BitwiseAndAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::BitwiseAndAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::BitwiseOrAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::BitwiseOrAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::BitwiseXorAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::BitwiseXorAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::LeftShiftAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::LeftShiftAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::SignedRightShiftAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::SignedRightShiftAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::UnsignedRightShiftAssign) => {
+                let lhs = self.add()?;
+                self.next();
+                Ok(Node::UnsignedRightShiftAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
             }
             _ => self.logical(),
         }
@@ -274,7 +377,7 @@ impl<'a> Parser<'a> {
             }
             Token::LogicalNot => {
                 self.next();
-                Ok(Node::LogicalNot(Box::new(self.unary()?)))
+                Ok(Node::UnaryLogicalNot(Box::new(self.unary()?)))
             }
             _ => self.primary(),
         }

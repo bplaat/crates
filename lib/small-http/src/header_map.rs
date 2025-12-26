@@ -38,11 +38,6 @@ impl HeaderMap {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-
-    /// Get iterator
-    pub fn iter(&self) -> Iter<'_, (String, String)> {
-        self.0.iter()
-    }
 }
 
 impl IntoIterator for HeaderMap {
