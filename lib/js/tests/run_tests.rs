@@ -242,3 +242,16 @@ fn test_statements() {
         "a='Hello';a+=' World';a",
     );
 }
+
+#[test]
+fn test_var_let_const() {
+    assert_js(Value::Number(10.0), "var a = 10; a");
+    assert_js(Value::Number(20.0), "let a = 20; a");
+    assert_js(Value::Number(30.0), "const a = 30; a");
+    assert_js(Value::Number(25.0), "var a = 10; let b = 15; a + b");
+    assert_js(Value::Number(50.0), "let a = 20; const b = 30; a + b");
+    assert_js(
+        Value::String(String::from("Hello JS")),
+        "const greeting = 'Hello'; let target = ' JS'; greeting + target",
+    );
+}

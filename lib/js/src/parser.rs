@@ -110,6 +110,11 @@ impl<'a> Parser<'a> {
     }
 
     fn assign(&mut self) -> Result<Node, String> {
+        // Handle variable declarations
+        if let Token::Var | Token::Let | Token::Const = self.peek() {
+            self.next();
+        }
+
         match self.peek_at(1) {
             Some(Token::Assign) => {
                 let lhs = self.tenary()?;
