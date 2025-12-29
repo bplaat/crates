@@ -261,12 +261,68 @@ impl Lexer {
             }
 
             if char == '"' || char == '\'' {
+                let quote = char;
                 let mut string = String::new();
                 while let Some(next_char) = self.next() {
-                    if next_char == char {
+                    if next_char == quote {
                         break;
                     }
-                    string.push(next_char);
+                    if next_char == '\\' {
+                        if let Some(escaped) = self.next() {
+                            match escaped {
+                                'n' => string.push('\n'),
+                                'r' => string.push('\r'),
+                                't' => string.push('\t'),
+                                'b' => string.push('\x08'),
+                                'f' => string.push('\x0c'),
+                                'v' => string.push('\x0b'),
+                                '0' => string.push('\0'),
+                                '"' => string.push('"'),
+                                '\'' => string.push('\''),
+                                '\\' => string.push('\\'),
+                                'x' => {
+                                    let mut hex = String::new();
+                                    for _ in 0..2 {
+                                        if let Some(c) = self.next() {
+                                            hex.push(c);
+                                        } else {
+                                            return Err("Invalid hex escape sequence".to_string());
+                                        }
+                                    }
+                                    if let Ok(code) = u8::from_str_radix(&hex, 16) {
+                                        string.push(code as char);
+                                    } else {
+                                        return Err("Invalid hex escape".to_string());
+                                    }
+                                }
+                                'u' => {
+                                    let mut hex = String::new();
+                                    for _ in 0..4 {
+                                        if let Some(c) = self.next() {
+                                            hex.push(c);
+                                        } else {
+                                            return Err(
+                                                "Invalid unicode escape sequence".to_string()
+                                            );
+                                        }
+                                    }
+                                    if let Ok(code) = u16::from_str_radix(&hex, 16) {
+                                        string.push(
+                                            char::from_u32(code as u32)
+                                                .ok_or("Invalid unicode code point".to_string())?,
+                                        );
+                                    } else {
+                                        return Err("Invalid unicode escape".to_string());
+                                    }
+                                }
+                                _ => string.push(escaped), // Invalid escape, push as is
+                            }
+                        } else {
+                            return Err("Unterminated escape sequence".to_string());
+                        }
+                    } else {
+                        string.push(next_char);
+                    }
                 }
                 tokens.push(Token::String(string));
                 continue;

@@ -135,6 +135,58 @@ fn test_strings() {
     assert_js(Value::String(String::from("hello")), r#""hello""#);
     assert_js(Value::String(String::from("world")), r#"'world'"#);
     assert_js(
+        Value::String(String::from("hello\nworld")),
+        r#""hello\nworld""#,
+    );
+    assert_js(
+        Value::String(String::from("hello\tworld")),
+        r#""hello\tworld""#,
+    );
+    assert_js(
+        Value::String(String::from("hello\\world")),
+        r#""hello\\world""#,
+    );
+    assert_js(
+        Value::String(String::from("hello\"world")),
+        r#""hello\"world""#,
+    );
+    assert_js(
+        Value::String(String::from("hello'world")),
+        r#"'hello\'world'"#,
+    );
+    assert_js(
+        Value::String(String::from("hello\rworld")),
+        r#""hello\rworld""#,
+    );
+    assert_js(
+        Value::String(String::from_utf8(vec![8, b'w', b'o', b'r', b'l', b'd']).unwrap()),
+        r#""\bworld""#,
+    );
+    assert_js(
+        Value::String(String::from_utf8(vec![12, b'w', b'o', b'r', b'l', b'd']).unwrap()),
+        r#""\fworld""#,
+    );
+    assert_js(
+        Value::String(String::from_utf8(vec![11, b'w', b'o', b'r', b'l', b'd']).unwrap()),
+        r#""\vworld""#,
+    );
+    assert_js(
+        Value::String(String::from("hello\0world")),
+        r#""hello\0world""#,
+    );
+    assert_js(
+        Value::String(String::from("helloAworld")),
+        r#""hello\x41world""#,
+    );
+    assert_js(
+        Value::String(String::from("helloAworld")),
+        r#""hello\u0041world""#,
+    );
+    assert_js(
+        Value::String(String::from("line1\nline2\ttab")),
+        r#""line1\nline2\ttab""#,
+    );
+    assert_js(
         Value::String(String::from("hello world")),
         r#""hello " + 'world'"#,
     );
