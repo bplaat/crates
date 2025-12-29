@@ -4,93 +4,105 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::rc::Rc;
+
 use crate::Value;
 use crate::lexer::Token;
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum DeclarationType {
+    Var,
+    Let,
+    Const,
+}
+
 #[derive(Debug)]
-pub(crate) enum Node {
-    Nodes(Vec<Node>),
+pub(crate) enum AstNode {
+    Nodes(Vec<AstNode>),
     If {
-        condition: Box<Node>,
-        then_branch: Box<Node>,
-        else_branch: Option<Box<Node>>,
+        condition: Box<AstNode>,
+        then_branch: Box<AstNode>,
+        else_branch: Option<Box<AstNode>>,
     },
     Switch {
-        expression: Box<Node>,
-        cases: Vec<(Node, Node)>,
-        default: Option<Box<Node>>,
+        expression: Box<AstNode>,
+        cases: Vec<(AstNode, AstNode)>,
+        default: Option<Box<AstNode>>,
     },
     While {
-        condition: Box<Node>,
-        body: Box<Node>,
+        condition: Box<AstNode>,
+        body: Box<AstNode>,
     },
     DoWhile {
-        body: Box<Node>,
-        condition: Box<Node>,
+        body: Box<AstNode>,
+        condition: Box<AstNode>,
     },
     For {
-        init: Option<Box<Node>>,
-        condition: Option<Box<Node>>,
-        update: Option<Box<Node>>,
-        body: Box<Node>,
+        init: Option<Box<AstNode>>,
+        condition: Option<Box<AstNode>>,
+        update: Option<Box<AstNode>>,
+        body: Box<AstNode>,
     },
     Continue,
     Break,
+    Return(Option<Box<AstNode>>),
 
     Value(Value),
     Variable(String),
-    FunctionCall(Box<Node>, Vec<Node>),
+    FunctionCall(Box<AstNode>, Vec<AstNode>),
 
-    Assign(Box<Node>, Box<Node>),
-    AddAssign(Box<Node>, Box<Node>),
-    SubtractAssign(Box<Node>, Box<Node>),
-    MultiplyAssign(Box<Node>, Box<Node>),
-    DivideAssign(Box<Node>, Box<Node>),
-    RemainderAssign(Box<Node>, Box<Node>),
-    ExponentiationAssign(Box<Node>, Box<Node>),
-    BitwiseAndAssign(Box<Node>, Box<Node>),
-    BitwiseOrAssign(Box<Node>, Box<Node>),
-    BitwiseXorAssign(Box<Node>, Box<Node>),
-    LeftShiftAssign(Box<Node>, Box<Node>),
-    SignedRightShiftAssign(Box<Node>, Box<Node>),
-    UnsignedRightShiftAssign(Box<Node>, Box<Node>),
+    Assign(DeclarationType, Box<AstNode>, Box<AstNode>),
+    AddAssign(Box<AstNode>, Box<AstNode>),
+    SubtractAssign(Box<AstNode>, Box<AstNode>),
+    MultiplyAssign(Box<AstNode>, Box<AstNode>),
+    DivideAssign(Box<AstNode>, Box<AstNode>),
+    RemainderAssign(Box<AstNode>, Box<AstNode>),
+    ExponentiationAssign(Box<AstNode>, Box<AstNode>),
+    BitwiseAndAssign(Box<AstNode>, Box<AstNode>),
+    BitwiseOrAssign(Box<AstNode>, Box<AstNode>),
+    BitwiseXorAssign(Box<AstNode>, Box<AstNode>),
+    LeftShiftAssign(Box<AstNode>, Box<AstNode>),
+    SignedRightShiftAssign(Box<AstNode>, Box<AstNode>),
+    UnsignedRightShiftAssign(Box<AstNode>, Box<AstNode>),
+    LogicalOrAssign(Box<AstNode>, Box<AstNode>),
+    LogicalAndAssign(Box<AstNode>, Box<AstNode>),
 
     Ternary {
-        condition: Box<Node>,
-        then_branch: Box<Node>,
-        else_branch: Box<Node>,
+        condition: Box<AstNode>,
+        then_branch: Box<AstNode>,
+        else_branch: Box<AstNode>,
     },
 
-    Add(Box<Node>, Box<Node>),
-    Subtract(Box<Node>, Box<Node>),
-    Multiply(Box<Node>, Box<Node>),
-    Divide(Box<Node>, Box<Node>),
-    Remainder(Box<Node>, Box<Node>),
-    Exponentiation(Box<Node>, Box<Node>),
-    BitwiseAnd(Box<Node>, Box<Node>),
-    BitwiseOr(Box<Node>, Box<Node>),
-    BitwiseXor(Box<Node>, Box<Node>),
-    BitwiseNot(Box<Node>),
-    LeftShift(Box<Node>, Box<Node>),
-    SignedRightShift(Box<Node>, Box<Node>),
-    UnsignedRightShift(Box<Node>, Box<Node>),
-    Equals(Box<Node>, Box<Node>),
-    StrictEquals(Box<Node>, Box<Node>),
-    NotEquals(Box<Node>, Box<Node>),
-    StrictNotEquals(Box<Node>, Box<Node>),
-    LessThen(Box<Node>, Box<Node>),
-    LessThenEquals(Box<Node>, Box<Node>),
-    GreaterThen(Box<Node>, Box<Node>),
-    GreaterThenEquals(Box<Node>, Box<Node>),
-    LogicalAnd(Box<Node>, Box<Node>),
-    LogicalOr(Box<Node>, Box<Node>),
-    UnaryMinus(Box<Node>),
-    UnaryLogicalNot(Box<Node>),
-    UnaryTypeof(Box<Node>),
-    UnaryPreIncrement(Box<Node>),
-    UnaryPreDecrement(Box<Node>),
-    UnaryPostIncrement(Box<Node>),
-    UnaryPostDecrement(Box<Node>),
+    Add(Box<AstNode>, Box<AstNode>),
+    Subtract(Box<AstNode>, Box<AstNode>),
+    Multiply(Box<AstNode>, Box<AstNode>),
+    Divide(Box<AstNode>, Box<AstNode>),
+    Remainder(Box<AstNode>, Box<AstNode>),
+    Exponentiation(Box<AstNode>, Box<AstNode>),
+    BitwiseAnd(Box<AstNode>, Box<AstNode>),
+    BitwiseOr(Box<AstNode>, Box<AstNode>),
+    BitwiseXor(Box<AstNode>, Box<AstNode>),
+    BitwiseNot(Box<AstNode>),
+    LeftShift(Box<AstNode>, Box<AstNode>),
+    SignedRightShift(Box<AstNode>, Box<AstNode>),
+    UnsignedRightShift(Box<AstNode>, Box<AstNode>),
+    Equals(Box<AstNode>, Box<AstNode>),
+    StrictEquals(Box<AstNode>, Box<AstNode>),
+    NotEquals(Box<AstNode>, Box<AstNode>),
+    StrictNotEquals(Box<AstNode>, Box<AstNode>),
+    LessThen(Box<AstNode>, Box<AstNode>),
+    LessThenEquals(Box<AstNode>, Box<AstNode>),
+    GreaterThen(Box<AstNode>, Box<AstNode>),
+    GreaterThenEquals(Box<AstNode>, Box<AstNode>),
+    LogicalAnd(Box<AstNode>, Box<AstNode>),
+    LogicalOr(Box<AstNode>, Box<AstNode>),
+    UnaryMinus(Box<AstNode>),
+    UnaryLogicalNot(Box<AstNode>),
+    UnaryTypeof(Box<AstNode>),
+    UnaryPreIncrement(Box<AstNode>),
+    UnaryPreDecrement(Box<AstNode>),
+    UnaryPostIncrement(Box<AstNode>),
+    UnaryPostDecrement(Box<AstNode>),
 }
 
 pub(crate) struct Parser<'a> {
@@ -106,7 +118,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) fn parse(&mut self) -> Result<Node, String> {
+    pub(crate) fn parse(&mut self) -> Result<AstNode, String> {
         self.statements()
     }
 
@@ -122,7 +134,7 @@ impl<'a> Parser<'a> {
         self.position += 1;
     }
 
-    fn statements(&mut self) -> Result<Node, String> {
+    fn statements(&mut self) -> Result<AstNode, String> {
         let mut nodes = Vec::new();
         loop {
             match self.peek() {
@@ -145,10 +157,10 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(Node::Nodes(nodes))
+        Ok(AstNode::Nodes(nodes))
     }
 
-    fn block(&mut self) -> Result<Node, String> {
+    fn block(&mut self) -> Result<AstNode, String> {
         if let Token::LeftBrace = self.peek() {
             self.next();
             let node = self.statements()?;
@@ -163,7 +175,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn statement(&mut self) -> Result<Node, String> {
+    fn statement(&mut self) -> Result<AstNode, String> {
         match self.peek() {
             Token::If => {
                 self.next();
@@ -179,7 +191,7 @@ impl<'a> Parser<'a> {
                         } else {
                             None
                         };
-                        Ok(Node::If {
+                        Ok(AstNode::If {
                             condition: Box::new(condition),
                             then_branch: Box::new(then_branch),
                             else_branch,
@@ -249,7 +261,7 @@ impl<'a> Parser<'a> {
                                     }
                                 }
                             }
-                            Ok(Node::Switch {
+                            Ok(AstNode::Switch {
                                 expression: Box::new(expression),
                                 cases,
                                 default,
@@ -272,7 +284,7 @@ impl<'a> Parser<'a> {
                     if let Token::RightParen = self.peek() {
                         self.next();
                         let body = self.block()?;
-                        Ok(Node::While {
+                        Ok(AstNode::While {
                             condition: Box::new(condition),
                             body: Box::new(body),
                         })
@@ -293,7 +305,7 @@ impl<'a> Parser<'a> {
                         let condition = self.ternary()?;
                         if let Token::RightParen = self.peek() {
                             self.next();
-                            Ok(Node::DoWhile {
+                            Ok(AstNode::DoWhile {
                                 body: Box::new(body),
                                 condition: Box::new(condition),
                             })
@@ -338,7 +350,7 @@ impl<'a> Parser<'a> {
                                 self.next();
                                 let body = self.block()?;
 
-                                Ok(Node::For {
+                                Ok(AstNode::For {
                                     init: init.map(Box::new),
                                     condition: condition.map(Box::new),
                                     update: update.map(Box::new),
@@ -359,17 +371,81 @@ impl<'a> Parser<'a> {
             }
             Token::Break => {
                 self.next();
-                Ok(Node::Break)
+                Ok(AstNode::Break)
             }
             Token::Continue => {
                 self.next();
-                Ok(Node::Continue)
+                Ok(AstNode::Continue)
+            }
+            Token::Function => {
+                self.next();
+                let name = if let Token::Variable(var_name) = self.peek() {
+                    let name = var_name.clone();
+                    self.next();
+                    name
+                } else {
+                    return Err(String::from(
+                        "Parser: expected function name after 'function'",
+                    ));
+                };
+
+                if let Token::LeftParen = self.peek() {
+                    self.next();
+                    let mut arguments = Vec::new();
+                    if let Token::RightParen = self.peek() {
+                        // No arguments
+                        self.next();
+                    } else {
+                        loop {
+                            if let Token::Variable(arg_name) = self.peek() {
+                                arguments.push(arg_name.clone());
+                                self.next();
+                            } else {
+                                return Err(String::from(
+                                    "Parser: expected argument name in function definition",
+                                ));
+                            }
+
+                            match self.peek() {
+                                Token::Comma => {
+                                    self.next();
+                                }
+                                Token::RightParen => {
+                                    self.next();
+                                    break;
+                                }
+                                _ => {
+                                    return Err(String::from(
+                                        "Parser: expected ',' or ')' in function arguments",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    let body = self.block()?;
+                    Ok(AstNode::Assign(
+                        DeclarationType::Var,
+                        Box::new(AstNode::Variable(name)),
+                        Box::new(AstNode::Value(Value::Function(arguments, Rc::new(body)))),
+                    ))
+                } else {
+                    Err(String::from("Parser: expected '(' after function name"))
+                }
+            }
+            Token::Return => {
+                self.next();
+                let expr = if let Token::Semicolon | Token::RightBrace | Token::Eof = self.peek() {
+                    None
+                } else {
+                    Some(Box::new(self.ternary()?))
+                };
+                Ok(AstNode::Return(expr))
             }
             _ => self.comma(),
         }
     }
 
-    fn comma(&mut self) -> Result<Node, String> {
+    fn comma(&mut self) -> Result<AstNode, String> {
         let node = self.assign()?;
         if let Token::Comma = self.peek() {
             let mut nodes = vec![node];
@@ -377,33 +453,48 @@ impl<'a> Parser<'a> {
                 self.next();
                 nodes.push(self.assign()?);
             }
-            Ok(Node::Nodes(nodes))
+            Ok(AstNode::Nodes(nodes))
         } else {
             Ok(node)
         }
     }
 
-    fn assign(&mut self) -> Result<Node, String> {
-        // Handle variable declarations
-        if let Token::Var | Token::Let | Token::Const = self.peek() {
-            self.next();
-        }
+    fn assign(&mut self) -> Result<AstNode, String> {
+        let declaration_type = match self.peek() {
+            Token::Var => {
+                self.next();
+                DeclarationType::Var
+            }
+            Token::Let => {
+                self.next();
+                DeclarationType::Let
+            }
+            Token::Const => {
+                self.next();
+                DeclarationType::Const
+            }
+            _ => DeclarationType::Var,
+        };
 
         match self.peek_at(1) {
             Some(Token::Assign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::Assign(Box::new(lhs), Box::new(self.assign()?)))
+                Ok(AstNode::Assign(
+                    declaration_type,
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
             }
             Some(Token::AddAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::AddAssign(Box::new(lhs), Box::new(self.assign()?)))
+                Ok(AstNode::AddAssign(Box::new(lhs), Box::new(self.assign()?)))
             }
             Some(Token::SubtractAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::SubtractAssign(
+                Ok(AstNode::SubtractAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -411,7 +502,7 @@ impl<'a> Parser<'a> {
             Some(Token::MultiplyAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::MultiplyAssign(
+                Ok(AstNode::MultiplyAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -419,12 +510,15 @@ impl<'a> Parser<'a> {
             Some(Token::DivideAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::DivideAssign(Box::new(lhs), Box::new(self.assign()?)))
+                Ok(AstNode::DivideAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
             }
             Some(Token::RemainderAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::RemainderAssign(
+                Ok(AstNode::RemainderAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -432,7 +526,7 @@ impl<'a> Parser<'a> {
             Some(Token::ExponentiationAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::ExponentiationAssign(
+                Ok(AstNode::ExponentiationAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -440,7 +534,7 @@ impl<'a> Parser<'a> {
             Some(Token::BitwiseAndAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::BitwiseAndAssign(
+                Ok(AstNode::BitwiseAndAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -448,7 +542,7 @@ impl<'a> Parser<'a> {
             Some(Token::BitwiseOrAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::BitwiseOrAssign(
+                Ok(AstNode::BitwiseOrAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -456,7 +550,7 @@ impl<'a> Parser<'a> {
             Some(Token::BitwiseXorAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::BitwiseXorAssign(
+                Ok(AstNode::BitwiseXorAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -464,7 +558,7 @@ impl<'a> Parser<'a> {
             Some(Token::LeftShiftAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::LeftShiftAssign(
+                Ok(AstNode::LeftShiftAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -472,7 +566,7 @@ impl<'a> Parser<'a> {
             Some(Token::SignedRightShiftAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::SignedRightShiftAssign(
+                Ok(AstNode::SignedRightShiftAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -480,7 +574,23 @@ impl<'a> Parser<'a> {
             Some(Token::UnsignedRightShiftAssign) => {
                 let lhs = self.ternary()?;
                 self.next();
-                Ok(Node::UnsignedRightShiftAssign(
+                Ok(AstNode::UnsignedRightShiftAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::LogicalOrAssign) => {
+                let lhs = self.ternary()?;
+                self.next();
+                Ok(AstNode::LogicalOrAssign(
+                    Box::new(lhs),
+                    Box::new(self.assign()?),
+                ))
+            }
+            Some(Token::LogicalAndAssign) => {
+                let lhs = self.ternary()?;
+                self.next();
+                Ok(AstNode::LogicalAndAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
@@ -489,7 +599,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn ternary(&mut self) -> Result<Node, String> {
+    fn ternary(&mut self) -> Result<AstNode, String> {
         let condition = self.logical()?;
         if let Token::Question = self.peek() {
             self.next();
@@ -497,7 +607,7 @@ impl<'a> Parser<'a> {
             if let Token::Colon = self.peek() {
                 self.next();
                 let else_branch = self.ternary()?;
-                Ok(Node::Ternary {
+                Ok(AstNode::Ternary {
                     condition: Box::new(condition),
                     then_branch: Box::new(if_branch),
                     else_branch: Box::new(else_branch),
@@ -510,17 +620,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn logical(&mut self) -> Result<Node, String> {
+    fn logical(&mut self) -> Result<AstNode, String> {
         let mut node = self.relational()?;
         loop {
             match self.peek() {
                 Token::LogicalAnd => {
                     self.next();
-                    node = Node::LogicalAnd(Box::new(node), Box::new(self.relational()?));
+                    node = AstNode::LogicalAnd(Box::new(node), Box::new(self.relational()?));
                 }
                 Token::LogicalOr => {
                     self.next();
-                    node = Node::LogicalOr(Box::new(node), Box::new(self.relational()?));
+                    node = AstNode::LogicalOr(Box::new(node), Box::new(self.relational()?));
                 }
                 _ => break,
             }
@@ -528,25 +638,25 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn relational(&mut self) -> Result<Node, String> {
+    fn relational(&mut self) -> Result<AstNode, String> {
         let mut node = self.equality()?;
         loop {
             match self.peek() {
                 Token::LessThen => {
                     self.next();
-                    node = Node::LessThen(Box::new(node), Box::new(self.equality()?));
+                    node = AstNode::LessThen(Box::new(node), Box::new(self.equality()?));
                 }
                 Token::LessThenEquals => {
                     self.next();
-                    node = Node::LessThenEquals(Box::new(node), Box::new(self.equality()?));
+                    node = AstNode::LessThenEquals(Box::new(node), Box::new(self.equality()?));
                 }
                 Token::GreaterThen => {
                     self.next();
-                    node = Node::GreaterThen(Box::new(node), Box::new(self.equality()?));
+                    node = AstNode::GreaterThen(Box::new(node), Box::new(self.equality()?));
                 }
                 Token::GreaterThenEquals => {
                     self.next();
-                    node = Node::GreaterThenEquals(Box::new(node), Box::new(self.equality()?));
+                    node = AstNode::GreaterThenEquals(Box::new(node), Box::new(self.equality()?));
                 }
                 _ => break,
             }
@@ -554,25 +664,25 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn equality(&mut self) -> Result<Node, String> {
+    fn equality(&mut self) -> Result<AstNode, String> {
         let mut node = self.shift()?;
         loop {
             match self.peek() {
                 Token::Equals => {
                     self.next();
-                    node = Node::Equals(Box::new(node), Box::new(self.shift()?));
+                    node = AstNode::Equals(Box::new(node), Box::new(self.shift()?));
                 }
                 Token::StrictEquals => {
                     self.next();
-                    node = Node::StrictEquals(Box::new(node), Box::new(self.shift()?));
+                    node = AstNode::StrictEquals(Box::new(node), Box::new(self.shift()?));
                 }
                 Token::NotEquals => {
                     self.next();
-                    node = Node::NotEquals(Box::new(node), Box::new(self.shift()?));
+                    node = AstNode::NotEquals(Box::new(node), Box::new(self.shift()?));
                 }
                 Token::StrictNotEquals => {
                     self.next();
-                    node = Node::StrictNotEquals(Box::new(node), Box::new(self.shift()?));
+                    node = AstNode::StrictNotEquals(Box::new(node), Box::new(self.shift()?));
                 }
                 _ => break,
             }
@@ -580,21 +690,21 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn shift(&mut self) -> Result<Node, String> {
+    fn shift(&mut self) -> Result<AstNode, String> {
         let mut node = self.bitwise()?;
         loop {
             match self.peek() {
                 Token::LeftShift => {
                     self.next();
-                    node = Node::LeftShift(Box::new(node), Box::new(self.bitwise()?));
+                    node = AstNode::LeftShift(Box::new(node), Box::new(self.bitwise()?));
                 }
                 Token::SignedRightShift => {
                     self.next();
-                    node = Node::SignedRightShift(Box::new(node), Box::new(self.bitwise()?));
+                    node = AstNode::SignedRightShift(Box::new(node), Box::new(self.bitwise()?));
                 }
                 Token::UnsignedRightShift => {
                     self.next();
-                    node = Node::UnsignedRightShift(Box::new(node), Box::new(self.bitwise()?));
+                    node = AstNode::UnsignedRightShift(Box::new(node), Box::new(self.bitwise()?));
                 }
                 _ => break,
             }
@@ -602,21 +712,21 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn bitwise(&mut self) -> Result<Node, String> {
+    fn bitwise(&mut self) -> Result<AstNode, String> {
         let mut node = self.add()?;
         loop {
             match self.peek() {
                 Token::BitwiseAnd => {
                     self.next();
-                    node = Node::BitwiseAnd(Box::new(node), Box::new(self.add()?));
+                    node = AstNode::BitwiseAnd(Box::new(node), Box::new(self.add()?));
                 }
                 Token::BitwiseOr => {
                     self.next();
-                    node = Node::BitwiseOr(Box::new(node), Box::new(self.add()?));
+                    node = AstNode::BitwiseOr(Box::new(node), Box::new(self.add()?));
                 }
                 Token::BitwiseXor => {
                     self.next();
-                    node = Node::BitwiseXor(Box::new(node), Box::new(self.add()?));
+                    node = AstNode::BitwiseXor(Box::new(node), Box::new(self.add()?));
                 }
                 _ => break,
             }
@@ -624,17 +734,17 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn add(&mut self) -> Result<Node, String> {
+    fn add(&mut self) -> Result<AstNode, String> {
         let mut node = self.mul()?;
         loop {
             match self.peek() {
                 Token::Add => {
                     self.next();
-                    node = Node::Add(Box::new(node), Box::new(self.mul()?));
+                    node = AstNode::Add(Box::new(node), Box::new(self.mul()?));
                 }
                 Token::Subtract => {
                     self.next();
-                    node = Node::Subtract(Box::new(node), Box::new(self.mul()?));
+                    node = AstNode::Subtract(Box::new(node), Box::new(self.mul()?));
                 }
                 _ => break,
             }
@@ -642,25 +752,25 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn mul(&mut self) -> Result<Node, String> {
+    fn mul(&mut self) -> Result<AstNode, String> {
         let mut node = self.unary()?;
         loop {
             match self.peek() {
                 Token::Multiply => {
                     self.next();
-                    node = Node::Multiply(Box::new(node), Box::new(self.unary()?));
+                    node = AstNode::Multiply(Box::new(node), Box::new(self.unary()?));
                 }
                 Token::Divide => {
                     self.next();
-                    node = Node::Divide(Box::new(node), Box::new(self.unary()?));
+                    node = AstNode::Divide(Box::new(node), Box::new(self.unary()?));
                 }
                 Token::Remainder => {
                     self.next();
-                    node = Node::Remainder(Box::new(node), Box::new(self.unary()?));
+                    node = AstNode::Remainder(Box::new(node), Box::new(self.unary()?));
                 }
                 Token::Exponentiation => {
                     self.next();
-                    node = Node::Exponentiation(Box::new(node), Box::new(self.unary()?));
+                    node = AstNode::Exponentiation(Box::new(node), Box::new(self.unary()?));
                 }
                 _ => break,
             }
@@ -668,7 +778,7 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    fn unary(&mut self) -> Result<Node, String> {
+    fn unary(&mut self) -> Result<AstNode, String> {
         match self.peek() {
             Token::Add => {
                 self.next();
@@ -676,77 +786,158 @@ impl<'a> Parser<'a> {
             }
             Token::Subtract => {
                 self.next();
-                Ok(Node::UnaryMinus(Box::new(self.unary()?)))
+                Ok(AstNode::UnaryMinus(Box::new(self.unary()?)))
             }
             Token::BitwiseNot => {
                 self.next();
-                Ok(Node::BitwiseNot(Box::new(self.unary()?)))
+                Ok(AstNode::BitwiseNot(Box::new(self.unary()?)))
             }
             Token::LogicalNot => {
                 self.next();
-                Ok(Node::UnaryLogicalNot(Box::new(self.unary()?)))
+                Ok(AstNode::UnaryLogicalNot(Box::new(self.unary()?)))
             }
             Token::Increment => {
                 self.next();
-                Ok(Node::UnaryPreIncrement(Box::new(self.unary()?)))
+                Ok(AstNode::UnaryPreIncrement(Box::new(self.unary()?)))
             }
             Token::Decrement => {
                 self.next();
-                Ok(Node::UnaryPreDecrement(Box::new(self.unary()?)))
+                Ok(AstNode::UnaryPreDecrement(Box::new(self.unary()?)))
             }
             Token::Typeof => {
                 self.next();
-                Ok(Node::UnaryTypeof(Box::new(self.unary()?)))
+                Ok(AstNode::UnaryTypeof(Box::new(self.unary()?)))
             }
             _ => self.primary(),
         }
     }
 
-    fn primary(&mut self) -> Result<Node, String> {
+    fn arrow_function_body(&mut self) -> Result<AstNode, String> {
+        if let Token::LeftBrace = self.peek() {
+            Ok(self.block()?)
+        } else {
+            Ok(AstNode::Return(Some(Box::new(self.ternary()?))))
+        }
+    }
+
+    fn primary(&mut self) -> Result<AstNode, String> {
         match self.peek() {
             Token::LeftParen => {
                 self.next();
                 let node = self.ternary()?;
-                self.next();
+
+                // Arrow function
+                if let Token::Comma = self.peek() {
+                    self.next();
+
+                    let mut function_args = Vec::new();
+                    if let AstNode::Variable(var_name) = node {
+                        function_args.push(var_name);
+                    }
+                    loop {
+                        if let Token::RightParen = self.peek() {
+                            self.next();
+                            break;
+                        }
+
+                        if let Token::Variable(var_name) = self.peek() {
+                            function_args.push(var_name.clone());
+                            self.next();
+                        } else {
+                            return Err(String::from(
+                                "Parser: expected argument name in arrow function",
+                            ));
+                        }
+
+                        if let Token::RightParen = self.peek() {
+                            self.next();
+                            break;
+                        } else if let Token::Comma = self.peek() {
+                            self.next();
+                        } else {
+                            return Err(String::from("Parser: expected ',' in arrow function"));
+                        }
+                    }
+
+                    if let Token::Arrow = self.peek() {
+                        self.next();
+                        let body = self.arrow_function_body()?;
+                        return Ok(AstNode::Value(Value::Function(
+                            function_args,
+                            Rc::new(body),
+                        )));
+                    } else {
+                        return Err(String::from("Parser: expected '=>' in arrow function"));
+                    }
+                } else if let Token::RightParen = self.peek() {
+                    self.next();
+                } else {
+                    return Err(String::from("Parser: expected ')' after expression"));
+                }
+
+                // Arrow function
+                if let Token::Arrow = self.peek() {
+                    self.next();
+                    let mut function_args = Vec::new();
+                    if let AstNode::Variable(var_name) = node {
+                        function_args.push(var_name);
+                    }
+                    let body = self.arrow_function_body()?;
+                    return Ok(AstNode::Value(Value::Function(
+                        function_args,
+                        Rc::new(body),
+                    )));
+                }
+
                 Ok(node)
             }
             Token::Undefined => {
                 self.next();
-                Ok(Node::Value(Value::Undefined))
+                Ok(AstNode::Value(Value::Undefined))
             }
             Token::Null => {
                 self.next();
-                Ok(Node::Value(Value::Null))
+                Ok(AstNode::Value(Value::Null))
             }
             Token::Boolean(boolean) => {
-                let node = Node::Value(Value::Boolean(*boolean));
+                let node = AstNode::Value(Value::Boolean(*boolean));
                 self.next();
                 Ok(node)
             }
             Token::Number(number) => {
-                let node = Node::Value(Value::Number(*number));
+                let node = AstNode::Value(Value::Number(*number));
                 self.next();
                 Ok(node)
             }
             Token::String(string) => {
-                let node = Node::Value(Value::String(string.clone()));
+                let node = AstNode::Value(Value::String(string.clone()));
                 self.next();
                 Ok(node)
             }
             Token::Variable(variable) => {
-                let node = Node::Variable(variable.clone());
+                let variable = variable.clone();
+                let node = AstNode::Variable(variable.clone());
                 self.next();
 
-                if let Token::LeftParen = self.peek() {
-                    // Function call
+                // Arrow function
+                if let Token::Arrow = self.peek() {
                     self.next();
-                    let mut args = Vec::new();
+                    let body = self.arrow_function_body()?;
+                    Ok(AstNode::Value(Value::Function(
+                        vec![variable],
+                        Rc::new(body),
+                    )))
+                }
+                // Function call
+                else if let Token::LeftParen = self.peek() {
+                    self.next();
+                    let mut call_args = Vec::new();
                     if let Token::RightParen = self.peek() {
                         // No arguments
                         self.next();
                     } else {
                         loop {
-                            args.push(self.ternary()?);
+                            call_args.push(self.ternary()?);
                             match self.peek() {
                                 Token::Comma => {
                                     self.next();
@@ -763,13 +954,13 @@ impl<'a> Parser<'a> {
                             }
                         }
                     }
-                    Ok(Node::FunctionCall(Box::new(node), args))
+                    Ok(AstNode::FunctionCall(Box::new(node), call_args))
                 } else if let Token::Increment = self.peek() {
                     self.next();
-                    Ok(Node::UnaryPostIncrement(Box::new(node)))
+                    Ok(AstNode::UnaryPostIncrement(Box::new(node)))
                 } else if let Token::Decrement = self.peek() {
                     self.next();
-                    Ok(Node::UnaryPostDecrement(Box::new(node)))
+                    Ok(AstNode::UnaryPostDecrement(Box::new(node)))
                 } else {
                     Ok(node)
                 }
