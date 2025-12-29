@@ -658,6 +658,10 @@ fn test_scoping() {
         "const a = 15; function test() { return a; } test();",
     );
     assert_js(
+        Value::Number(15.0),
+        "function sum() { let sum = 0; let i = 0; while (arguments[i] !== undefined) { sum += arguments[i]; i++; } return sum; } sum(5, 5, 5);",
+    );
+    assert_js(
         Value::Number(5.0),
         "function outer() { let x = 5; return x; } outer();",
     );
@@ -763,4 +767,45 @@ fn test_comments() {
     assert_js(Value::Number(12.0), "let x = 12; /* assign */ x");
     assert_js(Value::Number(6.0), "/* start */ 2 + 4 /* end */");
     assert_js(Value::Number(9.0), "/* multi\nline\ncomment */ 9");
+}
+
+#[test]
+fn test_arrays() {
+    assert_js(Value::Number(3.0), "[1, 2, 3][2]");
+    assert_js(Value::Undefined, "[1, 2, 3][5]");
+    assert_js(Value::Number(5.0), "let arr = [5, 10, 15]; arr[0]");
+    assert_js(Value::Number(15.0), "let arr = [5, 10, 15]; arr[2]");
+    assert_js(Value::Undefined, "let arr = [1, 2, 3]; arr[5]");
+    assert_js(
+        Value::Number(20.0),
+        "let arr = [10, 20, 30]; let index = 1; arr[index]",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "let arr = [10, 20, 30]; let index = 2; arr[index]",
+    );
+    assert_js(
+        Value::Number(60.0),
+        "let arr = [10, 20, 30]; arr[0] + arr[1] + arr[2]",
+    );
+    assert_js(Value::Number(100.0), "let arr = [25, 50, 75]; arr[0] * 4");
+    assert_js(Value::Boolean(false), " [25, 50, 75] == [25, 50, 75] ");
+    assert_js(Value::Boolean(true), " let a = [25, 50, 75]; a == a ");
+
+    assert_js(
+        Value::Number(15.0),
+        "let arr = [1, 2, 3, 4, 5]; let sum = 0; for (let i = 0; i < 5; i++) { sum += arr[i]; } sum",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "let arr = [10, 20, 30]; let max = arr[0]; for (let i = 1; i < 3; i++) { if (arr[i] > max) max = arr[i]; } max",
+    );
+    assert_js(
+        Value::Number(24.0),
+        "let arr = [1,2,3,4]; let product = 1; let i = 0; while (i < 4) { product *= arr[i]; i++; } product",
+    );
+    assert_js(
+        Value::Number(5.0),
+        "function findLength(a) { var length2 = 0; while (a[length2] !== undefined) { length2++; } return length2; } let arr = [1,2,3,4,5]; findLength(arr)",
+    );
 }

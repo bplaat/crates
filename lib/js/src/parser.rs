@@ -57,6 +57,7 @@ pub(crate) enum AstNode {
     Comma(Vec<AstNode>),
 
     Value(Value),
+    ArrayLiteral(Vec<AstNode>),
     Variable(String),
     FunctionCall(Box<AstNode>, Vec<AstNode>),
 
@@ -112,6 +113,8 @@ pub(crate) enum AstNode {
     UnaryPreDecrement(Box<AstNode>),
     UnaryPostIncrement(Box<AstNode>),
     UnaryPostDecrement(Box<AstNode>),
+
+    GetProperty(Box<AstNode>, Box<AstNode>),
 }
 
 pub(crate) struct Parser<'a> {
@@ -498,7 +501,7 @@ impl<'a> Parser<'a> {
                     Ok(AstNode::Assign(
                         Some(DeclarationType::Var),
                         Box::new(AstNode::Variable(name)),
-                        Box::new(AstNode::Value(Value::Function(arguments, Rc::new(body)))),
+                        Box::new(AstNode::Value(Value::Function(Rc::new((arguments, body))))),
                     ))
                 } else {
                     Err(String::from("Parser: expected '(' after function name"))
@@ -883,7 +886,35 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(AstNode::UnaryTypeof(Box::new(self.unary()?)))
             }
-            _ => self.primary(),
+            _ => {
+                let node = self.primary();
+                self.postfix(node)
+            }
+        }
+    }
+
+    fn postfix(&mut self, node_result: Result<AstNode, String>) -> Result<AstNode, String> {
+        let node = node_result?;
+        match self.peek() {
+            Token::LeftBlock => {
+                self.next();
+                let index_expr = self.comma()?;
+                if let Token::RightBlock = self.peek() {
+                    self.next();
+                    Ok(AstNode::GetProperty(Box::new(node), Box::new(index_expr)))
+                } else {
+                    Err(String::from("Parser: expected ']' after property access"))
+                }
+            }
+            Token::Increment => {
+                self.next();
+                Ok(AstNode::UnaryPostIncrement(Box::new(node)))
+            }
+            Token::Decrement => {
+                self.next();
+                Ok(AstNode::UnaryPostDecrement(Box::new(node)))
+            }
+            _ => Ok(node),
         }
     }
 
@@ -924,10 +955,10 @@ impl<'a> Parser<'a> {
                         }
                     }
                     let body = self.arrow_function_body()?;
-                    return Ok(AstNode::Value(Value::Function(
+                    return Ok(AstNode::Value(Value::Function(Rc::new((
                         function_args,
-                        Rc::new(body),
-                    )));
+                        body,
+                    )))));
                 }
 
                 Ok(node)
@@ -951,6 +982,33 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(node)
             }
+            Token::LeftBlock => {
+                self.next();
+                let mut nodes = Vec::new();
+                if let Token::RightBlock = self.peek() {
+                    // Empty array
+                    self.next();
+                } else {
+                    loop {
+                        nodes.push(self.assign()?);
+                        match self.peek() {
+                            Token::Comma => {
+                                self.next();
+                            }
+                            Token::RightBlock => {
+                                self.next();
+                                break;
+                            }
+                            _ => {
+                                return Err(String::from(
+                                    "Parser: expected ',' or ']' in array literal",
+                                ));
+                            }
+                        }
+                    }
+                }
+                Ok(AstNode::ArrayLiteral(nodes))
+            }
             Token::Variable(variable) => {
                 let variable = variable.clone();
                 let node = AstNode::Variable(variable.clone());
@@ -960,10 +1018,10 @@ impl<'a> Parser<'a> {
                 if let Token::Arrow = self.peek() {
                     self.next();
                     let body = self.arrow_function_body()?;
-                    Ok(AstNode::Value(Value::Function(
+                    Ok(AstNode::Value(Value::Function(Rc::new((
                         vec![variable],
-                        Rc::new(body),
-                    )))
+                        body,
+                    )))))
                 }
                 // Function call
                 else if let Token::LeftParen = self.peek() {
@@ -992,12 +1050,6 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Ok(AstNode::FunctionCall(Box::new(node), call_args))
-                } else if let Token::Increment = self.peek() {
-                    self.next();
-                    Ok(AstNode::UnaryPostIncrement(Box::new(node)))
-                } else if let Token::Decrement = self.peek() {
-                    self.next();
-                    Ok(AstNode::UnaryPostDecrement(Box::new(node)))
                 } else {
                     Ok(node)
                 }
