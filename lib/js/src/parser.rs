@@ -18,7 +18,7 @@ pub(crate) enum DeclarationType {
 
 #[derive(Debug)]
 pub(crate) enum AstNode {
-    Nodes(Vec<AstNode>),
+    Block(Vec<AstNode>),
     If {
         condition: Box<AstNode>,
         then_branch: Box<AstNode>,
@@ -46,12 +46,13 @@ pub(crate) enum AstNode {
     Continue,
     Break,
     Return(Option<Box<AstNode>>),
+    Comma(Vec<AstNode>),
 
     Value(Value),
     Variable(String),
     FunctionCall(Box<AstNode>, Vec<AstNode>),
 
-    Assign(DeclarationType, Box<AstNode>, Box<AstNode>),
+    Assign(Option<DeclarationType>, Box<AstNode>, Box<AstNode>),
     AddAssign(Box<AstNode>, Box<AstNode>),
     SubtractAssign(Box<AstNode>, Box<AstNode>),
     MultiplyAssign(Box<AstNode>, Box<AstNode>),
@@ -157,7 +158,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(AstNode::Nodes(nodes))
+        Ok(AstNode::Block(nodes))
     }
 
     fn block(&mut self) -> Result<AstNode, String> {
@@ -177,6 +178,7 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<AstNode, String> {
         match self.peek() {
+            Token::LeftBrace => self.block(),
             Token::If => {
                 self.next();
                 if let Token::LeftParen = self.peek() {
@@ -424,7 +426,7 @@ impl<'a> Parser<'a> {
                     }
                     let body = self.block()?;
                     Ok(AstNode::Assign(
-                        DeclarationType::Var,
+                        Some(DeclarationType::Var),
                         Box::new(AstNode::Variable(name)),
                         Box::new(AstNode::Value(Value::Function(arguments, Rc::new(body)))),
                     ))
@@ -453,7 +455,7 @@ impl<'a> Parser<'a> {
                 self.next();
                 nodes.push(self.assign()?);
             }
-            Ok(AstNode::Nodes(nodes))
+            Ok(AstNode::Comma(nodes))
         } else {
             Ok(node)
         }
@@ -463,17 +465,17 @@ impl<'a> Parser<'a> {
         let declaration_type = match self.peek() {
             Token::Var => {
                 self.next();
-                DeclarationType::Var
+                Some(DeclarationType::Var)
             }
             Token::Let => {
                 self.next();
-                DeclarationType::Let
+                Some(DeclarationType::Let)
             }
             Token::Const => {
                 self.next();
-                DeclarationType::Const
+                Some(DeclarationType::Const)
             }
-            _ => DeclarationType::Var,
+            _ => None,
         };
 
         match self.peek_at(1) {
