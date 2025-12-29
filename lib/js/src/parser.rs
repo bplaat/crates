@@ -18,33 +18,41 @@ pub(crate) enum DeclarationType {
 
 #[derive(Debug)]
 pub(crate) enum AstNode {
-    Block(Vec<AstNode>),
+    Block {
+        label: Option<String>,
+        nodes: Vec<AstNode>,
+    },
     If {
+        label: Option<String>,
         condition: Box<AstNode>,
         then_branch: Box<AstNode>,
         else_branch: Option<Box<AstNode>>,
     },
     Switch {
+        label: Option<String>,
         expression: Box<AstNode>,
         cases: Vec<(AstNode, AstNode)>,
         default: Option<Box<AstNode>>,
     },
     While {
+        label: Option<String>,
         condition: Box<AstNode>,
         body: Box<AstNode>,
     },
     DoWhile {
+        label: Option<String>,
         body: Box<AstNode>,
         condition: Box<AstNode>,
     },
     For {
+        label: Option<String>,
         init: Option<Box<AstNode>>,
         condition: Option<Box<AstNode>>,
         update: Option<Box<AstNode>>,
         body: Box<AstNode>,
     },
-    Continue,
-    Break,
+    Continue(Option<String>),
+    Break(Option<String>),
     Return(Option<Box<AstNode>>),
     Comma(Vec<AstNode>),
 
@@ -135,7 +143,7 @@ impl<'a> Parser<'a> {
         self.position += 1;
     }
 
-    fn statements(&mut self) -> Result<AstNode, String> {
+    fn statement_nodes(&mut self) -> Result<Vec<AstNode>, String> {
         let mut nodes = Vec::new();
         loop {
             match self.peek() {
@@ -158,27 +166,53 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(AstNode::Block(nodes))
+        Ok(nodes)
+    }
+
+    fn statements(&mut self) -> Result<AstNode, String> {
+        let nodes = self.statement_nodes()?;
+        Ok(AstNode::Block { label: None, nodes })
     }
 
     fn block(&mut self) -> Result<AstNode, String> {
-        if let Token::LeftBrace = self.peek() {
+        let nodes = if let Token::LeftBrace = self.peek() {
             self.next();
-            let node = self.statements()?;
+            let nodes = self.statement_nodes()?;
             if let Token::RightBrace = self.peek() {
                 self.next();
-                Ok(node)
             } else {
-                Err(String::from("Parser: expected '}' at end of block"))
+                return Err(String::from("Parser: expected '}' at end of block"));
             }
+            nodes
         } else {
-            self.statement()
-        }
+            vec![self.statement()?]
+        };
+        Ok(AstNode::Block { label: None, nodes })
     }
 
     fn statement(&mut self) -> Result<AstNode, String> {
+        let label = if let Token::Variable(var_name) = self.peek()
+            && let Some(Token::Colon) = self.peek_at(1)
+        {
+            let label_name = var_name.clone();
+            self.next();
+            self.next();
+            Some(label_name)
+        } else {
+            None
+        };
+
         match self.peek() {
-            Token::LeftBrace => self.block(),
+            Token::LeftBrace => {
+                self.next();
+                let nodes = self.statement_nodes()?;
+                if let Token::RightBrace = self.peek() {
+                    self.next();
+                } else {
+                    return Err(String::from("Parser: expected '}' at end of block"));
+                }
+                Ok(AstNode::Block { label, nodes })
+            }
             Token::If => {
                 self.next();
                 if let Token::LeftParen = self.peek() {
@@ -194,6 +228,7 @@ impl<'a> Parser<'a> {
                             None
                         };
                         Ok(AstNode::If {
+                            label,
                             condition: Box::new(condition),
                             then_branch: Box::new(then_branch),
                             else_branch,
@@ -264,6 +299,7 @@ impl<'a> Parser<'a> {
                                 }
                             }
                             Ok(AstNode::Switch {
+                                label,
                                 expression: Box::new(expression),
                                 cases,
                                 default,
@@ -287,6 +323,7 @@ impl<'a> Parser<'a> {
                         self.next();
                         let body = self.block()?;
                         Ok(AstNode::While {
+                            label,
                             condition: Box::new(condition),
                             body: Box::new(body),
                         })
@@ -308,6 +345,7 @@ impl<'a> Parser<'a> {
                         if let Token::RightParen = self.peek() {
                             self.next();
                             Ok(AstNode::DoWhile {
+                                label,
                                 body: Box::new(body),
                                 condition: Box::new(condition),
                             })
@@ -353,6 +391,7 @@ impl<'a> Parser<'a> {
                                 let body = self.block()?;
 
                                 Ok(AstNode::For {
+                                    label,
                                     init: init.map(Box::new),
                                     condition: condition.map(Box::new),
                                     update: update.map(Box::new),
@@ -373,11 +412,23 @@ impl<'a> Parser<'a> {
             }
             Token::Break => {
                 self.next();
-                Ok(AstNode::Break)
+                if let Token::Variable(var_name) = self.peek() {
+                    let label_name = var_name.clone();
+                    self.next();
+                    Ok(AstNode::Break(Some(label_name)))
+                } else {
+                    Ok(AstNode::Break(None))
+                }
             }
             Token::Continue => {
                 self.next();
-                Ok(AstNode::Continue)
+                if let Token::Variable(var_name) = self.peek() {
+                    let label_name = var_name.clone();
+                    self.next();
+                    Ok(AstNode::Continue(Some(label_name)))
+                } else {
+                    Ok(AstNode::Continue(None))
+                }
             }
             Token::Function => {
                 self.next();

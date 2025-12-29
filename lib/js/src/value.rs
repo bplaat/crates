@@ -27,7 +27,7 @@ pub enum Value {
     #[allow(private_interfaces)]
     Function(Vec<String>, Rc<AstNode>),
     /// Native function
-    NativeFunction(fn(Vec<Value>) -> Result<Value, String>),
+    NativeFunction(fn(&[Value]) -> Value),
 }
 
 impl PartialEq for Value {

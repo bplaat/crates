@@ -13,16 +13,14 @@ pub(crate) fn env() -> HashMap<String, Value> {
 
     env.insert(
         "sum".to_string(),
-        Value::NativeFunction(|args: Vec<Value>| {
+        Value::NativeFunction(|args: &[Value]| {
             let mut sum = 0.0;
             for arg in args {
                 if let Value::Number(n) = arg {
                     sum += n;
-                } else {
-                    return Err("Invalid argument to sum, expected number".to_string());
                 }
             }
-            Ok(Value::Number(sum))
+            Value::Number(sum)
         }),
     );
 

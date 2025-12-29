@@ -486,6 +486,28 @@ fn test_loops() {
 }
 
 #[test]
+fn test_loop_labels() {
+    assert_js(Value::Number(3.0), "x: { 3; break x; 6 }");
+    assert_js(Value::Number(7.0), "x:if(true){7;break x; 6}");
+    assert_js(
+        Value::Number(3.0),
+        "let i = 0; outer: while (i < 10) { let j = 0; while (j < 10) { if (i == 3) break outer; j++; } i++; } i",
+    );
+    assert_js(
+        Value::Number(1.0),
+        "let i = 0; outer: while (i < 5) { let j = 0; while (j < 5) { if (j == 2) { i++; break outer; } j++; } i++; } i",
+    );
+    assert_js(
+        Value::Number(4.0),
+        "let sum = 0; outer: for (let i = 0; i < 5; i++) { for (let j = 0; j < 5; j++) { if (i + j == 4) break outer; sum++; } } sum",
+    );
+    assert_js(
+        Value::Number(10.0),
+        "let sum = 0; outer: for (let i = 0; i < 5; i++) { for (let j = 0; j < 5; j++) { if (j == 2) continue outer; sum++; } } sum",
+    );
+}
+
+#[test]
 fn test_call_native_function() {
     assert_js(Value::Number(15.0), r#"sum(7, 8);"#);
     assert_js(Value::Number(56.0), r#"sum(20, 30, 1, 2, 3);"#);
@@ -619,5 +641,13 @@ fn test_scoping() {
     assert_js(
         Value::Number(10.0),
         "let sum = 0; for (let i = 0; i < 5; i++) { let x = i; sum += x; } sum",
+    );
+    assert_js(
+        Value::Number(20.0),
+        "var a = 10; function test() { var a = 20; { let a = 30; } return a } test()",
+    );
+    assert_js(
+        Value::Number(10.0),
+        "var a = 10; function test() { var a = 20; { let a = 30; } return a } test(); a",
     );
 }

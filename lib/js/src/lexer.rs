@@ -223,12 +223,12 @@ impl Lexer {
                 let mut num_str = String::new();
                 while let Some(c) = self.peek() {
                     if c.is_ascii_alphanumeric() {
-                        num_str.push(self.next().expect("Invalid number"));
+                        num_str.push(self.next().ok_or("Invalid number")?);
                     } else {
                         break;
                     }
                 }
-                let num = u64::from_str_radix(&num_str, radix).expect("Invalid number");
+                let num = u64::from_str_radix(&num_str, radix).map_err(|_| "Invalid number")?;
                 tokens.push(Token::Number(num as f64));
                 continue;
             }
@@ -237,19 +237,20 @@ impl Lexer {
                 let mut number = String::from(char);
                 while let Some(c) = self.peek() {
                     if c.is_ascii_digit() || *c == '.' {
-                        number.push(self.next().expect("Invalid number"));
+                        number.push(self.next().ok_or("Invalid number")?);
                     } else if *c == 'e' || *c == 'E' {
-                        number.push(self.next().expect("Invalid number"));
+                        number.push(self.next().ok_or("Invalid number")?);
                         if let Some(sign) = self.peek()
                             && (*sign == '+' || *sign == '-')
                         {
-                            number.push(self.next().expect("Invalid number"));
+                            number.push(self.next().ok_or("Invalid number")?);
                         }
                     } else {
                         break;
                     }
                 }
-                tokens.push(Token::Number(number.parse().expect("Invalid number")));
+                let num = number.parse::<f64>().map_err(|_| "Invalid number")?;
+                tokens.push(Token::Number(num));
                 continue;
             }
 
@@ -271,7 +272,7 @@ impl Lexer {
                     if !char.is_alphanumeric() {
                         break;
                     }
-                    variable.push(self.next().expect("Invalid variable"));
+                    variable.push(self.next().expect("Should be some"));
                 }
 
                 for keyword in &KEYWORDS {
@@ -286,7 +287,7 @@ impl Lexer {
 
             'symbol_loop: for symbol in &SYMBOLS {
                 let mut symbol_chars = symbol.keyword.chars();
-                let x = symbol_chars.next().expect("Invalid symbol");
+                let x = symbol_chars.next().expect("Should be some");
                 if char == x {
                     for (i, expected_char) in symbol_chars.enumerate() {
                         if let Some(next_char) = self.peek_at(i) {
@@ -305,7 +306,6 @@ impl Lexer {
                     continue 'char_loop;
                 }
             }
-
             return Err(format!("Lexer: unknown character: {char}"));
         }
 
