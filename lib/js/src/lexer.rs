@@ -213,6 +213,25 @@ impl Lexer {
                 continue;
             }
 
+            if char == '/' && self.peek() == Some(&'/') {
+                while let Some(next_char) = self.next() {
+                    if next_char == '\n' || next_char == '\r' {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if char == '/' && self.peek() == Some(&'*') {
+                self.next();
+                while let Some(next_char) = self.next() {
+                    if next_char == '*' && self.peek() == Some(&'/') {
+                        self.next();
+                        break;
+                    }
+                }
+                continue;
+            }
+
             if char == '0'
                 && matches!(
                     self.peek(),
