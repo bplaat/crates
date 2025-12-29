@@ -131,15 +131,32 @@ impl<'a> Parser<'a> {
         self.statements()
     }
 
-    fn peek(&self) -> &Token {
+    fn skip_whitespace(&mut self) {
+        while let Token::Newline = self.tokens[self.position] {
+            self.position += 1;
+        }
+    }
+
+    fn peek(&mut self) -> &Token {
+        self.skip_whitespace();
         &self.tokens[self.position]
     }
 
-    fn peek_at(&self, n: usize) -> Option<&Token> {
+    fn peek_without_whitespace_skip(&mut self) -> &Token {
+        &self.tokens[self.position]
+    }
+
+    fn peek_next(&mut self) -> Option<&Token> {
+        self.skip_whitespace();
+        let mut n = 1;
+        while let Token::Newline = self.tokens[self.position + n] {
+            n += 1;
+        }
         self.tokens.get(self.position + n)
     }
 
     fn next(&mut self) {
+        self.skip_whitespace();
         self.position += 1;
     }
 
@@ -152,8 +169,8 @@ impl<'a> Parser<'a> {
             }
 
             // Automatic Semicolon Insertion (ASI) rules
-            match self.peek() {
-                Token::Semicolon => {
+            match self.peek_without_whitespace_skip() {
+                Token::Semicolon | Token::Newline => {
                     self.next();
                 }
                 Token::RightBrace | Token::Eof => {
@@ -191,13 +208,15 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<AstNode, String> {
-        let label = if let Token::Variable(var_name) = self.peek()
-            && let Some(Token::Colon) = self.peek_at(1)
-        {
+        let label = if let Token::Variable(var_name) = self.peek() {
             let label_name = var_name.clone();
-            self.next();
-            self.next();
-            Some(label_name)
+            if let Some(Token::Colon) = self.peek_next() {
+                self.next();
+                self.next();
+                Some(label_name)
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -217,7 +236,7 @@ impl<'a> Parser<'a> {
                 self.next();
                 if let Token::LeftParen = self.peek() {
                     self.next();
-                    let condition = self.ternary()?;
+                    let condition = self.comma()?;
                     if let Token::RightParen = self.peek() {
                         self.next();
                         let then_branch = self.block()?;
@@ -244,7 +263,7 @@ impl<'a> Parser<'a> {
                 self.next();
                 if let Token::LeftParen = self.peek() {
                     self.next();
-                    let expression = self.ternary()?;
+                    let expression = self.comma()?;
                     if let Token::RightParen = self.peek() {
                         self.next();
                         if let Token::LeftBrace = self.peek() {
@@ -255,7 +274,7 @@ impl<'a> Parser<'a> {
                                 match self.peek() {
                                     Token::Case => {
                                         self.next();
-                                        let case_expr = self.ternary()?;
+                                        let case_expr = self.comma()?;
                                         if let Token::Colon = self.peek() {
                                             self.next();
                                             let case_body = if let Token::LeftBrace = self.peek() {
@@ -318,7 +337,7 @@ impl<'a> Parser<'a> {
                 self.next();
                 if let Token::LeftParen = self.peek() {
                     self.next();
-                    let condition = self.ternary()?;
+                    let condition = self.comma()?;
                     if let Token::RightParen = self.peek() {
                         self.next();
                         let body = self.block()?;
@@ -341,7 +360,7 @@ impl<'a> Parser<'a> {
                     self.next();
                     if let Token::LeftParen = self.peek() {
                         self.next();
-                        let condition = self.ternary()?;
+                        let condition = self.comma()?;
                         if let Token::RightParen = self.peek() {
                             self.next();
                             Ok(AstNode::DoWhile {
@@ -487,11 +506,14 @@ impl<'a> Parser<'a> {
             }
             Token::Return => {
                 self.next();
-                let expr = if let Token::Semicolon | Token::RightBrace | Token::Eof = self.peek() {
-                    None
-                } else {
-                    Some(Box::new(self.ternary()?))
-                };
+                let expr =
+                    if let Token::Semicolon | Token::Newline | Token::RightBrace | Token::Eof =
+                        self.peek_without_whitespace_skip()
+                    {
+                        None
+                    } else {
+                        Some(Box::new(self.comma()?))
+                    };
                 Ok(AstNode::Return(expr))
             }
             _ => self.comma(),
@@ -529,7 +551,7 @@ impl<'a> Parser<'a> {
             _ => None,
         };
 
-        match self.peek_at(1) {
+        match self.peek_next() {
             Some(Token::Assign) => {
                 let lhs = self.ternary()?;
                 self.next();
@@ -877,52 +899,8 @@ impl<'a> Parser<'a> {
         match self.peek() {
             Token::LeftParen => {
                 self.next();
-                let node = self.ternary()?;
-
-                // Arrow function
-                if let Token::Comma = self.peek() {
-                    self.next();
-
-                    let mut function_args = Vec::new();
-                    if let AstNode::Variable(var_name) = node {
-                        function_args.push(var_name);
-                    }
-                    loop {
-                        if let Token::RightParen = self.peek() {
-                            self.next();
-                            break;
-                        }
-
-                        if let Token::Variable(var_name) = self.peek() {
-                            function_args.push(var_name.clone());
-                            self.next();
-                        } else {
-                            return Err(String::from(
-                                "Parser: expected argument name in arrow function",
-                            ));
-                        }
-
-                        if let Token::RightParen = self.peek() {
-                            self.next();
-                            break;
-                        } else if let Token::Comma = self.peek() {
-                            self.next();
-                        } else {
-                            return Err(String::from("Parser: expected ',' in arrow function"));
-                        }
-                    }
-
-                    if let Token::Arrow = self.peek() {
-                        self.next();
-                        let body = self.arrow_function_body()?;
-                        return Ok(AstNode::Value(Value::Function(
-                            function_args,
-                            Rc::new(body),
-                        )));
-                    } else {
-                        return Err(String::from("Parser: expected '=>' in arrow function"));
-                    }
-                } else if let Token::RightParen = self.peek() {
+                let node = self.comma()?;
+                if let Token::RightParen = self.peek() {
                     self.next();
                 } else {
                     return Err(String::from("Parser: expected ')' after expression"));
@@ -934,6 +912,16 @@ impl<'a> Parser<'a> {
                     let mut function_args = Vec::new();
                     if let AstNode::Variable(var_name) = node {
                         function_args.push(var_name);
+                    } else if let AstNode::Comma(arg_nodes) = node {
+                        for arg_node in arg_nodes {
+                            if let AstNode::Variable(var_name) = arg_node {
+                                function_args.push(var_name);
+                            } else {
+                                return Err(String::from(
+                                    "Parser: expected variable name in arrow function arguments",
+                                ));
+                            }
+                        }
                     }
                     let body = self.arrow_function_body()?;
                     return Ok(AstNode::Value(Value::Function(
@@ -943,10 +931,6 @@ impl<'a> Parser<'a> {
                 }
 
                 Ok(node)
-            }
-            Token::Undefined => {
-                self.next();
-                Ok(AstNode::Value(Value::Undefined))
             }
             Token::Null => {
                 self.next();

@@ -11,16 +11,28 @@ use crate::value::Value;
 pub(crate) fn env() -> HashMap<String, Value> {
     let mut env = HashMap::new();
 
+    // Global variables
+    env.insert("Infinity".to_string(), Value::Number(f64::INFINITY));
+    env.insert("NaN".to_string(), Value::Number(f64::NAN));
+    env.insert("undefined".to_string(), Value::Undefined);
+
+    // Global functions
     env.insert(
-        "sum".to_string(),
+        "isNaN".to_string(),
         Value::NativeFunction(|args: &[Value]| {
-            let mut sum = 0.0;
-            for arg in args {
-                if let Value::Number(n) = arg {
-                    sum += n;
-                }
+            if args.is_empty() {
+                return Value::Boolean(true);
             }
-            Value::Number(sum)
+            Value::Boolean(args[0].to_number().is_nan())
+        }),
+    );
+    env.insert(
+        "isFinite".to_string(),
+        Value::NativeFunction(|args: &[Value]| {
+            if args.is_empty() {
+                return Value::Boolean(false);
+            }
+            Value::Boolean(args[0].to_number().is_finite())
         }),
     );
 

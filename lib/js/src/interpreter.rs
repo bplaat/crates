@@ -293,7 +293,7 @@ impl<'a> Interpreter<'a> {
             AstNode::DivideAssign(lhs, rhs) => self.op_assign(
                 lhs,
                 rhs,
-                |a, b| if b != 0.0 { a / b } else { 0.0 },
+                |a, b| if b != 0.0 { a / b } else { f64::NAN },
                 "division",
             ),
             AstNode::RemainderAssign(lhs, rhs) => self.op_assign(lhs, rhs, |a, b| a % b, "modulo"),
@@ -462,7 +462,7 @@ impl<'a> Interpreter<'a> {
             AstNode::Divide(lhs, rhs) => self.arithmetic_op(
                 lhs,
                 rhs,
-                |a, b| if b != 0.0 { a / b } else { 0.0 },
+                |a, b| if b != 0.0 { a / b } else { f64::NAN },
                 "division",
             ),
             AstNode::Remainder(lhs, rhs) => self.arithmetic_op(lhs, rhs, |a, b| a % b, "modulo"),
