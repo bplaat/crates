@@ -15,6 +15,7 @@ pub(crate) enum Token {
     Question,
     Colon,
     Semicolon,
+    Arrow,
 
     Undefined,
     Null,
@@ -36,6 +37,8 @@ pub(crate) enum Token {
     Do,
     Continue,
     For,
+    Function,
+    Return,
 
     Assign,
     AddAssign,
@@ -50,6 +53,8 @@ pub(crate) enum Token {
     LeftShiftAssign,
     SignedRightShiftAssign,
     UnsignedRightShiftAssign,
+    LogicalOrAssign,
+    LogicalAndAssign,
     Typeof,
     Add,
     Increment,
@@ -90,7 +95,7 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 18] = [
+const KEYWORDS: [Keyword; 20] = [
     Keyword::new("undefined", Token::Undefined),
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
@@ -109,10 +114,12 @@ const KEYWORDS: [Keyword; 18] = [
     Keyword::new("do", Token::Do),
     Keyword::new("continue", Token::Continue),
     Keyword::new("for", Token::For),
+    Keyword::new("function", Token::Function),
+    Keyword::new("return", Token::Return),
 ];
 
 // NOTE: Sort by length descending to match longest first
-const SYMBOLS: [Keyword; 47] = [
+const SYMBOLS: [Keyword; 50] = [
     Keyword::new(">>>=", Token::UnsignedRightShiftAssign),
     Keyword::new(">>>", Token::UnsignedRightShift),
     Keyword::new("===", Token::StrictEquals),
@@ -120,6 +127,9 @@ const SYMBOLS: [Keyword; 47] = [
     Keyword::new(">>=", Token::SignedRightShiftAssign),
     Keyword::new("<<=", Token::LeftShiftAssign),
     Keyword::new("**=", Token::ExponentiationAssign),
+    Keyword::new("||=", Token::LogicalOrAssign),
+    Keyword::new("&&=", Token::LogicalAndAssign),
+    Keyword::new("=>", Token::Arrow),
     Keyword::new("+=", Token::AddAssign),
     Keyword::new("-=", Token::SubtractAssign),
     Keyword::new("*=", Token::MultiplyAssign),

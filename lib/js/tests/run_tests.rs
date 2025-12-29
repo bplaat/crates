@@ -154,7 +154,7 @@ fn test_strings() {
 }
 
 #[test]
-fn test_assingments() {
+fn test_assignments() {
     assert_js(Value::Number(10.0), "a = 10");
     assert_js(Value::Number(15.0), "a = 5; a += 10");
     assert_js(Value::Number(5.0), "a = 15; a -= 10");
@@ -185,6 +185,12 @@ fn test_assingments() {
     assert_js(Value::Number(100.0), "a = 10; a += 20; a += 30; a += 40");
     assert_js(Value::Number(24.0), "a = 6; b = 4; a *= b");
     assert_js(Value::Number(3.0), "a = 15; b = 5; a /= b");
+    assert_js(Value::Number(5.0), "a = 0; a ||= 5");
+    assert_js(Value::Number(10.0), "a = 10; a ||= 5");
+    assert_js(Value::Number(0.0), "a = 5; a &&= 0");
+    assert_js(Value::Number(10.0), "a = 5; a &&= 10");
+    assert_js(Value::Number(8.0), "a = 0; b = 8; a ||= b");
+    assert_js(Value::Number(5.0), "a = 3; b = 5; a &&= b");
 }
 
 #[test]
@@ -483,4 +489,55 @@ fn test_loops() {
 fn test_call_native_function() {
     assert_js(Value::Number(15.0), r#"sum(7, 8);"#);
     assert_js(Value::Number(56.0), r#"sum(20, 30, 1, 2, 3);"#);
+}
+
+#[test]
+fn test_function() {
+    assert_js(
+        Value::String(String::from("function")),
+        "function add(a, b) { return a + b; } typeof add",
+    );
+    assert_js(
+        Value::Number(25.0),
+        "function add(a, b) { return a + b; } add(10, 15);",
+    );
+    assert_js(
+        Value::Number(120.0),
+        "function multiply(x, y) { return x * y; } multiply(10, 12);",
+    );
+    assert_js(
+        Value::Number(49.0),
+        "function square(n) { return n * n; } square(7);",
+    );
+    assert_js(
+        Value::Number(6.0),
+        "function factorial(n) { if (n <= 1) { return 1; } else { return n * factorial(n - 1); } } factorial(3);",
+    );
+    assert_js(
+        Value::Number(120.0),
+        "function factorial(n) { if (n <= 1) { return 1; } else { return n * factorial(n - 1); } } factorial(5);",
+    );
+    assert_js(
+        Value::Number(55.0),
+        "function fibonacci(n) { if (n <= 1) { return n; } else { return fibonacci(n - 1) + fibonacci(n - 2); } } fibonacci(10);",
+    );
+
+    assert_js(Value::Number(49.0), "const square = n => n * n; square(7);");
+    assert_js(
+        Value::Number(64.0),
+        "const square = (n) => (n) * n; square(8);",
+    );
+    assert_js(
+        Value::Number(11.0),
+        "const fmul = (a, b, c) => { let x = a * b; x += c; return x; }; fmul(2, 3, 5);",
+    );
+    assert_js(
+        Value::Number(100.0),
+        "const multiply = (x, y) => x * y; multiply(10, 10);",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "const sum = (a, b, c) => a + b + c; sum(3, 5, 7);",
+    );
+    assert_js(Value::Number(5.0), "const identity = x => x; identity(5);");
 }
