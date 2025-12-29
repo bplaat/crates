@@ -5,6 +5,7 @@
  */
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::parser::{AstNode, DeclarationType};
 use crate::value::Value;
@@ -114,7 +115,7 @@ impl<'a> Interpreter<'a> {
                 let mut last_value = Value::Undefined;
                 for (case_value, case_body) in cases {
                     let case_eval = self.eval_node(case_value)?;
-                    if expr_value == case_eval {
+                    if expr_value.loose_equals(&case_eval) {
                         last_value = match self.eval_node(case_body) {
                             Err(Control::Break(break_label)) if break_label == *label => {
                                 return Ok(self.previous_value.clone());
@@ -240,6 +241,13 @@ impl<'a> Interpreter<'a> {
             }
 
             AstNode::Value(value) => Ok(value.clone()),
+            AstNode::ArrayLiteral(nodes) => {
+                let mut elements = Vec::new();
+                for node in nodes {
+                    elements.push(self.eval_node(node)?);
+                }
+                Ok(Value::Array(Rc::new(elements)))
+            }
             AstNode::Variable(variable) => match self.get_var(variable) {
                 Some(value) => Ok(value.clone()),
                 None => Err(Control::Error(format!(
@@ -253,14 +261,20 @@ impl<'a> Interpreter<'a> {
                     arg_values.push(self.eval_node(arg)?);
                 }
                 match func_value {
-                    Value::Function(arguments, body) => {
+                    Value::Function(rc) => {
+                        let (arg_names, body) = &*rc;
                         let mut func_env = HashMap::new();
-                        for (i, arg_name) in arguments.iter().enumerate() {
+                        for (i, arg_name) in arg_names.iter().enumerate() {
                             let arg_value = arg_values.get(i).cloned().unwrap_or(Value::Undefined);
-                            func_env.insert(arg_name.clone(), arg_value);
+                            func_env.insert(arg_name.clone(), arg_value.clone());
                         }
+                        func_env.insert(
+                            "arguments".to_string(),
+                            Value::Array(Rc::new(arg_values.to_vec())),
+                        );
+
                         self.scopes.push(Scope::Function(func_env));
-                        match self.eval_node(&body) {
+                        match self.eval_node(body) {
                             Ok(_) => {
                                 self.scopes.pop();
                                 Ok(Value::Undefined)
@@ -489,26 +503,18 @@ impl<'a> Interpreter<'a> {
                 ))),
             },
 
-            AstNode::Equals(lhs, rhs) => match (self.eval_node(lhs)?, self.eval_node(rhs)?) {
-                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a == b)),
-                (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
-                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a == b)),
-                (Value::Undefined, Value::Undefined) => Ok(Value::Boolean(true)),
-                (Value::Null, Value::Null) => Ok(Value::Boolean(true)),
-                _ => Ok(Value::Boolean(false)),
-            },
+            AstNode::Equals(lhs, rhs) => {
+                let (lhs_val, rhs_val) = (self.eval_node(lhs)?, self.eval_node(rhs)?);
+                Ok(Value::Boolean(lhs_val.loose_equals(&rhs_val)))
+            }
             AstNode::StrictEquals(lhs, rhs) => {
                 let (lhs_val, rhs_val) = (self.eval_node(lhs)?, self.eval_node(rhs)?);
                 Ok(Value::Boolean(lhs_val == rhs_val))
             }
-            AstNode::NotEquals(lhs, rhs) => match (self.eval_node(lhs)?, self.eval_node(rhs)?) {
-                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a != b)),
-                (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a != b)),
-                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a != b)),
-                (Value::Undefined, Value::Undefined) => Ok(Value::Boolean(false)),
-                (Value::Null, Value::Null) => Ok(Value::Boolean(false)),
-                _ => Ok(Value::Boolean(true)),
-            },
+            AstNode::NotEquals(lhs, rhs) => {
+                let (lhs_val, rhs_val) = (self.eval_node(lhs)?, self.eval_node(rhs)?);
+                Ok(Value::Boolean(!lhs_val.loose_equals(&rhs_val)))
+            }
             AstNode::StrictNotEquals(lhs, rhs) => {
                 let (lhs_val, rhs_val) = (self.eval_node(lhs)?, self.eval_node(rhs)?);
                 Ok(Value::Boolean(lhs_val != rhs_val))
@@ -537,6 +543,24 @@ impl<'a> Interpreter<'a> {
                     return Ok(lhs_val);
                 }
                 self.eval_node(rhs)
+            }
+
+            AstNode::GetProperty(object_node, property_node) => {
+                let object_value = self.eval_node(object_node)?;
+                let property_value = self.eval_node(property_node)?;
+                match (object_value, property_value) {
+                    (Value::Array(elements), Value::Number(index)) => {
+                        let idx = index as usize;
+                        if idx < elements.len() {
+                            Ok(elements.get(idx).cloned().unwrap_or(Value::Undefined))
+                        } else {
+                            Ok(Value::Undefined)
+                        }
+                    }
+                    _ => Err(Control::Error(String::from(
+                        "Interpreter: property access on non-array or non-number index",
+                    ))),
+                }
             }
         }
     }
