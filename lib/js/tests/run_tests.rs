@@ -60,7 +60,6 @@ fn test_int_arithmetic() {
     assert_js(Value::Number(4.0), "(3 + 5) / 2");
     assert_js(Value::Number(16.0), "2 ** 4");
     assert_js(Value::Number(9.0), "2 ** 3 + 1");
-    assert_js(Value::Number(0.0), "36 / 0");
     assert_js(Value::Number(2.0), "20 % 3");
     assert_js(Value::Number(34.0), "- -34");
     assert_js(Value::Number(-40.0), "- - -40");
@@ -158,10 +157,10 @@ fn test_assignments() {
     assert_js(Value::Number(10.0), "a = 10");
     assert_js(Value::Number(15.0), "a = 5; a += 10");
     assert_js(Value::Number(5.0), "a = 15; a -= 10");
-    assert_js(Value::Number(50.0), "a = 5; a *= 10");
-    assert_js(Value::Number(2.0), "a = 20; a /= 10");
+    assert_js(Value::Number(50.0), "a = 5\n a *= 10");
+    assert_js(Value::Number(2.0), "a = 20\n a /= 10");
     assert_js(Value::Number(2.0), "a = 20; a %= 6");
-    assert_js(Value::Number(32.0), "a = 2; a **= 5");
+    assert_js(Value::Number(32.0), "a = 2\n a **= 5");
     assert_js(Value::Number(1.0), "a = 5; a &= 3");
     assert_js(Value::Number(7.0), "a = 5; a |= 3");
     assert_js(Value::Number(6.0), "a = 5; a ^= 3");
@@ -174,16 +173,16 @@ fn test_assignments() {
     assert_js(Value::Number(50.0), "a = 5; b = 10; a * b");
     assert_js(Value::Number(4.0), "a = 20; b = 5; a / b");
     assert_js(Value::Number(2.0), "a = 17; b = 5; a % b");
-    assert_js(Value::Number(32.0), "a = 2; b = 5; a ** b");
+    assert_js(Value::Number(32.0), "a = 2;\n b = 5;\n a ** b");
     assert_js(Value::Number(1.0), "a = 5; b = 3; a & b");
     assert_js(Value::Number(7.0), "a = 5; b = 3; a | b");
-    assert_js(Value::Number(6.0), "a = 5; b = 3; a ^ b");
+    assert_js(Value::Number(6.0), "a = 5; b = 3 \n a ^ b");
     assert_js(Value::Number(20.0), "a = 5; b = 2; a << b");
     assert_js(Value::Number(1.0), "a = 5; b = 2; a >> b");
     assert_js(Value::Number(1.0), "a = 5; b = 2; a >>> b");
     assert_js(Value::Number(30.0), "a = 10; b = 5; c = 15; a + b + c");
-    assert_js(Value::Number(100.0), "a = 10; a += 20; a += 30; a += 40");
-    assert_js(Value::Number(24.0), "a = 6; b = 4; a *= b");
+    assert_js(Value::Number(100.0), "a = 10 \n a += 20; a += 30; a += 40");
+    assert_js(Value::Number(24.0), "a = 6;\n b = 4; a *= b");
     assert_js(Value::Number(3.0), "a = 15; b = 5; a /= b");
     assert_js(Value::Number(5.0), "a = 0; a ||= 5");
     assert_js(Value::Number(10.0), "a = 10; a ||= 5");
@@ -191,6 +190,19 @@ fn test_assignments() {
     assert_js(Value::Number(10.0), "a = 5; a &&= 10");
     assert_js(Value::Number(8.0), "a = 0; b = 8; a ||= b");
     assert_js(Value::Number(5.0), "a = 3; b = 5; a &&= b");
+}
+
+#[test]
+fn test_comma_operator() {
+    assert_js(Value::Number(20.0), " (10, 20) ");
+    assert_js(Value::Number(30.0), " (5 + \n5, 15 + 15) ");
+    assert_js(Value::Number(3.0), " (1, 2, \n3) ");
+    assert_js(Value::Number(100.0), " (50 * \n2, 25 * 4, 100) ");
+    assert_js(Value::Number(15.0), " (a = 10, b = 5, a + b) ");
+    assert_js(Value::Number(50.0), " (a = 20\n, b = 30, a + b) ");
+    assert_js(Value::Number(7.0), " (x = 3, y = 4, x + y) ");
+    assert_js(Value::Number(0.0), " (x = 0\n,\n y = 1, x) ");
+    assert_js(Value::Number(1.0), " (x = 0, y = 1, y) ");
 }
 
 #[test]
@@ -207,16 +219,16 @@ fn test_ternary() {
     assert_js(Value::Number(25.0), "true ? (5 > 3 ? 25 : 5) : 10");
     assert_js(
         Value::Number(25.0),
-        "true ? (5 > 3 ? 25 : 5) : (5 < 3 ? 15 : 10)",
+        "true ? (5 > 3 \n? 25 : 5) : (5 < 3 ? 15 : 10)",
     );
     assert_js(Value::Number(10.0), "5 > 10 ? 20 : (3 < 5 ? 10 : 15)");
     assert_js(
         Value::Number(50.0),
-        "true ? (true ? (true ? 50 : 40) : 30) : 20",
+        "true ? (true ? (true ? 50 : \n40) : 30) : 20",
     );
     assert_js(
         Value::Boolean(true),
-        "true ? (5 > 3 ? true : false) : false",
+        "true ? (5 > 3 \n? true : false) : false",
     );
     assert_js(
         Value::Number(7.0),
@@ -240,9 +252,9 @@ fn test_statements() {
     assert_js(Value::Number(40.0), "20;30;40");
     assert_js(Value::Number(91.0), "34,  48,91");
     assert_js(Value::Number(10.0), "a = 10");
-    assert_js(Value::Number(40.0), "a = 5,a * 8");
+    assert_js(Value::Number(40.0), "a = \n5,a * 8");
     assert_js(Value::Number(100.0), "a=10;b = 90;a + b");
-    assert_js(Value::Number(40.0), "a=  b= 20,  a+b");
+    assert_js(Value::Number(40.0), "a= \n b= 20,\n  a+b");
     assert_js(
         Value::String(String::from("Hello World")),
         "a='Hello';a+=' World';a",
@@ -252,10 +264,10 @@ fn test_statements() {
 #[test]
 fn test_var_let_const() {
     assert_js(Value::Number(10.0), "var a = 10; a");
-    assert_js(Value::Number(20.0), "let a = 20; a");
-    assert_js(Value::Number(30.0), "const a = 30; a");
-    assert_js(Value::Number(25.0), "var a = 10; let b = 15; a + b");
-    assert_js(Value::Number(50.0), "let a = 20; const b = 30; a + b");
+    assert_js(Value::Number(20.0), "let a = 20 \n a");
+    assert_js(Value::Number(30.0), "const a = \n30; a");
+    assert_js(Value::Number(25.0), "var \n a \n = 10 \n let b = 15; a + b");
+    assert_js(Value::Number(50.0), "let a = 20; const b \n= 30; a + b");
     assert_js(
         Value::String(String::from("Hello JS")),
         "const greeting = 'Hello'; let target = ' JS'; greeting + target",
@@ -264,8 +276,8 @@ fn test_var_let_const() {
 
 #[test]
 fn test_if() {
-    assert_js(Value::Number(10.0), "if (true) { 10 } else { 20 }");
-    assert_js(Value::Number(20.0), "if (false) { 10 } else { 20 }");
+    assert_js(Value::Number(10.0), "if \n(true) { 10 } else { 20 }");
+    assert_js(Value::Number(20.0), "if (false) \n{ 10 }\n else \n{ 20 }");
     assert_js(
         Value::Number(15.0),
         "let a = 15; if (a > 10) { a } else { 10 }",
@@ -304,11 +316,11 @@ fn test_switch() {
     );
     assert_js(
         Value::Number(10.0),
-        "let a = 1; switch (a) { case 1: 10; break; case 2: 20; break; default: 30; }",
+        "let a = 1; \n switch ( \n a \n) \n { \n case 1: 10; break; case 2: 20; break; default: 30; }",
     );
     assert_js(
         Value::Number(30.0),
-        "let a = 5; switch (a) { case 1: 10; break; case 2: 20; break; default: 30; }",
+        "let a = 5; switch (a) \n { case 1: 10; break; case 2: 20; break; default: 30; }",
     );
     assert_js(
         Value::Number(30.0),
@@ -324,19 +336,19 @@ fn test_switch() {
     );
     assert_js(
         Value::Number(15.0),
-        "let a = 1; let b = 5; switch (a) { case 1: b + 10; break; case 2: b * 2; break; default: 0; }",
+        "let a = 1; let b = 5; switch (a) { case 1: \n b + 10; \n break; case 2: b * 2; break; default: 0; }",
     );
     assert_js(
         Value::Number(100.0),
-        "let x = 10; switch (x) { case 10: 100; break; case 20: 200; break; case 30: 300; break; default: 0; }",
+        "let x = 10; switch (x) { case 10: \n 100; \n break; \n case \n 20: 200; break; case 30: 300; break; default: 0; }",
     );
     assert_js(
         Value::Number(200.0),
-        "let x = 20; switch (x) { case 10: 100; break; case 20: 200; break; case 30: 300; break; default: 0; }",
+        "let x = 20; switch (x) { case 10: 100; \n break; case 20: 200; break; case 30: 300; break; default: 0; }",
     );
     assert_js(
         Value::Number(0.0),
-        "let x = 40; switch (x) { case 10: 100; break; case 20: 200; break; case 30: 300; break; default: 0; }",
+        "let x = 40; switch (x) { \n case 10: 100; break; case 20: 200; break; case 30: 300; break; default: 0; }",
     );
     assert_js(
         Value::Number(45.0),
@@ -488,14 +500,15 @@ fn test_loops() {
 #[test]
 fn test_loop_labels() {
     assert_js(Value::Number(3.0), "x: { 3; break x; 6 }");
-    assert_js(Value::Number(7.0), "x:if(true){7;break x; 6}");
+    assert_js(Value::Number(3.0), "x\n:\n{ 3; break x; 6 }");
+    assert_js(Value::Number(7.0), "x :  if(true){7;break x; 6}");
     assert_js(
         Value::Number(3.0),
-        "let i = 0; outer: while (i < 10) { let j = 0; while (j < 10) { if (i == 3) break outer; j++; } i++; } i",
+        "let i = 0; outer: while (i < 10) \n { let j = 0; while (j < 10) { if (i == 3) break outer; j++; } i++; } i",
     );
     assert_js(
         Value::Number(1.0),
-        "let i = 0; outer: while (i < 5) { let j = 0; while (j < 5) { if (j == 2) { i++; break outer; } j++; } i++; } i",
+        "let i = 0; outer: while (i < 5) { let j = 0; \n while (j < 5) { if (j == 2) { i++; break outer; } j++; } i++; } i",
     );
     assert_js(
         Value::Number(4.0),
@@ -503,14 +516,8 @@ fn test_loop_labels() {
     );
     assert_js(
         Value::Number(10.0),
-        "let sum = 0; outer: for (let i = 0; i < 5; i++) { for (let j = 0; j < 5; j++) { if (j == 2) continue outer; sum++; } } sum",
+        "let sum = 0; outer: for (let i = 0; \n i < 5; \n i++) { for (let j = 0; j < 5; j++) { if (j == 2) continue outer; sum++; } } sum",
     );
-}
-
-#[test]
-fn test_call_native_function() {
-    assert_js(Value::Number(15.0), r#"sum(7, 8);"#);
-    assert_js(Value::Number(56.0), r#"sum(20, 30, 1, 2, 3);"#);
 }
 
 #[test]
@@ -521,7 +528,19 @@ fn test_function() {
     );
     assert_js(
         Value::Number(25.0),
+        "function add(a, b) { return (4, a + b); } add(10, 15);",
+    );
+    assert_js(
+        Value::Number(25.0),
         "function add(a, b) { return a + b; } add(10, 15);",
+    );
+    assert_js(
+        Value::Undefined,
+        "function add(a, b) { return;a + b; } add(10, 15);",
+    );
+    assert_js(
+        Value::Undefined,
+        "function add(a, b) { return\na + b; } add(10, 15);",
     );
     assert_js(
         Value::Number(120.0),
@@ -611,7 +630,7 @@ fn test_scoping() {
     );
     assert_js(
         Value::Number(50.0),
-        "let x = 50; if (true) { let x = 100; } x",
+        "let x = 50; if (true) \n{ \n let x = 100; } x",
     );
     assert_js(Value::Number(100.0), "let x = 50; if (true) { x = 100; } x");
     assert_js(
@@ -650,4 +669,16 @@ fn test_scoping() {
         Value::Number(10.0),
         "var a = 10; function test() { var a = 20; { let a = 30; } return a } test(); a",
     );
+}
+
+#[test]
+fn test_globals() {
+    assert_js(Value::Boolean(true), "isNaN(NaN)");
+    assert_js(Value::Boolean(false), "isNaN(42)");
+    assert_js(Value::Boolean(true), "isNaN('string')");
+    assert_js(Value::Boolean(true), "isNaN(0 / 0)");
+    assert_js(Value::Boolean(true), "isFinite(42)");
+    assert_js(Value::Boolean(false), "isFinite(Infinity)");
+    assert_js(Value::Boolean(false), "isFinite(NaN)");
+    assert_js(Value::Boolean(false), "isFinite(1 / 0)");
 }

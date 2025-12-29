@@ -65,4 +65,21 @@ impl Value {
             Value::Function(..) | Value::NativeFunction(_) => true,
         }
     }
+
+    pub(crate) fn to_number(&self) -> f64 {
+        match self {
+            Value::Undefined => f64::NAN,
+            Value::Null => 0.0,
+            Value::Boolean(b) => {
+                if *b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            Value::Number(n) => *n,
+            Value::String(s) => s.parse::<f64>().unwrap_or(f64::NAN),
+            Value::Function(..) | Value::NativeFunction(_) => f64::NAN,
+        }
+    }
 }

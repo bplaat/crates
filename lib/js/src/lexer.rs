@@ -7,6 +7,7 @@
 #[derive(Debug, Clone)]
 pub(crate) enum Token {
     Eof,
+    Newline,
     LeftParen,
     RightParen,
     LeftBrace,
@@ -17,7 +18,6 @@ pub(crate) enum Token {
     Semicolon,
     Arrow,
 
-    Undefined,
     Null,
     Number(f64),
     String(String),
@@ -95,8 +95,7 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 20] = [
-    Keyword::new("undefined", Token::Undefined),
+const KEYWORDS: [Keyword; 19] = [
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
     Keyword::new("false", Token::Boolean(false)),
@@ -203,6 +202,13 @@ impl Lexer {
     pub(crate) fn tokens(&mut self) -> Result<Vec<Token>, String> {
         let mut tokens = Vec::new();
         'char_loop: while let Some(char) = self.next() {
+            if char == '\r' || char == '\n' {
+                if char == '\r' && self.peek() == Some(&'\n') {
+                    self.next();
+                }
+                tokens.push(Token::Newline);
+                continue;
+            }
             if char.is_whitespace() {
                 continue;
             }
