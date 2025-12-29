@@ -541,3 +541,83 @@ fn test_function() {
     );
     assert_js(Value::Number(5.0), "const identity = x => x; identity(5);");
 }
+
+#[test]
+fn test_scoping() {
+    assert_js(
+        Value::Number(10.0),
+        "var a = 10; function test() { return a; } test();",
+    );
+    assert_js(
+        Value::Number(20.0),
+        "let a = 10; function test() { let a = 20; return a; } test();",
+    );
+    assert_js(
+        Value::Number(10.0),
+        "let a = 10; function test() { let a = 20; return a; } test(); a",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "let a = 10; function test() { a = 30; return a; } test(); a",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "const a = 15; function test() { return a; } test();",
+    );
+    assert_js(
+        Value::Number(5.0),
+        "function outer() { let x = 5; return x; } outer();",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "function outer() { let x = 5; function inner() { return x + 10; } return inner(); } outer();",
+    );
+    assert_js(
+        Value::Number(25.0),
+        "function outer() { let x = 5; function inner() { let x = 20; return x; } return inner() + x; } outer();",
+    );
+    assert_js(Value::Number(10.0), "let x = 10; { let x = 20; } x");
+    assert_js(Value::Number(20.0), "let x = 10; { x = 20; } x");
+    assert_js(Value::Number(5.0), "for (let i = 0; i < 5; i++) { } i");
+    assert_js(
+        Value::Number(30.0),
+        "let sum = 0; for (let i = 0; i < 5; i++) { let x = 6; sum += x; } sum",
+    );
+    assert_js(
+        Value::Number(10.0),
+        "let a = 10; while (true) { let a = 20; break; } a",
+    );
+    assert_js(
+        Value::Number(50.0),
+        "let x = 50; if (true) { let x = 100; } x",
+    );
+    assert_js(Value::Number(100.0), "let x = 50; if (true) { x = 100; } x");
+    assert_js(
+        Value::Number(10.0),
+        "var a = 10; function test() { return a; } test();",
+    );
+    assert_js(
+        Value::Number(20.0),
+        "var a = 10; function test() { var a = 20; return a; } test();",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "var a = 10; function test() { a = 30; } test(); a",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "function outer() { let x = 10; function middle() { let y = 20; function inner() { return x + y; } return inner(); } return middle(); } outer();",
+    );
+    assert_js(
+        Value::Number(25.0),
+        "const x = 15; function test() { const x = 25; return x; } test();",
+    );
+    assert_js(
+        Value::Number(25.0),
+        "let result = 0; for (let i = 0; i < 5; i++) { for (let j = 0; j < 5; j++) { result += 1; } } result",
+    );
+    assert_js(
+        Value::Number(10.0),
+        "let sum = 0; for (let i = 0; i < 5; i++) { let x = i; sum += x; } sum",
+    );
+}
