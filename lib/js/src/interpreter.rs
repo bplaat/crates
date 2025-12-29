@@ -10,25 +10,21 @@ use crate::parser::{AstNode, DeclarationType};
 use crate::value::Value;
 
 enum Scope {
-    Block {
-        env: HashMap<String, Value>,
-    },
-    Switch {
-        break_flag: bool,
-    },
-    Loop {
-        continue_flag: bool,
-        break_flag: bool,
-    },
-    Function {
-        return_value: Option<Value>,
-    },
+    Function(HashMap<String, Value>),
+    Block(HashMap<String, Value>),
+}
+
+enum Control {
+    Error(String),
+    Break(Option<String>),
+    Continue(Option<String>),
+    Return(Value),
 }
 
 pub(crate) struct Interpreter<'a> {
     global_env: &'a mut HashMap<String, Value>,
     scopes: Vec<Scope>,
-    previous_value: Option<Value>,
+    previous_value: Value,
 }
 
 impl<'a> Interpreter<'a> {
@@ -36,247 +32,225 @@ impl<'a> Interpreter<'a> {
         Interpreter {
             global_env,
             scopes: Vec::new(),
-            previous_value: None,
+            previous_value: Value::Undefined,
         }
     }
 
-    // MARK: Eval node
+    // MARK: Eval
     pub(crate) fn eval(&mut self, node: &AstNode) -> Result<Value, String> {
-        // Unwrap scopes when needed
-        for scope in self.scopes.iter_mut().rev() {
-            match scope {
-                Scope::Block { .. } => {}
-                Scope::Switch { break_flag } => {
-                    if *break_flag {
-                        return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
-                    }
-                }
-                Scope::Loop {
-                    continue_flag,
-                    break_flag,
-                } => {
-                    if *continue_flag || *break_flag {
-                        return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
-                    }
-                }
-                Scope::Function { return_value, .. } => {
-                    if let Some(ret_val) = return_value.take() {
-                        return Ok(ret_val);
-                    }
-                }
+        match self.eval_node(node) {
+            Ok(val) => Ok(val),
+            Err(Control::Error(err)) => Err(err),
+            Err(Control::Break(_)) => Err(String::from(
+                "Interpreter: 'break' used outside of loop or switch",
+            )),
+            Err(Control::Continue(_)) => {
+                Err(String::from("Interpreter: 'continue' used outside of loop"))
             }
+            Err(Control::Return(_)) => Err(String::from(
+                "Interpreter: 'return' used outside of function",
+            )),
         }
+    }
 
+    fn eval_node(&mut self, node: &AstNode) -> Result<Value, Control> {
         match node {
-            AstNode::Block(nodes) => {
-                self.scopes.push(Scope::Block {
-                    env: HashMap::new(),
-                });
+            AstNode::Block { label, nodes } => {
+                self.scopes.push(Scope::Block(HashMap::new()));
                 for node in nodes {
-                    self.previous_value = Some(self.eval(node)?);
+                    self.previous_value = match self.eval_node(node) {
+                        Ok(val) => val,
+                        Err(Control::Break(break_label))
+                            if label.is_some() && break_label == *label =>
+                        {
+                            self.scopes.pop();
+                            return Ok(self.previous_value.clone());
+                        }
+                        Err(control) => {
+                            self.scopes.pop();
+                            return Err(control);
+                        }
+                    };
                 }
                 self.scopes.pop();
-                Ok(self.previous_value.take().unwrap_or(Value::Undefined))
+                Ok(self.previous_value.clone())
             }
             AstNode::If {
+                label,
                 condition,
                 then_branch,
                 else_branch,
             } => {
-                let cond_value = self.eval(condition)?;
+                let cond_value = self.eval_node(condition)?;
                 if cond_value.is_truthy() {
-                    self.eval(then_branch)
+                    match self.eval_node(then_branch) {
+                        Err(Control::Break(break_label))
+                            if label.is_some() && break_label == *label =>
+                        {
+                            Ok(self.previous_value.clone())
+                        }
+                        result => result,
+                    }
                 } else if let Some(else_branch) = else_branch {
-                    self.eval(else_branch)
+                    match self.eval_node(else_branch) {
+                        Err(Control::Break(break_label))
+                            if label.is_some() && break_label == *label =>
+                        {
+                            Ok(self.previous_value.clone())
+                        }
+                        result => result,
+                    }
                 } else {
                     Ok(Value::Undefined)
                 }
             }
             AstNode::Switch {
+                label,
                 expression,
                 cases,
                 default,
             } => {
-                self.scopes.push(Scope::Switch { break_flag: false });
-                let expr_value = self.eval(expression)?;
+                let expr_value = self.eval_node(expression)?;
+                let mut last_value = Value::Undefined;
                 for (case_value, case_body) in cases {
-                    let case_eval = self.eval(case_value)?;
+                    let case_eval = self.eval_node(case_value)?;
                     if expr_value == case_eval {
-                        let value = self.eval(case_body)?;
-                        if let Scope::Switch { break_flag } =
-                            self.scopes.last().expect("Should be some")
-                            && *break_flag
-                        {
-                            self.scopes.pop();
-                            return Ok(value);
-                        }
+                        last_value = match self.eval_node(case_body) {
+                            Err(Control::Break(break_label)) if break_label == *label => {
+                                return Ok(self.previous_value.clone());
+                            }
+                            result => result,
+                        }?;
                     }
                 }
                 if let Some(default_body) = default {
-                    let value = self.eval(default_body)?;
-                    self.scopes.pop();
-                    return Ok(value);
+                    last_value = match self.eval_node(default_body) {
+                        Err(Control::Break(break_label)) if break_label == *label => {
+                            return Ok(self.previous_value.clone());
+                        }
+                        result => result,
+                    }?;
                 }
-                self.scopes.pop();
-                Ok(Value::Undefined)
+                Ok(last_value)
             }
-            AstNode::While { condition, body } => {
-                self.scopes.push(Scope::Loop {
-                    continue_flag: false,
-                    break_flag: false,
-                });
-                let mut result = Value::Undefined;
+            AstNode::While {
+                label,
+                condition,
+                body,
+            } => {
+                let mut last_value = Value::Undefined;
                 loop {
-                    let cond_value = self.eval(condition)?;
+                    let cond_value = self.eval_node(condition)?;
                     if !cond_value.is_truthy() {
                         break;
                     }
-                    result = self.eval(body)?;
-                    if let Scope::Loop {
-                        continue_flag,
-                        break_flag,
-                    } = self.scopes.last_mut().expect("Should be some")
-                    {
-                        if *continue_flag {
-                            *continue_flag = false;
+
+                    last_value = match self.eval_node(body) {
+                        Err(Control::Break(break_label)) if break_label == *label => {
+                            return Ok(self.previous_value.clone());
                         }
-                        if *break_flag {
-                            *break_flag = false;
-                            break;
+                        Err(Control::Continue(continue_label)) if continue_label == *label => {
+                            continue;
                         }
-                    }
+                        result => result,
+                    }?;
                 }
-                self.scopes.pop();
-                Ok(result)
+                Ok(last_value)
             }
-            AstNode::DoWhile { body, condition } => {
-                self.scopes.push(Scope::Loop {
-                    continue_flag: false,
-                    break_flag: false,
-                });
-                #[allow(unused_assignments)]
-                let mut result = Value::Undefined;
+            AstNode::DoWhile {
+                label,
+                body,
+                condition,
+            } => {
+                let mut last_value = Value::Undefined;
                 loop {
-                    result = self.eval(body)?;
-                    if let Scope::Loop {
-                        continue_flag,
-                        break_flag,
-                    } = self.scopes.last_mut().expect("Should be some")
-                    {
-                        if *continue_flag {
-                            *continue_flag = false;
+                    last_value = match self.eval_node(body) {
+                        Err(Control::Break(break_label)) if break_label == *label => {
+                            return Ok(self.previous_value.clone());
                         }
-                        if *break_flag {
-                            *break_flag = false;
-                            break;
+                        Err(Control::Continue(continue_label)) if continue_label == *label => {
+                            if !self.eval_node(condition)?.is_truthy() {
+                                break;
+                            }
+                            continue;
                         }
-                    }
-                    let cond_value = self.eval(condition)?;
-                    if !cond_value.is_truthy() {
+                        result => result,
+                    }?;
+
+                    if !self.eval_node(condition)?.is_truthy() {
                         break;
                     }
                 }
-                self.scopes.pop();
-                Ok(result)
+                Ok(last_value)
             }
             AstNode::For {
+                label,
                 init,
                 condition,
                 update,
                 body,
             } => {
-                self.scopes.push(Scope::Loop {
-                    continue_flag: false,
-                    break_flag: false,
-                });
                 if let Some(init_node) = init {
-                    self.eval(init_node)?;
+                    self.eval_node(init_node)?;
                 }
-                let mut result = Value::Undefined;
+
+                let mut last_value = Value::Undefined;
                 loop {
                     if let Some(cond_node) = condition {
-                        let cond_value = self.eval(cond_node)?;
+                        let cond_value = self.eval_node(cond_node)?;
                         if !cond_value.is_truthy() {
                             break;
                         }
                     }
-                    result = self.eval(body)?;
-                    if let Scope::Loop {
-                        continue_flag,
-                        break_flag,
-                    } = self.scopes.last_mut().expect("Should be some")
-                    {
-                        if *continue_flag {
-                            *continue_flag = false;
+
+                    last_value = match self.eval_node(body) {
+                        Err(Control::Break(break_label)) if break_label == *label => {
+                            return Ok(self.previous_value.clone());
                         }
-                        if *break_flag {
-                            *break_flag = false;
-                            break;
+                        Err(Control::Continue(continue_label)) if continue_label == *label => {
+                            if let Some(update_node) = update {
+                                self.eval_node(update_node)?;
+                            }
+                            continue;
                         }
-                    }
+                        result => result,
+                    }?;
+
                     if let Some(update_node) = update {
-                        self.eval(update_node)?;
+                        self.eval_node(update_node)?;
                     }
                 }
-                self.scopes.pop();
-                Ok(result)
+                Ok(last_value)
             }
-            AstNode::Continue => {
-                for scope in self.scopes.iter_mut().rev() {
-                    if let Scope::Loop { continue_flag, .. } = scope {
-                        *continue_flag = true;
-                        return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
-                    }
-                }
-                Err(String::from("Interpreter: 'continue' used outside of loop"))
-            }
-            AstNode::Break => {
-                for scope in self.scopes.iter_mut().rev() {
-                    match scope {
-                        Scope::Loop { break_flag, .. } | Scope::Switch { break_flag } => {
-                            *break_flag = true;
-                            return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
-                        }
-                        _ => {}
-                    }
-                }
-                Err(String::from(
-                    "Interpreter: 'break' used outside of loop or switch",
-                ))
-            }
+            AstNode::Continue(continue_label) => Err(Control::Continue(continue_label.clone())),
+            AstNode::Break(label) => Err(Control::Break(label.clone())),
             AstNode::Return(value) => {
                 let ret_value = if let Some(ret_node) = value {
-                    self.eval(ret_node)?
+                    self.eval_node(ret_node)?
                 } else {
                     Value::Undefined
                 };
-                for scope in self.scopes.iter_mut().rev() {
-                    if let Scope::Function { return_value, .. } = scope {
-                        *return_value = Some(ret_value);
-                        return Ok(self.previous_value.take().unwrap_or(Value::Undefined));
-                    }
-                }
-                Err(String::from(
-                    "Interpreter: 'return' used outside of function",
-                ))
+                Err(Control::Return(ret_value))
             }
             AstNode::Comma(nodes) => {
                 for node in nodes {
-                    self.previous_value = Some(self.eval(node)?);
+                    self.previous_value = self.eval_node(node)?;
                 }
-                Ok(self.previous_value.take().unwrap_or(Value::Undefined))
+                Ok(self.previous_value.clone())
             }
 
             AstNode::Value(value) => Ok(value.clone()),
             AstNode::Variable(variable) => match self.get_var(variable) {
                 Some(value) => Ok(value.clone()),
-                None => Err(format!("Interpreter: variable {variable} doesn't exists")),
+                None => Err(Control::Error(format!(
+                    "Interpreter: variable {variable} doesn't exists"
+                ))),
             },
             AstNode::FunctionCall(function, arguments) => {
-                let func_value = self.eval(function)?;
+                let func_value = self.eval_node(function)?;
                 let mut arg_values = Vec::new();
                 for arg in arguments {
-                    arg_values.push(self.eval(arg)?);
+                    arg_values.push(self.eval_node(arg)?);
                 }
                 match func_value {
                     Value::Function(arguments, body) => {
@@ -285,22 +259,26 @@ impl<'a> Interpreter<'a> {
                             let arg_value = arg_values.get(i).cloned().unwrap_or(Value::Undefined);
                             func_env.insert(arg_name.clone(), arg_value);
                         }
-                        self.scopes.push(Scope::Function { return_value: None });
-                        self.scopes.push(Scope::Block { env: func_env });
-                        self.eval(&body)?;
-                        self.scopes.pop();
-                        if let Some(Scope::Function { return_value, .. }) = self.scopes.pop() {
-                            Ok(return_value.unwrap_or(Value::Undefined))
-                        } else {
-                            Err(String::from(
-                                "Interpreter: function scope not found after function call",
-                            ))
+                        self.scopes.push(Scope::Function(func_env));
+                        match self.eval_node(&body) {
+                            Ok(_) => {
+                                self.scopes.pop();
+                                Ok(Value::Undefined)
+                            }
+                            Err(Control::Return(ret_val)) => {
+                                self.scopes.pop();
+                                Ok(ret_val)
+                            }
+                            Err(control) => {
+                                self.scopes.pop();
+                                Err(control)
+                            }
                         }
                     }
-                    Value::NativeFunction(func) => func(arg_values),
-                    _ => Err(String::from(
+                    Value::NativeFunction(func) => Ok(func(&arg_values)),
+                    _ => Err(Control::Error(String::from(
                         "Interpreter: trying to call a non-function value",
-                    )),
+                    ))),
                 }
             }
 
@@ -344,26 +322,34 @@ impl<'a> Interpreter<'a> {
                 "unsigned right shift",
             ),
             AstNode::LogicalOrAssign(lhs, rhs) => {
-                let lhs_val = self.eval(lhs)?;
+                let lhs_val = self.eval_node(lhs)?;
                 if lhs_val.is_truthy() {
                     return Ok(lhs_val);
                 }
-                let rhs_val = self.eval(rhs)?;
+                let rhs_val = self.eval_node(rhs)?;
                 match &**lhs {
                     AstNode::Variable(variable) => self.set_var(None, variable, rhs_val.clone()),
-                    _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
+                    _ => {
+                        return Err(Control::Error(String::from(
+                            "Interpreter: assign lhs is not a variable",
+                        )));
+                    }
                 }
                 Ok(rhs_val)
             }
             AstNode::LogicalAndAssign(lhs, rhs) => {
-                let lhs_val = self.eval(lhs)?;
+                let lhs_val = self.eval_node(lhs)?;
                 if !lhs_val.is_truthy() {
                     return Ok(lhs_val);
                 }
-                let rhs_val = self.eval(rhs)?;
+                let rhs_val = self.eval_node(rhs)?;
                 match &**lhs {
                     AstNode::Variable(variable) => self.set_var(None, variable, rhs_val.clone()),
-                    _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
+                    _ => {
+                        return Err(Control::Error(String::from(
+                            "Interpreter: assign lhs is not a variable",
+                        )));
+                    }
                 }
                 Ok(rhs_val)
             }
@@ -373,86 +359,96 @@ impl<'a> Interpreter<'a> {
                 then_branch,
                 else_branch,
             } => {
-                let cond_value = self.eval(condition)?;
+                let cond_value = self.eval_node(condition)?;
                 if cond_value.is_truthy() {
-                    self.eval(then_branch)
+                    self.eval_node(then_branch)
                 } else {
-                    self.eval(else_branch)
+                    self.eval_node(else_branch)
                 }
             }
 
-            AstNode::UnaryMinus(unary) => match self.eval(unary)? {
+            AstNode::UnaryMinus(unary) => match self.eval_node(unary)? {
                 Value::Number(n) => Ok(Value::Number(-n)),
-                _ => Err(String::from("Interpreter: negation on non-number")),
+                _ => Err(Control::Error(String::from(
+                    "Interpreter: negation on non-number",
+                ))),
             },
             AstNode::UnaryLogicalNot(unary) => {
-                let val = self.eval(unary)?;
+                let val = self.eval_node(unary)?;
                 Ok(Value::Boolean(!val.is_truthy()))
             }
             AstNode::UnaryPreIncrement(unary) => match &**unary {
                 AstNode::Variable(var_name) => {
-                    let current_value = self.eval(unary)?;
+                    let current_value = self.eval_node(unary)?;
                     match current_value {
                         Value::Number(n) => {
                             let new_value = Value::Number(n + 1.0);
                             self.set_var(None, var_name, new_value.clone());
                             Ok(new_value)
                         }
-                        _ => Err(String::from("Interpreter: increment on non-number")),
+                        _ => Err(Control::Error(String::from(
+                            "Interpreter: increment on non-number",
+                        ))),
                     }
                 }
-                _ => Err(String::from(
+                _ => Err(Control::Error(String::from(
                     "Interpreter: pre-increment can only be applied to variables",
-                )),
+                ))),
             },
             AstNode::UnaryPreDecrement(unary) => match &**unary {
                 AstNode::Variable(var_name) => {
-                    let current_value = self.eval(unary)?;
+                    let current_value = self.eval_node(unary)?;
                     match current_value {
                         Value::Number(n) => {
                             let new_value = Value::Number(n - 1.0);
                             self.set_var(None, var_name, new_value.clone());
                             Ok(new_value)
                         }
-                        _ => Err(String::from("Interpreter: decrement on non-number")),
+                        _ => Err(Control::Error(String::from(
+                            "Interpreter: decrement on non-number",
+                        ))),
                     }
                 }
-                _ => Err(String::from(
+                _ => Err(Control::Error(String::from(
                     "Interpreter: pre-decrement can only be applied to variables",
-                )),
+                ))),
             },
             AstNode::UnaryPostIncrement(unary) => match &**unary {
                 AstNode::Variable(var_name) => {
-                    let current_value = self.eval(unary)?;
+                    let current_value = self.eval_node(unary)?;
                     match current_value {
                         Value::Number(n) => {
                             self.set_var(None, var_name, Value::Number(n + 1.0));
                             Ok(Value::Number(n))
                         }
-                        _ => Err(String::from("Interpreter: increment on non-number")),
+                        _ => Err(Control::Error(String::from(
+                            "Interpreter: increment on non-number",
+                        ))),
                     }
                 }
-                _ => Err(String::from(
+                _ => Err(Control::Error(String::from(
                     "Interpreter: post-increment can only be applied to variables",
-                )),
+                ))),
             },
             AstNode::UnaryPostDecrement(unary) => match &**unary {
                 AstNode::Variable(var_name) => {
-                    let current_value = self.eval(unary)?;
+                    let current_value = self.eval_node(unary)?;
                     match current_value {
                         Value::Number(n) => {
                             self.set_var(None, var_name, Value::Number(n - 1.0));
                             Ok(Value::Number(n))
                         }
-                        _ => Err(String::from("Interpreter: decrement on non-number")),
+                        _ => Err(Control::Error(String::from(
+                            "Interpreter: decrement on non-number",
+                        ))),
                     }
                 }
-                _ => Err(String::from(
+                _ => Err(Control::Error(String::from(
                     "Interpreter: post-decrement can only be applied to variables",
-                )),
+                ))),
             },
             AstNode::UnaryTypeof(unary) => {
-                let val = self.eval(unary)?;
+                let val = self.eval_node(unary)?;
                 Ok(Value::String(val.typeof_string().to_string()))
             }
 
@@ -486,12 +482,14 @@ impl<'a> Interpreter<'a> {
                 |a, b| ((a as u32) >> (b as u32)) as i32,
                 "unsigned right shift",
             ),
-            AstNode::BitwiseNot(unary) => match self.eval(unary)? {
+            AstNode::BitwiseNot(unary) => match self.eval_node(unary)? {
                 Value::Number(n) => Ok(Value::Number(!(n as i32) as f64)),
-                _ => Err(String::from("Interpreter: bitwise not on non-number")),
+                _ => Err(Control::Error(String::from(
+                    "Interpreter: bitwise not on non-number",
+                ))),
             },
 
-            AstNode::Equals(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            AstNode::Equals(lhs, rhs) => match (self.eval_node(lhs)?, self.eval_node(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a == b)),
                 (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
                 (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a == b)),
@@ -500,10 +498,10 @@ impl<'a> Interpreter<'a> {
                 _ => Ok(Value::Boolean(false)),
             },
             AstNode::StrictEquals(lhs, rhs) => {
-                let (lhs_val, rhs_val) = (self.eval(lhs)?, self.eval(rhs)?);
+                let (lhs_val, rhs_val) = (self.eval_node(lhs)?, self.eval_node(rhs)?);
                 Ok(Value::Boolean(lhs_val == rhs_val))
             }
-            AstNode::NotEquals(lhs, rhs) => match (self.eval(lhs)?, self.eval(rhs)?) {
+            AstNode::NotEquals(lhs, rhs) => match (self.eval_node(lhs)?, self.eval_node(rhs)?) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a != b)),
                 (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a != b)),
                 (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a != b)),
@@ -512,7 +510,7 @@ impl<'a> Interpreter<'a> {
                 _ => Ok(Value::Boolean(true)),
             },
             AstNode::StrictNotEquals(lhs, rhs) => {
-                let (lhs_val, rhs_val) = (self.eval(lhs)?, self.eval(rhs)?);
+                let (lhs_val, rhs_val) = (self.eval_node(lhs)?, self.eval_node(rhs)?);
                 Ok(Value::Boolean(lhs_val != rhs_val))
             }
             AstNode::LessThen(lhs, rhs) => self.compare_op(lhs, rhs, |a, b| a < b, "less than"),
@@ -527,18 +525,18 @@ impl<'a> Interpreter<'a> {
             }
 
             AstNode::LogicalAnd(lhs, rhs) => {
-                let lhs_val = self.eval(lhs)?;
+                let lhs_val = self.eval_node(lhs)?;
                 if !lhs_val.is_truthy() {
                     return Ok(lhs_val);
                 }
-                self.eval(rhs)
+                self.eval_node(rhs)
             }
             AstNode::LogicalOr(lhs, rhs) => {
-                let lhs_val = self.eval(lhs)?;
+                let lhs_val = self.eval_node(lhs)?;
                 if lhs_val.is_truthy() {
                     return Ok(lhs_val);
                 }
-                self.eval(rhs)
+                self.eval_node(rhs)
             }
         }
     }
@@ -546,23 +544,38 @@ impl<'a> Interpreter<'a> {
     // MARK: Var get set
     fn get_var(&mut self, variable: &str) -> Option<&Value> {
         for scope in self.scopes.iter_mut().rev() {
-            if let Scope::Block { env } = scope
-                && env.contains_key(variable)
-            {
-                return env.get(variable);
+            match scope {
+                Scope::Block(env) if env.contains_key(variable) => {
+                    return env.get(variable);
+                }
+                Scope::Function(env) if env.contains_key(variable) => {
+                    return env.get(variable);
+                }
+                _ => {}
             }
         }
         self.global_env.get(variable)
     }
 
     fn set_var(&mut self, declaration_type: Option<DeclarationType>, variable: &str, value: Value) {
-        // Try to find existing variable in function scopes
         for scope in self.scopes.iter_mut().rev() {
-            if let Scope::Block { env } = scope
-                && (declaration_type.is_some() || env.contains_key(variable))
-            {
-                env.insert(variable.to_string(), value);
-                return;
+            match scope {
+                Scope::Block(env)
+                    if matches!(
+                        declaration_type,
+                        Some(DeclarationType::Let | DeclarationType::Const)
+                    ) || env.contains_key(variable) =>
+                {
+                    env.insert(variable.to_string(), value);
+                    return;
+                }
+                Scope::Function(env)
+                    if declaration_type.is_some() || env.contains_key(variable) =>
+                {
+                    env.insert(variable.to_string(), value);
+                    return;
+                }
+                _ => {}
             }
         }
         self.global_env.insert(variable.to_string(), value);
@@ -574,11 +587,15 @@ impl<'a> Interpreter<'a> {
         declaration_type: Option<DeclarationType>,
         lhs: &AstNode,
         rhs: &AstNode,
-    ) -> Result<Value, String> {
-        let result = self.eval(rhs)?;
+    ) -> Result<Value, Control> {
+        let result = self.eval_node(rhs)?;
         match lhs {
             AstNode::Variable(variable) => self.set_var(declaration_type, variable, result.clone()),
-            _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
+            _ => {
+                return Err(Control::Error(String::from(
+                    "Interpreter: assign lhs is not a variable",
+                )));
+            }
         }
         Ok(result)
     }
@@ -589,12 +606,12 @@ impl<'a> Interpreter<'a> {
         rhs: &AstNode,
         op: F,
         op_name: &str,
-    ) -> Result<Value, String>
+    ) -> Result<Value, Control>
     where
         F: Fn(f64, f64) -> f64,
     {
-        let lhs_val = self.eval(lhs)?;
-        let rhs_val = self.eval(rhs)?;
+        let lhs_val = self.eval_node(lhs)?;
+        let rhs_val = self.eval_node(rhs)?;
 
         // Handle string concatenation for addition
         // FIXME: cleanup
@@ -606,7 +623,9 @@ impl<'a> Interpreter<'a> {
 
         match (lhs_val, rhs_val) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Number(op(a, b))),
-            _ => Err(format!("Interpreter: {op_name} on non-numbers")),
+            _ => Err(Control::Error(format!(
+                "Interpreter: {op_name} on non-numbers"
+            ))),
         }
     }
 
@@ -616,15 +635,17 @@ impl<'a> Interpreter<'a> {
         rhs: &AstNode,
         op: F,
         op_name: &str,
-    ) -> Result<Value, String>
+    ) -> Result<Value, Control>
     where
         F: Fn(i32, i32) -> i32,
     {
-        match (self.eval(lhs)?, self.eval(rhs)?) {
+        match (self.eval_node(lhs)?, self.eval_node(rhs)?) {
             (Value::Number(a), Value::Number(b)) => {
                 Ok(Value::Number(op(a as i32, b as i32) as f64))
             }
-            _ => Err(format!("Interpreter: {op_name} on non-numbers")),
+            _ => Err(Control::Error(format!(
+                "Interpreter: {op_name} on non-numbers"
+            ))),
         }
     }
 
@@ -634,13 +655,15 @@ impl<'a> Interpreter<'a> {
         rhs: &AstNode,
         op: F,
         op_name: &str,
-    ) -> Result<Value, String>
+    ) -> Result<Value, Control>
     where
         F: Fn(f64, f64) -> bool,
     {
-        match (self.eval(lhs)?, self.eval(rhs)?) {
+        match (self.eval_node(lhs)?, self.eval_node(rhs)?) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(op(a, b))),
-            _ => Err(format!("Interpreter: {op_name} on non-numbers")),
+            _ => Err(Control::Error(format!(
+                "Interpreter: {op_name} on non-numbers"
+            ))),
         }
     }
 
@@ -650,12 +673,12 @@ impl<'a> Interpreter<'a> {
         rhs: &AstNode,
         op: F,
         op_name: &str,
-    ) -> Result<Value, String>
+    ) -> Result<Value, Control>
     where
         F: Fn(f64, f64) -> f64,
     {
-        let lhs_val = self.eval(lhs)?;
-        let rhs_val = self.eval(rhs)?;
+        let lhs_val = self.eval_node(lhs)?;
+        let rhs_val = self.eval_node(rhs)?;
 
         // Handle string concatenation for addition
         // FIXME: cleanup
@@ -665,18 +688,30 @@ impl<'a> Interpreter<'a> {
             let result = Value::String(format!("{a}{b}"));
             match lhs {
                 AstNode::Variable(variable) => self.set_var(None, variable, result.clone()),
-                _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
+                _ => {
+                    return Err(Control::Error(String::from(
+                        "Interpreter: assign lhs is not a variable",
+                    )));
+                }
             }
             return Ok(result);
         }
 
         let result = match (lhs_val, rhs_val) {
             (Value::Number(a), Value::Number(b)) => Value::Number(op(a, b)),
-            _ => return Err(format!("Interpreter: {op_name} assign on non-numbers")),
+            _ => {
+                return Err(Control::Error(format!(
+                    "Interpreter: {op_name} assign on non-numbers"
+                )));
+            }
         };
         match lhs {
             AstNode::Variable(variable) => self.set_var(None, variable, result.clone()),
-            _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
+            _ => {
+                return Err(Control::Error(String::from(
+                    "Interpreter: assign lhs is not a variable",
+                )));
+            }
         }
         Ok(result)
     }
@@ -687,19 +722,27 @@ impl<'a> Interpreter<'a> {
         rhs: &AstNode,
         op: F,
         op_name: &str,
-    ) -> Result<Value, String>
+    ) -> Result<Value, Control>
     where
         F: Fn(i32, i32) -> i32,
     {
-        let lhs_val = self.eval(lhs)?;
-        let rhs_val = self.eval(rhs)?;
+        let lhs_val = self.eval_node(lhs)?;
+        let rhs_val = self.eval_node(rhs)?;
         let result = match (lhs_val, rhs_val) {
             (Value::Number(a), Value::Number(b)) => Value::Number(op(a as i32, b as i32) as f64),
-            _ => return Err(format!("Interpreter: {op_name} assign on non-numbers")),
+            _ => {
+                return Err(Control::Error(format!(
+                    "Interpreter: {op_name} assign on non-numbers"
+                )));
+            }
         };
         match lhs {
             AstNode::Variable(variable) => self.set_var(None, variable, result.clone()),
-            _ => return Err(String::from("Interpreter: assign lhs is not a variable")),
+            _ => {
+                return Err(Control::Error(String::from(
+                    "Interpreter: assign lhs is not a variable",
+                )));
+            }
         }
         Ok(result)
     }
