@@ -174,6 +174,13 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
                     .expect("Failed to serialize IPC message"),
             );
         }
+        IpcMessage::SetIntensity { intensity } => {
+            dmx_state.intensity = intensity;
+            connection.broadcast(
+                serde_json::to_string(&IpcMessage::SetIntensity { intensity })
+                    .expect("Failed to serialize IPC message"),
+            );
+        }
         IpcMessage::SetToggleSpeed { toggle_speed } => {
             dmx_state.toggle_speed = toggle_speed.map(Duration::from_millis);
             connection.broadcast(
