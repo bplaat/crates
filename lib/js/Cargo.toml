@@ -9,3 +9,4 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+indexmap = "2.12"

@@ -808,4 +808,59 @@ fn test_arrays() {
         Value::Number(5.0),
         "function findLength(a) { var length2 = 0; while (a[length2] !== undefined) { length2++; } return length2; } let arr = [1,2,3,4,5]; findLength(arr)",
     );
+    assert_js(Value::Number(3.0), "[1, 2, 3].length");
+    assert_js(Value::Number(0.0), "[].length");
+    assert_js(Value::Number(5.0), "[10, 20, 30, 40, 50].length");
+    assert_js(Value::Number(1.0), "['hello'].length");
+    assert_js(Value::Number(4.0), "let arr = [1, 2, 3, 4]; arr.length");
+    assert_js(Value::Number(2.0), "let arr = ['a', 'b']; arr.length");
+    assert_js(
+        Value::Number(10.0),
+        "let arr = []; for (let i = 0; i < 10; i++) { arr[i] = i; } arr.length",
+    );
+    assert_js(
+        Value::Number(6.0),
+        "let arr = [1, 2, 3]; arr.push(4); arr.push(5); arr.push(6); arr.length",
+    );
+    assert_js(
+        Value::Number(2.0),
+        "let arr = [1, 2, 3, 4]; arr.length = 2; arr.length",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "let arr = [1, 2, 3, 4, 5]; let sum = 0; for (let i = 0; i < arr.length; i++) { sum += arr[i]; } sum",
+    );
+    assert_js(
+        Value::Number(120.0),
+        "let arr = [1, 2, 3, 4, 5]; let product = 1; let i = 0; while (i < arr.length) { product *= arr[i]; i++; } product",
+    );
+}
+
+#[test]
+fn test_objects() {
+    assert_js(
+        Value::Number(25.0),
+        "let obj = { a: 10, b: 15 }; obj.a + obj.b",
+    );
+    assert_js(
+        Value::String(String::from("hello")),
+        r#"let obj = { greeting: "hello" }; obj.greeting"#,
+    );
+    assert_js(
+        Value::Number(50.0),
+        "let obj = { x: 20, y: 30 }; obj.x + obj.y",
+    );
+    assert_js(Value::Undefined, "let obj = { a: 10 }; obj.b");
+    assert_js(
+        Value::Number(100.0),
+        "let obj = { val: 100 }; let key = 'val'; obj[key]",
+    );
+    assert_js(
+        Value::Number(200.0),
+        "let obj = { val1: 100, val2: 200 }; let key = 'val2'; obj[key]",
+    );
+    assert_js(
+        Value::Number(300.0),
+        "let obj = { a: 100, b: 200 }; obj['a'] + obj['b']",
+    );
 }
