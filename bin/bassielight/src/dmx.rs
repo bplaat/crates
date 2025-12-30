@@ -67,9 +67,7 @@ pub(crate) struct DmxState {
     pub toggle_color: Color,
     pub intensity: u8,
     pub toggle_speed: Option<Duration>,
-    pub is_toggle_color: bool,
     pub strobe_speed: Option<Duration>,
-    pub is_strobe: bool,
     pub switches_toggle: [bool; DMX_SWITCHES_LENGTH],
     pub switches_press: [bool; DMX_SWITCHES_LENGTH],
 }
@@ -81,9 +79,7 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
     toggle_color: Color::BLACK,
     intensity: 0xff,
     toggle_speed: None,
-    is_toggle_color: false,
     strobe_speed: None,
-    is_strobe: false,
     switches_toggle: [false; DMX_SWITCHES_LENGTH],
     switches_press: [false; DMX_SWITCHES_LENGTH],
 });
@@ -95,10 +91,12 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
 
     let mut dmx = vec![0u8; config.dmx_length];
     let mut toggle_color_time = SystemTime::now();
+    let mut is_toggle_color = false;
     let mut strobe_time = SystemTime::now();
+    let mut is_strobe = false;
 
     loop {
-        let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
+        let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
         if !dmx_state.is_running {
             // FIXME: Create async framework don't do micro sleeps
             sleep(Duration::from_millis(100));
@@ -112,7 +110,7 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                 .expect("Time went backwards")
                 > toggle_speed
         {
-            dmx_state.is_toggle_color = !dmx_state.is_toggle_color;
+            is_toggle_color = !is_toggle_color;
             toggle_color_time = SystemTime::now();
         }
         if let Some(strobe_speed) = dmx_state.strobe_speed
@@ -121,7 +119,7 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                 .expect("Time went backwards")
                 > strobe_speed
         {
-            dmx_state.is_strobe = !dmx_state.is_strobe;
+            is_strobe = !is_strobe;
             strobe_time = SystemTime::now();
         }
 
@@ -133,9 +131,9 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                 | FixtureType::AmericanDJMegaTripar
                 | FixtureType::AyraCompar10 => {
                     let base_addr = fixture.addr - 1;
-                    let color = if dmx_state.is_strobe {
+                    let color = if is_strobe {
                         Color::BLACK
-                    } else if dmx_state.is_toggle_color {
+                    } else if is_toggle_color {
                         dmx_state.toggle_color
                     } else {
                         dmx_state.color

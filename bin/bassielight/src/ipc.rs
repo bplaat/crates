@@ -176,7 +176,6 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
         }
         IpcMessage::SetToggleSpeed { toggle_speed } => {
             dmx_state.toggle_speed = toggle_speed.map(Duration::from_millis);
-            dmx_state.is_toggle_color = toggle_speed.is_some();
             connection.broadcast(
                 serde_json::to_string(&IpcMessage::SetToggleSpeed { toggle_speed })
                     .expect("Failed to serialize IPC message"),
@@ -184,7 +183,6 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
         }
         IpcMessage::SetStrobeSpeed { strobe_speed } => {
             dmx_state.strobe_speed = strobe_speed.map(Duration::from_millis);
-            dmx_state.is_strobe = strobe_speed.is_some();
             connection.broadcast(
                 serde_json::to_string(&IpcMessage::SetStrobeSpeed { strobe_speed })
                     .expect("Failed to serialize IPC message"),
