@@ -129,7 +129,8 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
             match fixture.r#type {
                 FixtureType::AmericanDJP56Led
                 | FixtureType::AmericanDJMegaTripar
-                | FixtureType::AyraCompar10 => {
+                | FixtureType::AyraCompar10
+                | FixtureType::AyraCompar20 => {
                     let base_addr = fixture.addr - 1;
                     let color = if is_strobe {
                         Color::BLACK
@@ -177,6 +178,19 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                         }
                         if dmx_state.mode == Mode::Auto {
                             dmx[base_addr + 7] = 221;
+                        }
+                    }
+
+                    // Ayra Compar 20
+                    if fixture.r#type == FixtureType::AyraCompar20 {
+                        if dmx_state.mode == Mode::Manual {
+                            dmx[base_addr] = dmx_state.intensity;
+                            dmx[base_addr + 2] = color.r;
+                            dmx[base_addr + 3] = color.g;
+                            dmx[base_addr + 4] = color.b;
+                        }
+                        if dmx_state.mode == Mode::Auto {
+                            dmx[base_addr + 5] = 221;
                         }
                     }
                 }

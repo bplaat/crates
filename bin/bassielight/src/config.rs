@@ -22,6 +22,8 @@ pub(crate) enum FixtureType {
     AmericanDJMegaTripar,
     #[serde(rename = "ayra_compar_10")]
     AyraCompar10,
+    #[serde(rename = "ayra_compar_20")]
+    AyraCompar20,
     #[serde(rename = "showtec_multidim_mkii")]
     ShowtecMultidimMKII,
 }

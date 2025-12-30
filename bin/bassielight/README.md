@@ -28,6 +28,8 @@
     -   7 channel mode
 -   [Ayra Compar 10](https://www.manualslib.com/manual/1061771/Ayra-Compar-10.html)
     -   8 channel mode
+-   [Ayra Compar 20](https://www.manualslib.com/manual/1033103/Ayra-Compar-20.html)
+    -   6 channel mode
 -   [SHOWTEC Multidim MKII](https://www.manualslib.com/manual/2115423/Showtec-Multidim-Mkii.html)
 
 ### Installation
