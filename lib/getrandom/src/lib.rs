@@ -10,7 +10,7 @@ use std::io::Error;
 
 /// Fill buffer with crypto random bytes
 pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(any(target_os = "macos", target_os = "openbsd"))))]
     {
         use std::io::Read;
         let mut file = std::fs::File::open("/dev/urandom")
@@ -19,11 +19,23 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
             .map_err(|_| Error::other("Can't read from /dev/urandom"))?;
     }
 
+    #[cfg(any(target_os = "macos", target_os = "openbsd"))]
+    {
+        unsafe extern "C" {
+            fn getentropy(buf: *mut u8, buflen: usize) -> i32;
+        }
+        for chunk in buf.chunks_mut(256) {
+            if unsafe { getentropy(chunk.as_mut_ptr(), chunk.len()) } != 0 {
+                return Err(Error::other("getentropy failed"));
+            }
+        }
+    }
+
     #[cfg(windows)]
     {
         #[link(name = "bcryptprimitives", kind = "raw-dylib")]
         unsafe extern "system" {
-            fn ProcessPrng(pbdata: *mut u8, cbdata: usize) -> bool;
+            fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
         }
         unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) };
     }
