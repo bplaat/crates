@@ -17,5 +17,5 @@ workspace = true
 [dependencies]
 bwebview = { path = "../../lib/bwebview" }
 
-[target.'cfg(windows)'.build-dependencies]
+[build-dependencies]
 winres = "0.1.12"

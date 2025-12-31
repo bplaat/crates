@@ -27,10 +27,7 @@ fn main() {
     );
 
     // Build web frontend
-    #[cfg(windows)]
-    const NPM: &str = "npm.cmd";
-    #[cfg(not(windows))]
-    const NPM: &str = "npm";
+    const NPM: &str = if cfg!(windows) { "npm.cmd" } else { "npm" };
 
     // Install npm packages if needed
     if !Path::new("web/node_modules").exists() {

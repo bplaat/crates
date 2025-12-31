@@ -12,10 +12,7 @@ use std::process::Command;
 use copy_dir::copy_dir;
 
 fn main() {
-    #[cfg(windows)]
-    const NPM: &str = "npm.cmd";
-    #[cfg(not(windows))]
-    const NPM: &str = "npm";
+    const NPM: &str = if cfg!(windows) { "npm.cmd" } else { "npm" };
 
     // Install npm packages
     if !Path::new("web/node_modules").exists() {

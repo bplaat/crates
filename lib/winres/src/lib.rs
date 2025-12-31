@@ -177,21 +177,36 @@ impl WindowsResource {
             }
             "gnu" => {
                 let object_path = Path::new(&out_dir).join("resource.o");
-                let status = Command::new("windres")
-                    .arg(&rc_path)
-                    .arg("-O")
-                    .arg("coff")
-                    .arg("-o")
-                    .arg(&object_path)
-                    .status()
-                    .map_err(|e| format!("failed to execute windres: {e}"))?;
-                if !status.success() {
-                    return Err(format!(
-                        "windres failed with exit code: {}",
-                        status.code().unwrap_or(-1)
-                    ));
+                let tools = ["windres", "x86_64-w64-mingw32-windres"];
+                let mut last_error = None;
+                for tool in &tools {
+                    let status = Command::new(tool)
+                        .arg(&rc_path)
+                        .arg("-O")
+                        .arg("coff")
+                        .arg("-o")
+                        .arg(&object_path)
+                        .status();
+                    match status {
+                        Ok(s) if s.success() => {
+                            last_error = None;
+                            break;
+                        }
+                        Ok(s) => {
+                            last_error = Some(format!(
+                                "{} failed with exit code: {}",
+                                tool,
+                                s.code().unwrap_or(-1)
+                            ));
+                        }
+                        Err(e) => {
+                            last_error = Some(format!("failed to execute {tool}: {e}"));
+                        }
+                    }
                 }
-
+                if let Some(err) = last_error {
+                    return Err(err);
+                }
                 println!("cargo:rustc-link-arg={}", object_path.display());
             }
             other => {

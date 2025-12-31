@@ -11,10 +11,7 @@ use std::path::Path;
 use copy_dir::copy_dir;
 
 fn main() {
-    #[cfg(windows)]
-    const NPM: &str = "npm.cmd";
-    #[cfg(not(windows))]
-    const NPM: &str = "npm";
+    const NPM: &str = if cfg!(windows) { "npm.cmd" } else { "npm" };
 
     // Install npm packages if needed
     if !Path::new("web/node_modules").exists() {
@@ -61,8 +58,7 @@ fn main() {
         .expect("Failed to copy web/dist files to $OUT_DIR");
 
     // Compile Windows resources
-    #[cfg(windows)]
-    {
+    if std::env::var("CARGO_CFG_TARGET_OS").expect("Should be some") == "windows" {
         let manifest = format!(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
