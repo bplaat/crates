@@ -34,7 +34,17 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
 
     #[cfg(windows)]
     {
+        #[cfg(not(target_arch = "x86"))]
         #[link(name = "bcryptprimitives", kind = "raw-dylib")]
+        unsafe extern "system" {
+            fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
+        }
+        #[cfg(target_arch = "x86")]
+        #[link(
+            name = "bcryptprimitives",
+            kind = "raw-dylib",
+            import_name_type = "undecorated"
+        )]
         unsafe extern "system" {
             fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
         }
