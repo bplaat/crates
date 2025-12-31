@@ -217,6 +217,6 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             );
         }
 
-        _ => {}
+        _ => unimplemented!(),
     }
 }
