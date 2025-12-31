@@ -21,28 +21,11 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
 
     #[cfg(windows)]
     {
-        const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x00000002;
-        #[link(name = "bcrypt")]
+        #[link(name = "bcryptprimitives", kind = "raw-dylib")]
         unsafe extern "system" {
-            fn BCryptGenRandom(
-                h_alg: *mut std::ffi::c_void,
-                pb_output: *mut u8,
-                cb_output: u32,
-                dw_flags: u32,
-            ) -> i32;
+            fn ProcessPrng(pbdata: *mut u8, cbdata: usize) -> bool;
         }
-
-        if unsafe {
-            BCryptGenRandom(
-                std::ptr::null_mut(),
-                buf.as_mut_ptr(),
-                buf.len() as u32,
-                BCRYPT_USE_SYSTEM_PREFERRED_RNG,
-            )
-        } != 0
-        {
-            return Err(Error::other("BCryptGenRandom failed"));
-        }
+        unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) };
     }
 
     #[cfg(not(any(unix, windows)))]
