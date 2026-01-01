@@ -163,6 +163,6 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 
 ## License
 
-Copyright © 2023-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
+Copyright © 2023-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
 Licensed under the [MIT](LICENSE) license.
