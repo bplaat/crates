@@ -15,6 +15,7 @@ use std::time::Duration;
 use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
 use log::{error, info};
 use rust_embed::Embed;
+use serde::de;
 use small_http::Response;
 use small_websocket::Message;
 
@@ -52,17 +53,17 @@ fn main() {
     // Load config
     let config = Config::load();
     info!("Config: {config:?}");
-    let cloned_config = config.clone();
+    let dmx_config = config.clone();
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
 
     // Start DMX thread
     thread::spawn(move || {
         if let Some(device) = usb::find_udmx_device() {
             info!("uDMX device found: {device:?}");
-            dmx::dmx_thread(Some(device), cloned_config);
+            dmx::dmx_thread(Some(device), dmx_config);
         } else {
             error!("No uDMX device found");
-            dmx::dmx_thread(None, cloned_config);
+            dmx::dmx_thread(None, dmx_config);
         }
     });
 
