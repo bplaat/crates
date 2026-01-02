@@ -56,6 +56,10 @@ pub(crate) enum IpcMessage {
     SetMode {
         mode: Mode,
     },
+    GetConfig,
+    GetConfigResponse {
+        config: crate::config::Config,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -137,7 +141,7 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             );
         }
         IpcMessage::GetState => {
-            let config = CONFIG.lock().expect("Failed to lock config");
+            let config = CONFIG.lock().unwrap();
             let state = State {
                 color: dmx_state.color,
                 toggle_color: dmx_state.toggle_color,
@@ -214,6 +218,14 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             connection.broadcast(
                 serde_json::to_string(&IpcMessage::SetMode { mode })
                     .expect("Failed to serialize IPC message"),
+            );
+        }
+
+        IpcMessage::GetConfig => {
+            let config = CONFIG.lock().unwrap().as_ref().unwrap().clone();
+            connection.send(
+                serde_json::to_string(&IpcMessage::GetConfigResponse { config })
+                    .expect("Failed to serialize IPC response"),
             );
         }
 

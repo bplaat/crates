@@ -34,6 +34,10 @@ pub(crate) struct Fixture {
     #[serde(rename = "type")]
     pub r#type: FixtureType,
     pub addr: usize,
+    #[serde(default)]
+    pub x: isize,
+    #[serde(default)]
+    pub y: isize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub switches: Option<Vec<String>>,
 }
