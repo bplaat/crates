@@ -31,6 +31,14 @@ impl Color {
             b: (self.b as f32 * intensity) as u8,
         }
     }
+
+    pub(crate) fn tween(self, other: Color, t: f32) -> Color {
+        Color {
+            r: (self.r as f32 + (other.r as f32 - self.r as f32) * t) as u8,
+            g: (self.g as f32 + (other.g as f32 - self.g as f32) * t) as u8,
+            b: (self.b as f32 + (other.b as f32 - self.b as f32) * t) as u8,
+        }
+    }
 }
 
 impl Serialize for Color {
@@ -153,10 +161,49 @@ pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
                     let base_addr = fixture.addr - 1;
                     let color = if is_strobe {
                         Color::BLACK
-                    } else if is_toggle_color {
-                        dmx_state.toggle_color
                     } else {
-                        dmx_state.color
+                        match dmx_state.toggle_tween {
+                            ToggleTween::Direct => {
+                                if is_toggle_color {
+                                    dmx_state.toggle_color
+                                } else {
+                                    dmx_state.color
+                                }
+                            }
+                            ToggleTween::Linear => {
+                                let t = if let Some(toggle_speed) = dmx_state.toggle_speed {
+                                    SystemTime::now()
+                                        .duration_since(toggle_color_time)
+                                        .expect("Time went backwards")
+                                        .as_secs_f32()
+                                        / toggle_speed.as_secs_f32()
+                                } else {
+                                    0.0
+                                };
+                                if is_toggle_color {
+                                    dmx_state.color.tween(dmx_state.toggle_color, t)
+                                } else {
+                                    dmx_state.toggle_color.tween(dmx_state.color, t)
+                                }
+                            }
+                            ToggleTween::Ease => {
+                                let t = if let Some(toggle_speed) = dmx_state.toggle_speed {
+                                    SystemTime::now()
+                                        .duration_since(toggle_color_time)
+                                        .expect("Time went backwards")
+                                        .as_secs_f32()
+                                        / toggle_speed.as_secs_f32()
+                                } else {
+                                    0.0
+                                };
+                                let t = t * t * (3.0 - 2.0 * t);
+                                if is_toggle_color {
+                                    dmx_state.color.tween(dmx_state.toggle_color, t)
+                                } else {
+                                    dmx_state.toggle_color.tween(dmx_state.color, t)
+                                }
+                            }
+                        }
                     };
 
                     // American DJ P56 LED
