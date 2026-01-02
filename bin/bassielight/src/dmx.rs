@@ -23,6 +23,14 @@ pub(crate) struct Color {
 
 impl Color {
     pub(crate) const BLACK: Color = Color { r: 0, g: 0, b: 0 };
+
+    pub(crate) fn apply_intensity(self, intensity: f32) -> Color {
+        Color {
+            r: (self.r as f32 * intensity) as u8,
+            g: (self.g as f32 * intensity) as u8,
+            b: (self.b as f32 * intensity) as u8,
+        }
+    }
 }
 
 impl Serialize for Color {
@@ -74,7 +82,7 @@ pub(crate) struct DmxState {
     pub mode: Mode,
     pub color: Color,
     pub toggle_color: Color,
-    pub intensity: u8,
+    pub intensity: f32,
     pub toggle_tween: ToggleTween,
     pub toggle_speed: Option<Duration>,
     pub strobe_speed: Option<Duration>,
@@ -88,7 +96,7 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
     color: Color::BLACK,
     toggle_tween: ToggleTween::Direct,
     toggle_color: Color::BLACK,
-    intensity: 0xff,
+    intensity: 1.0,
     toggle_speed: None,
     strobe_speed: None,
     switches_toggle: [false; DMX_SWITCHES_LENGTH],
@@ -154,12 +162,10 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                     // American DJ P56 LED
                     if fixture.r#type == FixtureType::AmericanDJP56Led {
                         if dmx_state.mode == Mode::Manual {
-                            dmx[base_addr] =
-                                (color.r as u32 * dmx_state.intensity as u32 / 255) as u8;
-                            dmx[base_addr + 1] =
-                                (color.g as u32 * dmx_state.intensity as u32 / 255) as u8;
-                            dmx[base_addr + 2] =
-                                (color.b as u32 * dmx_state.intensity as u32 / 255) as u8;
+                            let color = color.apply_intensity(dmx_state.intensity);
+                            dmx[base_addr] = color.r;
+                            dmx[base_addr + 1] = color.g;
+                            dmx[base_addr + 2] = color.b;
                         }
                         if dmx_state.mode == Mode::Auto {
                             dmx[base_addr + 5] = 224;
@@ -172,7 +178,7 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                             dmx[base_addr] = color.r;
                             dmx[base_addr + 1] = color.g;
                             dmx[base_addr + 2] = color.b;
-                            dmx[base_addr + 6] = dmx_state.intensity;
+                            dmx[base_addr + 6] = (dmx_state.intensity * 255.0) as u8;
                         }
                         if dmx_state.mode == Mode::Auto {
                             dmx[base_addr + 5] = 240;
@@ -182,7 +188,7 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                     // Ayra Compar 10
                     if fixture.r#type == FixtureType::AyraCompar10 {
                         if dmx_state.mode == Mode::Manual {
-                            dmx[base_addr] = dmx_state.intensity;
+                            dmx[base_addr] = (dmx_state.intensity * 255.0) as u8;
                             dmx[base_addr + 2] = color.r;
                             dmx[base_addr + 3] = color.g;
                             dmx[base_addr + 4] = color.b;
@@ -195,7 +201,7 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
                     // Ayra Compar 20
                     if fixture.r#type == FixtureType::AyraCompar20 {
                         if dmx_state.mode == Mode::Manual {
-                            dmx[base_addr] = dmx_state.intensity;
+                            dmx[base_addr] = (dmx_state.intensity * 255.0) as u8;
                             dmx[base_addr + 2] = color.r;
                             dmx[base_addr + 3] = color.g;
                             dmx[base_addr + 4] = color.b;
