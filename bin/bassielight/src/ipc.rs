@@ -98,7 +98,6 @@ impl Eq for IpcConnection {}
 
 impl IpcConnection {
     pub(crate) fn send(&mut self, message: String) {
-        debug!("Sending IPC message: {message}");
         match self {
             Self::WebviewIpc(event_loop_proxy) => event_loop_proxy.send_user_event(message),
             Self::WebSocket(ws) => ws
@@ -112,7 +111,6 @@ impl IpcConnection {
             .lock()
             .expect("Failed to lock IPC connections");
         if connections.len() > 1 {
-            debug!("Broadcasting IPC message: {message}");
             for connection in connections.iter_mut() {
                 if connection != self {
                     connection.send(message.clone());

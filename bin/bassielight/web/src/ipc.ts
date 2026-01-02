@@ -42,7 +42,6 @@ export class Ipc {
 
     send(type: string, data: { [key: string]: any } = {}) {
         const message = JSON.stringify({ type, ...data });
-        console.debug(`Send ${message}`);
         return new Promise((resolve) => {
             if (this.type === IpcType.Ipc) {
                 window.ipc.postMessage(message);

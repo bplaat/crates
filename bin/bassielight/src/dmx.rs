@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::fmt::{self, Display};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
+use log::trace;
 use rusb::{Context, Device};
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +40,12 @@ impl Color {
             g: (self.g as f32 + (other.g as f32 - self.g as f32) * t) as u8,
             b: (self.b as f32 + (other.b as f32 - self.b as f32) * t) as u8,
         }
+    }
+}
+
+impl Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "#{:02X}{:02X}{:02X}", self.r, self.g, self.b)
     }
 }
 
@@ -158,6 +166,7 @@ pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
 
         // Update DMX data
         dmx.fill(0);
+        let mut dump_color_state = false;
         for fixture in &config.fixtures {
             match fixture.r#type {
                 FixtureType::AmericanDJP56Led
@@ -211,14 +220,24 @@ pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
                             }
                         }
                     };
+                    let color_with_intensity = color.apply_intensity(dmx_state.intensity);
+                    if !dump_color_state {
+                        dump_color_state = true;
+                        trace!(
+                            "Color: \x1b[38;2;{};{};{}m{}\x1b[0m",
+                            color_with_intensity.r,
+                            color_with_intensity.g,
+                            color_with_intensity.b,
+                            color_with_intensity
+                        );
+                    }
 
                     // American DJ P56 LED
                     if fixture.r#type == FixtureType::AmericanDJP56Led {
                         if dmx_state.mode == Mode::Manual {
-                            let color = color.apply_intensity(dmx_state.intensity);
-                            dmx[base_addr] = color.r;
-                            dmx[base_addr + 1] = color.g;
-                            dmx[base_addr + 2] = color.b;
+                            dmx[base_addr] = color_with_intensity.r;
+                            dmx[base_addr + 1] = color_with_intensity.g;
+                            dmx[base_addr + 2] = color_with_intensity.b;
                         }
                         if dmx_state.mode == Mode::Auto {
                             dmx[base_addr + 5] = 224;

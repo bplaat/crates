@@ -37,7 +37,12 @@ struct WebAssets;
 // MARK: Main
 fn main() {
     // Init logger
-    simple_logger::init_with_level(log::LevelFilter::Debug).expect("Failed to init logger");
+    simple_logger::init_with_level(if cfg!(debug_assertions) {
+        log::LevelFilter::Trace
+    } else {
+        log::LevelFilter::Info
+    })
+    .expect("Failed to init logger");
 
     // Create event loop
     let event_loop = EventLoopBuilder::new()
