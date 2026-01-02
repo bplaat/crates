@@ -54,9 +54,10 @@ fn main() {
     thread::spawn(move || {
         if let Some(device) = usb::find_udmx_device() {
             info!("uDMX device found: {device:?}");
-            dmx::dmx_thread(device, cloned_config);
+            dmx::dmx_thread(Some(device), cloned_config);
         } else {
             error!("No uDMX device found");
+            dmx::dmx_thread(None, cloned_config);
         }
     });
 

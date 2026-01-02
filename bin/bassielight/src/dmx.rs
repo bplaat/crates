@@ -105,8 +105,8 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
 
 // MARK: DMX Thread
 /// Starts the DMX output thread for the given device using the given configuration.
-pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
-    let handle = device.open().expect("Can't open uDMX device");
+pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
+    let handle = device.map(|dev| dev.open().expect("Failed to open uDMX device"));
 
     let mut dmx = vec![0u8; config.dmx_length];
     let mut toggle_color_time = SystemTime::now();
@@ -232,19 +232,22 @@ pub(crate) fn dmx_thread(device: Device<Context>, config: Config) {
         }
 
         // Send DMX data
-        let _ = handle.write_control(
-            rusb::request_type(
-                rusb::Direction::Out,
-                rusb::RequestType::Vendor,
-                rusb::Recipient::Device,
-            ),
-            0x02,
-            config.dmx_length as u16,
-            0,
-            &dmx,
-            Duration::from_millis(0),
-        );
-
+        if let Some(handle) = &handle {
+            handle
+                .write_control(
+                    rusb::request_type(
+                        rusb::Direction::Out,
+                        rusb::RequestType::Vendor,
+                        rusb::Recipient::Device,
+                    ),
+                    0x02,
+                    config.dmx_length as u16,
+                    0,
+                    &dmx,
+                    Duration::from_millis(0),
+                )
+                .expect("Can't write to uDMX device");
+        }
         sleep(Duration::from_millis(1000 / config.dmx_fps));
     }
 }
