@@ -58,6 +58,15 @@ pub(crate) enum Mode {
     Auto,
 }
 
+// MARK: ToggleTween
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ToggleTween {
+    Direct,
+    Linear,
+    Ease,
+}
+
 // MARK: DmxState
 #[derive(Clone)]
 pub(crate) struct DmxState {
@@ -66,6 +75,7 @@ pub(crate) struct DmxState {
     pub color: Color,
     pub toggle_color: Color,
     pub intensity: u8,
+    pub toggle_tween: ToggleTween,
     pub toggle_speed: Option<Duration>,
     pub strobe_speed: Option<Duration>,
     pub switches_toggle: [bool; DMX_SWITCHES_LENGTH],
@@ -76,6 +86,7 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
     is_running: false,
     mode: Mode::Manual,
     color: Color::BLACK,
+    toggle_tween: ToggleTween::Direct,
     toggle_color: Color::BLACK,
     intensity: 0xff,
     toggle_speed: None,
