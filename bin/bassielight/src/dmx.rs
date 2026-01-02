@@ -117,6 +117,7 @@ pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
     let handle = device.map(|dev| dev.open().expect("Failed to open uDMX device"));
 
     let mut dmx = vec![0u8; config.dmx_length];
+    let mut previous_toggle_speed = None;
     let mut toggle_color_time = SystemTime::now();
     let mut is_toggle_color = false;
     let mut strobe_time = SystemTime::now();
@@ -131,6 +132,11 @@ pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
         }
 
         // Update timers
+        if previous_toggle_speed != dmx_state.toggle_speed {
+            previous_toggle_speed = dmx_state.toggle_speed;
+            toggle_color_time = SystemTime::now();
+            is_toggle_color = false;
+        }
         if let Some(toggle_speed) = dmx_state.toggle_speed
             && SystemTime::now()
                 .duration_since(toggle_color_time)
