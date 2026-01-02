@@ -14,7 +14,7 @@ use small_websocket::{Message, WebSocket};
 
 use crate::CONFIG;
 use crate::config::FixtureType;
-use crate::dmx::{Color, DMX_STATE, Mode};
+use crate::dmx::{Color, DMX_STATE, Mode, ToggleTween};
 
 // MARK: IpcMessage
 #[derive(Debug, Deserialize, Serialize)]
@@ -36,6 +36,10 @@ pub(crate) enum IpcMessage {
     },
     SetIntensity {
         intensity: u8,
+    },
+    SetToggleTween {
+        #[serde(rename = "toggleTween")]
+        toggle_tween: ToggleTween,
     },
     SetToggleSpeed {
         #[serde(rename = "toggleSpeed")]
@@ -64,6 +68,7 @@ pub(crate) struct State {
     pub color: Color,
     pub toggle_color: Color,
     pub intensity: u8,
+    pub toggle_tween: ToggleTween,
     pub toggle_speed: Option<u64>,
     pub strobe_speed: Option<u64>,
     pub mode: Mode,
@@ -142,6 +147,7 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
                 color: dmx_state.color,
                 toggle_color: dmx_state.toggle_color,
                 intensity: dmx_state.intensity,
+                toggle_tween: dmx_state.toggle_tween,
                 toggle_speed: dmx_state.toggle_speed.map(|d| d.as_millis() as u64),
                 strobe_speed: dmx_state.strobe_speed.map(|d| d.as_millis() as u64),
                 mode: dmx_state.mode,
@@ -178,6 +184,13 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             dmx_state.intensity = intensity;
             connection.broadcast(
                 serde_json::to_string(&IpcMessage::SetIntensity { intensity })
+                    .expect("Failed to serialize IPC message"),
+            );
+        }
+        IpcMessage::SetToggleTween { toggle_tween } => {
+            dmx_state.toggle_tween = toggle_tween;
+            connection.broadcast(
+                serde_json::to_string(&IpcMessage::SetToggleTween { toggle_tween })
                     .expect("Failed to serialize IPC message"),
             );
         }

@@ -6,13 +6,18 @@
  */
 
 import { useState, useEffect, useContext } from 'preact/hooks';
-import { AccountIcon, LightbulbOffIcon, MusicIcon } from '../components/icons.tsx';
+import { AccountIcon, LightbulbOffIcon, MusicIcon, TweenDirect, TweenEase, TweenLinear } from '../components/icons.tsx';
 import { capitalize } from '../utils.ts';
 import { IpcContext } from '../app.tsx';
 import { $dmxLive } from '../components/menubar.tsx';
 
 const COLORS = [0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff];
 const SPEEDS = [null, 22, 50, 100, 200, 250, 500, 750, 1000];
+const TWEENS = [
+    { type: 'direct', icon: TweenDirect },
+    { type: 'linear', icon: TweenLinear },
+    { type: 'ease', icon: TweenEase },
+];
 const MODES = [
     { type: 'black', icon: LightbulbOffIcon },
     { type: 'manual', icon: AccountIcon },
@@ -44,6 +49,7 @@ export function StagePage() {
     const [selectedColor, setSelectedColor] = useIpcState('color');
     const [selectedToggleColor, setSelectedToggleColor] = useIpcState('toggleColor');
     const [intensity, setIntensity] = useIpcState('intensity');
+    const [selectedToggleTween, setSelectedToggleTween] = useIpcState('toggleTween');
     const [selectedToggleSpeed, setSelectedToggleSpeed] = useIpcState('toggleSpeed');
     const [selectedStrobeSpeed, setSelectedStrobeSpeed] = useIpcState('strobeSpeed');
     const [switchesLabels, setSwitchesLabels] = useState<string[] | null>(null);
@@ -61,6 +67,7 @@ export function StagePage() {
                     color: number;
                     toggleColor: number;
                     intensity: number;
+                    toggleTween: string;
                     toggleSpeed: number | null;
                     strobeSpeed: number | null;
                     mode: string;
@@ -72,6 +79,7 @@ export function StagePage() {
             setSelectedColor(state.color, false);
             setSelectedToggleColor(state.toggleColor, false);
             setIntensity(state.intensity, false);
+            setSelectedToggleTween(state.toggleTween, false);
             setSelectedToggleSpeed(state.toggleSpeed, false);
             setSelectedStrobeSpeed(state.strobeSpeed, false);
             setSelectedMode(state.mode, false);
@@ -142,6 +150,20 @@ export function StagePage() {
                     value={intensity ?? 0}
                     onInput={(e) => setIntensity(parseInt((e.target as HTMLInputElement).value, 10))}
                 />
+
+                <h2 class="subtitle">Toggle Tween</h2>
+                <div class="buttons">
+                    {TWEENS.map((tween) => (
+                        <button
+                            key={tween.type}
+                            class={`button is-icon ${tween.type === selectedToggleTween ? 'is-selected' : ''}`}
+                            onClick={() => setSelectedToggleTween(tween.type)}
+                            title={capitalize(tween.type)}
+                        >
+                            <tween.icon />
+                        </button>
+                    ))}
+                </div>
 
                 <h2 class="subtitle">Toggle Speed</h2>
                 <div class="buttons">
