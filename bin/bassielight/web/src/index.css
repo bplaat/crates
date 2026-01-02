@@ -113,7 +113,7 @@ a:focus {
 .subtitle {
     font-weight: 700;
     margin: 1rem 0;
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 0.5rem;
 }
