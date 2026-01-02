@@ -146,9 +146,10 @@ export function StagePage() {
                     class="slider is-fullwidth"
                     type="range"
                     min="0"
-                    max="255"
+                    max="1"
+                    step="0.01"
                     value={intensity ?? 0}
-                    onInput={(e) => setIntensity(parseInt((e.target as HTMLInputElement).value, 10))}
+                    onInput={(e) => setIntensity(parseFloat((e.target as HTMLInputElement).value))}
                 />
 
                 <h2 class="subtitle">Toggle Tween</h2>

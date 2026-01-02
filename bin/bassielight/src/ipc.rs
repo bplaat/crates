@@ -35,7 +35,7 @@ pub(crate) enum IpcMessage {
         toggle_color: Color,
     },
     SetIntensity {
-        intensity: u8,
+        intensity: f32,
     },
     SetToggleTween {
         #[serde(rename = "toggleTween")]
@@ -67,7 +67,7 @@ pub(crate) enum IpcMessage {
 pub(crate) struct State {
     pub color: Color,
     pub toggle_color: Color,
-    pub intensity: u8,
+    pub intensity: f32,
     pub toggle_tween: ToggleTween,
     pub toggle_speed: Option<u64>,
     pub strobe_speed: Option<u64>,
