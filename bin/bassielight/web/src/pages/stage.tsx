@@ -121,7 +121,7 @@ export function StagePage() {
                     ))}
                 </div>
 
-                <h2 class="subtitle">Toggle Colors</h2>
+                <h2 class="subtitle">Toggle Color</h2>
                 <div class="buttons">
                     {COLORS.map((color) => (
                         <button
@@ -143,7 +143,7 @@ export function StagePage() {
                     onInput={(e) => setIntensity(parseInt((e.target as HTMLInputElement).value, 10))}
                 />
 
-                <h2 class="subtitle">Toggle Speeds</h2>
+                <h2 class="subtitle">Toggle Speed</h2>
                 <div class="buttons">
                     {SPEEDS.map((speed) => (
                         <button
@@ -156,7 +156,7 @@ export function StagePage() {
                     ))}
                 </div>
 
-                <h2 class="subtitle">Strobe Speeds</h2>
+                <h2 class="subtitle">Strobe Speed</h2>
                 <div class="buttons">
                     {SPEEDS.map((speed) => (
                         <button
