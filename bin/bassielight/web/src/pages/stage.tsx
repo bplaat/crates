@@ -5,14 +5,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect, useContext } from 'preact/hooks';
+import { useState, useEffect, useContext, useRef } from 'preact/hooks';
 import { AccountIcon, LightbulbOffIcon, MusicIcon, TweenDirect, TweenEase, TweenLinear } from '../components/icons.tsx';
 import { capitalize } from '../utils.ts';
 import { IpcContext } from '../app.tsx';
 import { $dmxLive } from '../components/menubar.tsx';
 
 const COLORS = [0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff];
-const SPEEDS = [null, 22, 50, 100, 200, 250, 500, 750, 1000];
+const SPEEDS = [null, 22, 50, 100, 200, 250, 500, 1000];
 const TWEENS = [
     { type: 'direct', icon: TweenDirect },
     { type: 'linear', icon: TweenLinear },
@@ -41,6 +41,44 @@ function useIpcState(key: string): [any, (value: any, isUserInitiated?: boolean)
         }
     };
     return [value, setIpcValue];
+}
+
+function TapTempoButton({
+    selectedSpeed,
+    onSpeedChange,
+}: {
+    selectedSpeed: number | null;
+    onSpeedChange: (ms: number) => void;
+}) {
+    const taps = useRef<number[]>([]);
+    const isSelected = !SPEEDS.includes(selectedSpeed);
+    const bpm = isSelected && selectedSpeed ? Math.round(60000 / selectedSpeed) : null;
+
+    return (
+        <button
+            class={`button is-text ${isSelected ? 'is-selected' : ''}`}
+            onClick={() => {
+                const now = window.performance.now();
+                if (taps.current.length > 0 && now - taps.current[taps.current.length - 1] > 2000) {
+                    taps.current = [];
+                }
+                taps.current.push(now);
+                if (taps.current.length > 4) {
+                    taps.current.shift();
+                }
+                if (taps.current.length > 1) {
+                    let sum = 0;
+                    for (let i = 1; i < taps.current.length; i++) {
+                        sum += taps.current[i] - taps.current[i - 1];
+                    }
+                    const avg = sum / (taps.current.length - 1);
+                    onSpeedChange(Math.round(avg));
+                }
+            }}
+        >
+            {bpm ? `${bpm}BPM` : 'BPM'}
+        </button>
+    );
 }
 
 export function StagePage() {
@@ -177,6 +215,7 @@ export function StagePage() {
                             {speed == null ? 'Off' : `${speed}ms`}
                         </button>
                     ))}
+                    <TapTempoButton selectedSpeed={selectedToggleSpeed} onSpeedChange={setSelectedToggleSpeed} />
                 </div>
 
                 <h2 class="subtitle">Strobe Speed</h2>
@@ -190,6 +229,7 @@ export function StagePage() {
                             {speed == null ? 'Off' : `${speed}ms`}
                         </button>
                     ))}
+                    <TapTempoButton selectedSpeed={selectedStrobeSpeed} onSpeedChange={setSelectedStrobeSpeed} />
                 </div>
 
                 {switchesLabels && (
