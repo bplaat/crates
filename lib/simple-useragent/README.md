@@ -26,7 +26,7 @@ fn main() {
 
 ## Features
 
--   **serde**: Enable serialization and deserialization derives of the structs with [serde](https://serde.rs/).
+- **serde**: Enable serialization and deserialization derives of the structs with [serde](https://serde.rs/).
 
 ## Documentation
 

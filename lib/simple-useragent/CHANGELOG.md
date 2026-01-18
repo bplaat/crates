@@ -10,22 +10,22 @@ _Placeholder_
 
 ### Fixed
 
--   Use `static` instead of `const` for regex codegen to avoid inlining.
+- Use `static` instead of `const` for regex codegen to avoid inlining.
 
 ## [0.1.1] - 2025-02-04
 
 ### Changed
 
--   Remove `serde` and `postcard` dependencies and use Rust codegen instead.
--   Updated `regexes.yaml` from [uap-core](https://github.com/ua-parser/uap-core/blob/master/regexes.yaml)
+- Remove `serde` and `postcard` dependencies and use Rust codegen instead.
+- Updated `regexes.yaml` from [uap-core](https://github.com/ua-parser/uap-core/blob/master/regexes.yaml)
 
 ### Added
 
--   Make [README.md](README.md) more complete.
+- Make [README.md](README.md) more complete.
 
 ### Fixed
 
--   Fix bug with dollar template variables that where not expanded correctly.
+- Fix bug with dollar template variables that where not expanded correctly.
 
 ## [0.1.0] - 2025-02-04
 

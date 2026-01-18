@@ -10,24 +10,24 @@ _Placeholder_
 
 ### Changed
 
--   Updated to `small-http` v0.2.1
+- Updated to `small-http` v0.2.1
 
 ## [0.2.0] - 2025-06-27
 
 ### Changed
 
--   Updated to `small-http` v0.2.0
+- Updated to `small-http` v0.2.0
 
 ## [0.1.1] - 2025-02-24
 
 ### Added
 
--   Added `Router::new` method to create a new router without context
+- Added `Router::new` method to create a new router without context
 
 ### Changed
 
--   Improved examples
--   Updated `README.md`
+- Improved examples
+- Updated `README.md`
 
 ## [0.1.0] - 2025-02-21
 

@@ -8,25 +8,25 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 These crates are published to [crates.io](https://crates.io) and are more polished and documented
 
--   [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
--   [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
--   [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
--   [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library **([crates.io](https://crates.io/crates/small-http))**
--   [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library **([crates.io](https://crates.io/crates/small-router))**
+- [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
+- [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
+- [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
+- [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library **([crates.io](https://crates.io/crates/small-http))**
+- [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library **([crates.io](https://crates.io/crates/small-router))**
 
 ### Libraries
 
 These libraries are not published to [crates.io](https://crates.io) and are more intended for personal use but can still be useful
 
--   [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
--   [from_enum](lib/from_enum) A FromEnum derive macro library
--   [ini](lib/ini) A simple INI file parser library
--   [js](lib/js) A WIP JavaScript interpreter
--   [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
--   [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
--   [small-websocket](lib/small-websocket) A simple and small websocket library for the [small-http](lib/small-http) library
--   [validate](lib/validate) A simple struct validation library
--   [validate_derive](lib/validate_derive) Validation derive macro's library
+- [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
+- [from_enum](lib/from_enum) A FromEnum derive macro library
+- [ini](lib/ini) A simple INI file parser library
+- [js](lib/js) A WIP JavaScript interpreter
+- [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
+- [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
+- [small-websocket](lib/small-websocket) A simple and small websocket library for the [small-http](lib/small-http) library
+- [validate](lib/validate) A simple struct validation library
+- [validate_derive](lib/validate_derive) Validation derive macro's library
 
 ### Apps
 
@@ -61,46 +61,46 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 </tr>
 </table>
 
--   [2048](bin/game2048) An offline desktop 2048 game app
--   [BassieLight](bin/bassielight) A simple lights controller with GUI
--   [ManExplorer](bin/manexplorer) A simple man page explorer tool
--   [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
+- [2048](bin/game2048) An offline desktop 2048 game app
+- [BassieLight](bin/bassielight) A simple lights controller with GUI
+- [ManExplorer](bin/manexplorer) A simple man page explorer tool
+- [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 
 ### Tools / Websites
 
 Various tools and websites, for the live deployed sites go to [crates.bplaat.nl](https://crates.bplaat.nl/)
 
--   [baksteen](bin/baksteen/) A brick laying robot simulator
--   [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
--   [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
--   [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
--   [plaatnotes](bin/plaatnotes) A simple note-taking app
--   [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook
+- [baksteen](bin/baksteen/) A brick laying robot simulator
+- [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
+- [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
+- [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
+- [plaatnotes](bin/plaatnotes) A simple note-taking app
+- [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook
 
 ### Replacement libraries
 
 These libraries are created as minimal / smaller replacements for common used crates
 
--   [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
--   [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
--   [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
--   [dotenv](lib/dotenv) A minimal replacement for the [dotenv](https://crates.io/crates/dotenv) crate
--   [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
--   [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
--   [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
--   [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
--   [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
--   [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
--   [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
--   [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
--   [semver](lib/semver) A minimal replacement for the [semver](https://crates.io/crates/semver) crate
--   [sha1](lib/sha1) A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
--   [simple_logger](lib/simple_logger) A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
--   [terminal_size](lib/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
--   [threadpool](lib/threadpool) A minimal replacement for the [threadpool](https://crates.io/crates/threadpool) crate
--   [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
--   [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
--   [winres](lib/winres) A minimal replacement for the [winres](https://crates.io/crates/winres) crate
+- [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
+- [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
+- [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
+- [dotenv](lib/dotenv) A minimal replacement for the [dotenv](https://crates.io/crates/dotenv) crate
+- [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
+- [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
+- [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
+- [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
+- [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
+- [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
+- [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
+- [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
+- [semver](lib/semver) A minimal replacement for the [semver](https://crates.io/crates/semver) crate
+- [sha1](lib/sha1) A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
+- [simple_logger](lib/simple_logger) A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
+- [terminal_size](lib/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
+- [threadpool](lib/threadpool) A minimal replacement for the [threadpool](https://crates.io/crates/threadpool) crate
+- [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
+- [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
+- [winres](lib/winres) A minimal replacement for the [winres](https://crates.io/crates/winres) crate
 
 ## Repo organization
 
@@ -112,9 +112,9 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 
 ## Getting Started
 
--   Open a posix shell environment when you are on Windows (e.g. Git Bash)
--   Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [OpenJDK 21](https://adoptium.net/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
--   Install Rust nightly `rustfmt`, `cargo-binstall`, `cargo-deny` and `cargo-nextest`:
+- Open a posix shell environment when you are on Windows (e.g. Git Bash)
+- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [OpenJDK 21](https://adoptium.net/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
+- Install Rust nightly `rustfmt`, `cargo-binstall`, `cargo-deny` and `cargo-nextest`:
 
     ```sh
     rustup toolchain add nightly --component rustfmt
@@ -122,7 +122,7 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
     cargo binstall -y cargo-deny cargo-nextest
     ```
 
--   Run checks, or run an example:
+- Run checks, or run an example:
 
     ```sh
     ./meta.sh check
@@ -132,7 +132,7 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 
 ### Additional tools
 
--   For coverage reports, install the `llvm-tools` and `cargo-llvm-cov` tool:
+- For coverage reports, install the `llvm-tools` and `cargo-llvm-cov` tool:
 
     ```sh
     rustup component add llvm-tools
@@ -140,7 +140,7 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
     ./meta.sh coverage
     ```
 
--   To build pages, install a wasm target and the `wasm-bindgen-cli` tool:
+- To build pages, install a wasm target and the `wasm-bindgen-cli` tool:
 
     ```sh
     rustup target add wasm32-unknown-unknown
@@ -148,14 +148,14 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
     ./meta.sh build-pages
     ```
 
--   To build macOS app bundles, only on macOS, install targets:
+- To build macOS app bundles, only on macOS, install targets:
 
     ```sh
     rustup target add aarch64-apple-darwin x86_64-apple-darwin
     ./meta.sh build-bundle
     ```
 
--   To build and install bins and GUI applications to your system:
+- To build and install bins and GUI applications to your system:
 
     ```sh
     ./meta.sh install

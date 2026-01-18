@@ -6,32 +6,32 @@ A simple build system for my projects, because I really like the simplicity of C
 
 ## Supported project types
 
--   Clang/GCC languages (C, C++, Objective-C, Objective-C++, Assembly)
--   JVM languages (Java, Kotlin)
--   Android (Java, Kotlin, XML)
+- Clang/GCC languages (C, C++, Objective-C, Objective-C++, Assembly)
+- JVM languages (Java, Kotlin)
+- Android (Java, Kotlin, XML)
 
 ### Supported package types
 
--   Java Archive (.jar)
--   macOS bundle (.app)
--   Android APK (.apk)
+- Java Archive (.jar)
+- macOS bundle (.app)
+- Android APK (.apk)
 
 ### Supported unit test libraries
 
--   CUnit (C, C++, Objective-C, Objective-C++)
--   JUnit (Java, Kotlin)
+- CUnit (C, C++, Objective-C, Objective-C++)
+- JUnit (Java, Kotlin)
 
 ## Getting Started
 
 ### Creating a C project
 
--   Install bob
+- Install bob
 
     ```sh
     cargo install --git https://github.com/bplaat/crates bob
     ```
 
--   Create a `bob.toml` manifest file in your project root:
+- Create a `bob.toml` manifest file in your project root:
 
     ```toml
     [project]
@@ -39,7 +39,7 @@ A simple build system for my projects, because I really like the simplicity of C
     version = "0.1.0"
     ```
 
--   Create a `src/main.c` source file:
+- Create a `src/main.c` source file:
 
     ```c
     #include <stdio.h>
@@ -49,7 +49,7 @@ A simple build system for my projects, because I really like the simplicity of C
     }
     ```
 
--   Then run `bob` to build and run the project:
+- Then run `bob` to build and run the project:
 
     ```sh
     bob run
@@ -57,7 +57,7 @@ A simple build system for my projects, because I really like the simplicity of C
 
 ### Running C unit tests
 
--   You can create unit tests inline in your C code, for example if you have this function:
+- You can create unit tests inline in your C code, for example if you have this function:
 
     ```c
     int add(int a, int b) {
@@ -65,7 +65,7 @@ A simple build system for my projects, because I really like the simplicity of C
     }
     ```
 
--   You can create a unit test for it like this:
+- You can create a unit test for it like this:
 
     ```c
     #ifdef TEST
@@ -77,13 +77,13 @@ A simple build system for my projects, because I really like the simplicity of C
     #endif
     ```
 
--   Then run `bob` to build and run the tests:
+- Then run `bob` to build and run the tests:
 
     ```sh
     bob test
     ```
 
--   This will also print the CUnit test report
+- This will also print the CUnit test report
 
 ## License
 

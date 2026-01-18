@@ -11,12 +11,12 @@ declare global {
             addEventListener: (
                 type: 'message',
                 listener: (event: MessageEvent) => void,
-                options?: boolean | AddEventListenerOptions
+                options?: boolean | AddEventListenerOptions,
             ) => void;
             removeEventListener: (
                 type: 'message',
                 listener: (event: MessageEvent) => void,
-                options?: boolean | EventListenerOptions
+                options?: boolean | EventListenerOptions,
             ) => void;
         };
     }
@@ -58,7 +58,7 @@ export class Ipc {
                             this.ws!.send(message);
                             resolve(undefined);
                         },
-                        { once: true }
+                        { once: true },
                     );
                 }
             }

@@ -68,12 +68,12 @@ See the [examples](examples/) for many more examples.
 
 ## Design goals
 
--   Connect and execute queries on a SQLite database
--   Have a generic `Value` enum type to represent SQLite values
--   Bind and read `Value` types to and from SQLite statements
--   Have `FromRow` and `FromValue` derive macros to convert between Rust types to SQLite `Value`'s
--   Work well and efficient with popular crates like `uuid` and `chrono`
--   Have helpful error messages on query errors
+- Connect and execute queries on a SQLite database
+- Have a generic `Value` enum type to represent SQLite values
+- Bind and read `Value` types to and from SQLite statements
+- Have `FromRow` and `FromValue` derive macros to convert between Rust types to SQLite `Value`'s
+- Work well and efficient with popular crates like `uuid` and `chrono`
+- Have helpful error messages on query errors
 
 ## Documentation
 

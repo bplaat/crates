@@ -10,7 +10,7 @@ _Placeholder_
 
 ### Changed
 
--   Make the `columns()` and `values()` in `FromRow` const.
+- Make the `columns()` and `values()` in `FromRow` const.
 
 ## [0.1.0] - 2025-02-10
 
