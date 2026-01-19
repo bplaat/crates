@@ -15,6 +15,8 @@ use std::process::Command;
 use std::{env, fs};
 
 /// Windows resource compiler
+///
+/// Supports msvc rc.exe, mingw windres and zig rc.
 pub struct WindowsResource {
     icon_path: Option<PathBuf>,
     manifest: Option<String>,
@@ -156,8 +158,29 @@ impl WindowsResource {
             .unwrap_or_else(|_| panic!("failed to write resource.rc to {}", rc_path.display()));
 
         // Compile resource.rc
-        let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-        match target_env.as_str() {
+        if env::var("RUSTC_LINKER").unwrap_or_default().contains("zig") {
+            let status = Command::new("zig")
+                .arg("rc")
+                .arg("/fo")
+                .arg(Path::new(&out_dir).join("resource.lib"))
+                .arg(&rc_path)
+                .status()
+                .map_err(|e| format!("failed to execute rc.exe: {e}"))?;
+            if !status.success() {
+                return Err(format!(
+                    "zig rc failed with exit code: {}",
+                    status.code().unwrap_or(-1)
+                ));
+            }
+            println!("cargo:rustc-link-search=native={out_dir}");
+            println!("cargo:rustc-link-lib=static=resource");
+            return Ok(());
+        }
+
+        match env::var("CARGO_CFG_TARGET_ENV")
+            .unwrap_or_default()
+            .as_str()
+        {
             "msvc" => {
                 let status = Command::new(find_rc_exe().expect("Can't find rc.exe"))
                     .arg("/fo")
@@ -171,13 +194,17 @@ impl WindowsResource {
                         status.code().unwrap_or(-1)
                     ));
                 }
-
                 println!("cargo:rustc-link-search=native={out_dir}");
                 println!("cargo:rustc-link-lib=static=resource");
+                Ok(())
             }
             "gnu" => {
                 let object_path = Path::new(&out_dir).join("resource.o");
-                let tools = ["windres", "x86_64-w64-mingw32-windres"];
+                let tools = [
+                    "windres",
+                    "x86_64-w64-mingw32-windres",
+                    "i686-w64-mingw32-windres",
+                ];
                 let mut last_error = None;
                 for tool in &tools {
                     let status = Command::new(tool)
@@ -208,13 +235,10 @@ impl WindowsResource {
                     return Err(err);
                 }
                 println!("cargo:rustc-link-arg={}", object_path.display());
+                Ok(())
             }
-            other => {
-                return Err(format!("unsupported target environment: {other}"));
-            }
+            other => Err(format!("unsupported target environment: {other}")),
         }
-
-        Ok(())
     }
 }
 
