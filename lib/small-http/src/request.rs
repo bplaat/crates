@@ -398,14 +398,30 @@ impl Request {
 
     /// Fetch request with http client
     pub fn fetch(self) -> Result<Response, FetchError> {
+        // Open TCP connection
+        let is_https = self.url.scheme().to_lowercase() == "https";
         let mut stream = TcpStream::connect(format!(
             "{}:{}",
             self.url.host().expect("No host in URL"),
-            self.url.port().unwrap_or(80)
+            self.url.port().unwrap_or(if is_https { 443 } else { 80 })
         ))
         .map_err(|_| FetchError)?;
-        self.write_to_stream(&mut stream, false);
-        Response::read_from_stream(&mut stream).map_err(|_| FetchError)
+
+        if is_https {
+            // Setup TLS connection
+            let tls_connector = native_tls::TlsConnector::new().map_err(|_| FetchError)?;
+            let mut tls_stream = tls_connector
+                .connect(self.url.host().expect("No host in URL"), stream)
+                .map_err(|_| FetchError)?;
+
+            // Send request and read response
+            self.write_to_stream(&mut tls_stream, false);
+            Response::read_from_stream(&mut tls_stream).map_err(|_| FetchError)
+        } else {
+            // Send request and read response
+            self.write_to_stream(&mut stream, false);
+            Response::read_from_stream(&mut stream).map_err(|_| FetchError)
+        }
     }
 }
 
@@ -550,4 +566,7 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         assert_eq!(res.body, "test".as_bytes());
     }
+
+    // FIXME: Test fetch http 1.0 with tls
+    // FIXME : Test fetch http 1.1 with tls
 }

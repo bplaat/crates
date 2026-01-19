@@ -1,0 +1,13 @@
+[package]
+name = "native_tls"
+version = "0.2.14+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework-sys = { version = "2.15.0", default-features = false }
+core-foundation-sys = "0.8"

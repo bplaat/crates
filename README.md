@@ -91,6 +91,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
 - [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
 - [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
+- [native_tls](lib/native_tls) A minimal replacement for the [native_tls](https://crates.io/crates/native_tls) crate
 - [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 - [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 - [semver](lib/semver) A minimal replacement for the [semver](https://crates.io/crates/semver) crate

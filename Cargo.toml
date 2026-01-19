@@ -42,6 +42,7 @@ libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 local-ip-address = { path = "lib/local-ip-address" }
 mime = { path = "lib/mime" }
 mime_guess = { path = "lib/mime_guess" }
+native_tls = { path = "lib/native_tls" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 semver = { path = "lib/semver" }

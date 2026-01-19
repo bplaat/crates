@@ -166,6 +166,12 @@ name = "copy_dir"
 version = "0.1.3+patch"
 
 [[package]]
+name = "core-foundation-sys"
+version = "0.8.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
 name = "directories"
 version = "6.0.0+patch"
 
@@ -401,6 +407,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "native_tls"
+version = "0.2.14+patch"
+dependencies = [
+ "core-foundation-sys",
+ "security-framework-sys",
+]
+
+[[package]]
 name = "navidrome"
 version = "0.1.0"
 dependencies = [
@@ -562,6 +576,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
+name = "security-framework-sys"
+version = "2.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc1f0cbffaac4852523ce30d8bd3c5cdc873501d96ff467ca09b6767bb8cd5c0"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.27+patch"
 
@@ -667,6 +691,7 @@ version = "0.2.1"
 dependencies = [
  "base64",
  "chrono",
+ "native_tls",
  "serde",
  "serde_json",
  "serde_urlencoded",

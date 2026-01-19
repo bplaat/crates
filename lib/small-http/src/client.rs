@@ -40,7 +40,13 @@ impl Client {
             request = request.header(name, value);
         }
 
-        // Get or create connection
+        // Get or create TCP connection
+        let is_https = request.url.scheme().to_lowercase() == "https";
+        if is_https {
+            // FIXME: Add https support to Client
+            return Err(FetchError);
+        }
+
         let addr = format!(
             "{}:{}",
             request.url.host().expect("No host in URL"),
