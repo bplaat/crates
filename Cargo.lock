@@ -43,7 +43,7 @@ dependencies = [
  "simple_logger",
  "small-http",
  "small-websocket",
- "winres",
+ "winresource",
 ]
 
 [[package]]
@@ -265,7 +265,7 @@ version = "0.1.0"
 dependencies = [
  "bwebview",
  "rust-embed",
- "winres",
+ "winresource",
 ]
 
 [[package]]
@@ -405,7 +405,7 @@ name = "navidrome"
 version = "0.1.0"
 dependencies = [
  "bwebview",
- "winres",
+ "winresource",
 ]
 
 [[package]]
@@ -846,8 +846,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "winres"
-version = "0.1.12+patch"
+name = "winresource"
+version = "0.1.29+patch"
 dependencies = [
  "semver",
 ]

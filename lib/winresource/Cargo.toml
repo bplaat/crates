@@ -1,6 +1,6 @@
 [package]
-name = "winres"
-version = "0.1.12+patch"
+name = "winresource"
+version = "0.1.29+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

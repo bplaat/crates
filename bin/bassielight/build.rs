@@ -93,7 +93,7 @@ fn main() {
             env!("CARGO_PKG_VERSION")
         );
 
-        let mut res = winres::WindowsResource::new();
+        let mut res = winresource::WindowsResource::new();
         res.set("ProductName", "BassieLight")
             .set("FileDescription", "BassieLight")
             .set("LegalCopyright", "Copyright © 2025 Bastiaan van der Plaat")

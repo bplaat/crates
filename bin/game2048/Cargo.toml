@@ -19,4 +19,4 @@ bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
 rust-embed = "8.7"
 
 [build-dependencies]
-winres = "0.1.12"
+winresource = "0.1.29"

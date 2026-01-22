@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A minimal replacement for the [winres](https://crates.io/crates/winres) crate
+//! A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
 
 #![forbid(unsafe_code)]
 

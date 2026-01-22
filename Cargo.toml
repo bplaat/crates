@@ -51,4 +51,4 @@ terminal_size = { path = "lib/terminal_size" }
 threadpool = { path = "lib/threadpool" }
 url = { path = "lib/url" }
 uuid = { path = "lib/uuid" }
-winres = { path = "lib/winres" }
+winresource = { path = "lib/winresource" }

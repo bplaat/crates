@@ -100,7 +100,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [threadpool](lib/threadpool) A minimal replacement for the [threadpool](https://crates.io/crates/threadpool) crate
 - [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 - [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
-- [winres](lib/winres) A minimal replacement for the [winres](https://crates.io/crates/winres) crate
+- [winresource](lib/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
 
 ## Repo organization
 

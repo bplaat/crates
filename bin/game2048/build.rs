@@ -43,7 +43,7 @@ fn main() {
             env!("CARGO_PKG_VERSION")
         );
 
-        let mut res = winres::WindowsResource::new();
+        let mut res = winresource::WindowsResource::new();
         res.set("ProductName", "2048")
             .set("FileDescription", "2048")
             .set(
