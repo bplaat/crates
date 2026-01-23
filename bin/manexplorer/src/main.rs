@@ -71,8 +71,14 @@ fn man_index(_req: &Request, _ctx: &()) -> Response {
 }
 
 fn man_show(req: &Request, _ctx: &()) -> Response {
-    let page = req.params.get("page").expect("Should be some");
-    let name = req.params.get("name").expect("Should be some");
+    let page = req
+        .params
+        .get("page")
+        .expect("page param should be present");
+    let name = req
+        .params
+        .get("name")
+        .expect("name param should be present");
     let output = Command::new("man")
         .arg("-P")
         .arg("col -b")

@@ -53,7 +53,7 @@ fn main() {
         .expect("Failed to run npm run build");
 
     // Copy all files from web/dist to OUT_DIR
-    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
     copy_dir("web/dist", Path::new(&out_dir).join("web"))
         .expect("Failed to copy web/dist files to $OUT_DIR");
 }

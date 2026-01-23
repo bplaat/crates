@@ -11,7 +11,7 @@ use std::process::Command;
 use std::{env, fs};
 
 fn main() {
-    let out_dir = env::var("OUT_DIR").expect("Should be some");
+    let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set");
 
     // MARK: Compile JavacServer.java
     if cfg!(feature = "javac-server") {

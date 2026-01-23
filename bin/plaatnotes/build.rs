@@ -14,7 +14,7 @@ use copy_dir::copy_dir;
 
 fn main() {
     // Generate openapi file
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("Should be some"));
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     openapi_generator::generate_schemas_build(
         "openapi.yaml",
         out_dir.join("api.rs"),

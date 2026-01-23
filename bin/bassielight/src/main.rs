@@ -124,7 +124,7 @@ fn main() {
                 let mime = mime_guess::from_path(&path).first_or_octet_stream();
                 Response::with_header("Content-Type", mime.to_string()).body(file.data)
             } else {
-                let file = WebAssets::get("index.html").expect("Should be some");
+                let file = WebAssets::get("index.html").expect("index.html not found");
                 Response::with_header("Content-Type", "text/html").body(file.data)
             }
         });

@@ -45,7 +45,7 @@ fn main() {
         .expect("Can't parse regexes.yaml");
 
     // Write rules_data.rs
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("Should be some"));
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     let mut f = File::create(out_dir.join("rules_data.rs")).expect("Can't create rules_data.rs");
 
     let user_agent_parsers = rules

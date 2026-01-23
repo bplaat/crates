@@ -28,19 +28,19 @@ impl Default for WindowsResource {
         let mut version_fields = HashMap::new();
         version_fields.insert(
             "FileVersion".to_string(),
-            env::var("CARGO_PKG_VERSION").expect("Should be some"),
+            env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION not set"),
         );
         version_fields.insert(
             "ProductVersion".to_string(),
-            env::var("CARGO_PKG_VERSION").expect("Should be some"),
+            env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION not set"),
         );
         version_fields.insert(
             "FileDescription".to_string(),
-            env::var("CARGO_PKG_NAME").expect("Should be some"),
+            env::var("CARGO_PKG_NAME").expect("CARGO_PKG_NAME not set"),
         );
         version_fields.insert(
             "ProductName".to_string(),
-            env::var("CARGO_PKG_NAME").expect("Should be some"),
+            env::var("CARGO_PKG_NAME").expect("CARGO_PKG_NAME not set"),
         );
 
         Self {
@@ -115,9 +115,10 @@ impl WindowsResource {
             ));
         }
 
-        let version =
-            semver::Version::parse(&env::var("CARGO_PKG_VERSION").expect("Should be some"))
-                .expect("Can't parse version semver");
+        let version = semver::Version::parse(
+            &env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION not set"),
+        )
+        .expect("Can't parse version semver");
         rc_content.push_str(&format!(
             "1 VERSIONINFO\r\n\
         FILEVERSION {maj},{min},{pat},0\r\n\

@@ -53,12 +53,12 @@ fn main() {
         .expect("Failed to run npm run build");
 
     // Copy built assets to OUT_DIR/web
-    let out_dir = std::env::var("OUT_DIR").expect("Should be some");
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
     copy_dir("web/dist", Path::new(&out_dir).join("web"))
         .expect("Failed to copy web/dist files to $OUT_DIR");
 
     // Compile Windows resources
-    if std::env::var("CARGO_CFG_TARGET_OS").expect("Should be some") == "windows" {
+    if std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set") == "windows" {
         let manifest = format!(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3" manifestVersion="1.0">

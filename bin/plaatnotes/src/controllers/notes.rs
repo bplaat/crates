@@ -102,7 +102,7 @@ pub(crate) fn get_note(req: &Request, ctx: &Context) -> Option<Note> {
     let note_id = match req
         .params
         .get("note_id")
-        .expect("Should be some")
+        .expect("note_id param should be present")
         .parse::<Uuid>()
     {
         Ok(id) => id,

@@ -179,7 +179,7 @@ fn get_person(req: &Request, ctx: &Context) -> Option<Person> {
     let person_id = match req
         .params
         .get("person_id")
-        .expect("Should be some")
+        .expect("person_id param should be present")
         .parse::<Uuid>()
     {
         Ok(id) => id,

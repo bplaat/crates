@@ -165,7 +165,7 @@ impl Connection {
     pub fn query_some<T: FromRow>(&self, query: impl AsRef<str>, params: impl Bind) -> T {
         self.query::<T>(query.as_ref(), params)
             .next()
-            .expect("Should be some")
+            .expect("Expected at least one row from query")
     }
 
     /// Execute a query
