@@ -9,7 +9,7 @@ authors.workspace = true
 name = "ManExplorer"
 identifier = "nl.bplaat.ManExplorer"
 copyright = "Copyright © 2025 Bastiaan van der Plaat"
-iconset = "meta/macos/icon.iconset"
+icon = "meta/macos/icon.icon"
 
 [lints]
 workspace = true

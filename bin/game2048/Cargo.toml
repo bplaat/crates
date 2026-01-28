@@ -12,7 +12,7 @@ workspace = true
 name = "2048"
 identifier = "nl.bplaat.2048"
 copyright = "Copyright © 2014 Gabriele Cirulli\nCopyright © 2025 Bastiaan van der Plaat"
-iconset = "meta/macos/icon.iconset"
+icon = "meta/macos/icon.icon"
 
 [dependencies]
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }

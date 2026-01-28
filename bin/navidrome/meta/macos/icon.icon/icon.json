@@ -1,0 +1,37 @@
+{
+  "fill" : "system-light",
+  "groups" : [
+    {
+      "blur-material" : null,
+      "layers" : [
+        {
+          "hidden" : false,
+          "image-name" : "icon.svg",
+          "name" : "icon"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular-specializations" : [
+        {
+          "value" : false
+        },
+        {
+          "appearance" : "tinted",
+          "value" : true
+        }
+      ],
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.1
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}
