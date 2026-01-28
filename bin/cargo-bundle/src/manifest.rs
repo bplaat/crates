@@ -31,4 +31,5 @@ pub(crate) struct BundleMetadata {
     pub resources_dir: Option<String>,
     pub iconset: Option<String>,
     pub icns: Option<String>,
+    pub icon: Option<String>,
 }

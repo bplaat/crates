@@ -51,6 +51,29 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
             .expect("Failed to create icon.icns");
     }
 
+    // Compile .icon dir to Assets.car if needed
+    if let Some(icon) = &bundle.icon {
+        Command::new("actool")
+            .args([
+                &format!("{path}/{icon}"),
+                "--compile",
+                target_dir,
+                "--platform",
+                "macosx",
+                "--minimum-deployment-target",
+                "11.0",
+                "--target-device",
+                "mac",
+                "--app-icon",
+                "icon",
+                "--include-all-app-icons",
+                "--output-partial-info-plist",
+                &format!("{target_dir}/partial.plist"),
+            ])
+            .output()
+            .expect("Failed to create Assets.car");
+    }
+
     // Copy icns if provided
     if let Some(icns) = &bundle.icns {
         fs::copy(format!("{path}/{icns}"), format!("{target_dir}/icon.icns"))
@@ -74,8 +97,11 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
     if let Some(copyright) = &bundle.copyright {
         plist.push(("NSHumanReadableCopyright", copyright.clone()));
     }
-    if bundle.iconset.is_some() || bundle.icns.is_some() {
+    if bundle.iconset.is_some() || bundle.icns.is_some() || bundle.icon.is_some() {
         plist.push(("CFBundleIconFile", "icon.icns".to_string()));
+        if bundle.icon.is_some() {
+            plist.push(("CFBundleIconName", "icon".to_string()));
+        }
     }
 
     // Write Info.plist using the Vec
@@ -147,6 +173,14 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
         format!("{bundle_dir}/Resources/icon.icns"),
     )
     .expect("Failed to copy icon.icns");
+
+    if bundle.icon.is_some() {
+        fs::copy(
+            format!("{target_dir}/Assets.car"),
+            format!("{bundle_dir}/Resources/Assets.car"),
+        )
+        .expect("Failed to copy Assets.car");
+    }
 
     fs::copy(
         format!("{target_dir}/{}", bundle.name),
