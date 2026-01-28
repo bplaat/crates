@@ -31,7 +31,9 @@ fn read_manifest(path: &str) -> Manifest {
     })
 }
 
-fn generate_resources(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) {
+fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
+    let bundle = &manifest.package.metadata.bundle;
+
     // Generate resources for macOS bundle
     fs::create_dir_all(target_dir).expect("Failed to create target directory");
 
@@ -61,19 +63,19 @@ fn generate_resources(path: &str, target_dir: &str, bundle: &manifest::BundleMet
         ("CFBundleName", bundle.name.clone()),
         ("CFBundleDisplayName", bundle.name.clone()),
         ("CFBundleIdentifier", bundle.identifier.clone()),
-        ("CFBundleVersion", env!("CARGO_PKG_VERSION").to_string()),
+        ("CFBundleVersion", manifest.package.version.clone()),
         (
             "CFBundleShortVersionString",
-            env!("CARGO_PKG_VERSION").to_string(),
+            manifest.package.version.clone(),
         ),
         ("CFBundleExecutable", bundle.name.clone()),
         ("LSMinimumSystemVersion", "11.0".to_string()),
     ];
-    if bundle.iconset.is_some() || bundle.icns.is_some() {
-        plist.push(("CFBundleIconFile", "icon".to_string()));
-    }
     if let Some(copyright) = &bundle.copyright {
         plist.push(("NSHumanReadableCopyright", copyright.clone()));
+    }
+    if bundle.iconset.is_some() || bundle.icns.is_some() {
+        plist.push(("CFBundleIconFile", "icon.icns".to_string()));
     }
 
     // Write Info.plist using the Vec
@@ -132,12 +134,6 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
     fs::create_dir_all(format!("{bundle_dir}/Resources")).expect("Can't create directory");
 
     // Copy files
-    fs::copy(
-        format!("{target_dir}/icon.icns"),
-        format!("{bundle_dir}/Resources/icon.icns"),
-    )
-    .expect("Failed to copy icon.icns");
-
     if let Some(resources_dir) = &bundle.resources_dir {
         copy_dir(
             format!("{path}/{resources_dir}"),
@@ -145,6 +141,12 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
         )
         .expect("Failed to copy resources directory");
     }
+
+    fs::copy(
+        format!("{target_dir}/icon.icns"),
+        format!("{bundle_dir}/Resources/icon.icns"),
+    )
+    .expect("Failed to copy icon.icns");
 
     fs::copy(
         format!("{target_dir}/{}", bundle.name),
@@ -244,7 +246,7 @@ fn main() {
 
     // Generate resource
     let target_dir = format!("target/bundle/{}", manifest.package.name);
-    generate_resources(&args.path, &target_dir, bundle);
+    generate_resources(&args.path, &target_dir, &manifest);
 
     // Compile lipo executable
     compile_lipo(&args.path, &target_dir, &manifest.package, bundle);

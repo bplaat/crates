@@ -14,6 +14,7 @@ pub(crate) struct Manifest {
 #[derive(Deserialize)]
 pub(crate) struct Package {
     pub name: String,
+    pub version: String,
     pub metadata: PackageMetadata,
 }
 
