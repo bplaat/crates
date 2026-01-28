@@ -14,6 +14,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
 
+use crate::version::MicrosoftVersion;
+
+mod version;
+
 /// Windows resource compiler
 ///
 /// Supports msvc rc.exe, mingw windres and zig rc.
@@ -257,7 +261,7 @@ fn find_rc_exe() -> Option<PathBuf> {
         "x86"
     };
 
-    let mut best_version: Option<semver::MicrosoftVersion> = None;
+    let mut best_version: Option<MicrosoftVersion> = None;
     let mut best_path: Option<PathBuf> = None;
     if let Ok(entries) = fs::read_dir(kit_root) {
         for entry in entries.flatten() {
@@ -267,7 +271,7 @@ fn find_rc_exe() -> Option<PathBuf> {
             }
 
             if let Some(version_str) = path.file_name().and_then(|s| s.to_str())
-                && let Ok(version) = semver::MicrosoftVersion::parse(version_str)
+                && let Ok(version) = MicrosoftVersion::parse(version_str)
             {
                 let rc_path = path.join(arch).join("rc.exe");
                 if rc_path.exists()
