@@ -61,7 +61,7 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
                 "--platform",
                 "macosx",
                 "--minimum-deployment-target",
-                "11.0",
+                bundle.minimal_os_version.as_deref().unwrap_or("11.0"),
                 "--target-device",
                 "mac",
                 "--app-icon",
@@ -92,7 +92,13 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
             manifest.package.version.clone(),
         ),
         ("CFBundleExecutable", bundle.name.clone()),
-        ("LSMinimumSystemVersion", "11.0".to_string()),
+        (
+            "LSMinimumSystemVersion",
+            bundle
+                .minimal_os_version
+                .clone()
+                .unwrap_or("11.0".to_string()),
+        ),
     ];
     if let Some(copyright) = &bundle.copyright {
         plist.push(("NSHumanReadableCopyright", copyright.clone()));

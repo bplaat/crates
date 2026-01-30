@@ -28,6 +28,7 @@ pub(crate) struct BundleMetadata {
     pub name: String,
     pub identifier: String,
     pub copyright: Option<String>,
+    pub minimal_os_version: Option<String>,
     pub resources_dir: Option<String>,
     pub iconset: Option<String>,
     pub icns: Option<String>,
