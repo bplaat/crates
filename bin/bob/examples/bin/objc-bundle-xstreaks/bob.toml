@@ -8,5 +8,5 @@ cocoa = { framework = "Cocoa" }
 
 [package.metadata.bundle]
 lipo = true
-iconset = "icons/app_icon.iconset"
+icon = "icons/icon.icon"
 copyright = "Copyright © 2025 Bastiaan van der Plaat"

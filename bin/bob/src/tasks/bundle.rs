@@ -85,6 +85,58 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
         bundle_files.push(dest);
     }
 
+    // Copy icns file
+    if let Some(icns) = &bundle_metadata.icns {
+        let icns_path = PathBuf::from(icns);
+        let icns_name = icns_path
+            .file_name()
+            .expect("Invalid icns path")
+            .to_str()
+            .expect("Invalid UTF-8 sequence");
+        let dest = format!("{contents_dir}/Resources/{icns_name}");
+        executor.add_task_cp(icns.clone(), dest.clone());
+        bundle_files.push(dest);
+    }
+
+    // Compile .icon file
+    if let Some(icon) = &bundle_metadata.icon {
+        let icon_path = PathBuf::from(icon);
+        let icon_name = icon_path
+            .file_stem()
+            .expect("Invalid icon path")
+            .to_str()
+            .expect("Invalid UTF-8 sequence");
+        executor.add_task_cmd(
+            format!(
+                "actool {icon} --compile {} --platform macosx --minimum-deployment-target {} \
+                --target-device mac --app-icon {icon_name} --include-all-app-icons \
+                --output-partial-info-plist {}/src-gen/partial.plist > /dev/null",
+                bobje.out_dir(),
+                bundle_metadata.minimal_os_version,
+                bobje.out_dir()
+            ),
+            vec![icon.clone()],
+            vec![
+                format!("{}/Assets.car", bobje.out_dir()),
+                format!("{}/{}.icns", bobje.out_dir(), icon_name),
+                format!("{}/src-gen/partial.plist", bobje.out_dir()),
+            ],
+        );
+
+        // Copy Assets.car
+        let dest = format!("{contents_dir}/Resources/Assets.car");
+        executor.add_task_cp(format!("{}/Assets.car", bobje.out_dir()), dest.clone());
+        bundle_files.push(dest);
+
+        // Copy .icns
+        let dest = format!("{contents_dir}/Resources/{icon_name}.icns");
+        executor.add_task_cp(
+            format!("{}/{}.icns", bobje.out_dir(), icon_name),
+            dest.clone(),
+        );
+        bundle_files.push(dest);
+    }
+
     // Generate Info.plist
     let info_plist_file = "Info.plist";
     let extra_keys = if fs::metadata(info_plist_file).is_ok() {
@@ -204,6 +256,25 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
             .to_str()
             .expect("Invalid UTF-8 sequence");
         dict_entries.push(("CFBundleIconFile".to_string(), format!("{icon_name}.icns")));
+    }
+    if let Some(icns) = &bundle.icns {
+        let icns_path = PathBuf::from(icns);
+        let icns_name = icns_path
+            .file_name()
+            .expect("Invalid icns path")
+            .to_str()
+            .expect("Invalid UTF-8 sequence");
+        dict_entries.push(("CFBundleIconFile".to_string(), icns_name.to_string()));
+    }
+    if let Some(icon) = &bundle.icon {
+        let icon_path = PathBuf::from(icon);
+        let icon_name = icon_path
+            .file_stem()
+            .expect("Invalid icon path")
+            .to_str()
+            .expect("Invalid UTF-8 sequence");
+        dict_entries.push(("CFBundleIconFile".to_string(), format!("{icon_name}.icns")));
+        dict_entries.push(("CFBundleIconName".to_string(), icon_name.to_string()));
     }
 
     let mut s = String::from(
