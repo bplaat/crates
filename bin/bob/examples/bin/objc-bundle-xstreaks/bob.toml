@@ -9,4 +9,6 @@ cocoa = { framework = "Cocoa" }
 [package.metadata.bundle]
 lipo = true
 iconset = "icons/app_icon.iconset"
+# FIXME: Currently can't build .icon files in GitHub Actions CI with XCode 26.2
+# icon = "icons/icon.icon"
 copyright = "Copyright © 2025 Bastiaan van der Plaat"

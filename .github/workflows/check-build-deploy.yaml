@@ -84,6 +84,9 @@ jobs:
           rustup toolchain add nightly --component rustfmt
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y cargo-deny cargo-nextest
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
       - run: ./meta.sh check
 
   # MARK: Windows x86_64
