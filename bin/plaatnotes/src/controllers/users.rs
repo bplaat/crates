@@ -158,8 +158,6 @@ struct UserUpdateBody {
     last_name: String,
     #[validate(email)]
     email: String,
-    #[validate(ascii, length(min = 8, max = 128))]
-    password: Option<String>,
 }
 
 impl From<api::UserUpdateBody> for UserUpdateBody {
@@ -168,7 +166,6 @@ impl From<api::UserUpdateBody> for UserUpdateBody {
             first_name: body.first_name,
             last_name: body.last_name,
             email: body.email,
-            password: body.password,
         }
     }
 }
@@ -195,18 +192,14 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
     user.first_name = body.first_name;
     user.last_name = body.last_name;
     user.email = body.email;
-    if let Some(password) = body.password {
-        user.password = pbkdf2::password_hash(&password);
-    }
     user.updated_at = Utc::now();
     execute_args!(
         ctx.database,
-        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, password = :password, updated_at = :updated_at WHERE id = :id",
+        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, updated_at = :updated_at WHERE id = :id",
         Args {
             first_name: user.first_name.clone(),
             last_name: user.last_name.clone(),
             email: user.email.clone(),
-            password: user.password.clone(),
             updated_at: user.updated_at,
             id: user.id
         }
@@ -214,6 +207,65 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
 
     // Return updated user
     Response::with_json(Into::<api::User>::into(user))
+}
+
+#[derive(Validate)]
+struct UserChangePasswordBody {
+    #[validate(ascii, length(min = 8, max = 128))]
+    old_password: String,
+    #[validate(ascii, length(min = 8, max = 128))]
+    new_password: String,
+}
+
+impl From<api::UserChangePasswordBody> for UserChangePasswordBody {
+    fn from(body: api::UserChangePasswordBody) -> Self {
+        Self {
+            old_password: body.old_password,
+            new_password: body.new_password,
+        }
+    }
+}
+
+pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
+    // Get user
+    let mut user = match get_user(req, ctx) {
+        Some(user) => user,
+        None => return not_found(req, ctx),
+    };
+
+    // Parse and validate body
+    let body = match serde_urlencoded::from_bytes::<api::UserChangePasswordBody>(
+        req.body.as_deref().unwrap_or(&[]),
+    ) {
+        Ok(body) => Into::<UserChangePasswordBody>::into(body),
+        Err(_) => return Response::with_status(Status::BadRequest),
+    };
+    if let Err(report) = body.validate() {
+        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+    }
+
+    // Verify old password
+    match pbkdf2::password_verify(&body.old_password, &user.password) {
+        Ok(true) => {}
+        Ok(false) => return Response::with_status(Status::Unauthorized),
+        Err(_) => return Response::with_status(Status::InternalServerError),
+    }
+
+    // Update password
+    user.password = pbkdf2::password_hash(&body.new_password);
+    user.updated_at = Utc::now();
+    execute_args!(
+        ctx.database,
+        "UPDATE users SET password = :password, updated_at = :updated_at WHERE id = :id",
+        Args {
+            password: user.password.clone(),
+            updated_at: user.updated_at,
+            id: user.id
+        }
+    );
+
+    // Success response
+    Response::new()
 }
 
 pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
@@ -399,7 +451,7 @@ mod test {
         };
         ctx.database.insert_user(user.clone());
 
-        // Update user without password
+        // Update user
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .body("firstName=John&lastName=Smith&email=john.smith@example.com"),
@@ -409,17 +461,67 @@ mod test {
         assert_eq!(updated_user.last_name, "Smith");
         assert_eq!(updated_user.email, "john.smith@example.com");
 
-        // Update user with password
-        let res = router.handle(
-            &Request::put(format!("http://localhost/api/users/{}", user.id))
-                .body("firstName=John&lastName=Smith&email=john.smith@example.com&password=newpassword123"),
-        );
-        assert_eq!(res.status, Status::Ok);
-
         // Update user with validation errors
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .body("firstName=&lastName=Smith&email=invalid-email"),
+        );
+        assert_eq!(res.status, Status::BadRequest);
+    }
+
+    #[test]
+    fn test_users_change_password() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create user
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: pbkdf2::password_hash("password123"),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
+
+        // Change password with correct old password
+        let res = router.handle(
+            &Request::post(format!(
+                "http://localhost/api/users/{}/change-password",
+                user.id
+            ))
+            .body("oldPassword=password123&newPassword=newpassword456"),
+        );
+        assert_eq!(res.status, Status::Ok);
+
+        // Verify new password works
+        let stored_user = ctx
+            .database
+            .query::<User>(
+                formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+                user.id,
+            )
+            .next()
+            .unwrap();
+        assert!(pbkdf2::password_verify("newpassword456", &stored_user.password).unwrap());
+
+        // Try to change password with incorrect old password
+        let res = router.handle(
+            &Request::post(format!(
+                "http://localhost/api/users/{}/change-password",
+                user.id
+            ))
+            .body("oldPassword=wrongpassword&newPassword=anotherpassword"),
+        );
+        assert_eq!(res.status, Status::Unauthorized);
+
+        // Try to change password with validation errors (short password)
+        let res = router.handle(
+            &Request::post(format!(
+                "http://localhost/api/users/{}/change-password",
+                user.id
+            ))
+            .body("oldPassword=newpassword456&newPassword=short"),
         );
         assert_eq!(res.status, Status::BadRequest);
     }

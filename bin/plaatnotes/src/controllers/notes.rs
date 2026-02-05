@@ -63,23 +63,23 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
 }
 
 #[derive(Validate)]
-struct NoteCreateUpdateBody {
+struct NoteCreateBody {
     #[validate(ascii, length(min = 1))]
     body: String,
 }
 
-impl From<api::NoteCreateUpdateBody> for NoteCreateUpdateBody {
-    fn from(body: api::NoteCreateUpdateBody) -> Self {
+impl From<api::NoteCreateBody> for NoteCreateBody {
+    fn from(body: api::NoteCreateBody) -> Self {
         Self { body: body.body }
     }
 }
 
 pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Response {
     // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::NoteCreateUpdateBody>(
+    let body = match serde_urlencoded::from_bytes::<api::NoteCreateBody>(
         req.body.as_deref().unwrap_or(&[]),
     ) {
-        Ok(body) => Into::<NoteCreateUpdateBody>::into(body),
+        Ok(body) => Into::<NoteCreateBody>::into(body),
         Err(_) => return Response::with_status(Status::BadRequest),
     };
     if let Err(report) = body.validate() {
@@ -129,6 +129,18 @@ pub(crate) fn notes_show(req: &Request, ctx: &Context) -> Response {
     Response::with_json(Into::<api::Note>::into(note))
 }
 
+#[derive(Validate)]
+struct NoteUpdateBody {
+    #[validate(ascii, length(min = 1))]
+    body: String,
+}
+
+impl From<api::NoteUpdateBody> for NoteUpdateBody {
+    fn from(body: api::NoteUpdateBody) -> Self {
+        Self { body: body.body }
+    }
+}
+
 pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
     // Get note
     let mut note = match get_note(req, ctx) {
@@ -137,10 +149,10 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
     };
 
     // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::NoteCreateUpdateBody>(
+    let body = match serde_urlencoded::from_bytes::<api::NoteUpdateBody>(
         req.body.as_deref().unwrap_or(&[]),
     ) {
-        Ok(body) => Into::<NoteCreateUpdateBody>::into(body),
+        Ok(body) => Into::<NoteUpdateBody>::into(body),
         Err(_) => return Response::with_status(Status::BadRequest),
     };
     if let Err(report) = body.validate() {

@@ -113,6 +113,32 @@ paths:
         '404':
           description: User not found
 
+  /users/{id}/change-password:
+    post:
+      tags: [Users]
+      summary: Change user password
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserChangePasswordBody'
+      responses:
+        '200':
+          description: Password changed successfully
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Old password is incorrect
+        '404':
+          description: User not found
+
   # MARK: Notes
   /notes:
     get:
@@ -135,16 +161,16 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Note'
+              $ref: '#/components/schemas/NoteCreateBody'
       responses:
         '200':
           description: Note created
           content:
-            application/x-www-form-urlencoded:
+            application/json:
               schema:
-                $ref: '#/components/schemas/NoteCreateUpdateBody'
+                $ref: '#/components/schemas/Note'
         '400':
           description: Invalid request
           content:
@@ -177,7 +203,7 @@ paths:
         content:
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/NoteCreateUpdateBody'
+              $ref: '#/components/schemas/NoteUpdateBody'
       responses:
         '200':
           description: Note updated
@@ -341,14 +367,31 @@ components:
         email:
           type: string
           format: email
-        password:
-          type: string
       required:
         - firstName
         - lastName
         - email
 
-    NoteCreateUpdateBody:
+    UserChangePasswordBody:
+      type: object
+      properties:
+        oldPassword:
+          type: string
+        newPassword:
+          type: string
+      required:
+        - oldPassword
+        - newPassword
+
+    NoteCreateBody:
+      type: object
+      properties:
+        body:
+          type: string
+      required:
+        - body
+
+    NoteUpdateBody:
       type: object
       properties:
         body:
