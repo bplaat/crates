@@ -15,7 +15,7 @@ use crate::api;
 use crate::context::{Context, DatabaseHelpers};
 use crate::controllers::{get_auth_user, not_found};
 use crate::models::user::{UserRole, policies};
-use crate::models::{IndexQuery, User};
+use crate::models::{IndexQuery, Note, User};
 
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
     // Check authentication
@@ -357,13 +357,86 @@ pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
     Response::new()
 }
 
+pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    let auth_user = match get_auth_user(req, ctx) {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
+
+    // Get user
+    let user = match get_user(req, ctx) {
+        Some(user) => user,
+        None => return not_found(req, ctx),
+    };
+
+    // Check authorization
+    if !policies::can_show(&auth_user, &user) {
+        return Response::with_status(Status::Forbidden);
+    }
+
+    // Parse request query
+    let query = match req.url.query() {
+        Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
+            Ok(query) => query,
+            Err(_) => return Response::with_status(Status::BadRequest),
+        },
+        None => IndexQuery::default(),
+    };
+    if let Err(report) = query.validate() {
+        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+    }
+
+    // Get notes for the user
+    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
+    let total = query_args!(
+        i64,
+        ctx.database,
+        "SELECT COUNT(id) FROM notes WHERE user_id = :user_id AND body LIKE :search_query",
+        Args {
+            user_id: user.id,
+            search_query: search_query.clone()
+        }
+    )
+    .next()
+    .unwrap_or(0);
+    let notes = query_args!(
+        Note,
+        ctx.database,
+        formatcp!(
+            "SELECT {} FROM notes WHERE user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+            Note::columns()
+        ),
+        Args {
+            user_id: user.id,
+            search_query: search_query,
+            limit: query.limit,
+            offset: (query.page - 1) * query.limit
+        }
+    )
+    .map(Into::<api::Note>::into)
+    .collect::<Vec<_>>();
+
+    // Return notes
+    Response::with_json(api::NoteIndexResponse {
+        pagination: api::Pagination {
+            page: query.page,
+            limit: query.limit,
+            total,
+        },
+        data: notes,
+    })
+}
+
 // MARK: Tests
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::models::user::UserRole;
     use crate::router;
-    use crate::test_utils::create_test_user_with_session_and_role;
+    use crate::test_utils::{
+        create_test_user_with_session, create_test_user_with_session_and_role,
+    };
 
     #[test]
     fn test_users_index() {
@@ -757,5 +830,196 @@ mod test {
         // Verify password can be verified
         assert!(pbkdf2::password_verify("mypassword", &stored_user.password).unwrap());
         assert!(!pbkdf2::password_verify("wrongpassword", &stored_user.password).unwrap());
+    }
+
+    #[test]
+    fn test_users_notes() {
+        use crate::models::Note;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // User should have no notes initially
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/users/{}/notes", user.id))
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert!(notes.is_empty());
+
+        // Create a note for the user
+        let note = Note {
+            user_id: user.id,
+            body: "My first note".to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_note(note.clone());
+
+        // Fetch user's notes
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/users/{}/notes", user.id))
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].body, "My first note");
+        assert_eq!(notes[0].user_id, user.id);
+    }
+
+    #[test]
+    fn test_users_notes_pagination() {
+        use crate::models::Note;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create multiple notes
+        for i in 1..=30 {
+            ctx.database.insert_note(Note {
+                user_id: user.id,
+                body: format!("Note {i}"),
+                ..Default::default()
+            });
+        }
+
+        // Fetch first page
+        let res = router.handle(
+            &Request::get(format!(
+                "http://localhost/api/users/{}/notes?limit=10&page=1",
+                user.id
+            ))
+            .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 10);
+        assert_eq!(response.pagination.page, 1);
+        assert_eq!(response.pagination.limit, 10);
+        assert_eq!(response.pagination.total, 30);
+
+        // Fetch second page
+        let res = router.handle(
+            &Request::get(format!(
+                "http://localhost/api/users/{}/notes?limit=10&page=2",
+                user.id
+            ))
+            .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 10);
+        assert_eq!(response.pagination.page, 2);
+    }
+
+    #[test]
+    fn test_users_notes_search() {
+        use crate::models::Note;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create notes with different content
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            body: "Meeting notes from today".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            body: "Shopping list for tomorrow".to_string(),
+            ..Default::default()
+        });
+
+        // Search for "meeting"
+        let res = router.handle(
+            &Request::get(format!(
+                "http://localhost/api/users/{}/notes?q=meeting",
+                user.id
+            ))
+            .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].body, "Meeting notes from today");
+    }
+
+    #[test]
+    fn test_users_notes_admin_can_see_any_user_notes() {
+        use crate::models::Note;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let (user, _user_token) = create_test_user_with_session(&ctx);
+
+        // Create notes for the normal user
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            body: "User's private note".to_string(),
+            ..Default::default()
+        });
+
+        // Admin should be able to see the user's notes
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/users/{}/notes", user.id))
+                .header("Authorization", format!("Bearer {admin_token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].body, "User's private note");
+    }
+
+    #[test]
+    fn test_users_notes_normal_user_cannot_see_other_notes() {
+        use crate::models::Note;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_user1, user1_token) = create_test_user_with_session(&ctx);
+        let (user2, _user2_token) = create_test_user_with_session(&ctx);
+
+        // Create notes for user2
+        ctx.database.insert_note(Note {
+            user_id: user2.id,
+            body: "User2's private note".to_string(),
+            ..Default::default()
+        });
+
+        // User1 should not be able to see user2's notes
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/users/{}/notes", user2.id))
+                .header("Authorization", format!("Bearer {user1_token}")),
+        );
+        assert_eq!(res.status, Status::Forbidden);
+    }
+
+    #[test]
+    fn test_users_notes_not_found() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Try to fetch notes for non-existent user
+        let res = router.handle(
+            &Request::get(format!(
+                "http://localhost/api/users/{}/notes",
+                Uuid::now_v7()
+            ))
+            .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::NotFound);
     }
 }
