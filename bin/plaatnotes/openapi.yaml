@@ -392,6 +392,8 @@ components:
         email:
           type: string
           format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
         createdAt:
           type: string
           format: date-time
@@ -403,8 +405,13 @@ components:
         - firstName
         - lastName
         - email
+        - role
         - createdAt
         - updatedAt
+
+    UserRole:
+      type: string
+      enum: [normal, admin]
 
     Note:
       type: object
@@ -455,11 +462,14 @@ components:
           format: email
         password:
           type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
       required:
         - firstName
         - lastName
         - email
         - password
+        - role
 
     UserUpdateBody:
       type: object
@@ -471,10 +481,13 @@ components:
         email:
           type: string
           format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
       required:
         - firstName
         - lastName
         - email
+        - role
 
     UserChangePasswordBody:
       type: object

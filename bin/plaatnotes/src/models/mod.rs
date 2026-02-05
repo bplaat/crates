@@ -14,7 +14,7 @@ use crate::api;
 
 mod note;
 mod session;
-mod user;
+pub(crate) mod user;
 
 // MARK: IndexQuery
 #[derive(Deserialize, Validate)]

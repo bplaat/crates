@@ -179,6 +179,22 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::LoginResponse>(&res.body).unwrap();
         assert!(!response.token.is_empty());
+    }
+
+    #[test]
+    fn test_auth_login_incorrect_password() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create user
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: pbkdf2::password_hash("password123"),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
 
         // Login with incorrect password
         let res = router.handle(
@@ -186,6 +202,12 @@ mod test {
                 .body("email=john@example.com&password=wrongpassword"),
         );
         assert_eq!(res.status, Status::Unauthorized);
+    }
+
+    #[test]
+    fn test_auth_login_non_existent_email() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
 
         // Login with non-existent email
         let res = router.handle(
@@ -243,7 +265,7 @@ mod test {
     }
 
     #[test]
-    fn test_get_authenticated_user() {
+    fn test_get_authenticated_user_valid_token() {
         let ctx = Context::with_test_database();
 
         // Create user and session
@@ -270,14 +292,33 @@ mod test {
         let authenticated_user = get_auth_user(&req, &ctx);
         assert!(authenticated_user.is_some());
         assert_eq!(authenticated_user.unwrap().email, "john@example.com");
+    }
+
+    #[test]
+    fn test_get_authenticated_user_invalid_token() {
+        let ctx = Context::with_test_database();
 
         // Test with invalid token
         let req = Request::get("http://localhost/api/users")
             .header("Authorization", "Bearer invalid-token");
         let authenticated_user = get_auth_user(&req, &ctx);
         assert!(authenticated_user.is_none());
+    }
 
-        // Test with expired session
+    #[test]
+    fn test_get_authenticated_user_expired_session() {
+        let ctx = Context::with_test_database();
+
+        // Create user and expired session
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: pbkdf2::password_hash("password123"),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
+
         let expired_session = Session {
             user_id: user.id,
             token: "expired-token-789".to_string(),
@@ -286,6 +327,7 @@ mod test {
         };
         ctx.database.insert_session(expired_session);
 
+        // Test with expired session
         let req = Request::get("http://localhost/api/users")
             .header("Authorization", "Bearer expired-token-789");
         let authenticated_user = get_auth_user(&req, &ctx);

@@ -85,6 +85,7 @@ fn database_create_tables(database: &Connection) {
             last_name TEXT NOT NULL,
             email TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
+            role INTEGER NOT NULL,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
         ) STRICT",
@@ -130,12 +131,15 @@ pub(crate) mod test_helpers {
 
     // Creates a test user and returns (user, token)
     pub(crate) fn create_test_user_with_session(ctx: &Context) -> (User, String) {
-        // Create test user
+        use crate::models::user::UserRole;
+
+        // Create test user (admin by default for tests)
         let user = User {
             first_name: "Test".to_string(),
             last_name: "User".to_string(),
             email: "test@example.com".to_string(),
             password: pbkdf2::password_hash("password123"),
+            role: UserRole::Admin,
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());

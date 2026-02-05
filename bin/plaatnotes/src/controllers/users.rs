@@ -14,12 +14,19 @@ use validate::Validate;
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
 use crate::controllers::{get_auth_user, not_found};
+use crate::models::user::{UserRole, policies};
 use crate::models::{IndexQuery, User};
 
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    if get_auth_user(req, ctx).is_none() {
-        return Response::with_status(Status::Unauthorized);
+    let auth_user = match get_auth_user(req, ctx) {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
+
+    // Check authorization
+    if !policies::can_index(&auth_user) {
+        return Response::with_status(Status::Forbidden);
     }
 
     // Parse request query
@@ -81,6 +88,7 @@ struct UserCreateBody {
     email: String,
     #[validate(ascii, length(min = 8, max = 128))]
     password: String,
+    role: UserRole,
 }
 
 impl From<api::UserCreateBody> for UserCreateBody {
@@ -90,14 +98,21 @@ impl From<api::UserCreateBody> for UserCreateBody {
             last_name: body.last_name,
             email: body.email,
             password: body.password,
+            role: body.role.into(),
         }
     }
 }
 
 pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    if get_auth_user(req, ctx).is_none() {
-        return Response::with_status(Status::Unauthorized);
+    let auth_user = match get_auth_user(req, ctx) {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
+
+    // Check authorization
+    if !policies::can_create(&auth_user) {
+        return Response::with_status(Status::Forbidden);
     }
 
     // Parse and validate body
@@ -120,6 +135,7 @@ pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
         last_name: body.last_name,
         email: body.email,
         password: hashed_password,
+        role: body.role,
         ..Default::default()
     };
     ctx.database.insert_user(user.clone());
@@ -151,15 +167,21 @@ pub(crate) fn get_user(req: &Request, ctx: &Context) -> Option<User> {
 
 pub(crate) fn users_show(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    if get_auth_user(req, ctx).is_none() {
-        return Response::with_status(Status::Unauthorized);
-    }
+    let auth_user = match get_auth_user(req, ctx) {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
 
     // Get user
     let user = match get_user(req, ctx) {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
+
+    // Check authorization
+    if !policies::can_show(&auth_user, &user) {
+        return Response::with_status(Status::Forbidden);
+    }
 
     // Return user
     Response::with_json(Into::<api::User>::into(user))
@@ -173,6 +195,7 @@ struct UserUpdateBody {
     last_name: String,
     #[validate(email)]
     email: String,
+    role: UserRole,
 }
 
 impl From<api::UserUpdateBody> for UserUpdateBody {
@@ -181,21 +204,28 @@ impl From<api::UserUpdateBody> for UserUpdateBody {
             first_name: body.first_name,
             last_name: body.last_name,
             email: body.email,
+            role: body.role.into(),
         }
     }
 }
 
 pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    if get_auth_user(req, ctx).is_none() {
-        return Response::with_status(Status::Unauthorized);
-    }
+    let auth_user = match get_auth_user(req, ctx) {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
 
     // Get user
     let mut user = match get_user(req, ctx) {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
+
+    // Check authorization
+    if !policies::can_update(&auth_user, &user) {
+        return Response::with_status(Status::Forbidden);
+    }
 
     // Parse and validate body
     let body = match serde_urlencoded::from_bytes::<api::UserUpdateBody>(
@@ -212,14 +242,16 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
     user.first_name = body.first_name;
     user.last_name = body.last_name;
     user.email = body.email;
+    user.role = body.role;
     user.updated_at = Utc::now();
     execute_args!(
         ctx.database,
-        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, updated_at = :updated_at WHERE id = :id",
+        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, role = :role, updated_at = :updated_at WHERE id = :id",
         Args {
             first_name: user.first_name.clone(),
             last_name: user.last_name.clone(),
             email: user.email.clone(),
+            role: user.role,
             updated_at: user.updated_at,
             id: user.id
         }
@@ -248,15 +280,21 @@ impl From<api::UserChangePasswordBody> for UserChangePasswordBody {
 
 pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    if get_auth_user(req, ctx).is_none() {
-        return Response::with_status(Status::Unauthorized);
-    }
+    let auth_user = match get_auth_user(req, ctx) {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
 
     // Get user
     let mut user = match get_user(req, ctx) {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
+
+    // Check authorization
+    if !policies::can_update(&auth_user, &user) {
+        return Response::with_status(Status::Forbidden);
+    }
 
     // Parse and validate body
     let body = match serde_urlencoded::from_bytes::<api::UserChangePasswordBody>(
@@ -295,15 +333,21 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
 
 pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    if get_auth_user(req, ctx).is_none() {
-        return Response::with_status(Status::Unauthorized);
-    }
+    let auth_user = match get_auth_user(req, ctx) {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
 
     // Get user
     let user = match get_user(req, ctx) {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
+
+    // Check authorization
+    if !policies::can_delete(&auth_user, &user) {
+        return Response::with_status(Status::Forbidden);
+    }
 
     // Delete user
     ctx.database
@@ -447,7 +491,7 @@ mod test {
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
                 .body(
-                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=securepass123",
+                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=securepass123&role=normal",
                 ),
         );
         assert_eq!(res.status, Status::Ok);
@@ -481,8 +525,15 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();
         assert_eq!(user.first_name, "John");
+    }
 
-        // Fetch other user by random id should be 404 Not Found
+    #[test]
+    fn test_users_show_not_found() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
+
+        // Fetch user by random id should be 404 Not Found
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}", Uuid::now_v7()))
                 .header("Authorization", format!("Bearer {token}")),
@@ -510,12 +561,29 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=John&lastName=Smith&email=john.smith@example.com"),
+                .body("firstName=John&lastName=Smith&email=john.smith@example.com&role=normal"),
         );
         assert_eq!(res.status, Status::Ok);
         let updated_user = serde_json::from_slice::<api::User>(&res.body).unwrap();
         assert_eq!(updated_user.last_name, "Smith");
         assert_eq!(updated_user.email, "john.smith@example.com");
+    }
+
+    #[test]
+    fn test_users_update_validation_error() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
+
+        // Create user
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: pbkdf2::password_hash("password123"),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
 
         // Update user with validation errors
         let res = router.handle(
@@ -563,6 +631,23 @@ mod test {
             .next()
             .unwrap();
         assert!(pbkdf2::password_verify("newpassword456", &stored_user.password).unwrap());
+    }
+
+    #[test]
+    fn test_users_change_password_incorrect_old_password() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
+
+        // Create user
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: pbkdf2::password_hash("password123"),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
 
         // Try to change password with incorrect old password
         let res = router.handle(
@@ -574,6 +659,23 @@ mod test {
             .body("oldPassword=wrongpassword&newPassword=anotherpassword"),
         );
         assert_eq!(res.status, Status::Unauthorized);
+    }
+
+    #[test]
+    fn test_users_change_password_validation_error() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
+
+        // Create user
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: pbkdf2::password_hash("password123"),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
 
         // Try to change password with validation errors (short password)
         let res = router.handle(
@@ -582,7 +684,7 @@ mod test {
                 user.id
             ))
             .header("Authorization", format!("Bearer {token}"))
-            .body("oldPassword=newpassword456&newPassword=short"),
+            .body("oldPassword=password123&newPassword=short"),
         );
         assert_eq!(res.status, Status::BadRequest);
     }
@@ -632,7 +734,7 @@ mod test {
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=Test&lastName=User&email=test2@example.com&password=mypassword"),
+                .body("firstName=Test&lastName=User&email=test2@example.com&password=mypassword&role=normal"),
         );
         assert_eq!(res.status, Status::Ok);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();

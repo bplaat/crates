@@ -391,8 +391,15 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         let note = serde_json::from_slice::<api::Note>(&res.body).unwrap();
         assert_eq!(note.body, "My important note");
+    }
 
-        // Fetch other note by random id should be 404 Not Found
+    #[test]
+    fn test_notes_show_not_found() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
+
+        // Fetch note by random id should be 404 Not Found
         let res = router.handle(
             &Request::get(format!("http://localhost/api/notes/{}", Uuid::now_v7()))
                 .header("Authorization", format!("Bearer {token}")),
@@ -423,6 +430,21 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         let note = serde_json::from_slice::<api::Note>(&res.body).unwrap();
         assert_eq!(note.body, "Updated note content");
+    }
+
+    #[test]
+    fn test_notes_update_validation_error() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create note
+        let note = Note {
+            user_id: user.id,
+            body: "Original note content".to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_note(note.clone());
 
         // Update note with validation errors (empty body)
         let res = router.handle(
@@ -467,7 +489,11 @@ mod test {
     }
 
     #[test]
-    fn test_notes_user_isolation() {
+    fn test_notes_index_user_isolation() {
+        use std::time::Duration;
+
+        use crate::models::{Session, User};
+
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
@@ -481,9 +507,6 @@ mod test {
         ctx.database.insert_note(note1.clone());
 
         // Create second user and their note
-        use std::time::Duration;
-
-        use crate::models::{Session, User};
         let user2 = User {
             first_name: "User2".to_string(),
             last_name: "Test".to_string(),
@@ -533,6 +556,43 @@ mod test {
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].body, "User 2's private note");
         assert_eq!(notes[0].user_id, user2.id);
+    }
+
+    #[test]
+    fn test_notes_show_user_cannot_access_other_user_note() {
+        use std::time::Duration;
+
+        use crate::models::{Session, User};
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create first user and their note
+        let (user1, token1) = create_test_user_with_session(&ctx);
+        let note1 = Note {
+            user_id: user1.id,
+            body: "User 1's private note".to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_note(note1.clone());
+
+        // Create second user
+        let user2 = User {
+            first_name: "User2".to_string(),
+            last_name: "Test".to_string(),
+            email: "user2@example.com".to_string(),
+            password: pbkdf2::password_hash("password123"),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user2.clone());
+        let token2 = format!("test-token-{}", user2.id);
+        let session2 = Session {
+            user_id: user2.id,
+            token: token2.clone(),
+            expires_at: Utc::now() + Duration::from_secs(3600),
+            ..Default::default()
+        };
+        ctx.database.insert_session(session2);
 
         // User 2 should not be able to access User 1's note
         let res = router.handle(
@@ -541,11 +601,11 @@ mod test {
         );
         assert_eq!(res.status, Status::NotFound);
 
-        // User 1 should not be able to access User 2's note
+        // User 1 should still be able to access their own note
         let res = router.handle(
-            &Request::get(format!("http://localhost/api/notes/{}", note2.id))
+            &Request::get(format!("http://localhost/api/notes/{}", note1.id))
                 .header("Authorization", format!("Bearer {token1}")),
         );
-        assert_eq!(res.status, Status::NotFound);
+        assert_eq!(res.status, Status::Ok);
     }
 }
