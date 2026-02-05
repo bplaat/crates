@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Link, route } from '../../router.tsx';
 import { API_URL } from '../../consts.ts';
+import { getAuthHeaders } from '../../auth.ts';
 
 export function NotesCreate() {
     const [body, setBody] = useState<string>('');
@@ -19,6 +20,7 @@ export function NotesCreate() {
         event.preventDefault();
         const res = await fetch(`${API_URL}/notes`, {
             method: 'POST',
+            headers: getAuthHeaders(),
             body: new URLSearchParams({ body }),
         });
         if (res.status == 200) {

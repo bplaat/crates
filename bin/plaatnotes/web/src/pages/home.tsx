@@ -9,6 +9,7 @@ import { type Note, type NoteIndexResponse } from '../../src-gen/api.ts';
 import { noteExtractTile } from '../utils.ts';
 import { Link } from '../router.tsx';
 import { API_URL } from '../consts.ts';
+import { getAuthHeaders } from '../auth.ts';
 
 export function Home() {
     const [notes, setNotes] = useState<Note[]>([]);
@@ -17,14 +18,17 @@ export function Home() {
     useEffect(async () => {
         document.title = 'PlaatNotes';
 
-        const res = await fetch(`${API_URL}/notes`);
+        const res = await fetch(`${API_URL}/notes`, { headers: getAuthHeaders() });
         const { data }: NoteIndexResponse = await res.json();
         setNotes(data);
     }, []);
 
     async function deleteNote(id: string) {
         if (confirm('Are you sure you want to delete this note?')) {
-            await fetch(`${API_URL}/notes/${id}`, { method: 'DELETE' });
+            await fetch(`${API_URL}/notes/${id}`, { 
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
             setNotes((notes) => notes.filter((note) => note.id !== id));
         }
     }

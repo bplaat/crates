@@ -8,6 +8,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
 import { Link } from '../../router.tsx';
 import { API_URL } from '../../consts.ts';
+import { getAuthHeaders } from '../../auth.ts';
 import { noteExtractTile } from '../../utils.ts';
 
 export function NotesShow({ note_id }: { note_id: string }) {
@@ -17,7 +18,7 @@ export function NotesShow({ note_id }: { note_id: string }) {
     useEffect(async () => {
         document.title = 'PlaatNotes - Note loading...';
 
-        const res = await fetch(`${API_URL}/notes/${note_id}`);
+        const res = await fetch(`${API_URL}/notes/${note_id}`, { headers: getAuthHeaders() });
         const note: Note = await res.json();
         document.title = `PlaatNotes - ${noteExtractTile(note.body)}`;
         setNote(note);
@@ -27,6 +28,7 @@ export function NotesShow({ note_id }: { note_id: string }) {
         document.title = `PlaatNotes - ${noteExtractTile(note.body)}`;
         await fetch(`${API_URL}/notes/${note.id}`, {
             method: 'PUT',
+            headers: getAuthHeaders(),
             body: new URLSearchParams({ body: note.body }),
         });
     }

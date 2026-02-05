@@ -7,5 +7,7 @@
 import { render } from 'preact';
 import './index.scss';
 import { App } from './app.tsx';
+import { initAuth } from './auth.ts';
 
+initAuth();
 render(<App />, document.getElementById('app')!);
