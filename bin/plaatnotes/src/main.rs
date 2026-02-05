@@ -19,6 +19,7 @@ use crate::controllers::*;
 mod api {
     include!(concat!(env!("OUT_DIR"), "/api.rs"));
 }
+mod consts;
 mod context;
 mod controllers;
 mod layers;
@@ -32,12 +33,17 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .pre_layer(layers::cors_pre_layer)
         .post_layer(layers::cors_post_layer)
         .get("/api", home)
+        // Auth
+        .post("/api/auth/login", auth_login)
+        .post("/api/auth/logout", auth_logout)
+        // Users
         .get("/api/users", users_index)
         .post("/api/users", users_create)
         .get("/api/users/:user_id", users_show)
         .put("/api/users/:user_id", users_update)
         .delete("/api/users/:user_id", users_delete)
         .post("/api/users/:user_id/change-password", users_change_password)
+        // Notes
         .get("/api/notes", notes_index)
         .post("/api/notes", notes_create)
         .get("/api/notes/:note_id", notes_show)

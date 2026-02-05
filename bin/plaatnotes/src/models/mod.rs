@@ -8,10 +8,12 @@ use serde::Deserialize;
 use validate::Validate;
 
 pub(crate) use self::note::Note;
+pub(crate) use self::session::Session;
 pub(crate) use self::user::User;
 use crate::api;
 
 mod note;
+mod session;
 mod user;
 
 // MARK: IndexQuery

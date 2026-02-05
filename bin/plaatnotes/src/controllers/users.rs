@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -13,10 +13,15 @@ use validate::Validate;
 
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
-use crate::controllers::not_found;
+use crate::controllers::{get_auth_user, not_found};
 use crate::models::{IndexQuery, User};
 
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    if get_auth_user(req, ctx).is_none() {
+        return Response::with_status(Status::Unauthorized);
+    }
+
     // Parse request query
     let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
@@ -90,6 +95,11 @@ impl From<api::UserCreateBody> for UserCreateBody {
 }
 
 pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    if get_auth_user(req, ctx).is_none() {
+        return Response::with_status(Status::Unauthorized);
+    }
+
     // Parse and validate body
     let body = match serde_urlencoded::from_bytes::<api::UserCreateBody>(
         req.body.as_deref().unwrap_or(&[]),
@@ -140,6 +150,11 @@ pub(crate) fn get_user(req: &Request, ctx: &Context) -> Option<User> {
 }
 
 pub(crate) fn users_show(req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    if get_auth_user(req, ctx).is_none() {
+        return Response::with_status(Status::Unauthorized);
+    }
+
     // Get user
     let user = match get_user(req, ctx) {
         Some(user) => user,
@@ -171,6 +186,11 @@ impl From<api::UserUpdateBody> for UserUpdateBody {
 }
 
 pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    if get_auth_user(req, ctx).is_none() {
+        return Response::with_status(Status::Unauthorized);
+    }
+
     // Get user
     let mut user = match get_user(req, ctx) {
         Some(user) => user,
@@ -227,6 +247,11 @@ impl From<api::UserChangePasswordBody> for UserChangePasswordBody {
 }
 
 pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    if get_auth_user(req, ctx).is_none() {
+        return Response::with_status(Status::Unauthorized);
+    }
+
     // Get user
     let mut user = match get_user(req, ctx) {
         Some(user) => user,
@@ -269,6 +294,11 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
 }
 
 pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    if get_auth_user(req, ctx).is_none() {
+        return Response::with_status(Status::Unauthorized);
+    }
+
     // Get user
     let user = match get_user(req, ctx) {
         Some(user) => user,
@@ -287,22 +317,29 @@ pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::context::test_helpers::create_test_user_with_session;
     use crate::router;
 
     #[test]
     fn test_users_index() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
-        // Fetch /users check if empty
-        let res = router.handle(&Request::get("http://localhost/api/users"));
+        // Fetch /users check if user is there (the test user)
+        let res = router.handle(
+            &Request::get("http://localhost/api/users")
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::Ok);
         let users = serde_json::from_slice::<api::UserIndexResponse>(&res.body)
             .unwrap()
             .data;
-        assert!(users.is_empty());
+        assert_eq!(users.len(), 1);
+        assert_eq!(users[0].first_name, "Test");
+        assert_eq!(users[0].email, "test@example.com");
 
-        // Create user
+        // Create another user
         let user = User {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
@@ -312,21 +349,23 @@ mod test {
         };
         ctx.database.insert_user(user.clone());
 
-        // Fetch /users check if user is there
-        let res = router.handle(&Request::get("http://localhost/api/users"));
+        // Fetch /users check if both users are there
+        let res = router.handle(
+            &Request::get("http://localhost/api/users")
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::Ok);
         let users = serde_json::from_slice::<api::UserIndexResponse>(&res.body)
             .unwrap()
             .data;
-        assert_eq!(users.len(), 1);
-        assert_eq!(users[0].first_name, "John");
-        assert_eq!(users[0].email, "john.doe@example.com");
+        assert_eq!(users.len(), 2);
     }
 
     #[test]
     fn test_users_index_search() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
         // Create multiple users
         ctx.database.insert_user(User {
@@ -345,7 +384,10 @@ mod test {
         });
 
         // Search for "Alice"
-        let res = router.handle(&Request::get("http://localhost/api/users?q=Alice"));
+        let res = router.handle(
+            &Request::get("http://localhost/api/users?q=Alice")
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
@@ -356,9 +398,10 @@ mod test {
     fn test_users_index_pagination() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
-        // Create multiple users
-        for i in 1..=30 {
+        // Create multiple users (test user already exists, so create 29 more for 30 total)
+        for i in 1..=29 {
             ctx.database.insert_user(User {
                 first_name: format!("User{i}"),
                 last_name: "Test".to_string(),
@@ -369,7 +412,10 @@ mod test {
         }
 
         // Fetch /users with limit 10 and page 1
-        let res = router.handle(&Request::get("http://localhost/api/users?limit=10&page=1"));
+        let res = router.handle(
+            &Request::get("http://localhost/api/users?limit=10&page=1")
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 10);
@@ -378,7 +424,10 @@ mod test {
         assert_eq!(response.pagination.total, 30);
 
         // Fetch /users with limit 5 and page 2
-        let res = router.handle(&Request::get("http://localhost/api/users?limit=5&page=2"));
+        let res = router.handle(
+            &Request::get("http://localhost/api/users?limit=5&page=2")
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 5);
@@ -391,12 +440,16 @@ mod test {
     fn test_users_create() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
         // Create user
-        let res =
-            router.handle(&Request::post("http://localhost/api/users").body(
-                "firstName=Jane&lastName=Smith&email=jane@example.com&password=securepass123",
-            ));
+        let res = router.handle(
+            &Request::post("http://localhost/api/users")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(
+                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=securepass123",
+                ),
+        );
         assert_eq!(res.status, Status::Ok);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();
         assert_eq!(user.first_name, "Jane");
@@ -408,6 +461,7 @@ mod test {
     fn test_users_show() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
         // Create user
         let user = User {
@@ -420,19 +474,19 @@ mod test {
         ctx.database.insert_user(user.clone());
 
         // Fetch /users/:user_id check if user is there
-        let res = router.handle(&Request::get(format!(
-            "http://localhost/api/users/{}",
-            user.id
-        )));
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/users/{}", user.id))
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::Ok);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();
         assert_eq!(user.first_name, "John");
 
         // Fetch other user by random id should be 404 Not Found
-        let res = router.handle(&Request::get(format!(
-            "http://localhost/api/users/{}",
-            Uuid::now_v7()
-        )));
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/users/{}", Uuid::now_v7()))
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::NotFound);
     }
 
@@ -440,6 +494,7 @@ mod test {
     fn test_users_update() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
         // Create user
         let user = User {
@@ -454,6 +509,7 @@ mod test {
         // Update user
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
+                .header("Authorization", format!("Bearer {token}"))
                 .body("firstName=John&lastName=Smith&email=john.smith@example.com"),
         );
         assert_eq!(res.status, Status::Ok);
@@ -464,6 +520,7 @@ mod test {
         // Update user with validation errors
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
+                .header("Authorization", format!("Bearer {token}"))
                 .body("firstName=&lastName=Smith&email=invalid-email"),
         );
         assert_eq!(res.status, Status::BadRequest);
@@ -473,6 +530,7 @@ mod test {
     fn test_users_change_password() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
         // Create user
         let user = User {
@@ -490,6 +548,7 @@ mod test {
                 "http://localhost/api/users/{}/change-password",
                 user.id
             ))
+            .header("Authorization", format!("Bearer {token}"))
             .body("oldPassword=password123&newPassword=newpassword456"),
         );
         assert_eq!(res.status, Status::Ok);
@@ -511,6 +570,7 @@ mod test {
                 "http://localhost/api/users/{}/change-password",
                 user.id
             ))
+            .header("Authorization", format!("Bearer {token}"))
             .body("oldPassword=wrongpassword&newPassword=anotherpassword"),
         );
         assert_eq!(res.status, Status::Unauthorized);
@@ -521,6 +581,7 @@ mod test {
                 "http://localhost/api/users/{}/change-password",
                 user.id
             ))
+            .header("Authorization", format!("Bearer {token}"))
             .body("oldPassword=newpassword456&newPassword=short"),
         );
         assert_eq!(res.status, Status::BadRequest);
@@ -530,6 +591,7 @@ mod test {
     fn test_users_delete() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
         // Create user
         let user = User {
@@ -542,30 +604,35 @@ mod test {
         ctx.database.insert_user(user.clone());
 
         // Delete user
-        let res = router.handle(&Request::delete(format!(
-            "http://localhost/api/users/{}",
-            user.id
-        )));
+        let res = router.handle(
+            &Request::delete(format!("http://localhost/api/users/{}", user.id))
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::Ok);
 
-        // Fetch /users check if empty
-        let res = router.handle(&Request::get("http://localhost/api/users"));
+        // Fetch /users check if only test user remains
+        let res = router.handle(
+            &Request::get("http://localhost/api/users")
+                .header("Authorization", format!("Bearer {token}")),
+        );
         assert_eq!(res.status, Status::Ok);
         let users = serde_json::from_slice::<api::UserIndexResponse>(&res.body)
             .unwrap()
             .data;
-        assert!(users.is_empty());
+        assert_eq!(users.len(), 1); // Only test user remains
     }
 
     #[test]
     fn test_password_hashing() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
 
         // Create user with password
         let res = router.handle(
             &Request::post("http://localhost/api/users")
-                .body("firstName=Test&lastName=User&email=test@example.com&password=mypassword"),
+                .header("Authorization", format!("Bearer {token}"))
+                .body("firstName=Test&lastName=User&email=test2@example.com&password=mypassword"),
         );
         assert_eq!(res.status, Status::Ok);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();

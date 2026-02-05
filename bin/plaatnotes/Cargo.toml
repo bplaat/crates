@@ -9,12 +9,14 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+base64 = "0.22"
 bsqlite = { version = "0.1.2", features = ["uuid", "chrono"] }
 chrono = { version = "0.4", default-features = false, features = [
     "now",
     "serde",
 ] }
 const_format = "0.2"
+getrandom = "0.3"
 log = "0.4.28"
 mime_guess = { version = "2.0", default-features = false }
 pbkdf2 = { path = "../../lib/pbkdf2" }

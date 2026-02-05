@@ -9,8 +9,9 @@ use std::path::Path;
 use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
 
-use crate::models::{Note, User};
+use crate::models::{Note, Session, User};
 
+// MARK: Context
 #[derive(Clone)]
 pub(crate) struct Context {
     pub database: Connection,
@@ -34,24 +35,14 @@ impl Context {
     }
 }
 
-// MARK: Database
+// MARK: Database helpers
 pub(crate) trait DatabaseHelpers {
-    fn insert_note(&self, note: Note);
     fn insert_user(&self, user: User);
+    fn insert_session(&self, session: Session);
+    fn insert_note(&self, note: Note);
 }
 
 impl DatabaseHelpers for Connection {
-    fn insert_note(&self, note: Note) {
-        self.execute(
-            formatcp!(
-                "INSERT INTO notes ({}) VALUES ({})",
-                Note::columns(),
-                Note::values()
-            ),
-            note,
-        );
-    }
-
     fn insert_user(&self, user: User) {
         self.execute(
             formatcp!(
@@ -62,19 +53,31 @@ impl DatabaseHelpers for Connection {
             user,
         );
     }
+
+    fn insert_session(&self, session: Session) {
+        self.execute(
+            formatcp!(
+                "INSERT INTO sessions ({}) VALUES ({})",
+                Session::columns(),
+                Session::values()
+            ),
+            session,
+        );
+    }
+
+    fn insert_note(&self, note: Note) {
+        self.execute(
+            formatcp!(
+                "INSERT INTO notes ({}) VALUES ({})",
+                Note::columns(),
+                Note::values()
+            ),
+            note,
+        );
+    }
 }
 
 fn database_create_tables(database: &Connection) {
-    database.execute(
-        "CREATE TABLE IF NOT EXISTS notes(
-            id BLOB PRIMARY KEY,
-            body TEXT NOT NULL,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-        ) STRICT",
-        (),
-    );
-
     database.execute(
         "CREATE TABLE IF NOT EXISTS users(
             id BLOB PRIMARY KEY,
@@ -87,4 +90,66 @@ fn database_create_tables(database: &Connection) {
         ) STRICT",
         (),
     );
+
+    database.execute(
+        "CREATE TABLE IF NOT EXISTS sessions(
+            id BLOB PRIMARY KEY,
+            user_id BLOB NOT NULL,
+            token TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) STRICT",
+        (),
+    );
+
+    database.execute(
+        "CREATE TABLE IF NOT EXISTS notes(
+            id BLOB PRIMARY KEY,
+            user_id BLOB NOT NULL,
+            body TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) STRICT",
+        (),
+    );
+}
+
+// MARK: Test helpers
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    use std::time::Duration;
+
+    use chrono::Utc;
+
+    use super::{Context, DatabaseHelpers};
+    use crate::consts::SESSION_EXPIRY_SECONDS;
+    use crate::models::{Session, User};
+
+    // Creates a test user and returns (user, token)
+    pub(crate) fn create_test_user_with_session(ctx: &Context) -> (User, String) {
+        // Create test user
+        let user = User {
+            first_name: "Test".to_string(),
+            last_name: "User".to_string(),
+            email: "test@example.com".to_string(),
+            password: pbkdf2::password_hash("password123"),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
+
+        // Create session with token
+        let token = format!("test-token-{}", user.id);
+        let session = Session {
+            user_id: user.id,
+            token: token.clone(),
+            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+            ..Default::default()
+        };
+        ctx.database.insert_session(session);
+
+        (user, token)
+    }
 }
