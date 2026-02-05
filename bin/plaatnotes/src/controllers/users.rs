@@ -361,9 +361,9 @@ pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::context::test_helpers::create_test_user_with_session_and_role;
     use crate::models::user::UserRole;
     use crate::router;
+    use crate::test_utils::create_test_user_with_session_and_role;
 
     #[test]
     fn test_users_index() {
@@ -389,7 +389,7 @@ mod test {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
             email: "john.doe@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());
@@ -417,14 +417,14 @@ mod test {
             first_name: "Alice".to_string(),
             last_name: "Smith".to_string(),
             email: "alice@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         });
         ctx.database.insert_user(User {
             first_name: "Bob".to_string(),
             last_name: "Jones".to_string(),
             email: "bob@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         });
 
@@ -451,7 +451,7 @@ mod test {
                 first_name: format!("User{i}"),
                 last_name: "Test".to_string(),
                 email: format!("user{i}@example.com"),
-                password: pbkdf2::password_hash("password123"),
+                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
                 ..Default::default()
             });
         }
@@ -513,7 +513,7 @@ mod test {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
             email: "john@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());
@@ -553,7 +553,7 @@ mod test {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
             email: "john@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());
@@ -581,7 +581,7 @@ mod test {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
             email: "john@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());
@@ -606,7 +606,7 @@ mod test {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
             email: "john@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());
@@ -645,7 +645,7 @@ mod test {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
             email: "john@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());
@@ -673,7 +673,7 @@ mod test {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
             email: "john@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());
@@ -701,7 +701,7 @@ mod test {
             first_name: "John".to_string(),
             last_name: "Doe".to_string(),
             email: "john@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());

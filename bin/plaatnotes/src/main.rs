@@ -24,6 +24,8 @@ mod context;
 mod controllers;
 mod layers;
 mod models;
+#[cfg(test)]
+mod test_utils;
 
 const HTTP_PORT: u16 = 8080;
 

@@ -319,9 +319,14 @@ fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Option<Note
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use super::*;
-    use crate::context::test_helpers::create_test_user_with_session;
+    use crate::models::Session;
     use crate::router;
+    use crate::test_utils::{
+        create_test_user_with_session, create_test_user_with_session_and_role,
+    };
 
     #[test]
     fn test_notes_index() {
@@ -569,9 +574,6 @@ mod test {
 
     #[test]
     fn test_notes_index_admin_can_see_all_notes() {
-        use crate::context::test_helpers::create_test_user_with_session_and_role;
-        use crate::models::user::UserRole;
-
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
@@ -610,9 +612,6 @@ mod test {
 
     #[test]
     fn test_notes_show_admin_can_access_any_note() {
-        use crate::context::test_helpers::create_test_user_with_session_and_role;
-        use crate::models::user::UserRole;
-
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
@@ -641,9 +640,6 @@ mod test {
 
     #[test]
     fn test_notes_update_admin_can_update_any_note() {
-        use crate::context::test_helpers::create_test_user_with_session_and_role;
-        use crate::models::user::UserRole;
-
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
@@ -672,9 +668,6 @@ mod test {
 
     #[test]
     fn test_notes_delete_admin_can_delete_any_note() {
-        use crate::context::test_helpers::create_test_user_with_session_and_role;
-        use crate::models::user::UserRole;
-
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
@@ -758,10 +751,6 @@ mod test {
 
     #[test]
     fn test_notes_show_user_cannot_access_other_user_note() {
-        use std::time::Duration;
-
-        use crate::models::{Session, User};
-
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
@@ -779,7 +768,7 @@ mod test {
             first_name: "User2".to_string(),
             last_name: "Test".to_string(),
             email: "user2@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
         ctx.database.insert_user(user2.clone());
