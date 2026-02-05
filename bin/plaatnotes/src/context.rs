@@ -25,6 +25,13 @@ impl Context {
         database_create_tables(&database);
         Self { database }
     }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_database() -> Self {
+        let database = Connection::open_memory().expect("Can't open in-memory database");
+        database_create_tables(&database);
+        Self { database }
+    }
 }
 
 // MARK: Database

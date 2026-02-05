@@ -26,7 +26,7 @@ mod models;
 
 const HTTP_PORT: u16 = 8080;
 
-fn router(ctx: Context) -> Router<Context> {
+pub(crate) fn router(ctx: Context) -> Router<Context> {
     RouterBuilder::<Context>::with(ctx)
         .pre_layer(layers::log_pre_layer)
         .pre_layer(layers::cors_pre_layer)
