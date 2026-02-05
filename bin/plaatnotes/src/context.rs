@@ -127,19 +127,26 @@ pub(crate) mod test_helpers {
 
     use super::{Context, DatabaseHelpers};
     use crate::consts::SESSION_EXPIRY_SECONDS;
+    use crate::models::user::UserRole;
     use crate::models::{Session, User};
 
     // Creates a test user and returns (user, token)
     pub(crate) fn create_test_user_with_session(ctx: &Context) -> (User, String) {
-        use crate::models::user::UserRole;
+        create_test_user_with_session_and_role(ctx, UserRole::Normal)
+    }
 
-        // Create test user (admin by default for tests)
+    // Creates a test user with specific role and returns (user, token)
+    pub(crate) fn create_test_user_with_session_and_role(
+        ctx: &Context,
+        role: UserRole,
+    ) -> (User, String) {
+        // Create test user with specified role
         let user = User {
             first_name: "Test".to_string(),
             last_name: "User".to_string(),
-            email: "test@example.com".to_string(),
+            email: format!("test-{}@example.com", uuid::Uuid::now_v7()),
             password: pbkdf2::password_hash("password123"),
-            role: UserRole::Admin,
+            role,
             ..Default::default()
         };
         ctx.database.insert_user(user.clone());

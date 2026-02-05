@@ -12,7 +12,7 @@ pub(crate) use self::session::Session;
 pub(crate) use self::user::User;
 use crate::api;
 
-mod note;
+pub(crate) mod note;
 mod session;
 pub(crate) mod user;
 

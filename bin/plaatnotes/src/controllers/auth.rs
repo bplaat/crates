@@ -113,7 +113,7 @@ pub(crate) fn auth_logout(req: &Request, ctx: &Context) -> Response {
     Response::new()
 }
 
-// MARK: Authentication helpers
+// MARK: Utils
 pub(crate) fn get_auth_token(req: &Request) -> Option<String> {
     Some(
         req.headers

@@ -361,14 +361,15 @@ pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::context::test_helpers::create_test_user_with_session;
+    use crate::context::test_helpers::create_test_user_with_session_and_role;
+    use crate::models::user::UserRole;
     use crate::router;
 
     #[test]
     fn test_users_index() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Fetch /users check if user is there (the test user)
         let res = router.handle(
@@ -381,7 +382,7 @@ mod test {
             .data;
         assert_eq!(users.len(), 1);
         assert_eq!(users[0].first_name, "Test");
-        assert_eq!(users[0].email, "test@example.com");
+        assert_eq!(users[0].email, user.email);
 
         // Create another user
         let user = User {
@@ -409,7 +410,7 @@ mod test {
     fn test_users_index_search() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create multiple users
         ctx.database.insert_user(User {
@@ -442,7 +443,7 @@ mod test {
     fn test_users_index_pagination() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create multiple users (test user already exists, so create 29 more for 30 total)
         for i in 1..=29 {
@@ -484,7 +485,7 @@ mod test {
     fn test_users_create() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user
         let res = router.handle(
@@ -505,7 +506,7 @@ mod test {
     fn test_users_show() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user
         let user = User {
@@ -531,7 +532,7 @@ mod test {
     fn test_users_show_not_found() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Fetch user by random id should be 404 Not Found
         let res = router.handle(
@@ -545,7 +546,7 @@ mod test {
     fn test_users_update() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user
         let user = User {
@@ -573,7 +574,7 @@ mod test {
     fn test_users_update_validation_error() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user
         let user = User {
@@ -598,7 +599,7 @@ mod test {
     fn test_users_change_password() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user
         let user = User {
@@ -637,7 +638,7 @@ mod test {
     fn test_users_change_password_incorrect_old_password() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user
         let user = User {
@@ -665,7 +666,7 @@ mod test {
     fn test_users_change_password_validation_error() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user
         let user = User {
@@ -693,7 +694,7 @@ mod test {
     fn test_users_delete() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user
         let user = User {
@@ -728,7 +729,7 @@ mod test {
     fn test_password_hashing() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
-        let (_, token) = create_test_user_with_session(&ctx);
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create user with password
         let res = router.handle(

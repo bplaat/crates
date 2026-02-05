@@ -14,7 +14,9 @@ use validate::Validate;
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
 use crate::controllers::{get_auth_user, not_found};
-use crate::models::{IndexQuery, Note};
+use crate::models::note::policies;
+use crate::models::user::UserRole;
+use crate::models::{IndexQuery, Note, User};
 
 pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
     // Check authentication
@@ -22,6 +24,11 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
+
+    // Check authorization
+    if !policies::can_index(&user) {
+        return Response::with_status(Status::Forbidden);
+    }
 
     // Parse request query
     let query = match req.url.query() {
@@ -35,35 +42,70 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
         return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
     }
 
-    // Get notes for authenticated user
+    // Get notes for authenticated user or all notes if admin
     let search_query = format!("%{}%", query.query.replace("%", "\\%"));
-    let total = query_args!(
-        i64,
-        ctx.database,
-        "SELECT COUNT(id) FROM notes WHERE user_id = :user_id AND body LIKE :search_query",
-        Args {
-            user_id: user.id,
-            search_query: search_query.clone()
+    let (total, notes) = match user.role {
+        UserRole::Admin => {
+            // Admin sees all notes
+            let total = query_args!(
+                i64,
+                ctx.database,
+                "SELECT COUNT(id) FROM notes WHERE body LIKE :search_query",
+                Args {
+                    search_query: search_query.clone()
+                }
+            )
+            .next()
+            .unwrap_or(0);
+            let notes = query_args!(
+                Note,
+                ctx.database,
+                formatcp!(
+                    "SELECT {} FROM notes WHERE body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    Note::columns()
+                ),
+                Args {
+                    search_query: search_query,
+                    limit: query.limit,
+                    offset: (query.page - 1) * query.limit
+                }
+            )
+            .map(Into::<api::Note>::into)
+            .collect::<Vec<_>>();
+            (total, notes)
         }
-    )
-    .next()
-    .unwrap_or(0);
-    let notes = query_args!(
-        Note,
-        ctx.database,
-        formatcp!(
-            "SELECT {} FROM notes WHERE user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
-            Note::columns()
-        ),
-        Args {
-            user_id: user.id,
-            search_query: search_query,
-            limit: query.limit,
-            offset: (query.page - 1) * query.limit
+        UserRole::Normal => {
+            // Normal user sees only their own notes
+            let total = query_args!(
+                i64,
+                ctx.database,
+                "SELECT COUNT(id) FROM notes WHERE user_id = :user_id AND body LIKE :search_query",
+                Args {
+                    user_id: user.id,
+                    search_query: search_query.clone()
+                }
+            )
+            .next()
+            .unwrap_or(0);
+            let notes = query_args!(
+                Note,
+                ctx.database,
+                formatcp!(
+                    "SELECT {} FROM notes WHERE user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    Note::columns()
+                ),
+                Args {
+                    user_id: user.id,
+                    search_query: search_query,
+                    limit: query.limit,
+                    offset: (query.page - 1) * query.limit
+                }
+            )
+            .map(Into::<api::Note>::into)
+            .collect::<Vec<_>>();
+            (total, notes)
         }
-    )
-    .map(Into::<api::Note>::into)
-    .collect::<Vec<_>>();
+    };
 
     // Return notes
     Response::with_json(api::NoteIndexResponse {
@@ -95,6 +137,11 @@ pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Response {
         None => return Response::with_status(Status::Unauthorized),
     };
 
+    // Check authorization
+    if !policies::can_create(&user) {
+        return Response::with_status(Status::Forbidden);
+    }
+
     // Parse and validate body
     let body = match serde_urlencoded::from_bytes::<api::NoteCreateBody>(
         req.body.as_deref().unwrap_or(&[]),
@@ -118,34 +165,6 @@ pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Response {
     Response::with_json(Into::<api::Note>::into(note))
 }
 
-pub(crate) fn get_note(req: &Request, ctx: &Context, user_id: Uuid) -> Option<Note> {
-    // Parse note id from url
-    let note_id = match req
-        .params
-        .get("note_id")
-        .expect("note_id param should be present")
-        .parse::<Uuid>()
-    {
-        Ok(id) => id,
-        Err(_) => return None,
-    };
-
-    // Get note filtered by user_id
-    query_args!(
-        Note,
-        ctx.database,
-        formatcp!(
-            "SELECT {} FROM notes WHERE id = :note_id AND user_id = :user_id LIMIT 1",
-            Note::columns()
-        ),
-        Args {
-            note_id: note_id,
-            user_id: user_id
-        }
-    )
-    .next()
-}
-
 pub(crate) fn notes_show(req: &Request, ctx: &Context) -> Response {
     // Check authentication
     let user = match get_auth_user(req, ctx) {
@@ -153,11 +172,16 @@ pub(crate) fn notes_show(req: &Request, ctx: &Context) -> Response {
         None => return Response::with_status(Status::Unauthorized),
     };
 
-    // Get note
-    let note = match get_note(req, ctx, user.id) {
+    // Get note (admins can access any note, normal users only their own)
+    let note = match fetch_note_for_user(req, ctx, &user) {
         Some(note) => note,
         None => return not_found(req, ctx),
     };
+
+    // Check authorization
+    if !policies::can_show(&user, &note) {
+        return Response::with_status(Status::Forbidden);
+    }
 
     // Return note
     Response::with_json(Into::<api::Note>::into(note))
@@ -182,11 +206,16 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
         None => return Response::with_status(Status::Unauthorized),
     };
 
-    // Get note
-    let mut note = match get_note(req, ctx, user.id) {
+    // Get note (admins can access any note, normal users only their own)
+    let mut note = match fetch_note_for_user(req, ctx, &user) {
         Some(note) => note,
         None => return not_found(req, ctx),
     };
+
+    // Check authorization
+    if !policies::can_update(&user, &note) {
+        return Response::with_status(Status::Forbidden);
+    }
 
     // Parse and validate body
     let body = match serde_urlencoded::from_bytes::<api::NoteUpdateBody>(
@@ -223,11 +252,16 @@ pub(crate) fn notes_delete(req: &Request, ctx: &Context) -> Response {
         None => return Response::with_status(Status::Unauthorized),
     };
 
-    // Get note
-    let note = match get_note(req, ctx, user.id) {
+    // Get note (admins can access any note, normal users only their own)
+    let note = match fetch_note_for_user(req, ctx, &user) {
         Some(note) => note,
         None => return not_found(req, ctx),
     };
+
+    // Check authorization
+    if !policies::can_delete(&user, &note) {
+        return Response::with_status(Status::Forbidden);
+    }
 
     // Delete note
     ctx.database
@@ -235,6 +269,51 @@ pub(crate) fn notes_delete(req: &Request, ctx: &Context) -> Response {
 
     // Success response
     Response::new()
+}
+
+// MARK: Utils
+fn get_note_by_id(req: &Request, _ctx: &Context) -> Option<Uuid> {
+    req.params
+        .get("note_id")
+        .expect("note_id param should be present")
+        .parse::<Uuid>()
+        .ok()
+}
+
+fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Option<Note> {
+    let note_id = get_note_by_id(req, ctx)?;
+
+    match user.role {
+        UserRole::Admin => {
+            // Admin can fetch any note
+            query_args!(
+                Note,
+                ctx.database,
+                formatcp!(
+                    "SELECT {} FROM notes WHERE id = :note_id LIMIT 1",
+                    Note::columns()
+                ),
+                Args { note_id: note_id }
+            )
+            .next()
+        }
+        UserRole::Normal => {
+            // Normal user can only fetch their own notes
+            query_args!(
+                Note,
+                ctx.database,
+                formatcp!(
+                    "SELECT {} FROM notes WHERE id = :note_id AND user_id = :user_id LIMIT 1",
+                    Note::columns()
+                ),
+                Args {
+                    note_id: note_id,
+                    user_id: user.id
+                }
+            )
+            .next()
+        }
+    }
 }
 
 // MARK: Tests
@@ -489,11 +568,145 @@ mod test {
     }
 
     #[test]
+    fn test_notes_index_admin_can_see_all_notes() {
+        use crate::context::test_helpers::create_test_user_with_session_and_role;
+        use crate::models::user::UserRole;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create admin user
+        let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create first normal user and their note
+        let (user1, _) = create_test_user_with_session(&ctx);
+        let user1_note = Note {
+            user_id: user1.id,
+            body: "User 1's note".to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_note(user1_note);
+
+        // Create second normal user and their note
+        let (user2, _) = create_test_user_with_session(&ctx);
+        let user2_note = Note {
+            user_id: user2.id,
+            body: "User 2's note".to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_note(user2_note);
+
+        // Admin should see all notes
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes")
+                .header("Authorization", format!("Bearer {admin_token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(notes.len(), 2);
+    }
+
+    #[test]
+    fn test_notes_show_admin_can_access_any_note() {
+        use crate::context::test_helpers::create_test_user_with_session_and_role;
+        use crate::models::user::UserRole;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create admin user
+        let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create normal user and their note
+        let (user, _) = create_test_user_with_session(&ctx);
+        let note = Note {
+            user_id: user.id,
+            body: "User's private note".to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_note(note.clone());
+
+        // Admin should be able to access the user's note
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/notes/{}", note.id))
+                .header("Authorization", format!("Bearer {admin_token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let fetched_note = serde_json::from_slice::<api::Note>(&res.body).unwrap();
+        assert_eq!(fetched_note.id, note.id);
+        assert_eq!(fetched_note.body, "User's private note");
+    }
+
+    #[test]
+    fn test_notes_update_admin_can_update_any_note() {
+        use crate::context::test_helpers::create_test_user_with_session_and_role;
+        use crate::models::user::UserRole;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create admin user
+        let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create normal user and their note
+        let (user, _) = create_test_user_with_session(&ctx);
+        let note = Note {
+            user_id: user.id,
+            body: "Original content".to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_note(note.clone());
+
+        // Admin should be able to update the user's note
+        let res = router.handle(
+            &Request::put(format!("http://localhost/api/notes/{}", note.id))
+                .header("Authorization", format!("Bearer {admin_token}"))
+                .body("body=Admin+updated+this"),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let updated_note = serde_json::from_slice::<api::Note>(&res.body).unwrap();
+        assert_eq!(updated_note.body, "Admin updated this");
+    }
+
+    #[test]
+    fn test_notes_delete_admin_can_delete_any_note() {
+        use crate::context::test_helpers::create_test_user_with_session_and_role;
+        use crate::models::user::UserRole;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        // Create admin user
+        let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create normal user and their note
+        let (user, _) = create_test_user_with_session(&ctx);
+        let note = Note {
+            user_id: user.id,
+            body: "Note to delete".to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_note(note.clone());
+
+        // Admin should be able to delete the user's note
+        let res = router.handle(
+            &Request::delete(format!("http://localhost/api/notes/{}", note.id))
+                .header("Authorization", format!("Bearer {admin_token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+
+        // Verify note is deleted
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/notes/{}", note.id))
+                .header("Authorization", format!("Bearer {admin_token}")),
+        );
+        assert_eq!(res.status, Status::NotFound);
+    }
+
+    #[test]
     fn test_notes_index_user_isolation() {
-        use std::time::Duration;
-
-        use crate::models::{Session, User};
-
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
@@ -507,22 +720,7 @@ mod test {
         ctx.database.insert_note(note1.clone());
 
         // Create second user and their note
-        let user2 = User {
-            first_name: "User2".to_string(),
-            last_name: "Test".to_string(),
-            email: "user2@example.com".to_string(),
-            password: pbkdf2::password_hash("password123"),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user2.clone());
-        let token2 = format!("test-token-{}", user2.id);
-        let session2 = Session {
-            user_id: user2.id,
-            token: token2.clone(),
-            expires_at: Utc::now() + Duration::from_secs(3600),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session2);
+        let (user2, token2) = create_test_user_with_session(&ctx);
 
         let note2 = Note {
             user_id: user2.id,

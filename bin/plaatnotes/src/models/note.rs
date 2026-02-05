@@ -43,3 +43,40 @@ impl From<Note> for api::Note {
         }
     }
 }
+
+// MARK: Policies
+pub(crate) mod policies {
+    use super::Note;
+    use crate::models::user::{User, UserRole};
+
+    pub(crate) fn can_index(_auth_user: &User) -> bool {
+        // Both admin and normal users can index (admins see all, normal users see their own)
+        true
+    }
+
+    pub(crate) fn can_create(_auth_user: &User) -> bool {
+        // Both admin and normal users can create notes
+        true
+    }
+
+    pub(crate) fn can_show(auth_user: &User, note: &Note) -> bool {
+        match auth_user.role {
+            UserRole::Admin => true,
+            UserRole::Normal => auth_user.id == note.user_id,
+        }
+    }
+
+    pub(crate) fn can_update(auth_user: &User, note: &Note) -> bool {
+        match auth_user.role {
+            UserRole::Admin => true,
+            UserRole::Normal => auth_user.id == note.user_id,
+        }
+    }
+
+    pub(crate) fn can_delete(auth_user: &User, note: &Note) -> bool {
+        match auth_user.role {
+            UserRole::Admin => true,
+            UserRole::Normal => auth_user.id == note.user_id,
+        }
+    }
+}
