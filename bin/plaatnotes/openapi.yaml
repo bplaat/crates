@@ -22,6 +22,97 @@ paths:
               schema:
                 type: string
 
+  # MARK: Users
+  /users:
+    get:
+      tags: [Users]
+      summary: Get all users
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserIndexResponse'
+    post:
+      tags: [Users]
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserCreateBody'
+      responses:
+        '200':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get a user by ID
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: A single user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+    put:
+      tags: [Users]
+      summary: Update a user by ID
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserUpdateBody'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '404':
+          description: User not found
+    delete:
+      tags: [Users]
+      summary: Delete a user by ID
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: User deleted
+        '404':
+          description: User not found
+
   # MARK: Notes
   /notes:
     get:
@@ -174,6 +265,33 @@ components:
         - total
 
     # MARK: Models
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - firstName
+        - lastName
+        - email
+        - createdAt
+        - updatedAt
+
     Note:
       type: object
       properties:
@@ -195,6 +313,41 @@ components:
         - updatedAt
 
     # MARK: Bodies
+    UserCreateBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+
+    UserUpdateBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - firstName
+        - lastName
+        - email
+
     NoteCreateUpdateBody:
       type: object
       properties:
@@ -204,6 +357,19 @@ components:
         - body
 
     # MARK: Responses
+    UserIndexResponse:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+      required:
+        - pagination
+        - data
+
     NoteIndexResponse:
       type: object
       properties:

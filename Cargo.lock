@@ -469,6 +469,7 @@ dependencies = [
  "log",
  "mime_guess",
  "openapi-generator",
+ "pbkdf2",
  "rust-embed",
  "serde",
  "serde_json",
