@@ -504,6 +504,11 @@ components:
         email:
           type: string
           format: email
+        theme:
+          $ref: '#/components/schemas/UserTheme'
+        language:
+          type: string
+          description: ISO 639-1 language code
         role:
           $ref: '#/components/schemas/UserRole'
         createdAt:
@@ -517,6 +522,8 @@ components:
         - firstName
         - lastName
         - email
+        - theme
+        - language
         - role
         - createdAt
         - updatedAt
@@ -548,6 +555,10 @@ components:
         - expiresAt
         - createdAt
         - updatedAt
+
+    UserTheme:
+      type: string
+      enum: [system, light, dark]
 
     UserRole:
       type: string

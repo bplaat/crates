@@ -20,6 +20,8 @@ pub(crate) struct User {
     pub last_name: String,
     pub email: String,
     pub password: String,
+    pub theme: UserTheme,
+    pub language: String,
     pub role: UserRole,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -34,6 +36,8 @@ impl Default for User {
             last_name: String::default(),
             email: String::default(),
             password: String::default(),
+            theme: UserTheme::System,
+            language: "en".to_string(),
             role: UserRole::Normal,
             created_at: now,
             updated_at: now,
@@ -48,11 +52,22 @@ impl From<User> for api::User {
             first_name: user.first_name,
             last_name: user.last_name,
             email: user.email,
+            theme: user.theme.into(),
+            language: user.language,
             role: user.role.into(),
             created_at: user.created_at,
             updated_at: user.updated_at,
         }
     }
+}
+
+// MARK: UserTheme
+#[derive(Copy, Clone, FromValue, FromEnum)]
+#[from_enum(api::UserTheme)]
+pub(crate) enum UserTheme {
+    System = 0,
+    Light = 1,
+    Dark = 2,
 }
 
 // MARK: UserRole
