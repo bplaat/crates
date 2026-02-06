@@ -539,6 +539,9 @@ components:
           format: uuid
         token:
           type: string
+        client:
+          $ref: '#/components/schemas/SessionClient'
+          nullable: true
         expiresAt:
           type: string
           format: date-time
@@ -555,6 +558,19 @@ components:
         - expiresAt
         - createdAt
         - updatedAt
+
+    SessionClient:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        os:
+          type: string
+          nullable: true
 
     UserTheme:
       type: string

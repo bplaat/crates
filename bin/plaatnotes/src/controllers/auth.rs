@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use base64::prelude::*;
 use bsqlite::execute_args;
 use chrono::Utc;
 use const_format::formatcp;
+use simple_useragent::UserAgentParser;
 use small_http::{Request, Response, Status};
 use validate::Validate;
 
@@ -17,6 +19,8 @@ use crate::api;
 use crate::consts::{SESSION_EXPIRY_SECONDS, SESSION_TOKEN_LENGTH};
 use crate::context::{Context, DatabaseHelpers};
 use crate::models::{Session, User};
+
+static USER_AGENT_PARSER: LazyLock<UserAgentParser> = LazyLock::new(UserAgentParser::new);
 
 #[derive(Validate)]
 struct LoginBody {
@@ -76,10 +80,27 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Response {
         BASE64_URL_SAFE_NO_PAD.encode(bytes)
     };
 
+    // Parse User-Agent header
+    let (client_name, client_version, client_os) = req
+        .headers
+        .get("User-Agent")
+        .map(|ua_str| {
+            let ua = USER_AGENT_PARSER.parse(ua_str);
+            (
+                Some(ua.client.family),
+                ua.client.version,
+                Some(ua.os.family),
+            )
+        })
+        .unwrap_or((None, None, None));
+
     // Create session
     let session = Session {
         user_id: user.id,
         token: token.clone(),
+        client_name,
+        client_version,
+        client_os,
         expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
         ..Default::default()
     };

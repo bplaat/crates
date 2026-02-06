@@ -16,6 +16,9 @@ pub(crate) struct Session {
     pub id: Uuid,
     pub user_id: Uuid,
     pub token: String,
+    pub client_name: Option<String>,
+    pub client_version: Option<String>,
+    pub client_os: Option<String>,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -28,6 +31,9 @@ impl Default for Session {
             id: Uuid::now_v7(),
             user_id: Uuid::nil(),
             token: String::default(),
+            client_name: None,
+            client_version: None,
+            client_os: None,
             expires_at: now,
             created_at: now,
             updated_at: now,
@@ -41,6 +47,18 @@ impl From<Session> for api::Session {
             id: user.id,
             user_id: user.user_id,
             token: user.token,
+            client: if user.client_name.is_some()
+                || user.client_version.is_some()
+                || user.client_os.is_some()
+            {
+                Some(api::SessionClient {
+                    name: user.client_name,
+                    version: user.client_version,
+                    os: user.client_os,
+                })
+            } else {
+                None
+            },
             expires_at: user.expires_at,
             created_at: user.created_at,
             updated_at: user.updated_at,
