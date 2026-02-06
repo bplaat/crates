@@ -13,7 +13,7 @@ pub(crate) use self::user::{User, UserRole};
 use crate::api;
 
 pub(crate) mod note;
-mod session;
+pub(crate) mod session;
 pub(crate) mod user;
 
 // MARK: IndexQuery

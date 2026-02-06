@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::api;
+use crate::models::{User, UserRole};
 
 #[derive(Clone, FromRow)]
 pub(crate) struct Session {
@@ -43,6 +44,29 @@ impl From<Session> for api::Session {
             expires_at: user.expires_at,
             created_at: user.created_at,
             updated_at: user.updated_at,
+        }
+    }
+}
+
+// MARK: Policies
+pub(crate) mod policies {
+    use super::*;
+
+    pub(crate) fn can_index(auth_user: &User) -> bool {
+        matches!(auth_user.role, UserRole::Admin)
+    }
+
+    pub(crate) fn can_show(auth_user: &User, session: &Session) -> bool {
+        match auth_user.role {
+            UserRole::Admin => true,
+            UserRole::Normal => auth_user.id == session.user_id,
+        }
+    }
+
+    pub(crate) fn can_delete(auth_user: &User, session: &Session) -> bool {
+        match auth_user.role {
+            UserRole::Admin => true,
+            UserRole::Normal => auth_user.id == session.user_id,
         }
     }
 }
