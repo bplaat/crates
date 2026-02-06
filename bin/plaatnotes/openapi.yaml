@@ -541,10 +541,8 @@ components:
           type: string
         ip:
           $ref: '#/components/schemas/SessionIp'
-          nullable: true
         client:
           $ref: '#/components/schemas/SessionClient'
-          nullable: true
         expiresAt:
           type: string
           format: date-time
@@ -558,6 +556,8 @@ components:
         - id
         - userId
         - token
+        - ip
+        - client
         - expiresAt
         - createdAt
         - updatedAt

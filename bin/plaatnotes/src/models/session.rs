@@ -57,24 +57,17 @@ impl From<Session> for api::Session {
             id: user.id,
             user_id: user.user_id,
             token: user.token,
-            ip: Some(api::SessionIp {
+            ip: api::SessionIp {
                 address: Some(user.ip_address),
                 latitude: user.ip_latitude,
                 longitude: user.ip_longitude,
                 country: user.ip_country,
                 city: user.ip_city,
-            }),
-            client: if user.client_name.is_some()
-                || user.client_version.is_some()
-                || user.client_os.is_some()
-            {
-                Some(api::SessionClient {
-                    name: user.client_name,
-                    version: user.client_version,
-                    os: user.client_os,
-                })
-            } else {
-                None
+            },
+            client: api::SessionClient {
+                name: user.client_name,
+                version: user.client_version,
+                os: user.client_os,
             },
             expires_at: user.expires_at,
             created_at: user.created_at,
