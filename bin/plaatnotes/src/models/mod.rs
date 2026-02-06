@@ -9,7 +9,7 @@ use validate::Validate;
 
 pub(crate) use self::note::Note;
 pub(crate) use self::session::Session;
-pub(crate) use self::user::User;
+pub(crate) use self::user::{User, UserRole};
 use crate::api;
 
 pub(crate) mod note;

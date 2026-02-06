@@ -10,8 +10,7 @@ use chrono::Utc;
 
 use crate::consts::SESSION_EXPIRY_SECONDS;
 use crate::context::{Context, DatabaseHelpers};
-use crate::models::user::UserRole;
-use crate::models::{Session, User};
+use crate::models::{Session, User, UserRole};
 
 // Precomputed hash for "password123" to avoid computing it in every test
 pub(crate) const TEST_PASSWORD_HASH: &str =

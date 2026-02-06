@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use base64::prelude::*;
-use bsqlite::{execute_args, query_args};
+use bsqlite::execute_args;
 use chrono::Utc;
 use const_format::formatcp;
 use small_http::{Request, Response, Status};
@@ -92,12 +92,15 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Response {
     })
 }
 
-pub(crate) fn auth_logout(req: &Request, ctx: &Context) -> Response {
-    // Check authentication
-    if get_auth_user(req, ctx).is_none() {
-        return Response::with_status(Status::Unauthorized);
-    }
-    let token = get_auth_token(req).expect("Should be some");
+pub(crate) fn auth_validate(_req: &Request, ctx: &Context) -> Response {
+    Response::with_json(api::AuthValidateResponse {
+        user: ctx.auth_user.clone().expect("Should be authed").into(),
+        session: ctx.auth_session.clone().expect("Should be authed").into(),
+    })
+}
+
+pub(crate) fn auth_logout(_req: &Request, ctx: &Context) -> Response {
+    let session = ctx.auth_session.clone().expect("Should be authed");
 
     // Expire the session by setting expires_at to now
     execute_args!(
@@ -105,7 +108,7 @@ pub(crate) fn auth_logout(req: &Request, ctx: &Context) -> Response {
         "UPDATE sessions SET expires_at = :now, updated_at = :now WHERE token = :token",
         Args {
             now: Utc::now(),
-            token: token
+            token: session.token
         }
     );
 
@@ -113,47 +116,13 @@ pub(crate) fn auth_logout(req: &Request, ctx: &Context) -> Response {
     Response::new()
 }
 
-// MARK: Utils
-pub(crate) fn get_auth_token(req: &Request) -> Option<String> {
-    Some(
-        req.headers
-            .get("authorization")?
-            .strip_prefix("Bearer ")?
-            .to_string(),
-    )
-}
-
-pub(crate) fn get_auth_user(req: &Request, ctx: &Context) -> Option<User> {
-    let token = get_auth_token(req)?;
-
-    // Find valid session
-    let session = query_args!(
-        Session,
-        ctx.database,
-        formatcp!(
-            "SELECT {} FROM sessions WHERE token = :token AND expires_at > :now LIMIT 1",
-            Session::columns()
-        ),
-        Args {
-            token: token.to_string(),
-            now: Utc::now()
-        }
-    )
-    .next()?;
-
-    // Get user
-    ctx.database
-        .query::<User>(
-            formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
-            session.user_id,
-        )
-        .next()
-}
-
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use bsqlite::query_args;
+
     use super::*;
+    use crate::consts::SESSION_EXPIRY_SECONDS;
     use crate::router;
 
     #[test]
@@ -267,6 +236,7 @@ mod test {
     #[test]
     fn test_get_authenticated_user_valid_token() {
         let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
 
         // Create user and session
         let user = User {
@@ -287,27 +257,28 @@ mod test {
         ctx.database.insert_session(session.clone());
 
         // Test with valid token
-        let req = Request::get("http://localhost/api/users")
+        let req = Request::get("http://localhost/api/auth/validate")
             .header("Authorization", "Bearer valid-token-456");
-        let authenticated_user = get_auth_user(&req, &ctx);
-        assert!(authenticated_user.is_some());
-        assert_eq!(authenticated_user.unwrap().email, "john@example.com");
+        let res = router.handle(&req);
+        assert_eq!(res.status, Status::Ok);
     }
 
     #[test]
     fn test_get_authenticated_user_invalid_token() {
         let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
 
         // Test with invalid token
-        let req = Request::get("http://localhost/api/users")
+        let req = Request::get("http://localhost/api/auth/validate")
             .header("Authorization", "Bearer invalid-token");
-        let authenticated_user = get_auth_user(&req, &ctx);
-        assert!(authenticated_user.is_none());
+        let res = router.handle(&req);
+        assert_eq!(res.status, Status::Unauthorized);
     }
 
     #[test]
     fn test_get_authenticated_user_expired_session() {
         let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
 
         // Create user and expired session
         let user = User {
@@ -328,9 +299,9 @@ mod test {
         ctx.database.insert_session(expired_session);
 
         // Test with expired session
-        let req = Request::get("http://localhost/api/users")
+        let req = Request::get("http://localhost/api/auth/validate")
             .header("Authorization", "Bearer expired-token-789");
-        let authenticated_user = get_auth_user(&req, &ctx);
-        assert!(authenticated_user.is_none());
+        let res = router.handle(&req);
+        assert_eq!(res.status, Status::Unauthorized);
     }
 }

@@ -9,23 +9,24 @@ use chrono::Utc;
 use const_format::formatcp;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
-use validate::Validate;
+use validate::{self, Validate};
 
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
-use crate::controllers::{get_auth_user, not_found};
+use crate::controllers::not_found;
+use crate::models::user::validators::{is_unique_email, is_unique_email_or_auth_user_email};
 use crate::models::user::{UserRole, policies};
 use crate::models::{IndexQuery, Note, User};
 
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let auth_user = match get_auth_user(req, ctx) {
+    let auth_user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Check authorization
-    if !policies::can_index(&auth_user) {
+    if !policies::can_index(auth_user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -79,12 +80,13 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
 }
 
 #[derive(Validate)]
+#[validate(context(Context))]
 struct UserCreateBody {
     #[validate(ascii, length(min = 1, max = 128))]
     first_name: String,
     #[validate(ascii, length(min = 1, max = 128))]
     last_name: String,
-    #[validate(email)]
+    #[validate(email, custom(is_unique_email))]
     email: String,
     #[validate(ascii, length(min = 8, max = 128))]
     password: String,
@@ -105,13 +107,13 @@ impl From<api::UserCreateBody> for UserCreateBody {
 
 pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let auth_user = match get_auth_user(req, ctx) {
+    let auth_user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Check authorization
-    if !policies::can_create(&auth_user) {
+    if !policies::can_create(auth_user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -122,7 +124,7 @@ pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
         Ok(body) => Into::<UserCreateBody>::into(body),
         Err(_) => return Response::with_status(Status::BadRequest),
     };
-    if let Err(report) = body.validate() {
+    if let Err(report) = body.validate_with(ctx) {
         return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
     }
 
@@ -165,21 +167,21 @@ pub(crate) fn get_user(req: &Request, ctx: &Context) -> Option<User> {
         .next()
 }
 
-pub(crate) fn users_show(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let auth_user = match get_auth_user(req, ctx) {
+    let auth_user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Get user
-    let user = match get_user(req, ctx) {
+    let user = match get_user(_req, ctx) {
         Some(user) => user,
-        None => return not_found(req, ctx),
+        None => return not_found(_req, ctx),
     };
 
     // Check authorization
-    if !policies::can_show(&auth_user, &user) {
+    if !policies::can_show(auth_user, &user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -188,12 +190,13 @@ pub(crate) fn users_show(req: &Request, ctx: &Context) -> Response {
 }
 
 #[derive(Validate)]
+#[validate(context(Context))]
 struct UserUpdateBody {
     #[validate(ascii, length(min = 1, max = 128))]
     first_name: String,
     #[validate(ascii, length(min = 1, max = 128))]
     last_name: String,
-    #[validate(email)]
+    #[validate(email, custom(is_unique_email_or_auth_user_email))]
     email: String,
     role: UserRole,
 }
@@ -211,7 +214,7 @@ impl From<api::UserUpdateBody> for UserUpdateBody {
 
 pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let auth_user = match get_auth_user(req, ctx) {
+    let auth_user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
@@ -223,7 +226,7 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
     };
 
     // Check authorization
-    if !policies::can_update(&auth_user, &user) {
+    if !policies::can_update(auth_user, &user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -234,7 +237,7 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
         Ok(body) => Into::<UserUpdateBody>::into(body),
         Err(_) => return Response::with_status(Status::BadRequest),
     };
-    if let Err(report) = body.validate() {
+    if let Err(report) = body.validate_with(ctx) {
         return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
     }
 
@@ -280,7 +283,7 @@ impl From<api::UserChangePasswordBody> for UserChangePasswordBody {
 
 pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let auth_user = match get_auth_user(req, ctx) {
+    let auth_user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
@@ -292,7 +295,7 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
     };
 
     // Check authorization
-    if !policies::can_update(&auth_user, &user) {
+    if !policies::can_update(auth_user, &user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -331,21 +334,21 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
     Response::new()
 }
 
-pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let auth_user = match get_auth_user(req, ctx) {
+    let auth_user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Get user
-    let user = match get_user(req, ctx) {
+    let user = match get_user(_req, ctx) {
         Some(user) => user,
-        None => return not_found(req, ctx),
+        None => return not_found(_req, ctx),
     };
 
     // Check authorization
-    if !policies::can_delete(&auth_user, &user) {
+    if !policies::can_delete(auth_user, &user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -359,7 +362,7 @@ pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Response {
 
 pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let auth_user = match get_auth_user(req, ctx) {
+    let auth_user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
@@ -371,7 +374,7 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
     };
 
     // Check authorization
-    if !policies::can_show(&auth_user, &user) {
+    if !policies::can_show(auth_user, &user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -432,7 +435,7 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::models::user::UserRole;
+    use crate::models::UserRole;
     use crate::router;
     use crate::test_utils::{
         create_test_user_with_session, create_test_user_with_session_and_role,
@@ -576,6 +579,35 @@ mod test {
     }
 
     #[test]
+    fn test_users_create_duplicate_email() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create first user
+        let res = router.handle(
+            &Request::post("http://localhost/api/users")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(
+                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=securepass123&role=normal",
+                ),
+        );
+        assert_eq!(res.status, Status::Ok);
+
+        // Try to create another user with same email
+        let res = router.handle(
+            &Request::post("http://localhost/api/users")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(
+                    "firstName=John&lastName=Doe&email=jane@example.com&password=securepass123&role=normal",
+                ),
+        );
+        assert_eq!(res.status, Status::BadRequest);
+        let report = serde_json::from_slice::<api::Report>(&res.body).unwrap();
+        assert!(report.0.contains_key("email"));
+    }
+
+    #[test]
     fn test_users_show() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
@@ -641,6 +673,42 @@ mod test {
         let updated_user = serde_json::from_slice::<api::User>(&res.body).unwrap();
         assert_eq!(updated_user.last_name, "Smith");
         assert_eq!(updated_user.email, "john.smith@example.com");
+    }
+
+    #[test]
+    fn test_users_update_duplicate_email() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create two users
+        let user1 = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user1.clone());
+
+        let user2 = User {
+            first_name: "Jane".to_string(),
+            last_name: "Smith".to_string(),
+            email: "jane@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user2.clone());
+
+        // Try to update user2's email to user1's email
+        let res = router.handle(
+            &Request::put(format!("http://localhost/api/users/{}", user2.id))
+                .header("Authorization", format!("Bearer {token}"))
+                .body("firstName=Jane&lastName=Smith&email=john@example.com&role=normal"),
+        );
+        assert_eq!(res.status, Status::BadRequest);
+        let report = serde_json::from_slice::<api::Report>(&res.body).unwrap();
+        assert!(report.0.contains_key("email"));
     }
 
     #[test]

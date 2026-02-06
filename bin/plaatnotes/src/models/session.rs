@@ -8,6 +8,8 @@ use bsqlite::FromRow;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::api;
+
 #[derive(Clone, FromRow)]
 pub(crate) struct Session {
     pub id: Uuid,
@@ -28,6 +30,19 @@ impl Default for Session {
             expires_at: now,
             created_at: now,
             updated_at: now,
+        }
+    }
+}
+
+impl From<Session> for api::Session {
+    fn from(user: Session) -> Self {
+        Self {
+            id: user.id,
+            user_id: user.user_id,
+            token: user.token,
+            expires_at: user.expires_at,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
         }
     }
 }

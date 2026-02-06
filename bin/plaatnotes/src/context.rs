@@ -15,6 +15,18 @@ use crate::models::{Note, Session, User};
 #[derive(Clone)]
 pub(crate) struct Context {
     pub database: Connection,
+    pub auth_session: Option<Session>,
+    pub auth_user: Option<User>,
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self {
+            database: Connection::open_memory().expect("Can't open in-memory database"),
+            auth_session: None,
+            auth_user: None,
+        }
+    }
 }
 
 impl Context {
@@ -24,14 +36,22 @@ impl Context {
         database.enable_wal_logging();
         database.apply_various_performance_settings();
         database_create_tables(&database);
-        Self { database }
+        Self {
+            database,
+            auth_session: None,
+            auth_user: None,
+        }
     }
 
     #[cfg(test)]
     pub(crate) fn with_test_database() -> Self {
         let database = Connection::open_memory().expect("Can't open in-memory database");
         database_create_tables(&database);
-        Self { database }
+        Self {
+            database,
+            auth_session: None,
+            auth_user: None,
+        }
     }
 }
 

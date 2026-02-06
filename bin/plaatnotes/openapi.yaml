@@ -49,6 +49,22 @@ paths:
         '401':
           description: Invalid credentials
 
+  /auth/validate:
+    get:
+      tags: [Auth]
+      summary: Validate current session
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Session is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthValidateResponse'
+        '401':
+          description: Unauthorized
+
   /auth/logout:
     post:
       tags: [Auth]
@@ -434,6 +450,34 @@ components:
         - createdAt
         - updatedAt
 
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        token:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - token
+        - expiresAt
+        - createdAt
+        - updatedAt
+
     UserRole:
       type: string
       enum: [normal, admin]
@@ -553,6 +597,17 @@ components:
       required:
         - userId
         - token
+
+    AuthValidateResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          $ref: '#/components/schemas/Session'
+      required:
+        - user
+        - session
 
     UserIndexResponse:
       type: object

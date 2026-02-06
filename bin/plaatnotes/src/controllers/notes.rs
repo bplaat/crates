@@ -13,20 +13,19 @@ use validate::Validate;
 
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
-use crate::controllers::{get_auth_user, not_found};
+use crate::controllers::not_found;
 use crate::models::note::policies;
-use crate::models::user::UserRole;
-use crate::models::{IndexQuery, Note, User};
+use crate::models::{IndexQuery, Note, User, UserRole};
 
 pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let user = match get_auth_user(req, ctx) {
+    let user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Check authorization
-    if !policies::can_index(&user) {
+    if !policies::can_index(user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -132,13 +131,13 @@ impl From<api::NoteCreateBody> for NoteCreateBody {
 
 pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let user = match get_auth_user(req, ctx) {
+    let user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Check authorization
-    if !policies::can_create(&user) {
+    if !policies::can_create(user) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -165,21 +164,21 @@ pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Response {
     Response::with_json(Into::<api::Note>::into(note))
 }
 
-pub(crate) fn notes_show(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn notes_show(_req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let user = match get_auth_user(req, ctx) {
+    let user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Get note (admins can access any note, normal users only their own)
-    let note = match fetch_note_for_user(req, ctx, &user) {
+    let note = match fetch_note_for_user(_req, ctx, user) {
         Some(note) => note,
-        None => return not_found(req, ctx),
+        None => return not_found(_req, ctx),
     };
 
     // Check authorization
-    if !policies::can_show(&user, &note) {
+    if !policies::can_show(user, &note) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -201,19 +200,19 @@ impl From<api::NoteUpdateBody> for NoteUpdateBody {
 
 pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let user = match get_auth_user(req, ctx) {
+    let user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Get note (admins can access any note, normal users only their own)
-    let mut note = match fetch_note_for_user(req, ctx, &user) {
+    let mut note = match fetch_note_for_user(req, ctx, user) {
         Some(note) => note,
         None => return not_found(req, ctx),
     };
 
     // Check authorization
-    if !policies::can_update(&user, &note) {
+    if !policies::can_update(user, &note) {
         return Response::with_status(Status::Forbidden);
     }
 
@@ -245,21 +244,21 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
     Response::with_json(Into::<api::Note>::into(note))
 }
 
-pub(crate) fn notes_delete(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn notes_delete(_req: &Request, ctx: &Context) -> Response {
     // Check authentication
-    let user = match get_auth_user(req, ctx) {
+    let user = match &ctx.auth_user {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
     };
 
     // Get note (admins can access any note, normal users only their own)
-    let note = match fetch_note_for_user(req, ctx, &user) {
+    let note = match fetch_note_for_user(_req, ctx, user) {
         Some(note) => note,
-        None => return not_found(req, ctx),
+        None => return not_found(_req, ctx),
     };
 
     // Check authorization
-    if !policies::can_delete(&user, &note) {
+    if !policies::can_delete(user, &note) {
         return Response::with_status(Status::Forbidden);
     }
 

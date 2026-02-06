@@ -10,6 +10,7 @@ use from_enum::FromEnum;
 use uuid::Uuid;
 
 use crate::api;
+use crate::context::Context;
 
 // MARK: User
 #[derive(Clone, FromRow)]
@@ -62,9 +63,35 @@ pub(crate) enum UserRole {
     Admin = 1,
 }
 
+// MARK: Validators
+pub(crate) mod validators {
+    use super::*;
+
+    pub(crate) fn is_unique_email(value: &str, context: &Context) -> validate::Result {
+        let count = context.database.query_some::<i64>(
+            "SELECT COUNT(id) FROM users WHERE email = ?",
+            value.to_string(),
+        );
+        if count != 0 {
+            return Err(validate::Error::new("not unique"));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn is_unique_email_or_auth_user_email(
+        value: &str,
+        context: &Context,
+    ) -> validate::Result {
+        if value == context.auth_user.as_ref().expect("Not authed").email {
+            return Ok(());
+        }
+        is_unique_email(value, context)
+    }
+}
+
 // MARK: Policies
 pub(crate) mod policies {
-    use super::{User, UserRole};
+    use super::*;
 
     pub(crate) fn can_index(auth_user: &User) -> bool {
         matches!(auth_user.role, UserRole::Admin)

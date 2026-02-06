@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::api;
+use crate::models::user::{User, UserRole};
 
 #[derive(Clone, FromRow)]
 pub(crate) struct Note {
@@ -46,8 +47,7 @@ impl From<Note> for api::Note {
 
 // MARK: Policies
 pub(crate) mod policies {
-    use super::Note;
-    use crate::models::user::{User, UserRole};
+    use super::*;
 
     pub(crate) fn can_index(_auth_user: &User) -> bool {
         // Both admin and normal users can index (admins see all, normal users see their own)

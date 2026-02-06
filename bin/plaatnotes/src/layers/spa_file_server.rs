@@ -14,7 +14,12 @@ use crate::Context;
 struct WebAssets;
 
 pub(crate) fn spa_file_server_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
-    let mut path = req.url.path().to_string();
+    let path = req.url.path();
+    if path.starts_with("/api") {
+        return None;
+    }
+
+    let mut path = path.to_string();
     if path.ends_with('/') {
         path = format!("{path}index.html");
     }

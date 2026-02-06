@@ -30,13 +30,22 @@ mod test_utils;
 const HTTP_PORT: u16 = 8080;
 
 pub(crate) fn router(ctx: Context) -> Router<Context> {
-    RouterBuilder::<Context>::with(ctx)
+    // Guests routes
+    let router = RouterBuilder::<Context>::with(ctx)
         .pre_layer(layers::log_pre_layer)
         .pre_layer(layers::cors_pre_layer)
         .post_layer(layers::cors_post_layer)
+        .pre_layer(layers::auth_optional_pre_layer)
         .get("/api", home)
         // Auth
         .post("/api/auth/login", auth_login)
+        .pre_layer(layers::spa_file_server_pre_layer);
+
+    // Authed routes
+    router
+        .pre_layer(layers::auth_required_pre_layer)
+        // Auth
+        .get("/api/auth/validate", auth_validate)
         .post("/api/auth/logout", auth_logout)
         // Users
         .get("/api/users", users_index)
@@ -52,7 +61,6 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .get("/api/notes/:note_id", notes_show)
         .put("/api/notes/:note_id", notes_update)
         .delete("/api/notes/:note_id", notes_delete)
-        .pre_layer(layers::spa_file_server_pre_layer)
         .build()
 }
 
