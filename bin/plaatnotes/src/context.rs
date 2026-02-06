@@ -8,6 +8,7 @@ use std::path::Path;
 
 use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
+use pbkdf2::password_hash;
 
 use crate::models::{Note, Session, User};
 
@@ -36,6 +37,7 @@ impl Context {
         database.enable_wal_logging();
         database.apply_various_performance_settings();
         database_create_tables(&database);
+        database_seed(&database);
         Self {
             database,
             auth_session: None,
@@ -146,4 +148,18 @@ fn database_create_tables(database: &Connection) {
         ) STRICT",
         (),
     );
+}
+
+fn database_seed(database: &Connection) {
+    let user_count = database.query_some::<i64>("SELECT COUNT(id) FROM users", ());
+    if user_count == 0 {
+        let user = User {
+            first_name: "Admin".to_string(),
+            last_name: "Admin".to_string(),
+            email: "admin@example.com".to_string(),
+            password: password_hash("admin123"),
+            ..Default::default()
+        };
+        database.insert_user(user);
+    }
 }

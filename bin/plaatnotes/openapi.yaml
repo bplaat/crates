@@ -672,12 +672,18 @@ components:
         email:
           type: string
           format: email
+        theme:
+          $ref: '#/components/schemas/UserTheme'
+        language:
+          type: string
         role:
           $ref: '#/components/schemas/UserRole'
       required:
         - firstName
         - lastName
         - email
+        - theme
+        - language
         - role
 
     UserChangePasswordBody:

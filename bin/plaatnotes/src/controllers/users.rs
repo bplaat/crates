@@ -15,7 +15,7 @@ use crate::api;
 use crate::context::{Context, DatabaseHelpers};
 use crate::controllers::not_found;
 use crate::models::user::validators::{is_unique_email, is_unique_email_or_auth_user_email};
-use crate::models::user::{UserRole, policies};
+use crate::models::user::{UserRole, UserTheme, policies};
 use crate::models::{IndexQuery, Note, User};
 
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
@@ -198,6 +198,8 @@ struct UserUpdateBody {
     last_name: String,
     #[validate(email, custom(is_unique_email_or_auth_user_email))]
     email: String,
+    theme: UserTheme,
+    language: String,
     role: UserRole,
 }
 
@@ -207,6 +209,8 @@ impl From<api::UserUpdateBody> for UserUpdateBody {
             first_name: body.first_name,
             last_name: body.last_name,
             email: body.email,
+            theme: body.theme.into(),
+            language: body.language,
             role: body.role.into(),
         }
     }
@@ -245,15 +249,19 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
     user.first_name = body.first_name;
     user.last_name = body.last_name;
     user.email = body.email;
+    user.theme = body.theme;
+    user.language = body.language;
     user.role = body.role;
     user.updated_at = Utc::now();
     execute_args!(
         ctx.database,
-        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, role = :role, updated_at = :updated_at WHERE id = :id",
+        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, theme = :theme, language = :language, role = :role, updated_at = :updated_at WHERE id = :id",
         Args {
             first_name: user.first_name.clone(),
             last_name: user.last_name.clone(),
             email: user.email.clone(),
+            theme: user.theme,
+            language: user.language.clone(),
             role: user.role,
             updated_at: user.updated_at,
             id: user.id
@@ -667,7 +675,7 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=John&lastName=Smith&email=john.smith@example.com&role=normal"),
+                .body("firstName=John&lastName=Smith&email=john.smith@example.com&theme=system&language=en&role=normal"),
         );
         assert_eq!(res.status, Status::Ok);
         let updated_user = serde_json::from_slice::<api::User>(&res.body).unwrap();
@@ -704,7 +712,7 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user2.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=Jane&lastName=Smith&email=john@example.com&role=normal"),
+                .body("firstName=Jane&lastName=Smith&email=john@example.com&theme=system&language=en&role=normal"),
         );
         assert_eq!(res.status, Status::BadRequest);
         let report = serde_json::from_slice::<api::Report>(&res.body).unwrap();
