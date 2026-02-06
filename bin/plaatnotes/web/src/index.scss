@@ -10,6 +10,7 @@
 @use 'bulma/sass/elements/button';
 @use 'bulma/sass/elements/delete';
 @use 'bulma/sass/elements/title';
+@use 'bulma/sass/elements/table';
 @use 'bulma/sass/helpers';
 @use 'bulma/sass/form';
 @use 'bulma/sass/grid';
@@ -17,6 +18,15 @@
 :root {
     --bulma-body-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji';
+    color-scheme: light;
+}
+
+body.is-dark {
+    color-scheme: dark;
+}
+
+body.is-light {
+    color-scheme: light;
 }
 
 .container {

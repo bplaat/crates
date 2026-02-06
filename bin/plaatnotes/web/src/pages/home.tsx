@@ -5,66 +5,89 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
-import { type Note, type NoteIndexResponse } from '../../src-gen/api.ts';
+import { type Note } from '../../src-gen/api.ts';
 import { noteExtractTile } from '../utils.ts';
 import { Link } from '../router.tsx';
-import { API_URL } from '../consts.ts';
+import { $authToken } from '../services/auth.service.ts';
+import { NotesService } from '../services/notes.service.ts';
+import { useSignal } from '@preact/signals';
+import { Navbar } from '../components/navbar.tsx';
 
 export function Home() {
+    const authToken = useSignal($authToken.value);
     const [notes, setNotes] = useState<Note[]>([]);
+
+    useEffect(() => {
+        const unsub = $authToken.subscribe((v) => (authToken.value = v));
+        return () => unsub();
+    }, []);
 
     // @ts-ignore
     useEffect(async () => {
         document.title = 'PlaatNotes';
 
-        const res = await fetch(`${API_URL}/notes`);
-        const { data }: NoteIndexResponse = await res.json();
-        setNotes(data);
-    }, []);
+        if (!authToken.value) return;
+
+        const loadedNotes = await NotesService.getInstance().getNotes();
+        setNotes(loadedNotes);
+    }, [authToken.value]);
 
     async function deleteNote(id: string) {
         if (confirm('Are you sure you want to delete this note?')) {
-            await fetch(`${API_URL}/notes/${id}`, { method: 'DELETE' });
-            setNotes((notes) => notes.filter((note) => note.id !== id));
+            const success = await NotesService.getInstance().deleteNote(id);
+            if (success) {
+                setNotes((notes) => notes.filter((note) => note.id !== id));
+            }
         }
     }
 
     return (
-        <div class="container">
-            <h1 class="title">PlaatNotes</h1>
-            <div class="buttons">
-                <Link href="/notes/create" class="button is-link">
-                    Create a new note
-                </Link>
-            </div>
+        <>
+            <Navbar />
+            <section class="section">
+                <div class="container">
+                    <h1 class="title">Your Notes</h1>
 
-            <div class="fixed-grid has-3-cols">
-                <div class="grid">
-                    {notes.map((note) => (
-                        <Link href={`/notes/${note.id}`} class="box" key={note.id}>
-                            <b>{noteExtractTile(note.body)}</b>
-
-                            <button
-                                class="delete is-pulled-right"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    deleteNote(note.id);
-                                }}
-                            />
+                    <div class="buttons">
+                        <Link href="/notes/create" class="button is-link">
+                            <span class="icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                    <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+                                </svg>
+                            </span>
+                            <span>Create a new note</span>
                         </Link>
-                    ))}
-                </div>
-            </div>
-            {notes.length === 0 && (
-                <p>
-                    <i>No notes yet. Create one!</i>
-                </p>
-            )}
+                    </div>
 
-            <p>
-                Made by <a href="https://bplaat.nl">Bastiaan van der Plaat</a>
-            </p>
-        </div>
+                    {notes.length > 0 ? (
+                        <div class="fixed-grid has-3-cols">
+                            <div class="grid">
+                                {notes.map((note) => (
+                                    <Link href={`/notes/${note.id}`} class="box" key={note.id}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                                            <b>{noteExtractTile(note.body)}</b>
+                                            <button
+                                                class="delete"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    deleteNote(note.id);
+                                                }}
+                                            />
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div class="box">
+                            <p>
+                                <i>No notes yet. Create one!</i>
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </section>
+        </>
     );
 }
