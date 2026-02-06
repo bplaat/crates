@@ -11,6 +11,7 @@ use base64::prelude::*;
 use bsqlite::execute_args;
 use chrono::Utc;
 use const_format::formatcp;
+use serde::Deserialize;
 use simple_useragent::UserAgentParser;
 use small_http::{Request, Response, Status};
 use validate::Validate;
@@ -21,6 +22,13 @@ use crate::context::{Context, DatabaseHelpers};
 use crate::models::{Session, User};
 
 static USER_AGENT_PARSER: LazyLock<UserAgentParser> = LazyLock::new(UserAgentParser::new);
+
+#[derive(Deserialize)]
+struct IpInfo {
+    city: String,
+    country: String,
+    loc: String,
+}
 
 #[derive(Validate)]
 struct LoginBody {
@@ -80,6 +88,26 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Response {
         BASE64_URL_SAFE_NO_PAD.encode(bytes)
     };
 
+    // Get IP information
+    let ip_address = req.client_addr.ip().to_string();
+    let (ip_latitude, ip_longitude, ip_country, ip_city) = {
+        match Request::get(format!("https://ipinfo.io/{ip_address}/json")).fetch() {
+            Ok(res) => {
+                if let Ok(ip_info) = serde_json::from_slice::<IpInfo>(&res.body) {
+                    let (lat, lon) = if let Some((lat_str, lon_str)) = ip_info.loc.split_once(',') {
+                        (lat_str.parse::<f64>().ok(), lon_str.parse::<f64>().ok())
+                    } else {
+                        (None, None)
+                    };
+                    (lat, lon, Some(ip_info.country), Some(ip_info.city))
+                } else {
+                    (None, None, None, None)
+                }
+            }
+            Err(_) => (None, None, None, None),
+        }
+    };
+
     // Parse User-Agent header
     let (client_name, client_version, client_os) = req
         .headers
@@ -98,6 +126,11 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Response {
     let session = Session {
         user_id: user.id,
         token: token.clone(),
+        ip_address,
+        ip_latitude,
+        ip_longitude,
+        ip_country,
+        ip_city,
         client_name,
         client_version,
         client_os,

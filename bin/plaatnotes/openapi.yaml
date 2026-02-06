@@ -539,6 +539,9 @@ components:
           format: uuid
         token:
           type: string
+        ip:
+          $ref: '#/components/schemas/SessionIp'
+          nullable: true
         client:
           $ref: '#/components/schemas/SessionClient'
           nullable: true
@@ -558,6 +561,27 @@ components:
         - expiresAt
         - createdAt
         - updatedAt
+
+    SessionIp:
+      type: object
+      properties:
+        address:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          format: double
+          nullable: true
+        longitude:
+          type: number
+          format: double
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
 
     SessionClient:
       type: object

@@ -16,6 +16,11 @@ pub(crate) struct Session {
     pub id: Uuid,
     pub user_id: Uuid,
     pub token: String,
+    pub ip_address: String,
+    pub ip_latitude: Option<f64>,
+    pub ip_longitude: Option<f64>,
+    pub ip_country: Option<String>,
+    pub ip_city: Option<String>,
     pub client_name: Option<String>,
     pub client_version: Option<String>,
     pub client_os: Option<String>,
@@ -31,6 +36,11 @@ impl Default for Session {
             id: Uuid::now_v7(),
             user_id: Uuid::nil(),
             token: String::default(),
+            ip_address: String::default(),
+            ip_latitude: None,
+            ip_longitude: None,
+            ip_country: None,
+            ip_city: None,
             client_name: None,
             client_version: None,
             client_os: None,
@@ -47,6 +57,13 @@ impl From<Session> for api::Session {
             id: user.id,
             user_id: user.user_id,
             token: user.token,
+            ip: Some(api::SessionIp {
+                address: Some(user.ip_address),
+                latitude: user.ip_latitude,
+                longitude: user.ip_longitude,
+                country: user.ip_country,
+                city: user.ip_city,
+            }),
             client: if user.client_name.is_some()
                 || user.client_version.is_some()
                 || user.client_os.is_some()
