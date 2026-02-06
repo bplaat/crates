@@ -1,0 +1,20 @@
+[package]
+name = "mysql-client"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "A minimal MySQL client library with basic CRUD and prepared statement support"
+categories = ["database", "network-programming"]
+keywords = ["mysql", "database", "client"]
+homepage = "https://github.com/bplaat/crates/tree/master/lib/mysql-client"
+
+[lints]
+workspace = true
+
+[dependencies]
+sha1 = { version = "0.10", path = "../sha1" }
+pbkdf2 = { version = "0.1.0", path = "../pbkdf2" }
+
+[dev-dependencies]

@@ -401,6 +401,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mysql-client"
+version = "0.1.0"
+dependencies = [
+ "pbkdf2",
+ "sha1",
+]
+
+[[package]]
 name = "navidrome"
 version = "0.1.0"
 dependencies = [
