@@ -7,6 +7,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use indexmap::IndexMap;
+
 use crate::parser::{AstNode, DeclarationType};
 use crate::value::Value;
 
@@ -247,6 +249,14 @@ impl<'a> Interpreter<'a> {
                     elements.push(self.eval_node(node)?);
                 }
                 Ok(Value::Array(Rc::new(elements)))
+            }
+            AstNode::ObjectLiteral(properties) => {
+                let mut obj = IndexMap::new();
+                for (key, value_node) in properties {
+                    let value = self.eval_node(value_node)?;
+                    obj.insert(key.clone(), value);
+                }
+                Ok(Value::Object(Rc::new(obj)))
             }
             AstNode::Variable(variable) => match self.get_var(variable) {
                 Some(value) => Ok(value.clone()),
@@ -557,9 +567,17 @@ impl<'a> Interpreter<'a> {
                             Ok(Value::Undefined)
                         }
                     }
-                    _ => Err(Control::Error(String::from(
-                        "Interpreter: property access on non-array or non-number index",
-                    ))),
+                    (Value::Array(elements), Value::String(property)) => {
+                        if property == "length" {
+                            Ok(Value::Number(elements.len() as f64))
+                        } else {
+                            Ok(Value::Undefined)
+                        }
+                    }
+                    (Value::Object(obj), Value::String(property)) => {
+                        Ok(obj.get(&property).cloned().unwrap_or(Value::Undefined))
+                    }
+                    _ => Ok(Value::Undefined),
                 }
             }
         }
