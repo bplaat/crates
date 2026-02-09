@@ -1377,3 +1377,11 @@ fn test_globalthis_same_across_methods() {
         "globalTest = 123; let obj = { m1() { return globalThis.globalTest; }, m2() { return globalThis.globalTest === 123; } }; obj.m2()",
     );
 }
+
+#[test]
+fn test_globalthis_change() {
+    assert_js(
+        Value::Boolean(true),
+        "globalThis = 123; let obj = { m2() { return globalThis === 123; } }; obj.m2()",
+    );
+}

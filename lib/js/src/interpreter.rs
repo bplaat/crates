@@ -5,7 +5,6 @@
  */
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use indexmap::IndexMap;
@@ -14,8 +13,8 @@ use crate::parser::{AstNode, DeclarationType, ObjectProperty};
 use crate::value::{ArrayValue, ObjectValue, Value};
 
 enum Scope {
-    Function(HashMap<String, Value>),
-    Block(HashMap<String, Value>),
+    Function(IndexMap<String, Value>),
+    Block(IndexMap<String, Value>),
 }
 
 enum Control {
@@ -25,14 +24,14 @@ enum Control {
     Return(Value),
 }
 
-pub(crate) struct Interpreter<'a> {
-    global_env: &'a mut HashMap<String, Value>,
+pub(crate) struct Interpreter {
+    global_env: Rc<RefCell<IndexMap<String, Value>>>,
     scopes: Vec<Scope>,
     previous_value: Value,
 }
 
-impl<'a> Interpreter<'a> {
-    pub(crate) fn new(global_env: &'a mut HashMap<String, Value>) -> Self {
+impl Interpreter {
+    pub(crate) fn new(global_env: Rc<RefCell<IndexMap<String, Value>>>) -> Self {
         Interpreter {
             global_env,
             scopes: Vec::new(),
@@ -60,7 +59,7 @@ impl<'a> Interpreter<'a> {
     fn eval_node(&mut self, node: &AstNode) -> Result<Value, Control> {
         match node {
             AstNode::Block { label, nodes } => {
-                self.scopes.push(Scope::Block(HashMap::new()));
+                self.scopes.push(Scope::Block(IndexMap::new()));
                 for node in nodes {
                     self.previous_value = match self.eval_node(node) {
                         Ok(val) => val,
@@ -253,7 +252,7 @@ impl<'a> Interpreter<'a> {
                 };
 
                 if declaration_type.is_some() {
-                    self.scopes.push(Scope::Block(HashMap::new()));
+                    self.scopes.push(Scope::Block(IndexMap::new()));
                     self.set_var(*declaration_type, variable, Value::Undefined);
                 }
 
@@ -298,7 +297,7 @@ impl<'a> Interpreter<'a> {
                 };
 
                 if declaration_type.is_some() {
-                    self.scopes.push(Scope::Block(HashMap::new()));
+                    self.scopes.push(Scope::Block(IndexMap::new()));
                     self.set_var(*declaration_type, variable, Value::Undefined);
                 }
 
@@ -415,15 +414,11 @@ impl<'a> Interpreter<'a> {
                 match func_value {
                     Value::Function(rc) => {
                         let (arg_names, body) = &*rc;
-                        let mut func_env = HashMap::new();
+                        let mut func_env = IndexMap::new();
 
                         // Bind this
                         let this_val = this_value.unwrap_or(Value::Undefined);
                         func_env.insert("this".to_string(), this_val);
-
-                        // Bind globalThis
-                        let global_this = self.get_global_object();
-                        func_env.insert("globalThis".to_string(), global_this);
 
                         // Bind arguments
                         for (i, arg_name) in arg_names.iter().enumerate() {
@@ -749,19 +744,19 @@ impl<'a> Interpreter<'a> {
     }
 
     // MARK: Var get set
-    fn get_var(&mut self, variable: &str) -> Option<&Value> {
+    fn get_var(&mut self, variable: &str) -> Option<Value> {
         for scope in self.scopes.iter_mut().rev() {
             match scope {
                 Scope::Block(env) if env.contains_key(variable) => {
-                    return env.get(variable);
+                    return env.get(variable).cloned();
                 }
                 Scope::Function(env) if env.contains_key(variable) => {
-                    return env.get(variable);
+                    return env.get(variable).cloned();
                 }
                 _ => {}
             }
         }
-        self.global_env.get(variable)
+        self.global_env.borrow().get(variable).cloned()
     }
 
     fn set_var(&mut self, declaration_type: Option<DeclarationType>, variable: &str, value: Value) {
@@ -785,20 +780,12 @@ impl<'a> Interpreter<'a> {
                 _ => {}
             }
         }
-        self.global_env.insert(variable.to_string(), value);
+        self.global_env
+            .borrow_mut()
+            .insert(variable.to_string(), value);
     }
 
     // MARK: Utils
-    fn get_global_object(&self) -> Value {
-        let mut global_obj = IndexMap::new();
-        for (key, value) in self.global_env.iter() {
-            global_obj.insert(key.clone(), value.clone());
-        }
-        Value::Object(ObjectValue {
-            properties: Rc::new(RefCell::new(global_obj)),
-        })
-    }
-
     fn assign(
         &mut self,
         declaration_type: Option<DeclarationType>,

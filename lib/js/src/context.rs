@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use indexmap::IndexMap;
 
 use crate::interpreter::Interpreter;
 use crate::lexer::Lexer;
@@ -16,7 +19,7 @@ use crate::value::Value;
 #[derive(Default)]
 pub struct Context {
     verbose: bool,
-    env: HashMap<String, Value>,
+    env: Rc<RefCell<IndexMap<String, Value>>>,
 }
 
 impl Context {
@@ -53,6 +56,6 @@ impl Context {
             println!("Node: {node:?}");
         }
 
-        Interpreter::new(&mut self.env).eval(&node)
+        Interpreter::new(self.env.clone()).eval(&node)
     }
 }

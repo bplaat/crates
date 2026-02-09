@@ -1,22 +1,33 @@
 /*
- * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ * Copyright (c) 2023-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-use crate::value::Value;
+use indexmap::IndexMap;
 
-pub(crate) fn env() -> HashMap<String, Value> {
-    let mut env = HashMap::new();
+use crate::value::{ObjectValue, Value};
+
+pub(crate) fn env() -> Rc<RefCell<IndexMap<String, Value>>> {
+    let env = Rc::new(RefCell::new(IndexMap::new()));
 
     // MARK: Globals
-    env.insert("Infinity".to_string(), Value::Number(f64::INFINITY));
-    env.insert("NaN".to_string(), Value::Number(f64::NAN));
-    env.insert("undefined".to_string(), Value::Undefined);
-
-    env.insert(
+    env.borrow_mut().insert(
+        "globalThis".to_string(),
+        Value::Object(ObjectValue {
+            properties: env.clone(),
+        }),
+    );
+    env.borrow_mut()
+        .insert("Infinity".to_string(), Value::Number(f64::INFINITY));
+    env.borrow_mut()
+        .insert("NaN".to_string(), Value::Number(f64::NAN));
+    env.borrow_mut()
+        .insert("undefined".to_string(), Value::Undefined);
+    env.borrow_mut().insert(
         "isNaN".to_string(),
         Value::NativeFunction(|args: &[Value]| {
             if args.is_empty() {
@@ -25,7 +36,7 @@ pub(crate) fn env() -> HashMap<String, Value> {
             Value::Boolean(args[0].to_number().is_nan())
         }),
     );
-    env.insert(
+    env.borrow_mut().insert(
         "isFinite".to_string(),
         Value::NativeFunction(|args: &[Value]| {
             if args.is_empty() {
