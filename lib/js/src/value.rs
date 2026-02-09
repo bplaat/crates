@@ -6,14 +6,52 @@
 
 use std::cell::RefCell;
 use std::fmt::{self, Display, Formatter};
+use std::ops::Deref;
 use std::rc::Rc;
 
 use indexmap::IndexMap;
 
 use crate::parser::AstNode;
 
-/// Value
+/// MARK: Array value
 #[derive(Debug, Clone)]
+pub(crate) struct ArrayValue {
+    pub elements: Rc<RefCell<Vec<Value>>>,
+}
+impl Deref for ArrayValue {
+    type Target = Rc<RefCell<Vec<Value>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.elements
+    }
+}
+impl PartialEq for ArrayValue {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.elements, &other.elements)
+    }
+}
+
+/// MARK: Object value
+#[derive(Debug, Clone)]
+pub(crate) struct ObjectValue {
+    pub properties: Rc<RefCell<IndexMap<String, Value>>>,
+}
+impl Deref for ObjectValue {
+    type Target = Rc<RefCell<IndexMap<String, Value>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.properties
+    }
+}
+impl PartialEq for ObjectValue {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.properties, &other.properties)
+    }
+}
+
+/// MARK: Value
+#[derive(Debug, Clone)]
+#[allow(private_interfaces)]
 pub enum Value {
     /// Undefined value
     Undefined,
@@ -25,12 +63,11 @@ pub enum Value {
     Number(f64),
     /// String value
     String(String),
-    /// Array value (mutable)
-    Array(Rc<RefCell<Vec<Value>>>),
-    /// Object value (mutable)
-    Object(Rc<RefCell<IndexMap<String, Value>>>),
+    /// Array value
+    Array(ArrayValue),
+    /// Object value
+    Object(ObjectValue),
     /// Function value
-    #[allow(private_interfaces)]
     Function(Rc<(Vec<String>, AstNode)>),
     /// Native function
     NativeFunction(fn(&[Value]) -> Value),
@@ -44,7 +81,8 @@ impl PartialEq for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Number(a), Value::Number(b)) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
-            (Value::Array(a), Value::Array(b)) => Rc::ptr_eq(a, b),
+            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::Object(a), Value::Object(b)) => a == b,
             (Value::Function(a), Value::Function(b)) => Rc::ptr_eq(a, b),
             (Value::NativeFunction(a), Value::NativeFunction(b)) => {
                 let a_ptr: usize = (*a) as usize;

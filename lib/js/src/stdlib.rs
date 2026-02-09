@@ -11,12 +11,11 @@ use crate::value::Value;
 pub(crate) fn env() -> HashMap<String, Value> {
     let mut env = HashMap::new();
 
-    // Global variables
+    // MARK: Globals
     env.insert("Infinity".to_string(), Value::Number(f64::INFINITY));
     env.insert("NaN".to_string(), Value::Number(f64::NAN));
     env.insert("undefined".to_string(), Value::Undefined);
 
-    // Global functions
     env.insert(
         "isNaN".to_string(),
         Value::NativeFunction(|args: &[Value]| {

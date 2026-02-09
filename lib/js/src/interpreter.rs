@@ -11,7 +11,7 @@ use std::rc::Rc;
 use indexmap::IndexMap;
 
 use crate::parser::{AstNode, DeclarationType, ObjectProperty};
-use crate::value::Value;
+use crate::value::{ArrayValue, ObjectValue, Value};
 
 enum Scope {
     Function(HashMap<String, Value>),
@@ -349,7 +349,9 @@ impl<'a> Interpreter<'a> {
                 for node in nodes {
                     elements.push(self.eval_node(node)?);
                 }
-                Ok(Value::Array(Rc::new(RefCell::new(elements))))
+                Ok(Value::Array(ArrayValue {
+                    elements: Rc::new(RefCell::new(elements)),
+                }))
             }
             AstNode::ObjectLiteral(properties) => {
                 let mut obj = IndexMap::new();
@@ -364,7 +366,9 @@ impl<'a> Interpreter<'a> {
                     let value = self.eval_node(value_node)?;
                     obj.insert(key_str, value);
                 }
-                Ok(Value::Object(Rc::new(RefCell::new(obj))))
+                Ok(Value::Object(ObjectValue {
+                    properties: Rc::new(RefCell::new(obj)),
+                }))
             }
             AstNode::Variable(variable) => match self.get_var(variable) {
                 Some(value) => Ok(value.clone()),
@@ -428,7 +432,9 @@ impl<'a> Interpreter<'a> {
                         }
                         func_env.insert(
                             "arguments".to_string(),
-                            Value::Array(Rc::new(RefCell::new(arg_values.to_vec()))),
+                            Value::Array(ArrayValue {
+                                elements: Rc::new(RefCell::new(arg_values.to_vec())),
+                            }),
                         );
 
                         self.scopes.push(Scope::Function(func_env));
@@ -788,7 +794,9 @@ impl<'a> Interpreter<'a> {
         for (key, value) in self.global_env.iter() {
             global_obj.insert(key.clone(), value.clone());
         }
-        Value::Object(Rc::new(RefCell::new(global_obj)))
+        Value::Object(ObjectValue {
+            properties: Rc::new(RefCell::new(global_obj)),
+        })
     }
 
     fn assign(
