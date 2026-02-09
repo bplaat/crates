@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ * Copyright (c) 2023-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -248,7 +249,7 @@ impl<'a> Interpreter<'a> {
                 for node in nodes {
                     elements.push(self.eval_node(node)?);
                 }
-                Ok(Value::Array(Rc::new(elements)))
+                Ok(Value::Array(Rc::new(RefCell::new(elements))))
             }
             AstNode::ObjectLiteral(properties) => {
                 let mut obj = IndexMap::new();
@@ -256,7 +257,7 @@ impl<'a> Interpreter<'a> {
                     let value = self.eval_node(value_node)?;
                     obj.insert(key.clone(), value);
                 }
-                Ok(Value::Object(Rc::new(obj)))
+                Ok(Value::Object(Rc::new(RefCell::new(obj))))
             }
             AstNode::Variable(variable) => match self.get_var(variable) {
                 Some(value) => Ok(value.clone()),
@@ -265,6 +266,26 @@ impl<'a> Interpreter<'a> {
                 ))),
             },
             AstNode::FunctionCall(function, arguments) => {
+                // Special handling for array prototype methods
+                if let AstNode::GetProperty(object_node, property_node) = &**function
+                    && let AstNode::Value(Value::String(method_name)) = &**property_node
+                {
+                    let object_value = self.eval_node(object_node)?;
+                    if let Value::Array(arr) = object_value
+                        && method_name.as_str() == "push"
+                    {
+                        let mut arg_values = Vec::new();
+                        for arg in arguments {
+                            arg_values.push(self.eval_node(arg)?);
+                        }
+                        let mut borrowed = arr.borrow_mut();
+                        for val in arg_values {
+                            borrowed.push(val);
+                        }
+                        return Ok(Value::Number(borrowed.len() as f64));
+                    }
+                }
+
                 let func_value = self.eval_node(function)?;
                 let mut arg_values = Vec::new();
                 for arg in arguments {
@@ -280,7 +301,7 @@ impl<'a> Interpreter<'a> {
                         }
                         func_env.insert(
                             "arguments".to_string(),
-                            Value::Array(Rc::new(arg_values.to_vec())),
+                            Value::Array(Rc::new(RefCell::new(arg_values.to_vec()))),
                         );
 
                         self.scopes.push(Scope::Function(func_env));
@@ -561,22 +582,25 @@ impl<'a> Interpreter<'a> {
                 match (object_value, property_value) {
                     (Value::Array(elements), Value::Number(index)) => {
                         let idx = index as usize;
-                        if idx < elements.len() {
-                            Ok(elements.get(idx).cloned().unwrap_or(Value::Undefined))
+                        let arr = elements.borrow();
+                        if idx < arr.len() {
+                            Ok(arr.get(idx).cloned().unwrap_or(Value::Undefined))
                         } else {
                             Ok(Value::Undefined)
                         }
                     }
                     (Value::Array(elements), Value::String(property)) => {
                         if property == "length" {
-                            Ok(Value::Number(elements.len() as f64))
+                            Ok(Value::Number(elements.borrow().len() as f64))
                         } else {
                             Ok(Value::Undefined)
                         }
                     }
-                    (Value::Object(obj), Value::String(property)) => {
-                        Ok(obj.get(&property).cloned().unwrap_or(Value::Undefined))
-                    }
+                    (Value::Object(obj), Value::String(property)) => Ok(obj
+                        .borrow()
+                        .get(&property)
+                        .cloned()
+                        .unwrap_or(Value::Undefined)),
                     _ => Ok(Value::Undefined),
                 }
             }
@@ -632,14 +656,49 @@ impl<'a> Interpreter<'a> {
     ) -> Result<Value, Control> {
         let result = self.eval_node(rhs)?;
         match lhs {
-            AstNode::Variable(variable) => self.set_var(declaration_type, variable, result.clone()),
-            _ => {
-                return Err(Control::Error(String::from(
-                    "Interpreter: assign lhs is not a variable",
-                )));
+            AstNode::Variable(variable) => {
+                self.set_var(declaration_type, variable, result.clone());
+                Ok(result)
             }
+            AstNode::GetProperty(object_node, property_node) => {
+                let object_value = self.eval_node(object_node)?;
+                let property_value = self.eval_node(property_node)?;
+                match (&object_value, &property_value) {
+                    (Value::Array(arr), Value::Number(index)) => {
+                        let idx = *index as usize;
+                        let mut borrowed_arr = arr.borrow_mut();
+                        // Extend array if needed
+                        if idx >= borrowed_arr.len() {
+                            borrowed_arr.resize(idx + 1, Value::Undefined);
+                        }
+                        borrowed_arr[idx] = result.clone();
+                    }
+                    (Value::Array(arr), Value::String(property)) => {
+                        if property == "length" {
+                            let new_len = result.to_number() as usize;
+                            let mut borrowed_arr = arr.borrow_mut();
+                            borrowed_arr.truncate(new_len);
+                        } else {
+                            return Err(Control::Error(String::from(
+                                "Interpreter: cannot assign to array property",
+                            )));
+                        }
+                    }
+                    (Value::Object(obj), Value::String(property)) => {
+                        obj.borrow_mut().insert(property.clone(), result.clone());
+                    }
+                    _ => {
+                        return Err(Control::Error(String::from(
+                            "Interpreter: invalid property assignment",
+                        )));
+                    }
+                }
+                Ok(result)
+            }
+            _ => Err(Control::Error(String::from(
+                "Interpreter: assign lhs is not a variable",
+            ))),
         }
-        Ok(result)
     }
 
     fn arithmetic_op<F>(
