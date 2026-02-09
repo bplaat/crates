@@ -17,6 +17,7 @@ pub(crate) enum Token {
     Comma,
     Question,
     Colon,
+    Period,
     Semicolon,
     Arrow,
 
@@ -120,7 +121,7 @@ const KEYWORDS: [Keyword; 19] = [
 ];
 
 // NOTE: Sort by length descending to match longest first
-const SYMBOLS: [Keyword; 52] = [
+const SYMBOLS: [Keyword; 53] = [
     Keyword::new(">>>=", Token::UnsignedRightShiftAssign),
     Keyword::new(">>>", Token::UnsignedRightShift),
     Keyword::new("===", Token::StrictEquals),
@@ -159,6 +160,7 @@ const SYMBOLS: [Keyword; 52] = [
     Keyword::new(",", Token::Comma),
     Keyword::new("?", Token::Question),
     Keyword::new(":", Token::Colon),
+    Keyword::new(".", Token::Period),
     Keyword::new(";", Token::Semicolon),
     Keyword::new("=", Token::Assign),
     Keyword::new("+", Token::Add),
@@ -206,17 +208,6 @@ impl Lexer {
     pub(crate) fn tokens(&mut self) -> Result<Vec<Token>, String> {
         let mut tokens = Vec::new();
         'char_loop: while let Some(char) = self.next() {
-            if char == '\r' || char == '\n' {
-                if char == '\r' && self.peek() == Some(&'\n') {
-                    self.next();
-                }
-                tokens.push(Token::Newline);
-                continue;
-            }
-            if char.is_whitespace() {
-                continue;
-            }
-
             if char == '/' && self.peek() == Some(&'/') {
                 while let Some(next_char) = self.next() {
                     if next_char == '\n' || next_char == '\r' {
@@ -234,6 +225,39 @@ impl Lexer {
                     }
                 }
                 continue;
+            }
+
+            if char == '\r' || char == '\n' {
+                if char == '\r' && self.peek() == Some(&'\n') {
+                    self.next();
+                }
+                tokens.push(Token::Newline);
+                continue;
+            }
+            if char.is_whitespace() {
+                continue;
+            }
+
+            'symbol_loop: for symbol in &SYMBOLS {
+                let mut symbol_chars = symbol.keyword.chars();
+                let x = symbol_chars.next().expect("Should be some");
+                if char == x {
+                    for (i, expected_char) in symbol_chars.enumerate() {
+                        if let Some(next_char) = self.peek_at(i) {
+                            if *next_char != expected_char {
+                                continue 'symbol_loop;
+                            }
+                        } else {
+                            continue 'char_loop;
+                        }
+                    }
+
+                    for _ in 0..(symbol.keyword.len() - 1) {
+                        self.next();
+                    }
+                    tokens.push(symbol.token.clone());
+                    continue 'char_loop;
+                }
             }
 
             if char == '0'
@@ -370,27 +394,6 @@ impl Lexer {
                 continue;
             }
 
-            'symbol_loop: for symbol in &SYMBOLS {
-                let mut symbol_chars = symbol.keyword.chars();
-                let x = symbol_chars.next().expect("Should be some");
-                if char == x {
-                    for (i, expected_char) in symbol_chars.enumerate() {
-                        if let Some(next_char) = self.peek_at(i) {
-                            if *next_char != expected_char {
-                                continue 'symbol_loop;
-                            }
-                        } else {
-                            continue 'char_loop;
-                        }
-                    }
-
-                    for _ in 0..(symbol.keyword.len() - 1) {
-                        self.next();
-                    }
-                    tokens.push(symbol.token.clone());
-                    continue 'char_loop;
-                }
-            }
             return Err(format!("Lexer: unknown character: {char}"));
         }
 

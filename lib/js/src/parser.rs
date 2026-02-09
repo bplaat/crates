@@ -6,6 +6,8 @@
 
 use std::rc::Rc;
 
+use indexmap::IndexMap;
+
 use crate::Value;
 use crate::lexer::Token;
 
@@ -58,6 +60,7 @@ pub(crate) enum AstNode {
 
     Value(Value),
     ArrayLiteral(Vec<AstNode>),
+    ObjectLiteral(IndexMap<String, AstNode>),
     Variable(String),
     FunctionCall(Box<AstNode>, Vec<AstNode>),
 
@@ -149,15 +152,6 @@ impl<'a> Parser<'a> {
         &self.tokens[self.position]
     }
 
-    fn peek_next(&mut self) -> Option<&Token> {
-        self.skip_whitespace();
-        let mut n = 1;
-        while let Token::Newline = self.tokens[self.position + n] {
-            n += 1;
-        }
-        self.tokens.get(self.position + n)
-    }
-
     fn next(&mut self) {
         self.skip_whitespace();
         self.position += 1;
@@ -213,11 +207,13 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<AstNode, String> {
         let label = if let Token::Variable(var_name) = self.peek() {
             let label_name = var_name.clone();
-            if let Some(Token::Colon) = self.peek_next() {
-                self.next();
+            let saved_position = self.position;
+            self.next();
+            if let Token::Colon = self.peek() {
                 self.next();
                 Some(label_name)
             } else {
+                self.position = saved_position;
                 None
             }
         } else {
@@ -554,9 +550,9 @@ impl<'a> Parser<'a> {
             _ => None,
         };
 
-        match self.peek_next() {
-            Some(Token::Assign) => {
-                let lhs = self.ternary()?;
+        let lhs = self.ternary()?;
+        match self.peek() {
+            Token::Assign => {
                 self.next();
                 Ok(AstNode::Assign(
                     declaration_type,
@@ -564,116 +560,109 @@ impl<'a> Parser<'a> {
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::AddAssign) => {
-                let lhs = self.ternary()?;
+            Token::AddAssign => {
                 self.next();
                 Ok(AstNode::AddAssign(Box::new(lhs), Box::new(self.assign()?)))
             }
-            Some(Token::SubtractAssign) => {
-                let lhs = self.ternary()?;
+            Token::SubtractAssign => {
                 self.next();
                 Ok(AstNode::SubtractAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::MultiplyAssign) => {
-                let lhs = self.ternary()?;
+            Token::MultiplyAssign => {
                 self.next();
                 Ok(AstNode::MultiplyAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::DivideAssign) => {
-                let lhs = self.ternary()?;
+            Token::DivideAssign => {
                 self.next();
                 Ok(AstNode::DivideAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::RemainderAssign) => {
-                let lhs = self.ternary()?;
+            Token::RemainderAssign => {
                 self.next();
                 Ok(AstNode::RemainderAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::ExponentiationAssign) => {
-                let lhs = self.ternary()?;
+            Token::ExponentiationAssign => {
                 self.next();
                 Ok(AstNode::ExponentiationAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::BitwiseAndAssign) => {
-                let lhs = self.ternary()?;
+            Token::BitwiseAndAssign => {
                 self.next();
                 Ok(AstNode::BitwiseAndAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::BitwiseOrAssign) => {
-                let lhs = self.ternary()?;
+            Token::BitwiseOrAssign => {
                 self.next();
                 Ok(AstNode::BitwiseOrAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::BitwiseXorAssign) => {
-                let lhs = self.ternary()?;
+            Token::BitwiseXorAssign => {
                 self.next();
                 Ok(AstNode::BitwiseXorAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::LeftShiftAssign) => {
-                let lhs = self.ternary()?;
+            Token::LeftShiftAssign => {
                 self.next();
                 Ok(AstNode::LeftShiftAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::SignedRightShiftAssign) => {
-                let lhs = self.ternary()?;
+            Token::SignedRightShiftAssign => {
                 self.next();
                 Ok(AstNode::SignedRightShiftAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::UnsignedRightShiftAssign) => {
-                let lhs = self.ternary()?;
+            Token::UnsignedRightShiftAssign => {
                 self.next();
                 Ok(AstNode::UnsignedRightShiftAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::LogicalOrAssign) => {
-                let lhs = self.ternary()?;
+            Token::LogicalOrAssign => {
                 self.next();
                 Ok(AstNode::LogicalOrAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            Some(Token::LogicalAndAssign) => {
-                let lhs = self.ternary()?;
+            Token::LogicalAndAssign => {
                 self.next();
                 Ok(AstNode::LogicalAndAssign(
                     Box::new(lhs),
                     Box::new(self.assign()?),
                 ))
             }
-            _ => self.ternary(),
+            _ => {
+                if declaration_type.is_some() {
+                    return Err(String::from(
+                        "Parser: expected '=' after variable declaration",
+                    ));
+                }
+                Ok(lhs)
+            }
         }
     }
 
@@ -894,27 +883,66 @@ impl<'a> Parser<'a> {
     }
 
     fn postfix(&mut self, node_result: Result<AstNode, String>) -> Result<AstNode, String> {
-        let node = node_result?;
-        match self.peek() {
-            Token::LeftBlock => {
-                self.next();
-                let index_expr = self.comma()?;
-                if let Token::RightBlock = self.peek() {
+        let mut node = node_result?;
+        loop {
+            match self.peek() {
+                Token::Period => {
                     self.next();
-                    Ok(AstNode::GetProperty(Box::new(node), Box::new(index_expr)))
-                } else {
-                    Err(String::from("Parser: expected ']' after property access"))
+                    if let Token::Variable(prop_name) = self.peek() {
+                        let property = AstNode::Value(Value::String(prop_name.clone()));
+                        self.next();
+                        node = AstNode::GetProperty(Box::new(node), Box::new(property));
+                    } else {
+                        return Err(String::from("Parser: expected property name after '.'"));
+                    }
                 }
+                Token::LeftBlock => {
+                    self.next();
+                    let index_expr = self.comma()?;
+                    if let Token::RightBlock = self.peek() {
+                        self.next();
+                        node = AstNode::GetProperty(Box::new(node), Box::new(index_expr));
+                    } else {
+                        return Err(String::from("Parser: expected ']' after property access"));
+                    }
+                }
+                Token::LeftParen => {
+                    self.next();
+                    let mut call_args = Vec::new();
+                    if let Token::RightParen = self.peek() {
+                        // No arguments
+                        self.next();
+                    } else {
+                        loop {
+                            call_args.push(self.ternary()?);
+                            match self.peek() {
+                                Token::Comma => {
+                                    self.next();
+                                }
+                                Token::RightParen => {
+                                    self.next();
+                                    break;
+                                }
+                                _ => {
+                                    return Err(String::from(
+                                        "Parser: expected ',' or ')' in function call",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    node = AstNode::FunctionCall(Box::new(node), call_args);
+                }
+                Token::Increment => {
+                    self.next();
+                    return Ok(AstNode::UnaryPostIncrement(Box::new(node)));
+                }
+                Token::Decrement => {
+                    self.next();
+                    return Ok(AstNode::UnaryPostDecrement(Box::new(node)));
+                }
+                _ => return Ok(node),
             }
-            Token::Increment => {
-                self.next();
-                Ok(AstNode::UnaryPostIncrement(Box::new(node)))
-            }
-            Token::Decrement => {
-                self.next();
-                Ok(AstNode::UnaryPostDecrement(Box::new(node)))
-            }
-            _ => Ok(node),
         }
     }
 
@@ -1009,6 +1037,50 @@ impl<'a> Parser<'a> {
                 }
                 Ok(AstNode::ArrayLiteral(nodes))
             }
+            Token::LeftBrace => {
+                self.next();
+                let mut properties = IndexMap::new();
+                if let Token::RightBrace = self.peek() {
+                    // Empty object
+                    self.next();
+                } else {
+                    loop {
+                        if let Token::Variable(prop_name) = self.peek() {
+                            let property_name = prop_name.clone();
+                            self.next();
+                            if let Token::Colon = self.peek() {
+                                self.next();
+                                let property_value = self.assign()?;
+                                properties.insert(property_name, property_value);
+                            } else {
+                                return Err(String::from(
+                                    "Parser: expected ':' after property name in object literal",
+                                ));
+                            }
+                        } else {
+                            return Err(String::from(
+                                "Parser: expected property name in object literal",
+                            ));
+                        }
+
+                        match self.peek() {
+                            Token::Comma => {
+                                self.next();
+                            }
+                            Token::RightBrace => {
+                                self.next();
+                                break;
+                            }
+                            _ => {
+                                return Err(String::from(
+                                    "Parser: expected ',' or '}' in object literal",
+                                ));
+                            }
+                        }
+                    }
+                }
+                Ok(AstNode::ObjectLiteral(properties))
+            }
             Token::Variable(variable) => {
                 let variable = variable.clone();
                 let node = AstNode::Variable(variable.clone());
@@ -1022,34 +1094,6 @@ impl<'a> Parser<'a> {
                         vec![variable],
                         body,
                     )))))
-                }
-                // Function call
-                else if let Token::LeftParen = self.peek() {
-                    self.next();
-                    let mut call_args = Vec::new();
-                    if let Token::RightParen = self.peek() {
-                        // No arguments
-                        self.next();
-                    } else {
-                        loop {
-                            call_args.push(self.ternary()?);
-                            match self.peek() {
-                                Token::Comma => {
-                                    self.next();
-                                }
-                                Token::RightParen => {
-                                    self.next();
-                                    break;
-                                }
-                                _ => {
-                                    return Err(String::from(
-                                        "Parser: expected ',' or ')' in function call",
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                    Ok(AstNode::FunctionCall(Box::new(node), call_args))
                 } else {
                     Ok(node)
                 }

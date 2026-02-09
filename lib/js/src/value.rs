@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::fmt::{self, Display, Formatter};
 use std::rc::Rc;
+
+use indexmap::IndexMap;
 
 use crate::parser::AstNode;
 
@@ -23,6 +26,8 @@ pub enum Value {
     String(String),
     /// Array value
     Array(Rc<Vec<Value>>),
+    /// Object value
+    Object(Rc<IndexMap<String, Value>>),
     /// Function value
     #[allow(private_interfaces)]
     Function(Rc<(Vec<String>, AstNode)>),
@@ -50,6 +55,29 @@ impl PartialEq for Value {
     }
 }
 
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Undefined => write!(f, "undefined"),
+            Value::Null => write!(f, "null"),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Number(n) => write!(f, "{}", n),
+            Value::String(s) => write!(f, "{}", s),
+            Value::Array(a) => {
+                let mut elements = vec![];
+                for v in a.iter() {
+                    elements.push(v.to_string());
+                }
+                write!(f, "[{}]", elements.join(", "))
+            }
+            Value::Object(_) => write!(f, "[object Object]"),
+            Value::Function(_) | Value::NativeFunction(_) => {
+                write!(f, "function() {{ [native code] }}")
+            }
+        }
+    }
+}
+
 impl Value {
     pub(crate) fn typeof_string(&self) -> &'static str {
         match self {
@@ -58,7 +86,7 @@ impl Value {
             Value::Boolean(_) => "boolean",
             Value::Number(_) => "number",
             Value::String(_) => "string",
-            Value::Array(_) => "object",
+            Value::Array(_) | Value::Object(_) => "object",
             Value::Function(..) | Value::NativeFunction(_) => "function",
         }
     }
@@ -70,7 +98,7 @@ impl Value {
             Value::Boolean(b) => *b,
             Value::Number(n) => *n != 0.0 && !n.is_nan(),
             Value::String(s) => !s.is_empty(),
-            Value::Array(_) => true,
+            Value::Array(_) | Value::Object(_) => true,
             Value::Function(..) | Value::NativeFunction(_) => true,
         }
     }
@@ -119,34 +147,8 @@ impl Value {
                     f64::NAN
                 }
             }
+            Value::Object(_) => f64::NAN,
             Value::Function(..) | Value::NativeFunction(_) => f64::NAN,
-        }
-    }
-
-    #[allow(clippy::inherent_to_string)]
-    pub(crate) fn to_string(&self) -> String {
-        match self {
-            Value::Undefined => "undefined".to_string(),
-            Value::Null => "null".to_string(),
-            Value::Boolean(b) => {
-                if *b {
-                    "true".to_string()
-                } else {
-                    "false".to_string()
-                }
-            }
-            Value::Number(n) => n.to_string(),
-            Value::String(s) => s.clone(),
-            Value::Array(a) => {
-                let mut elements = vec![];
-                for v in a.iter() {
-                    elements.push(v.to_string());
-                }
-                elements.join(",")
-            }
-            Value::Function(_) | Value::NativeFunction(_) => {
-                "function() { [native code] }".to_string()
-            }
         }
     }
 }
