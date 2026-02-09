@@ -53,6 +53,20 @@ pub(crate) enum AstNode {
         update: Option<Box<AstNode>>,
         body: Box<AstNode>,
     },
+    ForIn {
+        label: Option<String>,
+        variable: String,
+        declaration_type: Option<DeclarationType>,
+        iterable: Box<AstNode>,
+        body: Box<AstNode>,
+    },
+    ForOf {
+        label: Option<String>,
+        variable: String,
+        declaration_type: Option<DeclarationType>,
+        iterable: Box<AstNode>,
+        body: Box<AstNode>,
+    },
     Continue(Option<String>),
     Break(Option<String>),
     Return(Option<Box<AstNode>>),
@@ -385,44 +399,116 @@ impl<'a> Parser<'a> {
                 self.next();
                 if let Token::LeftParen = self.peek() {
                     self.next();
-                    let init = if let Token::Semicolon = self.peek() {
-                        None
-                    } else {
-                        Some(self.comma()?)
-                    };
-                    if let Token::Semicolon = self.peek() {
+
+                    // Check if it's for...in or for...of
+                    // First, look ahead to see if we have a variable declaration or identifier followed by in/of
+                    let checkpoint = self.position;
+                    let mut is_for_in_of = false;
+                    let mut decl_type = None;
+                    let mut var_name = String::new();
+
+                    // Check for var/let/const declaration or identifier
+                    if matches!(self.peek(), Token::Var | Token::Let | Token::Const) {
+                        let dt = match self.peek() {
+                            Token::Var => Some(DeclarationType::Var),
+                            Token::Let => Some(DeclarationType::Let),
+                            Token::Const => Some(DeclarationType::Const),
+                            _ => None,
+                        };
                         self.next();
-                        let condition = if let Token::Semicolon = self.peek() {
+                        if let Token::Variable(name) = self.peek() {
+                            var_name = name.clone();
+                            self.next();
+                            if matches!(self.peek(), Token::In | Token::Of) {
+                                is_for_in_of = true;
+                                decl_type = dt;
+                            }
+                        }
+                    } else if let Token::Variable(name) = self.peek() {
+                        var_name = name.clone();
+                        self.next();
+                        if matches!(self.peek(), Token::In | Token::Of) {
+                            is_for_in_of = true;
+                        }
+                    }
+
+                    // Reset to checkpoint if not for...in/of
+                    if !is_for_in_of {
+                        self.position = checkpoint;
+                    }
+
+                    if is_for_in_of {
+                        // Parse for...in or for...of
+                        let is_of = matches!(self.peek(), Token::Of);
+                        self.next(); // consume 'in' or 'of'
+
+                        let iterable = self.comma()?;
+
+                        if let Token::RightParen = self.peek() {
+                            self.next();
+                            let body = self.block()?;
+
+                            Ok(if is_of {
+                                AstNode::ForOf {
+                                    label,
+                                    variable: var_name,
+                                    declaration_type: decl_type,
+                                    iterable: Box::new(iterable),
+                                    body: Box::new(body),
+                                }
+                            } else {
+                                AstNode::ForIn {
+                                    label,
+                                    variable: var_name,
+                                    declaration_type: decl_type,
+                                    iterable: Box::new(iterable),
+                                    body: Box::new(body),
+                                }
+                            })
+                        } else {
+                            Err(String::from("Parser: expected ')' after for...in/of"))
+                        }
+                    } else {
+                        // Parse traditional for loop
+                        let init = if let Token::Semicolon = self.peek() {
                             None
                         } else {
                             Some(self.comma()?)
                         };
                         if let Token::Semicolon = self.peek() {
                             self.next();
-                            let update = if let Token::RightParen = self.peek() {
+                            let condition = if let Token::Semicolon = self.peek() {
                                 None
                             } else {
                                 Some(self.comma()?)
                             };
-                            if let Token::RightParen = self.peek() {
+                            if let Token::Semicolon = self.peek() {
                                 self.next();
-                                let body = self.block()?;
+                                let update = if let Token::RightParen = self.peek() {
+                                    None
+                                } else {
+                                    Some(self.comma()?)
+                                };
+                                if let Token::RightParen = self.peek() {
+                                    self.next();
+                                    let body = self.block()?;
 
-                                Ok(AstNode::For {
-                                    label,
-                                    init: init.map(Box::new),
-                                    condition: condition.map(Box::new),
-                                    update: update.map(Box::new),
-                                    body: Box::new(body),
-                                })
+                                    Ok(AstNode::For {
+                                        label,
+                                        init: init.map(Box::new),
+                                        condition: condition.map(Box::new),
+                                        update: update.map(Box::new),
+                                        body: Box::new(body),
+                                    })
+                                } else {
+                                    Err(String::from("Parser: expected ')' after for loop"))
+                                }
                             } else {
-                                Err(String::from("Parser: expected ')' after for loop"))
+                                Err(String::from("Parser: expected ';' after for condition"))
                             }
                         } else {
-                            Err(String::from("Parser: expected ';' after for condition"))
+                            Err(String::from("Parser: expected ';' after for init"))
                         }
-                    } else {
-                        Err(String::from("Parser: expected ';' after for init"))
                     }
                 } else {
                     Err(String::from("Parser: expected '(' after 'for'"))

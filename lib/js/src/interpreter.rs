@@ -226,6 +226,106 @@ impl<'a> Interpreter<'a> {
                 }
                 Ok(last_value)
             }
+            AstNode::ForIn {
+                label,
+                variable,
+                declaration_type,
+                iterable,
+                body,
+            } => {
+                let iterable_value = self.eval_node(iterable)?;
+
+                // Get the keys to iterate over
+                let keys = match &iterable_value {
+                    Value::Object(obj) => obj.borrow().keys().cloned().collect::<Vec<_>>(),
+                    Value::Array(arr) => {
+                        let arr_borrowed = arr.borrow();
+                        let mut indices = Vec::new();
+                        for (idx, val) in arr_borrowed.iter().enumerate() {
+                            // for...in only iterates over defined elements
+                            if !matches!(val, Value::Undefined) {
+                                indices.push(idx.to_string());
+                            }
+                        }
+                        indices
+                    }
+                    _ => return Ok(Value::Undefined),
+                };
+
+                if declaration_type.is_some() {
+                    self.scopes.push(Scope::Block(HashMap::new()));
+                    self.set_var(*declaration_type, variable, Value::Undefined);
+                }
+
+                let mut last_value = Value::Undefined;
+                for key in keys {
+                    let key_value = Value::String(key.clone());
+                    self.set_var(*declaration_type, variable, key_value);
+
+                    last_value = match self.eval_node(body) {
+                        Err(Control::Break(break_label)) if break_label == *label => {
+                            if declaration_type.is_some() {
+                                self.scopes.pop();
+                            }
+                            return Ok(self.previous_value.clone());
+                        }
+                        Err(Control::Continue(continue_label)) if continue_label == *label => {
+                            continue;
+                        }
+                        result => result,
+                    }?;
+                    self.previous_value = last_value.clone();
+                }
+
+                if declaration_type.is_some() {
+                    self.scopes.pop();
+                }
+                Ok(last_value)
+            }
+            AstNode::ForOf {
+                label,
+                variable,
+                declaration_type,
+                iterable,
+                body,
+            } => {
+                let iterable_value = self.eval_node(iterable)?;
+
+                // Get the values to iterate over
+                let values = match &iterable_value {
+                    Value::Array(arr) => arr.borrow().clone(),
+                    _ => return Ok(Value::Undefined),
+                };
+
+                if declaration_type.is_some() {
+                    self.scopes.push(Scope::Block(HashMap::new()));
+                    self.set_var(*declaration_type, variable, Value::Undefined);
+                }
+
+                let mut last_value = Value::Undefined;
+                for value in values {
+                    self.set_var(*declaration_type, variable, value);
+
+                    last_value = match self.eval_node(body) {
+                        Err(Control::Break(break_label)) if break_label == *label => {
+                            if declaration_type.is_some() {
+                                self.scopes.pop();
+                            }
+                            return Ok(self.previous_value.clone());
+                        }
+                        Err(Control::Continue(continue_label)) if continue_label == *label => {
+                            continue;
+                        }
+                        result => result,
+                    }?;
+                    self.previous_value = last_value.clone();
+                }
+
+                if declaration_type.is_some() {
+                    self.scopes.pop();
+                }
+                Ok(last_value)
+            }
             AstNode::Continue(continue_label) => Err(Control::Continue(continue_label.clone())),
             AstNode::Break(label) => Err(Control::Break(label.clone())),
             AstNode::Return(value) => {
@@ -592,6 +692,14 @@ impl<'a> Interpreter<'a> {
                     (Value::Array(elements), Value::String(property)) => {
                         if property == "length" {
                             Ok(Value::Number(elements.borrow().len() as f64))
+                        } else if let Ok(index) = property.parse::<usize>() {
+                            // String is a numeric index
+                            let arr = elements.borrow();
+                            if index < arr.len() {
+                                Ok(arr.get(index).cloned().unwrap_or(Value::Undefined))
+                            } else {
+                                Ok(Value::Undefined)
+                            }
                         } else {
                             Ok(Value::Undefined)
                         }

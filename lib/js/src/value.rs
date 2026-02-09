@@ -61,9 +61,9 @@ impl Display for Value {
         match self {
             Value::Undefined => write!(f, "undefined"),
             Value::Null => write!(f, "null"),
-            Value::Boolean(b) => write!(f, "{}", b),
-            Value::Number(n) => write!(f, "{}", n),
-            Value::String(s) => write!(f, "{}", s),
+            Value::Boolean(b) => write!(f, "{b}"),
+            Value::Number(n) => write!(f, "{n}"),
+            Value::String(s) => write!(f, "{s}"),
             Value::Array(a) => {
                 let mut elements = vec![];
                 for v in a.borrow().iter() {
