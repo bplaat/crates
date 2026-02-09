@@ -417,6 +417,10 @@ impl<'a> Interpreter<'a> {
                         let this_val = this_value.unwrap_or(Value::Undefined);
                         func_env.insert("this".to_string(), this_val);
 
+                        // Bind globalThis
+                        let global_this = self.get_global_object();
+                        func_env.insert("globalThis".to_string(), global_this);
+
                         // Bind arguments
                         for (i, arg_name) in arg_names.iter().enumerate() {
                             let arg_value = arg_values.get(i).cloned().unwrap_or(Value::Undefined);
@@ -779,6 +783,14 @@ impl<'a> Interpreter<'a> {
     }
 
     // MARK: Utils
+    fn get_global_object(&self) -> Value {
+        let mut global_obj = IndexMap::new();
+        for (key, value) in self.global_env.iter() {
+            global_obj.insert(key.clone(), value.clone());
+        }
+        Value::Object(Rc::new(RefCell::new(global_obj)))
+    }
+
     fn assign(
         &mut self,
         declaration_type: Option<DeclarationType>,

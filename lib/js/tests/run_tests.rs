@@ -1337,3 +1337,43 @@ fn test_mixed_shorthand_and_computed() {
         "let obj = { a: 10, [1 + 1]: 20, sum() { return this.a + this['2']; } }; obj.sum()",
     );
 }
+
+#[test]
+fn test_globalthis_access() {
+    assert_js(
+        Value::Boolean(true),
+        "let obj = { getGlobal() { return typeof globalThis === 'object'; } }; obj.getGlobal()",
+    );
+}
+
+#[test]
+fn test_globalthis_global_variables() {
+    assert_js(
+        Value::Number(42.0),
+        "globalVar = 42; let obj = { getVar() { return globalThis.globalVar; } }; obj.getVar()",
+    );
+}
+
+#[test]
+fn test_globalthis_readonly_properties() {
+    assert_js(
+        Value::Boolean(true),
+        "let obj = { check() { return typeof globalThis.Infinity === 'number'; } }; obj.check()",
+    );
+}
+
+#[test]
+fn test_globalthis_multiple_accesses() {
+    assert_js(
+        Value::Number(20.0),
+        "globalX = 10; let obj = { getValue() { return globalThis.globalX * 2; } }; obj.getValue()",
+    );
+}
+
+#[test]
+fn test_globalthis_same_across_methods() {
+    assert_js(
+        Value::Boolean(true),
+        "globalTest = 123; let obj = { m1() { return globalThis.globalTest; }, m2() { return globalThis.globalTest === 123; } }; obj.m2()",
+    );
+}
