@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ * Copyright (c) 2023-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::RefCell;
 use std::fmt::{self, Display, Formatter};
 use std::rc::Rc;
 
@@ -24,10 +25,10 @@ pub enum Value {
     Number(f64),
     /// String value
     String(String),
-    /// Array value
-    Array(Rc<Vec<Value>>),
-    /// Object value
-    Object(Rc<IndexMap<String, Value>>),
+    /// Array value (mutable)
+    Array(Rc<RefCell<Vec<Value>>>),
+    /// Object value (mutable)
+    Object(Rc<RefCell<IndexMap<String, Value>>>),
     /// Function value
     #[allow(private_interfaces)]
     Function(Rc<(Vec<String>, AstNode)>),
@@ -65,7 +66,7 @@ impl Display for Value {
             Value::String(s) => write!(f, "{}", s),
             Value::Array(a) => {
                 let mut elements = vec![];
-                for v in a.iter() {
+                for v in a.borrow().iter() {
                     elements.push(v.to_string());
                 }
                 write!(f, "[{}]", elements.join(", "))
@@ -139,9 +140,10 @@ impl Value {
             Value::Number(n) => *n,
             Value::String(s) => s.parse::<f64>().unwrap_or(f64::NAN),
             Value::Array(a) => {
-                if a.len() == 1 {
-                    a[0].to_number()
-                } else if a.is_empty() {
+                let arr = a.borrow();
+                if arr.len() == 1 {
+                    arr[0].to_number()
+                } else if arr.is_empty() {
                     0.0
                 } else {
                     f64::NAN
