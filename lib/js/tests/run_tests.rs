@@ -1228,3 +1228,72 @@ fn test_labeled_for_in_of() {
         "let arr = [1, 2, 3]; let count = 0; loop: for (let val of arr) { count++; if (count == 2) break loop; } count",
     );
 }
+
+#[test]
+fn test_method_shorthand() {
+    assert_js(
+        Value::Number(10.0),
+        "let obj = { getValue() { return 10; } }; obj.getValue()",
+    );
+    assert_js(
+        Value::Number(15.0),
+        "let obj = { add(a, b) { return a + b; } }; obj.add(7, 8)",
+    );
+    assert_js(
+        Value::Number(3.0),
+        "let obj = { getValue() { return 10; }, getThree() { return 3; } }; obj.getThree()",
+    );
+    assert_js(
+        Value::String(String::from("hello")),
+        "let obj = { greet() { return 'hello'; } }; obj.greet()",
+    );
+    assert_js(
+        Value::Number(5.0),
+        "let obj = { x: 10, double() { return this.x / 2; } }; obj.double()",
+    );
+}
+
+#[test]
+fn test_computed_properties() {
+    assert_js(
+        Value::Number(100.0),
+        "let key = 'prop'; let obj = { [key]: 100 }; obj.prop",
+    );
+    assert_js(Value::Number(42.0), "let obj = { ['x']: 42 }; obj.x");
+    assert_js(
+        Value::String(String::from("dynamic")),
+        "let obj = { [1 + 1]: 'dynamic' }; obj['2']",
+    );
+    assert_js(
+        Value::Number(200.0),
+        "let key1 = 'a'; let key2 = 'b'; let obj = { [key1]: 100, [key2]: 200 }; obj.b",
+    );
+    assert_js(
+        Value::Number(55.0),
+        "let obj = { ['num']: 55 }; let k = 'num'; obj[k]",
+    );
+}
+
+#[test]
+fn test_method_shorthand_with_objects() {
+    assert_js(
+        Value::Number(25.0),
+        "let obj = { x: 10, y: 15, sum() { return this.x + this.y; } }; obj.sum()",
+    );
+    assert_js(
+        Value::String(String::from("hello world")),
+        "let obj = { greeting: 'hello', name: 'world', greet() { return this.greeting + ' ' + this.name; } }; obj.greet()",
+    );
+}
+
+#[test]
+fn test_mixed_shorthand_and_computed() {
+    assert_js(
+        Value::Number(30.0),
+        "let key = 'compute'; let obj = { x: 10, [key]: 20, getValue() { return this.x + this.compute; } }; obj.getValue()",
+    );
+    assert_js(
+        Value::Number(30.0),
+        "let obj = { a: 10, [1 + 1]: 20, sum() { return this.a + this['2']; } }; obj.sum()",
+    );
+}

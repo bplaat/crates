@@ -6,8 +6,6 @@
 
 use std::rc::Rc;
 
-use indexmap::IndexMap;
-
 use crate::Value;
 use crate::lexer::Token;
 
@@ -16,6 +14,12 @@ pub(crate) enum DeclarationType {
     Var,
     Let,
     Const,
+}
+
+#[derive(Debug)]
+pub(crate) enum ObjectProperty {
+    Literal(String),
+    Computed(Box<AstNode>),
 }
 
 #[derive(Debug)]
@@ -74,7 +78,7 @@ pub(crate) enum AstNode {
 
     Value(Value),
     ArrayLiteral(Vec<AstNode>),
-    ObjectLiteral(IndexMap<String, AstNode>),
+    ObjectLiteral(Vec<(ObjectProperty, AstNode)>),
     Variable(String),
     FunctionCall(Box<AstNode>, Vec<AstNode>),
 
@@ -1125,27 +1129,92 @@ impl<'a> Parser<'a> {
             }
             Token::LeftBrace => {
                 self.next();
-                let mut properties = IndexMap::new();
+                let mut properties = Vec::new();
                 if let Token::RightBrace = self.peek() {
                     // Empty object
                     self.next();
                 } else {
                     loop {
-                        if let Token::Variable(prop_name) = self.peek() {
-                            let property_name = prop_name.clone();
+                        // Handle computed property names: [expr]: value
+                        if let Token::LeftBlock = self.peek() {
                             self.next();
+                            let key_expr = self.assign()?;
+                            if let Token::RightBlock = self.peek() {
+                                self.next();
+                            } else {
+                                return Err(String::from(
+                                    "Parser: expected ']' after computed property name",
+                                ));
+                            }
                             if let Token::Colon = self.peek() {
                                 self.next();
                                 let property_value = self.assign()?;
-                                properties.insert(property_name, property_value);
+                                let property_key = ObjectProperty::Computed(Box::new(key_expr));
+                                properties.push((property_key, property_value));
                             } else {
                                 return Err(String::from(
-                                    "Parser: expected ':' after property name in object literal",
+                                    "Parser: expected ':' after computed property name",
+                                ));
+                            }
+                        } else if let Token::Variable(prop_name) = self.peek() {
+                            let name = prop_name.clone();
+                            self.next();
+
+                            // Handle method shorthand: methodName() { ... }
+                            if let Token::LeftParen = self.peek() {
+                                self.next();
+                                let mut params = vec![];
+                                if let Token::RightParen = self.peek() {
+                                    self.next();
+                                } else {
+                                    loop {
+                                        if let Token::Variable(param) = self.peek() {
+                                            params.push(param.clone());
+                                            self.next();
+                                        } else {
+                                            return Err(String::from(
+                                                "Parser: expected parameter name in method",
+                                            ));
+                                        }
+                                        match self.peek() {
+                                            Token::Comma => {
+                                                self.next();
+                                            }
+                                            Token::RightParen => {
+                                                self.next();
+                                                break;
+                                            }
+                                            _ => {
+                                                return Err(String::from(
+                                                    "Parser: expected ',' or ')' in method parameters",
+                                                ));
+                                            }
+                                        }
+                                    }
+                                }
+                                let property_value = if let Token::LeftBrace = self.peek() {
+                                    let body = self.block()?;
+                                    AstNode::Value(Value::Function(Rc::new((params, body))))
+                                } else {
+                                    return Err(String::from(
+                                        "Parser: expected '{' for method body",
+                                    ));
+                                };
+                                let property_key = ObjectProperty::Literal(name);
+                                properties.push((property_key, property_value));
+                            } else if let Token::Colon = self.peek() {
+                                self.next();
+                                let property_value = self.assign()?;
+                                let property_key = ObjectProperty::Literal(name);
+                                properties.push((property_key, property_value));
+                            } else {
+                                return Err(String::from(
+                                    "Parser: expected ':' or '(' after property name in object literal",
                                 ));
                             }
                         } else {
                             return Err(String::from(
-                                "Parser: expected property name in object literal",
+                                "Parser: expected property name or computed property in object literal",
                             ));
                         }
 

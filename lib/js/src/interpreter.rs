@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use indexmap::IndexMap;
 
-use crate::parser::{AstNode, DeclarationType};
+use crate::parser::{AstNode, DeclarationType, ObjectProperty};
 use crate::value::Value;
 
 enum Scope {
@@ -353,9 +353,16 @@ impl<'a> Interpreter<'a> {
             }
             AstNode::ObjectLiteral(properties) => {
                 let mut obj = IndexMap::new();
-                for (key, value_node) in properties {
+                for (property_key, value_node) in properties {
+                    let key_str = match property_key {
+                        ObjectProperty::Literal(key) => key.clone(),
+                        ObjectProperty::Computed(key_expr) => {
+                            let computed_key = self.eval_node(key_expr)?;
+                            computed_key.to_string()
+                        }
+                    };
                     let value = self.eval_node(value_node)?;
-                    obj.insert(key.clone(), value);
+                    obj.insert(key_str, value);
                 }
                 Ok(Value::Object(Rc::new(RefCell::new(obj))))
             }
@@ -386,7 +393,17 @@ impl<'a> Interpreter<'a> {
                     }
                 }
 
-                let func_value = self.eval_node(function)?;
+                // Check if this is a method call (object.method())
+                let (func_value, this_value) =
+                    if let AstNode::GetProperty(object_node, _) = &**function {
+                        let this_obj = self.eval_node(object_node)?;
+                        let func = self.eval_node(function)?;
+                        (func, Some(this_obj))
+                    } else {
+                        let func = self.eval_node(function)?;
+                        (func, None)
+                    };
+
                 let mut arg_values = Vec::new();
                 for arg in arguments {
                     arg_values.push(self.eval_node(arg)?);
@@ -395,6 +412,13 @@ impl<'a> Interpreter<'a> {
                     Value::Function(rc) => {
                         let (arg_names, body) = &*rc;
                         let mut func_env = HashMap::new();
+
+                        // Bind this
+                        if let Some(this_obj) = this_value {
+                            func_env.insert("this".to_string(), this_obj);
+                        }
+
+                        // Bind arguments
                         for (i, arg_name) in arg_names.iter().enumerate() {
                             let arg_value = arg_values.get(i).cloned().unwrap_or(Value::Undefined);
                             func_env.insert(arg_name.clone(), arg_value.clone());
