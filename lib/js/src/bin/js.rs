@@ -34,7 +34,7 @@ fn repl(verbose: bool) {
                 if verbose {
                     println!("Result: {result:?}");
                 } else {
-                    println!("{}", result);
+                    println!("{result}");
                 }
             }
             Err(err) => println!("Error: {err}"),

@@ -40,6 +40,8 @@ pub(crate) enum Token {
     Do,
     Continue,
     For,
+    In,
+    Of,
     Function,
     Return,
 
@@ -98,7 +100,7 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 19] = [
+const KEYWORDS: [Keyword; 21] = [
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
     Keyword::new("false", Token::Boolean(false)),
@@ -116,6 +118,8 @@ const KEYWORDS: [Keyword; 19] = [
     Keyword::new("do", Token::Do),
     Keyword::new("continue", Token::Continue),
     Keyword::new("for", Token::For),
+    Keyword::new("in", Token::In),
+    Keyword::new("of", Token::Of),
     Keyword::new("function", Token::Function),
     Keyword::new("return", Token::Return),
 ];
