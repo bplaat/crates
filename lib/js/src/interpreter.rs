@@ -414,9 +414,8 @@ impl<'a> Interpreter<'a> {
                         let mut func_env = HashMap::new();
 
                         // Bind this
-                        if let Some(this_obj) = this_value {
-                            func_env.insert("this".to_string(), this_obj);
-                        }
+                        let this_val = this_value.unwrap_or(Value::Undefined);
+                        func_env.insert("this".to_string(), this_val);
 
                         // Bind arguments
                         for (i, arg_name) in arg_names.iter().enumerate() {

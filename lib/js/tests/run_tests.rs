@@ -1230,6 +1230,46 @@ fn test_labeled_for_in_of() {
 }
 
 #[test]
+fn test_this_in_regular_functions() {
+    assert_js(
+        Value::Undefined,
+        "let obj = { val: 100, getValue() { return this.val; } }; let func = obj.getValue; func()",
+    );
+}
+
+#[test]
+fn test_this_in_nested_methods() {
+    assert_js(
+        Value::Number(20.0),
+        "let obj = { x: 10, nested: { y: 20, getY() { return this.y; } } }; obj.nested.getY()",
+    );
+}
+
+#[test]
+fn test_this_in_called_method() {
+    assert_js(
+        Value::Number(100.0),
+        "let obj = { val: 100, getValue() { return this.val; } }; obj.getValue()",
+    );
+}
+
+#[test]
+fn test_this_object_creation_pattern() {
+    assert_js(
+        Value::Number(15.0),
+        "let obj = { x: 10, y: 5, init(a, b) { this.x = a; this.y = b; return this.x + this.y; } }; obj.init(7, 8)",
+    );
+}
+
+#[test]
+fn test_this_in_chained_methods() {
+    assert_js(
+        Value::Number(100.0),
+        "let obj = { val: 50, double() { this.val = this.val * 2; return this.val; } }; obj.double()",
+    );
+}
+
+#[test]
 fn test_method_shorthand() {
     assert_js(
         Value::Number(10.0),
