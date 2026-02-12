@@ -61,7 +61,7 @@ fn main() {
         small_http::serve_cgi(move |req| router.handle(req));
     } else {
         // Start server
-        let http_port = env::var("PORT")
+        let http_port = env::var("SERVER_PORT")
             .ok()
             .and_then(|port| port.parse::<u16>().ok())
             .unwrap_or(8080);

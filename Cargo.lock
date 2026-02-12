@@ -470,6 +470,7 @@ dependencies = [
  "chrono",
  "const_format",
  "copy_dir",
+ "dotenv",
  "from_enum",
  "getrandom",
  "log",

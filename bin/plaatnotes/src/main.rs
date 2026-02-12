@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+use std::env;
 use std::net::{Ipv4Addr, TcpListener};
 
 use log::info;
@@ -26,8 +27,6 @@ mod layers;
 mod models;
 #[cfg(test)]
 mod test_utils;
-
-const HTTP_PORT: u16 = 8080;
 
 pub(crate) fn router(ctx: Context) -> Router<Context> {
     // Guests routes
@@ -69,17 +68,27 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
 }
 
 fn main() {
+    // Load environment variables
+    _ = dotenv::dotenv();
+
+    // Init logger
     simple_logger::init().expect("Failed to init logger");
 
-    let context = Context::with_database(if let Ok(path) = std::env::var("DATABASE_PATH") {
+    // Init context
+    let context = Context::with_database(if let Ok(path) = env::var("DATABASE_PATH") {
         path
     } else {
         "database.db".to_string()
     });
 
-    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, HTTP_PORT))
-        .unwrap_or_else(|_| panic!("Can't bind to port: {HTTP_PORT}"));
-    info!("Server is listening on: http://localhost:{HTTP_PORT}/");
+    // Start server
+    let http_port = env::var("SERVER_PORT")
+        .ok()
+        .and_then(|port| port.parse::<u16>().ok())
+        .unwrap_or(8080);
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, http_port))
+        .unwrap_or_else(|_| panic!("Can't bind to port: {http_port}"));
+    info!("Server is listening on: http://localhost:{http_port}/");
 
     let router = router(context);
     small_http::serve(listener, move |req| router.handle(req));

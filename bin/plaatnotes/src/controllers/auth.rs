@@ -109,18 +109,17 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Response {
     };
 
     // Parse User-Agent header
-    let (client_name, client_version, client_os) = req
-        .headers
-        .get("User-Agent")
-        .map(|ua_str| {
+    let (client_name, client_version, client_os) =
+        if let Some(ua_str) = req.headers.get("User-Agent") {
             let ua = USER_AGENT_PARSER.parse(ua_str);
             (
                 Some(ua.client.family),
                 ua.client.version,
                 Some(ua.os.family),
             )
-        })
-        .unwrap_or((None, None, None));
+        } else {
+            (None, None, None)
+        };
 
     // Create session
     let session = Session {

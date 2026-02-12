@@ -81,7 +81,7 @@ pub(crate) mod policies {
     use super::*;
 
     pub(crate) fn can_index(auth_user: &User) -> bool {
-        matches!(auth_user.role, UserRole::Admin)
+        auth_user.role == UserRole::Admin
     }
 
     pub(crate) fn can_show(auth_user: &User, session: &Session) -> bool {

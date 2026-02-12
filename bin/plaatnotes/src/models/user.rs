@@ -62,7 +62,7 @@ impl From<User> for api::User {
 }
 
 // MARK: UserTheme
-#[derive(Copy, Clone, FromValue, FromEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, FromValue, FromEnum)]
 #[from_enum(api::UserTheme)]
 pub(crate) enum UserTheme {
     System = 0,
@@ -71,7 +71,7 @@ pub(crate) enum UserTheme {
 }
 
 // MARK: UserRole
-#[derive(Copy, Clone, FromValue, FromEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, FromValue, FromEnum)]
 #[from_enum(api::UserRole)]
 pub(crate) enum UserRole {
     Normal = 0,
@@ -109,11 +109,11 @@ pub(crate) mod policies {
     use super::*;
 
     pub(crate) fn can_index(auth_user: &User) -> bool {
-        matches!(auth_user.role, UserRole::Admin)
+        auth_user.role == UserRole::Admin
     }
 
     pub(crate) fn can_create(auth_user: &User) -> bool {
-        matches!(auth_user.role, UserRole::Admin)
+        auth_user.role == UserRole::Admin
     }
 
     pub(crate) fn can_show(auth_user: &User, user: &User) -> bool {
