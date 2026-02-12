@@ -13,18 +13,31 @@ use small_router::RouterBuilder;
 
 /// Pre-layer that processes CORS requests
 fn cors_pre_layer(req: &Request, _: &mut ()) -> Option<Response> {
-    if req.method == Method::Options {
-        Some(Response::new())
+    if req.method == Method::Options && req.headers.get("Access-Control-Request-Method").is_some() {
+        Some(
+            Response::with_status(Status::NoContent)
+                .header("Access-Control-Allow-Origin", "*")
+                .header(
+                    "Access-Control-Allow-Methods",
+                    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                )
+                .header("Access-Control-Allow-Headers", "*")
+                .header("Access-Control-Max-Age", "86400"),
+        )
     } else {
         None
     }
 }
 
 /// Post-layer that processes CORS requests
-fn cors_post_layer(_: &Request, _: &mut (), res: Response) -> Response {
-    res.header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "GET")
-        .header("Access-Control-Max-Age", "86400")
+fn cors_post_layer(req: &Request, _: &mut (), res: Response) -> Response {
+    if !(req.method == Method::Options
+        && req.headers.get("Access-Control-Request-Method").is_some())
+    {
+        res.header("Access-Control-Allow-Origin", "*")
+    } else {
+        res
+    }
 }
 
 fn home(_req: &Request, _ctx: &()) -> Response {
