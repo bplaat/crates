@@ -16,7 +16,7 @@ int main(void) {
         id INTEGER PRIMARY KEY AUTOINCREMENT,\
         name TEXT NOT NULL,\
         age INTEGER NOT NULL\
-    );";
+    ) STRICT;";
     char* err_msg = NULL;
     if (sqlite3_exec(db, sql_create, 0, 0, &err_msg) != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
