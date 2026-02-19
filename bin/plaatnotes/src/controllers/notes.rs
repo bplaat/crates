@@ -281,7 +281,123 @@ pub(crate) fn notes_delete(_req: &Request, ctx: &Context) -> Response {
     Response::new()
 }
 
+pub(crate) fn notes_pinned(req: &Request, ctx: &Context) -> Response {
+    notes_filtered(req, ctx, "is_pinned", true)
+}
+
+pub(crate) fn notes_archived(req: &Request, ctx: &Context) -> Response {
+    notes_filtered(req, ctx, "is_archived", true)
+}
+
+pub(crate) fn notes_trashed(req: &Request, ctx: &Context) -> Response {
+    notes_filtered(req, ctx, "is_trashed", true)
+}
+
 // MARK: Utils
+fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Response {
+    // Check authentication
+    let user = match &ctx.auth_user {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
+
+    // Check authorization
+    if !policies::can_index(user) {
+        return Response::with_status(Status::Forbidden);
+    }
+
+    // Parse request query
+    let query = match req.url.query() {
+        Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
+            Ok(query) => query,
+            Err(_) => return Response::with_status(Status::BadRequest),
+        },
+        None => IndexQuery::default(),
+    };
+    if let Err(report) = query.validate() {
+        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+    }
+
+    // Get filtered notes
+    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
+    let (total, notes) = match user.role {
+        UserRole::Admin => {
+            // Admin sees all filtered notes
+            let total = query_args!(
+                i64,
+                ctx.database,
+                &format!(
+                    "SELECT COUNT(id) FROM notes WHERE {field} = 1 AND body LIKE :search_query"
+                ),
+                Args {
+                    search_query: search_query.clone()
+                }
+            )
+            .next()
+            .unwrap_or(0);
+            let notes = query_args!(
+                Note,
+                ctx.database,
+                format!(
+                    "SELECT {} FROM notes WHERE {} = 1 AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    Note::columns(),
+                    field
+                ),
+                Args {
+                    search_query: search_query,
+                    limit: query.limit,
+                    offset: (query.page - 1) * query.limit
+                }
+            )
+            .map(Into::<api::Note>::into)
+            .collect::<Vec<_>>();
+            (total, notes)
+        }
+        UserRole::Normal => {
+            // Normal user sees only their own filtered notes
+            let total = query_args!(
+                i64,
+                ctx.database,
+                &format!("SELECT COUNT(id) FROM notes WHERE {field} = 1 AND user_id = :user_id AND body LIKE :search_query"),
+                Args {
+                    user_id: user.id,
+                    search_query: search_query.clone()
+                }
+            )
+            .next()
+            .unwrap_or(0);
+            let notes = query_args!(
+                Note,
+                ctx.database,
+                format!(
+                    "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    Note::columns(),
+                    field
+                ),
+                Args {
+                    user_id: user.id,
+                    search_query: search_query,
+                    limit: query.limit,
+                    offset: (query.page - 1) * query.limit
+                }
+            )
+            .map(Into::<api::Note>::into)
+            .collect::<Vec<_>>();
+            (total, notes)
+        }
+    };
+
+    // Return filtered notes
+    Response::with_json(api::NoteIndexResponse {
+        pagination: api::Pagination {
+            page: query.page,
+            limit: query.limit,
+            total,
+        },
+        data: notes,
+    })
+}
+
 fn get_note_by_id(req: &Request, _ctx: &Context) -> Option<Uuid> {
     req.params
         .get("note_id")
@@ -822,5 +938,116 @@ mod test {
                 .header("Authorization", format!("Bearer {token1}")),
         );
         assert_eq!(res.status, Status::Ok);
+    }
+
+    #[test]
+    fn test_notes_pinned() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create some notes with different states
+        let pinned_note = Note {
+            user_id: user.id,
+            title: Some("Pinned Note".to_string()),
+            body: "This is a pinned note".to_string(),
+            is_pinned: true,
+            ..Default::default()
+        };
+        ctx.database.insert_note(pinned_note.clone());
+
+        let unpinned_note = Note {
+            user_id: user.id,
+            title: Some("Unpinned Note".to_string()),
+            body: "This is an unpinned note".to_string(),
+            is_pinned: false,
+            ..Default::default()
+        };
+        ctx.database.insert_note(unpinned_note);
+
+        // Fetch pinned notes
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/pinned")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert!(response.data[0].is_pinned);
+        assert_eq!(response.data[0].body, "This is a pinned note");
+    }
+
+    #[test]
+    fn test_notes_archived() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create archived and non-archived notes
+        let archived_note = Note {
+            user_id: user.id,
+            title: Some("Archived Note".to_string()),
+            body: "This is an archived note".to_string(),
+            is_archived: true,
+            ..Default::default()
+        };
+        ctx.database.insert_note(archived_note.clone());
+
+        let active_note = Note {
+            user_id: user.id,
+            title: Some("Active Note".to_string()),
+            body: "This is an active note".to_string(),
+            is_archived: false,
+            ..Default::default()
+        };
+        ctx.database.insert_note(active_note);
+
+        // Fetch archived notes
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/archived")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert!(response.data[0].is_archived);
+        assert_eq!(response.data[0].body, "This is an archived note");
+    }
+
+    #[test]
+    fn test_notes_trashed() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create trashed and non-trashed notes
+        let trashed_note = Note {
+            user_id: user.id,
+            title: Some("Trashed Note".to_string()),
+            body: "This is a trashed note".to_string(),
+            is_trashed: true,
+            ..Default::default()
+        };
+        ctx.database.insert_note(trashed_note.clone());
+
+        let kept_note = Note {
+            user_id: user.id,
+            title: Some("Kept Note".to_string()),
+            body: "This is a kept note".to_string(),
+            is_trashed: false,
+            ..Default::default()
+        };
+        ctx.database.insert_note(kept_note);
+
+        // Fetch trashed notes
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/trashed")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert!(response.data[0].is_trashed);
+        assert_eq!(response.data[0].body, "This is a trashed note");
     }
 }

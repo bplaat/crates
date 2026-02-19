@@ -312,6 +312,81 @@ paths:
         '404':
           description: User not found
 
+  /users/{id}/notes/pinned:
+    get:
+      tags: [Users]
+      summary: Get all pinned notes for a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of pinned notes for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteIndexResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (user can only see their own notes)
+        '404':
+          description: User not found
+
+  /users/{id}/notes/archived:
+    get:
+      tags: [Users]
+      summary: Get all archived notes for a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of archived notes for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteIndexResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (user can only see their own notes)
+        '404':
+          description: User not found
+
+  /users/{id}/notes/trashed:
+    get:
+      tags: [Users]
+      summary: Get all trashed notes for a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of trashed notes for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteIndexResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (user can only see their own notes)
+        '404':
+          description: User not found
+
   # MARK: Notes
   /notes:
     get:
@@ -422,6 +497,66 @@ paths:
           description: Unauthorized
         '404':
           description: Note not found
+
+  /notes/pinned:
+    get:
+      tags: [Notes]
+      summary: Get all pinned notes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of pinned notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteIndexResponse'
+        '401':
+          description: Unauthorized
+
+  /notes/archived:
+    get:
+      tags: [Notes]
+      summary: Get all archived notes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of archived notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteIndexResponse'
+        '401':
+          description: Unauthorized
+
+  /notes/trashed:
+    get:
+      tags: [Notes]
+      summary: Get all trashed notes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of trashed notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteIndexResponse'
+        '401':
+          description: Unauthorized
 
 components:
   # MARK: Security

@@ -54,6 +54,9 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .delete("/api/users/:user_id", users_delete)
         .post("/api/users/:user_id/change-password", users_change_password)
         .get("/api/users/:user_id/notes", users_notes)
+        .get("/api/users/:user_id/notes/pinned", users_notes_pinned)
+        .get("/api/users/:user_id/notes/archived", users_notes_archived)
+        .get("/api/users/:user_id/notes/trashed", users_notes_trashed)
         // Sessions
         .get("/api/sessions", sessions_index)
         .get("/api/sessions/:session_id", sessions_show)
@@ -64,6 +67,9 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .get("/api/notes/:note_id", notes_show)
         .put("/api/notes/:note_id", notes_update)
         .delete("/api/notes/:note_id", notes_delete)
+        .get("/api/notes/pinned", notes_pinned)
+        .get("/api/notes/archived", notes_archived)
+        .get("/api/notes/trashed", notes_trashed)
         .build()
 }
 
