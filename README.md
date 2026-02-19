@@ -19,7 +19,7 @@ These crates are published to [crates.io](https://crates.io) and are more polish
 These libraries are not published to [crates.io](https://crates.io) and are more intended for personal use but can still be useful
 
 - [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
-- [from_enum](lib/from_enum) A FromEnum derive macro library
+- [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
 - [ini](lib/ini) A simple INI file parser library
 - [js](lib/js) A WIP JavaScript interpreter
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator

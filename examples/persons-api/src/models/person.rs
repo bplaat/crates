@@ -6,13 +6,14 @@
 
 use bsqlite::{FromRow, FromValue};
 use chrono::{DateTime, Utc};
-use from_enum::FromEnum;
+use from_derive::{FromEnum, FromStruct};
 use uuid::Uuid;
 
 use crate::api;
 
 // MARK: Person
-#[derive(Clone, FromRow)]
+#[derive(Clone, FromRow, FromStruct)]
+#[from_struct(api::Person)]
 pub(crate) struct Person {
     pub id: Uuid,
     pub name: String,
@@ -30,19 +31,6 @@ impl Default for Person {
             age_in_years: 0,
             relation: Relation::Me,
             created_at: Utc::now(),
-        }
-    }
-}
-
-impl From<Person> for api::Person {
-    fn from(person: Person) -> Self {
-        Self {
-            id: person.id,
-            name: person.name,
-            age_in_years: person.age_in_years,
-            relation: person.relation.into(),
-            is_adult: Some(person.age_in_years >= 18),
-            created_at: person.created_at,
         }
     }
 }

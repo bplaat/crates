@@ -210,7 +210,7 @@ dependencies = [
  "chrono",
  "const_format",
  "dotenv",
- "from_enum",
+ "from_derive",
  "log",
  "openapi-generator",
  "serde",
@@ -252,7 +252,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "from_enum"
+name = "from_derive"
 version = "0.1.0"
 dependencies = [
  "quote",
@@ -471,7 +471,7 @@ dependencies = [
  "const_format",
  "copy_dir",
  "dotenv",
- "from_enum",
+ "from_derive",
  "getrandom",
  "log",
  "mime_guess",

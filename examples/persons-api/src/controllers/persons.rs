@@ -6,6 +6,7 @@
 
 use bsqlite::{execute_args, query_args};
 use const_format::formatcp;
+use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
 use validate::Validate;
@@ -63,23 +64,14 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Response {
 }
 
 // MARK: Persons Create
-#[derive(Validate)]
+#[derive(Validate, FromStruct)]
+#[from_struct(api::PersonCreateUpdateBody)]
 struct PersonCreateUpdateBody {
     #[validate(ascii, length(min = 3, max = 25), custom(validators::name_validator))]
     name: String,
     #[validate(range(min = 8))]
     age_in_years: i64,
     relation: Relation,
-}
-
-impl From<api::PersonCreateUpdateBody> for PersonCreateUpdateBody {
-    fn from(body: api::PersonCreateUpdateBody) -> Self {
-        Self {
-            name: body.name,
-            age_in_years: body.age_in_years,
-            relation: body.relation.into(),
-        }
-    }
 }
 
 pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Response {

@@ -185,8 +185,6 @@ components:
           type: integer
         relation:
           $ref: '#/components/schemas/Relation'
-        isAdult:
-          type: boolean
         createdAt:
           type: string
           format: date-time
