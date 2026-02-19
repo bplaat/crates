@@ -37,6 +37,21 @@ impl Display for ValueError {
 impl Error for ValueError {}
 
 // MARK: From T
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Value::Integer(if value { 1 } else { 0 })
+    }
+}
+impl TryFrom<Value> for bool {
+    type Error = ValueError;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Integer(v) => Ok(v != 0),
+            _ => Err(ValueError),
+        }
+    }
+}
+
 impl From<i64> for Value {
     fn from(value: i64) -> Self {
         Value::Integer(value)
@@ -98,6 +113,25 @@ impl TryFrom<Value> for Vec<u8> {
 }
 
 // MARK: From Option<T>
+impl From<Option<bool>> for Value {
+    fn from(value: Option<bool>) -> Self {
+        match value {
+            Some(v) => Value::Integer(if v { 1 } else { 0 }),
+            None => Value::Null,
+        }
+    }
+}
+impl TryFrom<Value> for Option<bool> {
+    type Error = ValueError;
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Integer(v) => Ok(Some(v != 0)),
+            Value::Null => Ok(None),
+            _ => Err(ValueError),
+        }
+    }
+}
+
 impl From<Option<i64>> for Value {
     fn from(value: Option<i64>) -> Self {
         match value {

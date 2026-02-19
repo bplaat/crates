@@ -78,16 +78,18 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
     let values = vec!["?"; fields.len()].join(", ");
 
     let binds = fields.iter().enumerate().map(|(index, (field, _))| {
+        let index = index as i32;
         let ident = field.ident.as_ref().expect("Invalid field");
-        quote! { statement.bind_value(#index as i32, self.#ident.into()) }
+        quote! { statement.bind_value(#index, self.#ident.into()) }
     });
 
     let from_rows = fields
         .iter()
         .enumerate()
         .map(|(index, (field, field_name))| {
+            let index = index as i32;
             let ident = field.ident.as_ref().expect("Invalid field");
-            quote! { #ident: statement.read_value(#index as i32).try_into().unwrap_or_else(|_| panic!(
+            quote! { #ident: statement.read_value(#index).try_into().unwrap_or_else(|_| panic!(
                 "Can't read value of column: {}", #field_name
             )) }
         });
