@@ -613,8 +613,16 @@ components:
         userId:
           type: string
           format: uuid
+        title:
+          type: string
         body:
           type: string
+        isPinned:
+          type: boolean
+        isArchived:
+          type: boolean
+        isTrashed:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -625,6 +633,9 @@ components:
         - id
         - userId
         - body
+        - isPinned
+        - isArchived
+        - isTrashed
         - createdAt
         - updatedAt
 
@@ -700,18 +711,33 @@ components:
     NoteCreateBody:
       type: object
       properties:
+        title:
+          type: string
         body:
           type: string
+        isPinned:
+          type: boolean
       required:
         - body
 
     NoteUpdateBody:
       type: object
       properties:
+        title:
+          type: string
         body:
           type: string
+        isPinned:
+          type: boolean
+        isArchived:
+          type: boolean
+        isTrashed:
+          type: boolean
       required:
         - body
+        - isPinned
+        - isArchived
+        - isTrashed
 
     # MARK: Responses
     LoginResponse:

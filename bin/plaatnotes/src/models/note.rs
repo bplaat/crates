@@ -6,16 +6,21 @@
 
 use bsqlite::FromRow;
 use chrono::{DateTime, Utc};
+use from_derive::FromStruct;
 use uuid::Uuid;
 
 use crate::api;
 use crate::models::user::{User, UserRole};
-
-#[derive(Clone, FromRow)]
+#[derive(Clone, FromRow, FromStruct)]
+#[from_struct(api::Note)]
 pub(crate) struct Note {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub title: Option<String>,
     pub body: String,
+    pub is_pinned: bool,
+    pub is_archived: bool,
+    pub is_trashed: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -26,21 +31,13 @@ impl Default for Note {
         Self {
             id: Uuid::now_v7(),
             user_id: Uuid::nil(),
+            title: None,
             body: String::default(),
+            is_pinned: false,
+            is_archived: false,
+            is_trashed: false,
             created_at: now,
             updated_at: now,
-        }
-    }
-}
-
-impl From<Note> for api::Note {
-    fn from(note: Note) -> Self {
-        Self {
-            id: note.id,
-            user_id: note.user_id,
-            body: note.body,
-            created_at: note.created_at,
-            updated_at: note.updated_at,
         }
     }
 }

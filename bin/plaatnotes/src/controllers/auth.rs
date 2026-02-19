@@ -11,6 +11,7 @@ use base64::prelude::*;
 use bsqlite::execute_args;
 use chrono::Utc;
 use const_format::formatcp;
+use from_derive::FromStruct;
 use serde::Deserialize;
 use simple_useragent::UserAgentParser;
 use small_http::{Request, Response, Status};
@@ -30,21 +31,13 @@ struct IpInfo {
     loc: String,
 }
 
-#[derive(Validate)]
+#[derive(Validate, FromStruct)]
+#[from_struct(api::LoginBody)]
 struct LoginBody {
     #[validate(email)]
     email: String,
     #[validate(ascii, length(min = 8, max = 128))]
     password: String,
-}
-
-impl From<api::LoginBody> for LoginBody {
-    fn from(body: api::LoginBody) -> Self {
-        Self {
-            email: body.email,
-            password: body.password,
-        }
-    }
 }
 
 pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Response {

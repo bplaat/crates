@@ -7,6 +7,7 @@
 use bsqlite::{execute_args, query_args};
 use chrono::Utc;
 use const_format::formatcp;
+use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
 use validate::{self, Validate};
@@ -79,7 +80,8 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
     })
 }
 
-#[derive(Validate)]
+#[derive(Validate, FromStruct)]
+#[from_struct(api::UserCreateBody)]
 #[validate(context(Context))]
 struct UserCreateBody {
     #[validate(ascii, length(min = 1, max = 128))]
@@ -91,18 +93,6 @@ struct UserCreateBody {
     #[validate(ascii, length(min = 8, max = 128))]
     password: String,
     role: UserRole,
-}
-
-impl From<api::UserCreateBody> for UserCreateBody {
-    fn from(body: api::UserCreateBody) -> Self {
-        Self {
-            first_name: body.first_name,
-            last_name: body.last_name,
-            email: body.email,
-            password: body.password,
-            role: body.role.into(),
-        }
-    }
 }
 
 pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
@@ -189,7 +179,8 @@ pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Response {
     Response::with_json(Into::<api::User>::into(user))
 }
 
-#[derive(Validate)]
+#[derive(Validate, FromStruct)]
+#[from_struct(api::UserUpdateBody)]
 #[validate(context(Context))]
 struct UserUpdateBody {
     #[validate(ascii, length(min = 1, max = 128))]
@@ -201,19 +192,6 @@ struct UserUpdateBody {
     theme: UserTheme,
     language: String,
     role: UserRole,
-}
-
-impl From<api::UserUpdateBody> for UserUpdateBody {
-    fn from(body: api::UserUpdateBody) -> Self {
-        Self {
-            first_name: body.first_name,
-            last_name: body.last_name,
-            email: body.email,
-            theme: body.theme.into(),
-            language: body.language,
-            role: body.role.into(),
-        }
-    }
 }
 
 pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
@@ -272,21 +250,13 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
     Response::with_json(Into::<api::User>::into(user))
 }
 
-#[derive(Validate)]
+#[derive(Validate, FromStruct)]
+#[from_struct(api::UserChangePasswordBody)]
 struct UserChangePasswordBody {
     #[validate(ascii, length(min = 8, max = 128))]
     old_password: String,
     #[validate(ascii, length(min = 8, max = 128))]
     new_password: String,
-}
-
-impl From<api::UserChangePasswordBody> for UserChangePasswordBody {
-    fn from(body: api::UserChangePasswordBody) -> Self {
-        Self {
-            old_password: body.old_password,
-            new_password: body.new_password,
-        }
-    }
 }
 
 pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {

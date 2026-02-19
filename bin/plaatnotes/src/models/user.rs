@@ -6,7 +6,7 @@
 
 use bsqlite::{FromRow, FromValue};
 use chrono::{DateTime, Utc};
-use from_enum::FromEnum;
+use from_derive::FromEnum;
 use uuid::Uuid;
 
 use crate::api;

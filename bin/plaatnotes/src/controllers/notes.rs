@@ -7,6 +7,7 @@
 use bsqlite::{execute_args, query_args};
 use chrono::Utc;
 use const_format::formatcp;
+use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
 use validate::Validate;
@@ -117,16 +118,14 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
     })
 }
 
-#[derive(Validate)]
+#[derive(Validate, FromStruct)]
+#[from_struct(api::NoteCreateBody)]
 struct NoteCreateBody {
     #[validate(ascii, length(min = 1))]
+    title: Option<String>,
+    #[validate(ascii, length(min = 1))]
     body: String,
-}
-
-impl From<api::NoteCreateBody> for NoteCreateBody {
-    fn from(body: api::NoteCreateBody) -> Self {
-        Self { body: body.body }
-    }
+    is_pinned: Option<bool>,
 }
 
 pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Response {
@@ -155,7 +154,11 @@ pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Response {
     // Create note with authenticated user's ID
     let note = Note {
         user_id: user.id,
+        title: body.title,
         body: body.body,
+        is_pinned: body.is_pinned.unwrap_or(false),
+        is_archived: false,
+        is_trashed: false,
         ..Default::default()
     };
     ctx.database.insert_note(note.clone());
@@ -186,16 +189,16 @@ pub(crate) fn notes_show(_req: &Request, ctx: &Context) -> Response {
     Response::with_json(Into::<api::Note>::into(note))
 }
 
-#[derive(Validate)]
+#[derive(Validate, FromStruct)]
+#[from_struct(api::NoteUpdateBody)]
 struct NoteUpdateBody {
     #[validate(ascii, length(min = 1))]
+    title: Option<String>,
+    #[validate(ascii, length(min = 1))]
     body: String,
-}
-
-impl From<api::NoteUpdateBody> for NoteUpdateBody {
-    fn from(body: api::NoteUpdateBody) -> Self {
-        Self { body: body.body }
-    }
+    is_pinned: bool,
+    is_archived: bool,
+    is_trashed: bool,
 }
 
 pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
@@ -228,13 +231,21 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
     }
 
     // Update note
+    note.title = body.title;
     note.body = body.body;
+    note.is_pinned = body.is_pinned;
+    note.is_archived = body.is_archived;
+    note.is_trashed = body.is_trashed;
     note.updated_at = Utc::now();
     execute_args!(
         ctx.database,
-        "UPDATE notes SET body = :body, updated_at = :updated_at WHERE id = :id",
+        "UPDATE notes SET title = :title, body = :body, is_pinned = :is_pinned, is_archived = :is_archived, is_trashed = :is_trashed, updated_at = :updated_at WHERE id = :id",
         Args {
+            title: note.title.clone(),
             body: note.body.clone(),
+            is_pinned: note.is_pinned,
+            is_archived: note.is_archived,
+            is_trashed: note.is_trashed,
             updated_at: note.updated_at,
             id: note.id
         }
@@ -347,6 +358,7 @@ mod test {
         // Create note for authenticated user
         let note = Note {
             user_id: user.id,
+            title: Some("My First Note".to_string()),
             body: "This is my first note".to_string(),
             ..Default::default()
         };
@@ -374,11 +386,13 @@ mod test {
         // Create multiple notes
         ctx.database.insert_note(Note {
             user_id: user.id,
+            title: Some("Meeting Notes".to_string()),
             body: "Meeting notes from today".to_string(),
             ..Default::default()
         });
         ctx.database.insert_note(Note {
             user_id: user.id,
+            title: Some("Shopping List".to_string()),
             body: "Shopping list for tomorrow".to_string(),
             ..Default::default()
         });
@@ -404,6 +418,7 @@ mod test {
         for i in 1..=30 {
             ctx.database.insert_note(Note {
                 user_id: user.id,
+                title: Some(format!("Note {i}")),
                 body: format!("Note number {i}"),
                 ..Default::default()
             });
@@ -444,10 +459,11 @@ mod test {
         let res = router.handle(
             &Request::post("http://localhost/api/notes")
                 .header("Authorization", format!("Bearer {token}"))
-                .body("body=This+is+a+new+note"),
+                .body("title=Test+Note&body=This+is+a+new+note&isPinned=false"),
         );
         assert_eq!(res.status, Status::Ok);
         let note = serde_json::from_slice::<api::Note>(&res.body).unwrap();
+        assert_eq!(note.title, Some("Test Note".to_string()));
         assert_eq!(note.body, "This is a new note");
         assert_eq!(note.user_id, user.id);
     }
@@ -461,6 +477,7 @@ mod test {
         // Create note
         let note = Note {
             user_id: user.id,
+            title: Some("Important".to_string()),
             body: "My important note".to_string(),
             ..Default::default()
         };
@@ -499,6 +516,7 @@ mod test {
         // Create note
         let note = Note {
             user_id: user.id,
+            title: Some("Original Title".to_string()),
             body: "Original note content".to_string(),
             ..Default::default()
         };
@@ -508,10 +526,11 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("body=Updated+note+content"),
+                .body("title=Updated+Title&body=Updated+note+content&isPinned=false&isArchived=false&isTrashed=false"),
         );
         assert_eq!(res.status, Status::Ok);
         let note = serde_json::from_slice::<api::Note>(&res.body).unwrap();
+        assert_eq!(note.title, Some("Updated Title".to_string()));
         assert_eq!(note.body, "Updated note content");
     }
 
@@ -524,6 +543,7 @@ mod test {
         // Create note
         let note = Note {
             user_id: user.id,
+            title: Some("Original Title".to_string()),
             body: "Original note content".to_string(),
             ..Default::default()
         };
@@ -533,7 +553,7 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("body="),
+                .body("title=Test&body=&isPinned=false&isArchived=false&isTrashed=false"),
         );
         assert_eq!(res.status, Status::BadRequest);
     }
@@ -547,6 +567,7 @@ mod test {
         // Create note
         let note = Note {
             user_id: user.id,
+            title: Some("To Delete".to_string()),
             body: "Note to be deleted".to_string(),
             ..Default::default()
         };
@@ -583,6 +604,7 @@ mod test {
         let (user1, _) = create_test_user_with_session(&ctx);
         let user1_note = Note {
             user_id: user1.id,
+            title: Some("User 1 Note".to_string()),
             body: "User 1's note".to_string(),
             ..Default::default()
         };
@@ -592,6 +614,7 @@ mod test {
         let (user2, _) = create_test_user_with_session(&ctx);
         let user2_note = Note {
             user_id: user2.id,
+            title: Some("User 2 Note".to_string()),
             body: "User 2's note".to_string(),
             ..Default::default()
         };
@@ -621,6 +644,7 @@ mod test {
         let (user, _) = create_test_user_with_session(&ctx);
         let note = Note {
             user_id: user.id,
+            title: Some("Private Note".to_string()),
             body: "User's private note".to_string(),
             ..Default::default()
         };
@@ -649,6 +673,7 @@ mod test {
         let (user, _) = create_test_user_with_session(&ctx);
         let note = Note {
             user_id: user.id,
+            title: Some("Original Title".to_string()),
             body: "Original content".to_string(),
             ..Default::default()
         };
@@ -658,7 +683,7 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {admin_token}"))
-                .body("body=Admin+updated+this"),
+                .body("title=Admin+Title&body=Admin+updated+this&isPinned=false&isArchived=false&isTrashed=false"),
         );
         assert_eq!(res.status, Status::Ok);
         let updated_note = serde_json::from_slice::<api::Note>(&res.body).unwrap();
@@ -677,6 +702,7 @@ mod test {
         let (user, _) = create_test_user_with_session(&ctx);
         let note = Note {
             user_id: user.id,
+            title: Some("To Delete".to_string()),
             body: "Note to delete".to_string(),
             ..Default::default()
         };
@@ -706,6 +732,7 @@ mod test {
         let (user1, token1) = create_test_user_with_session(&ctx);
         let note1 = Note {
             user_id: user1.id,
+            title: Some("User 1 Note".to_string()),
             body: "User 1's private note".to_string(),
             ..Default::default()
         };
@@ -716,6 +743,7 @@ mod test {
 
         let note2 = Note {
             user_id: user2.id,
+            title: Some("User 2 Note".to_string()),
             body: "User 2's private note".to_string(),
             ..Default::default()
         };
@@ -757,6 +785,7 @@ mod test {
         let (user1, token1) = create_test_user_with_session(&ctx);
         let note1 = Note {
             user_id: user1.id,
+            title: Some("Private Note".to_string()),
             body: "User 1's private note".to_string(),
             ..Default::default()
         };

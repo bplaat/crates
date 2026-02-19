@@ -18,7 +18,7 @@ chrono = { version = "0.4", default-features = false, features = [
 const_format = "0.2"
 getrandom = "0.3"
 dotenv = "0.15.0"
-from_enum = { path = "../../lib/from_enum" }
+from_derive = { path = "../../lib/from_derive" }
 log = "0.4.28"
 mime_guess = { version = "2.0", default-features = false }
 pbkdf2 = { path = "../../lib/pbkdf2" }
