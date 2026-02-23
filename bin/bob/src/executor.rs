@@ -6,6 +6,7 @@
 
 #![allow(unused_variables)]
 
+use std::collections::HashSet;
 use std::path::Path;
 use std::process::{Command, exit};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -314,6 +315,109 @@ impl ExecutorBuilder {
     }
 }
 
+// MARK: Circular Dependency Detection
+fn detect_circular_dependencies(tasks: &[Task]) {
+    for task in tasks {
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+        if has_cycle(task, tasks, &mut visited, &mut rec_stack) {
+            // Build the cycle path for error reporting
+            let mut cycle_path = Vec::new();
+            let mut current_stack = HashSet::new();
+            find_cycle_path(task, tasks, &mut current_stack, &mut cycle_path);
+
+            eprintln!("Circular dependency in tasks detected!\n");
+            eprintln!("Problematic tasks:");
+            for task_id in &cycle_path {
+                for t in tasks {
+                    if t.id == *task_id {
+                        eprintln!(
+                            "  Task {}: inputs={:?}, outputs={:?}",
+                            t.id, t.inputs, t.outputs
+                        );
+                    }
+                }
+            }
+            eprintln!("\nDependency cycle:");
+            for (i, task_id) in cycle_path.iter().enumerate() {
+                for t in tasks {
+                    if t.id == *task_id {
+                        eprint!("  Task {} (outputs: {:?})", t.id, t.outputs);
+                        if i < cycle_path.len() - 1 {
+                            eprintln!(" →");
+                        } else {
+                            eprintln!(" → [CYCLE]");
+                        }
+                    }
+                }
+            }
+            exit(1);
+        }
+    }
+}
+
+fn has_cycle(
+    task: &Task,
+    all_tasks: &[Task],
+    visited: &mut HashSet<usize>,
+    rec_stack: &mut HashSet<usize>,
+) -> bool {
+    visited.insert(task.id);
+    rec_stack.insert(task.id);
+
+    for input in &task.inputs {
+        for other_task in all_tasks {
+            if other_task.outputs.contains(input) {
+                if !visited.contains(&other_task.id) {
+                    if has_cycle(other_task, all_tasks, visited, rec_stack) {
+                        return true;
+                    }
+                } else if rec_stack.contains(&other_task.id) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    rec_stack.remove(&task.id);
+    false
+}
+
+fn find_cycle_path(
+    task: &Task,
+    all_tasks: &[Task],
+    current_stack: &mut HashSet<usize>,
+    cycle_path: &mut Vec<usize>,
+) -> bool {
+    current_stack.insert(task.id);
+    cycle_path.push(task.id);
+
+    for input in &task.inputs {
+        for other_task in all_tasks {
+            if other_task.outputs.contains(input) {
+                if current_stack.contains(&other_task.id) {
+                    // Found the cycle, keep only the cycle part
+                    while let Some(&id) = cycle_path.first() {
+                        if id == other_task.id {
+                            break;
+                        }
+                        cycle_path.remove(0);
+                    }
+                    cycle_path.push(other_task.id);
+                    return true;
+                }
+                if find_cycle_path(other_task, all_tasks, current_stack, cycle_path) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    cycle_path.pop();
+    current_stack.remove(&task.id);
+    false
+}
+
 // MARK: Executor
 pub(crate) struct Executor {
     log: Arc<Mutex<Log>>,
@@ -322,6 +426,9 @@ pub(crate) struct Executor {
 
 impl Executor {
     fn new(tasks: Vec<Task>, log_path: &str) -> Self {
+        // Detect circular dependencies before processing
+        detect_circular_dependencies(&tasks);
+
         fn visit_task(
             task: &Task,
             all_tasks: &[Task],
