@@ -74,6 +74,19 @@ impl RawStatement {
         self.bind_value(index - 1, value);
     }
 
+    /// Get the number of columns in the statement
+    pub fn column_count(&self) -> i32 {
+        unsafe { sqlite3_column_count(self.0) }
+    }
+
+    /// Get the name of a column
+    pub fn column_name(&self, index: i32) -> String {
+        let name = unsafe { sqlite3_column_name(self.0, index) };
+        unsafe { CStr::from_ptr(name) }
+            .to_string_lossy()
+            .to_string()
+    }
+
     /// Read a value from the statement
     pub fn read_value(&self, index: i32) -> Value {
         match unsafe { sqlite3_column_type(self.0, index) } {
@@ -131,6 +144,16 @@ impl<T> Statement<T> {
     /// Bind named value to the statement
     pub fn bind_named_value(&mut self, name: &str, value: impl Into<Value>) {
         self.0.bind_named_value(name, value.into());
+    }
+
+    /// Get the number of columns in the statement
+    pub fn column_count(&self) -> i32 {
+        self.0.column_count()
+    }
+
+    /// Get the name of a column
+    pub fn column_name(&self, index: i32) -> String {
+        self.0.column_name(index)
     }
 
     /// Read a value from the statement
