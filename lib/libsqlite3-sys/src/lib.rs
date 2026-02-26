@@ -78,6 +78,7 @@ unsafe extern "C" {
     pub fn sqlite3_column_count(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_column_name(pStmt: *mut sqlite3_stmt, iCol: c_int) -> *const c_char;
     pub fn sqlite3_column_type(pStmt: *mut sqlite3_stmt, iCol: c_int) -> c_int;
+    pub fn sqlite3_column_decltype(pStmt: *mut sqlite3_stmt, iCol: c_int) -> *const c_char;
     pub fn sqlite3_column_int64(pStmt: *mut sqlite3_stmt, iCol: c_int) -> i64;
     pub fn sqlite3_column_double(pStmt: *mut sqlite3_stmt, iCol: c_int) -> f64;
     pub fn sqlite3_column_text(pStmt: *mut sqlite3_stmt, iCol: c_int) -> *const c_char;
