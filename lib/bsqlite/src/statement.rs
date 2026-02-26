@@ -130,6 +130,20 @@ impl RawStatement {
         }
     }
 
+    /// Get the declared type of a column
+    pub fn column_declared_type(&self, index: i32) -> Option<String> {
+        let decl_type = unsafe { sqlite3_column_decltype(self.0, index) };
+        if !decl_type.is_null() {
+            Some(
+                unsafe { CStr::from_ptr(decl_type) }
+                    .to_string_lossy()
+                    .to_string(),
+            )
+        } else {
+            None
+        }
+    }
+
     /// Get the value of a column
     pub fn column_value(&self, index: i32) -> Value {
         match unsafe { sqlite3_column_type(self.0, index) } {
@@ -207,6 +221,11 @@ impl<T> Statement<T> {
     /// Get the type of a column
     pub fn column_type(&self, index: i32) -> ColumnType {
         self.0.column_type(index)
+    }
+
+    /// Get the declared type of a column
+    pub fn column_declared_type(&self, index: i32) -> Option<String> {
+        self.0.column_declared_type(index)
     }
 
     /// Get the value of a column
