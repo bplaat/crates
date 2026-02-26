@@ -1,5 +1,5 @@
 <!--
-    Copyright (c) 2025 Bastiaan van der Plaat
+    Copyright (c) 2025-2026 Bastiaan van der Plaat
 
     SPDX-License-Identifier: MIT
 -->
@@ -8,9 +8,38 @@
     <head>
         <meta charset="UTF-8" />
         <title>Todo App</title>
+        <link rel="stylesheet" href="/index.css" />
     </head>
     <body>
-        <div id="app"></div>
-        <script type="module" src="src/index.jsx"></script>
+        <div id="app" @vue:mounted="loadTodos">
+            <h1>Todo App</h1>
+            <form @submit="addTodo">
+                <input type="text" v-model="input" placeholder="Add a todo" />
+                <button type="submit">Add</button>
+                <button type="button" @click="removeCompleted" :disabled="todos.length === 0">Clear done</button>
+            </form>
+
+            <p v-if="todos.length === 0" class="empty-state">
+                <i>No todos yet!</i>
+            </p>
+            <ul v-else>
+                <li
+                    v-for="(todo, index) in todos"
+                    :key="todo.id"
+                    :class="{ 'is-completed': todo.completed }"
+                    @click="completeTodo(index, !todo.completed)"
+                >
+                    <input
+                        type="checkbox"
+                        :checked="todo.completed"
+                        @change="completeTodo(index, $event.target.checked)"
+                    />
+                    {{ todo.text }}
+                </li>
+            </ul>
+        </div>
+
+        <script src="/petite-vue.min.js"></script>
+        <script src="/index.js"></script>
     </body>
 </html>

@@ -33,7 +33,7 @@ enum IpcMessage {
 }
 
 #[derive(Embed)]
-#[folder = "$OUT_DIR/web"]
+#[folder = "web"]
 struct WebAssets;
 
 fn main() {

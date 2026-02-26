@@ -228,7 +228,6 @@ name = "example-todo-app"
 version = "0.1.0"
 dependencies = [
  "bwebview",
- "copy_dir",
  "directories",
  "rust-embed",
  "serde",
