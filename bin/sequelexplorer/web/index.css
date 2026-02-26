@@ -1,0 +1,400 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* Colors */
+:root {
+    --color-background: #fff;
+    --color-text-primary: #111;
+    --color-text-secondary: #555;
+    --color-border: #ccc;
+    --color-icon-disabled: #888;
+    --color-sidebar-background: #f6f6f6;
+    --color-scrollbar: rgba(0, 0, 0, 0.1);
+    --color-tab-active: #fff;
+    --color-tab-hover: #e8e8e8;
+    --color-row-hover: #f0f0f0;
+    --color-cell-null: #aaa;
+    --color-header-background: #f0f0f0;
+    --color-query-background: #f6f6f6;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-background: #222;
+        --color-text-primary: #fff;
+        --color-text-secondary: #aaa;
+        --color-border: #444;
+        --color-icon-disabled: #666;
+        --color-sidebar-background: #2a2a2a;
+        --color-scrollbar: rgba(255, 255, 255, 0.1);
+        --color-tab-active: #333;
+        --color-tab-hover: #2e2e2e;
+        --color-row-hover: #2e2e2e;
+        --color-cell-null: #666;
+        --color-header-background: #2e2e2e;
+        --color-query-background: #2a2a2a;
+    }
+}
+
+/* General */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+input,
+button,
+pre {
+    font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        Roboto,
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        'Open Sans',
+        'Helvetica Neue',
+        sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+html {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    overscroll-behavior: none;
+    cursor: default;
+    -webkit-user-select: none;
+    user-select: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar);
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+}
+
+/* App */
+.app {
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 22rem;
+    background-color: var(--color-sidebar-background);
+    border-right: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid var(--color-border);
+    height: var(--macos-titlebar-height, 28px);
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+body.is-bwebview-macos:not(.is-fullscreen) .sidebar-title {
+    display: flex;
+}
+
+.open-db {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.db-path-input {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    outline: none;
+    font-size: 0.875rem;
+    min-width: 0;
+}
+.db-path-input:focus {
+    border-color: #888;
+}
+
+.open-btn {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.open-btn:hover:not(:disabled) {
+    background: var(--color-tab-hover);
+}
+.open-btn:disabled {
+    color: var(--color-icon-disabled);
+    cursor: default;
+}
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+}
+
+.sidebar-section-title {
+    padding: 0.75rem 1rem 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+}
+
+.tables-list {
+    list-style: none;
+    padding: 0.25rem 0;
+}
+.tables-list li {
+    padding: 0;
+}
+.tables-list li a {
+    display: block;
+    padding: 0.3rem 1rem;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    font-size: 0.9375rem;
+    cursor: pointer;
+}
+.tables-list li a:hover {
+    background: var(--color-tab-hover);
+}
+.tables-list li a.is-active {
+    font-weight: 700;
+    background: var(--color-tab-hover);
+}
+
+/* Content area */
+.content-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* Table view */
+.table-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-sidebar-background);
+    flex-shrink: 0;
+}
+
+.tab {
+    padding: 0.4rem 1rem;
+    border: none;
+    border-right: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+.tab:hover {
+    background: var(--color-tab-hover);
+    color: var(--color-text-primary);
+}
+.tab.is-active {
+    background: var(--color-tab-active);
+    color: var(--color-text-primary);
+    font-weight: 600;
+}
+
+.tab-spacer {
+    flex: 1;
+}
+
+.row-count {
+    padding: 0.4rem 1rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+}
+
+.tab-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Data table */
+.data-table-wrap {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+}
+
+.data-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.875rem;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--color-header-background);
+    border-bottom: 2px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    padding: 0.4rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+    z-index: 1;
+}
+.data-table thead th:last-child {
+    border-right: none;
+}
+
+.col-name {
+    color: var(--color-text-primary);
+}
+
+.col-type {
+    margin-left: 0.25rem;
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    font-weight: normal;
+}
+
+.data-table tbody tr:hover td {
+    background: var(--color-row-hover);
+}
+
+.data-table tbody td {
+    border-bottom: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    padding: 0.35rem 0.75rem;
+    white-space: nowrap;
+    max-width: 24rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.data-table tbody td:last-child {
+    border-right: none;
+}
+
+.data-table tbody td.is-null {
+    color: var(--color-cell-null);
+    font-style: italic;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.load-sentinel {
+    height: 1px;
+}
+
+/* Schema tab */
+.schema-code {
+    flex: 1;
+    padding: 1rem;
+    overflow: auto;
+    font-family: monospace;
+    font-size: 0.875rem;
+    white-space: pre;
+    -webkit-user-select: text;
+    user-select: text;
+    line-height: 1.6;
+}
+
+/* Query bar */
+.query-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-query-background);
+    flex-shrink: 0;
+}
+
+.query-input {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    outline: none;
+    font-family: monospace;
+    font-size: 0.875rem;
+    min-width: 0;
+}
+.query-input:focus {
+    border-color: #888;
+}
+
+/* Placeholder */
+.placeholder {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    font-style: italic;
+    min-height: 4rem;
+}
+
+/* Utils */
+.hidden {
+    display: none !important;
+}

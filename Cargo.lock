@@ -574,6 +574,21 @@ name = "semver"
 version = "1.0.27+patch"
 
 [[package]]
+name = "sequelexplorer"
+version = "0.1.0"
+dependencies = [
+ "bsqlite",
+ "bwebview",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "small-http",
+ "small-router",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
