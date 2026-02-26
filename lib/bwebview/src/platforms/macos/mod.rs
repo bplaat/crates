@@ -936,9 +936,10 @@ fn ns_request_to_http_request(ns_request: *mut Object) -> small_http::Request {
     let body: *mut Object = unsafe { msg_send![ns_request, HTTPBody] };
     if !body.is_null() {
         let length: usize = unsafe { msg_send![body, length] };
-        let bytes: *const u8 = unsafe { msg_send![body, bytes] };
+        let bytes: *const c_void = unsafe { msg_send![body, bytes] };
         let mut post_data = Vec::with_capacity(length);
-        post_data.extend_from_slice(unsafe { std::slice::from_raw_parts(bytes, length) });
+        post_data
+            .extend_from_slice(unsafe { std::slice::from_raw_parts(bytes as *const u8, length) });
         req = req.body(post_data)
     }
     req
