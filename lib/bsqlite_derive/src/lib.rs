@@ -89,8 +89,8 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
         .map(|(index, (field, field_name))| {
             let index = index as i32;
             let ident = field.ident.as_ref().expect("Invalid field");
-            quote! { #ident: statement.read_value(#index).try_into().unwrap_or_else(|_| panic!(
-                "Can't read value of column: {}", #field_name
+            quote! { #ident: statement.column_value(#index).try_into().unwrap_or_else(|_| panic!(
+                "Can't get value of column: {}", #field_name
             )) }
         });
     let from_rows_default = if has_skipped {

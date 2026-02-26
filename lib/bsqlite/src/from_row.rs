@@ -18,7 +18,7 @@ impl FromRow for () {
 
 impl<T: TryFrom<Value>> FromRow for T {
     fn from_row(statement: &mut RawStatement) -> Self {
-        match T::try_from(statement.read_value(0)) {
+        match T::try_from(statement.column_value(0)) {
             Ok(value) => value,
             Err(_) => panic!("Can't convert Value"),
         }
@@ -34,7 +34,7 @@ macro_rules! impl_from_row_for_tuple {
             fn from_row(statement: &mut RawStatement) -> Self {
                 (
                     $(
-                        match $t::try_from(statement.read_value($n)) {
+                        match $t::try_from(statement.column_value($n)) {
                             Ok(value) => value,
                             Err(_) => panic!("Can't convert Value"),
                         },

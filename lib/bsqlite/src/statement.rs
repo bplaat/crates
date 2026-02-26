@@ -11,6 +11,22 @@ use libsqlite3_sys::*;
 
 use crate::{Bind, FromRow, Value};
 
+// MARK: Column Type
+/// Column type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColumnType {
+    /// Null type
+    Null,
+    /// Integer type
+    Integer,
+    /// Float type
+    Float,
+    /// Text type
+    Text,
+    /// Blob type
+    Blob,
+}
+
 // MARK: Raw Statement
 /// Raw SQLite statement without type information
 pub struct RawStatement(*mut sqlite3_stmt);
@@ -74,6 +90,21 @@ impl RawStatement {
         self.bind_value(index - 1, value);
     }
 
+    /// Step the statement
+    pub fn step(&mut self) -> Option<()> {
+        let result = unsafe { sqlite3_step(self.0) };
+        if result == SQLITE_ROW {
+            Some(())
+        } else if result == SQLITE_DONE {
+            None
+        } else {
+            let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0)) }.to_string_lossy();
+            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0))) }
+                .to_string_lossy();
+            panic!("bsqlite: Can't step statement!\n  Query: {query}\n  Error: {error}");
+        }
+    }
+
     /// Get the number of columns in the statement
     pub fn column_count(&self) -> i32 {
         unsafe { sqlite3_column_count(self.0) }
@@ -87,8 +118,20 @@ impl RawStatement {
             .to_string()
     }
 
-    /// Read a value from the statement
-    pub fn read_value(&self, index: i32) -> Value {
+    /// Get the type of a column
+    pub fn column_type(&self, index: i32) -> ColumnType {
+        match unsafe { sqlite3_column_type(self.0, index) } {
+            SQLITE_NULL => ColumnType::Null,
+            SQLITE_INTEGER => ColumnType::Integer,
+            SQLITE_FLOAT => ColumnType::Float,
+            SQLITE_TEXT => ColumnType::Text,
+            SQLITE_BLOB => ColumnType::Blob,
+            r#type => unreachable!("Unknown column type: {}", r#type),
+        }
+    }
+
+    /// Get the value of a column
+    pub fn column_value(&self, index: i32) -> Value {
         match unsafe { sqlite3_column_type(self.0, index) } {
             SQLITE_NULL => Value::Null,
             SQLITE_INTEGER => Value::Integer(unsafe { sqlite3_column_int64(self.0, index) }),
@@ -146,6 +189,11 @@ impl<T> Statement<T> {
         self.0.bind_named_value(name, value.into());
     }
 
+    /// Step the statement
+    pub fn step(&mut self) -> Option<()> {
+        self.0.step()
+    }
+
     /// Get the number of columns in the statement
     pub fn column_count(&self) -> i32 {
         self.0.column_count()
@@ -156,9 +204,14 @@ impl<T> Statement<T> {
         self.0.column_name(index)
     }
 
-    /// Read a value from the statement
-    pub fn read_value(&self, index: i32) -> Value {
-        self.0.read_value(index)
+    /// Get the type of a column
+    pub fn column_type(&self, index: i32) -> ColumnType {
+        self.0.column_type(index)
+    }
+
+    /// Get the value of a column
+    pub fn column_value(&self, index: i32) -> Value {
+        self.0.column_value(index)
     }
 }
 
@@ -166,16 +219,10 @@ impl<T: FromRow> Iterator for Statement<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let result = unsafe { sqlite3_step(self.0 .0) };
-        if result == SQLITE_ROW {
+        if let Some(()) = self.step() {
             Some(T::from_row(&mut self.0))
-        } else if result == SQLITE_DONE {
-            None
         } else {
-            let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0 .0)) }.to_string_lossy();
-            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0 .0))) }
-                .to_string_lossy();
-            panic!("bsqlite: Can't step statement!\n  Query: {query}\n  Error: {error}");
+            None
         }
     }
 }
