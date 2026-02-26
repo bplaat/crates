@@ -1,0 +1,117 @@
+<!--
+    Copyright (c) 2026 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Sequel Explorer</title>
+        <link rel="stylesheet" href="/index.css" />
+    </head>
+    <body>
+        <div id="app" @vue:mounted="init">
+            <div class="app">
+                <div class="sidebar">
+                    <div class="sidebar-title">{{ sidebarTitle }}</div>
+
+                    <div class="open-db">
+                        <input
+                            class="db-path-input"
+                            type="text"
+                            placeholder="Database path..."
+                            autocorrect="off"
+                            spellcheck="false"
+                            v-model="dbPath"
+                            @keydown.enter="openDatabase"
+                        />
+                        <button class="open-btn" :disabled="openBtnDisabled" @click="openDatabase">Open</button>
+                    </div>
+
+                    <div class="sidebar-content">
+                        <div class="placeholder" v-show="!dbOpened">Open a database...</div>
+                        <div class="placeholder" v-show="dbOpened && tables.length === 0">No tables found</div>
+                        <div class="sidebar-section-title" v-show="tables.length > 0">Tables</div>
+                        <ul class="tables-list" v-show="tables.length > 0">
+                            <li v-for="name in tables" :key="name">
+                                <a
+                                    href="#"
+                                    @click.prevent="selectTable(name)"
+                                    :class="{ 'is-active': name === currentTable }"
+                                >
+                                    {{ name }}
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="content-area">
+                    <div class="placeholder" v-show="currentTable === null">Select a table...</div>
+
+                    <div class="table-view" v-show="currentTable !== null">
+                        <div class="tabs">
+                            <button
+                                class="tab"
+                                :class="{ 'is-active': activeTab === 'data' }"
+                                @click="activeTab = 'data'"
+                            >
+                                Data
+                            </button>
+                            <button
+                                class="tab"
+                                :class="{ 'is-active': activeTab === 'schema' }"
+                                @click="activeTab = 'schema'"
+                            >
+                                Schema
+                            </button>
+                            <div class="tab-spacer"></div>
+                            <div class="row-count">{{ rowCount }}</div>
+                        </div>
+
+                        <div class="tab-panel" v-show="activeTab === 'data'">
+                            <div class="data-table-wrap">
+                                <table class="data-table" v-show="showDataTable">
+                                    <thead>
+                                        <tr>
+                                            <th v-for="col in columns" :key="col.name">
+                                                <span class="col-name">{{ col.name }}</span>
+                                                <span class="col-type">{{ col.type }}</span>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody ref="dataTbody"></tbody>
+                                </table>
+                                <div ref="loadSentinel" class="load-sentinel"></div>
+                                <div class="placeholder" v-show="showDataLoading">Loading...</div>
+                                <div class="placeholder" v-show="showDataEmpty">{{ dataEmptyText }}</div>
+                            </div>
+                        </div>
+
+                        <div class="tab-panel" v-show="activeTab === 'schema'">
+                            <pre class="schema-code" v-text="schemaText"></pre>
+                        </div>
+
+                        <div class="query-bar">
+                            <input
+                                class="query-input"
+                                type="text"
+                                placeholder="Custom SELECT query..."
+                                autocorrect="off"
+                                spellcheck="false"
+                                v-model="queryText"
+                                @keydown.enter="runQuery"
+                            />
+                            <button class="open-btn" @click="runQuery">Run</button>
+                            <button class="open-btn" :disabled="!isCustomQuery" @click="clearQuery">Clear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="/petite-vue.min.js"></script>
+        <script src="/index.js"></script>
+    </body>
+</html>
