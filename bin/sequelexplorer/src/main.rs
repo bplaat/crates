@@ -9,14 +9,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use bsqlite::{Connection, OpenMode, Value};
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
+use bsqlite::{ColumnType, Connection, OpenMode, Value};
 use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use small_http::{Request, Response, Status};
 use small_router::RouterBuilder;
-use url::Url;
 
 #[derive(Embed)]
 #[folder = "web"]
@@ -24,6 +25,17 @@ struct WebAssets;
 
 // MARK: State
 type State = Arc<Mutex<Option<Connection>>>;
+
+// MARK: Database helpers
+fn get_connection(
+    state: &State,
+) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, Response> {
+    let guard = state.lock().expect("mutex poisoned");
+    if guard.is_none() {
+        return Err(Response::with_json(json!({ "error": "No database open" })));
+    }
+    Ok(guard)
+}
 
 // MARK: Open
 #[derive(Deserialize)]
@@ -47,10 +59,11 @@ fn db_open(req: &Request, state: &State) -> Response {
 
 // MARK: Tables
 fn db_tables(_req: &Request, state: &State) -> Response {
-    let guard = state.lock().expect("mutex poisoned");
-    let Some(conn) = guard.as_ref() else {
-        return Response::with_json(json!({ "error": "No database open" }));
+    let guard = match get_connection(state) {
+        Ok(g) => g,
+        Err(e) => return e,
     };
+    let conn = guard.as_ref().expect("Connection should be present");
 
     let table_names: Vec<String> = conn
         .query::<String>(
@@ -62,36 +75,26 @@ fn db_tables(_req: &Request, state: &State) -> Response {
 }
 
 // MARK: Table data
-fn column_type_to_string(r#type: bsqlite::ColumnType) -> String {
-    match r#type {
-        bsqlite::ColumnType::Null => "NULL".to_string(),
-        bsqlite::ColumnType::Integer => "INTEGER".to_string(),
-        bsqlite::ColumnType::Float => "FLOAT".to_string(),
-        bsqlite::ColumnType::Text => "TEXT".to_string(),
-        bsqlite::ColumnType::Blob => "BLOB".to_string(),
-    }
+#[derive(Deserialize)]
+struct TableDataQuery {
+    #[serde(default)]
+    offset: i64,
+    #[serde(default = "default_limit")]
+    limit: i64,
+}
+
+fn default_limit() -> i64 {
+    100
 }
 
 fn column_value_to_json(value: Value) -> serde_json::Value {
     match value {
         Value::Null => serde_json::Value::Null,
         Value::Integer(i) => json!(i),
-        Value::Real(f) => json!(f),
+        Value::Float(f) => json!(f),
         Value::Text(s) => json!(s),
-        Value::Blob(b) => {
-            if let Ok(uuid) = uuid::Uuid::from_slice(&b) {
-                json!(uuid.to_string())
-            } else {
-                json!(format!("<BLOB {} bytes>", b.len()))
-            }
-        }
+        Value::Blob(b) => json!(BASE64_STANDARD.encode(&b)),
     }
-}
-
-#[derive(Serialize)]
-struct ColumnInfo {
-    name: String,
-    r#type: String,
 }
 
 #[derive(Serialize)]
@@ -101,50 +104,71 @@ struct TableData {
     total: i64,
 }
 
-fn parse_query_param(url: &Url, key: &str) -> Option<String> {
-    let query = url.query()?;
-    query.split('&').find_map(|pair| {
-        let mut parts = pair.splitn(2, '=');
-        let k = parts.next()?;
-        let v = parts.next().unwrap_or("");
-        if k == key { Some(v.to_string()) } else { None }
-    })
+#[derive(Serialize)]
+struct ColumnInfo {
+    name: String,
+    r#type: String,
+    is_blob: bool,
+    foreign_key: Option<ColumnForeignKey>,
 }
 
-fn db_table_data(req: &Request, state: &State) -> Response {
-    let name = req
-        .params
-        .get("name")
-        .expect("name param should be present");
-    let offset: i64 = parse_query_param(&req.url, "offset")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0);
-    let limit: i64 = parse_query_param(&req.url, "limit")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(100);
+#[derive(Clone, Serialize)]
+struct ColumnForeignKey {
+    table: String,
+    column: String,
+}
 
-    let guard = state.lock().expect("mutex poisoned");
-    let Some(conn) = guard.as_ref() else {
-        return Response::with_json(json!({ "error": "No database open" }));
-    };
+fn get_foreign_key(conn: &Connection, table: &str, column: &str) -> Option<ColumnForeignKey> {
+    conn.query::<(String, String, String)>(
+        &format!("SELECT \"from\", \"table\", \"to\" FROM pragma_foreign_key_list(\"{table}\") WHERE \"from\" = ?"),
+        column.to_string(),
+    )
+    .next()
+    .map(|(_, table, column)| ColumnForeignKey { table, column })
+}
 
-    let total: i64 = conn.query_some::<i64>(&format!("SELECT COUNT(*) FROM \"{name}\""), ());
-
-    let query = format!("SELECT * FROM \"{name}\" LIMIT {limit} OFFSET {offset}");
-    let mut stmt = conn.prepare::<()>(&query);
-
-    let col_count = stmt.column_count();
-    let columns = (0..col_count)
-        .map(|j| ColumnInfo {
-            name: stmt.column_name(j),
-            r#type: stmt
-                .column_declared_type(j)
-                .expect("Declared type should be present"),
-        })
-        .collect::<Vec<_>>();
-
+// MARK: Statement processing
+fn process_statement(
+    stmt: &mut bsqlite::Statement<()>,
+    conn: &Connection,
+) -> (Vec<ColumnInfo>, Vec<Vec<serde_json::Value>>) {
+    let mut columns = None;
     let mut rows: Vec<Vec<serde_json::Value>> = Vec::new();
+
     while stmt.step().is_some() {
+        let col_count = stmt.column_count();
+        if columns.is_none() {
+            columns = Some(
+                (0..col_count)
+                    .map(|j| {
+                        let name = stmt.column_name(j);
+                        ColumnInfo {
+                            name,
+                            r#type: stmt.column_declared_type(j).unwrap_or_else(|| {
+                                match stmt.column_type(j) {
+                                    ColumnType::Null => "NULL".to_string(),
+                                    ColumnType::Integer => "INTEGER".to_string(),
+                                    ColumnType::Float => "FLOAT".to_string(),
+                                    ColumnType::Text => "TEXT".to_string(),
+                                    ColumnType::Blob => "BLOB".to_string(),
+                                }
+                            }),
+                            is_blob: stmt.column_type(j) == ColumnType::Blob,
+                            foreign_key: match (
+                                stmt.column_table_name(j),
+                                stmt.column_origin_name(j),
+                            ) {
+                                (Some(table), Some(column)) => {
+                                    get_foreign_key(conn, &table, &column)
+                                }
+                                _ => None,
+                            },
+                        }
+                    })
+                    .collect(),
+            );
+        }
+
         let mut row = Vec::new();
         for i in 0..col_count {
             row.push(column_value_to_json(stmt.column_value(i)));
@@ -152,6 +176,39 @@ fn db_table_data(req: &Request, state: &State) -> Response {
         rows.push(row);
     }
 
+    (columns.unwrap_or_default(), rows)
+}
+
+fn db_table_data(req: &Request, state: &State) -> Response {
+    let name = req
+        .params
+        .get("name")
+        .expect("name param should be present");
+
+    let query = match req.url.query() {
+        Some(q) => match serde_urlencoded::from_str::<TableDataQuery>(q) {
+            Ok(query) => query,
+            Err(_) => return Response::with_json(json!({ "error": "Invalid query parameters" })),
+        },
+        None => TableDataQuery {
+            offset: 0,
+            limit: 100,
+        },
+    };
+
+    let guard = match get_connection(state) {
+        Ok(g) => g,
+        Err(e) => return e,
+    };
+    let conn = guard.as_ref().expect("Connection should be present");
+
+    let total: i64 = conn.query_some::<i64>(&format!("SELECT COUNT(*) FROM \"{name}\""), ());
+
+    let mut stmt = conn.prepare::<()>(format!("SELECT * FROM \"{name}\" LIMIT ? OFFSET ?",));
+    stmt.bind_value(0, query.limit);
+    stmt.bind_value(1, query.offset);
+
+    let (columns, rows) = process_statement(&mut stmt, conn);
     Response::with_json(&TableData {
         columns,
         rows,
@@ -171,10 +228,11 @@ fn db_table_schema(req: &Request, state: &State) -> Response {
         .get("name")
         .expect("name param should be present");
 
-    let guard = state.lock().expect("mutex poisoned");
-    let Some(conn) = guard.as_ref() else {
-        return Response::with_json(json!({ "error": "No database open" }));
+    let guard = match get_connection(state) {
+        Ok(g) => g,
+        Err(e) => return e,
     };
+    let conn = guard.as_ref().expect("Connection should be present");
 
     let sql = conn
         .query::<String>(
@@ -210,40 +268,16 @@ fn db_query(req: &Request, state: &State) -> Response {
         Err(e) => return Response::with_json(json!({ "error": e.to_string() })),
     };
 
-    let guard = state.lock().expect("mutex poisoned");
-    let Some(conn) = guard.as_ref() else {
-        return Response::with_json(json!({ "error": "No database open" }));
+    let guard = match get_connection(state) {
+        Ok(g) => g,
+        Err(e) => return e,
     };
+    let conn = guard.as_ref().expect("Connection should be present");
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let mut stmt = conn.prepare::<()>(&body.sql);
-
-        let mut columns = None;
-        let mut rows: Vec<Vec<serde_json::Value>> = Vec::new();
-        while stmt.step().is_some() {
-            let col_count = stmt.column_count();
-            if columns.is_none() {
-                columns = Some(
-                    (0..col_count)
-                        .map(|j| ColumnInfo {
-                            name: stmt.column_name(j),
-                            r#type: column_type_to_string(stmt.column_type(j)),
-                        })
-                        .collect(),
-                );
-            }
-
-            let mut row = Vec::new();
-            for i in 0..col_count {
-                row.push(column_value_to_json(stmt.column_value(i)));
-            }
-            rows.push(row);
-        }
-
-        QueryResult {
-            columns: columns.unwrap_or_default(),
-            rows,
-        }
+        let (columns, rows) = process_statement(&mut stmt, conn);
+        QueryResult { columns, rows }
     }));
 
     match result {

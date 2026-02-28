@@ -202,6 +202,7 @@ body.is-bwebview-macos:not(.is-fullscreen) .sidebar-title {
     text-decoration: none;
     font-size: 0.9375rem;
     cursor: pointer;
+    -webkit-user-drag: none;
 }
 .tables-list li a:hover {
     background: var(--color-tab-hover);
@@ -218,6 +219,7 @@ body.is-bwebview-macos:not(.is-fullscreen) .sidebar-title {
     flex-direction: column;
     min-width: 0;
     overflow: hidden;
+    padding-top: var(--macos-titlebar-height, 28px);
 }
 
 /* Table view */
@@ -333,10 +335,34 @@ body.is-bwebview-macos:not(.is-fullscreen) .sidebar-title {
     border-right: none;
 }
 
-.data-table tbody td.is-null {
+.is-null {
     color: var(--color-cell-null);
     font-style: italic;
-    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.fk-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0.35rem;
+    padding: 0 0.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.7rem;
+    line-height: 1.2;
+    cursor: pointer;
+    vertical-align: middle;
+    opacity: 0.6;
+    transition:
+        opacity 0.15s,
+        color 0.15s;
+}
+.fk-btn:hover {
+    opacity: 1;
+    color: var(--color-text-primary);
+    border-color: #888;
 }
 
 .load-sentinel {

@@ -577,15 +577,16 @@ version = "1.0.27+patch"
 name = "sequelexplorer"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bsqlite",
  "bwebview",
  "rust-embed",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "small-http",
  "small-router",
  "url",
- "uuid",
 ]
 
 [[package]]

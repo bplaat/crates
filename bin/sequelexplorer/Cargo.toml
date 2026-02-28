@@ -14,14 +14,18 @@ copyright = "Copyright © 2026 Bastiaan van der Plaat"
 workspace = true
 
 [dependencies]
-bsqlite = { path = "../../lib/bsqlite", features = ["bundled"] }
+base64 = "0.22"
+bsqlite = "0.1.2"
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
 rust-embed = "8.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_urlencoded = "0.7.1"
 small-http = { version = "0.2.1", default-features = false, features = [
     "json",
 ] }
 small-router = { version = "0.2.1" }
-uuid = { version = "1.0" }
 url = { version = "2.0" }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+bsqlite = { version = "0.1.2", features = ["bundled"] }

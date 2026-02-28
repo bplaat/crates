@@ -22,6 +22,7 @@ PetiteVue.createApp({
     activeTab: 'data',
     rowCount: '',
     columns: [],
+    rows: [],
     showDataTable: false,
     showDataLoading: false,
     showDataEmpty: false,
@@ -87,12 +88,12 @@ PetiteVue.createApp({
         this.currentTotal = 0;
         this.isCustomQuery = false;
         this.columns = [];
+        this.rows = [];
         this.rowCount = '';
         this.showDataEmpty = false;
         this.showDataLoading = true;
         this.showDataTable = false;
         this.activeTab = 'data';
-        this.$refs.dataTbody.innerHTML = '';
 
         await this.loadMoreRows(name);
 
@@ -144,22 +145,72 @@ PetiteVue.createApp({
     },
 
     appendRows(rows) {
-        const frag = document.createDocumentFragment();
-        for (const row of rows) {
-            const tr = document.createElement('tr');
-            for (const val of row) {
-                const td = document.createElement('td');
-                if (val === null) {
-                    td.textContent = 'NULL';
-                    td.classList.add('is-null');
-                } else {
-                    td.textContent = String(val);
-                }
-                tr.appendChild(td);
-            }
-            frag.appendChild(tr);
+        this.rows = this.rows.concat(rows);
+    },
+
+    formatSqlValue(val) {
+        if (val === null) {
+            return 'NULL';
         }
-        this.$refs.dataTbody.appendChild(frag);
+
+        if (typeof val === 'number') {
+            return String(val);
+        }
+
+        try {
+            const binaryStr = atob(val);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            const hex = Array.from(bytes)
+                .map((b) => b.toString(16).padStart(2, '0'))
+                .join('');
+            return `X'${hex.toUpperCase()}'`;
+        } catch (e) {
+            return `'${String(val).replace(/'/g, "''")}'`;
+        }
+    },
+
+    async navigateToForeignKey(table, column, value) {
+        const sql = `SELECT * FROM "${table}" WHERE "${column}" = ${this.formatSqlValue(value)}`;
+        this.queryText = sql;
+        this.isCustomQuery = true;
+        this.activeTab = 'data';
+        this.currentOffset = 0;
+        this.currentTotal = 0;
+        this.columns = [];
+        this.rows = [];
+        this.rowCount = '';
+        this.showDataEmpty = false;
+        this.showDataLoading = true;
+        this.showDataTable = false;
+
+        const res = await fetch('/api/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sql }),
+        });
+        const data = await res.json();
+        this.showDataLoading = false;
+
+        if (data.error) {
+            this.dataEmptyText = 'Error: ' + data.error;
+            this.showDataEmpty = true;
+            return;
+        }
+
+        this.rowCount = `${data.rows.length.toLocaleString()} rows`;
+        this.columns = data.columns;
+        this.showDataTable = true;
+
+        if (data.rows.length === 0) {
+            this.dataEmptyText = 'No rows';
+            this.showDataEmpty = true;
+            return;
+        }
+
+        this.appendRows(data.rows);
     },
 
     async runQuery() {
@@ -171,11 +222,11 @@ PetiteVue.createApp({
         this.currentOffset = 0;
         this.currentTotal = 0;
         this.columns = [];
+        this.rows = [];
         this.rowCount = '';
         this.showDataEmpty = false;
         this.showDataLoading = true;
         this.showDataTable = false;
-        this.$refs.dataTbody.innerHTML = '';
 
         const res = await fetch('/api/query', {
             method: 'POST',
@@ -208,5 +259,35 @@ PetiteVue.createApp({
         this.queryText = '';
         this.isCustomQuery = false;
         if (this.currentTable) this.openTableView(this.currentTable);
+    },
+
+    formatCellValue(val, colIdx) {
+        if (val === null) return 'NULL';
+
+        const column = this.columns[colIdx];
+        if (column.is_blob) {
+            try {
+                const binaryStr = atob(val);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) {
+                    bytes[i] = binaryStr.charCodeAt(i);
+                }
+
+                if (bytes.length === 16) {
+                    const hex = Array.from(bytes)
+                        .map((b) => b.toString(16).padStart(2, '0'))
+                        .join('');
+                    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+                }
+
+                return Array.from(bytes)
+                    .map((b) => b.toString(16).padStart(2, '0'))
+                    .join('');
+            } catch (e) {
+                return val;
+            }
+        }
+
+        return val;
     },
 }).mount('#app');
