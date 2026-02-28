@@ -529,9 +529,9 @@ impl Webview {
 
     /// Send IPC message
     pub fn send_ipc_message(&mut self, message: impl AsRef<str>) {
+        let message = message.as_ref().replace('\\', "\\\\").replace('`', "\\`");
         self.evaluate_script(format!(
-            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{}`}}));",
-            message.as_ref()
+            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{message}`}}));",
         ));
     }
 

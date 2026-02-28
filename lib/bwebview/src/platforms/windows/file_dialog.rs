@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::CString;
+use std::ffi::c_void;
 use std::path::PathBuf;
-use std::ptr::{null, null_mut};
+use std::ptr::null_mut;
 
+use super::event_loop::FIRST_HWND;
 use super::win32::*;
 
 #[cfg(feature = "file_dialog")]
@@ -43,8 +44,7 @@ impl crate::FileDialogInterface for PlatformFileDialog {
             if !specs.is_empty() {
                 dlg.SetFileTypes(specs.len() as u32, specs.as_ptr());
             }
-            let hwnd = #[allow(static_mut_refs)]
-            FIRST_HWND.unwrap_or(null_mut());
+            let hwnd = unsafe { FIRST_HWND }.unwrap_or(null_mut());
             let path = if dlg.Show(hwnd) == S_OK {
                 let mut item: *mut IShellItem = null_mut();
                 if dlg.GetResult(&mut item) == S_OK {
@@ -92,8 +92,7 @@ impl crate::FileDialogInterface for PlatformFileDialog {
             if !specs.is_empty() {
                 dlg.SetFileTypes(specs.len() as u32, specs.as_ptr());
             }
-            let hwnd = #[allow(static_mut_refs)]
-            FIRST_HWND.unwrap_or(null_mut());
+            let hwnd = unsafe { FIRST_HWND }.unwrap_or(null_mut());
             let paths = if dlg.Show(hwnd) == S_OK {
                 let mut items: *mut IShellItemArray = null_mut();
                 if dlg.GetResults(&mut items) == S_OK {
@@ -166,8 +165,7 @@ impl crate::FileDialogInterface for PlatformFileDialog {
             if let Some(ref e) = def_ext_w {
                 dlg.SetDefaultExtension(e.as_ptr());
             }
-            let hwnd = #[allow(static_mut_refs)]
-            FIRST_HWND.unwrap_or(null_mut());
+            let hwnd = unsafe { FIRST_HWND }.unwrap_or(null_mut());
             let path = if dlg.Show(hwnd) == S_OK {
                 let mut item: *mut IShellItem = null_mut();
                 if dlg.GetResult(&mut item) == S_OK {
@@ -187,10 +185,13 @@ impl crate::FileDialogInterface for PlatformFileDialog {
 }
 
 #[cfg(feature = "file_dialog")]
+type FilterStorage = Vec<(Box<[u16]>, Box<[u16]>)>;
+
+#[cfg(feature = "file_dialog")]
 fn build_com_filters(
     filters: &[crate::FileDialogFilter],
-) -> (Vec<COMDLG_FILTERSPEC>, Vec<(Box<[u16]>, Box<[u16]>)>) {
-    let mut storage: Vec<(Box<[u16]>, Box<[u16]>)> = Vec::new();
+) -> (Vec<COMDLG_FILTERSPEC>, FilterStorage) {
+    let mut storage: FilterStorage = Vec::new();
     let mut specs: Vec<COMDLG_FILTERSPEC> = Vec::new();
     for f in filters {
         let name: Box<[u16]> = f.name.to_wide_string().into_boxed_slice();
@@ -211,9 +212,9 @@ fn build_com_filters(
 }
 
 #[cfg(feature = "file_dialog")]
-unsafe fn make_shell_item_from_path(path: Option<&std::path::PathBuf>) -> Option<*mut IShellItem> {
+unsafe fn make_shell_item_from_path(path: Option<&PathBuf>) -> Option<*mut IShellItem> {
     let path = path?;
-    let w = path.to_string_lossy().to_wide_string();
+    let w = path.to_string_lossy().to_string().to_wide_string();
     let mut item: *mut IShellItem = null_mut();
     if unsafe {
         SHCreateItemFromParsingName(
@@ -232,15 +233,9 @@ unsafe fn make_shell_item_from_path(path: Option<&std::path::PathBuf>) -> Option
 
 #[cfg(feature = "file_dialog")]
 unsafe fn shell_item_path(item: *mut IShellItem) -> Option<PathBuf> {
-    let mut ptr: *mut u16 = null_mut();
-    if unsafe { (*item).GetDisplayName(SIGDN_FILESYSPATH, &mut ptr) } == S_OK && !ptr.is_null() {
-        let mut len = 0;
-        while unsafe { *ptr.add(len) } != 0 {
-            len += 1;
-        }
-        let s = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(ptr, len) });
-        unsafe { CoTaskMemFree(ptr as *mut c_void) };
-        Some(PathBuf::from(s))
+    let mut name = LPWSTR::default();
+    if unsafe { (*item).GetDisplayName(SIGDN_FILESYSPATH, name.as_mut_ptr()) } == S_OK {
+        Some(PathBuf::from(name.to_string()))
     } else {
         None
     }

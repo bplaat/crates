@@ -116,7 +116,7 @@ pub(crate) fn send_event(event: Event) {
 }
 
 // MARK: EventLoopProxy
-const WM_SEND_MESSAGE: u32 = WM_USER + 1;
+pub(super) const WM_SEND_MESSAGE: u32 = WM_USER + 1;
 
 pub(crate) struct PlatformEventLoopProxy;
 
