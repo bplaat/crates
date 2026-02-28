@@ -13,7 +13,6 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 const PAGE_SIZE = 100;
 
 PetiteVue.createApp({
-    sidebarTitle: 'Sequel Explorer',
     dbPath: localStorage.getItem('lastDbPath') || '',
     openBtnDisabled: false,
     dbOpened: false,
@@ -80,9 +79,7 @@ PetiteVue.createApp({
     },
 
     async openTableView(name) {
-        const title = `Sequel Explorer - ${name}`;
-        document.title = title;
-        this.sidebarTitle = title;
+        document.title = `Sequel Explorer - ${name}`;
 
         this.currentOffset = 0;
         this.currentTotal = 0;
