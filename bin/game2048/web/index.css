@@ -160,6 +160,7 @@ a {
     font-weight: bold;
     text-decoration: underline;
     cursor: pointer;
+    -webkit-user-drag: none;
 }
 
 strong.important {
