@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -83,6 +83,8 @@ pub(crate) const NS_EVENT_MODIFIER_FLAG_OPTION: u64 = 1 << 19;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
 
 pub(crate) const NS_KEY_VALUE_OBSERVING_OPTION_NEW: u64 = 0x1;
+
+pub(crate) const NS_MODAL_RESPONSE_OK: i64 = 1;
 
 #[repr(transparent)]
 pub(crate) struct NSString(pub *mut Object);

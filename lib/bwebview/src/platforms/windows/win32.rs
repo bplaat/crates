@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -475,4 +475,274 @@ impl Drop for LPWSTR {
             unsafe { CoTaskMemFree(self.0 as *mut c_void) };
         }
     }
+}
+
+// MARK: Common Item Dialog
+pub(crate) const FOS_OVERWRITEPROMPT: u32 = 0x00000002;
+pub(crate) const FOS_NOCHANGEDIR: u32 = 0x00000008;
+pub(crate) const FOS_ALLOWMULTISELECT: u32 = 0x00000200;
+pub(crate) const FOS_PATHMUSTEXIST: u32 = 0x00000800;
+pub(crate) const FOS_FILEMUSTEXIST: u32 = 0x00001000;
+pub(crate) const SIGDN_FILESYSPATH: u32 = 0x80058000;
+pub(crate) const CLSCTX_INPROC_SERVER: u32 = 1;
+
+pub(crate) const CLSID_FileOpenDialog: GUID = GUID {
+    data1: 0xDC1C5A9C,
+    data2: 0xE88A,
+    data3: 0x4dde,
+    data4: [0xA5, 0xA1, 0x60, 0xF8, 0x2A, 0x20, 0xAE, 0xF7],
+};
+pub(crate) const CLSID_FileSaveDialog: GUID = GUID {
+    data1: 0xC0B4E2F3,
+    data2: 0xBA21,
+    data3: 0x4773,
+    data4: [0x8D, 0xBA, 0x33, 0x5E, 0xC9, 0x46, 0xEB, 0x8B],
+};
+pub(crate) const IID_IFileOpenDialog: GUID = GUID {
+    data1: 0xD57C7288,
+    data2: 0xD4AD,
+    data3: 0x4768,
+    data4: [0xBE, 0x02, 0x9D, 0x96, 0x95, 0x32, 0xD9, 0x60],
+};
+pub(crate) const IID_IFileSaveDialog: GUID = GUID {
+    data1: 0x84BCCD23,
+    data2: 0x5FDE,
+    data3: 0x4CDB,
+    data4: [0xAE, 0xA4, 0xAF, 0x64, 0xB8, 0x3D, 0x78, 0xAB],
+};
+pub(crate) const IID_IShellItem: GUID = GUID {
+    data1: 0x43826D1E,
+    data2: 0xE718,
+    data3: 0x42EE,
+    data4: [0xBC, 0x55, 0xA1, 0xE2, 0x61, 0xC3, 0x7B, 0xFE],
+};
+
+#[repr(C)]
+pub(crate) struct COMDLG_FILTERSPEC {
+    pub(crate) pszName: *const u16,
+    pub(crate) pszSpec: *const u16,
+}
+
+// IShellItem
+#[repr(C)]
+pub(crate) struct IShellItem {
+    pub(crate) vtbl: *const IShellItemVtbl,
+}
+
+impl IShellItem {
+    pub(crate) unsafe fn Release(&self) -> u32 {
+        unsafe { ((*self.vtbl).Release)(self as *const _ as *mut _) }
+    }
+
+    pub(crate) unsafe fn GetDisplayName(&self, sigdn: u32, ppszName: *mut *mut u16) -> HRESULT {
+        unsafe { ((*self.vtbl).GetDisplayName)(self as *const _ as *mut _, sigdn, ppszName) }
+    }
+}
+
+#[repr(C)]
+pub(crate) struct IShellItemVtbl {
+    _unk: [usize; 2], // QueryInterface, AddRef
+    pub(crate) Release: unsafe extern "system" fn(*mut c_void) -> u32,
+    _bind_parent: [usize; 2], // BindToHandler, GetParent
+    pub(crate) GetDisplayName:
+        unsafe extern "system" fn(*mut c_void, u32, *mut *mut u16) -> HRESULT,
+    // GetAttributes, Compare
+}
+
+// IShellItemArray
+#[repr(C)]
+pub(crate) struct IShellItemArray {
+    pub(crate) vtbl: *const IShellItemArrayVtbl,
+}
+
+impl IShellItemArray {
+    pub(crate) unsafe fn Release(&self) -> u32 {
+        unsafe { ((*self.vtbl).Release)(self as *const _ as *mut _) }
+    }
+
+    pub(crate) unsafe fn GetCount(&self, pdwNumItems: *mut u32) -> HRESULT {
+        unsafe { ((*self.vtbl).GetCount)(self as *const _ as *mut _, pdwNumItems) }
+    }
+
+    pub(crate) unsafe fn GetItemAt(&self, dwIndex: u32, ppsi: *mut *mut IShellItem) -> HRESULT {
+        unsafe { ((*self.vtbl).GetItemAt)(self as *const _ as *mut _, dwIndex, ppsi) }
+    }
+}
+
+#[repr(C)]
+pub(crate) struct IShellItemArrayVtbl {
+    _unk: [usize; 2], // QueryInterface, AddRef
+    pub(crate) Release: unsafe extern "system" fn(*mut c_void) -> u32,
+    _mid: [usize; 4], // BindToHandler, GetPropertyStore, GetPropertyDescriptionList, GetAttributes
+    pub(crate) GetCount: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
+    pub(crate) GetItemAt:
+        unsafe extern "system" fn(*mut c_void, u32, *mut *mut IShellItem) -> HRESULT,
+    // EnumItems
+}
+
+// IFileOpenDialog
+#[repr(C)]
+pub(crate) struct IFileOpenDialog {
+    pub(crate) vtbl: *const IFileOpenDialogVtbl,
+}
+
+impl IFileOpenDialog {
+    pub(crate) unsafe fn Release(&self) -> u32 {
+        unsafe { ((*self.vtbl).Release)(self as *const _ as *mut _) }
+    }
+
+    pub(crate) unsafe fn Show(&self, hwnd: HWND) -> HRESULT {
+        unsafe { ((*self.vtbl).Show)(self as *const _ as *mut _, hwnd) }
+    }
+
+    pub(crate) unsafe fn SetFileTypes(
+        &self,
+        cFileTypes: u32,
+        rgFilterSpec: *const COMDLG_FILTERSPEC,
+    ) -> HRESULT {
+        unsafe { ((*self.vtbl).SetFileTypes)(self as *const _ as *mut _, cFileTypes, rgFilterSpec) }
+    }
+
+    pub(crate) unsafe fn SetOptions(&self, fos: u32) -> HRESULT {
+        unsafe { ((*self.vtbl).SetOptions)(self as *const _ as *mut _, fos) }
+    }
+
+    pub(crate) unsafe fn SetFolder(&self, psi: *mut IShellItem) -> HRESULT {
+        unsafe { ((*self.vtbl).SetFolder)(self as *const _ as *mut _, psi as *mut c_void) }
+    }
+
+    pub(crate) unsafe fn SetTitle(&self, pszTitle: *const u16) -> HRESULT {
+        unsafe { ((*self.vtbl).SetTitle)(self as *const _ as *mut _, pszTitle) }
+    }
+
+    pub(crate) unsafe fn GetResult(&self, ppsi: *mut *mut IShellItem) -> HRESULT {
+        unsafe { ((*self.vtbl).GetResult)(self as *const _ as *mut _, ppsi) }
+    }
+
+    pub(crate) unsafe fn GetResults(&self, ppsia: *mut *mut IShellItemArray) -> HRESULT {
+        unsafe { ((*self.vtbl).GetResults)(self as *const _ as *mut _, ppsia) }
+    }
+}
+
+#[repr(C)]
+pub(crate) struct IFileOpenDialogVtbl {
+    _unk: [usize; 2], // QueryInterface, AddRef
+    pub(crate) Release: unsafe extern "system" fn(*mut c_void) -> u32,
+    // IModalWindow
+    pub(crate) Show: unsafe extern "system" fn(*mut c_void, HWND) -> HRESULT,
+    // IFileDialog
+    pub(crate) SetFileTypes:
+        unsafe extern "system" fn(*mut c_void, u32, *const COMDLG_FILTERSPEC) -> HRESULT,
+    _type_idx: [usize; 4], // SetFileTypeIndex, GetFileTypeIndex, Advise, Unadvise
+    pub(crate) SetOptions: unsafe extern "system" fn(*mut c_void, u32) -> HRESULT,
+    _get_opts_def: [usize; 2], // GetOptions, SetDefaultFolder
+    pub(crate) SetFolder: unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
+    _get_folder_sel: [usize; 2], // GetFolder, GetCurrentSelection
+    _set_filename: usize,        // SetFileName
+    _get_filename: usize,        // GetFileName
+    pub(crate) SetTitle: unsafe extern "system" fn(*mut c_void, *const u16) -> HRESULT,
+    _labels: [usize; 2], // SetOkButtonLabel, SetFileNameLabel
+    pub(crate) GetResult: unsafe extern "system" fn(*mut c_void, *mut *mut IShellItem) -> HRESULT,
+    _add_place: usize,      // AddPlace
+    _def_ext: usize,        // SetDefaultExtension
+    _close_etc: [usize; 4], // Close, SetClientGuid, ClearClientData, SetFilter
+    // IFileOpenDialog
+    pub(crate) GetResults:
+        unsafe extern "system" fn(*mut c_void, *mut *mut IShellItemArray) -> HRESULT,
+    // GetSelectedItems
+}
+
+// IFileSaveDialog
+#[repr(C)]
+pub(crate) struct IFileSaveDialog {
+    pub(crate) vtbl: *const IFileSaveDialogVtbl,
+}
+
+impl IFileSaveDialog {
+    pub(crate) unsafe fn Release(&self) -> u32 {
+        unsafe { ((*self.vtbl).Release)(self as *const _ as *mut _) }
+    }
+
+    pub(crate) unsafe fn Show(&self, hwnd: HWND) -> HRESULT {
+        unsafe { ((*self.vtbl).Show)(self as *const _ as *mut _, hwnd) }
+    }
+
+    pub(crate) unsafe fn SetFileTypes(
+        &self,
+        cFileTypes: u32,
+        rgFilterSpec: *const COMDLG_FILTERSPEC,
+    ) -> HRESULT {
+        unsafe { ((*self.vtbl).SetFileTypes)(self as *const _ as *mut _, cFileTypes, rgFilterSpec) }
+    }
+
+    pub(crate) unsafe fn SetOptions(&self, fos: u32) -> HRESULT {
+        unsafe { ((*self.vtbl).SetOptions)(self as *const _ as *mut _, fos) }
+    }
+
+    pub(crate) unsafe fn SetFolder(&self, psi: *mut IShellItem) -> HRESULT {
+        unsafe { ((*self.vtbl).SetFolder)(self as *const _ as *mut _, psi as *mut c_void) }
+    }
+
+    pub(crate) unsafe fn SetFileName(&self, pszName: *const u16) -> HRESULT {
+        unsafe { ((*self.vtbl).SetFileName)(self as *const _ as *mut _, pszName) }
+    }
+
+    pub(crate) unsafe fn SetTitle(&self, pszTitle: *const u16) -> HRESULT {
+        unsafe { ((*self.vtbl).SetTitle)(self as *const _ as *mut _, pszTitle) }
+    }
+
+    pub(crate) unsafe fn SetDefaultExtension(&self, pszDefaultExtension: *const u16) -> HRESULT {
+        unsafe {
+            ((*self.vtbl).SetDefaultExtension)(self as *const _ as *mut _, pszDefaultExtension)
+        }
+    }
+
+    pub(crate) unsafe fn GetResult(&self, ppsi: *mut *mut IShellItem) -> HRESULT {
+        unsafe { ((*self.vtbl).GetResult)(self as *const _ as *mut _, ppsi) }
+    }
+}
+
+#[repr(C)]
+pub(crate) struct IFileSaveDialogVtbl {
+    _unk: [usize; 2], // QueryInterface, AddRef
+    pub(crate) Release: unsafe extern "system" fn(*mut c_void) -> u32,
+    // IModalWindow
+    pub(crate) Show: unsafe extern "system" fn(*mut c_void, HWND) -> HRESULT,
+    // IFileDialog
+    pub(crate) SetFileTypes:
+        unsafe extern "system" fn(*mut c_void, u32, *const COMDLG_FILTERSPEC) -> HRESULT,
+    _type_idx: [usize; 4], // SetFileTypeIndex, GetFileTypeIndex, Advise, Unadvise
+    pub(crate) SetOptions: unsafe extern "system" fn(*mut c_void, u32) -> HRESULT,
+    _get_opts_def: [usize; 2], // GetOptions, SetDefaultFolder
+    pub(crate) SetFolder: unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
+    _get_folder_sel: [usize; 2], // GetFolder, GetCurrentSelection
+    pub(crate) SetFileName: unsafe extern "system" fn(*mut c_void, *const u16) -> HRESULT,
+    _get_filename: usize, // GetFileName
+    pub(crate) SetTitle: unsafe extern "system" fn(*mut c_void, *const u16) -> HRESULT,
+    _labels: [usize; 2], // SetOkButtonLabel, SetFileNameLabel
+    pub(crate) GetResult: unsafe extern "system" fn(*mut c_void, *mut *mut IShellItem) -> HRESULT,
+    _add_place: usize, // AddPlace
+    pub(crate) SetDefaultExtension: unsafe extern "system" fn(*mut c_void, *const u16) -> HRESULT,
+    // Close, SetClientGuid, ClearClientData, SetFilter, then IFileSaveDialog methods
+}
+
+#[link(name = "ole32")]
+unsafe extern "system" {
+    pub(crate) fn CoCreateInstance(
+        rclsid: *const GUID,
+        pUnkOuter: *mut c_void,
+        dwClsContext: u32,
+        riid: *const GUID,
+        ppv: *mut *mut c_void,
+    ) -> HRESULT;
+}
+
+#[link(name = "shell32")]
+unsafe extern "system" {
+    pub(crate) fn SHCreateItemFromParsingName(
+        pszPath: *const u16,
+        pbc: *mut c_void,
+        riid: *const GUID,
+        ppv: *mut *mut c_void,
+    ) -> HRESULT;
 }

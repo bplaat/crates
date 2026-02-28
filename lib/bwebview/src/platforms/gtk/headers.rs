@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -43,6 +43,11 @@ unsafe extern "C" {
 pub(crate) struct GError([u8; 0]);
 #[repr(C)]
 pub(crate) struct GKeyFile([u8; 0]);
+#[repr(C)]
+pub(crate) struct GSList {
+    pub(crate) data: *mut c_void,
+    pub(crate) next: *mut GSList,
+}
 #[link(name = "glib-2.0")]
 unsafe extern "C" {
     pub(crate) fn g_error_free(error: *mut GError);
@@ -85,6 +90,11 @@ unsafe extern "C" {
     pub(crate) fn g_key_file_free(key_file: *mut GKeyFile);
     pub(crate) fn g_idle_add(function: extern "C" fn(*mut c_void) -> i32, data: *mut c_void)
     -> u32;
+    pub(crate) fn g_free(mem: *mut c_void);
+    pub(crate) fn g_slist_free_full(
+        list: *mut GSList,
+        free_func: unsafe extern "C" fn(*mut c_void),
+    );
 }
 
 // MARK: GIO
@@ -185,6 +195,42 @@ unsafe extern "C" {
         state: i32,
         color: *const GdkRGBA,
     );
+}
+
+// MARK: GTK File Chooser
+pub(crate) const GTK_FILE_CHOOSER_ACTION_OPEN: i32 = 0;
+pub(crate) const GTK_FILE_CHOOSER_ACTION_SAVE: i32 = 1;
+pub(crate) const GTK_RESPONSE_ACCEPT: i32 = -3;
+
+#[repr(C)]
+pub(crate) struct GtkFileChooserNative([u8; 0]);
+#[repr(C)]
+pub(crate) struct GtkNativeDialog([u8; 0]);
+#[repr(C)]
+pub(crate) struct GtkFileFilter([u8; 0]);
+
+#[link(name = "gtk-3")]
+unsafe extern "C" {
+    pub(crate) fn gtk_file_chooser_native_new(
+        title: *const c_char,
+        parent: *mut GtkWindow,
+        action: i32,
+        accept_label: *const c_char,
+        cancel_label: *const c_char,
+    ) -> *mut GtkFileChooserNative;
+    pub(crate) fn gtk_native_dialog_run(dialog: *mut GtkNativeDialog) -> i32;
+    pub(crate) fn gtk_file_chooser_set_select_multiple(chooser: *mut c_void, select_multiple: bool);
+    pub(crate) fn gtk_file_chooser_set_current_folder(
+        chooser: *mut c_void,
+        folder: *const c_char,
+    ) -> bool;
+    pub(crate) fn gtk_file_chooser_set_current_name(chooser: *mut c_void, name: *const c_char);
+    pub(crate) fn gtk_file_chooser_get_filename(chooser: *mut c_void) -> *mut c_char;
+    pub(crate) fn gtk_file_chooser_get_filenames(chooser: *mut c_void) -> *mut GSList;
+    pub(crate) fn gtk_file_filter_new() -> *mut GtkFileFilter;
+    pub(crate) fn gtk_file_filter_set_name(filter: *mut GtkFileFilter, name: *const c_char);
+    pub(crate) fn gtk_file_filter_add_pattern(filter: *mut GtkFileFilter, pattern: *const c_char);
+    pub(crate) fn gtk_file_chooser_add_filter(chooser: *mut c_void, filter: *mut GtkFileFilter);
 }
 
 // MARK: Soup
