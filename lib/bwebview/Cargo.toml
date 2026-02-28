@@ -22,6 +22,11 @@ objc2 = "0.6"
 [features]
 default = ["log", "remember_window_state"]
 custom_protocol = ["dep:small-http"]
+file_dialog = []
 log = ["dep:log"]
 remember_window_state = ["dep:directories"]
 rust-embed = ["custom_protocol", "dep:rust-embed", "dep:mime_guess"]
+
+[[example]]
+name = "bwebview-file-dialog"
+required-features = ["file_dialog"]
