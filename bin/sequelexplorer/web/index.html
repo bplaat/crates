@@ -15,16 +15,8 @@
             <div class="app">
                 <div class="sidebar">
                     <div class="open-db">
-                        <input
-                            class="db-path-input"
-                            type="text"
-                            placeholder="Database path..."
-                            autocorrect="off"
-                            spellcheck="false"
-                            v-model="dbPath"
-                            @keydown.enter="openDatabase"
-                        />
-                        <button class="open-btn" :disabled="openBtnDisabled" @click="openDatabase">Open</button>
+                        <button class="open-btn" @click="openDatabase">Open</button>
+                        <span class="db-path-label">{{ dbPath || 'No database open' }}</span>
                     </div>
 
                     <div class="sidebar-content">
