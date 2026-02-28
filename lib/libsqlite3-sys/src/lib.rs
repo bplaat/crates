@@ -15,12 +15,15 @@ pub type sqlite3_stmt = c_void;
 pub type sqlite3_destructor_type = Option<unsafe extern "C" fn(*mut c_void)>;
 
 pub const SQLITE_OK: i32 = 0;
+
 pub const SQLITE_OPEN_READONLY: i32 = 0x00000001;
 pub const SQLITE_OPEN_READWRITE: i32 = 0x00000002;
 pub const SQLITE_OPEN_CREATE: i32 = 0x00000004;
 pub const SQLITE_OPEN_FULLMUTEX: i32 = 0x00010000;
+
 pub const SQLITE_ROW: i32 = 100;
 pub const SQLITE_DONE: i32 = 101;
+
 pub const SQLITE_INTEGER: i32 = 1;
 pub const SQLITE_FLOAT: i32 = 2;
 pub const SQLITE_TEXT: i32 = 3;
@@ -57,6 +60,7 @@ unsafe extern "C" {
     pub fn sqlite3_step(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_reset(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_finalize(pStmt: *mut sqlite3_stmt) -> c_int;
+
     pub fn sqlite3_bind_parameter_index(pStmt: *mut sqlite3_stmt, zName: *const c_char) -> c_int;
     pub fn sqlite3_bind_null(pStmt: *mut sqlite3_stmt, i: c_int) -> c_int;
     pub fn sqlite3_bind_int64(pStmt: *mut sqlite3_stmt, i: c_int, value: i64) -> c_int;
@@ -75,10 +79,13 @@ unsafe extern "C" {
         n: c_int,
         xDel: sqlite3_destructor_type,
     ) -> c_int;
+
     pub fn sqlite3_column_count(pStmt: *mut sqlite3_stmt) -> c_int;
     pub fn sqlite3_column_name(pStmt: *mut sqlite3_stmt, iCol: c_int) -> *const c_char;
     pub fn sqlite3_column_type(pStmt: *mut sqlite3_stmt, iCol: c_int) -> c_int;
     pub fn sqlite3_column_decltype(pStmt: *mut sqlite3_stmt, iCol: c_int) -> *const c_char;
+    pub fn sqlite3_column_table_name(pStmt: *mut sqlite3_stmt, iCol: c_int) -> *const c_char;
+    pub fn sqlite3_column_origin_name(pStmt: *mut sqlite3_stmt, iCol: c_int) -> *const c_char;
     pub fn sqlite3_column_int64(pStmt: *mut sqlite3_stmt, iCol: c_int) -> i64;
     pub fn sqlite3_column_double(pStmt: *mut sqlite3_stmt, iCol: c_int) -> f64;
     pub fn sqlite3_column_text(pStmt: *mut sqlite3_stmt, iCol: c_int) -> *const c_char;

@@ -12,6 +12,7 @@ fn main() {
     {
         cc::Build::new()
             .file("sqlite3/sqlite3.c")
+            .define("SQLITE_ENABLE_COLUMN_METADATA", None)
             .compile("sqlite3");
     }
     // Or link to the system SQLite library

@@ -52,7 +52,7 @@ impl RawStatement {
         let result = match value {
             Value::Null => unsafe { sqlite3_bind_null(self.0, index) },
             Value::Integer(i) => unsafe { sqlite3_bind_int64(self.0, index, i) },
-            Value::Real(f) => unsafe { sqlite3_bind_double(self.0, index, f) },
+            Value::Float(f) => unsafe { sqlite3_bind_double(self.0, index, f) },
             Value::Text(s) => unsafe {
                 sqlite3_bind_text(
                     self.0,
@@ -144,12 +144,40 @@ impl RawStatement {
         }
     }
 
+    /// Get the table name of a column
+    pub fn column_table_name(&self, index: i32) -> Option<String> {
+        let table_name = unsafe { sqlite3_column_table_name(self.0, index) };
+        if !table_name.is_null() {
+            Some(
+                unsafe { CStr::from_ptr(table_name) }
+                    .to_string_lossy()
+                    .to_string(),
+            )
+        } else {
+            None
+        }
+    }
+
+    /// Get the origin name of a column
+    pub fn column_origin_name(&self, index: i32) -> Option<String> {
+        let origin_name = unsafe { sqlite3_column_origin_name(self.0, index) };
+        if !origin_name.is_null() {
+            Some(
+                unsafe { CStr::from_ptr(origin_name) }
+                    .to_string_lossy()
+                    .to_string(),
+            )
+        } else {
+            None
+        }
+    }
+
     /// Get the value of a column
     pub fn column_value(&self, index: i32) -> Value {
         match unsafe { sqlite3_column_type(self.0, index) } {
             SQLITE_NULL => Value::Null,
             SQLITE_INTEGER => Value::Integer(unsafe { sqlite3_column_int64(self.0, index) }),
-            SQLITE_FLOAT => Value::Real(unsafe { sqlite3_column_double(self.0, index) }),
+            SQLITE_FLOAT => Value::Float(unsafe { sqlite3_column_double(self.0, index) }),
             SQLITE_TEXT => {
                 let text = unsafe { sqlite3_column_text(self.0, index) };
                 let text = unsafe { CStr::from_ptr(text as *const c_char) }
@@ -226,6 +254,16 @@ impl<T> Statement<T> {
     /// Get the declared type of a column
     pub fn column_declared_type(&self, index: i32) -> Option<String> {
         self.0.column_declared_type(index)
+    }
+
+    /// Get the table name of a column
+    pub fn column_table_name(&self, index: i32) -> Option<String> {
+        self.0.column_table_name(index)
+    }
+
+    /// Get the origin name of a column
+    pub fn column_origin_name(&self, index: i32) -> Option<String> {
+        self.0.column_origin_name(index)
     }
 
     /// Get the value of a column

@@ -14,7 +14,7 @@ pub enum Value {
     /// An 64-bit integer value
     Integer(i64),
     /// A 64-bit floating point value
-    Real(f64),
+    Float(f64),
     /// A text value
     Text(String),
     /// A blob value
@@ -114,14 +114,14 @@ impl TryFrom<Value> for i64 {
 
 impl From<f64> for Value {
     fn from(value: f64) -> Self {
-        Value::Real(value)
+        Value::Float(value)
     }
 }
 impl TryFrom<Value> for f64 {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Real(v) => Ok(v),
+            Value::Float(v) => Ok(v),
             _ => Err(ValueError),
         }
     }
@@ -256,7 +256,7 @@ impl TryFrom<Value> for Option<i64> {
 impl From<Option<f64>> for Value {
     fn from(value: Option<f64>) -> Self {
         match value {
-            Some(v) => Value::Real(v),
+            Some(v) => Value::Float(v),
             None => Value::Null,
         }
     }
@@ -265,7 +265,7 @@ impl TryFrom<Value> for Option<f64> {
     type Error = ValueError;
     fn try_from(value: Value) -> Result<Self> {
         match value {
-            Value::Real(v) => Ok(Some(v)),
+            Value::Float(v) => Ok(Some(v)),
             Value::Null => Ok(None),
             _ => Err(ValueError),
         }
