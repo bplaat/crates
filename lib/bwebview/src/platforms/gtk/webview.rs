@@ -9,9 +9,11 @@ use std::ffi::{CStr, CString, c_char, c_void};
 use std::mem::MaybeUninit;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
+use std::{env, fs};
 
+use super::event_loop::{APP_ID, send_event};
 use super::headers::*;
-use crate::{InjectionTime, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
+use crate::{Event, InjectionTime, LogicalPoint, LogicalSize, Theme, WebviewBuilder};
 
 struct WebviewData {
     window: *mut GtkWindow,
