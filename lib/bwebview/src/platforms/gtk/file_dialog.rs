@@ -142,14 +142,14 @@ fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<std:
 #[cfg(feature = "file_dialog")]
 unsafe fn add_gtk_filters(chooser: *mut c_void, filters: &[crate::FileDialogFilter]) {
     for filter in filters {
-        let f = gtk_file_filter_new();
+        let f = unsafe { gtk_file_filter_new() };
         let name = CString::new(filter.name.as_str()).expect("Can't convert to CString");
-        gtk_file_filter_set_name(f, name.as_ptr());
+        unsafe { gtk_file_filter_set_name(f, name.as_ptr()) };
         for ext in &filter.extensions {
             let pattern = format!("*.{ext}");
             let pat = CString::new(pattern.as_str()).expect("Can't convert to CString");
-            gtk_file_filter_add_pattern(f, pat.as_ptr());
+            unsafe { gtk_file_filter_add_pattern(f, pat.as_ptr()) };
         }
-        gtk_file_chooser_add_filter(chooser, f);
+        unsafe { gtk_file_chooser_add_filter(chooser, f) };
     }
 }

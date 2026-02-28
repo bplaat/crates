@@ -20,7 +20,7 @@ use crate::{
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop;
 
-static mut APP_ID: Option<AppId> = None;
+pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
 impl PlatformEventLoop {
@@ -99,7 +99,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
     }
 }
 
-fn send_event(event: Event) {
+pub(super) fn send_event(event: Event) {
     unsafe {
         #[allow(static_mut_refs)]
         if let Some(handler) = &mut EVENT_HANDLER {
@@ -132,7 +132,7 @@ extern "C" fn send_event_callback(ptr: *mut c_void) -> i32 {
 
 // MARK: Monitor
 pub(crate) struct PlatformMonitor {
-    monitor: *mut GdkMonitor,
+    pub(crate) monitor: *mut GdkMonitor,
 }
 
 impl PlatformMonitor {
