@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use bsqlite::{ColumnType, Connection, OpenMode, Value};
-use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
+use bwebview::{Event, EventLoopBuilder, FileDialog, LogicalSize, WebviewBuilder};
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -22,6 +22,17 @@ use small_router::RouterBuilder;
 #[derive(Embed)]
 #[folder = "web"]
 struct WebAssets;
+
+// MARK: IPC messages
+#[derive(Deserialize, Serialize)]
+#[allow(clippy::enum_variant_names)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum IpcMessage {
+    OpenFileDialog,
+    OpenFileDialogResponse { path: Option<String> },
+    OpenDatabase { path: String },
+    OpenDatabaseResponse { ok: bool, error: Option<String> },
+}
 
 // MARK: State
 type State = Arc<Mutex<Option<Connection>>>;
@@ -35,26 +46,6 @@ fn get_connection(
         return Err(Response::with_json(json!({ "error": "No database open" })));
     }
     Ok(guard)
-}
-
-// MARK: Open
-#[derive(Deserialize)]
-struct OpenBody {
-    path: String,
-}
-
-fn db_open(req: &Request, state: &State) -> Response {
-    let body: OpenBody = match serde_json::from_slice(req.body.as_deref().unwrap_or(&[])) {
-        Ok(b) => b,
-        Err(e) => return Response::with_json(json!({ "error": e.to_string() })),
-    };
-    match Connection::open(&body.path, OpenMode::ReadOnly) {
-        Ok(conn) => {
-            *state.lock().expect("mutex poisoned") = Some(conn);
-            Response::with_json(json!({ "ok": true }))
-        }
-        Err(e) => Response::with_json(json!({ "error": e.to_string() })),
-    }
 }
 
 // MARK: Tables
@@ -295,7 +286,6 @@ fn main() {
         .build();
 
     let router = RouterBuilder::<State>::with(Arc::clone(&state))
-        .post("/api/open", db_open)
         .get("/api/tables", db_tables)
         .get("/api/table/:name/data", db_table_data)
         .get("/api/table/:name/schema", db_table_schema)
@@ -319,9 +309,38 @@ fn main() {
         });
     let mut webview = webview_builder.build();
 
-    event_loop.run(move |event| {
-        if let Event::PageTitleChanged(title) = event {
-            webview.set_title(title)
+    event_loop.run(move |event| match event {
+        Event::PageTitleChanged(title) => webview.set_title(title),
+        Event::PageMessageReceived(message) => {
+            match serde_json::from_str(&message).expect("Can't parse IPC message") {
+                IpcMessage::OpenFileDialog => {
+                    let path = FileDialog::new()
+                        .title("Open SQLite Database")
+                        .add_filter("SQLite databases", &["db", "sqlite", "sqlite3"])
+                        .pick_file()
+                        .map(|p| p.to_string_lossy().into_owned());
+                    let response = IpcMessage::OpenFileDialogResponse { path };
+                    webview.send_ipc_message(
+                        serde_json::to_string(&response).expect("Failed to serialize response"),
+                    );
+                }
+                IpcMessage::OpenDatabase { path } => {
+                    let result = Connection::open(&path, OpenMode::ReadOnly);
+                    let (ok, error) = match result {
+                        Ok(conn) => {
+                            *state.lock().expect("mutex poisoned") = Some(conn);
+                            (true, None)
+                        }
+                        Err(e) => (false, Some(e.to_string())),
+                    };
+                    let response = IpcMessage::OpenDatabaseResponse { ok, error };
+                    webview.send_ipc_message(
+                        serde_json::to_string(&response).expect("Failed to serialize response"),
+                    );
+                }
+                _ => {}
+            }
         }
+        _ => {}
     });
 }

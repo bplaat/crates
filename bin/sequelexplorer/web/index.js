@@ -12,9 +12,27 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 const PAGE_SIZE = 100;
 
+function ipcSend(type, data = {}) {
+    window.ipc.postMessage(JSON.stringify({ type, ...data }));
+}
+
+async function ipcRequest(type, data = {}) {
+    return new Promise((resolve) => {
+        const listener = (event) => {
+            const message = JSON.parse(event.data);
+            if (message.type === `${type}Response`) {
+                window.ipc.removeEventListener('message', listener);
+                resolve(message);
+            }
+        };
+        window.ipc.addEventListener('message', listener);
+        ipcSend(type, data);
+    });
+}
+
 PetiteVue.createApp({
-    dbPath: localStorage.getItem('lastDbPath') || '',
-    openBtnDisabled: false,
+    dbPath: '',
+    dbFileName: '',
     dbOpened: false,
     tables: [],
     currentTable: null,
@@ -33,7 +51,7 @@ PetiteVue.createApp({
     currentTotal: 0,
     isLoading: false,
 
-    init() {
+    async init() {
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting && this.currentTable && !this.isCustomQuery) {
@@ -43,26 +61,35 @@ PetiteVue.createApp({
             { rootMargin: '200px' },
         );
         observer.observe(this.$refs.loadSentinel);
+
+        const lastDbPath = localStorage.getItem('lastDbPath');
+        if (lastDbPath) {
+            await this._openDatabaseByPath(lastDbPath);
+        }
     },
 
     async openDatabase() {
-        const path = this.dbPath.trim();
+        const { path } = await ipcRequest('openFileDialog');
         if (!path) return;
-        this.openBtnDisabled = true;
-        localStorage.setItem('lastDbPath', this.dbPath);
-        const res = await fetch('/api/open', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path }),
-        });
-        const data = await res.json();
-        this.openBtnDisabled = false;
-        if (data.error) {
-            alert('Failed to open database:\n' + data.error);
+        await this._openDatabaseByPath(path);
+    },
+
+    async _openDatabaseByPath(path) {
+        const { ok, error } = await ipcRequest('openDatabase', { path });
+        if (!ok) {
+            alert('Failed to open database:\n' + error);
             return;
         }
+        this.dbPath = path;
+        this.dbFileName = path.replace(/.*[\\/]/, '');
+        localStorage.setItem('lastDbPath', path);
         this.dbOpened = true;
+        document.title = `Sequel Explorer - ${this.dbFileName}`;
         await this.loadTables();
+        const lastTable = localStorage.getItem('lastTableName');
+        if (lastTable && this.tables.includes(lastTable)) {
+            await this.selectTable(lastTable);
+        }
     },
 
     async loadTables() {
@@ -75,11 +102,12 @@ PetiteVue.createApp({
         this.currentTable = name;
         this.isCustomQuery = false;
         this.queryText = '';
+        localStorage.setItem('lastTableName', name);
         await this.openTableView(name);
     },
 
     async openTableView(name) {
-        document.title = `Sequel Explorer - ${name}`;
+        document.title = `Sequel Explorer - ${this.dbFileName} - ${name}`;
 
         this.currentOffset = 0;
         this.currentTotal = 0;

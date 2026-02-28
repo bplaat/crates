@@ -16,7 +16,7 @@ workspace = true
 [dependencies]
 base64 = "0.22"
 bsqlite = "0.1.2"
-bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
+bwebview = { path = "../../lib/bwebview", features = ["rust-embed", "file_dialog"] }
 rust-embed = "8.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
