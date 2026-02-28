@@ -12,7 +12,7 @@ use std::process::exit;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
 
-use super::event_loop::{APP_ID, FIRST_HWND, send_event};
+use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event};
 use super::webview2::*;
 use super::win32::*;
 #[cfg(feature = "custom_protocol")]
