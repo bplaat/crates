@@ -317,32 +317,11 @@ fn main() {
                 None
             }
         });
-    #[cfg(target_os = "macos")]
-    {
-        webview_builder =
-            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
-    }
     let mut webview = webview_builder.build();
 
-    #[cfg(target_os = "macos")]
-    webview.add_user_script(
-        format!(
-            "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
-            webview.macos_titlebar_size().height
-        ),
-        bwebview::InjectionTime::DocumentStart,
-    );
-
-    event_loop.run(move |event| match event {
-        Event::PageTitleChanged(title) => webview.set_title(title),
-        #[cfg(target_os = "macos")]
-        Event::MacosWindowFullscreenChanged(is_fullscreen) => {
-            if is_fullscreen {
-                webview.evaluate_script("document.body.classList.add('is-fullscreen');");
-            } else {
-                webview.evaluate_script("document.body.classList.remove('is-fullscreen');");
-            }
+    event_loop.run(move |event| {
+        if let Event::PageTitleChanged(title) = event {
+            webview.set_title(title)
         }
-        _ => {}
     });
 }
