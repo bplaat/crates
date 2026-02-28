@@ -58,6 +58,12 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
         Navidrome
     </a>
 </td>
+<td width="100" align="center">
+    <a href="bin/sequelexplorer">
+        <img src="bin/sequelexplorer/docs/images/icon.svg" alt="Sequel Explorer icon" width="48" height="48"/><br/>
+        Sequel Explorer
+    </a>
+</td>
 </tr>
 </table>
 
@@ -65,6 +71,7 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 - [BassieLight](bin/bassielight) A simple lights controller with GUI
 - [ManExplorer](bin/manexplorer) A simple man page explorer tool
 - [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
+- [Sequel Explorer](bin/sequelexplorer) A simple SQLite database GUI viewer
 
 ### Tools / Websites
 
