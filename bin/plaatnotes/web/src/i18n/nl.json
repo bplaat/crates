@@ -1,0 +1,67 @@
+{
+    "app.loading": "Laden…",
+
+    "page.login": "Aanmelden",
+    "page.archive": "Archief",
+    "page.trash": "Prullenbak",
+    "page.create": "Notitie maken",
+    "page.note_loading": "Laden…",
+    "page.notfound": "Niet gevonden",
+
+    "login.tagline": "Meld je aan bij je account",
+    "login.error": "Ongeldig e-mailadres of wachtwoord.",
+    "login.email": "E-mail",
+    "login.email_placeholder": "jij@voorbeeld.nl",
+    "login.password": "Wachtwoord",
+    "login.submit": "Aanmelden",
+    "login.submitting": "Aanmelden…",
+    "login.made_by": "Gemaakt door",
+
+    "nav.logout": "Uitloggen",
+
+    "sidebar.notes": "Notities",
+    "sidebar.archive": "Archief",
+    "sidebar.trash": "Prullenbak",
+
+    "home.loading": "Notities laden…",
+    "home.empty": "Nog geen notities. Maak er een!",
+    "home.pinned": "Vastgezet",
+    "home.other": "Overig",
+    "home.create": "Notitie maken",
+
+    "archive.heading": "Archief",
+    "archive.loading": "Laden…",
+    "archive.empty": "Geen gearchiveerde notities.",
+
+    "trash.heading": "Prullenbak",
+    "trash.loading": "Laden…",
+    "trash.empty_btn": "Prullenbak leegmaken",
+    "trash.hint": "Notities in de prullenbak worden na verloop van tijd definitief verwijderd.",
+    "trash.empty": "Prullenbak is leeg.",
+    "trash.confirm_delete": "Notitie voor altijd verwijderen? Dit kan niet ongedaan worden gemaakt.",
+    "trash.confirm_empty": "Prullenbak leegmaken? Alle notities in de prullenbak worden definitief verwijderd.",
+
+    "note.pin": "Vastzetten",
+    "note.unpin": "Losmaken",
+    "note.archive": "Archiveren",
+    "note.unarchive": "Uit archief halen",
+    "note.trash": "Naar prullenbak",
+    "note.restore": "Herstellen",
+    "note.delete_forever": "Definitief verwijderen",
+
+    "notes_create.heading": "Nieuwe notitie",
+    "notes_create.back": "Terug",
+    "notes_create.title_placeholder": "Titel",
+    "notes_create.body_placeholder": "Een notitie maken…",
+    "notes_create.cancel": "Annuleren",
+    "notes_create.save": "Opslaan",
+
+    "notes_show.heading": "Notitie bewerken",
+    "notes_show.back": "Terug",
+    "notes_show.title_placeholder": "Titel",
+    "notes_show.body_placeholder": "Een notitie maken…",
+    "notes_show.last_updated": "Laatst bijgewerkt {0}",
+
+    "notfound.message": "Geen idee hoe je hier bent gekomen 🤷‍♂️",
+    "notfound.go_home": "Naar beginpagina"
+}

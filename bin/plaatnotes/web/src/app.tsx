@@ -14,6 +14,7 @@ import { NotesShow } from './pages/notes/show.tsx';
 import { NotFound } from './pages/notfound.tsx';
 import { TrashPage } from './pages/trash.tsx';
 import { $authUser, initAuth } from './services/auth.service.ts';
+import { setLanguage, t } from './services/i18n.service.ts';
 
 export function App() {
     // @ts-ignore
@@ -27,6 +28,10 @@ export function App() {
         if (authUser === null && window.location.pathname !== '/auth/login') {
             route('/auth/login');
         }
+    }, [authUser]);
+
+    useEffect(() => {
+        if (authUser) setLanguage(authUser.language);
     }, [authUser]);
 
     useEffect(() => {
@@ -49,7 +54,7 @@ export function App() {
     if (authUser === undefined) {
         return (
             <div class="min-h-screen bg-gray-50 dark:bg-zinc-900 flex items-center justify-center">
-                <div class="text-gray-400 dark:text-gray-500 text-sm">Loading…</div>
+                <div class="text-gray-400 dark:text-gray-500 text-sm">{t('app.loading')}</div>
             </div>
         );
     }

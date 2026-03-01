@@ -1,0 +1,67 @@
+{
+    "app.loading": "Loading…",
+
+    "page.login": "Login",
+    "page.archive": "Archive",
+    "page.trash": "Trash",
+    "page.create": "Create Note",
+    "page.note_loading": "Loading…",
+    "page.notfound": "Not Found",
+
+    "login.tagline": "Sign in to your account",
+    "login.error": "Invalid email or password.",
+    "login.email": "Email",
+    "login.email_placeholder": "you@example.com",
+    "login.password": "Password",
+    "login.submit": "Sign in",
+    "login.submitting": "Signing in…",
+    "login.made_by": "Made by",
+
+    "nav.logout": "Logout",
+
+    "sidebar.notes": "Notes",
+    "sidebar.archive": "Archive",
+    "sidebar.trash": "Trash",
+
+    "home.loading": "Loading notes…",
+    "home.empty": "No notes yet. Create one!",
+    "home.pinned": "Pinned",
+    "home.other": "Other",
+    "home.create": "Create note",
+
+    "archive.heading": "Archive",
+    "archive.loading": "Loading…",
+    "archive.empty": "No archived notes.",
+
+    "trash.heading": "Trash",
+    "trash.loading": "Loading…",
+    "trash.empty_btn": "Empty trash",
+    "trash.hint": "Notes in trash will be permanently deleted after some time.",
+    "trash.empty": "Trash is empty.",
+    "trash.confirm_delete": "Delete this note forever? This cannot be undone.",
+    "trash.confirm_empty": "Empty trash? All trashed notes will be deleted forever.",
+
+    "note.pin": "Pin",
+    "note.unpin": "Unpin",
+    "note.archive": "Archive",
+    "note.unarchive": "Unarchive",
+    "note.trash": "Move to trash",
+    "note.restore": "Restore",
+    "note.delete_forever": "Delete forever",
+
+    "notes_create.heading": "New note",
+    "notes_create.back": "Back",
+    "notes_create.title_placeholder": "Title",
+    "notes_create.body_placeholder": "Take a note…",
+    "notes_create.cancel": "Cancel",
+    "notes_create.save": "Save",
+
+    "notes_show.heading": "Edit note",
+    "notes_show.back": "Back",
+    "notes_show.title_placeholder": "Title",
+    "notes_show.body_placeholder": "Take a note…",
+    "notes_show.last_updated": "Last updated {0}",
+
+    "notfound.message": "No idea how you got here 🤷‍♂️",
+    "notfound.go_home": "Go home"
+}

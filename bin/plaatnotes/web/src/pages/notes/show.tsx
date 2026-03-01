@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
 import { Navbar } from '../../components/navbar.tsx';
 import { getNote, updateNote } from '../../services/notes.service.ts';
+import { t } from '../../services/i18n.service.ts';
 
 export function NotesShow({ note_id }: { note_id?: string }) {
     const [note, setNote] = useState<Note | null>(null);
@@ -16,7 +17,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
 
     // @ts-ignore
     useEffect(async () => {
-        document.title = 'PlaatNotes - Loading…';
+        document.title = `PlaatNotes - ${t('page.note_loading')}`;
         const loaded = await getNote(note_id!);
         document.title = `PlaatNotes - ${loaded.title || loaded.body.slice(0, 40)}`;
         setNote(loaded);
@@ -53,7 +54,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
         return (
             <div class="min-h-screen bg-gray-50 dark:bg-zinc-900">
                 <Navbar />
-                <p class="text-center text-gray-400 dark:text-gray-500 mt-24">Loading…</p>
+                <p class="text-center text-gray-400 dark:text-gray-500 mt-24">{t('app.loading')}</p>
             </div>
         );
     }
@@ -66,18 +67,18 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     <button
                         onClick={() => route('/')}
                         class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400 transition-colors cursor-pointer"
-                        title="Back"
+                        title={t('notes_show.back')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
                         </svg>
                     </button>
-                    <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">Edit note</h1>
+                    <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('notes_show.heading')}</h1>
                     <div class="flex-1" />
                     <button
                         onClick={handlePin}
                         class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isPinned ? 'text-yellow-500' : 'text-gray-400'}`}
-                        title={note.isPinned ? 'Unpin' : 'Pin'}
+                        title={note.isPinned ? t('note.unpin') : t('note.pin')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
@@ -86,7 +87,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     <button
                         onClick={handleArchive}
                         class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isArchived ? 'text-yellow-600' : 'text-gray-400'}`}
-                        title={note.isArchived ? 'Unarchive' : 'Archive'}
+                        title={note.isArchived ? t('note.unarchive') : t('note.archive')}
                     >
                         {note.isArchived ? (
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -101,7 +102,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     <button
                         onClick={handleTrash}
                         class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isTrashed ? 'text-red-500' : 'text-gray-400'}`}
-                        title={note.isTrashed ? 'Restore from trash' : 'Move to trash'}
+                        title={note.isTrashed ? t('note.restore') : t('note.trash')}
                     >
                         {note.isTrashed ? (
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -120,13 +121,13 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                         <input
                             class="text-xl font-medium text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 bg-transparent outline-none w-full"
                             type="text"
-                            placeholder="Title"
+                            placeholder={t('notes_show.title_placeholder')}
                             value={note.title || ''}
                             onInput={(e) => scheduleSave({ ...note, title: (e.target as HTMLInputElement).value })}
                         />
                         <textarea
                             class="text-gray-700 dark:text-gray-300 bg-transparent outline-none w-full resize-none min-h-96 font-mono text-sm"
-                            placeholder="Take a note…"
+                            placeholder={t('notes_show.body_placeholder')}
                             value={note.body}
                             rows={20}
                             onInput={(e) => scheduleSave({ ...note, body: (e.target as HTMLTextAreaElement).value })}
@@ -134,7 +135,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </div>
                     <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-2 bg-gray-50 dark:bg-zinc-700/50">
                         <p class="text-xs text-gray-400 dark:text-gray-500">
-                            Last updated {new Date(note.updatedAt).toLocaleString()}
+                            {t('notes_show.last_updated', new Date(note.updatedAt).toLocaleString())}
                         </p>
                     </div>
                 </div>

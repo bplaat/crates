@@ -6,6 +6,7 @@
 
 import { Link } from 'preact-router';
 import { type Note } from '../../src-gen/api.ts';
+import { t } from '../services/i18n.service.ts';
 
 const NOTE_COLORS = [
     'bg-white dark:bg-zinc-800',
@@ -60,7 +61,7 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
                 {onPin && (
                     <button
                         class={`p-1.5 rounded-full hover:bg-black/10 transition-colors cursor-pointer ${note.isPinned ? 'text-yellow-500' : 'text-gray-400'}`}
-                        title={note.isPinned ? 'Unpin' : 'Pin'}
+                        title={note.isPinned ? t('note.unpin') : t('note.pin')}
                         onClick={(e) => act(e, () => onPin(note))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -71,7 +72,7 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
                 {onArchive && (
                     <button
                         class="p-1.5 rounded-full hover:bg-black/10 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
-                        title="Archive"
+                        title={t('note.archive')}
                         onClick={(e) => act(e, () => onArchive(note.id))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -82,7 +83,7 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
                 {onUnarchive && (
                     <button
                         class="p-1.5 rounded-full hover:bg-black/10 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
-                        title="Unarchive"
+                        title={t('note.unarchive')}
                         onClick={(e) => act(e, () => onUnarchive(note.id))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -93,7 +94,7 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
                 {onRestore && (
                     <button
                         class="p-1.5 rounded-full hover:bg-black/10 text-gray-400 hover:text-green-600 transition-colors cursor-pointer"
-                        title="Restore"
+                        title={t('note.restore')}
                         onClick={(e) => act(e, () => onRestore(note.id))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -104,7 +105,7 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
                 {onTrash && (
                     <button
                         class="p-1.5 rounded-full hover:bg-black/10 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                        title="Move to trash"
+                        title={t('note.trash')}
                         onClick={(e) => act(e, () => onTrash(note.id))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -115,7 +116,7 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
                 {onDeleteForever && (
                     <button
                         class="p-1.5 rounded-full hover:bg-black/10 text-gray-400 hover:text-red-700 transition-colors cursor-pointer"
-                        title="Delete forever"
+                        title={t('note.delete_forever')}
                         onClick={(e) => act(e, () => onDeleteForever(note.id))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">

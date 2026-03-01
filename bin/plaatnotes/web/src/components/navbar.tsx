@@ -6,6 +6,7 @@
 
 import { Link, route } from 'preact-router';
 import { $authUser, logout } from '../services/auth.service.ts';
+import { t } from '../services/i18n.service.ts';
 
 export function Navbar() {
     const user = $authUser.value;
@@ -30,7 +31,7 @@ export function Navbar() {
 
                 {user && (
                     <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-yellow-400 text-white font-semibold text-sm flex items-center justify-center select-none">
+                        <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-sm flex items-center justify-center select-none">
                             {user.firstName[0]}
                             {user.lastName[0]}
                         </div>
@@ -41,7 +42,7 @@ export function Navbar() {
                             onClick={handleLogout}
                             class="text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-zinc-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
                         >
-                            Logout
+                            {t('nav.logout')}
                         </button>
                     </div>
                 )}

@@ -14,6 +14,18 @@ export async function listNotes(): Promise<Note[]> {
     return data;
 }
 
+export async function listArchivedNotes(): Promise<Note[]> {
+    const res = await authFetch(`${API_URL}/notes/archived`);
+    const { data }: NoteIndexResponse = await res.json();
+    return data;
+}
+
+export async function listTrashedNotes(): Promise<Note[]> {
+    const res = await authFetch(`${API_URL}/notes/trashed`);
+    const { data }: NoteIndexResponse = await res.json();
+    return data;
+}
+
 export async function createNote(params: { body: string; title?: string; isPinned?: boolean }): Promise<Note> {
     const form = new URLSearchParams({ body: params.body });
     if (params.title) form.set('title', params.title);

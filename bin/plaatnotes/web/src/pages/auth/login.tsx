@@ -7,6 +7,7 @@
 import { route } from 'preact-router';
 import { useEffect, useState } from 'preact/hooks';
 import { login } from '../../services/auth.service.ts';
+import { t } from '../../services/i18n.service.ts';
 
 export function AuthLogin() {
     const [email, setEmail] = useState('');
@@ -15,7 +16,7 @@ export function AuthLogin() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        document.title = 'PlaatNotes - Login';
+        document.title = `PlaatNotes - ${t('page.login')}`;
     }, []);
 
     async function handleSubmit(event: SubmitEvent) {
@@ -37,27 +38,27 @@ export function AuthLogin() {
                 <img src="/assets/icon.svg" class="w-16 h-16" alt="" />
 
                 <h1 class="text-3xl font-medium text-gray-700 dark:text-gray-200">PlaatNotes</h1>
-                <p class="text-gray-500 dark:text-gray-400 text-sm">Sign in to your account</p>
+                <p class="text-gray-500 dark:text-gray-400 text-sm">{t('login.tagline')}</p>
             </div>
 
             <div class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-gray-200 dark:border-zinc-700 w-full max-w-sm p-8">
                 {error && (
                     <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-red-600 dark:text-red-400 text-sm">
-                        Invalid email or password.
+                        {t('login.error')}
                     </div>
                 )}
 
                 <form onSubmit={handleSubmit} class="flex flex-col gap-4">
                     <div class="flex flex-col gap-1">
                         <label for="email" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Email
+                            {t('login.email')}
                         </label>
                         <input
                             id="email"
                             class="w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg text-sm bg-white dark:bg-zinc-700 text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 dark:focus:ring-yellow-500/50 focus:border-transparent"
                             type="email"
                             required
-                            placeholder="you@example.com"
+                            placeholder={t('login.email_placeholder')}
                             value={email}
                             onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
                         />
@@ -65,7 +66,7 @@ export function AuthLogin() {
 
                     <div class="flex flex-col gap-1">
                         <label for="password" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Password
+                            {t('login.password')}
                         </label>
                         <input
                             id="password"
@@ -83,13 +84,13 @@ export function AuthLogin() {
                         disabled={loading}
                         class="w-full mt-2 py-2 px-4 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 dark:text-yellow-400 disabled:opacity-60 text-white font-medium rounded-lg transition-colors cursor-pointer"
                     >
-                        {loading ? 'Signing in…' : 'Sign in'}
+                        {loading ? t('login.submitting') : t('login.submit')}
                     </button>
                 </form>
             </div>
 
             <p class="mt-8 text-xs text-gray-400 dark:text-gray-500">
-                Made by{' '}
+                {t('login.made_by')}{' '}
                 <a
                     href="https://bplaat.nl"
                     target="_blank"
