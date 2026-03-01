@@ -84,7 +84,7 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Response {
     };
 
     // Get IP information
-    let ip_address = req.client_addr.ip().to_string();
+    let ip_address = req.ip().to_string();
     let (ip_latitude, ip_longitude, ip_country, ip_city) = {
         match Request::get(format!("https://ipinfo.io/{ip_address}/json")).fetch() {
             Ok(res) => {

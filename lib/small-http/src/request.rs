@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::str::{self, FromStr};
 
 use url::Url;
@@ -342,6 +342,16 @@ impl Request {
             body,
             client_addr,
         })
+    }
+
+    /// Get client IP address, respecting X-Forwarded-For and X-Real-IP proxy headers
+    pub fn ip(&self) -> IpAddr {
+        self.headers
+            .get("X-Forwarded-For")
+            .and_then(|v| v.split(',').next())
+            .or_else(|| self.headers.get("X-Real-IP"))
+            .and_then(|ip_str| ip_str.trim().parse::<IpAddr>().ok())
+            .unwrap_or_else(|| self.client_addr.ip())
     }
 
     /// Write request to TCP stream
