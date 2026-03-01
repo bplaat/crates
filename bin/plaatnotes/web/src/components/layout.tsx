@@ -39,7 +39,7 @@ export function Layout({ children }: { children: any }) {
         <div class="h-screen overflow-hidden bg-gray-50 dark:bg-zinc-900 flex flex-col">
             <Navbar />
             <div class="flex flex-1 overflow-hidden">
-                <aside class="w-14 sm:w-56 shrink-0 bg-white dark:bg-zinc-800 border-r border-gray-100 dark:border-zinc-700 pt-2 pb-4 overflow-y-auto">
+                <aside class="w-14 sm:w-56 shrink-0 flex flex-col bg-white dark:bg-zinc-800 border-r border-gray-100 dark:border-zinc-700 pt-2 overflow-y-auto">
                     <nav class="flex flex-col gap-0.5 px-2">
                         <SidebarLink href="/" exact label={t('sidebar.notes')}>
                             <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
@@ -57,6 +57,8 @@ export function Layout({ children }: { children: any }) {
                             </svg>
                         </SidebarLink>
                     </nav>
+                    <div class="flex-1" />
+                    <p class="hidden sm:block px-4 pb-4 text-xs text-gray-400 dark:text-zinc-500">v{__APP_VERSION__}</p>
                 </aside>
                 <main class="flex-1 min-w-0 overflow-y-auto">{children}</main>
             </div>

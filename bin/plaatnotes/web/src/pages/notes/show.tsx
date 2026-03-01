@@ -8,6 +8,7 @@ import { route } from 'preact-router';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
 import { Navbar } from '../../components/navbar.tsx';
+import { RichEditor } from '../../components/rich-editor.tsx';
 import { getNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
 
@@ -68,7 +69,9 @@ export function NotesShow({ note_id }: { note_id?: string }) {
     async function handlePin() {
         if (!note) return;
         const saved = await updateNote(note, { isPinned: !note.isPinned });
-        setNote((current) => (current ? { ...current, isPinned: saved.isPinned, updatedAt: saved.updatedAt } : current));
+        setNote((current) =>
+            current ? { ...current, isPinned: saved.isPinned, updatedAt: saved.updatedAt } : current,
+        );
     }
 
     if (!note) {
@@ -138,7 +141,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                 </div>
 
                 <div class="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
-                    <div class="flex-1 flex flex-col min-h-0 p-5 gap-4">
+                    <div class="px-5 pt-5 pb-2">
                         <input
                             class="text-xl font-medium text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 bg-transparent outline-none w-full"
                             type="text"
@@ -146,13 +149,13 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                             value={note.title || ''}
                             onInput={(e) => scheduleSave({ ...note, title: (e.target as HTMLInputElement).value })}
                         />
-                        <textarea
-                            class="flex-1 text-gray-700 dark:text-gray-300 bg-transparent outline-none w-full resize-none font-mono text-sm"
-                            placeholder={t('notes_show.body_placeholder')}
-                            value={note.body}
-                            onInput={(e) => scheduleSave({ ...note, body: (e.target as HTMLTextAreaElement).value })}
-                        />
                     </div>
+                    <RichEditor
+                        class="flex-1 min-h-0"
+                        value={note.body}
+                        onInput={(markdown) => scheduleSave({ ...note, body: markdown })}
+                        placeholder={t('notes_show.body_placeholder')}
+                    />
                     <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-2 bg-gray-50 dark:bg-zinc-700/50">
                         <p class="text-xs text-gray-400 dark:text-gray-500">
                             {saveStatus === 'saving' && (

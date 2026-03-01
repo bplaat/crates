@@ -34,10 +34,28 @@ interface NoteCardProps {
     onDeleteForever?: (note: Note) => void;
 }
 
+function stripMarkdown(text: string): string {
+    return text
+        .replace(/<[^>]*>/g, '') // strip HTML tags (e.g. <br>, <u>)
+        .replace(/^#{1,6}\s+/gm, '') // headings
+        .replace(/\*\*(.+?)\*\*/g, '$1') // bold
+        .replace(/\*(.+?)\*/g, '$1') // italic
+        .replace(/__(.+?)__/g, '$1') // bold alt
+        .replace(/_(.+?)_/g, '$1') // italic alt
+        .replace(/~~(.+?)~~/g, '$1') // strikethrough
+        .replace(/`{3}[\s\S]*?`{3}/g, '') // fenced code blocks
+        .replace(/`(.+?)`/g, '$1') // inline code
+        .replace(/^\s*[-*+]\s+/gm, '') // unordered list bullets
+        .replace(/^\s*\d+\.\s+/gm, '') // ordered list numbers
+        .replace(/^\s*>\s*/gm, '') // blockquotes
+        .replace(/^---+$/gm, '') // horizontal rules
+        .replace(/\[(.+?)\]\(.+?\)/g, '$1'); // links
+}
+
 export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onRestore, onDeleteForever }: NoteCardProps) {
     const lines = note.body.split('\n').filter(Boolean);
     const title = note.title || (lines[0]?.startsWith('#') ? lines[0].replace(/^#+\s*/, '') : null);
-    const bodyLines = lines.filter((l, i) => !(i === 0 && l.startsWith('#'))).slice(0, 8);
+    const snippetLines = lines.map(stripMarkdown).filter(Boolean).slice(0, 8);
 
     function act(e: MouseEvent, cb?: () => void) {
         e.preventDefault();
@@ -51,9 +69,9 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
             class={`block rounded-xl border border-gray-200 dark:border-zinc-600 hover:border-gray-400 dark:hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-4 mb-4 break-inside-avoid group no-underline ${noteColor(note.id)}`}
         >
             {title && <p class="font-medium text-gray-800 dark:text-gray-100 mb-1 truncate">{title}</p>}
-            {bodyLines.length > 0 && (
+            {snippetLines.length > 0 && (
                 <p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap line-clamp-6">
-                    {bodyLines.join('\n')}
+                    {snippetLines.join('\n')}
                 </p>
             )}
 

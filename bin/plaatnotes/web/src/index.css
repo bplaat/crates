@@ -13,3 +13,53 @@
         @apply bg-gray-50 dark:bg-zinc-900;
     }
 }
+
+@layer components {
+    .rich-editor-content h1 {
+        @apply text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2 mt-4;
+    }
+    .rich-editor-content h1:first-child,
+    .rich-editor-content h2:first-child,
+    .rich-editor-content h3:first-child {
+        @apply mt-0;
+    }
+    .rich-editor-content h2 {
+        @apply text-xl font-bold text-gray-800 dark:text-gray-100 mb-2 mt-3;
+    }
+    .rich-editor-content h3 {
+        @apply text-lg font-semibold text-gray-800 dark:text-gray-100 mb-1 mt-2;
+    }
+    .rich-editor-content p {
+        @apply mb-2;
+    }
+    .rich-editor-content p:last-child {
+        @apply mb-0;
+    }
+    .rich-editor-content ul {
+        @apply list-disc list-outside pl-5 mb-2;
+    }
+    .rich-editor-content ol {
+        @apply list-decimal list-outside pl-5 mb-2;
+    }
+    .rich-editor-content li {
+        @apply mb-0.5;
+    }
+    .rich-editor-content a {
+        @apply text-blue-500 dark:text-blue-400 underline;
+    }
+    .rich-editor-content blockquote {
+        @apply border-l-4 border-gray-300 dark:border-zinc-500 pl-4 my-2 text-gray-500 dark:text-gray-400 italic;
+    }
+    .rich-editor-content code {
+        @apply font-mono text-xs bg-gray-100 dark:bg-zinc-700 rounded px-1 py-0.5;
+    }
+    .rich-editor-content pre {
+        @apply bg-gray-100 dark:bg-zinc-700 rounded p-3 my-2 overflow-x-auto;
+    }
+    .rich-editor-content pre code {
+        @apply bg-transparent p-0 text-sm;
+    }
+    .rich-editor-content hr {
+        @apply my-8 border-gray-200 dark:border-zinc-600;
+    }
+}
