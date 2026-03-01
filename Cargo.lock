@@ -507,6 +507,7 @@ dependencies = [
  "small-router",
  "uuid",
  "validate",
+ "zip",
 ]
 
 [[package]]
