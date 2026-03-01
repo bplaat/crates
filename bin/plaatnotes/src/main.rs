@@ -28,6 +28,7 @@ mod controllers;
 mod imports;
 mod layers;
 mod models;
+mod tasks;
 #[cfg(test)]
 mod test_utils;
 
@@ -116,6 +117,9 @@ fn main() {
         imports::google_keep::run(&path, &email, &context);
         return;
     }
+
+    // Start task runner
+    tasks::start_task_runner(context.clone());
 
     // Start server
     let http_port = env::var("SERVER_PORT")
