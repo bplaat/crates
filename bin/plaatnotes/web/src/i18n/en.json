@@ -2,6 +2,7 @@
     "app.loading": "Loading…",
 
     "page.settings": "Settings",
+    "page.sessions": "Sessions",
     "page.login": "Login",
     "page.archive": "Archive",
     "page.trash": "Trash",
@@ -64,6 +65,8 @@
     "notes_show.body_placeholder": "Take a note…",
     "notes_show.last_updated": "Last updated {0}",
 
+    "settings.account": "Account",
+    "settings.sessions": "Sessions",
     "settings.profile_heading": "Profile",
     "settings.first_name": "First name",
     "settings.last_name": "Last name",
@@ -86,6 +89,15 @@
     "settings.change_password": "Change password",
     "settings.password_changed": "Password changed!",
     "settings.password_error": "Failed to change password.",
+
+    "sessions.heading": "Active sessions",
+    "sessions.loading": "Loading…",
+    "sessions.empty": "No active sessions.",
+    "sessions.current": "Current",
+    "sessions.revoke": "Revoke",
+    "sessions.confirm_revoke": "Revoke this session? That device will be signed out.",
+    "sessions.created": "Created {0}",
+    "sessions.expires": "Expires {0}",
 
     "notfound.message": "No idea how you got here 🤷‍♂️",
     "notfound.go_home": "Go home"

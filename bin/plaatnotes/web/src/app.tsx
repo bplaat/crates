@@ -12,7 +12,8 @@ import { Home } from './pages/home.tsx';
 import { NotesCreate } from './pages/notes/create.tsx';
 import { NotesShow } from './pages/notes/show.tsx';
 import { NotFound } from './pages/notfound.tsx';
-import { Settings } from './pages/settings.tsx';
+import { SettingsAccount } from './pages/settings/account.tsx';
+import { SettingsSessions } from './pages/settings/sessions.tsx';
 import { TrashPage } from './pages/trash.tsx';
 import { $authUser, initAuth } from './services/auth.service.ts';
 import { setLanguage, t } from './services/i18n.service.ts';
@@ -67,7 +68,8 @@ export function App() {
             <TrashPage path="/trash" />
             <NotesCreate path="/notes/create" />
             <NotesShow path="/notes/:note_id" />
-            <Settings path="/settings" />
+            <SettingsAccount path="/settings" />
+            <SettingsSessions path="/settings/sessions" />
             <NotFound default />
         </Router>
     );

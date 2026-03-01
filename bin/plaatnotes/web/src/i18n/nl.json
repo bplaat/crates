@@ -2,6 +2,7 @@
     "app.loading": "Laden…",
 
     "page.settings": "Instellingen",
+    "page.sessions": "Sessies",
     "page.login": "Aanmelden",
     "page.archive": "Archief",
     "page.trash": "Prullenbak",
@@ -64,6 +65,8 @@
     "notes_show.body_placeholder": "Een notitie maken…",
     "notes_show.last_updated": "Laatst bijgewerkt {0}",
 
+    "settings.account": "Account",
+    "settings.sessions": "Sessies",
     "settings.profile_heading": "Profiel",
     "settings.first_name": "Voornaam",
     "settings.last_name": "Achternaam",
@@ -86,6 +89,15 @@
     "settings.change_password": "Wachtwoord wijzigen",
     "settings.password_changed": "Wachtwoord gewijzigd!",
     "settings.password_error": "Wachtwoord wijzigen mislukt.",
+
+    "sessions.heading": "Actieve sessies",
+    "sessions.loading": "Laden…",
+    "sessions.empty": "Geen actieve sessies.",
+    "sessions.current": "Huidig",
+    "sessions.revoke": "Intrekken",
+    "sessions.confirm_revoke": "Sessie intrekken? Dat apparaat wordt afgemeld.",
+    "sessions.created": "Aangemaakt {0}",
+    "sessions.expires": "Verloopt {0}",
 
     "notfound.message": "Geen idee hoe je hier bent gekomen 🤷‍♂️",
     "notfound.go_home": "Naar beginpagina"

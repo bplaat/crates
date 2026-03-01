@@ -12,9 +12,21 @@ const TOKEN_KEY = 'token';
 
 // undefined = loading, null = not authenticated, User = authenticated
 export const $authUser = signal<User | null | undefined>(undefined);
+export const $currentSessionId = signal<string | null>(null);
 
 export function getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY);
+}
+
+async function applyValidate(token: string): Promise<boolean> {
+    const res = await fetch(`${API_URL}/auth/validate`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return false;
+    const { user, session }: AuthValidateResponse = await res.json();
+    $authUser.value = user;
+    $currentSessionId.value = session.id;
+    return true;
 }
 
 export async function initAuth() {
@@ -23,16 +35,18 @@ export async function initAuth() {
         $authUser.value = null;
         return;
     }
-    const res = await fetch(`${API_URL}/auth/validate`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-        const { user }: AuthValidateResponse = await res.json();
-        $authUser.value = user;
-    } else {
+    const ok = await applyValidate(token);
+    if (!ok) {
         localStorage.removeItem(TOKEN_KEY);
         $authUser.value = null;
     }
+}
+
+export function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
+    const token = getToken();
+    const headers = new Headers(init.headers);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return fetch(url, { ...init, headers });
 }
 
 export async function login(email: string, password: string): Promise<boolean> {
@@ -43,31 +57,13 @@ export async function login(email: string, password: string): Promise<boolean> {
     if (!res.ok) return false;
     const { token }: { token: string } = await res.json();
     localStorage.setItem(TOKEN_KEY, token);
-    const validate = await fetch(`${API_URL}/auth/validate`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-    if (validate.ok) {
-        const { user }: AuthValidateResponse = await validate.json();
-        $authUser.value = user;
-    }
+    await applyValidate(token);
     return true;
 }
 
 export async function logout() {
-    const token = getToken();
-    if (token) {
-        await fetch(`${API_URL}/auth/logout`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-        });
-    }
+    await authFetch(`${API_URL}/auth/logout`, { method: 'POST' });
     localStorage.removeItem(TOKEN_KEY);
     $authUser.value = null;
-}
-
-export function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
-    const token = getToken();
-    const headers = new Headers(init.headers);
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    return fetch(url, { ...init, headers });
+    $currentSessionId.value = null;
 }

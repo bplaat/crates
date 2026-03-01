@@ -4,13 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { route } from 'preact-router';
 import { useEffect, useState } from 'preact/hooks';
-import { type UserTheme } from '../../src-gen/api.ts';
-import { Navbar } from '../components/navbar.tsx';
-import { $authUser } from '../services/auth.service.ts';
-import { t } from '../services/i18n.service.ts';
-import { changePassword, updateUser } from '../services/users.service.ts';
+import { type UserTheme } from '../../../src-gen/api.ts';
+import { SettingsLayout } from '../../components/settings-layout.tsx';
+import { $authUser } from '../../services/auth.service.ts';
+import { t } from '../../services/i18n.service.ts';
+import { changePassword, updateUser } from '../../services/users.service.ts';
 
 const INPUT_CLASS =
     'w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg text-sm bg-white dark:bg-zinc-700 text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 dark:focus:ring-yellow-500/50 focus:border-transparent';
@@ -19,7 +18,7 @@ const LABEL_CLASS = 'text-sm font-medium text-gray-700 dark:text-gray-300';
 
 const CARD_CLASS = 'bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm p-6';
 
-export function Settings() {
+export function SettingsAccount() {
     const user = $authUser.value!;
 
     const [firstName, setFirstName] = useState(user.firstName);
@@ -79,30 +78,22 @@ export function Settings() {
     }
 
     return (
-        <div class="min-h-screen bg-gray-50 dark:bg-zinc-900">
-            <Navbar />
-            <main class="max-w-2xl mx-auto px-4 py-8">
-                <div class="flex items-center gap-3 mb-6">
-                    <button
-                        onClick={() => route('/')}
-                        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400 transition-colors cursor-pointer"
-                        title={t('notes_create.back')}
-                    >
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-                        </svg>
-                    </button>
-                    <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('page.settings')}</h1>
-                </div>
+        <SettingsLayout>
+            <div class="max-w-2xl mx-auto px-4 py-8">
+                <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200 mb-6">{t('settings.account')}</h1>
 
                 <div class="flex flex-col gap-6">
                     {/* Profile form */}
                     <div class={CARD_CLASS}>
-                        <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-5">{t('settings.profile_heading')}</h2>
+                        <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-5">
+                            {t('settings.profile_heading')}
+                        </h2>
                         <form onSubmit={handleProfileSubmit} class="flex flex-col gap-4">
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="flex flex-col gap-1">
-                                    <label for="firstName" class={LABEL_CLASS}>{t('settings.first_name')}</label>
+                                    <label for="firstName" class={LABEL_CLASS}>
+                                        {t('settings.first_name')}
+                                    </label>
                                     <input
                                         id="firstName"
                                         class={INPUT_CLASS}
@@ -113,7 +104,9 @@ export function Settings() {
                                     />
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label for="lastName" class={LABEL_CLASS}>{t('settings.last_name')}</label>
+                                    <label for="lastName" class={LABEL_CLASS}>
+                                        {t('settings.last_name')}
+                                    </label>
                                     <input
                                         id="lastName"
                                         class={INPUT_CLASS}
@@ -126,7 +119,9 @@ export function Settings() {
                             </div>
 
                             <div class="flex flex-col gap-1">
-                                <label for="email" class={LABEL_CLASS}>{t('settings.email')}</label>
+                                <label for="email" class={LABEL_CLASS}>
+                                    {t('settings.email')}
+                                </label>
                                 <input
                                     id="email"
                                     class={INPUT_CLASS}
@@ -139,7 +134,9 @@ export function Settings() {
 
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="flex flex-col gap-1">
-                                    <label for="theme" class={LABEL_CLASS}>{t('settings.theme')}</label>
+                                    <label for="theme" class={LABEL_CLASS}>
+                                        {t('settings.theme')}
+                                    </label>
                                     <select
                                         id="theme"
                                         class={INPUT_CLASS}
@@ -152,7 +149,9 @@ export function Settings() {
                                     </select>
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label for="language" class={LABEL_CLASS}>{t('settings.language')}</label>
+                                    <label for="language" class={LABEL_CLASS}>
+                                        {t('settings.language')}
+                                    </label>
                                     <select
                                         id="language"
                                         class={INPUT_CLASS}
@@ -187,10 +186,14 @@ export function Settings() {
 
                     {/* Change password form */}
                     <div class={CARD_CLASS}>
-                        <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-5">{t('settings.password_heading')}</h2>
+                        <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-5">
+                            {t('settings.password_heading')}
+                        </h2>
                         <form onSubmit={handlePasswordSubmit} class="flex flex-col gap-4">
                             <div class="flex flex-col gap-1">
-                                <label for="oldPassword" class={LABEL_CLASS}>{t('settings.current_password')}</label>
+                                <label for="oldPassword" class={LABEL_CLASS}>
+                                    {t('settings.current_password')}
+                                </label>
                                 <input
                                     id="oldPassword"
                                     class={INPUT_CLASS}
@@ -202,7 +205,9 @@ export function Settings() {
                                 />
                             </div>
                             <div class="flex flex-col gap-1">
-                                <label for="newPassword" class={LABEL_CLASS}>{t('settings.new_password')}</label>
+                                <label for="newPassword" class={LABEL_CLASS}>
+                                    {t('settings.new_password')}
+                                </label>
                                 <input
                                     id="newPassword"
                                     class={INPUT_CLASS}
@@ -214,7 +219,9 @@ export function Settings() {
                                 />
                             </div>
                             <div class="flex flex-col gap-1">
-                                <label for="confirmPassword" class={LABEL_CLASS}>{t('settings.confirm_password')}</label>
+                                <label for="confirmPassword" class={LABEL_CLASS}>
+                                    {t('settings.confirm_password')}
+                                </label>
                                 <input
                                     id="confirmPassword"
                                     class={INPUT_CLASS}
@@ -229,7 +236,9 @@ export function Settings() {
                             <div class="flex items-center justify-between pt-1">
                                 <div>
                                     {passwordChanged && (
-                                        <p class="text-sm text-green-600 dark:text-green-400">{t('settings.password_changed')}</p>
+                                        <p class="text-sm text-green-600 dark:text-green-400">
+                                            {t('settings.password_changed')}
+                                        </p>
                                     )}
                                     {passwordError && (
                                         <p class="text-sm text-red-500 dark:text-red-400">{passwordError}</p>
@@ -246,7 +255,7 @@ export function Settings() {
                         </form>
                     </div>
                 </div>
-            </main>
-        </div>
+            </div>
+        </SettingsLayout>
     );
 }
