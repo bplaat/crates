@@ -41,16 +41,14 @@ fn schema_generate_code(
     }
 
     if let Some(r#enum) = &schema.r#enum {
-        let mut code = format!("export enum {name} {{\n");
-        for variant in r#enum {
-            _ = writeln!(
-                code,
-                "    {} = '{}',",
-                variant.to_scream_case(),
-                variant.to_snake_case()
-            );
+        let mut code = format!("export type {name} = ");
+        for (variant_index, variant) in r#enum.iter().enumerate() {
+            if variant_index > 0 {
+                code.push_str(" | ");
+            }
+            code.push_str(&format!("\"{}\"", variant.to_snake_case()));
         }
-        code.push_str("}\n\n");
+        code.push_str(";\n\n");
         code_schemas.insert(name.clone(), code);
         return name;
     }

@@ -8,7 +8,6 @@
 pub(crate) trait ToCase {
     fn to_student_case(&self) -> String;
     fn to_snake_case(&self) -> String;
-    fn to_scream_case(&self) -> String;
 }
 
 impl ToCase for str {
@@ -40,17 +39,6 @@ impl ToCase for str {
         }
         snake_case
     }
-
-    fn to_scream_case(&self) -> String {
-        let mut scream_case = String::with_capacity(self.len());
-        for (i, c) in self.chars().enumerate() {
-            if c.is_uppercase() && i != 0 {
-                scream_case.push('_');
-            }
-            scream_case.push(c.to_ascii_uppercase());
-        }
-        scream_case
-    }
 }
 
 #[cfg(test)]
@@ -71,13 +59,5 @@ mod test {
         assert_eq!("HelloWorld".to_snake_case(), "hello_world");
         assert_eq!("hello_world".to_snake_case(), "hello_world");
         assert_eq!("".to_snake_case(), "");
-    }
-
-    #[test]
-    fn test_to_scream_case() {
-        assert_eq!("helloWorld".to_scream_case(), "HELLO_WORLD");
-        assert_eq!("HelloWorld".to_scream_case(), "HELLO_WORLD");
-        assert_eq!("hello_world".to_scream_case(), "HELLO_WORLD");
-        assert_eq!("".to_scream_case(), "");
     }
 }

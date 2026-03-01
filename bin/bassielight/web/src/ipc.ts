@@ -22,10 +22,7 @@ declare global {
     }
 }
 
-export enum IpcType {
-    Ipc = 'ipc',
-    WebSocket = 'websocket',
-}
+export type IpcType = 'ipc' | 'websocket';
 
 export class Ipc {
     type: IpcType;
@@ -33,9 +30,9 @@ export class Ipc {
 
     constructor() {
         if ('ipc' in window) {
-            this.type = IpcType.Ipc;
+            this.type = 'ipc';
         } else {
-            this.type = IpcType.WebSocket;
+            this.type = 'websocket';
             this.ws = new WebSocket('/ipc');
         }
     }
@@ -43,11 +40,11 @@ export class Ipc {
     send(type: string, data: { [key: string]: any } = {}) {
         const message = JSON.stringify({ type, ...data });
         return new Promise((resolve) => {
-            if (this.type === IpcType.Ipc) {
+            if (this.type === 'ipc') {
                 window.ipc.postMessage(message);
                 resolve(undefined);
             }
-            if (this.type === IpcType.WebSocket) {
+            if (this.type === 'websocket') {
                 if (this.ws!.readyState === WebSocket.OPEN) {
                     this.ws!.send(message);
                     resolve(undefined);
@@ -73,12 +70,12 @@ export class Ipc {
                 callback(data);
             }
         };
-        if (this.type === IpcType.Ipc) window.ipc.addEventListener('message', listener);
-        if (this.type === IpcType.WebSocket) this.ws!.addEventListener('message', listener);
+        if (this.type === 'ipc') window.ipc.addEventListener('message', listener);
+        if (this.type === 'websocket') this.ws!.addEventListener('message', listener);
         return {
             remove: () => {
-                if (this.type === IpcType.Ipc) window.ipc.removeEventListener('message', listener);
-                if (this.type === IpcType.WebSocket) this.ws!.removeEventListener('message', listener);
+                if (this.type === 'ipc') window.ipc.removeEventListener('message', listener);
+                if (this.type === 'websocket') this.ws!.removeEventListener('message', listener);
             },
         };
     }
