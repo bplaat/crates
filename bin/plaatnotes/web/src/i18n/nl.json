@@ -1,6 +1,7 @@
 {
     "app.loading": "Laden…",
 
+    "page.settings": "Instellingen",
     "page.login": "Aanmelden",
     "page.archive": "Archief",
     "page.trash": "Prullenbak",
@@ -17,6 +18,7 @@
     "login.submitting": "Aanmelden…",
     "login.made_by": "Gemaakt door",
 
+    "nav.settings": "Instellingen",
     "nav.logout": "Uitloggen",
 
     "sidebar.notes": "Notities",
@@ -61,6 +63,29 @@
     "notes_show.title_placeholder": "Titel",
     "notes_show.body_placeholder": "Een notitie maken…",
     "notes_show.last_updated": "Laatst bijgewerkt {0}",
+
+    "settings.profile_heading": "Profiel",
+    "settings.first_name": "Voornaam",
+    "settings.last_name": "Achternaam",
+    "settings.email": "E-mail",
+    "settings.theme": "Thema",
+    "settings.theme_system": "Systeem",
+    "settings.theme_light": "Licht",
+    "settings.theme_dark": "Donker",
+    "settings.language": "Taal",
+    "settings.language_en": "Engels",
+    "settings.language_nl": "Nederlands",
+    "settings.save": "Wijzigingen opslaan",
+    "settings.saved": "Wijzigingen opgeslagen!",
+    "settings.save_error": "Opslaan mislukt.",
+    "settings.password_heading": "Wachtwoord wijzigen",
+    "settings.current_password": "Huidig wachtwoord",
+    "settings.new_password": "Nieuw wachtwoord",
+    "settings.confirm_password": "Nieuw wachtwoord bevestigen",
+    "settings.password_mismatch": "Wachtwoorden komen niet overeen.",
+    "settings.change_password": "Wachtwoord wijzigen",
+    "settings.password_changed": "Wachtwoord gewijzigd!",
+    "settings.password_error": "Wachtwoord wijzigen mislukt.",
 
     "notfound.message": "Geen idee hoe je hier bent gekomen 🤷‍♂️",
     "notfound.go_home": "Naar beginpagina"

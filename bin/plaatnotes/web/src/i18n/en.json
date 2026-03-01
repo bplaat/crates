@@ -1,6 +1,7 @@
 {
     "app.loading": "Loading…",
 
+    "page.settings": "Settings",
     "page.login": "Login",
     "page.archive": "Archive",
     "page.trash": "Trash",
@@ -17,6 +18,7 @@
     "login.submitting": "Signing in…",
     "login.made_by": "Made by",
 
+    "nav.settings": "Settings",
     "nav.logout": "Logout",
 
     "sidebar.notes": "Notes",
@@ -61,6 +63,29 @@
     "notes_show.title_placeholder": "Title",
     "notes_show.body_placeholder": "Take a note…",
     "notes_show.last_updated": "Last updated {0}",
+
+    "settings.profile_heading": "Profile",
+    "settings.first_name": "First name",
+    "settings.last_name": "Last name",
+    "settings.email": "Email",
+    "settings.theme": "Theme",
+    "settings.theme_system": "System",
+    "settings.theme_light": "Light",
+    "settings.theme_dark": "Dark",
+    "settings.language": "Language",
+    "settings.language_en": "English",
+    "settings.language_nl": "Dutch",
+    "settings.save": "Save changes",
+    "settings.saved": "Changes saved!",
+    "settings.save_error": "Failed to save changes.",
+    "settings.password_heading": "Change password",
+    "settings.current_password": "Current password",
+    "settings.new_password": "New password",
+    "settings.confirm_password": "Confirm new password",
+    "settings.password_mismatch": "Passwords do not match.",
+    "settings.change_password": "Change password",
+    "settings.password_changed": "Password changed!",
+    "settings.password_error": "Failed to change password.",
 
     "notfound.message": "No idea how you got here 🤷‍♂️",
     "notfound.go_home": "Go home"
