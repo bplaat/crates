@@ -10,7 +10,7 @@ use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
 use pbkdf2::password_hash;
 
-use crate::models::{Note, Session, User};
+use crate::models::{Note, Session, User, UserRole};
 
 // MARK: Context
 #[derive(Clone)]
@@ -175,6 +175,7 @@ fn database_seed(database: &Connection) {
             last_name: "Admin".to_string(),
             email: "admin@example.com".to_string(),
             password: password_hash("admin123"),
+            role: UserRole::Admin,
             ..Default::default()
         };
         database.insert_user(user);

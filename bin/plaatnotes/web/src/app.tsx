@@ -6,6 +6,7 @@
 
 import Router from 'preact-router';
 import { useEffect } from 'preact/hooks';
+import { AdminUsers } from './pages/admin/users.tsx';
 import { ArchivePage } from './pages/archive.tsx';
 import { AuthLogin } from './pages/auth/login.tsx';
 import { Home } from './pages/home.tsx';
@@ -70,6 +71,7 @@ export function App() {
             <NotesShow path="/notes/:note_id" />
             <SettingsAccount path="/settings" />
             <SettingsSessions path="/settings/sessions" />
+            <AdminUsers path="/admin/users" />
             <NotFound default />
         </Router>
     );

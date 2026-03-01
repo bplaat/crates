@@ -19,6 +19,7 @@
     "login.submitting": "Aanmelden…",
     "login.made_by": "Gemaakt door",
 
+    "nav.admin": "Beheer",
     "nav.settings": "Instellingen",
     "nav.logout": "Uitloggen",
 
@@ -98,6 +99,28 @@
     "sessions.confirm_revoke": "Sessie intrekken? Dat apparaat wordt afgemeld.",
     "sessions.created": "Aangemaakt {0}",
     "sessions.expires": "Verloopt {0}",
+
+    "admin.sidebar_users": "Gebruikers",
+    "admin.users_heading": "Gebruikers",
+    "admin.create_user": "Gebruiker aanmaken",
+    "admin.edit_user": "Gebruiker bewerken",
+    "admin.loading": "Laden…",
+    "admin.empty": "Geen gebruikers.",
+    "admin.col_name": "Naam",
+    "admin.col_email": "E-mail",
+    "admin.col_role": "Rol",
+    "admin.col_created": "Aangemaakt",
+    "admin.col_actions": "Acties",
+    "admin.first_name": "Voornaam",
+    "admin.last_name": "Achternaam",
+    "admin.email": "E-mail",
+    "admin.password": "Wachtwoord",
+    "admin.role": "Rol",
+    "admin.role_normal": "Normaal",
+    "admin.role_admin": "Beheerder",
+    "admin.save": "Wijzigingen opslaan",
+    "admin.create": "Aanmaken",
+    "admin.confirm_delete": "Deze gebruiker verwijderen? Dit kan niet ongedaan worden gemaakt.",
 
     "notfound.message": "Geen idee hoe je hier bent gekomen 🤷‍♂️",
     "notfound.go_home": "Naar beginpagina"

@@ -4,9 +4,39 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type User, type UserRole, type UserTheme } from '../../src-gen/api.ts';
+import {
+    type User,
+    type UserCreateBody,
+    type UserIndexResponse,
+    type UserRole,
+    type UserTheme,
+} from '../../src-gen/api.ts';
 import { API_URL } from '../consts.ts';
 import { authFetch } from './auth.service.ts';
+
+export async function listUsers(): Promise<User[]> {
+    const res = await authFetch(`${API_URL}/users`);
+    const { data }: UserIndexResponse = await res.json();
+    return data;
+}
+
+export async function createUser(params: UserCreateBody): Promise<User | null> {
+    const form = new URLSearchParams({
+        firstName: params.firstName,
+        lastName: params.lastName,
+        email: params.email,
+        password: params.password,
+        role: params.role,
+    });
+    const res = await authFetch(`${API_URL}/users`, { method: 'POST', body: form });
+    if (!res.ok) return null;
+    return res.json();
+}
+
+export async function deleteUser(id: string): Promise<boolean> {
+    const res = await authFetch(`${API_URL}/users/${id}`, { method: 'DELETE' });
+    return res.ok;
+}
 
 export async function updateUser(
     id: string,

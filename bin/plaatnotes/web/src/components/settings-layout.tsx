@@ -8,15 +8,7 @@ import { route } from 'preact-router';
 import { Navbar } from './navbar.tsx';
 import { t } from '../services/i18n.service.ts';
 
-function SettingsSidebarLink({
-    href,
-    label,
-    children,
-}: {
-    href: string;
-    label: string;
-    children: any;
-}) {
+function SettingsSidebarLink({ href, label, children }: { href: string; label: string; children: any }) {
     const active = window.location.pathname === href;
     return (
         <a

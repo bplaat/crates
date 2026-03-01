@@ -27,3 +27,15 @@ export function t(key: string, ...args: string[]): string {
     const value = dict[key] ?? translations['en'][key] ?? key;
     return value.replace(/\{(\d+)\}/g, (_, i) => args[parseInt(i)] ?? '');
 }
+
+const DATE_FORMAT: Intl.DateTimeFormatOptions = {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+};
+
+export function formatDate(date: string | Date): string {
+    return new Date(date).toLocaleString($language.value, DATE_FORMAT);
+}

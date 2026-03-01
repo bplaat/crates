@@ -19,6 +19,7 @@
     "login.submitting": "Signing in…",
     "login.made_by": "Made by",
 
+    "nav.admin": "Admin",
     "nav.settings": "Settings",
     "nav.logout": "Logout",
 
@@ -98,6 +99,28 @@
     "sessions.confirm_revoke": "Revoke this session? That device will be signed out.",
     "sessions.created": "Created {0}",
     "sessions.expires": "Expires {0}",
+
+    "admin.sidebar_users": "Users",
+    "admin.users_heading": "Users",
+    "admin.create_user": "Create user",
+    "admin.edit_user": "Edit user",
+    "admin.loading": "Loading…",
+    "admin.empty": "No users.",
+    "admin.col_name": "Name",
+    "admin.col_email": "Email",
+    "admin.col_role": "Role",
+    "admin.col_created": "Created",
+    "admin.col_actions": "Actions",
+    "admin.first_name": "First name",
+    "admin.last_name": "Last name",
+    "admin.email": "Email",
+    "admin.password": "Password",
+    "admin.role": "Role",
+    "admin.role_normal": "Normal",
+    "admin.role_admin": "Admin",
+    "admin.save": "Save changes",
+    "admin.create": "Create",
+    "admin.confirm_delete": "Delete this user? This cannot be undone.",
 
     "notfound.message": "No idea how you got here 🤷‍♂️",
     "notfound.go_home": "Go home"

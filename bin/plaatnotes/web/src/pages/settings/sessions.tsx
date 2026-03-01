@@ -8,7 +8,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { type Session } from '../../../src-gen/api.ts';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $currentSessionId } from '../../services/auth.service.ts';
-import { $language, t } from '../../services/i18n.service.ts';
+import { formatDate, t } from '../../services/i18n.service.ts';
 import { listSessions, revokeSession } from '../../services/sessions.service.ts';
 
 function clientLabel(session: Session): string {
@@ -33,7 +33,6 @@ export function SettingsSessions() {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
     const currentSessionId = $currentSessionId.value;
-    const locale = $language.value;
     const now = Date.now();
 
     // @ts-ignore
@@ -91,9 +90,9 @@ export function SettingsSessions() {
                                             {locationLabel(session)}
                                         </p>
                                         <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                            {t('sessions.created', new Date(session.createdAt).toLocaleString(locale))}
+                                            {t('sessions.created', formatDate(session.createdAt))}
                                             {' · '}
-                                            {t('sessions.expires', new Date(session.expiresAt).toLocaleString(locale))}
+                                            {t('sessions.expires', formatDate(session.expiresAt))}
                                         </p>
                                     </div>
 

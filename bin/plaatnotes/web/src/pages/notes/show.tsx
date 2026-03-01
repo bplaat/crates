@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
 import { Navbar } from '../../components/navbar.tsx';
 import { getNote, updateNote } from '../../services/notes.service.ts';
-import { t } from '../../services/i18n.service.ts';
+import { formatDate, t } from '../../services/i18n.service.ts';
 
 export function NotesShow({ note_id }: { note_id?: string }) {
     const [note, setNote] = useState<Note | null>(null);
@@ -135,7 +135,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </div>
                     <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-2 bg-gray-50 dark:bg-zinc-700/50">
                         <p class="text-xs text-gray-400 dark:text-gray-500">
-                            {t('notes_show.last_updated', new Date(note.updatedAt).toLocaleString())}
+                            {t('notes_show.last_updated', formatDate(note.updatedAt))}
                         </p>
                     </div>
                 </div>
