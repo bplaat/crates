@@ -109,6 +109,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 - [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 - [winresource](lib/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
+- [zip](lib/zip) A minimal replacement for the [zip](https://crates.io/crates/zip) crate
 
 ## Repo organization
 
