@@ -37,10 +37,10 @@ function AdminSidebarLink({ href, label, children }: { href: string; label: stri
 
 export function AdminLayout({ children }: { children: ComponentChildren }) {
     return (
-        <div class="min-h-screen bg-gray-50 dark:bg-zinc-900 flex flex-col">
+        <div class="h-screen overflow-hidden bg-gray-50 dark:bg-zinc-900 flex flex-col">
             <Navbar />
-            <div class="flex flex-1">
-                <aside class="w-14 sm:w-56 shrink-0 bg-white dark:bg-zinc-800 border-r border-gray-100 dark:border-zinc-700 pt-2 pb-4">
+            <div class="flex flex-1 overflow-hidden">
+                <aside class="w-14 sm:w-56 shrink-0 bg-white dark:bg-zinc-800 border-r border-gray-100 dark:border-zinc-700 pt-2 pb-4 overflow-y-auto">
                     <nav class="flex flex-col gap-0.5 px-2">
                         <AdminSidebarLink href="/admin/users" label={t('admin.users.sidebar')}>
                             <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
@@ -49,7 +49,7 @@ export function AdminLayout({ children }: { children: ComponentChildren }) {
                         </AdminSidebarLink>
                     </nav>
                 </aside>
-                <main class="flex-1 min-w-0">{children}</main>
+                <main class="flex-1 min-w-0 overflow-y-auto">{children}</main>
             </div>
         </div>
     );

@@ -45,12 +45,12 @@ export function TrashPage() {
     return (
         <Layout>
             <div class="max-w-screen-xl mx-auto px-4 py-6">
-                <div class="flex items-center justify-between mb-6">
+                <div class="relative flex items-center justify-between mb-6">
                     <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{t('trash.heading')}</h1>
                     {notes.length > 0 && (
                         <button
                             onClick={handleEmptyTrash}
-                            class="text-sm text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+                            class="absolute right-0 text-sm text-red-400 hover:text-red-600 transition-colors cursor-pointer"
                         >
                             {t('trash.empty_btn')}
                         </button>
