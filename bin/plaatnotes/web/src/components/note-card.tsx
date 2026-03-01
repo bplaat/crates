@@ -8,13 +8,13 @@ import { Link } from 'preact-router';
 import { type Note } from '../../src-gen/api.ts';
 
 const NOTE_COLORS = [
-    'bg-white',
-    'bg-yellow-100',
-    'bg-green-100',
-    'bg-blue-100',
-    'bg-pink-100',
-    'bg-purple-100',
-    'bg-orange-100',
+    'bg-white dark:bg-zinc-800',
+    'bg-yellow-100 dark:bg-yellow-900/40',
+    'bg-green-100 dark:bg-green-900/40',
+    'bg-blue-100 dark:bg-blue-900/40',
+    'bg-pink-100 dark:bg-pink-900/40',
+    'bg-purple-100 dark:bg-purple-900/40',
+    'bg-orange-100 dark:bg-orange-900/40',
 ];
 
 function noteColor(id: string): string {
@@ -47,11 +47,13 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
     return (
         <Link
             href={`/notes/${note.id}`}
-            class={`block rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-4 mb-4 break-inside-avoid group no-underline ${noteColor(note.id)}`}
+            class={`block rounded-xl border border-gray-200 dark:border-zinc-600 hover:border-gray-400 dark:hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-4 mb-4 break-inside-avoid group no-underline ${noteColor(note.id)}`}
         >
-            {title && <p class="font-medium text-gray-800 mb-1 truncate">{title}</p>}
+            {title && <p class="font-medium text-gray-800 dark:text-gray-100 mb-1 truncate">{title}</p>}
             {bodyLines.length > 0 && (
-                <p class="text-sm text-gray-600 whitespace-pre-wrap line-clamp-6">{bodyLines.join('\n')}</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap line-clamp-6">
+                    {bodyLines.join('\n')}
+                </p>
             )}
 
             <div class="flex items-center justify-end gap-0.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">

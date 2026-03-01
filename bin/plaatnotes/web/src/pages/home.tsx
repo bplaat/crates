@@ -95,7 +95,7 @@ export function Home() {
 
             <button
                 onClick={() => route('/notes/create')}
-                class="fixed bottom-6 right-6 w-14 h-14 bg-yellow-400 hover:bg-yellow-500 text-white rounded-full shadow-lg flex items-center justify-center transition-colors cursor-pointer"
+                class="fixed bottom-6 right-6 w-14 h-14 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 dark:text-yellow-400 text-white rounded-full shadow-lg flex items-center justify-center transition-colors cursor-pointer"
                 title="Create note"
             >
                 <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">

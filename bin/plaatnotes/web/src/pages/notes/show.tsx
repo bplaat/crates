@@ -51,32 +51,32 @@ export function NotesShow({ note_id }: { note_id?: string }) {
 
     if (!note) {
         return (
-            <div class="min-h-screen bg-gray-50">
+            <div class="min-h-screen bg-gray-50 dark:bg-zinc-900">
                 <Navbar />
-                <p class="text-center text-gray-400 mt-24">Loading…</p>
+                <p class="text-center text-gray-400 dark:text-gray-500 mt-24">Loading…</p>
             </div>
         );
     }
 
     return (
-        <div class="min-h-screen bg-gray-50">
+        <div class="min-h-screen bg-gray-50 dark:bg-zinc-900">
             <Navbar />
             <main class="max-w-2xl mx-auto px-4 py-8">
                 <div class="flex items-center gap-3 mb-6">
                     <button
                         onClick={() => route('/')}
-                        class="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors cursor-pointer"
+                        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400 transition-colors cursor-pointer"
                         title="Back"
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
                         </svg>
                     </button>
-                    <h1 class="text-xl font-medium text-gray-700">Edit note</h1>
+                    <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">Edit note</h1>
                     <div class="flex-1" />
                     <button
                         onClick={handlePin}
-                        class={`p-2 rounded-full hover:bg-gray-200 transition-colors cursor-pointer ${note.isPinned ? 'text-yellow-500' : 'text-gray-400'}`}
+                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isPinned ? 'text-yellow-500' : 'text-gray-400'}`}
                         title={note.isPinned ? 'Unpin' : 'Pin'}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -85,7 +85,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </button>
                     <button
                         onClick={handleArchive}
-                        class={`p-2 rounded-full hover:bg-gray-200 transition-colors cursor-pointer ${note.isArchived ? 'text-yellow-600' : 'text-gray-400'}`}
+                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isArchived ? 'text-yellow-600' : 'text-gray-400'}`}
                         title={note.isArchived ? 'Unarchive' : 'Archive'}
                     >
                         {note.isArchived ? (
@@ -100,7 +100,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </button>
                     <button
                         onClick={handleTrash}
-                        class={`p-2 rounded-full hover:bg-gray-200 transition-colors cursor-pointer ${note.isTrashed ? 'text-red-500' : 'text-gray-400'}`}
+                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isTrashed ? 'text-red-500' : 'text-gray-400'}`}
                         title={note.isTrashed ? 'Restore from trash' : 'Move to trash'}
                     >
                         {note.isTrashed ? (
@@ -115,25 +115,27 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </button>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
                     <div class="p-5 flex flex-col gap-4">
                         <input
-                            class="text-xl font-medium text-gray-800 placeholder-gray-400 outline-none w-full"
+                            class="text-xl font-medium text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 bg-transparent outline-none w-full"
                             type="text"
                             placeholder="Title"
                             value={note.title || ''}
                             onInput={(e) => scheduleSave({ ...note, title: (e.target as HTMLInputElement).value })}
                         />
                         <textarea
-                            class="text-gray-700 outline-none w-full resize-none min-h-96 font-mono text-sm"
+                            class="text-gray-700 dark:text-gray-300 bg-transparent outline-none w-full resize-none min-h-96 font-mono text-sm"
                             placeholder="Take a note…"
                             value={note.body}
                             rows={20}
                             onInput={(e) => scheduleSave({ ...note, body: (e.target as HTMLTextAreaElement).value })}
                         />
                     </div>
-                    <div class="border-t border-gray-100 px-5 py-2 bg-gray-50">
-                        <p class="text-xs text-gray-400">Last updated {new Date(note.updatedAt).toLocaleString()}</p>
+                    <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-2 bg-gray-50 dark:bg-zinc-700/50">
+                        <p class="text-xs text-gray-400 dark:text-gray-500">
+                            Last updated {new Date(note.updatedAt).toLocaleString()}
+                        </p>
                     </div>
                 </div>
             </main>

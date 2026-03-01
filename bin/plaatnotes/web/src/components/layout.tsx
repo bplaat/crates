@@ -20,7 +20,9 @@ function SidebarLink({ href, label, children }: { href: string; exact?: boolean;
                     }}
                     title={label}
                     class={`flex items-center gap-3 px-3 py-2.5 rounded-full transition-colors no-underline ${
-                        matches ? 'bg-yellow-50 text-yellow-700' : 'text-gray-600 hover:bg-gray-100'
+                        matches
+                            ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-zinc-700'
                     }`}
                 >
                     {children}
@@ -33,10 +35,10 @@ function SidebarLink({ href, label, children }: { href: string; exact?: boolean;
 
 export function Layout({ children }: { children: any }) {
     return (
-        <div class="min-h-screen bg-gray-50 flex flex-col">
+        <div class="min-h-screen bg-gray-50 dark:bg-zinc-900 flex flex-col">
             <Navbar />
             <div class="flex flex-1">
-                <aside class="w-14 sm:w-56 shrink-0 bg-white border-r border-gray-100 pt-2 pb-4">
+                <aside class="w-14 sm:w-56 shrink-0 bg-white dark:bg-zinc-800 border-r border-gray-100 dark:border-zinc-700 pt-2 pb-4">
                     <nav class="flex flex-col gap-0.5 px-2">
                         <SidebarLink href="/" exact label="Notes">
                             <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
