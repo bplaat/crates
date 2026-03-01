@@ -9,6 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+anyhow = "1.0"
 directories = "6.0"
 mp4ameta = "0.13"
 percent-encoding = "2.3"

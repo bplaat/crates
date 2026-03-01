@@ -1,0 +1,9 @@
+[package]
+name = "anyhow"
+version = "1.0.102+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true

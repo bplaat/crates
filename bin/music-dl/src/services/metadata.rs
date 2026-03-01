@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use percent_encoding::utf8_percent_encode;
 use small_http::Request;
 
-use crate::result::Result;
 use crate::structs::deezer::{Album, AlbumList, AlbumSmall, ArtistList, ArtistSmall, Track};
 
 const USER_AGENT: &str =

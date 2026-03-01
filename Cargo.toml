@@ -32,6 +32,7 @@ small-http = { path = "lib/small-http" }
 small-router = { path = "lib/small-router" }
 
 # Patch some popular crates with my minimal alternatives
+anyhow = { path = "lib/anyhow" }
 chrono = { path = "lib/chrono" }
 copy_dir = { path = "lib/copy_dir" }
 directories = { path = "lib/directories" }

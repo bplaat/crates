@@ -13,16 +13,15 @@ use std::process::{Command, Stdio, exit};
 use std::time::Duration;
 use std::{fs, thread};
 
+use anyhow::Result;
 use threadpool::ThreadPool;
 
 use crate::args::{Args, Subcommand, parse_args};
-use crate::result::Result;
 use crate::services::metadata::MetadataService;
 use crate::structs::deezer::{Album, Track};
 use crate::structs::youtube::Video;
 
 mod args;
-mod result;
 mod services;
 mod structs;
 

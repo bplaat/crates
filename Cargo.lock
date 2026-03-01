@@ -3,6 +3,10 @@
 version = 3
 
 [[package]]
+name = "anyhow"
+version = "1.0.102+patch"
+
+[[package]]
 name = "baksteen"
 version = "0.1.0"
 dependencies = [
@@ -393,6 +397,7 @@ checksum = "453e991b2efe96c288cbc2d03a19e353504294559ecb6c03067fff5bd824616d"
 name = "music-dl"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "directories",
  "mp4ameta",
  "percent-encoding",
