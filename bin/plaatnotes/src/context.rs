@@ -9,6 +9,7 @@ use std::path::Path;
 use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
 use pbkdf2::password_hash;
+use uuid::Uuid;
 
 use crate::models::{Note, Session, User, UserRole};
 
@@ -18,6 +19,7 @@ pub(crate) struct Context {
     pub database: Connection,
     pub auth_session: Option<Session>,
     pub auth_user: Option<User>,
+    pub update_target_user_id: Option<Uuid>,
 }
 
 impl Default for Context {
@@ -26,6 +28,7 @@ impl Default for Context {
             database: Connection::open_memory().expect("Can't open in-memory database"),
             auth_session: None,
             auth_user: None,
+            update_target_user_id: None,
         }
     }
 }
@@ -45,6 +48,7 @@ impl Context {
             database,
             auth_session: None,
             auth_user: None,
+            update_target_user_id: None,
         }
     }
 
@@ -56,6 +60,7 @@ impl Context {
             database,
             auth_session: None,
             auth_user: None,
+            update_target_user_id: None,
         }
     }
 }

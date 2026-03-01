@@ -96,11 +96,22 @@ pub(crate) mod validators {
         Ok(())
     }
 
-    pub(crate) fn is_unique_email_or_auth_user_email(
+    pub(crate) fn is_unique_email_or_target_user_email(
         value: &str,
         context: &Context,
     ) -> validate::Result {
-        if value == context.auth_user.as_ref().expect("Not authed").email {
+        // Allow keeping the same email as the user being updated
+        if let Some(target_id) = context.update_target_user_id {
+            let count = context
+                .database
+                .query_some::<i64>(
+                    "SELECT COUNT(id) FROM users WHERE email = ? AND id != ?",
+                    (value.to_string(), target_id),
+                )
+                .expect("Database error");
+            if count != 0 {
+                return Err(validate::Error::new("not unique"));
+            }
             return Ok(());
         }
         is_unique_email(value, context)

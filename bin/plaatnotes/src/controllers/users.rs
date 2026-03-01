@@ -15,7 +15,7 @@ use validate::{self, Validate};
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
 use crate::controllers::not_found;
-use crate::models::user::validators::{is_unique_email, is_unique_email_or_auth_user_email};
+use crate::models::user::validators::{is_unique_email, is_unique_email_or_target_user_email};
 use crate::models::user::{UserRole, UserTheme, policies};
 use crate::models::{IndexQuery, Note, User};
 
@@ -190,7 +190,7 @@ struct UserUpdateBody {
     first_name: String,
     #[validate(ascii, length(min = 1, max = 128))]
     last_name: String,
-    #[validate(email, custom(is_unique_email_or_auth_user_email))]
+    #[validate(email, custom(is_unique_email_or_target_user_email))]
     email: String,
     #[validate(ascii, length(min = 8, max = 128))]
     password: Option<String>,
@@ -224,7 +224,11 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
         Ok(body) => Into::<UserUpdateBody>::into(body),
         Err(_) => return Response::with_status(Status::BadRequest),
     };
-    if let Err(report) = body.validate_with(ctx) {
+    let validation_ctx = Context {
+        update_target_user_id: Some(user.id),
+        ..ctx.clone()
+    };
+    if let Err(report) = body.validate_with(&validation_ctx) {
         return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
     }
 
@@ -798,6 +802,33 @@ mod test {
         assert_eq!(res.status, Status::BadRequest);
         let report = serde_json::from_slice::<api::Report>(&res.body).unwrap();
         assert!(report.0.contains_key("email"));
+    }
+
+    #[test]
+    fn test_users_update_same_email() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create user
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
+
+        // Update user keeping the same email — should succeed, not be treated as duplicate
+        let res = router.handle(
+            &Request::put(format!("http://localhost/api/users/{}", user.id))
+                .header("Authorization", format!("Bearer {token}"))
+                .body("firstName=John&lastName=Doe&email=john@example.com&theme=system&language=en&role=normal"),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let updated_user = serde_json::from_slice::<api::User>(&res.body).unwrap();
+        assert_eq!(updated_user.email, "john@example.com");
     }
 
     #[test]
