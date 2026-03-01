@@ -33,7 +33,7 @@ impl Default for IndexQuery {
         Self {
             query: "".to_string(),
             page: 1,
-            limit: 20,
+            limit: 50,
         }
     }
 }
