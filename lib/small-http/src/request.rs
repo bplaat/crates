@@ -220,7 +220,7 @@ impl Request {
                 .map_err(|_| InvalidRequestError("Can't parse Content-Length".to_string()))?;
             if content_length > 0 {
                 let mut buffer = vec![0; content_length];
-                reader.read(&mut buffer).map_err(|_| {
+                reader.read_exact(&mut buffer).map_err(|_| {
                     InvalidRequestError(
                         "Can't read Content-Length amount of bytes from stream".to_string(),
                     )
