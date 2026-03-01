@@ -4,13 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-    type User,
-    type UserCreateBody,
-    type UserIndexResponse,
-    type UserRole,
-    type UserTheme,
-} from '../../src-gen/api.ts';
+import { type User, type UserCreateBody, type UserIndexResponse, type UserUpdateBody } from '../../src-gen/api.ts';
 import { API_URL } from '../consts.ts';
 import { authFetch } from './auth.service.ts';
 
@@ -38,10 +32,7 @@ export async function deleteUser(id: string): Promise<boolean> {
     return res.ok;
 }
 
-export async function updateUser(
-    id: string,
-    params: { firstName: string; lastName: string; email: string; theme: UserTheme; language: string; role: UserRole },
-): Promise<User | null> {
+export async function updateUser(id: string, params: UserUpdateBody): Promise<User | null> {
     const form = new URLSearchParams({
         firstName: params.firstName,
         lastName: params.lastName,
@@ -50,6 +41,7 @@ export async function updateUser(
         language: params.language,
         role: params.role,
     });
+    if (params.password) form.set('password', params.password);
     const res = await authFetch(`${API_URL}/users/${id}`, { method: 'PUT', body: form });
     if (!res.ok) return null;
     return res.json();

@@ -5,7 +5,7 @@
  */
 
 import { signal } from '@preact/signals';
-import { type AuthValidateResponse, type User } from '../../src-gen/api.ts';
+import { type AuthValidateResponse, type LoginResponse, type User } from '../../src-gen/api.ts';
 import { API_URL } from '../consts.ts';
 
 const TOKEN_KEY = 'token';
@@ -55,7 +55,7 @@ export async function login(email: string, password: string): Promise<boolean> {
         body: new URLSearchParams({ email, password }),
     });
     if (!res.ok) return false;
-    const { token }: { token: string } = await res.json();
+    const { token }: LoginResponse = await res.json();
     localStorage.setItem(TOKEN_KEY, token);
     await applyValidate(token);
     return true;

@@ -33,18 +33,17 @@ export function SettingsSessions() {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
     const currentSessionId = $currentSessionId.value;
-    const now = Date.now();
 
     // @ts-ignore
     useEffect(async () => {
         document.title = `PlaatNotes - ${t('page.sessions')}`;
         const data = await listSessions();
-        setSessions(data.filter((s) => new Date(s.expiresAt).getTime() > now));
+        setSessions(data);
         setLoading(false);
     }, []);
 
     async function handleRevoke(id: string) {
-        if (!confirm(t('sessions.confirm_revoke'))) return;
+        if (!confirm(t('settings.sessions.confirm_revoke'))) return;
         const ok = await revokeSession(id);
         if (ok) setSessions((ss) => ss.filter((s) => s.id !== id));
     }
@@ -52,12 +51,16 @@ export function SettingsSessions() {
     return (
         <SettingsLayout>
             <div class="max-w-2xl mx-auto px-4 py-8">
-                <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200 mb-6">{t('sessions.heading')}</h1>
+                <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200 mb-6">
+                    {t('settings.sessions.heading')}
+                </h1>
 
-                {loading && <p class="text-center text-gray-400 dark:text-gray-500 mt-16">{t('sessions.loading')}</p>}
+                {loading && (
+                    <p class="text-center text-gray-400 dark:text-gray-500 mt-16">{t('settings.sessions.loading')}</p>
+                )}
 
                 {!loading && sessions.length === 0 && (
-                    <p class="text-center text-gray-400 dark:text-gray-500 mt-16">{t('sessions.empty')}</p>
+                    <p class="text-center text-gray-400 dark:text-gray-500 mt-16">{t('settings.sessions.empty')}</p>
                 )}
 
                 {!loading && sessions.length > 0 && (
@@ -82,7 +85,7 @@ export function SettingsSessions() {
                                             </p>
                                             {isCurrent && (
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400">
-                                                    {t('sessions.current')}
+                                                    {t('settings.sessions.current')}
                                                 </span>
                                             )}
                                         </div>
@@ -90,9 +93,9 @@ export function SettingsSessions() {
                                             {locationLabel(session)}
                                         </p>
                                         <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                            {t('sessions.created', formatDate(session.createdAt))}
+                                            {t('settings.sessions.created', formatDate(session.createdAt))}
                                             {' · '}
-                                            {t('sessions.expires', formatDate(session.expiresAt))}
+                                            {t('settings.sessions.expires', formatDate(session.expiresAt))}
                                         </p>
                                     </div>
 
@@ -101,7 +104,7 @@ export function SettingsSessions() {
                                             onClick={() => handleRevoke(session.id)}
                                             class="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-zinc-600 text-gray-500 dark:text-gray-400 hover:border-red-300 dark:hover:border-red-700 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
                                         >
-                                            {t('sessions.revoke')}
+                                            {t('settings.sessions.revoke')}
                                         </button>
                                     )}
                                 </div>

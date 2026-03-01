@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
-import { type User, type UserRole } from '../../../src-gen/api.ts';
+import { type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
 import { Dialog } from '../../components/dialog.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
@@ -46,7 +46,7 @@ export function AdminUsers() {
 
     // @ts-ignore
     useEffect(async () => {
-        document.title = `PlaatNotes - ${t('admin.users_heading')}`;
+        document.title = `PlaatNotes - ${t('admin.users.heading')}`;
         const data = await listUsers();
         setUsers(data);
         setLoading(false);
@@ -82,10 +82,11 @@ export function AdminUsers() {
                 firstName: form.firstName,
                 lastName: form.lastName,
                 email: form.email,
+                password: form.password || undefined,
                 theme: target.theme,
                 language: target.language,
                 role: form.role,
-            });
+            } satisfies UserUpdateBody);
             if (updated) {
                 setUsers((us) => us.map((u) => (u.id === updated.id ? updated : u)));
                 closeDialog();
@@ -95,7 +96,7 @@ export function AdminUsers() {
     }
 
     async function handleDelete(user: User) {
-        if (!confirm(t('admin.confirm_delete'))) return;
+        if (!confirm(t('admin.users.confirm_delete'))) return;
         const ok = await deleteUser(user.id);
         if (ok) setUsers((us) => us.filter((u) => u.id !== user.id));
     }
@@ -106,31 +107,33 @@ export function AdminUsers() {
         <AdminLayout>
             <div class="px-4 py-8">
                 <div class="flex items-center justify-between mb-6">
-                    <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('admin.users_heading')}</h1>
+                    <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('admin.users.heading')}</h1>
                     <button onClick={openCreate} class={BTN_PRIMARY}>
                         <span class="flex items-center gap-1.5">
                             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                             </svg>
-                            {t('admin.create_user')}
+                            {t('admin.users.create_user')}
                         </span>
                     </button>
                 </div>
 
                 <div class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
-                    {loading && <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.loading')}</p>}
+                    {loading && (
+                        <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.users.loading')}</p>
+                    )}
                     {!loading && users.length === 0 && (
-                        <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.empty')}</p>
+                        <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.users.empty')}</p>
                     )}
                     {!loading && users.length > 0 && (
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b border-gray-100 dark:border-zinc-700 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                    <th class="px-5 py-3">{t('admin.col_name')}</th>
-                                    <th class="px-5 py-3 hidden md:table-cell">{t('admin.col_email')}</th>
-                                    <th class="px-5 py-3 hidden sm:table-cell">{t('admin.col_role')}</th>
-                                    <th class="px-5 py-3 hidden lg:table-cell">{t('admin.col_created')}</th>
-                                    <th class="px-5 py-3 text-right">{t('admin.col_actions')}</th>
+                                    <th class="px-5 py-3">{t('admin.users.col_name')}</th>
+                                    <th class="px-5 py-3 hidden md:table-cell">{t('admin.users.col_email')}</th>
+                                    <th class="px-5 py-3 hidden sm:table-cell">{t('admin.users.col_role')}</th>
+                                    <th class="px-5 py-3 hidden lg:table-cell">{t('admin.users.col_created')}</th>
+                                    <th class="px-5 py-3 text-right">{t('admin.users.col_actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -161,7 +164,9 @@ export function AdminUsers() {
                                                         : 'bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-gray-400'
                                                 }`}
                                             >
-                                                {user.role === 'admin' ? t('admin.role_admin') : t('admin.role_normal')}
+                                                {user.role === 'admin'
+                                                    ? t('admin.users.role_admin')
+                                                    : t('admin.users.role_normal')}
                                             </span>
                                         </td>
                                         <td class="px-5 py-3 hidden lg:table-cell text-gray-400 dark:text-gray-500">
@@ -171,7 +176,7 @@ export function AdminUsers() {
                                             <div class="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => openEdit(user)}
-                                                    title={t('admin.edit_user')}
+                                                    title={t('admin.users.edit_user')}
                                                     class={BTN_ICON}
                                                 >
                                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -180,7 +185,7 @@ export function AdminUsers() {
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(user)}
-                                                    title={t('admin.confirm_delete')}
+                                                    title={t('admin.users.confirm_delete')}
                                                     class={`${BTN_ICON} hover:text-red-500 dark:hover:text-red-400`}
                                                 >
                                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -198,12 +203,15 @@ export function AdminUsers() {
             </div>
 
             {dialog && (
-                <Dialog title={isCreate ? t('admin.create_user') : t('admin.edit_user')} onClose={closeDialog}>
+                <Dialog
+                    title={isCreate ? t('admin.users.create_user') : t('admin.users.edit_user')}
+                    onClose={closeDialog}
+                >
                     <form onSubmit={handleSubmit} class="flex flex-col gap-4">
                         <div class="grid grid-cols-2 gap-4">
                             <div class="flex flex-col gap-1">
                                 <label for="firstName" class={LABEL_CLASS}>
-                                    {t('admin.first_name')}
+                                    {t('admin.users.first_name')}
                                 </label>
                                 <input
                                     id="firstName"
@@ -218,7 +226,7 @@ export function AdminUsers() {
                             </div>
                             <div class="flex flex-col gap-1">
                                 <label for="lastName" class={LABEL_CLASS}>
-                                    {t('admin.last_name')}
+                                    {t('admin.users.last_name')}
                                 </label>
                                 <input
                                     id="lastName"
@@ -235,7 +243,7 @@ export function AdminUsers() {
 
                         <div class="flex flex-col gap-1">
                             <label for="email" class={LABEL_CLASS}>
-                                {t('admin.email')}
+                                {t('admin.users.email')}
                             </label>
                             <input
                                 id="email"
@@ -247,10 +255,10 @@ export function AdminUsers() {
                             />
                         </div>
 
-                        {isCreate && (
+                        {isCreate ? (
                             <div class="flex flex-col gap-1">
                                 <label for="password" class={LABEL_CLASS}>
-                                    {t('admin.password')}
+                                    {t('admin.users.password')}
                                 </label>
                                 <input
                                     id="password"
@@ -264,11 +272,27 @@ export function AdminUsers() {
                                     }
                                 />
                             </div>
+                        ) : (
+                            <div class="flex flex-col gap-1">
+                                <label for="password" class={LABEL_CLASS}>
+                                    {t('admin.users.password')}
+                                </label>
+                                <input
+                                    id="password"
+                                    class={INPUT_CLASS}
+                                    type="password"
+                                    placeholder={t('admin.users.password_keep')}
+                                    value={form.password}
+                                    onInput={(e) =>
+                                        setForm({ ...form, password: (e.target as HTMLInputElement).value })
+                                    }
+                                />
+                            </div>
                         )}
 
                         <div class="flex flex-col gap-1">
                             <label for="role" class={LABEL_CLASS}>
-                                {t('admin.role')}
+                                {t('admin.users.role')}
                             </label>
                             <select
                                 id="role"
@@ -278,14 +302,14 @@ export function AdminUsers() {
                                     setForm({ ...form, role: (e.target as HTMLSelectElement).value as UserRole })
                                 }
                             >
-                                <option value="normal">{t('admin.role_normal')}</option>
-                                <option value="admin">{t('admin.role_admin')}</option>
+                                <option value="normal">{t('admin.users.role_normal')}</option>
+                                <option value="admin">{t('admin.users.role_admin')}</option>
                             </select>
                         </div>
 
                         <div class="flex justify-end pt-1">
                             <button type="submit" disabled={submitting} class={BTN_PRIMARY}>
-                                {isCreate ? t('admin.create') : t('admin.save')}
+                                {isCreate ? t('admin.users.create') : t('admin.users.save')}
                             </button>
                         </div>
                     </form>

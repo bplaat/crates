@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type Note, type NoteIndexResponse } from '../../src-gen/api.ts';
+import { type Note, type NoteCreateBody, type NoteIndexResponse, type NoteUpdateBody } from '../../src-gen/api.ts';
 import { API_URL } from '../consts.ts';
 import { authFetch } from './auth.service.ts';
 
@@ -26,7 +26,7 @@ export async function listTrashedNotes(): Promise<Note[]> {
     return data;
 }
 
-export async function createNote(params: { body: string; title?: string; isPinned?: boolean }): Promise<Note> {
+export async function createNote(params: NoteCreateBody): Promise<Note> {
     const form = new URLSearchParams({ body: params.body });
     if (params.title) form.set('title', params.title);
     if (params.isPinned !== undefined) form.set('isPinned', String(params.isPinned));
@@ -39,10 +39,7 @@ export async function getNote(id: string): Promise<Note> {
     return res.json();
 }
 
-export async function updateNote(
-    id: string,
-    params: { body?: string; title?: string; isPinned?: boolean; isArchived?: boolean; isTrashed?: boolean },
-): Promise<Note> {
+export async function updateNote(id: string, params: Partial<NoteUpdateBody>): Promise<Note> {
     const note = await getNote(id);
     const form = new URLSearchParams({
         body: params.body ?? note.body,
