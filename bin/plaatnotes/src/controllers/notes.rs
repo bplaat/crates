@@ -50,7 +50,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                "SELECT COUNT(id) FROM notes WHERE body LIKE :search_query",
+                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND body LIKE :search_query",
                 Args {
                     search_query: search_query.clone()
                 }
@@ -63,7 +63,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                 Note,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM notes WHERE body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE is_trashed = 0 AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns()
                 ),
                 Args {
@@ -82,7 +82,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                "SELECT COUNT(id) FROM notes WHERE user_id = :user_id AND body LIKE :search_query",
+                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND user_id = :user_id AND body LIKE :search_query",
                 Args {
                     user_id: user.id,
                     search_query: search_query.clone()
@@ -96,7 +96,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                 Note,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM notes WHERE user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE is_trashed = 0 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns()
                 ),
                 Args {
@@ -289,19 +289,19 @@ pub(crate) fn notes_delete(_req: &Request, ctx: &Context) -> Response {
 }
 
 pub(crate) fn notes_pinned(req: &Request, ctx: &Context) -> Response {
-    notes_filtered(req, ctx, "is_pinned", true)
+    notes_filtered(req, ctx, "is_trashed = 0 AND is_pinned")
 }
 
 pub(crate) fn notes_archived(req: &Request, ctx: &Context) -> Response {
-    notes_filtered(req, ctx, "is_archived", true)
+    notes_filtered(req, ctx, "is_trashed = 0 AND is_archived")
 }
 
 pub(crate) fn notes_trashed(req: &Request, ctx: &Context) -> Response {
-    notes_filtered(req, ctx, "is_trashed", true)
+    notes_filtered(req, ctx, "is_trashed")
 }
 
 // MARK: Utils
-fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Response {
+fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
     // Check authentication
     let user = match &ctx.auth_user {
         Some(user) => user,
@@ -334,7 +334,7 @@ fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Re
                 i64,
                 ctx.database,
                 &format!(
-                    "SELECT COUNT(id) FROM notes WHERE {field} = 1 AND body LIKE :search_query"
+                    "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND body LIKE :search_query"
                 ),
                 Args {
                     search_query: search_query.clone()
@@ -350,7 +350,7 @@ fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Re
                 format!(
                     "SELECT {} FROM notes WHERE {} = 1 AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns(),
-                    field
+                    filter
                 ),
                 Args {
                     search_query: search_query,
@@ -368,7 +368,7 @@ fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Re
             let total = query_args!(
                 i64,
                 ctx.database,
-                &format!("SELECT COUNT(id) FROM notes WHERE {field} = 1 AND user_id = :user_id AND body LIKE :search_query"),
+                &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND body LIKE :search_query"),
                 Args {
                     user_id: user.id,
                     search_query: search_query.clone()
@@ -384,7 +384,7 @@ fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Re
                 format!(
                     "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns(),
-                    field
+                    filter
                 ),
                 Args {
                     user_id: user.id,

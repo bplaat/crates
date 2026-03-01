@@ -39,16 +39,15 @@ export function Home() {
         setNotes((ns) => ns.filter((n) => n.id !== id));
     }
 
-    const active = notes.filter((n) => !n.isArchived && !n.isTrashed);
-    const pinned = active.filter((n) => n.isPinned);
-    const others = active.filter((n) => !n.isPinned);
+    const pinned = notes.filter((n) => n.isPinned);
+    const others = notes.filter((n) => !n.isPinned);
 
     return (
         <Layout>
             <div class="max-w-screen-xl mx-auto px-4 py-6">
                 {loading && <p class="text-center text-gray-400 mt-16">{t('home.loading')}</p>}
 
-                {!loading && active.length === 0 && (
+                {!loading && notes.length === 0 && (
                     <div class="flex flex-col items-center justify-center mt-24 gap-3 text-gray-400">
                         <svg class="w-16 h-16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
