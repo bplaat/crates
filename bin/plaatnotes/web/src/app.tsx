@@ -14,6 +14,7 @@ import { NotesCreate } from './pages/notes/create.tsx';
 import { NotesShow } from './pages/notes/show.tsx';
 import { NotFound } from './pages/notfound.tsx';
 import { SettingsAccount } from './pages/settings/account.tsx';
+import { SettingsImports } from './pages/settings/imports.tsx';
 import { SettingsSessions } from './pages/settings/sessions.tsx';
 import { TrashPage } from './pages/trash.tsx';
 import { $authUser, initAuth } from './services/auth.service.ts';
@@ -71,6 +72,7 @@ export function App() {
             <NotesShow path="/notes/:note_id" />
             <SettingsAccount path="/settings" />
             <SettingsSessions path="/settings/sessions" />
+            <SettingsImports path="/settings/imports" />
             <AdminUsers path="/admin/users" />
             <NotFound default />
         </Router>

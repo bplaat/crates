@@ -56,6 +56,36 @@ fn import_note_from_json(json_bytes: &[u8], ctx: &Context, user_id: uuid::Uuid, 
     *count += 1;
 }
 
+/// Import all Google Keep notes from a zip archive in memory.
+/// Returns the number of notes successfully imported.
+pub(crate) fn import_from_zip_bytes(zip_bytes: &[u8], ctx: &Context, user_id: uuid::Uuid) -> usize {
+    let mut count = 0;
+    let mut archive = match zip::ZipArchive::new(Cursor::new(zip_bytes)) {
+        Ok(a) => a,
+        Err(_) => return 0,
+    };
+    for i in 0..archive.len() {
+        let mut file = match archive.by_index(i) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        let file_name = file.name().to_string();
+        let parts: Vec<&str> = file_name.split('/').collect();
+        let is_keep_json = parts
+            .windows(2)
+            .any(|w| w[0] == "Keep" && w[1].ends_with(".json"));
+        if !is_keep_json {
+            continue;
+        }
+        let mut json_bytes = Vec::new();
+        if file.read_to_end(&mut json_bytes).is_err() {
+            continue;
+        }
+        import_note_from_json(&json_bytes, ctx, user_id, &mut count);
+    }
+    count
+}
+
 pub(crate) fn run(path: &str, email: &str, ctx: &Context) {
     let user_id = ctx
         .database
@@ -66,23 +96,7 @@ pub(crate) fn run(path: &str, email: &str, ctx: &Context) {
 
     if path.ends_with(".zip") {
         let zip_bytes = std::fs::read(path).unwrap_or_else(|_| panic!("Can't read zip: {path}"));
-        let mut archive =
-            zip::ZipArchive::new(Cursor::new(zip_bytes)).expect("Can't open zip archive");
-        for i in 0..archive.len() {
-            let mut file = archive.by_index(i).expect("Can't read zip entry");
-            let file_name = file.name().to_string();
-            let parts: Vec<&str> = file_name.split('/').collect();
-            let is_keep_json = parts
-                .windows(2)
-                .any(|w| w[0] == "Keep" && w[1].ends_with(".json"));
-            if !is_keep_json {
-                continue;
-            }
-            let mut json_bytes = Vec::new();
-            file.read_to_end(&mut json_bytes)
-                .expect("Can't read zip entry contents");
-            import_note_from_json(&json_bytes, ctx, user_id, &mut count);
-        }
+        count = import_from_zip_bytes(&zip_bytes, ctx, user_id);
     } else {
         let keep_dir = {
             let keep_sub = Path::new(path).join("Keep");

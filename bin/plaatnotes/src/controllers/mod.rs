@@ -7,6 +7,7 @@
 use small_http::{Request, Response, Status};
 
 pub(crate) use self::auth::{auth_login, auth_logout, auth_validate};
+pub(crate) use self::imports::imports_google_keep;
 pub(crate) use self::notes::{
     notes_archived, notes_create, notes_delete, notes_index, notes_pinned, notes_show,
     notes_trashed, notes_update,
@@ -22,6 +23,7 @@ pub(crate) use self::users::{
 use crate::Context;
 
 mod auth;
+mod imports;
 mod notes;
 mod sessions;
 mod users;

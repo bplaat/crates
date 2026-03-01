@@ -78,6 +78,8 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .get("/api/notes/pinned", notes_pinned)
         .get("/api/notes/archived", notes_archived)
         .get("/api/notes/trashed", notes_trashed)
+        // Imports
+        .post("/api/imports/google-keep", imports_google_keep)
         .build()
 }
 

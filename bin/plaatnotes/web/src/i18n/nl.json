@@ -112,6 +112,16 @@
     "settings.password_changed": "Wachtwoord gewijzigd!",
     "settings.password_error": "Wachtwoord wijzigen mislukt.",
 
+    "settings.imports": "Imports",
+    "settings.imports.heading": "Imports",
+    "settings.imports.google_keep.heading": "Google Keep",
+    "settings.imports.google_keep.desc": "Importeer notities vanuit een Google Keep Takeout zip-archief.",
+    "settings.imports.google_keep.label": "Takeout zip-bestand",
+    "settings.imports.google_keep.submit": "Importeren",
+    "settings.imports.google_keep.importing": "Importeren…",
+    "settings.imports.google_keep.success": "{0} notities geïmporteerd.",
+    "settings.imports.google_keep.error": "Importeren mislukt. Zorg dat je een geldig Google Keep Takeout zip-bestand hebt geselecteerd.",
+
     "settings.sessions.heading": "Actieve sessies",
     "settings.sessions.loading": "Laden…",
     "settings.sessions.empty": "Geen actieve sessies.",

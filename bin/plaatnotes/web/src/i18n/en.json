@@ -112,6 +112,16 @@
     "settings.password_changed": "Password changed!",
     "settings.password_error": "Failed to change password.",
 
+    "settings.imports": "Imports",
+    "settings.imports.heading": "Imports",
+    "settings.imports.google_keep.heading": "Google Keep",
+    "settings.imports.google_keep.desc": "Import notes from a Google Keep Takeout zip archive.",
+    "settings.imports.google_keep.label": "Takeout zip file",
+    "settings.imports.google_keep.submit": "Import",
+    "settings.imports.google_keep.importing": "Importing…",
+    "settings.imports.google_keep.success": "Imported {0} notes.",
+    "settings.imports.google_keep.error": "Import failed. Make sure you selected a valid Google Keep Takeout zip.",
+
     "settings.sessions.heading": "Active sessions",
     "settings.sessions.loading": "Loading…",
     "settings.sessions.empty": "No active sessions.",

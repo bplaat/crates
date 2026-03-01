@@ -47,6 +47,11 @@ export function SettingsLayout({ children }: { children: any }) {
                                 <path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z" />
                             </svg>
                         </SettingsSidebarLink>
+                        <SettingsSidebarLink href="/settings/imports" label={t('settings.imports')}>
+                            <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z" />
+                            </svg>
+                        </SettingsSidebarLink>
                     </nav>
                 </aside>
                 <main class="flex-1 min-w-0 overflow-y-auto">{children}</main>

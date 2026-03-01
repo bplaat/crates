@@ -8,14 +8,10 @@ import { useEffect, useState } from 'preact/hooks';
 import { type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
 import { Dialog } from '../../components/dialog.tsx';
+import { Button, FormField, FormInput, FormSelect } from '../../components/form.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/users.service.ts';
 
-const INPUT_CLASS =
-    'w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg text-sm bg-white dark:bg-zinc-700 text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 dark:focus:ring-yellow-500/50 focus:border-transparent';
-const LABEL_CLASS = 'text-sm font-medium text-gray-700 dark:text-gray-300';
-const BTN_PRIMARY =
-    'px-4 py-2 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 dark:text-yellow-400 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer';
 const BTN_ICON =
     'p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer';
 
@@ -108,14 +104,14 @@ export function AdminUsers() {
             <div class="px-4 py-8">
                 <div class="flex items-center justify-between mb-6">
                     <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('admin.users.heading')}</h1>
-                    <button onClick={openCreate} class={BTN_PRIMARY}>
+                    <Button onClick={openCreate}>
                         <span class="flex items-center gap-1.5">
                             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                             </svg>
                             {t('admin.users.create_user')}
                         </span>
-                    </button>
+                    </Button>
                 </div>
 
                 <div class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
@@ -209,13 +205,9 @@ export function AdminUsers() {
                 >
                     <form onSubmit={handleSubmit} class="flex flex-col gap-4">
                         <div class="grid grid-cols-2 gap-4">
-                            <div class="flex flex-col gap-1">
-                                <label for="firstName" class={LABEL_CLASS}>
-                                    {t('admin.users.first_name')}
-                                </label>
-                                <input
+                            <FormField id="firstName" label={t('admin.users.first_name')}>
+                                <FormInput
                                     id="firstName"
-                                    class={INPUT_CLASS}
                                     type="text"
                                     required
                                     value={form.firstName}
@@ -223,14 +215,10 @@ export function AdminUsers() {
                                         setForm({ ...form, firstName: (e.target as HTMLInputElement).value })
                                     }
                                 />
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <label for="lastName" class={LABEL_CLASS}>
-                                    {t('admin.users.last_name')}
-                                </label>
-                                <input
+                            </FormField>
+                            <FormField id="lastName" label={t('admin.users.last_name')}>
+                                <FormInput
                                     id="lastName"
-                                    class={INPUT_CLASS}
                                     type="text"
                                     required
                                     value={form.lastName}
@@ -238,65 +226,35 @@ export function AdminUsers() {
                                         setForm({ ...form, lastName: (e.target as HTMLInputElement).value })
                                     }
                                 />
-                            </div>
+                            </FormField>
                         </div>
 
-                        <div class="flex flex-col gap-1">
-                            <label for="email" class={LABEL_CLASS}>
-                                {t('admin.users.email')}
-                            </label>
-                            <input
+                        <FormField id="email" label={t('admin.users.email')}>
+                            <FormInput
                                 id="email"
-                                class={INPUT_CLASS}
                                 type="email"
                                 required
                                 value={form.email}
                                 onInput={(e) => setForm({ ...form, email: (e.target as HTMLInputElement).value })}
                             />
-                        </div>
+                        </FormField>
 
-                        {isCreate ? (
-                            <div class="flex flex-col gap-1">
-                                <label for="password" class={LABEL_CLASS}>
-                                    {t('admin.users.password')}
-                                </label>
-                                <input
-                                    id="password"
-                                    class={INPUT_CLASS}
-                                    type="password"
-                                    required
-                                    placeholder="••••••••"
-                                    value={form.password}
-                                    onInput={(e) =>
-                                        setForm({ ...form, password: (e.target as HTMLInputElement).value })
-                                    }
-                                />
-                            </div>
-                        ) : (
-                            <div class="flex flex-col gap-1">
-                                <label for="password" class={LABEL_CLASS}>
-                                    {t('admin.users.password')}
-                                </label>
-                                <input
-                                    id="password"
-                                    class={INPUT_CLASS}
-                                    type="password"
-                                    placeholder={t('admin.users.password_keep')}
-                                    value={form.password}
-                                    onInput={(e) =>
-                                        setForm({ ...form, password: (e.target as HTMLInputElement).value })
-                                    }
-                                />
-                            </div>
-                        )}
+                        <FormField id="password" label={t('admin.users.password')}>
+                            <FormInput
+                                id="password"
+                                type="password"
+                                required={isCreate}
+                                placeholder={isCreate ? '••••••••' : t('admin.users.password_keep')}
+                                value={form.password}
+                                onInput={(e) =>
+                                    setForm({ ...form, password: (e.target as HTMLInputElement).value })
+                                }
+                            />
+                        </FormField>
 
-                        <div class="flex flex-col gap-1">
-                            <label for="role" class={LABEL_CLASS}>
-                                {t('admin.users.role')}
-                            </label>
-                            <select
+                        <FormField id="role" label={t('admin.users.role')}>
+                            <FormSelect
                                 id="role"
-                                class={INPUT_CLASS}
                                 value={form.role}
                                 onChange={(e) =>
                                     setForm({ ...form, role: (e.target as HTMLSelectElement).value as UserRole })
@@ -304,13 +262,13 @@ export function AdminUsers() {
                             >
                                 <option value="normal">{t('admin.users.role_normal')}</option>
                                 <option value="admin">{t('admin.users.role_admin')}</option>
-                            </select>
-                        </div>
+                            </FormSelect>
+                        </FormField>
 
                         <div class="flex justify-end pt-1">
-                            <button type="submit" disabled={submitting} class={BTN_PRIMARY}>
+                            <Button type="submit" disabled={submitting}>
                                 {isCreate ? t('admin.users.create') : t('admin.users.save')}
-                            </button>
+                            </Button>
                         </div>
                     </form>
                 </Dialog>

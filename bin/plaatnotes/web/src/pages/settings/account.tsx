@@ -6,15 +6,11 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { type UserTheme } from '../../../src-gen/api.ts';
+import { Button, FormField, FormInput, FormSelect } from '../../components/form.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $authUser } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
 import { changePassword, updateUser } from '../../services/users.service.ts';
-
-const INPUT_CLASS =
-    'w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg text-sm bg-white dark:bg-zinc-700 text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 dark:focus:ring-yellow-500/50 focus:border-transparent';
-
-const LABEL_CLASS = 'text-sm font-medium text-gray-700 dark:text-gray-300';
 
 const CARD_CLASS = 'bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm p-6';
 
@@ -90,78 +86,58 @@ export function SettingsAccount() {
                         </h2>
                         <form onSubmit={handleProfileSubmit} class="flex flex-col gap-4">
                             <div class="grid grid-cols-2 gap-4">
-                                <div class="flex flex-col gap-1">
-                                    <label for="firstName" class={LABEL_CLASS}>
-                                        {t('settings.first_name')}
-                                    </label>
-                                    <input
+                                <FormField id="firstName" label={t('settings.first_name')}>
+                                    <FormInput
                                         id="firstName"
-                                        class={INPUT_CLASS}
                                         type="text"
                                         required
                                         value={firstName}
                                         onInput={(e) => setFirstName((e.target as HTMLInputElement).value)}
                                     />
-                                </div>
-                                <div class="flex flex-col gap-1">
-                                    <label for="lastName" class={LABEL_CLASS}>
-                                        {t('settings.last_name')}
-                                    </label>
-                                    <input
+                                </FormField>
+                                <FormField id="lastName" label={t('settings.last_name')}>
+                                    <FormInput
                                         id="lastName"
-                                        class={INPUT_CLASS}
                                         type="text"
                                         required
                                         value={lastName}
                                         onInput={(e) => setLastName((e.target as HTMLInputElement).value)}
                                     />
-                                </div>
+                                </FormField>
                             </div>
 
-                            <div class="flex flex-col gap-1">
-                                <label for="email" class={LABEL_CLASS}>
-                                    {t('settings.email')}
-                                </label>
-                                <input
+                            <FormField id="email" label={t('settings.email')}>
+                                <FormInput
                                     id="email"
-                                    class={INPUT_CLASS}
                                     type="email"
                                     required
                                     value={email}
                                     onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
                                 />
-                            </div>
+                            </FormField>
 
                             <div class="grid grid-cols-2 gap-4">
-                                <div class="flex flex-col gap-1">
-                                    <label for="theme" class={LABEL_CLASS}>
-                                        {t('settings.theme')}
-                                    </label>
-                                    <select
+                                <FormField id="theme" label={t('settings.theme')}>
+                                    <FormSelect
                                         id="theme"
-                                        class={INPUT_CLASS}
                                         value={theme}
                                         onChange={(e) => setTheme((e.target as HTMLSelectElement).value as UserTheme)}
                                     >
                                         <option value="system">{t('settings.theme_system')}</option>
                                         <option value="light">{t('settings.theme_light')}</option>
                                         <option value="dark">{t('settings.theme_dark')}</option>
-                                    </select>
-                                </div>
-                                <div class="flex flex-col gap-1">
-                                    <label for="language" class={LABEL_CLASS}>
-                                        {t('settings.language')}
-                                    </label>
-                                    <select
+                                    </FormSelect>
+                                </FormField>
+                                <FormField id="language" label={t('settings.language')}>
+                                    <FormSelect
                                         id="language"
-                                        class={INPUT_CLASS}
                                         value={language}
                                         onChange={(e) => setLanguage((e.target as HTMLSelectElement).value)}
                                     >
                                         <option value="en">{t('settings.language_en')}</option>
                                         <option value="nl">{t('settings.language_nl')}</option>
-                                    </select>
-                                </div>
+                                    </FormSelect>
+                                </FormField>
                             </div>
 
                             <div class="flex items-center justify-between pt-1">
@@ -173,13 +149,9 @@ export function SettingsAccount() {
                                         <p class="text-sm text-red-500 dark:text-red-400">{t('settings.save_error')}</p>
                                     )}
                                 </div>
-                                <button
-                                    type="submit"
-                                    disabled={profileLoading}
-                                    class="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 dark:text-yellow-400 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
-                                >
+                                <Button type="submit" disabled={profileLoading}>
                                     {t('settings.save')}
-                                </button>
+                                </Button>
                             </div>
                         </form>
                     </div>
@@ -190,48 +162,36 @@ export function SettingsAccount() {
                             {t('settings.password_heading')}
                         </h2>
                         <form onSubmit={handlePasswordSubmit} class="flex flex-col gap-4">
-                            <div class="flex flex-col gap-1">
-                                <label for="oldPassword" class={LABEL_CLASS}>
-                                    {t('settings.current_password')}
-                                </label>
-                                <input
+                            <FormField id="oldPassword" label={t('settings.current_password')}>
+                                <FormInput
                                     id="oldPassword"
-                                    class={INPUT_CLASS}
                                     type="password"
                                     required
                                     placeholder="••••••••"
                                     value={oldPassword}
                                     onInput={(e) => setOldPassword((e.target as HTMLInputElement).value)}
                                 />
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <label for="newPassword" class={LABEL_CLASS}>
-                                    {t('settings.new_password')}
-                                </label>
-                                <input
+                            </FormField>
+                            <FormField id="newPassword" label={t('settings.new_password')}>
+                                <FormInput
                                     id="newPassword"
-                                    class={INPUT_CLASS}
                                     type="password"
                                     required
                                     placeholder="••••••••"
                                     value={newPassword}
                                     onInput={(e) => setNewPassword((e.target as HTMLInputElement).value)}
                                 />
-                            </div>
-                            <div class="flex flex-col gap-1">
-                                <label for="confirmPassword" class={LABEL_CLASS}>
-                                    {t('settings.confirm_password')}
-                                </label>
-                                <input
+                            </FormField>
+                            <FormField id="confirmPassword" label={t('settings.confirm_password')}>
+                                <FormInput
                                     id="confirmPassword"
-                                    class={INPUT_CLASS}
                                     type="password"
                                     required
                                     placeholder="••••••••"
                                     value={confirmPassword}
                                     onInput={(e) => setConfirmPassword((e.target as HTMLInputElement).value)}
                                 />
-                            </div>
+                            </FormField>
 
                             <div class="flex items-center justify-between pt-1">
                                 <div>
@@ -244,13 +204,9 @@ export function SettingsAccount() {
                                         <p class="text-sm text-red-500 dark:text-red-400">{passwordError}</p>
                                     )}
                                 </div>
-                                <button
-                                    type="submit"
-                                    disabled={passwordLoading}
-                                    class="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 dark:text-yellow-400 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
-                                >
+                                <Button type="submit" disabled={passwordLoading}>
                                     {t('settings.change_password')}
-                                </button>
+                                </Button>
                             </div>
                         </form>
                     </div>

@@ -628,6 +628,31 @@ paths:
         '401':
           description: Unauthorized
 
+  # MARK: Imports
+  /imports/google-keep:
+    post:
+      tags: [Imports]
+      summary: Import notes from a Google Keep Takeout zip archive
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImportGoogleKeepBody'
+      responses:
+        '200':
+          description: Import successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportGoogleKeepResponse'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+
 components:
   # MARK: Security
   securitySchemes:
@@ -946,6 +971,24 @@ components:
         - isPinned
         - isArchived
         - isTrashed
+
+    ImportGoogleKeepBody:
+      type: object
+      properties:
+        file:
+          type: string
+          description: Base64-encoded Google Keep Takeout zip archive
+      required:
+        - file
+
+    ImportGoogleKeepResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Number of notes imported
+      required:
+        - count
 
     # MARK: Responses
     LoginResponse:
