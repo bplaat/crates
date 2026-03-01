@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Sequel Explorer
+Exec=SequelExplorer
+Icon=SequelExplorer
+Terminal=false
+Categories=Utility;

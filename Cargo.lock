@@ -587,6 +587,7 @@ dependencies = [
  "small-http",
  "small-router",
  "url",
+ "winresource",
 ]
 
 [[package]]

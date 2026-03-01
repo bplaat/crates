@@ -9,6 +9,7 @@ authors.workspace = true
 name = "Sequel Explorer"
 identifier = "nl.bplaat.SequelExplorer"
 copyright = "Copyright © 2026 Bastiaan van der Plaat"
+icon = "meta/macos/icon.icon"
 
 [lints]
 workspace = true
@@ -16,7 +17,10 @@ workspace = true
 [dependencies]
 base64 = "0.22"
 bsqlite = "0.1.2"
-bwebview = { path = "../../lib/bwebview", features = ["rust-embed", "file_dialog"] }
+bwebview = { path = "../../lib/bwebview", features = [
+    "rust-embed",
+    "file_dialog",
+] }
 rust-embed = "8.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -29,3 +33,6 @@ url = { version = "2.0" }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 bsqlite = { version = "0.1.2", features = ["bundled"] }
+
+[build-dependencies]
+winresource = "0.1.29"
