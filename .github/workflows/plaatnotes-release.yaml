@@ -1,0 +1,41 @@
+name: plaatnotes-release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  plaatnotes-release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Docker image
+        run: |
+          VERSION=$(grep '^version' bin/plaatnotes/Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
+          docker build \
+            --platform linux/amd64 \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.url=https://github.com/${{ github.repository }}/releases/tag/plaatnotes%2Fv${VERSION}" \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            --tag ghcr.io/bplaat/plaatnotes:${VERSION} \
+            --push \
+            -f bin/plaatnotes/Dockerfile .
+      - name: Create Git tag and GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(grep '^version' bin/plaatnotes/Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
+          gh release create "plaatnotes/v${VERSION}" --title "PlaatNotes v${VERSION}"

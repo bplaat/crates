@@ -17,6 +17,8 @@ RUN cargo build --release --target x86_64-unknown-linux-musl --bin plaatnotes
 # Run container
 FROM scratch
 
-COPY --from=builder /src/target/x86_64-unknown-linux-musl/release/plaatnotes /plaatnotes
+COPY --from=builder /src/target/x86_64-unknown-linux-musl/release/plaatnotes /app/plaatnotes
 
-ENTRYPOINT ["/plaatnotes"]
+WORKDIR /app
+
+ENTRYPOINT ["/app/plaatnotes"]

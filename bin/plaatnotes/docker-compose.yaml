@@ -1,0 +1,12 @@
+# This is a example docker-compose.yaml for deploying/running PlaatNotes
+
+services:
+  plaatnotes:
+    image: ghcr.io/bplaat/plaatnotes:0.1.0
+    restart: unless-stopped
+    environment:
+      DATABASE_PATH: 'data/database.db'
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./data/:/app/data/

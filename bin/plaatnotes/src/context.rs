@@ -32,6 +32,7 @@ impl Default for Context {
 
 impl Context {
     pub(crate) fn with_database(path: impl AsRef<Path>) -> Self {
+        log::info!("Using database at {}", path.as_ref().display());
         let database =
             Connection::open(path.as_ref(), OpenMode::ReadWrite).expect("Can't open database");
         database.enable_wal_logging().expect("Database error");

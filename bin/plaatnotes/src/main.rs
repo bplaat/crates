@@ -10,6 +10,7 @@
 
 use std::env;
 use std::net::{Ipv4Addr, TcpListener};
+use std::process::exit;
 
 use log::info;
 use small_router::{Router, RouterBuilder};
@@ -108,11 +109,11 @@ fn main() {
     if args.subcommand == Subcommand::ImportGoogleKeep {
         let path = args.path.unwrap_or_else(|| {
             eprintln!("Usage: plaatnotes import-google-keep <path> --email <email>");
-            std::process::exit(1);
+            exit(1);
         });
         let email = args.email.unwrap_or_else(|| {
             eprintln!("Error: --email <email> is required for import-google-keep");
-            std::process::exit(1);
+            exit(1);
         });
         imports::google_keep::run(&path, &email, &context);
         return;
