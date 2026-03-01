@@ -67,8 +67,11 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose
                 </button>
                 <button
                     onClick={onConfirm}
-                    class="px-4 py-2 bg-red-500 hover:bg-red-600 dark:bg-red-900/50 dark:hover:bg-red-900/70 dark:text-red-300 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                    class="px-4 py-2 bg-red-500 hover:bg-red-600 dark:bg-red-900/50 dark:hover:bg-red-900/70 dark:text-red-300 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer flex items-center gap-2"
                 >
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
+                    </svg>
                     {confirmLabel}
                 </button>
             </div>
