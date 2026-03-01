@@ -32,10 +32,13 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Response {
 
     // Get persons
     let search_query = format!("%{}%", query.query.replace("%", "\\%"));
-    let total = ctx.database.query_some::<i64>(
-        "SELECT COUNT(id) FROM persons WHERE name LIKE ?",
-        search_query.clone(),
-    );
+    let total = ctx
+        .database
+        .query_some::<i64>(
+            "SELECT COUNT(id) FROM persons WHERE name LIKE ?",
+            search_query.clone(),
+        )
+        .expect("Database error");
     let persons = query_args!(
         Person,
         ctx.database,
@@ -49,7 +52,8 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Response {
             offset: (query.page - 1) * query.limit
         }
     )
-    .map(Into::<api::Person>::into)
+    .expect("Database error")
+    .map(|r| Into::<api::Person>::into(r.expect("Database error")))
     .collect::<Vec<_>>();
 
     // Return persons
@@ -143,7 +147,8 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Response {
             age: person.age_in_years,
             relation: person.relation
         }
-    );
+    )
+    .expect("Database error");
 
     // Return updated person
     Response::with_json(Into::<api::Person>::into(person))
@@ -159,7 +164,8 @@ pub(crate) fn persons_delete(req: &Request, ctx: &Context) -> Response {
 
     // Delete person
     ctx.database
-        .execute("DELETE FROM persons WHERE id = ?", person.id);
+        .execute("DELETE FROM persons WHERE id = ?", person.id)
+        .expect("Database error");
 
     // Success response
     Response::new()
@@ -187,7 +193,9 @@ fn get_person(req: &Request, ctx: &Context) -> Option<Person> {
             ),
             person_id,
         )
+        .expect("Database error")
         .next()
+        .map(|r| r.expect("Database error"))
 }
 
 // MARK: Tests

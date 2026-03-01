@@ -15,7 +15,7 @@ enum HairColor {
     Black = 2,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // Connect and create table
     let db = Connection::open_memory().expect("Can't open database");
     db.execute(
@@ -26,7 +26,7 @@ fn main() {
             hair_color INTEGER NOT NULL
         ) STRICT",
         (),
-    );
+    )?;
 
     // Insert a rows
     db.execute(
@@ -40,12 +40,13 @@ fn main() {
             40,
             HairColor::Blond,
         ),
-    );
+    )?;
 
     // Read rows
-    let rows =
-        db.query::<(String, i64, HairColor)>("SELECT name, age, hair_color FROM persons", ());
-    for row in rows {
-        println!("{row:?}");
+    for row in
+        db.query::<(String, i64, HairColor)>("SELECT name, age, hair_color FROM persons", ())?
+    {
+        println!("{:?}", row?);
     }
+    Ok(())
 }

@@ -79,6 +79,7 @@ dependencies = [
 name = "bsqlite"
 version = "0.1.2"
 dependencies = [
+ "anyhow",
  "bsqlite_derive",
  "chrono",
  "const_format",

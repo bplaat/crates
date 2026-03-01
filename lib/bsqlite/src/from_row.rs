@@ -4,24 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
+use crate::value::ValueError;
 use crate::{RawStatement, Value};
 
 /// A trait for converting read values from a statement to a row
 pub trait FromRow: Sized {
     /// Convert read values from a statement to a row
-    fn from_row(statement: &mut RawStatement) -> Self;
+    fn from_row(statement: &mut RawStatement) -> Result<Self, ValueError>;
 }
 
 impl FromRow for () {
-    fn from_row(_statement: &mut RawStatement) -> Self {}
+    fn from_row(_statement: &mut RawStatement) -> Result<Self, ValueError> {
+        Ok(())
+    }
 }
 
-impl<T: TryFrom<Value>> FromRow for T {
-    fn from_row(statement: &mut RawStatement) -> Self {
-        match T::try_from(statement.column_value(0)) {
-            Ok(value) => value,
-            Err(_) => panic!("Can't convert Value"),
-        }
+impl<T: TryFrom<Value, Error = ValueError>> FromRow for T {
+    fn from_row(statement: &mut RawStatement) -> Result<Self, ValueError> {
+        T::try_from(statement.column_value(0))
     }
 }
 
@@ -29,17 +29,12 @@ macro_rules! impl_from_row_for_tuple {
     ($($n:tt: $t:ident),*) => (
         impl<$($t,)*> FromRow for ($($t,)*)
         where
-            $($t: TryFrom<Value>,)+
+            $($t: TryFrom<Value, Error = ValueError>,)+
         {
-            fn from_row(statement: &mut RawStatement) -> Self {
-                (
-                    $(
-                        match $t::try_from(statement.column_value($n)) {
-                            Ok(value) => value,
-                            Err(_) => panic!("Can't convert Value"),
-                        },
-                    )*
-                )
+            fn from_row(statement: &mut RawStatement) -> Result<Self, ValueError> {
+                Ok((
+                    $($t::try_from(statement.column_value($n))?,)*
+                ))
             }
         }
     );

@@ -52,7 +52,7 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
             search_query.clone(),
             search_query.clone(),
         ),
-    );
+    ).expect("Database error");
     let users = query_args!(
         User,
         ctx.database,
@@ -66,7 +66,8 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
             offset: (query.page - 1) * query.limit
         }
     )
-    .map(Into::<api::User>::into)
+    .expect("Database error")
+    .map(|r| Into::<api::User>::into(r.expect("Database error")))
     .collect::<Vec<_>>();
 
     // Return users
@@ -154,7 +155,9 @@ pub(crate) fn get_user(req: &Request, ctx: &Context) -> Option<User> {
             formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
             user_id,
         )
+        .expect("Database error")
         .next()
+        .map(|r| r.expect("Database error"))
 }
 
 pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Response {
@@ -244,7 +247,7 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
             updated_at: user.updated_at,
             id: user.id
         }
-    );
+    ).expect("Database error");
 
     // Return updated user
     Response::with_json(Into::<api::User>::into(user))
@@ -306,7 +309,8 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
             updated_at: user.updated_at,
             id: user.id
         }
-    );
+    )
+    .expect("Database error");
 
     // Success response
     Response::new()
@@ -332,7 +336,8 @@ pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Response {
 
     // Delete user
     ctx.database
-        .execute("DELETE FROM users WHERE id = ?", user.id);
+        .execute("DELETE FROM users WHERE id = ?", user.id)
+        .expect("Database error");
 
     // Success response
     Response::new()
@@ -379,7 +384,9 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
             search_query: search_query.clone()
         }
     )
+    .expect("Database error")
     .next()
+    .map(|r| r.expect("Database error"))
     .unwrap_or(0);
     let notes = query_args!(
         Note,
@@ -395,7 +402,8 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
             offset: (query.page - 1) * query.limit
         }
     )
-    .map(Into::<api::Note>::into)
+    .expect("Database error")
+    .map(|r| Into::<api::Note>::into(r.expect("Database error")))
     .collect::<Vec<_>>();
 
     // Return notes
@@ -463,7 +471,9 @@ fn users_notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool)
             search_query: search_query.clone()
         }
     )
+    .expect("Database error")
     .next()
+    .map(|r| r.expect("Database error"))
     .unwrap_or(0);
     let notes = query_args!(
         Note,
@@ -480,7 +490,8 @@ fn users_notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool)
             offset: (query.page - 1) * query.limit
         }
     )
-    .map(Into::<api::Note>::into)
+    .expect("Database error")
+    .map(|r| Into::<api::Note>::into(r.expect("Database error")))
     .collect::<Vec<_>>();
 
     // Return filtered notes
@@ -832,7 +843,9 @@ mod test {
                 formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
             .unwrap();
         assert!(pbkdf2::password_verify("newpassword456", &stored_user.password).unwrap());
     }
@@ -950,7 +963,9 @@ mod test {
                 formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
             .unwrap();
 
         // Password should be hashed (not plain text)

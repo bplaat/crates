@@ -48,7 +48,9 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                     search_query: search_query.clone()
                 }
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
             .unwrap_or(0);
             let sessions = query_args!(
                 Session,
@@ -63,7 +65,8 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                     offset: (query.page - 1) * query.limit
                 }
             )
-            .map(Into::<api::Session>::into)
+            .expect("Database error")
+            .map(|r| Into::<api::Session>::into(r.expect("Database error")))
             .collect::<Vec<_>>();
             (total, sessions)
         }
@@ -78,7 +81,9 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                     search_query: search_query.clone()
                 }
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
             .unwrap_or(0);
             let sessions = query_args!(
                 Session,
@@ -94,7 +99,8 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                     offset: (query.page - 1) * query.limit
                 }
             )
-            .map(Into::<api::Session>::into)
+            .expect("Database error")
+            .map(|r| Into::<api::Session>::into(r.expect("Database error")))
             .collect::<Vec<_>>();
             (total, sessions)
         }
@@ -153,7 +159,8 @@ pub(crate) fn sessions_delete(req: &Request, ctx: &Context) -> Response {
 
     // Delete session
     ctx.database
-        .execute("DELETE FROM sessions WHERE id = ?", session.id);
+        .execute("DELETE FROM sessions WHERE id = ?", session.id)
+        .expect("Database error");
 
     // Success response
     Response::new()
@@ -179,7 +186,9 @@ fn get_session(req: &Request, ctx: &Context) -> Option<Session> {
             ),
             session_id,
         )
+        .expect("Database error")
         .next()
+        .map(|r| r.expect("Database error"))
 }
 
 // MARK: Tests
@@ -390,7 +399,9 @@ mod test {
             ),
             Args { id: session.id }
         )
-        .next();
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"));
         assert!(deleted.is_none());
     }
 
@@ -436,7 +447,9 @@ mod test {
             ),
             Args { id: session2.id }
         )
-        .next();
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"));
         assert!(existing.is_some());
     }
 }

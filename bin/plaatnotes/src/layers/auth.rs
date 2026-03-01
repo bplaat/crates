@@ -30,7 +30,9 @@ pub(crate) fn auth_optional_pre_layer(req: &Request, ctx: &mut Context) -> Optio
             ),
             (token, Utc::now()),
         )
-        .next();
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"));
     let session = session?;
 
     // Get user by session user_id
@@ -43,7 +45,9 @@ pub(crate) fn auth_optional_pre_layer(req: &Request, ctx: &mut Context) -> Optio
             ),
             session.user_id,
         )
-        .next();
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"));
     ctx.auth_session = Some(session);
 
     None
@@ -78,7 +82,9 @@ pub(crate) fn auth_required_pre_layer(req: &Request, ctx: &mut Context) -> Optio
             ),
             (token, Utc::now()),
         )
-        .next();
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"));
     let session = match session {
         Some(session) => session,
         None => {
@@ -100,7 +106,9 @@ pub(crate) fn auth_required_pre_layer(req: &Request, ctx: &mut Context) -> Optio
             ),
             session.user_id,
         )
-        .next();
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"));
     ctx.auth_session = Some(session);
 
     None

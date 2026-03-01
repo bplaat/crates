@@ -18,8 +18,10 @@ pub(crate) struct Context {
 impl Context {
     pub(crate) fn with_database(path: &str) -> Self {
         let database = Connection::open(path, OpenMode::ReadWrite).expect("Can't open database");
-        database.enable_wal_logging();
-        database.apply_various_performance_settings();
+        database.enable_wal_logging().expect("Database error");
+        database
+            .apply_various_performance_settings()
+            .expect("Database error");
         database_create_tables(&database);
         database_seed(&database);
         Self { database }
@@ -46,26 +48,33 @@ impl DatabaseHelpers for Connection {
                 Person::values()
             ),
             person,
-        );
+        )
+        .expect("Database error");
     }
 }
 
 fn database_create_tables(database: &Connection) {
-    database.execute(
-        "CREATE TABLE IF NOT EXISTS persons(
+    database
+        .execute(
+            "CREATE TABLE IF NOT EXISTS persons(
             id BLOB PRIMARY KEY,
             name TEXT NOT NULL,
             age INTEGER NOT NULL,
             relation INTEGER NOT NULL,
             created_at INTEGER NOT NULL
         ) STRICT",
-        (),
-    );
+            (),
+        )
+        .expect("Database error");
 }
 
 fn database_seed(database: &Connection) {
     // Insert persons
-    if database.query_some::<i64>("SELECT COUNT(id) FROM persons", ()) == 0 {
+    if database
+        .query_some::<i64>("SELECT COUNT(id) FROM persons", ())
+        .expect("Database error")
+        == 0
+    {
         database.insert_person(Person {
             name: "Bastiaan".to_string(),
             age_in_years: 20,

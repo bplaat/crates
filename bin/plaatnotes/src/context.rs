@@ -34,8 +34,10 @@ impl Context {
     pub(crate) fn with_database(path: impl AsRef<Path>) -> Self {
         let database =
             Connection::open(path.as_ref(), OpenMode::ReadWrite).expect("Can't open database");
-        database.enable_wal_logging();
-        database.apply_various_performance_settings();
+        database.enable_wal_logging().expect("Database error");
+        database
+            .apply_various_performance_settings()
+            .expect("Database error");
         database_create_tables(&database);
         database_seed(&database);
         Self {
@@ -73,7 +75,8 @@ impl DatabaseHelpers for Connection {
                 User::values()
             ),
             user,
-        );
+        )
+        .expect("Database error");
     }
 
     fn insert_session(&self, session: Session) {
@@ -84,7 +87,8 @@ impl DatabaseHelpers for Connection {
                 Session::values()
             ),
             session,
-        );
+        )
+        .expect("Database error");
     }
 
     fn insert_note(&self, note: Note) {
@@ -95,13 +99,15 @@ impl DatabaseHelpers for Connection {
                 Note::values()
             ),
             note,
-        );
+        )
+        .expect("Database error");
     }
 }
 
 fn database_create_tables(database: &Connection) {
-    database.execute(
-        "CREATE TABLE IF NOT EXISTS users(
+    database
+        .execute(
+            "CREATE TABLE IF NOT EXISTS users(
             id BLOB PRIMARY KEY,
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
@@ -113,11 +119,13 @@ fn database_create_tables(database: &Connection) {
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
         ) STRICT",
-        (),
-    );
+            (),
+        )
+        .expect("Database error");
 
-    database.execute(
-        "CREATE TABLE IF NOT EXISTS sessions(
+    database
+        .execute(
+            "CREATE TABLE IF NOT EXISTS sessions(
             id BLOB PRIMARY KEY,
             user_id BLOB NOT NULL,
             token TEXT NOT NULL,
@@ -134,11 +142,13 @@ fn database_create_tables(database: &Connection) {
             updated_at INTEGER NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) STRICT",
-        (),
-    );
+            (),
+        )
+        .expect("Database error");
 
-    database.execute(
-        "CREATE TABLE IF NOT EXISTS notes(
+    database
+        .execute(
+            "CREATE TABLE IF NOT EXISTS notes(
             id BLOB PRIMARY KEY,
             user_id BLOB NOT NULL,
             title TEXT NULL,
@@ -150,12 +160,15 @@ fn database_create_tables(database: &Connection) {
             updated_at INTEGER NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) STRICT",
-        (),
-    );
+            (),
+        )
+        .expect("Database error");
 }
 
 fn database_seed(database: &Connection) {
-    let user_count = database.query_some::<i64>("SELECT COUNT(id) FROM users", ());
+    let user_count = database
+        .query_some::<i64>("SELECT COUNT(id) FROM users", ())
+        .expect("Database error");
     if user_count == 0 {
         let user = User {
             first_name: "Admin".to_string(),

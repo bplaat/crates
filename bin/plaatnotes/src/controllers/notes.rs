@@ -55,7 +55,9 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                     search_query: search_query.clone()
                 }
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
             .unwrap_or(0);
             let notes = query_args!(
                 Note,
@@ -70,7 +72,8 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                     offset: (query.page - 1) * query.limit
                 }
             )
-            .map(Into::<api::Note>::into)
+            .expect("Database error")
+            .map(|r| Into::<api::Note>::into(r.expect("Database error")))
             .collect::<Vec<_>>();
             (total, notes)
         }
@@ -85,7 +88,9 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                     search_query: search_query.clone()
                 }
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
             .unwrap_or(0);
             let notes = query_args!(
                 Note,
@@ -101,7 +106,8 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                     offset: (query.page - 1) * query.limit
                 }
             )
-            .map(Into::<api::Note>::into)
+            .expect("Database error")
+            .map(|r| Into::<api::Note>::into(r.expect("Database error")))
             .collect::<Vec<_>>();
             (total, notes)
         }
@@ -249,7 +255,7 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
             updated_at: note.updated_at,
             id: note.id
         }
-    );
+    ).expect("Database error");
 
     // Return updated note
     Response::with_json(Into::<api::Note>::into(note))
@@ -275,7 +281,8 @@ pub(crate) fn notes_delete(_req: &Request, ctx: &Context) -> Response {
 
     // Delete note
     ctx.database
-        .execute("DELETE FROM notes WHERE id = ?", note.id);
+        .execute("DELETE FROM notes WHERE id = ?", note.id)
+        .expect("Database error");
 
     // Success response
     Response::new()
@@ -333,7 +340,9 @@ fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Re
                     search_query: search_query.clone()
                 }
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
             .unwrap_or(0);
             let notes = query_args!(
                 Note,
@@ -349,7 +358,8 @@ fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Re
                     offset: (query.page - 1) * query.limit
                 }
             )
-            .map(Into::<api::Note>::into)
+            .expect("Database error")
+            .map(|r| Into::<api::Note>::into(r.expect("Database error")))
             .collect::<Vec<_>>();
             (total, notes)
         }
@@ -364,7 +374,9 @@ fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Re
                     search_query: search_query.clone()
                 }
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
             .unwrap_or(0);
             let notes = query_args!(
                 Note,
@@ -381,7 +393,8 @@ fn notes_filtered(req: &Request, ctx: &Context, field: &str, _value: bool) -> Re
                     offset: (query.page - 1) * query.limit
                 }
             )
-            .map(Into::<api::Note>::into)
+            .expect("Database error")
+            .map(|r| Into::<api::Note>::into(r.expect("Database error")))
             .collect::<Vec<_>>();
             (total, notes)
         }
@@ -421,7 +434,9 @@ fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Option<Note
                 ),
                 Args { note_id: note_id }
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
         }
         UserRole::Normal => {
             // Normal user can only fetch their own notes
@@ -437,7 +452,9 @@ fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Option<Note
                     user_id: user.id
                 }
             )
+            .expect("Database error")
             .next()
+            .map(|r| r.expect("Database error"))
         }
     }
 }

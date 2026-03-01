@@ -8,7 +8,7 @@
 
 use bsqlite::{execute_args, query_args, Connection};
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // Connect and create table
     let db = Connection::open_memory().expect("Can't open database");
     db.execute(
@@ -18,7 +18,7 @@ fn main() {
             age INTEGER NOT NULL
         ) STRICT",
         (),
-    );
+    )?;
 
     // Insert a rows
     execute_args!(
@@ -28,7 +28,7 @@ fn main() {
             name: "Alice".to_string(),
             age: 30,
         },
-    );
+    )?;
     execute_args!(
         db,
         "INSERT INTO persons (name, age) VALUES (:name, :age)",
@@ -36,16 +36,16 @@ fn main() {
             name: "Bob".to_string(),
             age: 40,
         },
-    );
+    )?;
 
     // Read rows
-    let rows = query_args!(
+    for row in query_args!(
         (String, i64),
         db,
         "SELECT name, age FROM persons LIMIT :limit",
         Args { limit: 2 }
-    );
-    for row in rows {
-        println!("{row:?}");
+    )? {
+        println!("{:?}", row?);
     }
+    Ok(())
 }

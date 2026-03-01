@@ -26,11 +26,20 @@ type Result<T> = std::result::Result<T, ValueError>;
 
 /// A value error
 #[derive(Debug)]
-pub struct ValueError;
+pub struct ValueError {
+    msg: String,
+}
+
+impl ValueError {
+    #[doc(hidden)]
+    pub fn new(msg: impl Into<String>) -> Self {
+        Self { msg: msg.into() }
+    }
+}
 
 impl Display for ValueError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Value error")
+        write!(f, "Value error: {}", self.msg)
     }
 }
 
@@ -47,7 +56,9 @@ impl TryFrom<Value> for bool {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(v) => Ok(v != 0),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer".to_string(),
+            }),
         }
     }
 }
@@ -62,7 +73,9 @@ impl TryFrom<Value> for i8 {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(v) => Ok(v as i8),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer".to_string(),
+            }),
         }
     }
 }
@@ -77,7 +90,9 @@ impl TryFrom<Value> for i16 {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(v) => Ok(v as i16),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer".to_string(),
+            }),
         }
     }
 }
@@ -92,7 +107,9 @@ impl TryFrom<Value> for i32 {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(v) => Ok(v as i32),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer".to_string(),
+            }),
         }
     }
 }
@@ -107,7 +124,9 @@ impl TryFrom<Value> for i64 {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Integer(v) => Ok(v),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer".to_string(),
+            }),
         }
     }
 }
@@ -122,7 +141,9 @@ impl TryFrom<Value> for f64 {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Float(v) => Ok(v),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected float".to_string(),
+            }),
         }
     }
 }
@@ -137,7 +158,9 @@ impl TryFrom<Value> for String {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Text(v) => Ok(v),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected text".to_string(),
+            }),
         }
     }
 }
@@ -152,7 +175,9 @@ impl TryFrom<Value> for Vec<u8> {
     fn try_from(value: Value) -> Result<Self> {
         match value {
             Value::Blob(v) => Ok(v),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected blob".to_string(),
+            }),
         }
     }
 }
@@ -172,7 +197,9 @@ impl TryFrom<Value> for Option<bool> {
         match value {
             Value::Integer(v) => Ok(Some(v != 0)),
             Value::Null => Ok(None),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer or null".to_string(),
+            }),
         }
     }
 }
@@ -191,7 +218,9 @@ impl TryFrom<Value> for Option<i8> {
         match value {
             Value::Integer(v) => Ok(Some(v as i8)),
             Value::Null => Ok(None),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer or null".to_string(),
+            }),
         }
     }
 }
@@ -210,7 +239,9 @@ impl TryFrom<Value> for Option<i16> {
         match value {
             Value::Integer(v) => Ok(Some(v as i16)),
             Value::Null => Ok(None),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer or null".to_string(),
+            }),
         }
     }
 }
@@ -229,7 +260,9 @@ impl TryFrom<Value> for Option<i32> {
         match value {
             Value::Integer(v) => Ok(Some(v as i32)),
             Value::Null => Ok(None),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer or null".to_string(),
+            }),
         }
     }
 }
@@ -248,7 +281,9 @@ impl TryFrom<Value> for Option<i64> {
         match value {
             Value::Integer(v) => Ok(Some(v)),
             Value::Null => Ok(None),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected integer or null".to_string(),
+            }),
         }
     }
 }
@@ -267,7 +302,9 @@ impl TryFrom<Value> for Option<f64> {
         match value {
             Value::Float(v) => Ok(Some(v)),
             Value::Null => Ok(None),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected float or null".to_string(),
+            }),
         }
     }
 }
@@ -286,7 +323,9 @@ impl TryFrom<Value> for Option<String> {
         match value {
             Value::Text(v) => Ok(Some(v)),
             Value::Null => Ok(None),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected text or null".to_string(),
+            }),
         }
     }
 }
@@ -305,7 +344,9 @@ impl TryFrom<Value> for Option<Vec<u8>> {
         match value {
             Value::Blob(v) => Ok(Some(v)),
             Value::Null => Ok(None),
-            _ => Err(ValueError),
+            _ => Err(ValueError {
+                msg: "expected blob or null".to_string(),
+            }),
         }
     }
 }
@@ -327,8 +368,12 @@ mod uuid_impls {
         type Error = ValueError;
         fn try_from(value: Value) -> Result<Self> {
             match value {
-                Value::Blob(v) => Ok(Uuid::from_slice(&v).map_err(|_| ValueError)?),
-                _ => Err(ValueError),
+                Value::Blob(v) => {
+                    Ok(Uuid::from_slice(&v).map_err(|e| ValueError { msg: e.to_string() })?)
+                }
+                _ => Err(ValueError {
+                    msg: "expected blob".to_string(),
+                }),
             }
         }
     }
@@ -345,9 +390,13 @@ mod uuid_impls {
         type Error = ValueError;
         fn try_from(value: Value) -> Result<Self> {
             match value {
-                Value::Blob(v) => Ok(Some(Uuid::from_slice(&v).map_err(|_| ValueError)?)),
+                Value::Blob(v) => Ok(Some(
+                    Uuid::from_slice(&v).map_err(|e| ValueError { msg: e.to_string() })?,
+                )),
                 Value::Null => Ok(None),
-                _ => Err(ValueError),
+                _ => Err(ValueError {
+                    msg: "expected blob or null".to_string(),
+                }),
             }
         }
     }
@@ -377,10 +426,14 @@ mod chrono_impls {
         fn try_from(value: Value) -> Result<Self> {
             match value {
                 Value::Integer(i) => Ok(DateTime::<Utc>::from_timestamp_secs(i)
-                    .expect("Should be some")
+                    .ok_or_else(|| ValueError {
+                        msg: format!("invalid timestamp: {i}"),
+                    })?
                     .naive_utc()
                     .date()),
-                _ => Err(ValueError),
+                _ => Err(ValueError {
+                    msg: "expected integer".to_string(),
+                }),
             }
         }
     }
@@ -404,12 +457,16 @@ mod chrono_impls {
             match value {
                 Value::Integer(i) => Ok(Some(
                     DateTime::<Utc>::from_timestamp_secs(i)
-                        .expect("Should be some")
+                        .ok_or_else(|| ValueError {
+                            msg: format!("invalid timestamp: {i}"),
+                        })?
                         .naive_utc()
                         .date(),
                 )),
                 Value::Null => Ok(None),
-                _ => Err(ValueError),
+                _ => Err(ValueError {
+                    msg: "expected integer or null".to_string(),
+                }),
             }
         }
     }
@@ -424,8 +481,14 @@ mod chrono_impls {
         type Error = ValueError;
         fn try_from(value: Value) -> Result<Self> {
             match value {
-                Value::Integer(i) => Ok(Self::from_timestamp_secs(i).expect("Should be some")),
-                _ => Err(ValueError),
+                Value::Integer(i) => {
+                    Ok(Self::from_timestamp_secs(i).ok_or_else(|| ValueError {
+                        msg: format!("invalid timestamp: {i}"),
+                    })?)
+                }
+                _ => Err(ValueError {
+                    msg: "expected integer".to_string(),
+                }),
             }
         }
     }
@@ -444,7 +507,9 @@ mod chrono_impls {
             match value {
                 Value::Integer(i) => Ok(DateTime::<Utc>::from_timestamp_secs(i)),
                 Value::Null => Ok(None),
-                _ => Err(ValueError),
+                _ => Err(ValueError {
+                    msg: "expected integer or null".to_string(),
+                }),
             }
         }
     }

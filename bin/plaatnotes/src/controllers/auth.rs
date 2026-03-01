@@ -61,7 +61,9 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Response {
             ),
             body.email,
         )
+        .expect("Database error")
         .next()
+        .map(|r| r.expect("Database error"))
     {
         Some(user) => user,
         None => return Response::with_status(Status::Unauthorized),
@@ -156,7 +158,8 @@ pub(crate) fn auth_logout(_req: &Request, ctx: &Context) -> Response {
             now: Utc::now(),
             token: session.token
         }
-    );
+    )
+    .expect("Database error");
 
     // Success response
     Response::new()
@@ -274,7 +277,9 @@ mod test {
                 token: "test-token-123".to_string()
             }
         )
+        .expect("Database error")
         .next()
+        .map(|r| r.expect("Database error"))
         .unwrap();
         assert!(expired_session.expires_at.timestamp() <= Utc::now().timestamp());
     }

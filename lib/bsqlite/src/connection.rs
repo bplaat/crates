@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use libsqlite3_sys::*;
 
-use crate::{Bind, FromRow, Statement};
+use crate::{Bind, FromRow, Statement, StatementError};
 
 // MARK: Inner Connection
 /// The mode to open the database in
@@ -56,7 +56,7 @@ impl InnerConnection {
         Ok(InnerConnection(db))
     }
 
-    fn prepare<T: FromRow>(&self, query: &str) -> Statement<T> {
+    fn prepare<T: FromRow>(&self, query: &str) -> Result<Statement<T>, StatementError> {
         let mut statement = ptr::null_mut();
         let result = unsafe {
             sqlite3_prepare_v2(
@@ -69,9 +69,11 @@ impl InnerConnection {
         };
         if result != SQLITE_OK {
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(self.0)) }.to_string_lossy();
-            panic!("bsqlite: Failed to prepare SQL statement!\n  Query: {query}\n  Error: {error}");
+            return Err(StatementError {
+                msg: format!("Failed to prepare statement '{query}': {error}"),
+            });
         }
-        Statement::new(statement)
+        Ok(Statement::new(statement))
     }
 
     fn affected_rows(&self) -> i32 {
@@ -124,53 +126,71 @@ impl Connection {
     }
 
     /// Set the journal mode to Write-Ahead Logging for better concurrency throughput
-    pub fn enable_wal_logging(&self) {
-        self.execute("PRAGMA journal_mode = WAL", ());
+    pub fn enable_wal_logging(&self) -> Result<(), StatementError> {
+        self.execute("PRAGMA journal_mode = WAL", ())
     }
 
     /// Apply various performance settings to the database
-    pub fn apply_various_performance_settings(&self) {
+    pub fn apply_various_performance_settings(&self) -> Result<(), StatementError> {
         // Apply some SQLite performance settings (https://briandouglas.ie/sqlite-defaults/)
         // - Set synchronous mode to NORMAL for performance and data safety balance
-        self.execute("PRAGMA synchronous = NORMAL", ());
+        self.execute("PRAGMA synchronous = NORMAL", ())?;
         // - Set busy timeout to 5 seconds to avoid "database is locked" errors
-        self.execute("PRAGMA busy_timeout = 5000", ());
+        self.execute("PRAGMA busy_timeout = 5000", ())?;
         // - Set cache size to 20MB for faster data access
-        self.execute("PRAGMA cache_size = 20000", ());
+        self.execute("PRAGMA cache_size = 20000", ())?;
         // - Enable foreign key constraint enforcement
-        self.execute("PRAGMA foreign_keys = ON", ());
+        self.execute("PRAGMA foreign_keys = ON", ())?;
         // - Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
-        self.execute("PRAGMA auto_vacuum = INCREMENTAL", ());
+        self.execute("PRAGMA auto_vacuum = INCREMENTAL", ())?;
         // - Store temporary tables and data in memory for better performance
-        self.execute("PRAGMA temp_store = MEMORY", ());
+        self.execute("PRAGMA temp_store = MEMORY", ())?;
         // - Set the mmap_size to 2GB for faster read/write access using memory-mapped I/O
-        self.execute("PRAGMA mmap_size = 2147483648", ());
+        self.execute("PRAGMA mmap_size = 2147483648", ())?;
         // - Set the page size to 8KB for balanced memory usage and performance
-        self.execute("PRAGMA page_size = 8192", ());
+        self.execute("PRAGMA page_size = 8192", ())?;
+        Ok(())
     }
 
     /// Prepare a statement
-    pub fn prepare<T: FromRow>(&self, query: impl AsRef<str>) -> Statement<T> {
+    pub fn prepare<T: FromRow>(
+        &self,
+        query: impl AsRef<str>,
+    ) -> Result<Statement<T>, StatementError> {
         self.0.prepare(query.as_ref())
     }
 
     /// Run a query
-    pub fn query<T: FromRow>(&self, query: impl AsRef<str>, params: impl Bind) -> Statement<T> {
-        let mut statement = self.prepare::<T>(query.as_ref());
-        statement.bind(params);
-        statement
+    pub fn query<T: FromRow>(
+        &self,
+        query: impl AsRef<str>,
+        params: impl Bind,
+    ) -> Result<Statement<T>, StatementError> {
+        let mut statement = self.prepare::<T>(query.as_ref())?;
+        statement.bind(params)?;
+        Ok(statement)
     }
 
     /// Run a query, read and expect the first row
-    pub fn query_some<T: FromRow>(&self, query: impl AsRef<str>, params: impl Bind) -> T {
-        self.query::<T>(query.as_ref(), params)
+    pub fn query_some<T: FromRow>(
+        &self,
+        query: impl AsRef<str>,
+        params: impl Bind,
+    ) -> Result<T, StatementError> {
+        self.query::<T>(query.as_ref(), params)?
             .next()
-            .expect("Expected at least one row from query")
+            .transpose()?
+            .ok_or_else(|| StatementError {
+                msg: "expected at least one row from query".to_string(),
+            })
     }
 
     /// Execute a query
-    pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) {
-        self.query::<()>(query.as_ref(), params).next();
+    pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) -> Result<(), StatementError> {
+        self.query::<()>(query.as_ref(), params)?
+            .next()
+            .transpose()?;
+        Ok(())
     }
 
     /// Get the number of affected rows
@@ -190,11 +210,13 @@ impl Connection {
 #[macro_export]
 macro_rules! query_args {
     ($t:tt, $db:expr, $query:expr, Args { $($key:ident : $value:expr),* $(,)? } $(,)?) => {{
-        let mut stat = $db.prepare::<$t>($query);
-        $(
-            stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value));
-        )*
-        stat
+        (|| -> Result<_, $crate::StatementError> {
+            let mut stat = $db.prepare::<$t>($query)?;
+            $(
+                stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value))?;
+            )*
+            Ok(stat)
+        })()
     }};
 }
 
@@ -202,11 +224,14 @@ macro_rules! query_args {
 #[macro_export]
 macro_rules! execute_args {
     ($db:expr, $query:expr, Args { $($key:ident : $value:expr),* $(,)? } $(,)?) => {{
-        let mut stat = $db.prepare::<()>($query);
-        $(
-            stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value));
-        )*
-        stat.next();
+        (|| -> Result<_, $crate::StatementError> {
+            let mut stat = $db.prepare::<()>($query)?;
+            $(
+                stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value))?;
+            )*
+            stat.next().transpose()?;
+            Ok(())
+        })()
     }};
 }
 
@@ -216,16 +241,16 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_open_db_execute_queries() {
+    fn test_open_db_execute_queries() -> Result<(), StatementError> {
         let db = Connection::open_memory().unwrap();
         db.execute(
             "CREATE TABLE persons (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER) STRICT",
             (),
-        );
+        )?;
         db.execute(
             "INSERT INTO persons (name, age) VALUES (?, ?)",
             ("Alice".to_string(), 30),
-        );
+        )?;
         execute_args!(
             db,
             "INSERT INTO persons (name, age) VALUES (:name, :age)",
@@ -233,16 +258,17 @@ mod test {
                 name: "Bob".to_string(),
                 age: 40,
             },
-        );
+        )?;
 
-        let total = db.query_some::<i64>("SELECT COUNT(id) FROM persons", ());
+        let total = db.query_some::<i64>("SELECT COUNT(id) FROM persons", ())?;
         assert_eq!(total, 2);
         let names = db
-            .query::<(String, i64)>("SELECT name, age FROM persons", ())
-            .collect::<Vec<_>>();
+            .query::<(String, i64)>("SELECT name, age FROM persons", ())?
+            .collect::<Result<Vec<_>, _>>()?;
         assert_eq!(
             names,
             vec![("Alice".to_string(), 30), ("Bob".to_string(), 40)]
         );
+        Ok(())
     }
 }

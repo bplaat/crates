@@ -4,12 +4,36 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::error::Error;
 use std::ffi::{c_char, c_void, CStr, CString};
+use std::fmt::{self, Display, Formatter};
 use std::marker::PhantomData;
 
 use libsqlite3_sys::*;
 
 use crate::{Bind, FromRow, Value};
+
+// MARK: Statement Error
+/// A statement error
+#[derive(Debug)]
+pub struct StatementError {
+    pub(crate) msg: String,
+}
+
+impl StatementError {
+    #[doc(hidden)]
+    pub fn new(msg: impl Into<String>) -> Self {
+        Self { msg: msg.into() }
+    }
+}
+
+impl Display for StatementError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Statement error: {}", self.msg)
+    }
+}
+
+impl Error for StatementError {}
 
 // MARK: Column Type
 /// Column type
@@ -42,12 +66,12 @@ impl RawStatement {
     }
 
     /// Bind values to the statement
-    pub fn bind(&mut self, params: impl Bind) {
-        params.bind(self);
+    pub fn bind(&mut self, params: impl Bind) -> Result<(), StatementError> {
+        params.bind(self)
     }
 
     /// Bind value to the statement
-    pub fn bind_value(&mut self, index: i32, value: Value) {
+    pub fn bind_value(&mut self, index: i32, value: Value) -> Result<(), StatementError> {
         let index = index + 1;
         let result = match value {
             Value::Null => unsafe { sqlite3_bind_null(self.0, index) },
@@ -76,32 +100,39 @@ impl RawStatement {
             let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0)) }.to_string_lossy();
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0))) }
                 .to_string_lossy();
-            panic!("bsqlite: Can't bind value to statement!\n  Query: {query}\n  Error: {error}");
+            return Err(StatementError {
+                msg: format!("Failed to bind value to statement '{query}': {error}"),
+            });
         }
+        Ok(())
     }
 
     /// Bind named value to the statement
-    pub fn bind_named_value(&mut self, name: &str, value: Value) {
+    pub fn bind_named_value(&mut self, name: &str, value: Value) -> Result<(), StatementError> {
         let c_name = CString::new(name).expect("Can't convert to CString");
         let index = unsafe { sqlite3_bind_parameter_index(self.0, c_name.as_ptr()) };
         if index == 0 {
-            panic!("bsqlite: Can't find named parameter: {name}");
+            return Err(StatementError {
+                msg: format!("Parameter '{name}' not found in statement"),
+            });
         }
-        self.bind_value(index - 1, value);
+        self.bind_value(index - 1, value)
     }
 
     /// Step the statement
-    pub fn step(&mut self) -> Option<()> {
+    pub fn step(&mut self) -> Result<Option<()>, StatementError> {
         let result = unsafe { sqlite3_step(self.0) };
         if result == SQLITE_ROW {
-            Some(())
+            Ok(Some(()))
         } else if result == SQLITE_DONE {
-            None
+            Ok(None)
         } else {
             let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0)) }.to_string_lossy();
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0))) }
                 .to_string_lossy();
-            panic!("bsqlite: Can't step statement!\n  Query: {query}\n  Error: {error}");
+            Err(StatementError {
+                msg: format!("Failed to step statement '{query}': {error}"),
+            })
         }
     }
 
@@ -217,22 +248,30 @@ impl<T> Statement<T> {
     }
 
     /// Bind values to the statement
-    pub fn bind(&mut self, params: impl Bind) {
-        self.0.bind(params);
+    pub fn bind(&mut self, params: impl Bind) -> Result<(), StatementError> {
+        self.0.bind(params)
     }
 
     /// Bind value to the statement
-    pub fn bind_value(&mut self, index: i32, value: impl Into<Value>) {
-        self.0.bind_value(index, value.into());
+    pub fn bind_value(
+        &mut self,
+        index: i32,
+        value: impl Into<Value>,
+    ) -> Result<(), StatementError> {
+        self.0.bind_value(index, value.into())
     }
 
     /// Bind named value to the statement
-    pub fn bind_named_value(&mut self, name: &str, value: impl Into<Value>) {
-        self.0.bind_named_value(name, value.into());
+    pub fn bind_named_value(
+        &mut self,
+        name: &str,
+        value: impl Into<Value>,
+    ) -> Result<(), StatementError> {
+        self.0.bind_named_value(name, value.into())
     }
 
     /// Step the statement
-    pub fn step(&mut self) -> Option<()> {
+    pub fn step(&mut self) -> Result<Option<()>, StatementError> {
         self.0.step()
     }
 
@@ -273,13 +312,15 @@ impl<T> Statement<T> {
 }
 
 impl<T: FromRow> Iterator for Statement<T> {
-    type Item = T;
+    type Item = Result<T, StatementError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(()) = self.step() {
-            Some(T::from_row(&mut self.0))
-        } else {
-            None
+        match self.step() {
+            Ok(Some(())) => {
+                Some(T::from_row(&mut self.0).map_err(|e| StatementError { msg: e.to_string() }))
+            }
+            Ok(None) => None,
+            Err(e) => Some(Err(e)),
         }
     }
 }

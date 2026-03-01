@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use bsqlite::{ColumnType, Connection, OpenMode, Value};
+use bsqlite::{ColumnType, Connection, OpenMode, StatementError, Value};
 use bwebview::{Event, EventLoopBuilder, FileDialog, LogicalSize, WebviewBuilder};
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -61,7 +61,9 @@ fn db_tables(_req: &Request, state: &State) -> Response {
             "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
             (),
         )
-        .collect();
+        .expect("Database error")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("Database error");
     Response::with_json(&table_names)
 }
 
@@ -114,19 +116,23 @@ fn get_foreign_key(conn: &Connection, table: &str, column: &str) -> Option<Colum
         &format!("SELECT \"from\", \"table\", \"to\" FROM pragma_foreign_key_list(\"{table}\") WHERE \"from\" = ?"),
         column.to_string(),
     )
+    .expect("Database error")
     .next()
-    .map(|(_, table, column)| ColumnForeignKey { table, column })
+    .map(|r| {
+        let (_, table, column) = r.expect("Database error");
+        ColumnForeignKey { table, column }
+    })
 }
 
 // MARK: Statement processing
 fn process_statement(
     stmt: &mut bsqlite::Statement<()>,
     conn: &Connection,
-) -> (Vec<ColumnInfo>, Vec<Vec<serde_json::Value>>) {
+) -> Result<(Vec<ColumnInfo>, Vec<Vec<serde_json::Value>>), StatementError> {
     let mut columns = None;
     let mut rows: Vec<Vec<serde_json::Value>> = Vec::new();
 
-    while stmt.step().is_some() {
+    while stmt.step()?.is_some() {
         let col_count = stmt.column_count();
         if columns.is_none() {
             columns = Some(
@@ -167,7 +173,7 @@ fn process_statement(
         rows.push(row);
     }
 
-    (columns.unwrap_or_default(), rows)
+    Ok((columns.unwrap_or_default(), rows))
 }
 
 fn db_table_data(req: &Request, state: &State) -> Response {
@@ -193,13 +199,17 @@ fn db_table_data(req: &Request, state: &State) -> Response {
     };
     let conn = guard.as_ref().expect("Connection should be present");
 
-    let total: i64 = conn.query_some::<i64>(&format!("SELECT COUNT(*) FROM \"{name}\""), ());
+    let total: i64 = conn
+        .query_some::<i64>(&format!("SELECT COUNT(*) FROM \"{name}\""), ())
+        .expect("Database error");
 
-    let mut stmt = conn.prepare::<()>(format!("SELECT * FROM \"{name}\" LIMIT ? OFFSET ?",));
-    stmt.bind_value(0, query.limit);
-    stmt.bind_value(1, query.offset);
+    let mut stmt = conn
+        .prepare::<()>(format!("SELECT * FROM \"{name}\" LIMIT ? OFFSET ?"))
+        .expect("Database error");
+    stmt.bind_value(0, query.limit).expect("Database error");
+    stmt.bind_value(1, query.offset).expect("Database error");
 
-    let (columns, rows) = process_statement(&mut stmt, conn);
+    let (columns, rows) = process_statement(&mut stmt, conn).expect("Database error");
     Response::with_json(&TableData {
         columns,
         rows,
@@ -230,7 +240,9 @@ fn db_table_schema(req: &Request, state: &State) -> Response {
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
             name.to_string(),
         )
-        .next();
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"));
 
     match sql {
         Some(sql) => {
@@ -265,15 +277,16 @@ fn db_query(req: &Request, state: &State) -> Response {
     };
     let conn = guard.as_ref().expect("Connection should be present");
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let mut stmt = conn.prepare::<()>(&body.sql);
-        let (columns, rows) = process_statement(&mut stmt, conn);
-        QueryResult { columns, rows }
-    }));
+    let result = conn
+        .prepare::<()>(&body.sql)
+        .and_then(|mut stmt| process_statement(&mut stmt, conn));
 
     match result {
-        Ok(qr) => Response::with_json(&qr),
-        Err(_) => Response::with_json(json!({ "error": "Query failed" })),
+        Ok(qr) => Response::with_json(&QueryResult {
+            columns: qr.0,
+            rows: qr.1,
+        }),
+        Err(e) => Response::with_json(json!({ "error": e.to_string() })),
     }
 }
 

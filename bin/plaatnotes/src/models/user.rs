@@ -83,10 +83,13 @@ pub(crate) mod validators {
     use super::*;
 
     pub(crate) fn is_unique_email(value: &str, context: &Context) -> validate::Result {
-        let count = context.database.query_some::<i64>(
-            "SELECT COUNT(id) FROM users WHERE email = ?",
-            value.to_string(),
-        );
+        let count = context
+            .database
+            .query_some::<i64>(
+                "SELECT COUNT(id) FROM users WHERE email = ?",
+                value.to_string(),
+            )
+            .expect("Database error");
         if count != 0 {
             return Err(validate::Error::new("not unique"));
         }

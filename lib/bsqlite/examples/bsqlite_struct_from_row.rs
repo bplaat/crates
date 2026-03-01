@@ -22,7 +22,7 @@ struct Person {
     age: i64,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // Connect and create table
     let db = Connection::open_memory().expect("Can't open database");
     db.execute(
@@ -32,7 +32,7 @@ fn main() {
             age INTEGER NOT NULL
         ) STRICT",
         (),
-    );
+    )?;
 
     // Insert a rows
     let persons = [
@@ -53,12 +53,12 @@ fn main() {
                 NewPerson::values()
             ),
             person,
-        );
+        )?;
     }
 
     // Read rows back
-    let persons = db.query::<Person>(formatcp!("SELECT {} FROM persons", Person::columns()), ());
-    for person in persons {
-        println!("{person:?}");
+    for person in db.query::<Person>(formatcp!("SELECT {} FROM persons", Person::columns()), ())? {
+        println!("{:?}", person?);
     }
+    Ok(())
 }

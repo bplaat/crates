@@ -8,10 +8,10 @@
 
 use bsqlite::{Connection, OpenMode};
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // Connect and create table
     let db = Connection::open("database.db", OpenMode::ReadWrite).expect("Can't open database");
-    db.enable_wal_logging();
+    db.enable_wal_logging()?;
     db.execute(
         "CREATE TABLE IF NOT EXISTS persons (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,17 +19,17 @@ fn main() {
             age INTEGER NOT NULL
         ) STRICT",
         (),
-    );
+    )?;
 
     // Insert a rows
     db.execute(
         "INSERT INTO persons (name, age) VALUES (?, ?), (?, ?)",
         ("Alice".to_string(), 30, "Bob".to_string(), 40),
-    );
+    )?;
 
     // Read rows
-    let rows = db.query::<(String, i64)>("SELECT name, age FROM persons", ());
-    for row in rows {
-        println!("{row:?}");
+    for row in db.query::<(String, i64)>("SELECT name, age FROM persons", ())? {
+        println!("{:?}", row?);
     }
+    Ok(())
 }

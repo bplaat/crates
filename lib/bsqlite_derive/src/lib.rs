@@ -80,7 +80,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
     let binds = fields.iter().enumerate().map(|(index, (field, _))| {
         let index = index as i32;
         let ident = field.ident.as_ref().expect("Invalid field");
-        quote! { statement.bind_value(#index, self.#ident.into()) }
+        quote! { statement.bind_value(#index, self.#ident.into())?; }
     });
 
     let from_rows = fields
@@ -89,9 +89,9 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
         .map(|(index, (field, field_name))| {
             let index = index as i32;
             let ident = field.ident.as_ref().expect("Invalid field");
-            quote! { #ident: statement.column_value(#index).try_into().unwrap_or_else(|_| panic!(
+            quote! { #ident: statement.column_value(#index).try_into().map_err(|_| bsqlite::ValueError::new(format!(
                 "Can't get value of column: {}", #field_name
-            )) }
+            )))? }
         });
     let from_rows_default = if has_skipped {
         quote! { ..Default::default() }
@@ -109,16 +109,17 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
             }
         }
         impl bsqlite::Bind for #name {
-            fn bind(self, statement: &mut bsqlite::RawStatement) {
-                #( #binds; )*
+            fn bind(self, statement: &mut bsqlite::RawStatement) -> Result<(), bsqlite::StatementError> {
+                #( #binds )*
+                Ok(())
             }
         }
         impl bsqlite::FromRow for #name {
-            fn from_row(statement: &mut bsqlite::RawStatement) -> Self {
-                Self {
+            fn from_row(statement: &mut bsqlite::RawStatement) -> Result<Self, bsqlite::ValueError> {
+                Ok(Self {
                     #( #from_rows, )*
                     #from_rows_default
-                }
+                })
             }
         }
     })
@@ -173,7 +174,7 @@ pub fn from_value_derive(input: TokenStream) -> TokenStream {
             fn try_from(value: bsqlite::Value) -> Result<Self, Self::Error> {
                 match value {
                     #( #from_impls )*
-                    _ => Err(bsqlite::ValueError),
+                    _ => Err(bsqlite::ValueError::new("invalid enum variant")),
                 }
             }
         }

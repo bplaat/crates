@@ -4,21 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
+use crate::statement::StatementError;
 use crate::{RawStatement, Value};
 
 /// A trait for binding values to a statement
 pub trait Bind {
     /// Bind values to a statement
-    fn bind(self, statement: &mut RawStatement);
+    fn bind(self, statement: &mut RawStatement) -> Result<(), StatementError>;
 }
 
 impl Bind for () {
-    fn bind(self, _statement: &mut RawStatement) {}
+    fn bind(self, _statement: &mut RawStatement) -> Result<(), StatementError> {
+        Ok(())
+    }
 }
 
 impl<T: Into<Value>> Bind for T {
-    fn bind(self, statement: &mut RawStatement) {
-        statement.bind_value(0, self.into());
+    fn bind(self, statement: &mut RawStatement) -> Result<(), StatementError> {
+        statement.bind_value(0, self.into())
     }
 }
 
@@ -28,8 +31,9 @@ macro_rules! impl_bind_for_tuple {
         where
             $($t: Into<Value>,)+
         {
-            fn bind(self, statement: &mut RawStatement)  {
-                $( statement.bind_value($n, self.$n.into()); )*
+            fn bind(self, statement: &mut RawStatement) -> Result<(), StatementError> {
+                $( statement.bind_value($n, self.$n.into())?; )*
+                Ok(())
             }
         }
     );

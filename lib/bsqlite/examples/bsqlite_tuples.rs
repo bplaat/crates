@@ -8,7 +8,7 @@
 
 use bsqlite::Connection;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // Connect and create table
     let db = Connection::open_memory().expect("Can't open database");
     db.execute(
@@ -18,7 +18,7 @@ fn main() {
             age INTEGER NOT NULL
         ) STRICT",
         (),
-    );
+    )?;
 
     // Insert a rows
     db.execute(
@@ -30,11 +30,11 @@ fn main() {
             "Bob".to_string(),
             40,
         ),
-    );
+    )?;
 
     // Read rows
-    let rows = db.query::<(String, i64)>("SELECT name, age FROM persons", ());
-    for row in rows {
-        println!("{row:?}");
+    for row in db.query::<(String, i64)>("SELECT name, age FROM persons", ())? {
+        println!("{:?}", row?);
     }
+    Ok(())
 }
