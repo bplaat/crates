@@ -192,6 +192,8 @@ struct UserUpdateBody {
     last_name: String,
     #[validate(email, custom(is_unique_email_or_auth_user_email))]
     email: String,
+    #[validate(ascii, length(min = 8, max = 128))]
+    password: Option<String>,
     theme: UserTheme,
     language: String,
     role: UserRole,
@@ -233,6 +235,20 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
     user.theme = body.theme;
     user.language = body.language;
     user.role = body.role;
+    if let Some(password) = body.password
+        && auth_user.role == UserRole::Admin
+    {
+        user.password = pbkdf2::password_hash(&password);
+        execute_args!(
+            ctx.database,
+            "UPDATE users SET password = :password WHERE id = :id",
+            Args {
+                password: user.password.clone(),
+                id: user.id
+            }
+        )
+        .expect("Database error");
+    }
     user.updated_at = Utc::now();
     execute_args!(
         ctx.database,
@@ -1286,5 +1302,100 @@ mod test {
         let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
         assert!(response.data[0].is_trashed);
+    }
+
+    #[test]
+    fn test_users_update_with_password_admin() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create user
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
+
+        // Admin updates user including a new password (use the same email, admin auth user check allows target user's existing email via update path)
+        // Note: we change first_name to avoid the unique-email validator rejecting the unchanged email
+        let res = router.handle(
+            &Request::put(format!("http://localhost/api/users/{}", user.id))
+                .header("Authorization", format!("Bearer {token}"))
+                .body("firstName=John&lastName=Doe&email=john.new@example.com&theme=system&language=en&role=normal&password=newpassword99"),
+        );
+        assert_eq!(res.status, Status::Ok);
+
+        // Verify the password was actually changed in the database
+        let stored = ctx
+            .database
+            .query::<User>(
+                formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+                user.id,
+            )
+            .expect("Database error")
+            .next()
+            .map(|r| r.expect("Database error"))
+            .unwrap();
+        assert!(pbkdf2::password_verify("newpassword99", &stored.password).unwrap());
+    }
+
+    #[test]
+    fn test_users_update_with_password_non_admin_ignored() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
+
+        // Normal user tries to update own profile including a new password
+        let res = router.handle(
+            &Request::put(format!("http://localhost/api/users/{}", user.id))
+                .header("Authorization", format!("Bearer {token}"))
+                .body("firstName=Test&lastName=User&email=test@example.com&theme=system&language=en&role=normal&password=newpassword99"),
+        );
+        // Should succeed (update is allowed), but password change is silently ignored
+        assert_eq!(res.status, Status::Ok);
+
+        // The original password must still work
+        let stored = ctx
+            .database
+            .query::<User>(
+                formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+                user.id,
+            )
+            .expect("Database error")
+            .next()
+            .map(|r| r.expect("Database error"))
+            .unwrap();
+        assert!(pbkdf2::password_verify("password123", &stored.password).unwrap());
+    }
+
+    #[test]
+    fn test_users_update_with_password_too_short() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        // Create user
+        let user = User {
+            first_name: "John".to_string(),
+            last_name: "Doe".to_string(),
+            email: "john@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user.clone());
+
+        // Admin sends a password that is too short (< 8 chars)
+        let res = router.handle(
+            &Request::put(format!("http://localhost/api/users/{}", user.id))
+                .header("Authorization", format!("Bearer {token}"))
+                .body("firstName=John&lastName=Doe&email=john@example.com&theme=system&language=en&role=normal&password=short"),
+        );
+        assert_eq!(res.status, Status::BadRequest);
+        let report = serde_json::from_slice::<api::Report>(&res.body).unwrap();
+        assert!(report.0.contains_key("password"));
     }
 }

@@ -148,6 +148,26 @@ paths:
         '404':
           description: Session not found
 
+  /sessions/active:
+    get:
+      tags: [Sessions]
+      summary: Get all active (non-expired) sessions for the authenticated user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Active sessions retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionIndexResponse'
+        '401':
+          description: Unauthorized
+
   # MARK: Users
   /users:
     get:
@@ -384,6 +404,56 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden (user can only see their own notes)
+        '404':
+          description: User not found
+
+  /users/{id}/sessions:
+    get:
+      tags: [Users]
+      summary: Get all sessions for a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of sessions for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionIndexResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+
+  /users/{id}/sessions/active:
+    get:
+      tags: [Users]
+      summary: Get all active (non-expired) sessions for a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A list of active sessions for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionIndexResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: User not found
 
@@ -818,6 +888,9 @@ components:
         email:
           type: string
           format: email
+        password:
+          type: string
+          description: Optional new password (only when auth user has admin role)
         theme:
           $ref: '#/components/schemas/UserTheme'
         language:

@@ -11,7 +11,10 @@ pub(crate) use self::notes::{
     notes_archived, notes_create, notes_delete, notes_index, notes_pinned, notes_show,
     notes_trashed, notes_update,
 };
-pub(crate) use self::sessions::{sessions_delete, sessions_index, sessions_show};
+pub(crate) use self::sessions::{
+    sessions_active, sessions_delete, sessions_index, sessions_show, users_sessions,
+    users_sessions_active,
+};
 pub(crate) use self::users::{
     users_change_password, users_create, users_delete, users_index, users_notes,
     users_notes_archived, users_notes_pinned, users_notes_trashed, users_show, users_update,

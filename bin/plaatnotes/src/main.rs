@@ -57,10 +57,13 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .get("/api/users/:user_id/notes/pinned", users_notes_pinned)
         .get("/api/users/:user_id/notes/archived", users_notes_archived)
         .get("/api/users/:user_id/notes/trashed", users_notes_trashed)
+        .get("/api/users/:user_id/sessions", users_sessions)
+        .get("/api/users/:user_id/sessions/active", users_sessions_active)
         // Sessions
         .get("/api/sessions", sessions_index)
         .get("/api/sessions/:session_id", sessions_show)
         .delete("/api/sessions/:session_id", sessions_delete)
+        .get("/api/sessions/active", sessions_active)
         // Notes
         .get("/api/notes", notes_index)
         .post("/api/notes", notes_create)
