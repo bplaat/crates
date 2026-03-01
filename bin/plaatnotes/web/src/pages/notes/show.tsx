@@ -60,9 +60,9 @@ export function NotesShow({ note_id }: { note_id?: string }) {
     }
 
     return (
-        <div class="min-h-screen bg-gray-50 dark:bg-zinc-900">
+        <div class="h-screen flex flex-col bg-gray-50 dark:bg-zinc-900">
             <Navbar />
-            <main class="max-w-2xl mx-auto px-4 py-8">
+            <main class="flex-1 flex flex-col min-h-0 max-w-2xl w-full mx-auto px-4 py-8">
                 <div class="flex items-center gap-3 mb-6">
                     <button
                         onClick={() => route('/')}
@@ -116,8 +116,8 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </button>
                 </div>
 
-                <div class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
-                    <div class="p-5 flex flex-col gap-4">
+                <div class="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
+                    <div class="flex-1 flex flex-col min-h-0 p-5 gap-4">
                         <input
                             class="text-xl font-medium text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 bg-transparent outline-none w-full"
                             type="text"
@@ -126,10 +126,9 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                             onInput={(e) => scheduleSave({ ...note, title: (e.target as HTMLInputElement).value })}
                         />
                         <textarea
-                            class="text-gray-700 dark:text-gray-300 bg-transparent outline-none w-full resize-none min-h-96 font-mono text-sm"
+                            class="flex-1 text-gray-700 dark:text-gray-300 bg-transparent outline-none w-full resize-none font-mono text-sm"
                             placeholder={t('notes_show.body_placeholder')}
                             value={note.body}
-                            rows={20}
                             onInput={(e) => scheduleSave({ ...note, body: (e.target as HTMLTextAreaElement).value })}
                         />
                     </div>

@@ -50,7 +50,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND body LIKE :search_query",
+                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND body LIKE :search_query",
                 Args {
                     search_query: search_query.clone()
                 }
@@ -63,7 +63,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                 Note,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM notes WHERE is_trashed = 0 AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns()
                 ),
                 Args {
@@ -82,7 +82,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND user_id = :user_id AND body LIKE :search_query",
+                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND user_id = :user_id AND body LIKE :search_query",
                 Args {
                     user_id: user.id,
                     search_query: search_query.clone()
@@ -96,7 +96,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                 Note,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM notes WHERE is_trashed = 0 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns()
                 ),
                 Args {
