@@ -25,18 +25,18 @@ export function Home() {
     }, []);
 
     async function handlePin(note: Note) {
-        const updated = await updateNote(note.id, { isPinned: !note.isPinned });
+        const updated = await updateNote(note, { isPinned: !note.isPinned });
         setNotes((ns) => ns.map((n) => (n.id === note.id ? updated : n)));
     }
 
-    async function handleArchive(id: string) {
-        await updateNote(id, { isArchived: true });
-        setNotes((ns) => ns.filter((n) => n.id !== id));
+    async function handleArchive(note: Note) {
+        await updateNote(note, { isArchived: true });
+        setNotes((ns) => ns.filter((n) => n.id !== note.id));
     }
 
-    async function handleTrash(id: string) {
-        await updateNote(id, { isTrashed: true });
-        setNotes((ns) => ns.filter((n) => n.id !== id));
+    async function handleTrash(note: Note) {
+        await updateNote(note, { isTrashed: true });
+        setNotes((ns) => ns.filter((n) => n.id !== note.id));
     }
 
     const pinned = notes.filter((n) => n.isPinned);

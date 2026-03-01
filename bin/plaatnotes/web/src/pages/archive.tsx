@@ -23,14 +23,14 @@ export function ArchivePage() {
         setLoading(false);
     }, []);
 
-    async function handleUnarchive(id: string) {
-        await updateNote(id, { isArchived: false });
-        setNotes((ns) => ns.filter((n) => n.id !== id));
+    async function handleUnarchive(note: Note) {
+        await updateNote(note, { isArchived: false });
+        setNotes((ns) => ns.filter((n) => n.id !== note.id));
     }
 
-    async function handleTrash(id: string) {
-        await updateNote(id, { isTrashed: true });
-        setNotes((ns) => ns.filter((n) => n.id !== id));
+    async function handleTrash(note: Note) {
+        await updateNote(note, { isTrashed: true });
+        setNotes((ns) => ns.filter((n) => n.id !== note.id));
     }
 
     return (

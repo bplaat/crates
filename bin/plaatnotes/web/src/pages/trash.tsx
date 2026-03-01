@@ -23,15 +23,15 @@ export function TrashPage() {
         setLoading(false);
     }, []);
 
-    async function handleRestore(id: string) {
-        await updateNote(id, { isTrashed: false });
-        setNotes((ns) => ns.filter((n) => n.id !== id));
+    async function handleRestore(note: Note) {
+        await updateNote(note, { isTrashed: false });
+        setNotes((ns) => ns.filter((n) => n.id !== note.id));
     }
 
-    async function handleDeleteForever(id: string) {
+    async function handleDeleteForever(note: Note) {
         if (confirm(t('trash.confirm_delete'))) {
-            await deleteNote(id);
-            setNotes((ns) => ns.filter((n) => n.id !== id));
+            await deleteNote(note.id);
+            setNotes((ns) => ns.filter((n) => n.id !== note.id));
         }
     }
 

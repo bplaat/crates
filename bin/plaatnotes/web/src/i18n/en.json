@@ -65,6 +65,8 @@
     "notes_show.title_placeholder": "Title",
     "notes_show.body_placeholder": "Take a note…",
     "notes_show.last_updated": "Last updated {0}",
+    "notes_show.saving": "Saving…",
+    "notes_show.saved": "Saved!",
 
     "settings.account": "Account",
     "settings.sessions": "Sessions",

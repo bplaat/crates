@@ -36,6 +36,9 @@ const DATE_FORMAT: Intl.DateTimeFormatOptions = {
     minute: '2-digit',
 };
 
-export function formatDate(date: string | Date): string {
-    return new Date(date).toLocaleString($language.value, DATE_FORMAT);
+export function formatDate(date: string | Date | undefined | null): string {
+    if (!date) return '—';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleString($language.value, DATE_FORMAT);
 }

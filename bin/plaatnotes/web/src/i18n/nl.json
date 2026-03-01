@@ -65,6 +65,8 @@
     "notes_show.title_placeholder": "Titel",
     "notes_show.body_placeholder": "Een notitie maken…",
     "notes_show.last_updated": "Laatst bijgewerkt {0}",
+    "notes_show.saving": "Opslaan…",
+    "notes_show.saved": "Opgeslagen!",
 
     "settings.account": "Account",
     "settings.sessions": "Sessies",

@@ -13,7 +13,10 @@ import { formatDate, t } from '../../services/i18n.service.ts';
 
 export function NotesShow({ note_id }: { note_id?: string }) {
     const [note, setNote] = useState<Note | null>(null);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingSave = useRef<Note | null>(null);
 
     // @ts-ignore
     useEffect(async () => {
@@ -23,31 +26,49 @@ export function NotesShow({ note_id }: { note_id?: string }) {
         setNote(loaded);
     }, [note_id]);
 
+    // Flush pending save on unmount
+    useEffect(() => {
+        return () => {
+            if (saveTimeout.current) {
+                clearTimeout(saveTimeout.current);
+                if (pendingSave.current) updateNote(pendingSave.current, {});
+            }
+            if (savedTimer.current) clearTimeout(savedTimer.current);
+        };
+    }, []);
+
     function scheduleSave(updated: Note) {
         setNote(updated);
+        setSaveStatus('saving');
+        pendingSave.current = updated;
         if (saveTimeout.current) clearTimeout(saveTimeout.current);
         saveTimeout.current = setTimeout(async () => {
-            const saved = await updateNote(updated.id, { body: updated.body, title: updated.title });
+            saveTimeout.current = null;
+            const saved = await updateNote(updated, {});
+            pendingSave.current = null;
             setNote((current) => (current ? { ...current, updatedAt: saved.updatedAt } : current));
+            setSaveStatus('saved');
+            if (savedTimer.current) clearTimeout(savedTimer.current);
+            savedTimer.current = setTimeout(() => setSaveStatus('idle'), 2000);
         }, 600);
     }
 
     async function handleArchive() {
         if (!note) return;
-        await updateNote(note.id, { isArchived: !note.isArchived });
+        await updateNote(note, { isArchived: !note.isArchived });
         route(note.isArchived ? '/' : '/archive');
     }
 
     async function handleTrash() {
         if (!note) return;
-        await updateNote(note.id, { isTrashed: !note.isTrashed });
+        await updateNote(note, { isTrashed: !note.isTrashed });
         route(note.isTrashed ? '/' : '/trash');
     }
 
     async function handlePin() {
         if (!note) return;
-        const updated = await updateNote(note.id, { isPinned: !note.isPinned });
-        setNote(updated);
+        const saved = await updateNote(note, { isPinned: !note.isPinned });
+        setNote((current) => (current ? { ...current, isPinned: saved.isPinned, updatedAt: saved.updatedAt } : current));
     }
 
     if (!note) {
@@ -134,7 +155,13 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </div>
                     <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-2 bg-gray-50 dark:bg-zinc-700/50">
                         <p class="text-xs text-gray-400 dark:text-gray-500">
-                            {t('notes_show.last_updated', formatDate(note.updatedAt))}
+                            {saveStatus === 'saving' && (
+                                <span class="text-yellow-500 dark:text-yellow-400">{t('notes_show.saving')}</span>
+                            )}
+                            {saveStatus === 'saved' && (
+                                <span class="text-green-500 dark:text-green-400">{t('notes_show.saved')}</span>
+                            )}
+                            {saveStatus === 'idle' && t('notes_show.last_updated', formatDate(note.updatedAt))}
                         </p>
                     </div>
                 </div>
