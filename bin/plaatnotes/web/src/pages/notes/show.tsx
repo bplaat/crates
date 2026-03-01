@@ -8,6 +8,7 @@ import { route } from 'preact-router';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
 import { Navbar } from '../../components/navbar.tsx';
+import { IconButton } from '../../components/form.tsx';
 import { RichEditor } from '../../components/rich-editor.tsx';
 import { getNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
@@ -88,29 +89,29 @@ export function NotesShow({ note_id }: { note_id?: string }) {
             <Navbar />
             <main class="flex-1 flex flex-col min-h-0 max-w-2xl w-full mx-auto px-4 py-8">
                 <div class="flex items-center gap-3 mb-6">
-                    <button
+                    <IconButton
                         onClick={() => route('/')}
-                        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400 transition-colors cursor-pointer"
+                        class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
                         title={t('notes_show.back')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
                         </svg>
-                    </button>
+                    </IconButton>
                     <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('notes_show.heading')}</h1>
                     <div class="flex-1" />
-                    <button
+                    <IconButton
                         onClick={handlePin}
-                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isPinned ? 'text-yellow-500' : 'text-gray-400'}`}
+                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 ${note.isPinned ? 'text-yellow-500' : 'text-gray-400 dark:text-gray-500'}`}
                         title={note.isPinned ? t('note.unpin') : t('note.pin')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
                         </svg>
-                    </button>
-                    <button
+                    </IconButton>
+                    <IconButton
                         onClick={handleArchive}
-                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isArchived ? 'text-yellow-600' : 'text-gray-400'}`}
+                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 ${note.isArchived ? 'text-yellow-600' : 'text-gray-400 dark:text-gray-500'}`}
                         title={note.isArchived ? t('note.unarchive') : t('note.archive')}
                     >
                         {note.isArchived ? (
@@ -122,10 +123,10 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                                 <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.42l.82-1zM5 19V8h14v11H5zm8.45-9h-2.9v3H8l4 4 4-4h-2.55v-3z" />
                             </svg>
                         )}
-                    </button>
-                    <button
+                    </IconButton>
+                    <IconButton
                         onClick={handleTrash}
-                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer ${note.isTrashed ? 'text-red-500' : 'text-gray-400'}`}
+                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 ${note.isTrashed ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}
                         title={note.isTrashed ? t('note.restore') : t('note.trash')}
                     >
                         {note.isTrashed ? (
@@ -137,7 +138,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
                             </svg>
                         )}
-                    </button>
+                    </IconButton>
                 </div>
 
                 <div class="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">

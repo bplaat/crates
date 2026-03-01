@@ -6,14 +6,18 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
+import { ConfirmDialog } from '../components/dialog.tsx';
 import { Layout } from '../components/layout.tsx';
 import { NoteCard } from '../components/note-card.tsx';
 import { deleteNote, listTrashedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
 
+type ConfirmAction = { kind: 'delete'; note: Note } | { kind: 'empty' } | null;
+
 export function TrashPage() {
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(true);
+    const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
     // @ts-ignore
     useEffect(async () => {
@@ -28,61 +32,80 @@ export function TrashPage() {
         setNotes((ns) => ns.filter((n) => n.id !== note.id));
     }
 
-    async function handleDeleteForever(note: Note) {
-        if (confirm(t('trash.confirm_delete'))) {
-            await deleteNote(note.id);
-            setNotes((ns) => ns.filter((n) => n.id !== note.id));
-        }
+    function handleDeleteForever(note: Note) {
+        setConfirmAction({ kind: 'delete', note });
     }
 
-    async function handleEmptyTrash() {
-        if (confirm(t('trash.confirm_empty'))) {
+    function handleEmptyTrash() {
+        setConfirmAction({ kind: 'empty' });
+    }
+
+    async function doConfirm() {
+        if (confirmAction?.kind === 'delete') {
+            await deleteNote(confirmAction.note.id);
+            setNotes((ns) => ns.filter((n) => n.id !== confirmAction.note.id));
+        } else if (confirmAction?.kind === 'empty') {
             await Promise.all(notes.map((n) => deleteNote(n.id)));
             setNotes([]);
         }
+        setConfirmAction(null);
     }
 
     return (
-        <Layout>
-            <div class="max-w-screen-xl mx-auto px-4 py-6">
-                <div class="relative flex items-center justify-between mb-6">
-                    <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400">{t('trash.heading')}</h1>
+        <>
+            <Layout>
+                <div class="max-w-screen-xl mx-auto px-4 py-6">
+                    <div class="relative flex items-center justify-between mb-6">
+                        <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                            {t('trash.heading')}
+                        </h1>
+                        {notes.length > 0 && (
+                            <button
+                                onClick={handleEmptyTrash}
+                                class="absolute right-0 text-sm text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+                            >
+                                {t('trash.empty_btn')}
+                            </button>
+                        )}
+                    </div>
+
+                    {!loading && notes.length > 0 && <p class="text-xs text-gray-400 mb-4">{t('trash.hint')}</p>}
+
+                    {loading && <p class="text-center text-gray-400 mt-16">{t('trash.loading')}</p>}
+
+                    {!loading && notes.length === 0 && (
+                        <div class="flex flex-col items-center justify-center mt-24 gap-3 text-gray-400">
+                            <svg class="w-16 h-16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
+                            </svg>
+                            <p class="text-lg">{t('trash.empty')}</p>
+                        </div>
+                    )}
+
                     {notes.length > 0 && (
-                        <button
-                            onClick={handleEmptyTrash}
-                            class="absolute right-0 text-sm text-red-400 hover:text-red-600 transition-colors cursor-pointer"
-                        >
-                            {t('trash.empty_btn')}
-                        </button>
+                        <div class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
+                            {notes.map((note) => (
+                                <NoteCard
+                                    key={note.id}
+                                    note={note}
+                                    onRestore={handleRestore}
+                                    onDeleteForever={handleDeleteForever}
+                                />
+                            ))}
+                        </div>
                     )}
                 </div>
+            </Layout>
 
-                {!loading && notes.length > 0 && <p class="text-xs text-gray-400 mb-4">{t('trash.hint')}</p>}
-
-                {loading && <p class="text-center text-gray-400 mt-16">{t('trash.loading')}</p>}
-
-                {!loading && notes.length === 0 && (
-                    <div class="flex flex-col items-center justify-center mt-24 gap-3 text-gray-400">
-                        <svg class="w-16 h-16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
-                        </svg>
-                        <p class="text-lg">{t('trash.empty')}</p>
-                    </div>
-                )}
-
-                {notes.length > 0 && (
-                    <div class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
-                        {notes.map((note) => (
-                            <NoteCard
-                                key={note.id}
-                                note={note}
-                                onRestore={handleRestore}
-                                onDeleteForever={handleDeleteForever}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-        </Layout>
+            {confirmAction && (
+                <ConfirmDialog
+                    title={confirmAction.kind === 'delete' ? t('note.delete_forever') : t('trash.empty_btn')}
+                    message={confirmAction.kind === 'delete' ? t('trash.confirm_delete') : t('trash.confirm_empty')}
+                    confirmLabel={confirmAction.kind === 'delete' ? t('note.delete_forever') : t('trash.empty_btn')}
+                    onConfirm={doConfirm}
+                    onClose={() => setConfirmAction(null)}
+                />
+            )}
+        </>
     );
 }

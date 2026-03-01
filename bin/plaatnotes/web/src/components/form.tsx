@@ -7,6 +7,9 @@
 import { type ComponentChildren } from 'preact';
 import { type JSX } from 'preact/jsx-runtime';
 
+const BTN_ICON_CLASS =
+    'p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer';
+
 const INPUT_CLASS =
     'w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg text-sm bg-white dark:bg-zinc-700 text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 dark:focus:ring-yellow-500/50 focus:border-transparent';
 
@@ -44,4 +47,8 @@ export function FormSelect({ children, ...props }: JSX.IntrinsicElements['select
 
 export function Button({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
     return <button {...props} class={extraClass ? `${BTN_PRIMARY_CLASS} ${extraClass}` : BTN_PRIMARY_CLASS} />;
+}
+
+export function IconButton({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
+    return <button {...props} class={extraClass ? `${BTN_ICON_CLASS} ${extraClass}` : BTN_ICON_CLASS} />;
 }

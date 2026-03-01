@@ -52,8 +52,8 @@ export function Navbar() {
                             class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
                         >
                             <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-sm flex items-center justify-center select-none">
-                                {user.firstName[0]}
-                                {user.lastName[0]}
+                                {user.firstName[0].toUpperCase()}
+                                {user.lastName[0].toUpperCase()}
                             </div>
                             <span class="text-sm text-gray-600 dark:text-gray-300 hidden sm:block">
                                 {user.firstName} {user.lastName}

@@ -6,6 +6,7 @@
 
 import { type ComponentChildren } from 'preact';
 import { useEffect } from 'preact/hooks';
+import { t } from '../services/i18n.service.ts';
 
 interface DialogProps {
     title: string;
@@ -42,5 +43,35 @@ export function Dialog({ title, onClose, children }: DialogProps) {
                 <div class="px-6 py-5">{children}</div>
             </div>
         </div>
+    );
+}
+
+interface ConfirmDialogProps {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+    onClose: () => void;
+}
+
+export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose }: ConfirmDialogProps) {
+    return (
+        <Dialog title={title} onClose={onClose}>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">{message}</p>
+            <div class="flex justify-end gap-2">
+                <button
+                    onClick={onClose}
+                    class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-lg transition-colors cursor-pointer"
+                >
+                    {t('dialog.cancel')}
+                </button>
+                <button
+                    onClick={onConfirm}
+                    class="px-4 py-2 bg-red-500 hover:bg-red-600 dark:bg-red-900/50 dark:hover:bg-red-900/70 dark:text-red-300 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                >
+                    {confirmLabel}
+                </button>
+            </div>
+        </Dialog>
     );
 }

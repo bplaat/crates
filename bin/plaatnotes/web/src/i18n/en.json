@@ -155,5 +155,9 @@
     "admin.users.confirm_delete": "Delete this user? This cannot be undone.",
 
     "notfound.message": "No idea how you got here 🤷‍♂️",
-    "notfound.go_home": "Go home"
+    "notfound.go_home": "Go home",
+
+    "dialog.cancel": "Cancel",
+
+    "admin.users.delete_user": "Delete user"
 }

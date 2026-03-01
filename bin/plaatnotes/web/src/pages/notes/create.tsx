@@ -6,6 +6,7 @@
 
 import { route } from 'preact-router';
 import { useEffect, useState } from 'preact/hooks';
+import { IconButton } from '../../components/form.tsx';
 import { Navbar } from '../../components/navbar.tsx';
 import { RichEditor } from '../../components/rich-editor.tsx';
 import { createNote } from '../../services/notes.service.ts';
@@ -62,16 +63,16 @@ export function NotesCreate() {
                     <RichEditor value={body} onInput={setBody} placeholder={t('notes_create.body_placeholder')} />
 
                     <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-3 flex items-center justify-between bg-gray-50 dark:bg-zinc-700/50">
-                        <button
+                        <IconButton
                             type="button"
                             onClick={() => setIsPinned(!isPinned)}
-                            class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-600 transition-colors cursor-pointer ${isPinned ? 'text-yellow-500' : 'text-gray-400'}`}
+                            class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-600 ${isPinned ? 'text-yellow-500' : 'text-gray-400 dark:text-gray-500'}`}
                             title={isPinned ? t('note.unpin') : t('note.pin')}
                         >
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
                             </svg>
-                        </button>
+                        </IconButton>
                         <div class="flex gap-2">
                             <button
                                 type="button"
@@ -82,8 +83,11 @@ export function NotesCreate() {
                             </button>
                             <button
                                 type="submit"
-                                class="px-4 py-1.5 rounded-lg text-sm bg-yellow-400 hover:bg-yellow-500 text-white font-medium transition-colors cursor-pointer"
+                                class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm bg-yellow-400 hover:bg-yellow-500 text-white font-medium transition-colors cursor-pointer"
                             >
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                </svg>
                                 {t('notes_create.save')}
                             </button>
                         </div>

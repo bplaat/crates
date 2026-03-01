@@ -155,5 +155,9 @@
     "admin.users.confirm_delete": "Deze gebruiker verwijderen? Dit kan niet ongedaan worden gemaakt.",
 
     "notfound.message": "Geen idee hoe je hier bent gekomen 🤷‍♂️",
-    "notfound.go_home": "Naar beginpagina"
+    "notfound.go_home": "Naar beginpagina",
+
+    "dialog.cancel": "Annuleren",
+
+    "admin.users.delete_user": "Gebruiker verwijderen"
 }

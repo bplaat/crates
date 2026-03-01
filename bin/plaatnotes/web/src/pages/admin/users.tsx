@@ -7,13 +7,10 @@
 import { useEffect, useState } from 'preact/hooks';
 import { type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
-import { Dialog } from '../../components/dialog.tsx';
-import { Button, FormField, FormInput, FormSelect } from '../../components/form.tsx';
+import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
+import { Button, FormField, FormInput, FormSelect, IconButton } from '../../components/form.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/users.service.ts';
-
-const BTN_ICON =
-    'p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer';
 
 type DialogMode = { kind: 'create' } | { kind: 'edit'; user: User };
 
@@ -39,6 +36,7 @@ export function AdminUsers() {
     const [dialog, setDialog] = useState<DialogMode | null>(null);
     const [form, setForm] = useState<UserFormState>(emptyForm());
     const [submitting, setSubmitting] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
 
     // @ts-ignore
     useEffect(async () => {
@@ -92,9 +90,14 @@ export function AdminUsers() {
     }
 
     async function handleDelete(user: User) {
-        if (!confirm(t('admin.users.confirm_delete'))) return;
-        const ok = await deleteUser(user.id);
-        if (ok) setUsers((us) => us.filter((u) => u.id !== user.id));
+        setConfirmDelete(user);
+    }
+
+    async function doDelete() {
+        if (!confirmDelete) return;
+        const ok = await deleteUser(confirmDelete.id);
+        if (ok) setUsers((us) => us.filter((u) => u.id !== confirmDelete.id));
+        setConfirmDelete(null);
     }
 
     const isCreate = dialog?.kind === 'create';
@@ -141,8 +144,8 @@ export function AdminUsers() {
                                         <td class="px-5 py-3">
                                             <div class="flex items-center gap-3">
                                                 <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-xs flex items-center justify-center shrink-0 select-none">
-                                                    {user.firstName[0]}
-                                                    {user.lastName[0]}
+                                                    {user.firstName[0].toUpperCase()}
+                                                    {user.lastName[0].toUpperCase()}
                                                 </div>
                                                 <span class="font-medium text-gray-800 dark:text-gray-100">
                                                     {user.firstName} {user.lastName}
@@ -170,24 +173,23 @@ export function AdminUsers() {
                                         </td>
                                         <td class="px-5 py-3">
                                             <div class="flex items-center justify-end gap-1">
-                                                <button
+                                                <IconButton
                                                     onClick={() => openEdit(user)}
                                                     title={t('admin.users.edit_user')}
-                                                    class={BTN_ICON}
                                                 >
                                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                                                         <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
                                                     </svg>
-                                                </button>
-                                                <button
+                                                </IconButton>
+                                                <IconButton
                                                     onClick={() => handleDelete(user)}
-                                                    title={t('admin.users.confirm_delete')}
-                                                    class={`${BTN_ICON} hover:text-red-500 dark:hover:text-red-400`}
+                                                    title={t('admin.users.delete_user')}
+                                                    class="hover:text-red-500 dark:hover:text-red-400"
                                                 >
                                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                                                         <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
                                                     </svg>
-                                                </button>
+                                                </IconButton>
                                             </div>
                                         </td>
                                     </tr>
@@ -244,11 +246,9 @@ export function AdminUsers() {
                                 id="password"
                                 type="password"
                                 required={isCreate}
-                                placeholder={isCreate ? '••••••••' : t('admin.users.password_keep')}
+                                placeholder={!isCreate ? t('admin.users.password_keep') : ''}
                                 value={form.password}
-                                onInput={(e) =>
-                                    setForm({ ...form, password: (e.target as HTMLInputElement).value })
-                                }
+                                onInput={(e) => setForm({ ...form, password: (e.target as HTMLInputElement).value })}
                             />
                         </FormField>
 
@@ -267,11 +267,32 @@ export function AdminUsers() {
 
                         <div class="flex justify-end pt-1">
                             <Button type="submit" disabled={submitting}>
-                                {isCreate ? t('admin.users.create') : t('admin.users.save')}
+                                <span class="flex items-center gap-1.5">
+                                    {isCreate ? (
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                                        </svg>
+                                    ) : (
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
+                                        </svg>
+                                    )}
+                                    {isCreate ? t('admin.users.create') : t('admin.users.save')}
+                                </span>
                             </Button>
                         </div>
                     </form>
                 </Dialog>
+            )}
+
+            {confirmDelete && (
+                <ConfirmDialog
+                    title={t('admin.users.delete_user')}
+                    message={t('admin.users.confirm_delete')}
+                    confirmLabel={t('admin.users.delete_user')}
+                    onConfirm={doDelete}
+                    onClose={() => setConfirmDelete(null)}
+                />
             )}
         </AdminLayout>
     );
