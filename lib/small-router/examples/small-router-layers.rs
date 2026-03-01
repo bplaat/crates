@@ -21,7 +21,6 @@ fn cors_pre_layer(req: &Request, _: &mut ()) -> Option<Response> {
                     "Access-Control-Allow-Methods",
                     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
                 )
-                .header("Access-Control-Allow-Headers", "*")
                 .header("Access-Control-Max-Age", "86400"),
         )
     } else {

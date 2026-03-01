@@ -30,7 +30,7 @@ pub(crate) fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Response>
                     "Access-Control-Allow-Methods",
                     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
                 )
-                .header("Access-Control-Allow-Headers", "*")
+                .header("Access-Control-Allow-Headers", "Authorization")
                 .header("Access-Control-Max-Age", "86400"),
         )
     } else {
@@ -76,7 +76,10 @@ mod test {
             res.headers.get("Access-Control-Allow-Methods"),
             Some("GET, POST, PUT, PATCH, DELETE, OPTIONS")
         );
-        assert_eq!(res.headers.get("Access-Control-Allow-Headers"), Some("*"));
+        assert_eq!(
+            res.headers.get("Access-Control-Allow-Headers"),
+            Some("Authorization")
+        );
         assert_eq!(res.headers.get("Access-Control-Max-Age"), Some("86400"));
     }
 }
