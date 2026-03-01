@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { route } from 'preact-router';
 import { useEffect, useState } from 'preact/hooks';
-import { Link, route } from '../../router.tsx';
-import { API_URL } from '../../consts.ts';
+import { Navbar } from '../../components/navbar.tsx';
+import { createNote } from '../../services/notes.service.ts';
 
 export function NotesCreate() {
-    const [body, setBody] = useState<string>('');
+    const [title, setTitle] = useState('');
+    const [body, setBody] = useState('');
+    const [isPinned, setIsPinned] = useState(false);
 
     useEffect(() => {
         document.title = 'PlaatNotes - Create Note';
@@ -17,47 +20,78 @@ export function NotesCreate() {
 
     async function saveNote(event: SubmitEvent) {
         event.preventDefault();
-        const res = await fetch(`${API_URL}/notes`, {
-            method: 'POST',
-            body: new URLSearchParams({ body }),
-        });
-        if (res.status == 200) {
-            const { id }: { id: string } = await res.json();
-            route(`/notes/${id}`);
+        if (!body.trim()) return;
+        const note = await createNote({ body, title: title || undefined, isPinned });
+        if (note?.id) {
+            route(`/notes/${note.id}`);
         }
     }
 
     return (
-        <div class="container">
-            <h1 class="title">PlaatNotes</h1>
-            <div class="buttons">
-                <Link href="/" class="button">
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                        <path d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" />
-                    </svg>
-                    Back
-                </Link>
-            </div>
-
-            <form class="form" onSubmit={saveNote}>
-                <div class="field">
-                    <textarea
-                        class="textarea has-fixed-size"
-                        value={body}
-                        rows={20}
-                        onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-                    />
-                </div>
-
-                <div class="field">
-                    <button class="button is-link" type="submit">
-                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                            <path d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" />
+        <div class="min-h-screen bg-gray-50">
+            <Navbar />
+            <main class="max-w-2xl mx-auto px-4 py-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <button
+                        onClick={() => route('/')}
+                        class="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors cursor-pointer"
+                        title="Back"
+                    >
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
                         </svg>
-                        Save note
                     </button>
+                    <h1 class="text-xl font-medium text-gray-700">New note</h1>
                 </div>
-            </form>
+
+                <form onSubmit={saveNote} class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="p-5 flex flex-col gap-4">
+                        <input
+                            class="text-xl font-medium text-gray-800 placeholder-gray-400 outline-none w-full"
+                            type="text"
+                            placeholder="Title"
+                            value={title}
+                            onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
+                        />
+                        <textarea
+                            class="text-gray-700 placeholder-gray-400 outline-none w-full resize-none min-h-48 font-mono text-sm"
+                            placeholder="Take a note…"
+                            required
+                            value={body}
+                            rows={12}
+                            onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+                        />
+                    </div>
+
+                    <div class="border-t border-gray-100 px-5 py-3 flex items-center justify-between bg-gray-50">
+                        <button
+                            type="button"
+                            onClick={() => setIsPinned(!isPinned)}
+                            class={`p-2 rounded-full hover:bg-gray-200 transition-colors cursor-pointer ${isPinned ? 'text-yellow-500' : 'text-gray-400'}`}
+                            title={isPinned ? 'Unpin' : 'Pin'}
+                        >
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
+                            </svg>
+                        </button>
+                        <div class="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => route('/')}
+                                class="px-4 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                class="px-4 py-1.5 rounded-lg text-sm bg-yellow-400 hover:bg-yellow-500 text-white font-medium transition-colors cursor-pointer"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </main>
         </div>
     );
 }
