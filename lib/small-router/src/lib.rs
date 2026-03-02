@@ -7,6 +7,7 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -269,9 +270,26 @@ impl<T: Clone> RouterBuilder<T> {
 
     /// Build router
     pub fn build(self) -> Router<T> {
+        // Sort routes: longest first, then prefer static parts over params at each position
+        let mut routes = self.routes;
+        routes.sort_by(|a, b| {
+            let len_cmp = b.parts.len().cmp(&a.parts.len());
+            if len_cmp != Ordering::Equal {
+                return len_cmp;
+            }
+            for (pa, pb) in a.parts.iter().zip(b.parts.iter()) {
+                let score = |p: &RoutePart| matches!(p, RoutePart::Static(_)) as u8;
+                let part_cmp = score(pb).cmp(&score(pa));
+                if part_cmp != Ordering::Equal {
+                    return part_cmp;
+                }
+            }
+            Ordering::Equal
+        });
+
         Router(Arc::new(InnerRouter {
             ctx: self.ctx,
-            routes: self.routes,
+            routes,
             not_allowed_method_handler: self.not_allowed_method_handler.unwrap_or_else(|| {
                 Handler::new(
                     |_, _| {
@@ -307,7 +325,7 @@ impl<T: Clone> InnerRouter<T> {
 
         // Match routes
         let path = req.url.path();
-        for route in self.routes.iter().rev() {
+        for route in self.routes.iter() {
             if route.is_match(path) {
                 let mut req = req.clone();
                 req.params = route.match_path(path);

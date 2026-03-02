@@ -9,8 +9,8 @@ use small_http::{Request, Response, Status};
 pub(crate) use self::auth::{auth_login, auth_logout, auth_validate};
 pub(crate) use self::imports::imports_google_keep;
 pub(crate) use self::notes::{
-    notes_archived, notes_create, notes_delete, notes_index, notes_pinned, notes_reorder,
-    notes_show, notes_trashed, notes_update,
+    notes_archived, notes_archived_reorder, notes_create, notes_delete, notes_index, notes_pinned,
+    notes_pinned_reorder, notes_reorder, notes_show, notes_trashed, notes_update,
 };
 pub(crate) use self::sessions::{
     sessions_active, sessions_delete, sessions_index, sessions_show, users_sessions,

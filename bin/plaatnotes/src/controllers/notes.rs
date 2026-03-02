@@ -50,7 +50,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND body LIKE :search_query",
+                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND (title LIKE :search_query OR body LIKE :search_query)",
                 Args {
                     search_query: search_query.clone()
                 }
@@ -63,7 +63,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                 Note,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND body LIKE :search_query ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns()
                 ),
                 Args {
@@ -82,7 +82,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND user_id = :user_id AND body LIKE :search_query",
+                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query)",
                 Args {
                     user_id: user.id,
                     search_query: search_query.clone()
@@ -96,7 +96,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                 Note,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND user_id = :user_id AND body LIKE :search_query ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns()
                 ),
                 Args {
@@ -238,6 +238,7 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
 
     // Update note
     let prev_is_archived = note.is_archived;
+    let prev_is_trashed = note.is_trashed;
     note.title = body.title;
     note.body = body.body;
     note.is_pinned = body.is_pinned;
@@ -259,11 +260,38 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
     ).expect("Database error");
 
     // When archiving or unarchiving, put the note first and shift all others
-    if note.is_archived != prev_is_archived {
+    if note.is_archived != prev_is_archived && !note.is_trashed {
         let filter = if note.is_archived {
             "is_archived = 1 AND is_trashed = 0"
         } else {
-            "is_archived = 0 AND is_trashed = 0"
+            "is_archived = 0 AND is_trashed = 0 AND is_pinned = 0"
+        };
+        execute_args!(
+            ctx.database,
+            &format!("UPDATE notes SET position = position + 1 WHERE id != :id AND {filter} AND user_id = :user_id"),
+            Args { id: note.id, user_id: user.id }
+        )
+        .expect("Database error");
+        execute_args!(
+            ctx.database,
+            "UPDATE notes SET position = 0 WHERE id = :id",
+            Args { id: note.id }
+        )
+        .expect("Database error");
+        note.position = 0;
+    }
+
+    // When trashing or untrashing, reset position in the destination category
+    if note.is_trashed != prev_is_trashed {
+        let filter = if note.is_trashed {
+            // Trashed notes form their own ordered list
+            "is_trashed = 1"
+        } else if note.is_pinned {
+            "is_trashed = 0 AND is_pinned = 1"
+        } else if note.is_archived {
+            "is_trashed = 0 AND is_archived = 1"
+        } else {
+            "is_trashed = 0 AND is_archived = 0 AND is_pinned = 0"
         };
         execute_args!(
             ctx.database,
@@ -357,7 +385,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
                 i64,
                 ctx.database,
                 &format!(
-                    "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND body LIKE :search_query"
+                    "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND (title LIKE :search_query OR body LIKE :search_query)"
                 ),
                 Args {
                     search_query: search_query.clone()
@@ -371,7 +399,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
                 Note,
                 ctx.database,
                 format!(
-                    "SELECT {} FROM notes WHERE {} = 1 AND body LIKE :search_query ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE {} = 1 AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns(),
                     filter
                 ),
@@ -391,7 +419,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND body LIKE :search_query"),
+                &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query)"),
                 Args {
                     user_id: user.id,
                     search_query: search_query.clone()
@@ -405,7 +433,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
                 Note,
                 ctx.database,
                 format!(
-                    "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND body LIKE :search_query ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns(),
                     filter
                 ),
@@ -482,28 +510,40 @@ fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Option<Note
     }
 }
 
-pub(crate) fn notes_reorder(req: &Request, ctx: &Context) -> Response {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
-    };
+fn notes_reorder_for(ctx: &Context, user: &User, ids_str: &str, filter: &str) {
+    // Parse provided IDs in order (these are assigned positions 0, 1, 2, …)
+    let provided_ids: Vec<Uuid> = ids_str
+        .split(',')
+        .filter_map(|s| s.trim().parse::<Uuid>().ok())
+        .collect();
 
-    // Parse body
-    let body = match serde_urlencoded::from_bytes::<api::NoteReorderBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
-        Ok(body) => body,
-        Err(_) => return Response::with_status(Status::BadRequest),
-    };
+    // Fetch all note IDs in this category ordered by current position
+    let all_ids: Vec<Uuid> = query_args!(
+        Note,
+        ctx.database,
+        format!(
+            "SELECT {} FROM notes WHERE {filter} AND user_id = :user_id ORDER BY position ASC, updated_at DESC",
+            Note::columns()
+        ),
+        Args { user_id: user.id }
+    )
+    .expect("Database error")
+    .filter_map(|r| r.ok())
+    .map(|n| n.id)
+    .collect();
 
-    // Assign positions in order
-    for (position, id_str) in body.ids.split(',').enumerate() {
-        let id_str = id_str.trim();
-        let note_id = match id_str.parse::<Uuid>() {
-            Ok(id) => id,
-            Err(_) => continue,
-        };
+    // Notes not in the provided list follow in their existing relative order
+    let rest_ids: Vec<Uuid> = all_ids
+        .into_iter()
+        .filter(|id| !provided_ids.contains(id))
+        .collect();
+
+    // Final sequence: provided notes first (in given order), then the rest
+    for (position, note_id) in provided_ids
+        .into_iter()
+        .chain(rest_ids.into_iter())
+        .enumerate()
+    {
         execute_args!(
             ctx.database,
             "UPDATE notes SET position = :position WHERE id = :note_id AND user_id = :user_id",
@@ -515,8 +555,37 @@ pub(crate) fn notes_reorder(req: &Request, ctx: &Context) -> Response {
         )
         .expect("Database error");
     }
+}
 
+fn notes_reorder_handler(req: &Request, ctx: &Context, filter: &str) -> Response {
+    let user = match &ctx.auth_user {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
+    let body = match serde_urlencoded::from_bytes::<api::NoteReorderBody>(
+        req.body.as_deref().unwrap_or(&[]),
+    ) {
+        Ok(body) => body,
+        Err(_) => return Response::with_status(Status::BadRequest),
+    };
+    notes_reorder_for(ctx, user, &body.ids, filter);
     Response::with_status(Status::NoContent)
+}
+
+pub(crate) fn notes_reorder(req: &Request, ctx: &Context) -> Response {
+    notes_reorder_handler(
+        req,
+        ctx,
+        "is_trashed = 0 AND is_archived = 0 AND is_pinned = 0",
+    )
+}
+
+pub(crate) fn notes_pinned_reorder(req: &Request, ctx: &Context) -> Response {
+    notes_reorder_handler(req, ctx, "is_trashed = 0 AND is_pinned = 1")
+}
+
+pub(crate) fn notes_archived_reorder(req: &Request, ctx: &Context) -> Response {
+    notes_reorder_handler(req, ctx, "is_trashed = 0 AND is_archived = 1")
 }
 
 // MARK: Tests
@@ -571,6 +640,39 @@ mod test {
     }
 
     #[test]
+    fn test_notes_index_excludes_pinned() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create a regular note and a pinned note
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Regular Note".to_string()),
+            body: "Regular".to_string(),
+            is_pinned: false,
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Pinned Note".to_string()),
+            body: "Pinned".to_string(),
+            is_pinned: true,
+            ..Default::default()
+        });
+
+        // /notes should only return the non-pinned note
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].body, "Regular");
+    }
+
+    #[test]
     fn test_notes_index_search() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
@@ -590,7 +692,7 @@ mod test {
             ..Default::default()
         });
 
-        // Search for "meeting"
+        // Search for "meeting" finds by body
         let res = router.handle(
             &Request::get("http://localhost/api/notes?q=meeting")
                 .header("Authorization", format!("Bearer {token}")),
@@ -599,6 +701,47 @@ mod test {
         let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].body, "Meeting notes from today");
+
+        // Search for "Shopping" finds by title
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes?q=Shopping")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Shopping List".to_string()));
+    }
+
+    #[test]
+    fn test_notes_index_search_by_title_only() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Note with a unique title but generic body
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("ProjectAlpha".to_string()),
+            body: "Some content".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: None,
+            body: "Some other content".to_string(),
+            ..Default::default()
+        });
+
+        // "ProjectAlpha" only appears in the title of the first note
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes?q=ProjectAlpha")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("ProjectAlpha".to_string()));
     }
 
     #[test]
@@ -1185,6 +1328,71 @@ mod test {
     }
 
     #[test]
+    fn test_notes_reorder_partial() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create four notes (simulates two loaded pages of 2)
+        let note1 = Note {
+            user_id: user.id,
+            title: Some("Note 1".to_string()),
+            body: "First".to_string(),
+            position: 0,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note1.clone());
+        let note2 = Note {
+            user_id: user.id,
+            title: Some("Note 2".to_string()),
+            body: "Second".to_string(),
+            position: 1,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note2.clone());
+        let note3 = Note {
+            user_id: user.id,
+            title: Some("Note 3".to_string()),
+            body: "Third".to_string(),
+            position: 2,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note3.clone());
+        let note4 = Note {
+            user_id: user.id,
+            title: Some("Note 4".to_string()),
+            body: "Fourth".to_string(),
+            position: 3,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note4.clone());
+
+        // User reorders only the first "page" (note1, note2) swapping them to (note2, note1)
+        let ids = format!("{},{}", note2.id, note1.id);
+        let res = router.handle(
+            &Request::put("http://localhost/api/notes/reorder")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(format!("ids={ids}")),
+        );
+        assert_eq!(res.status, Status::NoContent);
+
+        // Full list should be: note2, note1, note3, note4 (unloaded notes keep relative order)
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(notes.len(), 4);
+        assert_eq!(notes[0].id, note2.id);
+        assert_eq!(notes[1].id, note1.id);
+        assert_eq!(notes[2].id, note3.id);
+        assert_eq!(notes[3].id, note4.id);
+    }
+
+    #[test]
     fn test_notes_reorder_unauthenticated() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
@@ -1235,5 +1443,93 @@ mod test {
             .data;
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].id, note1.id);
+    }
+
+    #[test]
+    fn test_notes_reorder_pinned_category() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        let normal1 = Note {
+            user_id: user.id,
+            body: "Normal 1".to_string(),
+            position: 0,
+            ..Default::default()
+        };
+        ctx.database.insert_note(normal1.clone());
+        let pinned1 = Note {
+            user_id: user.id,
+            body: "Pinned 1".to_string(),
+            is_pinned: true,
+            position: 0,
+            ..Default::default()
+        };
+        ctx.database.insert_note(pinned1.clone());
+        let pinned2 = Note {
+            user_id: user.id,
+            body: "Pinned 2".to_string(),
+            is_pinned: true,
+            position: 1,
+            ..Default::default()
+        };
+        ctx.database.insert_note(pinned2.clone());
+
+        // Reorder only pinned: swap pinned2 before pinned1
+        let ids = format!("{},{}", pinned2.id, pinned1.id);
+        let res = router.handle(
+            &Request::put("http://localhost/api/notes/pinned/reorder")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(format!("ids={ids}")),
+        );
+        assert_eq!(res.status, Status::NoContent);
+
+        // Pinned list order should reflect the reorder
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/pinned")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        let pinned = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(pinned.len(), 2);
+        assert_eq!(pinned[0].id, pinned2.id);
+        assert_eq!(pinned[1].id, pinned1.id);
+
+        // Normal list should be unaffected
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        let normal = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(normal.len(), 1);
+        assert_eq!(normal[0].id, normal1.id);
+    }
+
+    #[test]
+    fn test_notes_trash_resets_position() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        let note1 = Note {
+            user_id: user.id,
+            body: "Note 1".to_string(),
+            position: 5,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note1.clone());
+
+        // Trash the note
+        let res = router.handle(
+            &Request::put(format!("http://localhost/api/notes/{}", note1.id))
+                .header("Authorization", format!("Bearer {token}"))
+                .body("body=Note+1&isPinned=false&isArchived=false&isTrashed=true"),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let updated = serde_json::from_slice::<api::Note>(&res.body).unwrap();
+        assert_eq!(updated.position, 0);
     }
 }

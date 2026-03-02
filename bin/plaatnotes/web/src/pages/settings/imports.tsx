@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Button, FormField, FormInput, FormMessage } from '../../components/form.tsx';
 import { Card } from '../../components/card.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
@@ -22,6 +22,7 @@ export function SettingsImports() {
     const [loading, setLoading] = useState(false);
     const [importedCount, setImportedCount] = useState<number | null>(null);
     const [error, setError] = useState(false);
+    const formRef = useRef<HTMLFormElement>(null);
 
     async function handleSubmit(e: SubmitEvent) {
         e.preventDefault();
@@ -48,6 +49,8 @@ export function SettingsImports() {
             } else {
                 const { count }: ImportGoogleKeepResponse = await res.json();
                 setImportedCount(count);
+                setFile(null);
+                formRef.current?.reset();
             }
         } catch {
             setError(true);
@@ -69,7 +72,7 @@ export function SettingsImports() {
                     <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">
                         {t('settings.imports.google_keep.desc')}
                     </p>
-                    <form onSubmit={handleSubmit} class="flex flex-col gap-4">
+                    <form ref={formRef} onSubmit={handleSubmit} class="flex flex-col gap-4">
                         <FormField id="keepFile" label={t('settings.imports.google_keep.label')}>
                             <FormInput
                                 id="keepFile"

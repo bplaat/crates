@@ -5,51 +5,72 @@
  */
 
 import { route } from 'preact-router';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
 import { Layout } from '../components/layout.tsx';
-import { listNotes, updateNote } from '../services/notes.service.ts';
+import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
+import { listNotes, listPinnedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
 
 export function Home() {
-    const [notes, setNotes] = useState<Note[]>([]);
-    const [loading, setLoading] = useState(true);
+    const {
+        items: pinnedItems,
+        loading: pinnedLoading,
+        hasMore: pinnedHasMore,
+        sentinelRef: pinnedSentinelRef,
+        setItems: setPinnedItems,
+    } = useInfiniteScroll(listPinnedNotes);
+    const {
+        items: otherItems,
+        loading: otherLoading,
+        hasMore: otherHasMore,
+        sentinelRef: otherSentinelRef,
+        setItems: setOtherItems,
+    } = useInfiniteScroll(listNotes);
 
     useEffect(() => {
-        void (async () => {
-            document.title = 'PlaatNotes';
-            const data = await listNotes();
-            setNotes(data.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt)));
-            setLoading(false);
-        })();
+        document.title = 'PlaatNotes';
     }, []);
 
     async function handlePin(note: Note) {
         const updated = await updateNote(note, { isPinned: !note.isPinned });
-        setNotes((ns) => ns.map((n) => (n.id === note.id ? updated : n)));
+        if (updated.isPinned) {
+            setOtherItems((ns) => ns.filter((n) => n.id !== note.id));
+            setPinnedItems((ns) => [...ns, updated]);
+        } else {
+            setPinnedItems((ns) => ns.filter((n) => n.id !== note.id));
+            setOtherItems((ns) => [...ns, updated]);
+        }
     }
 
     async function handleArchive(note: Note) {
         await updateNote(note, { isArchived: true });
-        setNotes((ns) => ns.filter((n) => n.id !== note.id));
+        setPinnedItems((ns) => ns.filter((n) => n.id !== note.id));
+        setOtherItems((ns) => ns.filter((n) => n.id !== note.id));
     }
 
     async function handleTrash(note: Note) {
         await updateNote(note, { isTrashed: true });
-        setNotes((ns) => ns.filter((n) => n.id !== note.id));
+        setPinnedItems((ns) => ns.filter((n) => n.id !== note.id));
+        setOtherItems((ns) => ns.filter((n) => n.id !== note.id));
     }
 
-    const pinned = notes.filter((n) => n.isPinned);
-    const others = notes.filter((n) => !n.isPinned);
+    const initialLoading = (pinnedLoading && pinnedItems.length === 0) || (otherLoading && otherItems.length === 0);
+    const isEmpty = !pinnedLoading && !otherLoading && pinnedItems.length === 0 && otherItems.length === 0;
+
+    const pinned = pinnedItems
+        .slice()
+        .sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt));
+    const others = otherItems.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt));
 
     return (
         <Layout>
             <div class="max-w-screen-xl mx-auto px-4 py-6">
-                {loading && <p class="text-center text-gray-400 mt-16">{t('home.loading')}</p>}
+                {initialLoading && <p class="text-center text-gray-400 mt-16">{t('home.loading')}</p>}
 
-                {!loading && notes.length === 0 && (
+                {isEmpty && (
                     <EmptyState
                         icon={
                             <svg class="w-16 h-16" viewBox="0 0 24 24" fill="currentColor">
@@ -67,13 +88,16 @@ export function Home() {
                         </h2>
                         <DraggableNoteGrid
                             notes={pinned}
-                            onReorder={(reordered) =>
-                                setNotes((ns) => [...reordered, ...ns.filter((n) => !n.isPinned)])
-                            }
+                            reorderEndpoint="/notes/pinned/reorder"
+                            onReorder={setPinnedItems}
                             onPin={handlePin}
                             onArchive={handleArchive}
                             onTrash={handleTrash}
                         />
+                        {pinnedHasMore && <div ref={pinnedSentinelRef} class="h-1" />}
+                        {pinnedLoading && pinnedItems.length > 0 && (
+                            <p class="text-center text-gray-400 py-4">{t('home.loading')}</p>
+                        )}
                     </section>
                 )}
 
@@ -86,12 +110,18 @@ export function Home() {
                         )}
                         <DraggableNoteGrid
                             notes={others}
-                            onReorder={(reordered) => setNotes((ns) => [...ns.filter((n) => n.isPinned), ...reordered])}
+                            reorderEndpoint="/notes/reorder"
+                            onReorder={setOtherItems}
                             onPin={handlePin}
                             onArchive={handleArchive}
                             onTrash={handleTrash}
                         />
                     </section>
+                )}
+
+                {otherHasMore && <div ref={otherSentinelRef} class="h-1" />}
+                {otherLoading && otherItems.length > 0 && (
+                    <p class="text-center text-gray-400 py-4">{t('home.loading')}</p>
                 )}
             </div>
 

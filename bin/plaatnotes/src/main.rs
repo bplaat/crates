@@ -78,7 +78,9 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .delete("/api/notes/:note_id", notes_delete)
         .put("/api/notes/reorder", notes_reorder)
         .get("/api/notes/pinned", notes_pinned)
+        .put("/api/notes/pinned/reorder", notes_pinned_reorder)
         .get("/api/notes/archived", notes_archived)
+        .put("/api/notes/archived/reorder", notes_archived_reorder)
         .get("/api/notes/trashed", notes_trashed)
         // Imports
         .post("/api/imports/google-keep", imports_google_keep)

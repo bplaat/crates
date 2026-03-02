@@ -11,6 +11,7 @@ import { Card } from '../../components/card.tsx';
 import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
 import { Button, FormField, FormInput, FormSelect, SmallIconButton } from '../../components/form.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
+import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/users.service.ts';
 
 type DialogMode = { kind: 'create' } | { kind: 'edit'; user: User };
@@ -32,20 +33,14 @@ function formFromUser(user: User): UserFormState {
 }
 
 export function AdminUsers() {
-    const [users, setUsers] = useState<User[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { items: users, loading, hasMore, sentinelRef, setItems: setUsers } = useInfiniteScroll(listUsers);
     const [dialog, setDialog] = useState<DialogMode | null>(null);
     const [form, setForm] = useState<UserFormState>(emptyForm());
     const [submitting, setSubmitting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
 
     useEffect(() => {
-        void (async () => {
-            document.title = `PlaatNotes - ${t('admin.users.heading')}`;
-            const data = await listUsers();
-            setUsers(data);
-            setLoading(false);
-        })();
+        document.title = `PlaatNotes - ${t('admin.users.heading')}`;
     }, []);
 
     function openCreate() {
@@ -120,13 +115,13 @@ export function AdminUsers() {
                 </div>
 
                 <Card class="overflow-hidden">
-                    {loading && (
+                    {loading && users.length === 0 && (
                         <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.users.loading')}</p>
                     )}
                     {!loading && users.length === 0 && (
                         <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.users.empty')}</p>
                     )}
-                    {!loading && users.length > 0 && (
+                    {users.length > 0 && (
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b border-gray-100 dark:border-zinc-700 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -198,6 +193,11 @@ export function AdminUsers() {
                                 ))}
                             </tbody>
                         </table>
+                    )}
+
+                    {hasMore && <div ref={sentinelRef} class="h-1" />}
+                    {loading && users.length > 0 && (
+                        <p class="text-center text-gray-400 dark:text-gray-500 py-4">{t('admin.users.loading')}</p>
                     )}
                 </Card>
             </div>

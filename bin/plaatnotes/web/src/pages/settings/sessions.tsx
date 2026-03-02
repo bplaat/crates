@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../components/dialog.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $currentSessionId } from '../../services/auth.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
+import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { listSessions, revokeSession } from '../../services/sessions.service.ts';
 
 function clientLabel(session: Session): string {
@@ -32,18 +33,12 @@ function locationLabel(session: Session): string {
 }
 
 export function SettingsSessions() {
-    const [sessions, setSessions] = useState<Session[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { items: sessions, loading, hasMore, sentinelRef, setItems: setSessions } = useInfiniteScroll(listSessions);
     const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
     const currentSessionId = $currentSessionId.value;
 
     useEffect(() => {
-        void (async () => {
-            document.title = `PlaatNotes - ${t('page.sessions')}`;
-            const data = await listSessions();
-            setSessions(data);
-            setLoading(false);
-        })();
+        document.title = `PlaatNotes - ${t('page.sessions')}`;
     }, []);
 
     async function handleRevoke(id: string) {
@@ -65,7 +60,7 @@ export function SettingsSessions() {
                         {t('settings.sessions.heading')}
                     </h1>
 
-                    {loading && (
+                    {loading && sessions.length === 0 && (
                         <p class="text-center text-gray-400 dark:text-gray-500 mt-16">
                             {t('settings.sessions.loading')}
                         </p>
@@ -75,7 +70,7 @@ export function SettingsSessions() {
                         <p class="text-center text-gray-400 dark:text-gray-500 mt-16">{t('settings.sessions.empty')}</p>
                     )}
 
-                    {!loading && sessions.length > 0 && (
+                    {sessions.length > 0 && (
                         <div class="flex flex-col gap-3">
                             {sessions.map((session) => {
                                 const isCurrent = session.id === currentSessionId;
@@ -123,6 +118,13 @@ export function SettingsSessions() {
                                 );
                             })}
                         </div>
+                    )}
+
+                    {hasMore && <div ref={sentinelRef} class="h-1" />}
+                    {loading && sessions.length > 0 && (
+                        <p class="text-center text-gray-400 dark:text-gray-500 py-4">
+                            {t('settings.sessions.loading')}
+                        </p>
                     )}
                 </div>
             </SettingsLayout>

@@ -311,6 +311,10 @@ paths:
     get:
       tags: [Users]
       summary: Get all notes for a user
+      description: >
+        Returns active notes for the specified user: non-trashed, non-archived, and non-pinned.
+        Use `/users/{id}/notes/pinned` for pinned notes, `/users/{id}/notes/archived` for archived,
+        and `/users/{id}/notes/trashed` for trashed notes.
       security:
         - BearerAuth: []
       parameters:
@@ -320,7 +324,7 @@ paths:
         - $ref: '#/components/parameters/Limit'
       responses:
         '200':
-          description: A list of notes for the user
+          description: A list of active notes for the user
           content:
             application/json:
               schema:
@@ -336,6 +340,9 @@ paths:
     get:
       tags: [Users]
       summary: Get all pinned notes for a user
+      description: >
+        Returns only pinned, non-trashed notes for the specified user.
+        Pinned notes are excluded from the main `/users/{id}/notes` index.
       security:
         - BearerAuth: []
       parameters:
@@ -361,6 +368,9 @@ paths:
     get:
       tags: [Users]
       summary: Get all archived notes for a user
+      description: >
+        Returns only archived, non-trashed notes for the specified user.
+        Archived notes are excluded from the main `/users/{id}/notes` index.
       security:
         - BearerAuth: []
       parameters:
@@ -386,6 +396,9 @@ paths:
     get:
       tags: [Users]
       summary: Get all trashed notes for a user
+      description: >
+        Returns only trashed notes for the specified user.
+        Trashed notes are excluded from all other note index endpoints until permanently deleted.
       security:
         - BearerAuth: []
       parameters:
@@ -462,6 +475,10 @@ paths:
     get:
       tags: [Notes]
       summary: Get all notes
+      description: >
+        Returns active notes for the authenticated user: non-trashed, non-archived, and non-pinned.
+        Use `/notes/pinned` for pinned notes, `/notes/archived` for archived notes,
+        and `/notes/trashed` for trashed notes.
       security:
         - BearerAuth: []
       parameters:
@@ -470,7 +487,7 @@ paths:
         - $ref: '#/components/parameters/Limit'
       responses:
         '200':
-          description: A list of notes
+          description: A list of active notes
           content:
             application/json:
               schema:
@@ -572,6 +589,9 @@ paths:
     get:
       tags: [Notes]
       summary: Get all pinned notes
+      description: >
+        Returns only pinned, non-trashed notes for the authenticated user.
+        Pinned notes are excluded from the main `/notes` index so they can always be shown at the top.
       security:
         - BearerAuth: []
       parameters:
@@ -592,6 +612,9 @@ paths:
     get:
       tags: [Notes]
       summary: Get all archived notes
+      description: >
+        Returns only archived, non-trashed notes for the authenticated user.
+        Archived notes are excluded from the main `/notes` index.
       security:
         - BearerAuth: []
       parameters:
@@ -612,6 +635,9 @@ paths:
     get:
       tags: [Notes]
       summary: Get all trashed notes
+      description: >
+        Returns only trashed notes for the authenticated user.
+        Trashed notes are excluded from all other note index endpoints until permanently deleted.
       security:
         - BearerAuth: []
       parameters:
@@ -631,7 +657,8 @@ paths:
   /notes/reorder:
     put:
       tags: [Notes]
-      summary: Reorder notes by providing an ordered list of note IDs
+      summary: Reorder normal (non-pinned, non-archived) notes
+      description: Reorders the normal notes list. Only affects notes that are not pinned, archived, or trashed. Provided IDs are placed first in the given order; any unloaded notes remain after in their existing relative order.
       security:
         - BearerAuth: []
       requestBody:
@@ -643,6 +670,44 @@ paths:
       responses:
         '204':
           description: Notes reordered successfully
+        '401':
+          description: Unauthorized
+
+  /notes/pinned/reorder:
+    put:
+      tags: [Notes]
+      summary: Reorder pinned notes
+      description: Reorders the pinned notes list. Only affects notes where is_pinned=true and is_trashed=false. Does not affect normal or archived note ordering.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+      responses:
+        '204':
+          description: Pinned notes reordered successfully
+        '401':
+          description: Unauthorized
+
+  /notes/archived/reorder:
+    put:
+      tags: [Notes]
+      summary: Reorder archived notes
+      description: Reorders the archived notes list. Only affects notes where is_archived=true and is_trashed=false. Does not affect normal or pinned note ordering.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+      responses:
+        '204':
+          description: Archived notes reordered successfully
         '401':
           description: Unauthorized
 

@@ -10,23 +10,18 @@ import { ConfirmDialog } from '../components/dialog.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
 import { Layout } from '../components/layout.tsx';
 import { NoteCard } from '../components/note-card.tsx';
+import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { deleteNote, listTrashedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
 
 type ConfirmAction = { kind: 'delete'; note: Note } | { kind: 'empty' } | null;
 
 export function TrashPage() {
-    const [notes, setNotes] = useState<Note[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { items: notes, loading, hasMore, sentinelRef, setItems: setNotes } = useInfiniteScroll(listTrashedNotes);
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
     useEffect(() => {
-        void (async () => {
-            document.title = `PlaatNotes - ${t('page.trash')}`;
-            const data = await listTrashedNotes();
-            setNotes(data.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
-            setLoading(false);
-        })();
+        document.title = `PlaatNotes - ${t('page.trash')}`;
     }, []);
 
     async function handleRestore(note: Note) {
@@ -73,7 +68,9 @@ export function TrashPage() {
 
                     {!loading && notes.length > 0 && <p class="text-xs text-gray-400 mb-4">{t('trash.hint')}</p>}
 
-                    {loading && <p class="text-center text-gray-400 mt-16">{t('trash.loading')}</p>}
+                    {loading && notes.length === 0 && (
+                        <p class="text-center text-gray-400 mt-16">{t('trash.loading')}</p>
+                    )}
 
                     {!loading && notes.length === 0 && (
                         <EmptyState
@@ -98,6 +95,9 @@ export function TrashPage() {
                             ))}
                         </div>
                     )}
+
+                    {hasMore && <div ref={sentinelRef} class="h-1" />}
+                    {loading && notes.length > 0 && <p class="text-center text-gray-400 py-4">{t('trash.loading')}</p>}
                 </div>
             </Layout>
 

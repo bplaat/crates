@@ -4,14 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type User, type UserCreateBody, type UserIndexResponse, type UserUpdateBody } from '../../src-gen/api.ts';
+import {
+    type Pagination,
+    type User,
+    type UserCreateBody,
+    type UserIndexResponse,
+    type UserUpdateBody,
+} from '../../src-gen/api.ts';
 import { API_URL } from '../consts.ts';
 import { authFetch } from './auth.service.ts';
 
-export async function listUsers(): Promise<User[]> {
-    const res = await authFetch(`${API_URL}/users`);
-    const { data }: UserIndexResponse = await res.json();
-    return data;
+export async function listUsers(page = 1): Promise<{ data: User[]; pagination: Pagination }> {
+    const res = await authFetch(`${API_URL}/users?page=${page}`);
+    const result: UserIndexResponse = await res.json();
+    return result;
 }
 
 export async function createUser(params: UserCreateBody): Promise<User | null> {

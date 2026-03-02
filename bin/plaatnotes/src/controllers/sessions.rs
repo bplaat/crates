@@ -44,7 +44,7 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                "SELECT COUNT(id) FROM sessions WHERE token LIKE :search_query",
+                "SELECT COUNT(id) FROM sessions WHERE (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
                 Args {
                     search_query: search_query.clone()
                 }
@@ -57,7 +57,7 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                 Session,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM sessions WHERE token LIKE :search_query ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM sessions WHERE (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                     Session::columns()
                 ),
                 Args {
@@ -76,7 +76,7 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
             let total = query_args!(
                 i64,
                 ctx.database,
-                "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND token LIKE :search_query",
+                "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
                 Args {
                     user_id: auth_user.id,
                     search_query: search_query.clone()
@@ -90,7 +90,7 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                 Session,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM sessions WHERE user_id = :user_id AND token LIKE :search_query ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM sessions WHERE user_id = :user_id AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                     Session::columns()
                 ),
                 Args {
@@ -203,14 +203,14 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Respons
         let total = query_args!(
             i64,
             ctx.database,
-            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND token LIKE :search_query",
+            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
             Args { user_id: user.id, now: now, search_query: search_query.clone() }
         ).expect("Database error").next().map(|r| r.expect("Database error")).unwrap_or(0);
         let sessions = query_args!(
             Session,
             ctx.database,
             formatcp!(
-                "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND token LIKE :search_query ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                 Session::columns()
             ),
             Args { user_id: user.id, now: now, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
@@ -222,7 +222,7 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Respons
         let total = query_args!(
             i64,
             ctx.database,
-            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND token LIKE :search_query",
+            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
             Args {
                 user_id: user.id,
                 search_query: search_query.clone()
@@ -236,7 +236,7 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Respons
             Session,
             ctx.database,
             formatcp!(
-                "SELECT {} FROM sessions WHERE user_id = :user_id AND token LIKE :search_query ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                "SELECT {} FROM sessions WHERE user_id = :user_id AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                 Session::columns()
             ),
             Args { user_id: user.id, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
@@ -288,14 +288,14 @@ pub(crate) fn sessions_active(req: &Request, ctx: &Context) -> Response {
     let total = query_args!(
         i64,
         ctx.database,
-        "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND token LIKE :search_query",
+        "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
         Args { user_id: auth_user.id, now: now, search_query: search_query.clone() }
     ).expect("Database error").next().map(|r| r.expect("Database error")).unwrap_or(0);
     let sessions = query_args!(
         Session,
         ctx.database,
         formatcp!(
-            "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND token LIKE :search_query ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+            "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
             Session::columns()
         ),
         Args { user_id: auth_user.id, now: now, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
@@ -350,6 +350,62 @@ mod test {
     use crate::models::{User, UserRole};
     use crate::router;
     use crate::test_utils::create_test_user_with_session_and_role;
+
+    #[test]
+    fn test_sessions_index_search() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_user1, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        let user2 = User {
+            first_name: "Jane".to_string(),
+            last_name: "Doe".to_string(),
+            email: "jane@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        };
+        ctx.database.insert_user(user2.clone());
+
+        // Session with recognizable client_name and country
+        ctx.database.insert_session(Session {
+            user_id: user2.id,
+            token: "token-jane".to_string(),
+            ip_address: "1.2.3.4".to_string(),
+            ip_country: Some("Netherlands".to_string()),
+            client_name: Some("Firefox".to_string()),
+            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+            ..Default::default()
+        });
+        // Session with different client
+        ctx.database.insert_session(Session {
+            user_id: user2.id,
+            token: "token-jane2".to_string(),
+            ip_address: "5.6.7.8".to_string(),
+            client_name: Some("Chrome".to_string()),
+            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+            ..Default::default()
+        });
+
+        // Search by client_name
+        let res = router.handle(
+            &Request::get("http://localhost/api/sessions?q=Firefox")
+                .header("Authorization", format!("Bearer {token1}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::SessionIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].client.name, Some("Firefox".to_string()));
+
+        // Search by ip_country
+        let res = router.handle(
+            &Request::get("http://localhost/api/sessions?q=Netherlands")
+                .header("Authorization", format!("Bearer {token1}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::SessionIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].ip.country, Some("Netherlands".to_string()));
+    }
 
     #[test]
     fn test_sessions_index_admin() {

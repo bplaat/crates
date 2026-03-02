@@ -5,7 +5,13 @@
  */
 
 import { signal } from '@preact/signals';
-import { type Note, type NoteCreateBody, type NoteIndexResponse, type NoteUpdateBody } from '../../src-gen/api.ts';
+import {
+    type Note,
+    type NoteCreateBody,
+    type NoteIndexResponse,
+    type NoteUpdateBody,
+    type Pagination,
+} from '../../src-gen/api.ts';
 import { API_URL } from '../consts.ts';
 import { authFetch } from './auth.service.ts';
 
@@ -15,28 +21,40 @@ function cacheNotes(notes: Note[]) {
     $notesCache.value = new Map([...$notesCache.value, ...notes.map((n) => [n.id, n] as [string, Note])]);
 }
 
-export async function listNotes(): Promise<Note[]> {
-    const res = await authFetch(`${API_URL}/notes`);
-    if (!res.ok) return [];
-    const { data }: NoteIndexResponse = await res.json();
-    cacheNotes(data);
-    return data;
+const emptyPage = (page: number): { data: Note[]; pagination: Pagination } => ({
+    data: [],
+    pagination: { page, limit: 20, total: 0 },
+});
+
+export async function listNotes(page = 1): Promise<{ data: Note[]; pagination: Pagination }> {
+    const res = await authFetch(`${API_URL}/notes?page=${page}`);
+    if (!res.ok) return emptyPage(page);
+    const result: NoteIndexResponse = await res.json();
+    cacheNotes(result.data);
+    return result;
 }
 
-export async function listArchivedNotes(): Promise<Note[]> {
-    const res = await authFetch(`${API_URL}/notes/archived`);
-    if (!res.ok) return [];
-    const { data }: NoteIndexResponse = await res.json();
-    cacheNotes(data);
-    return data;
+export async function listPinnedNotes(page = 1): Promise<{ data: Note[]; pagination: Pagination }> {
+    const res = await authFetch(`${API_URL}/notes/pinned?page=${page}`);
+    if (!res.ok) return emptyPage(page);
+    const result: NoteIndexResponse = await res.json();
+    cacheNotes(result.data);
+    return result;
 }
 
-export async function listTrashedNotes(): Promise<Note[]> {
-    const res = await authFetch(`${API_URL}/notes/trashed`);
-    if (!res.ok) return [];
-    const { data }: NoteIndexResponse = await res.json();
-    cacheNotes(data);
-    return data;
+export async function listArchivedNotes(page = 1): Promise<{ data: Note[]; pagination: Pagination }> {
+    const res = await authFetch(`${API_URL}/notes/archived?page=${page}`);
+    const result: NoteIndexResponse = await res.json();
+    cacheNotes(result.data);
+    return result;
+}
+
+export async function listTrashedNotes(page = 1): Promise<{ data: Note[]; pagination: Pagination }> {
+    const res = await authFetch(`${API_URL}/notes/trashed?page=${page}`);
+    if (!res.ok) return emptyPage(page);
+    const result: NoteIndexResponse = await res.json();
+    cacheNotes(result.data);
+    return result;
 }
 
 export async function createNote(params: NoteCreateBody): Promise<Note | null> {
@@ -82,8 +100,8 @@ export async function deleteNote(id: string): Promise<void> {
     $notesCache.value = next;
 }
 
-export async function reorderNotes(ids: string[]): Promise<void> {
-    await authFetch(`${API_URL}/notes/reorder`, {
+export async function reorderNotes(ids: string[], endpoint: string): Promise<void> {
+    await authFetch(`${API_URL}${endpoint}`, {
         method: 'PUT',
         body: new URLSearchParams({ ids: ids.join(',') }),
     });

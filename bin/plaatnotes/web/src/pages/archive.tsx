@@ -4,36 +4,33 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
 import { Layout } from '../components/layout.tsx';
+import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { listArchivedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
 
 export function ArchivePage() {
-    const [notes, setNotes] = useState<Note[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { items, loading, hasMore, sentinelRef, setItems } = useInfiniteScroll(listArchivedNotes);
 
     useEffect(() => {
-        void (async () => {
-            document.title = `PlaatNotes - ${t('page.archive')}`;
-            const data = await listArchivedNotes();
-            setNotes(data.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt)));
-            setLoading(false);
-        })();
+        document.title = `PlaatNotes - ${t('page.archive')}`;
     }, []);
 
     async function handleUnarchive(note: Note) {
         await updateNote(note, { isArchived: false });
-        setNotes((ns) => ns.filter((n) => n.id !== note.id));
+        setItems((ns) => ns.filter((n) => n.id !== note.id));
     }
 
     async function handleTrash(note: Note) {
         await updateNote(note, { isTrashed: true });
-        setNotes((ns) => ns.filter((n) => n.id !== note.id));
+        setItems((ns) => ns.filter((n) => n.id !== note.id));
     }
+
+    const notes = items.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt));
 
     return (
         <Layout>
@@ -42,7 +39,7 @@ export function ArchivePage() {
                     {t('archive.heading')}
                 </h1>
 
-                {loading && <p class="text-center text-gray-400 mt-16">{t('archive.loading')}</p>}
+                {loading && items.length === 0 && <p class="text-center text-gray-400 mt-16">{t('archive.loading')}</p>}
 
                 {!loading && notes.length === 0 && (
                     <EmptyState
@@ -58,11 +55,15 @@ export function ArchivePage() {
                 {notes.length > 0 && (
                     <DraggableNoteGrid
                         notes={notes}
-                        onReorder={setNotes}
+                        reorderEndpoint="/notes/archived/reorder"
+                        onReorder={(reordered) => setItems(reordered)}
                         onUnarchive={handleUnarchive}
                         onTrash={handleTrash}
                     />
                 )}
+
+                {hasMore && <div ref={sentinelRef} class="h-1" />}
+                {loading && items.length > 0 && <p class="text-center text-gray-400 py-4">{t('archive.loading')}</p>}
             </div>
         </Layout>
     );

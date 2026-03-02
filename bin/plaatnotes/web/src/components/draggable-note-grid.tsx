@@ -11,6 +11,7 @@ import { NoteCard } from './note-card.tsx';
 
 interface DraggableNoteGridProps {
     notes: Note[];
+    reorderEndpoint: string;
     onReorder: (notes: Note[]) => void;
     onPin?: (note: Note) => void;
     onArchive?: (note: Note) => void;
@@ -22,6 +23,7 @@ interface DraggableNoteGridProps {
 
 export function DraggableNoteGrid({
     notes,
+    reorderEndpoint,
     onReorder,
     onPin,
     onArchive,
@@ -66,7 +68,10 @@ export function DraggableNoteGrid({
         // Assign new positions
         const updated = reordered.map((n, i) => ({ ...n, position: i }));
         onReorder(updated);
-        void reorderNotes(updated.map((n) => n.id));
+        void reorderNotes(
+            updated.map((n) => n.id),
+            reorderEndpoint,
+        );
     }
 
     return (

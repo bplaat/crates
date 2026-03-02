@@ -398,7 +398,7 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
     let total = query_args!(
         i64,
         ctx.database,
-        "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND user_id = :user_id AND body LIKE :search_query",
+        "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query)",
         Args {
             user_id: user.id,
             search_query: search_query.clone()
@@ -412,7 +412,7 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
         Note,
         ctx.database,
         formatcp!(
-            "SELECT {} FROM notes WHERE is_trashed = 0 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+            "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
             Note::columns()
         ),
         Args {
@@ -485,7 +485,7 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response 
     let total = query_args!(
         i64,
         ctx.database,
-        &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND body LIKE :search_query"),
+        &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query)"),
         Args {
             user_id: user.id,
             search_query: search_query.clone()
@@ -499,7 +499,7 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response 
         Note,
         ctx.database,
         format!(
-            "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+            "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
             Note::columns(),
             filter
         ),
@@ -1066,6 +1066,42 @@ mod test {
     }
 
     #[test]
+    fn test_users_notes_excludes_pinned_and_archived() {
+        use crate::models::Note;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            body: "Regular".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            body: "Pinned".to_string(),
+            is_pinned: true,
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            body: "Archived".to_string(),
+            is_archived: true,
+            ..Default::default()
+        });
+
+        let res = router.handle(
+            &Request::get(format!("http://localhost/api/users/{}/notes", user.id))
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].body, "Regular");
+    }
+
+    #[test]
     fn test_users_notes_pagination() {
         use crate::models::Note;
 
@@ -1143,6 +1179,42 @@ mod test {
         let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].body, "Meeting notes from today");
+    }
+
+    #[test]
+    fn test_users_notes_search_by_title() {
+        use crate::models::Note;
+
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Note where search term is only in title
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("ProjectBeta".to_string()),
+            body: "Some content".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: None,
+            body: "Other content".to_string(),
+            ..Default::default()
+        });
+
+        // "ProjectBeta" only in title of first note
+        let res = router.handle(
+            &Request::get(format!(
+                "http://localhost/api/users/{}/notes?q=ProjectBeta",
+                user.id
+            ))
+            .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("ProjectBeta".to_string()));
     }
 
     #[test]
