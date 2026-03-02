@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -21,6 +21,7 @@ pub(crate) struct Note {
     pub is_pinned: bool,
     pub is_archived: bool,
     pub is_trashed: bool,
+    pub position: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -36,6 +37,7 @@ impl Default for Note {
             is_pinned: false,
             is_archived: false,
             is_trashed: false,
+            position: 0i64,
             created_at: now,
             updated_at: now,
         }

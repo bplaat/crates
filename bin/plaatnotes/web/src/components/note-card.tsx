@@ -9,8 +9,7 @@ import { type Note } from '../../src-gen/api.ts';
 import { t } from '../services/i18n.service.ts';
 
 // Icon button for use on colored card backgrounds — uses semi-transparent hover overlay
-const CARD_BTN_BASE =
-    'p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/15 transition-colors cursor-pointer';
+const CARD_BTN_BASE = 'p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/15 transition-colors cursor-pointer';
 
 function NoteIconButton({ class: extraClass, ...props }: preact.JSX.IntrinsicElements['button']) {
     return <button type="button" {...props} class={extraClass ? `${CARD_BTN_BASE} ${extraClass}` : CARD_BTN_BASE} />;
@@ -34,6 +33,7 @@ function noteColor(id: string): string {
 
 interface NoteCardProps {
     note: Note;
+    draggable?: boolean;
     onPin?: (note: Note) => void;
     onArchive?: (note: Note) => void;
     onUnarchive?: (note: Note) => void;
@@ -60,7 +60,16 @@ function stripMarkdown(text: string): string {
         .replace(/\[(.+?)\]\(.+?\)/g, '$1'); // links
 }
 
-export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onRestore, onDeleteForever }: NoteCardProps) {
+export function NoteCard({
+    note,
+    draggable: isDraggable,
+    onPin,
+    onArchive,
+    onUnarchive,
+    onTrash,
+    onRestore,
+    onDeleteForever,
+}: NoteCardProps) {
     const lines = note.body.split('\n').filter(Boolean);
     const title = note.title || (lines[0]?.startsWith('#') ? lines[0].replace(/^#+\s*/, '') : null);
     const snippetLines = lines.map(stripMarkdown).filter(Boolean).slice(0, 8);
@@ -74,7 +83,7 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
     return (
         <Link
             href={`/notes/${note.id}`}
-            class={`block rounded-xl border border-gray-200 dark:border-zinc-600 hover:border-gray-400 dark:hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-4 mb-4 break-inside-avoid group no-underline ${noteColor(note.id)}`}
+            class={`block rounded-xl border border-gray-200 dark:border-zinc-600 hover:border-gray-400 dark:hover:border-gray-400 hover:shadow-md transition-all p-4 mb-4 break-inside-avoid group no-underline ${noteColor(note.id)}${isDraggable ? ' cursor-grab active:cursor-grabbing' : ' cursor-pointer'}`}
         >
             {title && <p class="font-medium text-gray-800 dark:text-gray-100 mb-1 truncate">{title}</p>}
             {snippetLines.length > 0 && (
@@ -86,7 +95,9 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
             <div class="flex items-center justify-end gap-0.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {onPin && (
                     <NoteIconButton
-                        class={note.isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'}
+                        class={
+                            note.isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'
+                        }
                         title={note.isPinned ? t('note.unpin') : t('note.pin')}
                         onClick={(e) => act(e, () => onPin(note))}
                     >

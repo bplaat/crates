@@ -628,6 +628,24 @@ paths:
         '401':
           description: Unauthorized
 
+  /notes/reorder:
+    put:
+      tags: [Notes]
+      summary: Reorder notes by providing an ordered list of note IDs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+      responses:
+        '204':
+          description: Notes reordered successfully
+        '401':
+          description: Unauthorized
+
   # MARK: Imports
   /imports/google-keep:
     post:
@@ -853,6 +871,8 @@ components:
           type: boolean
         isTrashed:
           type: boolean
+        position:
+          type: integer
         createdAt:
           type: string
           format: date-time
@@ -866,6 +886,7 @@ components:
         - isPinned
         - isArchived
         - isTrashed
+        - position
         - createdAt
         - updatedAt
 
@@ -971,6 +992,15 @@ components:
         - isPinned
         - isArchived
         - isTrashed
+
+    NoteReorderBody:
+      type: object
+      properties:
+        ids:
+          type: string
+          description: Comma-separated list of note UUIDs in desired order
+      required:
+        - ids
 
     ImportGoogleKeepBody:
       type: object

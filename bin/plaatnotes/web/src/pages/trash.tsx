@@ -24,7 +24,7 @@ export function TrashPage() {
         void (async () => {
             document.title = `PlaatNotes - ${t('page.trash')}`;
             const data = await listTrashedNotes();
-            setNotes(data);
+            setNotes(data.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
             setLoading(false);
         })();
     }, []);

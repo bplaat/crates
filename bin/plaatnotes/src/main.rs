@@ -28,6 +28,7 @@ mod context;
 mod controllers;
 mod imports;
 mod layers;
+mod migrations;
 mod models;
 mod tasks;
 #[cfg(test)]
@@ -75,6 +76,7 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .get("/api/notes/:note_id", notes_show)
         .put("/api/notes/:note_id", notes_update)
         .delete("/api/notes/:note_id", notes_delete)
+        .put("/api/notes/reorder", notes_reorder)
         .get("/api/notes/pinned", notes_pinned)
         .get("/api/notes/archived", notes_archived)
         .get("/api/notes/trashed", notes_trashed)

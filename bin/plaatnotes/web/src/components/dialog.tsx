@@ -57,9 +57,7 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose
         <Dialog title={title} onClose={onClose}>
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">{message}</p>
             <div class="flex justify-end gap-2">
-                <SecondaryButton onClick={onClose}>
-                    {t('dialog.cancel')}
-                </SecondaryButton>
+                <SecondaryButton onClick={onClose}>{t('dialog.cancel')}</SecondaryButton>
                 <DangerButton onClick={onConfirm}>
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />

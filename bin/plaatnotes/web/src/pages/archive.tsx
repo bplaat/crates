@@ -6,9 +6,9 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
-import { Layout } from '../components/layout.tsx';
+import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
-import { NoteCard } from '../components/note-card.tsx';
+import { Layout } from '../components/layout.tsx';
 import { listArchivedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
 
@@ -20,7 +20,7 @@ export function ArchivePage() {
         void (async () => {
             document.title = `PlaatNotes - ${t('page.archive')}`;
             const data = await listArchivedNotes();
-            setNotes(data);
+            setNotes(data.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt)));
             setLoading(false);
         })();
     }, []);
@@ -56,11 +56,12 @@ export function ArchivePage() {
                 )}
 
                 {notes.length > 0 && (
-                    <div class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
-                        {notes.map((note) => (
-                            <NoteCard key={note.id} note={note} onUnarchive={handleUnarchive} onTrash={handleTrash} />
-                        ))}
-                    </div>
+                    <DraggableNoteGrid
+                        notes={notes}
+                        onReorder={setNotes}
+                        onUnarchive={handleUnarchive}
+                        onTrash={handleTrash}
+                    />
                 )}
             </div>
         </Layout>

@@ -81,3 +81,10 @@ export async function deleteNote(id: string): Promise<void> {
     next.delete(id);
     $notesCache.value = next;
 }
+
+export async function reorderNotes(ids: string[]): Promise<void> {
+    await authFetch(`${API_URL}/notes/reorder`, {
+        method: 'PUT',
+        body: new URLSearchParams({ ids: ids.join(',') }),
+    });
+}

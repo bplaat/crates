@@ -105,7 +105,9 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     <div class="flex-1" />
                     <IconButton
                         onClick={handlePin}
-                        class={note.isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'}
+                        class={
+                            note.isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'
+                        }
                         title={note.isPinned ? t('note.unpin') : t('note.pin')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -114,7 +116,11 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </IconButton>
                     <IconButton
                         onClick={handleArchive}
-                        class={note.isArchived ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'}
+                        class={
+                            note.isArchived
+                                ? 'text-yellow-500 dark:text-yellow-400'
+                                : 'text-gray-400 dark:text-gray-500'
+                        }
                         title={note.isArchived ? t('note.unarchive') : t('note.archive')}
                     >
                         {note.isArchived ? (

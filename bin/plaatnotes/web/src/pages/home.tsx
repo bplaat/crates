@@ -7,9 +7,9 @@
 import { route } from 'preact-router';
 import { useEffect, useState } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
-import { Layout } from '../components/layout.tsx';
+import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
-import { NoteCard } from '../components/note-card.tsx';
+import { Layout } from '../components/layout.tsx';
 import { listNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
 
@@ -21,7 +21,7 @@ export function Home() {
         void (async () => {
             document.title = 'PlaatNotes';
             const data = await listNotes();
-            setNotes(data);
+            setNotes(data.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt)));
             setLoading(false);
         })();
     }, []);
@@ -65,17 +65,15 @@ export function Home() {
                         <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
                             {t('home.pinned')}
                         </h2>
-                        <div class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
-                            {pinned.map((note) => (
-                                <NoteCard
-                                    key={note.id}
-                                    note={note}
-                                    onPin={handlePin}
-                                    onArchive={handleArchive}
-                                    onTrash={handleTrash}
-                                />
-                            ))}
-                        </div>
+                        <DraggableNoteGrid
+                            notes={pinned}
+                            onReorder={(reordered) =>
+                                setNotes((ns) => [...reordered, ...ns.filter((n) => !n.isPinned)])
+                            }
+                            onPin={handlePin}
+                            onArchive={handleArchive}
+                            onTrash={handleTrash}
+                        />
                     </section>
                 )}
 
@@ -86,17 +84,13 @@ export function Home() {
                                 {t('home.other')}
                             </h2>
                         )}
-                        <div class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
-                            {others.map((note) => (
-                                <NoteCard
-                                    key={note.id}
-                                    note={note}
-                                    onPin={handlePin}
-                                    onArchive={handleArchive}
-                                    onTrash={handleTrash}
-                                />
-                            ))}
-                        </div>
+                        <DraggableNoteGrid
+                            notes={others}
+                            onReorder={(reordered) => setNotes((ns) => [...ns.filter((n) => n.isPinned), ...reordered])}
+                            onPin={handlePin}
+                            onArchive={handleArchive}
+                            onTrash={handleTrash}
+                        />
                     </section>
                 )}
             </div>

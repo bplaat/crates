@@ -8,10 +8,10 @@ use std::path::Path;
 
 use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
-use pbkdf2::password_hash;
 use uuid::Uuid;
 
-use crate::models::{Note, Session, User, UserRole};
+use crate::migrations::database_migrate;
+use crate::models::{Note, Session, User};
 
 // MARK: Context
 #[derive(Clone)]
@@ -42,8 +42,7 @@ impl Context {
         database
             .apply_various_performance_settings()
             .expect("Database error");
-        database_create_tables(&database);
-        database_seed(&database);
+        database_migrate(&database);
         Self {
             database,
             auth_session: None,
@@ -55,7 +54,7 @@ impl Context {
     #[cfg(test)]
     pub(crate) fn with_test_database() -> Self {
         let database = Connection::open_memory().expect("Can't open in-memory database");
-        database_create_tables(&database);
+        database_migrate(&database);
         Self {
             database,
             auth_session: None,
@@ -107,83 +106,5 @@ impl DatabaseHelpers for Connection {
             note,
         )
         .expect("Database error");
-    }
-}
-
-fn database_create_tables(database: &Connection) {
-    database
-        .execute(
-            "CREATE TABLE IF NOT EXISTS users(
-            id BLOB PRIMARY KEY,
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            theme INTEGER NOT NULL,
-            language TEXT NOT NULL,
-            role INTEGER NOT NULL,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-        ) STRICT",
-            (),
-        )
-        .expect("Database error");
-
-    database
-        .execute(
-            "CREATE TABLE IF NOT EXISTS sessions(
-            id BLOB PRIMARY KEY,
-            user_id BLOB NOT NULL,
-            token TEXT NOT NULL,
-            ip_address TEXT NOT NULL,
-            ip_latitude REAL,
-            ip_longitude REAL,
-            ip_country TEXT,
-            ip_city TEXT,
-            client_name TEXT,
-            client_version TEXT,
-            client_os TEXT,
-            expires_at INTEGER NOT NULL,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        ) STRICT",
-            (),
-        )
-        .expect("Database error");
-
-    database
-        .execute(
-            "CREATE TABLE IF NOT EXISTS notes(
-            id BLOB PRIMARY KEY,
-            user_id BLOB NOT NULL,
-            title TEXT NULL,
-            body TEXT NOT NULL,
-            is_pinned INTEGER NOT NULL,
-            is_archived INTEGER NOT NULL,
-            is_trashed INTEGER NOT NULL,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        ) STRICT",
-            (),
-        )
-        .expect("Database error");
-}
-
-fn database_seed(database: &Connection) {
-    let user_count = database
-        .query_some::<i64>("SELECT COUNT(id) FROM users", ())
-        .expect("Database error");
-    if user_count == 0 {
-        let user = User {
-            first_name: "Admin".to_string(),
-            last_name: "Admin".to_string(),
-            email: "admin@example.com".to_string(),
-            password: password_hash("admin123"),
-            role: UserRole::Admin,
-            ..Default::default()
-        };
-        database.insert_user(user);
     }
 }

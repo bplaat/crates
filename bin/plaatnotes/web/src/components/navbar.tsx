@@ -76,7 +76,12 @@ export function Navbar() {
                             <div class="absolute right-0 mt-1 w-44 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-lg overflow-hidden z-20">
                                 {user.role === 'admin' && (
                                     <>
-                                        <DropdownItem onClick={() => { setDropdownOpen(false); route('/admin/users'); }}>
+                                        <DropdownItem
+                                            onClick={() => {
+                                                setDropdownOpen(false);
+                                                route('/admin/users');
+                                            }}
+                                        >
                                             <svg
                                                 class="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0"
                                                 viewBox="0 0 24 24"
@@ -89,7 +94,12 @@ export function Navbar() {
                                         <div class="border-t border-gray-100 dark:border-zinc-700" />
                                     </>
                                 )}
-                                <DropdownItem onClick={() => { setDropdownOpen(false); route('/settings'); }}>
+                                <DropdownItem
+                                    onClick={() => {
+                                        setDropdownOpen(false);
+                                        route('/settings');
+                                    }}
+                                >
                                     <svg
                                         class="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0"
                                         viewBox="0 0 24 24"

@@ -63,7 +63,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                 Note,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND body LIKE :search_query ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns()
                 ),
                 Args {
@@ -96,7 +96,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
                 Note,
                 ctx.database,
                 formatcp!(
-                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND user_id = :user_id AND body LIKE :search_query ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns()
                 ),
                 Args {
@@ -237,6 +237,7 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
     }
 
     // Update note
+    let prev_is_archived = note.is_archived;
     note.title = body.title;
     note.body = body.body;
     note.is_pinned = body.is_pinned;
@@ -256,6 +257,28 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Response {
             id: note.id
         }
     ).expect("Database error");
+
+    // When archiving or unarchiving, put the note first and shift all others
+    if note.is_archived != prev_is_archived {
+        let filter = if note.is_archived {
+            "is_archived = 1 AND is_trashed = 0"
+        } else {
+            "is_archived = 0 AND is_trashed = 0"
+        };
+        execute_args!(
+            ctx.database,
+            &format!("UPDATE notes SET position = position + 1 WHERE id != :id AND {filter} AND user_id = :user_id"),
+            Args { id: note.id, user_id: user.id }
+        )
+        .expect("Database error");
+        execute_args!(
+            ctx.database,
+            "UPDATE notes SET position = 0 WHERE id = :id",
+            Args { id: note.id }
+        )
+        .expect("Database error");
+        note.position = 0;
+    }
 
     // Return updated note
     Response::with_json(Into::<api::Note>::into(note))
@@ -348,7 +371,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
                 Note,
                 ctx.database,
                 format!(
-                    "SELECT {} FROM notes WHERE {} = 1 AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE {} = 1 AND body LIKE :search_query ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns(),
                     filter
                 ),
@@ -382,7 +405,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
                 Note,
                 ctx.database,
                 format!(
-                    "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND body LIKE :search_query ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                    "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND body LIKE :search_query ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
                     Note::columns(),
                     filter
                 ),
@@ -457,6 +480,43 @@ fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Option<Note
             .map(|r| r.expect("Database error"))
         }
     }
+}
+
+pub(crate) fn notes_reorder(req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    let user = match &ctx.auth_user {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
+
+    // Parse body
+    let body = match serde_urlencoded::from_bytes::<api::NoteReorderBody>(
+        req.body.as_deref().unwrap_or(&[]),
+    ) {
+        Ok(body) => body,
+        Err(_) => return Response::with_status(Status::BadRequest),
+    };
+
+    // Assign positions in order
+    for (position, id_str) in body.ids.split(',').enumerate() {
+        let id_str = id_str.trim();
+        let note_id = match id_str.parse::<Uuid>() {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+        execute_args!(
+            ctx.database,
+            "UPDATE notes SET position = :position WHERE id = :note_id AND user_id = :user_id",
+            Args {
+                position: position as i64,
+                note_id: note_id,
+                user_id: user.id,
+            }
+        )
+        .expect("Database error");
+    }
+
+    Response::with_status(Status::NoContent)
 }
 
 // MARK: Tests
@@ -1066,5 +1126,114 @@ mod test {
         assert_eq!(response.data.len(), 1);
         assert!(response.data[0].is_trashed);
         assert_eq!(response.data[0].body, "This is a trashed note");
+    }
+
+    #[test]
+    fn test_notes_reorder() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create three notes
+        let note1 = Note {
+            user_id: user.id,
+            title: Some("Note 1".to_string()),
+            body: "First note".to_string(),
+            position: 0,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note1.clone());
+        let note2 = Note {
+            user_id: user.id,
+            title: Some("Note 2".to_string()),
+            body: "Second note".to_string(),
+            position: 1,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note2.clone());
+        let note3 = Note {
+            user_id: user.id,
+            title: Some("Note 3".to_string()),
+            body: "Third note".to_string(),
+            position: 2,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note3.clone());
+
+        // Reorder notes: 3, 1, 2
+        let ids = format!("{},{},{}", note3.id, note1.id, note2.id);
+        let res = router.handle(
+            &Request::put("http://localhost/api/notes/reorder")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(format!("ids={ids}")),
+        );
+        assert_eq!(res.status, Status::NoContent);
+
+        // Fetch notes and verify order
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(notes.len(), 3);
+        assert_eq!(notes[0].id, note3.id);
+        assert_eq!(notes[1].id, note1.id);
+        assert_eq!(notes[2].id, note2.id);
+    }
+
+    #[test]
+    fn test_notes_reorder_unauthenticated() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        let res = router.handle(&Request::put("http://localhost/api/notes/reorder").body("ids="));
+        assert_eq!(res.status, Status::Unauthorized);
+    }
+
+    #[test]
+    fn test_notes_reorder_ignores_other_users_notes() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        let (user1, token1) = create_test_user_with_session(&ctx);
+        let (user2, _token2) = create_test_user_with_session(&ctx);
+
+        let note1 = Note {
+            user_id: user1.id,
+            body: "User 1 note".to_string(),
+            position: 0,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note1.clone());
+        let note2 = Note {
+            user_id: user2.id,
+            body: "User 2 note".to_string(),
+            position: 0,
+            ..Default::default()
+        };
+        ctx.database.insert_note(note2.clone());
+
+        // User 1 tries to include user 2's note in reorder — should be silently ignored
+        let ids = format!("{},{}", note2.id, note1.id);
+        let res = router.handle(
+            &Request::put("http://localhost/api/notes/reorder")
+                .header("Authorization", format!("Bearer {token1}"))
+                .body(format!("ids={ids}")),
+        );
+        assert_eq!(res.status, Status::NoContent);
+
+        // User 1's note position should have changed (position 1 since note2.id is first but ignored)
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes")
+                .header("Authorization", format!("Bearer {token1}")),
+        );
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+            .unwrap()
+            .data;
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].id, note1.id);
     }
 }
