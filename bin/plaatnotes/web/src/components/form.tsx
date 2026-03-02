@@ -29,16 +29,18 @@ const BTN_DANGER_CLASS =
 interface FormFieldProps {
     id: string;
     label: string;
+    error?: string | null | false;
     children: ComponentChildren;
 }
 
-export function FormField({ id, label, children }: FormFieldProps) {
+export function FormField({ id, label, error, children }: FormFieldProps) {
     return (
         <div class="flex flex-col gap-1">
             <label for={id} class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {label}
             </label>
             {children}
+            {error && <p class="text-xs text-red-500 dark:text-red-400">{error}</p>}
         </div>
     );
 }

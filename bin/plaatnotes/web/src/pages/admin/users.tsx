@@ -5,11 +5,11 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
-import { type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
+import { type Report, type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
 import { Card } from '../../components/card.tsx';
 import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
-import { Button, FormField, FormInput, FormSelect, SmallIconButton } from '../../components/form.tsx';
+import { Button, FormField, FormInput, FormMessage, FormSelect, SmallIconButton } from '../../components/form.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
 import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/users.service.ts';
@@ -38,6 +38,7 @@ export function AdminUsers() {
     const [form, setForm] = useState<UserFormState>(emptyForm());
     const [submitting, setSubmitting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
+    const [report, setReport] = useState<Report | null>(null);
 
     useEffect(() => {
         document.title = `PlaatNotes - ${t('admin.users.heading')}`;
@@ -45,31 +46,37 @@ export function AdminUsers() {
 
     function openCreate() {
         setForm(emptyForm());
+        setReport(null);
         setDialog({ kind: 'create' });
     }
 
     function openEdit(user: User) {
         setForm(formFromUser(user));
+        setReport(null);
         setDialog({ kind: 'edit', user });
     }
 
     function closeDialog() {
         setDialog(null);
+        setReport(null);
         setSubmitting(false);
     }
 
     async function handleSubmit(e: SubmitEvent) {
         e.preventDefault();
         setSubmitting(true);
+        setReport(null);
         if (dialog!.kind === 'create') {
-            const created = await createUser(form);
+            const { data: created, report: r } = await createUser(form);
             if (created) {
                 setUsers((us) => [...us, created]);
                 closeDialog();
+            } else {
+                setReport(r);
             }
         } else {
             const target = (dialog as { kind: 'edit'; user: User }).user;
-            const updated = await updateUser(target.id, {
+            const { data: updated, report: r } = await updateUser(target.id, {
                 firstName: form.firstName,
                 lastName: form.lastName,
                 email: form.email,
@@ -81,6 +88,8 @@ export function AdminUsers() {
             if (updated) {
                 setUsers((us) => us.map((u) => (u.id === updated.id ? updated : u)));
                 closeDialog();
+            } else {
+                setReport(r);
             }
         }
         setSubmitting(false);
@@ -209,7 +218,11 @@ export function AdminUsers() {
                 >
                     <form onSubmit={handleSubmit} class="flex flex-col gap-4">
                         <div class="grid grid-cols-2 gap-4">
-                            <FormField id="firstName" label={t('admin.users.first_name')}>
+                            <FormField
+                                id="firstName"
+                                label={t('admin.users.first_name')}
+                                error={report?.['first_name']?.[0]}
+                            >
                                 <FormInput
                                     id="firstName"
                                     type="text"
@@ -220,7 +233,11 @@ export function AdminUsers() {
                                     }
                                 />
                             </FormField>
-                            <FormField id="lastName" label={t('admin.users.last_name')}>
+                            <FormField
+                                id="lastName"
+                                label={t('admin.users.last_name')}
+                                error={report?.['last_name']?.[0]}
+                            >
                                 <FormInput
                                     id="lastName"
                                     type="text"
@@ -233,7 +250,7 @@ export function AdminUsers() {
                             </FormField>
                         </div>
 
-                        <FormField id="email" label={t('admin.users.email')}>
+                        <FormField id="email" label={t('admin.users.email')} error={report?.['email']?.[0]}>
                             <FormInput
                                 id="email"
                                 type="email"
@@ -243,7 +260,7 @@ export function AdminUsers() {
                             />
                         </FormField>
 
-                        <FormField id="password" label={t('admin.users.password')}>
+                        <FormField id="password" label={t('admin.users.password')} error={report?.['password']?.[0]}>
                             <FormInput
                                 id="password"
                                 type="password"
@@ -254,7 +271,7 @@ export function AdminUsers() {
                             />
                         </FormField>
 
-                        <FormField id="role" label={t('admin.users.role')}>
+                        <FormField id="role" label={t('admin.users.role')} error={report?.['role']?.[0]}>
                             <FormSelect
                                 id="role"
                                 value={form.role}
@@ -267,7 +284,8 @@ export function AdminUsers() {
                             </FormSelect>
                         </FormField>
 
-                        <div class="flex justify-end pt-1">
+                        <div class="flex items-center justify-between pt-1">
+                            <FormMessage type="error" message={report && t('form.errors_occurred')} />
                             <Button type="submit" disabled={submitting}>
                                 <span class="flex items-center gap-1.5">
                                     {isCreate ? (

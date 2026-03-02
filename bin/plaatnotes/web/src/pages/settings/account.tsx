@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
-import { type UserTheme } from '../../../src-gen/api.ts';
+import { type Report, type UserTheme } from '../../../src-gen/api.ts';
 import { Button, FormField, FormInput, FormMessage, FormSelect } from '../../components/form.tsx';
 import { Card } from '../../components/card.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
@@ -24,13 +24,14 @@ export function SettingsAccount() {
     const [profileLoading, setProfileLoading] = useState(false);
     const [profileSaved, setProfileSaved] = useState(false);
     const [profileError, setProfileError] = useState(false);
+    const [profileReport, setProfileReport] = useState<Report | null>(null);
 
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [passwordChanged, setPasswordChanged] = useState(false);
-    const [passwordError, setPasswordError] = useState<string | null>(null);
+    const [passwordReport, setPasswordReport] = useState<Report | null>(null);
 
     useEffect(() => {
         document.title = `PlaatNotes - ${t('page.settings')}`;
@@ -40,27 +41,32 @@ export function SettingsAccount() {
         e.preventDefault();
         setProfileSaved(false);
         setProfileError(false);
+        setProfileReport(null);
         setProfileLoading(true);
-        const updated = await updateUser(user.id, { firstName, lastName, email, theme, language, role: user.role });
+        const { data: updated, report } = await updateUser(user.id, {
+            firstName,
+            lastName,
+            email,
+            theme,
+            language,
+            role: user.role,
+        });
         setProfileLoading(false);
         if (updated) {
             $authUser.value = updated;
             setProfileSaved(true);
         } else {
             setProfileError(true);
+            setProfileReport(report);
         }
     }
 
     async function handlePasswordSubmit(e: SubmitEvent) {
         e.preventDefault();
         setPasswordChanged(false);
-        setPasswordError(null);
-        if (newPassword !== confirmPassword) {
-            setPasswordError(t('settings.password_mismatch'));
-            return;
-        }
+        setPasswordReport(null);
         setPasswordLoading(true);
-        const ok = await changePassword(user.id, oldPassword, newPassword);
+        const { ok, report } = await changePassword(user.id, oldPassword, newPassword);
         setPasswordLoading(false);
         if (ok) {
             setPasswordChanged(true);
@@ -68,7 +74,7 @@ export function SettingsAccount() {
             setNewPassword('');
             setConfirmPassword('');
         } else {
-            setPasswordError(t('settings.password_error'));
+            setPasswordReport(report);
         }
     }
 
@@ -85,7 +91,11 @@ export function SettingsAccount() {
                         </h2>
                         <form onSubmit={handleProfileSubmit} class="flex flex-col gap-4">
                             <div class="grid grid-cols-2 gap-4">
-                                <FormField id="firstName" label={t('settings.first_name')}>
+                                <FormField
+                                    id="firstName"
+                                    label={t('settings.first_name')}
+                                    error={profileReport?.['first_name']?.[0]}
+                                >
                                     <FormInput
                                         id="firstName"
                                         type="text"
@@ -94,7 +104,11 @@ export function SettingsAccount() {
                                         onInput={(e) => setFirstName((e.target as HTMLInputElement).value)}
                                     />
                                 </FormField>
-                                <FormField id="lastName" label={t('settings.last_name')}>
+                                <FormField
+                                    id="lastName"
+                                    label={t('settings.last_name')}
+                                    error={profileReport?.['last_name']?.[0]}
+                                >
                                     <FormInput
                                         id="lastName"
                                         type="text"
@@ -105,7 +119,7 @@ export function SettingsAccount() {
                                 </FormField>
                             </div>
 
-                            <FormField id="email" label={t('settings.email')}>
+                            <FormField id="email" label={t('settings.email')} error={profileReport?.['email']?.[0]}>
                                 <FormInput
                                     id="email"
                                     type="email"
@@ -142,7 +156,7 @@ export function SettingsAccount() {
                             <div class="flex items-center justify-between pt-1">
                                 <div>
                                     <FormMessage type="success" message={profileSaved && t('settings.saved')} />
-                                    <FormMessage type="error" message={profileError && t('settings.save_error')} />
+                                    <FormMessage type="error" message={profileError && t('form.errors_occurred')} />
                                 </div>
                                 <Button type="submit" disabled={profileLoading}>
                                     <span class="flex items-center gap-1.5">
@@ -162,7 +176,11 @@ export function SettingsAccount() {
                             {t('settings.password_heading')}
                         </h2>
                         <form onSubmit={handlePasswordSubmit} class="flex flex-col gap-4">
-                            <FormField id="oldPassword" label={t('settings.current_password')}>
+                            <FormField
+                                id="oldPassword"
+                                label={t('settings.current_password')}
+                                error={passwordReport?.['old_password']?.[0]}
+                            >
                                 <FormInput
                                     id="oldPassword"
                                     type="password"
@@ -172,7 +190,11 @@ export function SettingsAccount() {
                                     onInput={(e) => setOldPassword((e.target as HTMLInputElement).value)}
                                 />
                             </FormField>
-                            <FormField id="newPassword" label={t('settings.new_password')}>
+                            <FormField
+                                id="newPassword"
+                                label={t('settings.new_password')}
+                                error={passwordReport?.['new_password']?.[0]}
+                            >
                                 <FormInput
                                     id="newPassword"
                                     type="password"
@@ -199,7 +221,7 @@ export function SettingsAccount() {
                                         type="success"
                                         message={passwordChanged && t('settings.password_changed')}
                                     />
-                                    <FormMessage type="error" message={passwordError} />
+                                    <FormMessage type="error" message={passwordReport && t('form.errors_occurred')} />
                                 </div>
                                 <Button type="submit" disabled={passwordLoading}>
                                     <span class="flex items-center gap-1.5">

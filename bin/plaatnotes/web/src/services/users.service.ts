@@ -6,6 +6,7 @@
 
 import {
     type Pagination,
+    type Report,
     type User,
     type UserCreateBody,
     type UserIndexResponse,
@@ -20,7 +21,7 @@ export async function listUsers(page = 1): Promise<{ data: User[]; pagination: P
     return result;
 }
 
-export async function createUser(params: UserCreateBody): Promise<User | null> {
+export async function createUser(params: UserCreateBody): Promise<{ data: User | null; report: Report | null }> {
     const form = new URLSearchParams({
         firstName: params.firstName,
         lastName: params.lastName,
@@ -29,8 +30,8 @@ export async function createUser(params: UserCreateBody): Promise<User | null> {
         role: params.role,
     });
     const res = await authFetch(`${API_URL}/users`, { method: 'POST', body: form });
-    if (!res.ok) return null;
-    return res.json();
+    if (!res.ok) return { data: null, report: await res.json().catch(() => null) };
+    return { data: await res.json(), report: null };
 }
 
 export async function deleteUser(id: string): Promise<boolean> {
@@ -38,7 +39,10 @@ export async function deleteUser(id: string): Promise<boolean> {
     return res.ok;
 }
 
-export async function updateUser(id: string, params: UserUpdateBody): Promise<User | null> {
+export async function updateUser(
+    id: string,
+    params: UserUpdateBody,
+): Promise<{ data: User | null; report: Report | null }> {
     const form = new URLSearchParams({
         firstName: params.firstName,
         lastName: params.lastName,
@@ -49,12 +53,17 @@ export async function updateUser(id: string, params: UserUpdateBody): Promise<Us
     });
     if (params.password) form.set('password', params.password);
     const res = await authFetch(`${API_URL}/users/${id}`, { method: 'PUT', body: form });
-    if (!res.ok) return null;
-    return res.json();
+    if (!res.ok) return { data: null, report: await res.json().catch(() => null) };
+    return { data: await res.json(), report: null };
 }
 
-export async function changePassword(id: string, oldPassword: string, newPassword: string): Promise<boolean> {
+export async function changePassword(
+    id: string,
+    oldPassword: string,
+    newPassword: string,
+): Promise<{ ok: boolean; report: Report | null }> {
     const form = new URLSearchParams({ oldPassword, newPassword });
     const res = await authFetch(`${API_URL}/users/${id}/change-password`, { method: 'POST', body: form });
-    return res.ok;
+    if (!res.ok) return { ok: false, report: await res.json().catch(() => null) };
+    return { ok: true, report: null };
 }

@@ -1,6 +1,5 @@
 {
     "app.loading": "Laden…",
-
     "page.settings": "Instellingen",
     "page.sessions": "Sessies",
     "page.login": "Aanmelden",
@@ -9,7 +8,6 @@
     "page.create": "Notitie maken",
     "page.note_loading": "Laden…",
     "page.notfound": "Niet gevonden",
-
     "login.tagline": "Meld je aan bij je account",
     "login.error": "Ongeldig e-mailadres of wachtwoord.",
     "login.email": "E-mail",
@@ -18,28 +16,23 @@
     "login.submit": "Aanmelden",
     "login.submitting": "Aanmelden…",
     "login.made_by": "Gemaakt door",
-
     "nav.admin": "Beheer",
     "nav.settings": "Instellingen",
     "nav.logout": "Uitloggen",
     "nav.search": "Notities zoeken…",
-
     "sidebar.notes": "Notities",
     "sidebar.archive": "Archief",
     "sidebar.trash": "Prullenbak",
-
     "home.loading": "Notities laden…",
     "home.empty": "Nog geen notities. Maak er een!",
     "home.empty_search": "Geen notities gevonden voor je zoekopdracht.",
     "home.pinned": "Vastgezet",
     "home.other": "Overig",
     "home.create": "Notitie maken",
-
     "archive.heading": "Archief",
     "archive.loading": "Laden…",
     "archive.empty": "Geen gearchiveerde notities.",
     "archive.empty_search": "Geen gearchiveerde notities gevonden voor je zoekopdracht.",
-
     "trash.heading": "Prullenbak",
     "trash.loading": "Laden…",
     "trash.empty_btn": "Prullenbak leegmaken",
@@ -48,7 +41,6 @@
     "trash.empty_search": "Geen notities in prullenbak gevonden voor je zoekopdracht.",
     "trash.confirm_delete": "Notitie voor altijd verwijderen? Dit kan niet ongedaan worden gemaakt.",
     "trash.confirm_empty": "Prullenbak leegmaken? Alle notities in de prullenbak worden definitief verwijderd.",
-
     "note.pin": "Vastzetten",
     "note.unpin": "Losmaken",
     "note.archive": "Archiveren",
@@ -56,14 +48,12 @@
     "note.trash": "Naar prullenbak",
     "note.restore": "Herstellen",
     "note.delete_forever": "Definitief verwijderen",
-
     "notes_create.heading": "Nieuwe notitie",
     "notes_create.back": "Terug",
     "notes_create.title_placeholder": "Titel",
     "notes_create.body_placeholder": "Een notitie maken…",
     "notes_create.cancel": "Annuleren",
     "notes_create.save": "Opslaan",
-
     "editor.bold": "Vet",
     "editor.italic": "Cursief",
     "editor.underline": "Onderstrepen",
@@ -82,7 +72,6 @@
     "editor.code_block": "Codeblok",
     "editor.plain_mode": "Platte tekst",
     "editor.rich_mode": "Rijke tekst",
-
     "notes_show.heading": "Notitie bewerken",
     "notes_show.back": "Terug",
     "notes_show.title_placeholder": "Titel",
@@ -90,7 +79,6 @@
     "notes_show.last_updated": "Laatst bijgewerkt {0}",
     "notes_show.saving": "Opslaan…",
     "notes_show.saved": "Opgeslagen!",
-
     "settings.account": "Account",
     "settings.sessions": "Sessies",
     "settings.profile_heading": "Profiel",
@@ -115,7 +103,6 @@
     "settings.change_password": "Wachtwoord wijzigen",
     "settings.password_changed": "Wachtwoord gewijzigd!",
     "settings.password_error": "Wachtwoord wijzigen mislukt.",
-
     "settings.imports": "Imports",
     "settings.imports.heading": "Imports",
     "settings.imports.google_keep.heading": "Google Keep",
@@ -125,7 +112,6 @@
     "settings.imports.google_keep.importing": "Importeren…",
     "settings.imports.google_keep.success": "{0} notities geïmporteerd.",
     "settings.imports.google_keep.error": "Importeren mislukt. Zorg dat je een geldig Google Keep Takeout zip-bestand hebt geselecteerd.",
-
     "settings.sessions.heading": "Actieve sessies",
     "settings.sessions.loading": "Laden…",
     "settings.sessions.empty": "Geen actieve sessies.",
@@ -134,7 +120,6 @@
     "settings.sessions.confirm_revoke": "Sessie intrekken? Dat apparaat wordt afgemeld.",
     "settings.sessions.created": "Aangemaakt {0}",
     "settings.sessions.expires": "Verloopt {0}",
-
     "admin.users.sidebar": "Gebruikers",
     "admin.users.heading": "Gebruikers",
     "admin.users.create_user": "Gebruiker aanmaken",
@@ -157,11 +142,9 @@
     "admin.users.save": "Wijzigingen opslaan",
     "admin.users.create": "Aanmaken",
     "admin.users.confirm_delete": "Deze gebruiker verwijderen? Dit kan niet ongedaan worden gemaakt.",
-
     "notfound.message": "Geen idee hoe je hier bent gekomen 🤷‍♂️",
     "notfound.go_home": "Naar beginpagina",
-
     "dialog.cancel": "Annuleren",
-
-    "admin.users.delete_user": "Gebruiker verwijderen"
+    "admin.users.delete_user": "Gebruiker verwijderen",
+    "form.errors_occurred": "Er zijn fouten opgetreden"
 }

@@ -7,7 +7,7 @@
 // MARK: Name
 pub(crate) fn name_validator(name: &str) -> validate::Result {
     if name.to_lowercase() == "bastiaan" {
-        Err(validate::Error::new("name can't be Bastiaan"))
+        Err(validate::Error::new("Name can't be Bastiaan"))
     } else {
         Ok(())
     }

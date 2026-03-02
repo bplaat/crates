@@ -91,7 +91,7 @@ pub(crate) mod validators {
             )
             .expect("Database error");
         if count != 0 {
-            return Err(validate::Error::new("not unique"));
+            return Err(validate::Error::new("Email not unique"));
         }
         Ok(())
     }
@@ -110,7 +110,7 @@ pub(crate) mod validators {
                 )
                 .expect("Database error");
             if count != 0 {
-                return Err(validate::Error::new("not unique"));
+                return Err(validate::Error::new("Email not unique"));
             }
             return Ok(());
         }

@@ -207,33 +207,33 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             match &rule.r#type {
                 RuleType::Ascii => test_condition(
                     quote! { !value.is_ascii() },
-                    quote! { "must only contain ASCII characters".to_string() },
+                    quote! { "Must only contain ASCII characters".to_string() },
                 ),
                 #[cfg(feature = "email")]
                 RuleType::Email => test_condition(
                     quote! { !validate::is_valid_email(value) },
-                    quote! { "must be a valid email address".to_string() },
+                    quote! { "Must be a valid email address".to_string() },
                 ),
                 #[cfg(feature = "url")]
                 RuleType::Url => test_condition(
                     quote! { !validate::is_valid_url(value) },
-                    quote! { "must be a valid url".to_string() },
+                    quote! { "Must be a valid url".to_string() },
                 ),
                 RuleType::LengthMin(min) => test_condition(
                     quote! { value.len() < #min as usize },
-                    quote! { format!("must be at least {} characters long", #min) },
+                    quote! { format!("Must be at least {} characters long", #min) },
                 ),
                 RuleType::LengthMax(max) => test_condition(
                     quote! { value.len() > #max as usize },
-                    quote! { format!("must be at most {} characters long", #max) },
+                    quote! { format!("Must be at most {} characters long", #max) },
                 ),
                 RuleType::RangeMin(min) => test_condition(
                     quote! { *value < #min },
-                    quote! { format!("must be at least {}", #min) },
+                    quote! { format!("Must be at least {}", #min) },
                 ),
                 RuleType::RangeMax(max) => test_condition(
                     quote! { *value > #max },
-                    quote! { format!("must be at most {}", #max) },
+                    quote! { format!("Must be at most {}", #max) },
                 ),
                 RuleType::Custom(custom) => {
                     if context.is_some() {
