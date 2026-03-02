@@ -6,7 +6,8 @@
 
 import { route } from 'preact-router';
 import { useEffect, useState } from 'preact/hooks';
-import { IconButton } from '../../components/form.tsx';
+import { Button, IconButton, SecondaryButton } from '../../components/form.tsx';
+import { Card } from '../../components/card.tsx';
 import { Navbar } from '../../components/navbar.tsx';
 import { RichEditor } from '../../components/rich-editor.tsx';
 import { createNote } from '../../services/notes.service.ts';
@@ -35,15 +36,15 @@ export function NotesCreate() {
             <Navbar />
             <main class="max-w-2xl mx-auto px-4 py-8">
                 <div class="flex items-center gap-3 mb-6">
-                    <button
+                    <IconButton
                         onClick={() => route('/')}
-                        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400 transition-colors cursor-pointer"
+                        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400"
                         title={t('notes_create.back')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
                         </svg>
-                    </button>
+                    </IconButton>
                     <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('notes_create.heading')}</h1>
                 </div>
 
@@ -74,22 +75,15 @@ export function NotesCreate() {
                             </svg>
                         </IconButton>
                         <div class="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => route('/')}
-                                class="px-4 py-1.5 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-600 transition-colors cursor-pointer"
-                            >
+                            <SecondaryButton type="button" onClick={() => route('/')}>
                                 {t('notes_create.cancel')}
-                            </button>
-                            <button
-                                type="submit"
-                                class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm bg-yellow-400 hover:bg-yellow-500 text-white font-medium transition-colors cursor-pointer"
-                            >
+                            </SecondaryButton>
+                            <Button type="submit" class="inline-flex items-center gap-1.5 px-4 py-1.5">
                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                                 </svg>
                                 {t('notes_create.save')}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </form>

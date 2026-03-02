@@ -11,6 +11,7 @@ import { $authUser, authFetch } from './auth.service.ts';
 export async function listSessions(): Promise<Session[]> {
     const userId = $authUser.value!.id;
     const res = await authFetch(`${API_URL}/users/${userId}/sessions/active`);
+    if (!res.ok) return [];
     const { data }: SessionIndexResponse = await res.json();
     return data;
 }

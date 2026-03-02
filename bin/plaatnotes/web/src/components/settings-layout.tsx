@@ -4,33 +4,38 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { type ComponentChildren } from 'preact';
+import Match from 'preact-router/match';
 import { route } from 'preact-router';
 import { Navbar } from './navbar.tsx';
 import { t } from '../services/i18n.service.ts';
 
-function SettingsSidebarLink({ href, label, children }: { href: string; label: string; children: any }) {
-    const active = window.location.pathname === href;
+function SettingsSidebarLink({ href, label, children }: { href: string; label: string; children: ComponentChildren }) {
     return (
-        <a
-            href={href}
-            onClick={(e: MouseEvent) => {
-                e.preventDefault();
-                route(href);
-            }}
-            title={label}
-            class={`flex items-center gap-3 px-3 py-2.5 rounded-full transition-colors no-underline ${
-                active
-                    ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-zinc-700'
-            }`}
-        >
-            {children}
-            <span class="hidden sm:block text-sm font-medium">{label}</span>
-        </a>
+        <Match path={href}>
+            {({ matches }: { matches: boolean }) => (
+                <a
+                    href={href}
+                    onClick={(e: MouseEvent) => {
+                        e.preventDefault();
+                        route(href);
+                    }}
+                    title={label}
+                    class={`flex items-center gap-3 px-3 py-2.5 rounded-full transition-colors no-underline ${
+                        matches
+                            ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-zinc-700'
+                    }`}
+                >
+                    {children}
+                    <span class="hidden sm:block text-sm font-medium">{label}</span>
+                </a>
+            )}
+        </Match>
     );
 }
 
-export function SettingsLayout({ children }: { children: any }) {
+export function SettingsLayout({ children }: { children: ComponentChildren }) {
     return (
         <div class="h-screen overflow-hidden bg-gray-50 dark:bg-zinc-900 flex flex-col">
             <Navbar />

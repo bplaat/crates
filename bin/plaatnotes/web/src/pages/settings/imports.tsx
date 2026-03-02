@@ -5,14 +5,13 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
-import { Button, FormField, FormInput } from '../../components/form.tsx';
+import { Button, FormField, FormInput, FormMessage } from '../../components/form.tsx';
+import { Card } from '../../components/card.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { API_URL } from '../../consts.ts';
 import { authFetch } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
 import { type ImportGoogleKeepResponse } from '../../../src-gen/api.ts';
-
-const CARD_CLASS = 'bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm p-6';
 
 export function SettingsImports() {
     useEffect(() => {
@@ -63,7 +62,7 @@ export function SettingsImports() {
                     {t('settings.imports.heading')}
                 </h1>
 
-                <div class={CARD_CLASS}>
+                <Card>
                     <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-1">
                         {t('settings.imports.google_keep.heading')}
                     </h2>
@@ -82,19 +81,14 @@ export function SettingsImports() {
                         </FormField>
                         <div class="flex items-center justify-between pt-1">
                             <div>
-                                {importedCount !== null && (
-                                    <p class="text-sm text-green-600 dark:text-green-400">
-                                        {t('settings.imports.google_keep.success').replace(
-                                            '{0}',
-                                            String(importedCount),
-                                        )}
-                                    </p>
-                                )}
-                                {error && (
-                                    <p class="text-sm text-red-500 dark:text-red-400">
-                                        {t('settings.imports.google_keep.error')}
-                                    </p>
-                                )}
+                                <FormMessage
+                                    type="success"
+                                    message={
+                                        importedCount !== null &&
+                                        t('settings.imports.google_keep.success').replace('{0}', String(importedCount))
+                                    }
+                                />
+                                <FormMessage type="error" message={error && t('settings.imports.google_keep.error')} />
                             </div>
                             <Button type="submit" disabled={loading || !file}>
                                 <span class="flex items-center gap-1.5">
@@ -108,7 +102,7 @@ export function SettingsImports() {
                             </Button>
                         </div>
                     </form>
-                </div>
+                </Card>
             </div>
         </SettingsLayout>
     );

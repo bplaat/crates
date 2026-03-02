@@ -6,6 +6,7 @@
 
 import { route } from 'preact-router';
 import { useEffect } from 'preact/hooks';
+import { Button } from '../components/form.tsx';
 import { t } from '../services/i18n.service.ts';
 
 export function NotFound() {
@@ -20,12 +21,9 @@ export function NotFound() {
             </svg>
             <h1 class="text-4xl font-light text-gray-500 dark:text-gray-400">404</h1>
             <p class="text-gray-400 dark:text-gray-500">{t('notfound.message')}</p>
-            <button
-                onClick={() => route('/')}
-                class="mt-2 px-5 py-2 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 dark:text-yellow-400 text-white rounded-lg transition-colors cursor-pointer"
-            >
+            <Button class="mt-2" onClick={() => route('/')}>
                 {t('notfound.go_home')}
-            </button>
+            </Button>
         </div>
     );
 }

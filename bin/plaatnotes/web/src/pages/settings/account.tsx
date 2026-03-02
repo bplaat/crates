@@ -6,13 +6,12 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { type UserTheme } from '../../../src-gen/api.ts';
-import { Button, FormField, FormInput, FormSelect } from '../../components/form.tsx';
+import { Button, FormField, FormInput, FormMessage, FormSelect } from '../../components/form.tsx';
+import { Card } from '../../components/card.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $authUser } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
 import { changePassword, updateUser } from '../../services/users.service.ts';
-
-const CARD_CLASS = 'bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm p-6';
 
 export function SettingsAccount() {
     const user = $authUser.value!;
@@ -80,7 +79,7 @@ export function SettingsAccount() {
 
                 <div class="flex flex-col gap-6">
                     {/* Profile form */}
-                    <div class={CARD_CLASS}>
+                    <Card>
                         <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-5">
                             {t('settings.profile_heading')}
                         </h2>
@@ -142,12 +141,8 @@ export function SettingsAccount() {
 
                             <div class="flex items-center justify-between pt-1">
                                 <div>
-                                    {profileSaved && (
-                                        <p class="text-sm text-green-600 dark:text-green-400">{t('settings.saved')}</p>
-                                    )}
-                                    {profileError && (
-                                        <p class="text-sm text-red-500 dark:text-red-400">{t('settings.save_error')}</p>
-                                    )}
+                                    <FormMessage type="success" message={profileSaved && t('settings.saved')} />
+                                    <FormMessage type="error" message={profileError && t('settings.save_error')} />
                                 </div>
                                 <Button type="submit" disabled={profileLoading}>
                                     <span class="flex items-center gap-1.5">
@@ -159,10 +154,10 @@ export function SettingsAccount() {
                                 </Button>
                             </div>
                         </form>
-                    </div>
+                    </Card>
 
                     {/* Change password form */}
-                    <div class={CARD_CLASS}>
+                    <Card>
                         <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-5">
                             {t('settings.password_heading')}
                         </h2>
@@ -200,14 +195,11 @@ export function SettingsAccount() {
 
                             <div class="flex items-center justify-between pt-1">
                                 <div>
-                                    {passwordChanged && (
-                                        <p class="text-sm text-green-600 dark:text-green-400">
-                                            {t('settings.password_changed')}
-                                        </p>
-                                    )}
-                                    {passwordError && (
-                                        <p class="text-sm text-red-500 dark:text-red-400">{passwordError}</p>
-                                    )}
+                                    <FormMessage
+                                        type="success"
+                                        message={passwordChanged && t('settings.password_changed')}
+                                    />
+                                    <FormMessage type="error" message={passwordError} />
                                 </div>
                                 <Button type="submit" disabled={passwordLoading}>
                                     <span class="flex items-center gap-1.5">
@@ -219,7 +211,7 @@ export function SettingsAccount() {
                                 </Button>
                             </div>
                         </form>
-                    </div>
+                    </Card>
                 </div>
             </div>
         </SettingsLayout>

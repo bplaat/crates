@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { type ComponentChildren } from 'preact';
 import Match from 'preact-router/match';
 import { route } from 'preact-router';
 import { t } from '../services/i18n.service.ts';
 import { Navbar } from './navbar.tsx';
 
-function SidebarLink({ href, label, children }: { href: string; exact?: boolean; label: string; children: any }) {
+function SidebarLink({ href, label, children }: { href: string; label: string; children: ComponentChildren }) {
     return (
         <Match path={href}>
             {({ matches }: { matches: boolean }) => (
@@ -41,7 +42,7 @@ export function Layout({ children }: { children: any }) {
             <div class="flex flex-1 overflow-hidden">
                 <aside class="w-14 sm:w-56 shrink-0 flex flex-col bg-white dark:bg-zinc-800 border-r border-gray-100 dark:border-zinc-700 pt-2 overflow-y-auto">
                     <nav class="flex flex-col gap-0.5 px-2">
-                        <SidebarLink href="/" exact label={t('sidebar.notes')}>
+                        <SidebarLink href="/" label={t('sidebar.notes')}>
                             <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
                             </svg>

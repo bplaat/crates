@@ -8,6 +8,7 @@ import { route } from 'preact-router';
 import { useEffect, useState } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { Layout } from '../components/layout.tsx';
+import { EmptyState } from '../components/empty-state.tsx';
 import { NoteCard } from '../components/note-card.tsx';
 import { listNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
@@ -16,12 +17,13 @@ export function Home() {
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // @ts-ignore
-    useEffect(async () => {
-        document.title = 'PlaatNotes';
-        const data = await listNotes();
-        setNotes(data);
-        setLoading(false);
+    useEffect(() => {
+        void (async () => {
+            document.title = 'PlaatNotes';
+            const data = await listNotes();
+            setNotes(data);
+            setLoading(false);
+        })();
     }, []);
 
     async function handlePin(note: Note) {
@@ -48,12 +50,14 @@ export function Home() {
                 {loading && <p class="text-center text-gray-400 mt-16">{t('home.loading')}</p>}
 
                 {!loading && notes.length === 0 && (
-                    <div class="flex flex-col items-center justify-center mt-24 gap-3 text-gray-400">
-                        <svg class="w-16 h-16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
-                        </svg>
-                        <p class="text-lg">{t('home.empty')}</p>
-                    </div>
+                    <EmptyState
+                        icon={
+                            <svg class="w-16 h-16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
+                            </svg>
+                        }
+                        message={t('home.empty')}
+                    />
                 )}
 
                 {pinned.length > 0 && (

@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { type Session } from '../../../src-gen/api.ts';
+import { Card } from '../../components/card.tsx';
 import { ConfirmDialog } from '../../components/dialog.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $currentSessionId } from '../../services/auth.service.ts';
@@ -36,12 +37,13 @@ export function SettingsSessions() {
     const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
     const currentSessionId = $currentSessionId.value;
 
-    // @ts-ignore
-    useEffect(async () => {
-        document.title = `PlaatNotes - ${t('page.sessions')}`;
-        const data = await listSessions();
-        setSessions(data);
-        setLoading(false);
+    useEffect(() => {
+        void (async () => {
+            document.title = `PlaatNotes - ${t('page.sessions')}`;
+            const data = await listSessions();
+            setSessions(data);
+            setLoading(false);
+        })();
     }, []);
 
     async function handleRevoke(id: string) {
@@ -78,10 +80,7 @@ export function SettingsSessions() {
                             {sessions.map((session) => {
                                 const isCurrent = session.id === currentSessionId;
                                 return (
-                                    <div
-                                        key={session.id}
-                                        class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm px-5 py-4 flex items-start gap-4"
-                                    >
+                                    <Card key={session.id} class="px-5 py-4 flex items-start gap-4">
                                         <div class="mt-0.5 text-gray-400 dark:text-gray-500 shrink-0">
                                             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
                                                 <path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z" />
@@ -120,7 +119,7 @@ export function SettingsSessions() {
                                                 {t('settings.sessions.revoke')}
                                             </button>
                                         )}
-                                    </div>
+                                    </Card>
                                 );
                             })}
                         </div>

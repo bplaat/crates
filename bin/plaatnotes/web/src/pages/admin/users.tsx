@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
+import { Card } from '../../components/card.tsx';
 import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
 import { Button, FormField, FormInput, FormSelect, IconButton } from '../../components/form.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
@@ -38,12 +39,13 @@ export function AdminUsers() {
     const [submitting, setSubmitting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
 
-    // @ts-ignore
-    useEffect(async () => {
-        document.title = `PlaatNotes - ${t('admin.users.heading')}`;
-        const data = await listUsers();
-        setUsers(data);
-        setLoading(false);
+    useEffect(() => {
+        void (async () => {
+            document.title = `PlaatNotes - ${t('admin.users.heading')}`;
+            const data = await listUsers();
+            setUsers(data);
+            setLoading(false);
+        })();
     }, []);
 
     function openCreate() {
@@ -117,7 +119,7 @@ export function AdminUsers() {
                     </Button>
                 </div>
 
-                <div class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
+                <Card class="overflow-hidden">
                     {loading && (
                         <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.users.loading')}</p>
                     )}
@@ -197,7 +199,7 @@ export function AdminUsers() {
                             </tbody>
                         </table>
                     )}
-                </div>
+                </Card>
             </div>
 
             {dialog && (

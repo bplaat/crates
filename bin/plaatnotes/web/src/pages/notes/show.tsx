@@ -8,6 +8,7 @@ import { route } from 'preact-router';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
 import { Navbar } from '../../components/navbar.tsx';
+import { Card } from '../../components/card.tsx';
 import { IconButton } from '../../components/form.tsx';
 import { RichEditor } from '../../components/rich-editor.tsx';
 import { getNote, updateNote } from '../../services/notes.service.ts';
@@ -20,12 +21,14 @@ export function NotesShow({ note_id }: { note_id?: string }) {
     const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingSave = useRef<Note | null>(null);
 
-    // @ts-ignore
-    useEffect(async () => {
-        document.title = `PlaatNotes - ${t('page.note_loading')}`;
-        const loaded = await getNote(note_id!);
-        document.title = `PlaatNotes - ${loaded.title || loaded.body.slice(0, 40)}`;
-        setNote(loaded);
+    useEffect(() => {
+        void (async () => {
+            document.title = `PlaatNotes - ${t('page.note_loading')}`;
+            const loaded = await getNote(note_id!);
+            if (!loaded) return;
+            document.title = `PlaatNotes - ${loaded.title || loaded.body.slice(0, 40)}`;
+            setNote(loaded);
+        })();
     }, [note_id]);
 
     // Flush pending save on unmount
@@ -141,7 +144,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </IconButton>
                 </div>
 
-                <div class="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden">
+                <Card class="flex-1 flex flex-col min-h-0 overflow-hidden">
                     <div class="px-5 pt-5 pb-2">
                         <input
                             class="text-xl font-medium text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 bg-transparent outline-none w-full"
@@ -168,7 +171,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                             {saveStatus === 'idle' && t('notes_show.last_updated', formatDate(note.updatedAt))}
                         </p>
                     </div>
-                </div>
+                </Card>
             </main>
         </div>
     );

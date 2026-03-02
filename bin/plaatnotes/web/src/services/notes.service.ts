@@ -17,6 +17,7 @@ function cacheNotes(notes: Note[]) {
 
 export async function listNotes(): Promise<Note[]> {
     const res = await authFetch(`${API_URL}/notes`);
+    if (!res.ok) return [];
     const { data }: NoteIndexResponse = await res.json();
     cacheNotes(data);
     return data;
@@ -24,6 +25,7 @@ export async function listNotes(): Promise<Note[]> {
 
 export async function listArchivedNotes(): Promise<Note[]> {
     const res = await authFetch(`${API_URL}/notes/archived`);
+    if (!res.ok) return [];
     const { data }: NoteIndexResponse = await res.json();
     cacheNotes(data);
     return data;
@@ -31,24 +33,27 @@ export async function listArchivedNotes(): Promise<Note[]> {
 
 export async function listTrashedNotes(): Promise<Note[]> {
     const res = await authFetch(`${API_URL}/notes/trashed`);
+    if (!res.ok) return [];
     const { data }: NoteIndexResponse = await res.json();
     cacheNotes(data);
     return data;
 }
 
-export async function createNote(params: NoteCreateBody): Promise<Note> {
+export async function createNote(params: NoteCreateBody): Promise<Note | null> {
     const form = new URLSearchParams({ body: params.body });
     if (params.title) form.set('title', params.title);
     if (params.isPinned !== undefined) form.set('isPinned', String(params.isPinned));
     const res = await authFetch(`${API_URL}/notes`, { method: 'POST', body: form });
+    if (!res.ok) return null;
     const note: Note = await res.json();
     cacheNotes([note]);
     return note;
 }
 
-export async function getNote(id: string): Promise<Note> {
+export async function getNote(id: string): Promise<Note | null> {
     if ($notesCache.value.has(id)) return $notesCache.value.get(id)!;
     const res = await authFetch(`${API_URL}/notes/${id}`);
+    if (!res.ok) return null;
     const note: Note = await res.json();
     cacheNotes([note]);
     return note;
@@ -64,6 +69,7 @@ export async function updateNote(note: Note, params: Partial<NoteUpdateBody>): P
     const title = params.title !== undefined ? params.title : note.title;
     if (title) form.set('title', title);
     const res = await authFetch(`${API_URL}/notes/${note.id}`, { method: 'PUT', body: form });
+    if (!res.ok) return note;
     const saved: Note = await res.json();
     cacheNotes([saved]);
     return saved;
