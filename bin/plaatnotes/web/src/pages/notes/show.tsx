@@ -93,8 +93,8 @@ export function NotesShow({ note_id }: { note_id?: string }) {
             <main class="flex-1 flex flex-col min-h-0 max-w-2xl w-full mx-auto px-4 py-8">
                 <div class="flex items-center gap-3 mb-6">
                     <IconButton
-                        onClick={() => route('/')}
-                        class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
+                        onClick={() => route(note.isArchived ? '/archive' : note.isTrashed ? '/trash' : '/')}
+                        class="text-gray-500 dark:text-gray-400"
                         title={t('notes_show.back')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -105,7 +105,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     <div class="flex-1" />
                     <IconButton
                         onClick={handlePin}
-                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 ${note.isPinned ? 'text-yellow-500' : 'text-gray-400 dark:text-gray-500'}`}
+                        class={note.isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'}
                         title={note.isPinned ? t('note.unpin') : t('note.pin')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -114,7 +114,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </IconButton>
                     <IconButton
                         onClick={handleArchive}
-                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 ${note.isArchived ? 'text-yellow-600' : 'text-gray-400 dark:text-gray-500'}`}
+                        class={note.isArchived ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'}
                         title={note.isArchived ? t('note.unarchive') : t('note.archive')}
                     >
                         {note.isArchived ? (
@@ -129,7 +129,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
                     </IconButton>
                     <IconButton
                         onClick={handleTrash}
-                        class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 ${note.isTrashed ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}
+                        class={note.isTrashed ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}
                         title={note.isTrashed ? t('note.restore') : t('note.trash')}
                     >
                         {note.isTrashed ? (

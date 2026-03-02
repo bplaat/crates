@@ -7,7 +7,6 @@
 import { route } from 'preact-router';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, IconButton, SecondaryButton } from '../../components/form.tsx';
-import { Card } from '../../components/card.tsx';
 import { Navbar } from '../../components/navbar.tsx';
 import { RichEditor } from '../../components/rich-editor.tsx';
 import { createNote } from '../../services/notes.service.ts';
@@ -38,7 +37,7 @@ export function NotesCreate() {
                 <div class="flex items-center gap-3 mb-6">
                     <IconButton
                         onClick={() => route('/')}
-                        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400"
+                        class="text-gray-500 dark:text-gray-400"
                         title={t('notes_create.back')}
                     >
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -67,7 +66,9 @@ export function NotesCreate() {
                         <IconButton
                             type="button"
                             onClick={() => setIsPinned(!isPinned)}
-                            class={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-600 ${isPinned ? 'text-yellow-500' : 'text-gray-400 dark:text-gray-500'}`}
+                            class={
+                                isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'
+                            }
                             title={isPinned ? t('note.unpin') : t('note.pin')}
                         >
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">

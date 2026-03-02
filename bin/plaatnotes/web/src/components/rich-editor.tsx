@@ -271,7 +271,7 @@ export function RichEditor({ value, onInput, placeholder, class: className }: Ri
                     }}
                 />
             ) : (
-                <div class="relative overflow-y-auto flex-1">
+                <div class="relative overflow-y-auto overflow-x-hidden flex-1">
                     {isEmpty && (
                         <p class="absolute top-5 left-5 text-gray-400 dark:text-gray-600 text-sm pointer-events-none select-none">
                             {placeholder}
@@ -280,7 +280,7 @@ export function RichEditor({ value, onInput, placeholder, class: className }: Ri
                     <div
                         ref={editorRef}
                         contentEditable={true}
-                        class="rich-editor-content p-5 outline-none min-h-[12rem] text-gray-700 dark:text-gray-300 text-sm"
+                        class="rich-editor-content p-5 outline-none min-h-[12rem] text-gray-700 dark:text-gray-300 text-sm break-all"
                         onKeyDown={(e) => {
                             if (e.key === 'Tab') {
                                 e.preventDefault();

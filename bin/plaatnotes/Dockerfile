@@ -16,7 +16,7 @@ RUN apt-get update && \
         rustup target add x86_64-unknown-linux-musl; \
     fi
 
-COPY . .
+COPY --exclude=target --exclude=dist --exclude=node_modules . .
 
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         cargo build --release --target aarch64-unknown-linux-musl --bin plaatnotes && \

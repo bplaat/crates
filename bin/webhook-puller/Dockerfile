@@ -3,7 +3,7 @@ FROM rust:1.93.0-slim-bookworm AS builder
 
 WORKDIR /src
 
-COPY . .
+COPY --exclude=target --exclude=dist --exclude=node_modules . .
 
 RUN cargo build --release --bin webhook-puller
 

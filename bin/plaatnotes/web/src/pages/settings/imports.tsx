@@ -85,7 +85,7 @@ export function SettingsImports() {
                                     type="success"
                                     message={
                                         importedCount !== null &&
-                                        t('settings.imports.google_keep.success').replace('{0}', String(importedCount))
+                                        t('settings.imports.google_keep.success', String(importedCount))
                                     }
                                 />
                                 <FormMessage type="error" message={error && t('settings.imports.google_keep.error')} />

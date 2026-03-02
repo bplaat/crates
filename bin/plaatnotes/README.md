@@ -4,6 +4,8 @@ A simple note-taking app
 
 ## Docker image
 
+Example command to build the Docker image for PlaatNotes locally:
+
 ```sh
-docker build -t ghcr.io/bplaat/plaatnotes:0.1.0 -f bin/plaatnotes/Dockerfile .
+docker build -t ghcr.io/bplaat/plaatnotes:latest -f bin/plaatnotes/Dockerfile .
 ```

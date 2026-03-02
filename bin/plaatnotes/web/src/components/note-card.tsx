@@ -6,8 +6,15 @@
 
 import { Link } from 'preact-router';
 import { type Note } from '../../src-gen/api.ts';
-import { IconButton } from './form.tsx';
 import { t } from '../services/i18n.service.ts';
+
+// Icon button for use on colored card backgrounds — uses semi-transparent hover overlay
+const CARD_BTN_BASE =
+    'p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/15 transition-colors cursor-pointer';
+
+function NoteIconButton({ class: extraClass, ...props }: preact.JSX.IntrinsicElements['button']) {
+    return <button type="button" {...props} class={extraClass ? `${CARD_BTN_BASE} ${extraClass}` : CARD_BTN_BASE} />;
+}
 
 const NOTE_COLORS = [
     'bg-white dark:bg-zinc-800',
@@ -78,70 +85,70 @@ export function NoteCard({ note, onPin, onArchive, onUnarchive, onTrash, onResto
 
             <div class="flex items-center justify-end gap-0.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {onPin && (
-                    <IconButton
-                        class={`rounded-full hover:bg-black/10 ${note.isPinned ? 'text-yellow-500' : 'text-gray-400'}`}
+                    <NoteIconButton
+                        class={note.isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'}
                         title={note.isPinned ? t('note.unpin') : t('note.pin')}
                         onClick={(e) => act(e, () => onPin(note))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
                         </svg>
-                    </IconButton>
+                    </NoteIconButton>
                 )}
                 {onArchive && (
-                    <IconButton
-                        class="rounded-full hover:bg-black/10 text-gray-400 hover:text-gray-700"
+                    <NoteIconButton
+                        class="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200"
                         title={t('note.archive')}
                         onClick={(e) => act(e, () => onArchive(note))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.42l.82-1zM5 19V8h14v11H5zm8.45-9h-2.9v3H8l4 4 4-4h-2.55v-3z" />
                         </svg>
-                    </IconButton>
+                    </NoteIconButton>
                 )}
                 {onUnarchive && (
-                    <IconButton
-                        class="rounded-full hover:bg-black/10 text-gray-400 hover:text-gray-700"
+                    <NoteIconButton
+                        class="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200"
                         title={t('note.unarchive')}
                         onClick={(e) => act(e, () => onUnarchive(note))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20.55 5.22l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.15.55L3.46 5.22C3.17 5.57 3 6.01 3 6.5V19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.49-.17-.93-.45-1.28zM12 9.5l5.5 5.5H14v2h-4v-2H6.5L12 9.5zM5.12 5l.82-1h12l.93 1H5.12z" />
                         </svg>
-                    </IconButton>
+                    </NoteIconButton>
                 )}
                 {onRestore && (
-                    <IconButton
-                        class="rounded-full hover:bg-black/10 text-gray-400 hover:text-green-600"
+                    <NoteIconButton
+                        class="text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400"
                         title={t('note.restore')}
                         onClick={(e) => act(e, () => onRestore(note))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18z" />
                         </svg>
-                    </IconButton>
+                    </NoteIconButton>
                 )}
                 {onTrash && (
-                    <IconButton
-                        class="rounded-full hover:bg-black/10 text-gray-400 hover:text-red-500"
+                    <NoteIconButton
+                        class="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400"
                         title={t('note.trash')}
                         onClick={(e) => act(e, () => onTrash(note))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M19 4h-3.5l-1-1h-5l-1 1H5v2h14M6 19a2 2 0 002 2h8a2 2 0 002-2V7H6v12z" />
                         </svg>
-                    </IconButton>
+                    </NoteIconButton>
                 )}
                 {onDeleteForever && (
-                    <IconButton
-                        class="rounded-full hover:bg-black/10 text-gray-400 hover:text-red-700"
+                    <NoteIconButton
+                        class="text-gray-400 dark:text-gray-500 hover:text-red-700 dark:hover:text-red-500"
                         title={t('note.delete_forever')}
                         onClick={(e) => act(e, () => onDeleteForever(note))}
                     >
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
                         </svg>
-                    </IconButton>
+                    </NoteIconButton>
                 )}
             </div>
         </Link>
