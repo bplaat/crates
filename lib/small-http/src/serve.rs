@@ -58,8 +58,9 @@ pub fn serve(
     handler: impl Fn(&Request) -> Response + Clone + Send + 'static,
 ) {
     // Create thread pool with workers
+    // FIXME: The current thread pool doesn't spawn extra threads so http server could be overwhelmed with long running requests.
     let num_threads = std::thread::available_parallelism().map_or(1, |n| n.get());
-    let pool = threadpool::ThreadPool::new(num_threads * 64);
+    let pool = threadpool::ThreadPool::new(num_threads * 8);
 
     // Listen for incoming tcp clients
     for stream in listener.incoming() {
