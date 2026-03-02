@@ -17,3 +17,7 @@ Example command to build the Docker image for PlaatNotes locally (from the root 
 ```sh
 docker build -t ghcr.io/bplaat/plaatnotes:latest -f bin/plaatnotes/Dockerfile .
 ```
+
+## Screenshot
+
+![PlaatNotes Screenshot](docs/images/screenshot.png)
