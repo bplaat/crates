@@ -37,10 +37,10 @@ function SidebarLink({ href, label, children }: { href: string; label: string; c
 
 export function Layout({ children, showSearch }: { children: any; showSearch?: boolean }) {
     return (
-        <div class="h-screen overflow-hidden bg-gray-50 dark:bg-zinc-900 flex flex-col">
+        <div class="min-h-screen bg-gray-50 dark:bg-zinc-900 flex flex-col">
             <Navbar showSearch={showSearch} />
-            <div class="flex flex-1 overflow-hidden">
-                <aside class="w-14 sm:w-56 shrink-0 flex flex-col bg-white dark:bg-zinc-800 border-r border-gray-100 dark:border-zinc-700 pt-2 overflow-y-auto">
+            <div class="flex flex-1">
+                <aside class="w-14 sm:w-56 shrink-0 flex flex-col bg-white dark:bg-zinc-800 border-r border-gray-100 dark:border-zinc-700 pt-2 sticky top-16 self-start h-[calc(100vh-4rem)] overflow-y-auto">
                     <nav class="flex flex-col gap-0.5 px-2">
                         <SidebarLink href="/" label={t('sidebar.notes')}>
                             <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
@@ -61,7 +61,7 @@ export function Layout({ children, showSearch }: { children: any; showSearch?: b
                     <div class="flex-1" />
                     <p class="hidden sm:block px-4 pb-4 text-xs text-gray-400 dark:text-zinc-500">v{__APP_VERSION__}</p>
                 </aside>
-                <main class="flex-1 min-w-0 overflow-y-auto">{children}</main>
+                <main class="flex-1 min-w-0">{children}</main>
             </div>
         </div>
     );
