@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -51,9 +51,9 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
             .expect("Failed to create icon.icns");
     }
 
-    // Compile .icon dir to Assets.car if needed
+    // Compile .icon dir to Assets.car and icon.icns if needed
     if let Some(icon) = &bundle.icon {
-        Command::new("actool")
+        let actool_output = Command::new("actool")
             .args([
                 &format!("{path}/{icon}"),
                 "--compile",
@@ -71,7 +71,12 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
                 &format!("{target_dir}/partial.plist"),
             ])
             .output()
-            .expect("Failed to create Assets.car");
+            .expect("Failed to run actool");
+        let actool_stderr = String::from_utf8_lossy(&actool_output.stderr);
+        if actool_stderr.contains("A required plugin failed to load") {
+            eprintln!("actool failed: {}", actool_stderr.trim());
+            exit(1);
+        }
     }
 
     // Copy icns if provided
@@ -174,11 +179,13 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
         .expect("Failed to copy resources directory");
     }
 
-    fs::copy(
-        format!("{target_dir}/icon.icns"),
-        format!("{bundle_dir}/Resources/icon.icns"),
-    )
-    .expect("Failed to copy icon.icns");
+    if bundle.iconset.is_some() || bundle.icns.is_some() || bundle.icon.is_some() {
+        fs::copy(
+            format!("{target_dir}/icon.icns"),
+            format!("{bundle_dir}/Resources/icon.icns"),
+        )
+        .expect("Failed to copy icon.icns");
+    }
 
     if bundle.icon.is_some() {
         fs::copy(
