@@ -7,7 +7,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Pagination } from '../../src-gen/api.ts';
 
-export function useInfiniteScroll<T>(fetchFn: (page: number) => Promise<{ data: T[]; pagination: Pagination }>) {
+export function useInfiniteScroll<T>(
+    fetchFn: (page: number, query?: string) => Promise<{ data: T[]; pagination: Pagination }>,
+    query = '',
+) {
     const [items, setItems] = useState<T[]>([]);
     const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState(false);
@@ -19,7 +22,7 @@ export function useInfiniteScroll<T>(fetchFn: (page: number) => Promise<{ data: 
         if (fetchingRef.current) return;
         fetchingRef.current = true;
         setLoading(true);
-        const { data, pagination } = await fetchFn(page);
+        const { data, pagination } = await fetchFn(page, query);
         setItems((prev) => (page === 1 ? data : [...prev, ...data]));
         setHasMore(page * pagination.limit < pagination.total);
         pageRef.current = page;
@@ -28,8 +31,9 @@ export function useInfiniteScroll<T>(fetchFn: (page: number) => Promise<{ data: 
     }
 
     useEffect(() => {
+        setHasMore(false);
         void fetchPage(1);
-    }, []);
+    }, [query]);
 
     useEffect(() => {
         const el = sentinelRef.current;

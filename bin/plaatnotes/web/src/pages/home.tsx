@@ -13,22 +13,24 @@ import { Layout } from '../components/layout.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { listNotes, listPinnedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
+import { useSearchQuery } from '../hooks/use-search-query.ts';
 
 export function Home() {
+    const query = useSearchQuery();
     const {
         items: pinnedItems,
         loading: pinnedLoading,
         hasMore: pinnedHasMore,
         sentinelRef: pinnedSentinelRef,
         setItems: setPinnedItems,
-    } = useInfiniteScroll(listPinnedNotes);
+    } = useInfiniteScroll(listPinnedNotes, query);
     const {
         items: otherItems,
         loading: otherLoading,
         hasMore: otherHasMore,
         sentinelRef: otherSentinelRef,
         setItems: setOtherItems,
-    } = useInfiniteScroll(listNotes);
+    } = useInfiniteScroll(listNotes, query);
 
     useEffect(() => {
         document.title = 'PlaatNotes';
@@ -66,7 +68,7 @@ export function Home() {
     const others = otherItems.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt));
 
     return (
-        <Layout>
+        <Layout showSearch>
             <div class="max-w-screen-xl mx-auto px-4 py-6">
                 {initialLoading && <p class="text-center text-gray-400 mt-16">{t('home.loading')}</p>}
 
@@ -77,7 +79,7 @@ export function Home() {
                                 <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
                             </svg>
                         }
-                        message={t('home.empty')}
+                        message={query ? t('home.empty_search') : t('home.empty')}
                     />
                 )}
 

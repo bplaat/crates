@@ -5,6 +5,8 @@
  */
 
 import { signal } from '@preact/signals';
+export const $searchQuery = signal(new URLSearchParams(window.location.search).get('q') ?? '');
+
 import {
     type Note,
     type NoteCreateBody,
@@ -26,31 +28,36 @@ const emptyPage = (page: number): { data: Note[]; pagination: Pagination } => ({
     pagination: { page, limit: 20, total: 0 },
 });
 
-export async function listNotes(page = 1): Promise<{ data: Note[]; pagination: Pagination }> {
-    const res = await authFetch(`${API_URL}/notes?page=${page}`);
+function buildUrl(base: string, page: number, query?: string): string {
+    const q = query ? `&q=${encodeURIComponent(query)}` : '';
+    return `${base}?page=${page}${q}`;
+}
+
+export async function listNotes(page = 1, query?: string): Promise<{ data: Note[]; pagination: Pagination }> {
+    const res = await authFetch(buildUrl(`${API_URL}/notes`, page, query));
     if (!res.ok) return emptyPage(page);
     const result: NoteIndexResponse = await res.json();
     cacheNotes(result.data);
     return result;
 }
 
-export async function listPinnedNotes(page = 1): Promise<{ data: Note[]; pagination: Pagination }> {
-    const res = await authFetch(`${API_URL}/notes/pinned?page=${page}`);
+export async function listPinnedNotes(page = 1, query?: string): Promise<{ data: Note[]; pagination: Pagination }> {
+    const res = await authFetch(buildUrl(`${API_URL}/notes/pinned`, page, query));
     if (!res.ok) return emptyPage(page);
     const result: NoteIndexResponse = await res.json();
     cacheNotes(result.data);
     return result;
 }
 
-export async function listArchivedNotes(page = 1): Promise<{ data: Note[]; pagination: Pagination }> {
-    const res = await authFetch(`${API_URL}/notes/archived?page=${page}`);
+export async function listArchivedNotes(page = 1, query?: string): Promise<{ data: Note[]; pagination: Pagination }> {
+    const res = await authFetch(buildUrl(`${API_URL}/notes/archived`, page, query));
     const result: NoteIndexResponse = await res.json();
     cacheNotes(result.data);
     return result;
 }
 
-export async function listTrashedNotes(page = 1): Promise<{ data: Note[]; pagination: Pagination }> {
-    const res = await authFetch(`${API_URL}/notes/trashed?page=${page}`);
+export async function listTrashedNotes(page = 1, query?: string): Promise<{ data: Note[]; pagination: Pagination }> {
+    const res = await authFetch(buildUrl(`${API_URL}/notes/trashed`, page, query));
     if (!res.ok) return emptyPage(page);
     const result: NoteIndexResponse = await res.json();
     cacheNotes(result.data);

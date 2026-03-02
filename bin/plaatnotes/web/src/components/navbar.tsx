@@ -8,7 +8,9 @@ import { Link, route } from 'preact-router';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type ComponentChildren } from 'preact';
 import { $authUser, logout } from '../services/auth.service.ts';
+import { $searchQuery } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
+import { SearchInput } from './form.tsx';
 
 function DropdownItem({ onClick, children }: { onClick: () => void; children: ComponentChildren }) {
     return (
@@ -21,10 +23,14 @@ function DropdownItem({ onClick, children }: { onClick: () => void; children: Co
     );
 }
 
-export function Navbar() {
+export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
     const user = $authUser.value;
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!showSearch) $searchQuery.value = '';
+    }, [showSearch]);
 
     useEffect(() => {
         function handleClickOutside(e: MouseEvent) {
@@ -46,14 +52,27 @@ export function Navbar() {
 
     return (
         <header class="bg-white dark:bg-zinc-800 shadow-sm sticky top-0 z-10">
-            <div class="px-4 h-16 flex items-center gap-4">
+            <div class="px-4 h-16 relative flex items-center">
                 <Link
                     href="/"
-                    class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white no-underline"
+                    class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white no-underline shrink-0"
                 >
                     <img src="/assets/icon.svg" class="w-8 h-8" alt="" />
-                    <span class="text-xl font-medium">PlaatNotes</span>
+                    <span class="text-xl font-medium hidden sm:block">PlaatNotes</span>
                 </Link>
+
+                {showSearch && (
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none px-4">
+                        <div class="w-full max-w-md pointer-events-auto">
+                            <SearchInput
+                                value={$searchQuery.value}
+                                onInput={(v) => ($searchQuery.value = v)}
+                                onClear={() => ($searchQuery.value = '')}
+                                placeholder={t('nav.search')}
+                            />
+                        </div>
+                    </div>
+                )}
 
                 <div class="flex-1" />
 

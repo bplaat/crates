@@ -13,11 +13,19 @@ import { NoteCard } from '../components/note-card.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { deleteNote, listTrashedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
+import { useSearchQuery } from '../hooks/use-search-query.ts';
 
 type ConfirmAction = { kind: 'delete'; note: Note } | { kind: 'empty' } | null;
 
 export function TrashPage() {
-    const { items: notes, loading, hasMore, sentinelRef, setItems: setNotes } = useInfiniteScroll(listTrashedNotes);
+    const query = useSearchQuery();
+    const {
+        items: notes,
+        loading,
+        hasMore,
+        sentinelRef,
+        setItems: setNotes,
+    } = useInfiniteScroll(listTrashedNotes, query);
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
     useEffect(() => {
@@ -50,7 +58,7 @@ export function TrashPage() {
 
     return (
         <>
-            <Layout>
+            <Layout showSearch>
                 <div class="max-w-screen-xl mx-auto px-4 py-6">
                     <div class="relative flex items-center justify-between mb-6">
                         <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400">
@@ -79,7 +87,7 @@ export function TrashPage() {
                                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
                                 </svg>
                             }
-                            message={t('trash.empty')}
+                            message={query ? t('trash.empty_search') : t('trash.empty')}
                         />
                     )}
 

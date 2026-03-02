@@ -22,6 +22,7 @@
     "nav.admin": "Admin",
     "nav.settings": "Settings",
     "nav.logout": "Logout",
+    "nav.search": "Search notes…",
 
     "sidebar.notes": "Notes",
     "sidebar.archive": "Archive",
@@ -29,6 +30,7 @@
 
     "home.loading": "Loading notes…",
     "home.empty": "No notes yet. Create one!",
+    "home.empty_search": "No notes match your search.",
     "home.pinned": "Pinned",
     "home.other": "Other",
     "home.create": "Create note",
@@ -36,12 +38,14 @@
     "archive.heading": "Archive",
     "archive.loading": "Loading…",
     "archive.empty": "No archived notes.",
+    "archive.empty_search": "No archived notes match your search.",
 
     "trash.heading": "Trash",
     "trash.loading": "Loading…",
     "trash.empty_btn": "Empty trash",
     "trash.hint": "Notes in trash will be permanently deleted after some time.",
     "trash.empty": "Trash is empty.",
+    "trash.empty_search": "No trashed notes match your search.",
     "trash.confirm_delete": "Delete this note forever? This cannot be undone.",
     "trash.confirm_empty": "Empty trash? All trashed notes will be deleted forever.",
 

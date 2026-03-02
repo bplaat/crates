@@ -1272,6 +1272,189 @@ mod test {
     }
 
     #[test]
+    fn test_notes_pinned_search() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create two pinned notes with different content
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Pinned Alpha".to_string()),
+            body: "Content about alpha".to_string(),
+            is_pinned: true,
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Pinned Beta".to_string()),
+            body: "Content about beta".to_string(),
+            is_pinned: true,
+            ..Default::default()
+        });
+        // A non-pinned note that also matches the query – must not appear
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Unpinned Alpha".to_string()),
+            body: "Content about alpha".to_string(),
+            is_pinned: false,
+            ..Default::default()
+        });
+
+        // ?q=alpha should return only the pinned alpha note
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/pinned?q=alpha")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert!(response.data[0].is_pinned);
+        assert_eq!(response.data[0].title, Some("Pinned Alpha".to_string()));
+
+        // ?q=beta should return only the pinned beta note
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/pinned?q=beta")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Pinned Beta".to_string()));
+
+        // Empty query returns all pinned notes
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/pinned")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 2);
+    }
+
+    #[test]
+    fn test_notes_archived_search() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create two archived notes with different content
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Archived Recipe".to_string()),
+            body: "How to bake bread".to_string(),
+            is_archived: true,
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Archived Travel".to_string()),
+            body: "Trip to Paris".to_string(),
+            is_archived: true,
+            ..Default::default()
+        });
+        // Non-archived note that also matches – must not appear
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Active Recipe".to_string()),
+            body: "How to bake bread".to_string(),
+            is_archived: false,
+            ..Default::default()
+        });
+
+        // ?q=recipe should return only the archived recipe note
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/archived?q=recipe")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert!(response.data[0].is_archived);
+        assert_eq!(response.data[0].title, Some("Archived Recipe".to_string()));
+
+        // ?q=paris finds by body content
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/archived?q=paris")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Archived Travel".to_string()));
+
+        // No match returns empty list
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/archived?q=zzznomatch")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 0);
+    }
+
+    #[test]
+    fn test_notes_trashed_search() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create two trashed notes with different content
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Trashed Invoice".to_string()),
+            body: "Invoice for January".to_string(),
+            is_trashed: true,
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Trashed Draft".to_string()),
+            body: "Draft blog post".to_string(),
+            is_trashed: true,
+            ..Default::default()
+        });
+        // Non-trashed note that also matches – must not appear
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Active Invoice".to_string()),
+            body: "Invoice for February".to_string(),
+            is_trashed: false,
+            ..Default::default()
+        });
+
+        // ?q=invoice should return only the trashed invoice
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/trashed?q=invoice")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert!(response.data[0].is_trashed);
+        assert_eq!(response.data[0].title, Some("Trashed Invoice".to_string()));
+
+        // ?q=draft finds by body
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/trashed?q=draft")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Trashed Draft".to_string()));
+
+        // No match returns empty list
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/trashed?q=zzznomatch")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 0);
+    }
+
+    #[test]
     fn test_notes_reorder() {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());

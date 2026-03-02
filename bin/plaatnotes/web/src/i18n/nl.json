@@ -22,6 +22,7 @@
     "nav.admin": "Beheer",
     "nav.settings": "Instellingen",
     "nav.logout": "Uitloggen",
+    "nav.search": "Notities zoeken…",
 
     "sidebar.notes": "Notities",
     "sidebar.archive": "Archief",
@@ -29,6 +30,7 @@
 
     "home.loading": "Notities laden…",
     "home.empty": "Nog geen notities. Maak er een!",
+    "home.empty_search": "Geen notities gevonden voor je zoekopdracht.",
     "home.pinned": "Vastgezet",
     "home.other": "Overig",
     "home.create": "Notitie maken",
@@ -36,12 +38,14 @@
     "archive.heading": "Archief",
     "archive.loading": "Laden…",
     "archive.empty": "Geen gearchiveerde notities.",
+    "archive.empty_search": "Geen gearchiveerde notities gevonden voor je zoekopdracht.",
 
     "trash.heading": "Prullenbak",
     "trash.loading": "Laden…",
     "trash.empty_btn": "Prullenbak leegmaken",
     "trash.hint": "Notities in de prullenbak worden na verloop van tijd definitief verwijderd.",
     "trash.empty": "Prullenbak is leeg.",
+    "trash.empty_search": "Geen notities in prullenbak gevonden voor je zoekopdracht.",
     "trash.confirm_delete": "Notitie voor altijd verwijderen? Dit kan niet ongedaan worden gemaakt.",
     "trash.confirm_empty": "Prullenbak leegmaken? Alle notities in de prullenbak worden definitief verwijderd.",
 
