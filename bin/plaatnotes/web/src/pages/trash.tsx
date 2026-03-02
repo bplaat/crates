@@ -11,7 +11,7 @@ import { EmptyState } from '../components/empty-state.tsx';
 import { Layout } from '../components/layout.tsx';
 import { NoteCard } from '../components/note-card.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
-import { deleteNote, listTrashedNotes, updateNote } from '../services/notes.service.ts';
+import { deleteNote, listTrashedNotes, updateNote, clearTrashedNotes } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
 import { useSearchQuery } from '../hooks/use-search-query.ts';
 
@@ -50,7 +50,7 @@ export function TrashPage() {
             await deleteNote(confirmAction.note.id);
             setNotes((ns) => ns.filter((n) => n.id !== confirmAction.note.id));
         } else if (confirmAction?.kind === 'empty') {
-            await Promise.all(notes.map((n) => deleteNote(n.id)));
+            await clearTrashedNotes();
             setNotes([]);
         }
         setConfirmAction(null);

@@ -127,9 +127,9 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
 #[derive(Validate, FromStruct)]
 #[from_struct(api::NoteCreateBody)]
 struct NoteCreateBody {
-    #[validate(ascii, length(min = 1))]
+    #[validate(length(min = 1))]
     title: Option<String>,
-    #[validate(ascii, length(min = 1))]
+    #[validate(length(min = 1))]
     body: String,
     is_pinned: Option<bool>,
 }
@@ -198,9 +198,9 @@ pub(crate) fn notes_show(_req: &Request, ctx: &Context) -> Response {
 #[derive(Validate, FromStruct)]
 #[from_struct(api::NoteUpdateBody)]
 struct NoteUpdateBody {
-    #[validate(ascii, length(min = 1))]
+    #[validate(length(min = 1))]
     title: Option<String>,
-    #[validate(ascii, length(min = 1))]
+    #[validate(length(min = 1))]
     body: String,
     is_pinned: bool,
     is_archived: bool,
@@ -349,6 +349,33 @@ pub(crate) fn notes_archived(req: &Request, ctx: &Context) -> Response {
 
 pub(crate) fn notes_trashed(req: &Request, ctx: &Context) -> Response {
     notes_filtered(req, ctx, "is_trashed")
+}
+
+pub(crate) fn notes_trashed_clear(_req: &Request, ctx: &Context) -> Response {
+    // Check authentication
+    let user = match &ctx.auth_user {
+        Some(user) => user,
+        None => return Response::with_status(Status::Unauthorized),
+    };
+
+    // Delete all trashed notes for this user (admins delete all, normal users only their own)
+    match user.role {
+        UserRole::Admin => {
+            ctx.database
+                .execute("DELETE FROM notes WHERE is_trashed = 1", ())
+                .expect("Database error");
+        }
+        UserRole::Normal => {
+            execute_args!(
+                ctx.database,
+                "DELETE FROM notes WHERE is_trashed = 1 AND user_id = :user_id",
+                Args { user_id: user.id }
+            )
+            .expect("Database error");
+        }
+    }
+
+    Response::new()
 }
 
 // MARK: Utils
@@ -1452,6 +1479,103 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 0);
+    }
+
+    #[test]
+    fn test_notes_trashed_clear() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        // Create two trashed notes and one non-trashed note
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Trashed A".to_string()),
+            body: "First trashed note".to_string(),
+            is_trashed: true,
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Trashed B".to_string()),
+            body: "Second trashed note".to_string(),
+            is_trashed: true,
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Active".to_string()),
+            body: "Non-trashed note".to_string(),
+            is_trashed: false,
+            ..Default::default()
+        });
+
+        // Clear trash
+        let res = router.handle(
+            &Request::delete("http://localhost/api/notes/trashed/clear")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+
+        // Trashed endpoint should now be empty
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes/trashed")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert!(response.data.is_empty());
+
+        // Non-trashed note must still exist
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Active".to_string()));
+    }
+
+    #[test]
+    fn test_notes_trashed_clear_only_own_notes() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user1, token1) = create_test_user_with_session(&ctx);
+        let (user2, _token2) = create_test_user_with_session(&ctx);
+
+        // Create a trashed note for user1 and user2
+        ctx.database.insert_note(Note {
+            user_id: user1.id,
+            title: Some("User1 Trashed".to_string()),
+            body: "User1 trashed note".to_string(),
+            is_trashed: true,
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user2.id,
+            title: Some("User2 Trashed".to_string()),
+            body: "User2 trashed note".to_string(),
+            is_trashed: true,
+            ..Default::default()
+        });
+
+        // User1 clears their trash
+        let res = router.handle(
+            &Request::delete("http://localhost/api/notes/trashed/clear")
+                .header("Authorization", format!("Bearer {token1}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+
+        // User2's trashed note must still exist in the database
+        let remaining: i64 = ctx
+            .database
+            .query("SELECT COUNT(id) FROM notes WHERE is_trashed = 1", ())
+            .expect("Database error")
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(remaining, 1);
     }
 
     #[test]

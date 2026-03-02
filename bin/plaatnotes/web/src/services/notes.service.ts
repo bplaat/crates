@@ -107,6 +107,11 @@ export async function deleteNote(id: string): Promise<void> {
     $notesCache.value = next;
 }
 
+export async function clearTrashedNotes(): Promise<void> {
+    await authFetch(`${API_URL}/notes/trashed/clear`, { method: 'DELETE' });
+    $notesCache.value = new Map([...$notesCache.value].filter(([, note]) => !note.isTrashed));
+}
+
 export async function reorderNotes(ids: string[], endpoint: string): Promise<void> {
     await authFetch(`${API_URL}${endpoint}`, {
         method: 'PUT',

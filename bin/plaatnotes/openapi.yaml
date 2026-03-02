@@ -654,6 +654,21 @@ paths:
         '401':
           description: Unauthorized
 
+  /notes/trashed/clear:
+    delete:
+      tags: [Notes]
+      summary: Clear all trashed notes
+      description: >
+        Permanently deletes all trashed notes for the authenticated user.
+        Admins delete all trashed notes across all users.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All trashed notes deleted successfully
+        '401':
+          description: Unauthorized
+
   /notes/reorder:
     put:
       tags: [Notes]

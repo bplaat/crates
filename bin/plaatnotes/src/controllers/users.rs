@@ -85,9 +85,9 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
 #[from_struct(api::UserCreateBody)]
 #[validate(context(Context))]
 struct UserCreateBody {
-    #[validate(ascii, length(min = 1, max = 128))]
+    #[validate(length(min = 1, max = 128))]
     first_name: String,
-    #[validate(ascii, length(min = 1, max = 128))]
+    #[validate(length(min = 1, max = 128))]
     last_name: String,
     #[validate(email, custom(is_unique_email))]
     email: String,
@@ -186,9 +186,9 @@ pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Response {
 #[from_struct(api::UserUpdateBody)]
 #[validate(context(Context))]
 struct UserUpdateBody {
-    #[validate(ascii, length(min = 1, max = 128))]
+    #[validate(length(min = 1, max = 128))]
     first_name: String,
-    #[validate(ascii, length(min = 1, max = 128))]
+    #[validate(length(min = 1, max = 128))]
     last_name: String,
     #[validate(email, custom(is_unique_email_or_target_user_email))]
     email: String,
