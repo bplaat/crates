@@ -27,3 +27,9 @@ typedef size_t usize;
 typedef ptrdiff_t isize;
 
 char* strdup(const char* s);
+
+// Internals
+typedef struct _InterfaceSlot {
+    size_t id;
+    const void* vtbl;
+} _InterfaceSlot;

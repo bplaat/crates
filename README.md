@@ -2,52 +2,42 @@
 
 _A transpiler that translates an OOP-extension for the C programming language back to C_
 
-I like C and I like C++, both are powerful languages in there own right. But C++ is quite complicated and sometimes I just want to create some classes with inheritance in my C project. So I've created the weird hacky Python transpiler that can translate a C++ like syntax with a Java like class system back to C code 🤓.
+I like C and I like C++, both are powerful languages in their own right. But C++ is quite complicated and sometimes I just want to create some classes with inheritance in my C project. So I've created this weird hacky Python transpiler that translates a C++ like syntax with a Java like class system back to C code 🤓.
 
-## The syntax
+## Usage
 
-### Basic class
+```sh
+./ccc.py <file.cc> [options]
+```
 
-A basic class can be created with the `class` keyword, a class can contain fields:
+| Flag        | Description                                        |
+| ----------- | -------------------------------------------------- |
+| `-o <file>` | Output file                                        |
+| `-I <path>` | Add include search path                            |
+| `-S`        | Only run the transpile step (emit `.c` source)     |
+| `-c`        | Only transpile and compile (emit `.o` object)      |
+| `-r`        | Run the linked binary after building               |
+| `-R`        | Run with memory leak checks (`leaks` / `valgrind`) |
+
+## Syntax
+
+### Classes
+
+Classes implicitly extend `Object` (heap-allocated, reference-counted). Methods are declared in the class body and implemented with `ClassName::method()`. Use `this` inside methods, call parent methods with `ParentClass::method()`, and use `Self*` as return type when returning the current instance:
 
 ```cpp
 class Person {
-    char* name;
-    i32 age;
-};
-```
-
-A class is just a `struct` that inherit fields and (virtual) methods from its parent. If no parent class is defined the class will inherit from the base `Object` class. All class instances are heap allocated and reference counted. You can create a class instance with the created `_new()` method and free the instance with the created `_free()` method:
-
-```cpp
-int main(void) {
-    Person* person = person_new();
-    person->name = "Bastiaan";
-    person->age = 21;
-    person_free(person);
-}
-```
-
-### Class methods
-
-Classes can also have methods, you can't implement methods inline in the class definition like C++ but you have to use the separated method impl syntax:
-
-```cpp
-class Person {
-    // ...
+    @get @init(strdup) @deinit char* name;
+    @prop @init i32 age;
     void greet();
 };
 
 void Person::greet() {
     printf("Hello %s, you are %d years old!\n", this->name, this->age);
 }
-```
 
-You can call the method like the `free` method:
-
-```cpp
 int main(void) {
-    // ...
+    Person* person = person_new("Bastiaan", 21);
     person_greet(person);
     person_free(person);
 }
@@ -55,110 +45,176 @@ int main(void) {
 
 ### Field attributes
 
-You can add attributes with the `@attribute` syntax before class fields to generated methods automatically. This is useful because it saves a lot of typing work, we can extend the `Person` class with the following attributes:
+Attributes before a field declaration auto-generate boilerplate:
 
-```cpp
-class Person {
-    @get @init(strdup) @deinit char* name;
-    @prop @init i32 age;
-};
-```
+| Attribute     | Effect                                                    |
+| ------------- | --------------------------------------------------------- |
+| `@get`        | Generate a `get_<field>()` getter                         |
+| `@set`        | Generate a `set_<field>()` setter                         |
+| `@prop`       | Alias for `@get` + `@set`                                 |
+| `@init`       | Pass field as argument to `_new()`; assign directly       |
+| `@init(fn)`   | Same but wrap the argument with `fn(arg)` (e.g. `strdup`) |
+| `@deinit`     | Free field in `deinit`; calls `free()` by default         |
+| `@deinit(fn)` | Same but call `fn(field)` instead of `free()`             |
 
-This will in turn generated the following methods for us:
+### Inheritance & virtual methods
 
-```cpp
-class Person {
-    // ...
-    void init(char* name, i32 age);
-    virtual void deinit();
-    Person* ref();
-    void free();
-
-    char* get_name();
-    i32 get_age();
-    void set_age(i32 age);
-};
-```
-
-All the fields of the `init` method are also present in the `new` method, so our main function can be:
-
-```cpp
-int main(void) {
-    Person* person = person_new("Bastiaan", 21);
-    // ...
-    person_free(person);
-}
-```
-
-You can use the following attributes:
-
-- `@get` Generate a getter method for this field
-- `@set` Generate a setter method for this field
-- `@prop` alias for `@get` and `@set`
-- `@init` or `@init(init_function)` Use this field as an argument for the generated `init` method
-- `@deinit` or `@deinit(free_function)` Free this field in the generated `deinit` method
-
-### Abstract classes
-
-Classes can be made abstract when they have a virtual method without implementation:
+A class can extend **one** parent with `: Parent`. Mark methods `virtual` for vtable dispatch. A class with `virtual method = 0` is abstract:
 
 ```cpp
 class Animal {
-    @prop @init(strdup) @deinit char* name;
-    virtual void greet() = 0;
+    @get @init(strdup) @deinit char* name;
+    virtual void speak() = 0;
 };
-```
 
-### Class inheritance
-
-Classes can inherit from **one** other parent class:
-
-```cpp
 class Dog : Animal {
-    virtual void greet();
+    virtual void speak();
 };
-void Dog::greet() {
-    printf("The dog %s greets you!\n", this->name);
-}
-
-class Cat : Animal {
-    virtual void Greet();
-};
-void Cat::greet() {
-    printf("The cat %s greets you!\n", this->name);
+void Dog::speak() {
+    printf("Dog %s barks!\n", this->name);
 }
 ```
 
-### Super call
+### Interfaces
 
-You can call the parent class method with the super call syntax:
+Interfaces are declared as `class IFoo` (name starts with `I` + uppercase). Implement with `: IFace`. Methods must **not** have bodies inside the declaration — define defaults outside with `IFoo::method()`. Dispatch via `cast<IFoo>(obj)` (fat pointer). Interfaces can extend other interfaces (multi-parent):
 
 ```cpp
-void Dog::greet() {
-    Animal::greet();
-}
-```
-
-### Self\* type
-
-When a class method returns itself a.k.a. `return this;` you need to use the `Self*` return type:
-
-```cpp
-class PersonBuilder {
-    Self* name();
+class IEquatable {
+    virtual bool equals(Object* other) = 0;
 };
 
-Self* PersonBuilder::name() {
-    return this;
-}
+class IComparable : IEquatable {
+    i32 compare(Object* other);
+    bool less_than(Object* other);
+    bool greater_than(Object* other);
+};
+bool IComparable::less_than(Object* other) { return compare(this, other) < 0; }
+bool IComparable::greater_than(Object* other) { return compare(this, other) > 0; }
+
+class Number : IComparable {
+    @get @init i32 value;
+
+    virtual bool equals(Object* other);
+    virtual i32 compare(Object* other);
+};
+
+Number* n = number_new(42);
+IComparable c = cast<IComparable>(n);
+IEquatable  e = cast<IEquatable>(n);
 ```
 
-## TODO
+Generated dispatch macros use the snake_case of the interface name:
 
-- Add interfaces that work like Java interfaces
+- `IComparable` → `i_comparable_less_than(c, other)`
+- `IHashable` → `i_hashable_hash(h)`
+
+### String literals
+
+`@"..."` string literals are sugar for `string_new("...")`:
+
+```cpp
+String* s = @"hello";  // → string_new("hello")
+```
+
+### Type checks
+
+`instanceof<Type>(expr)` returns a `bool`. Checks exact class for classes, interface slot for interfaces:
+
+```cpp
+if (instanceof<IHashable>(obj)) { ... }
+if (instanceof<Dog>(obj)) { ... }
+```
+
+## Standard library
+
+Include stdlib classes with `#include <ClassName.hh>`.
+
+### `Object` — base class
+
+Every class implicitly extends `Object`. Provides reference counting:
+
+```c
+Object* object_ref(Object* obj)   // Increment reference count; returns obj
+void    object_free(Object* obj)  // Decrement reference count; frees when it reaches zero
+```
+
+### `String` — heap string
+
+```cpp
+#include <String.hh>
+```
+
+Implements `IEquatable`, `IHashable`, and `IKeyable`. Stores an owned copy of the string.
+
+```c
+String* string_new(char* cstr)                  // Create a new String (copies cstr with strdup)
+void    string_free(String* s)                  // Free the string
+char*   string_get_cstr(String* s)              // Get the raw char* pointer
+usize   string_get_length(String* s)            // Get the string length
+bool    string_equals(String* s, Object* other) // Compare two strings by content
+u32     string_hash(String* s)                  // FNV-1a hash of the string
+```
+
+### `List` — dynamic array
+
+```cpp
+#include <List.hh>
+```
+
+A growable array of `Object*` values.
+
+```c
+List*    list_new()                                         // Create an empty list
+void     list_free(List* list)                              // Free the list and all contained objects
+usize    list_get_size(List* list)                          // Number of items
+Object*  list_get(List* list, usize index)                  // Get item at index
+void     list_set(List* list, usize index, Object* item)    // Set item at index
+void     list_add(List* list, Object* item)                 // Append item
+void     list_insert(List* list, usize index, Object* item) // Insert item at index
+void     list_remove(List* list, usize index)               // Remove item at index
+```
+
+### `Map` — hash map
+
+```cpp
+#include <Map.hh>
+```
+
+A hash map from `IKeyable` keys to `Object*` values. Use `String` (or any `IKeyable` type) as the key:
+
+```cpp
+String* k = @"hello";
+map_set(map, cast<IKeyable>(k), value);
+Object* v = map_get(map, cast<IKeyable>(k));
+map_remove(map, cast<IKeyable>(k));
+string_free(k);
+```
+
+```c
+Map*     map_new()                                      // Create an empty map
+void     map_free(Map* map)                             // Free the map and all stored values
+usize    map_get_capacity(Map* map)                     // Current bucket capacity
+usize    map_get_filled(Map* map)                       // Number of stored entries
+Object*  map_get(Map* map, IKeyable key)                // Lookup by key; returns NULL if absent
+void     map_set(Map* map, IKeyable key, Object* value) // Insert or update entry
+void     map_remove(Map* map, IKeyable key)             // Remove entry (frees key and value)
+```
+
+## Built-in types
+
+`prelude.h` defines short aliases for the standard integer and float types:
+
+```c
+i8, i16, i32, i64  // Signed integers
+u8, u16, u32, u64  // Unsigned integers
+f32, f64           // Floating point
+isize              // ptrdiff_t
+usize              // size_t
+```
 
 ## License
 
-Copyright © 2021-2025 Bastiaan van der Plaat
+Copyright © 2021-2026 Bastiaan van der Plaat
 
 Licensed under the [MIT](LICENSE) license.

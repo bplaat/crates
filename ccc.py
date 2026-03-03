@@ -56,6 +56,7 @@ class Class:
     is_abstract: bool
     fields: Dict[str, Field]
     methods: Dict[str, Method]
+    interface_names: List[str]
 
     def __init__(self, name: str, parent_name: Optional[str]) -> None:
         self.name = name
@@ -64,11 +65,33 @@ class Class:
         self.is_abstract = False
         self.fields = {}
         self.methods = {}
+        self.interface_names = []
+
+
+class Interface:
+    """Interface metadata"""
+
+    name: str
+    snake_name: str
+    id: int
+    parent_names: List[str]
+    methods: Dict[str, Method]
+    default_bodies: Dict[str, str]
+
+    def __init__(self, name: str, id_: int) -> None:
+        self.name = name
+        self.snake_name = to_snake_case(name)
+        self.id = id_
+        self.parent_names = []
+        self.methods = {}
+        self.default_bodies = {}
 
 
 # MARK: Globals
 include_paths: List[str] = []
 classes: Dict[str, Class] = {}
+interfaces: Dict[str, Interface] = {}
+next_interface_id: int = 1
 
 
 # MARK: Utils
@@ -127,6 +150,97 @@ class ConvertInclude:
         sys.exit(1)
 
 
+# MARK: Convert interface
+class ConvertInterface:
+    """Convert interface declaration"""
+
+    def __init__(self, is_header: bool) -> None:
+        self.is_header = is_header
+
+    def __call__(self, iface_name: str, supers_raw: Optional[str], contents: str) -> str:
+        global next_interface_id
+        snake_name = to_snake_case(iface_name)
+
+        # Create interface object
+        iface = Interface(iface_name, next_interface_id)
+        next_interface_id += 1
+        interfaces[iface_name] = iface
+
+        # Inherit parent interface methods (multi-parent support)
+        if supers_raw is not None:
+            for name in supers_raw.strip().lstrip(":").split(","):
+                name = name.strip()
+                if not name:
+                    continue
+                if name not in interfaces:
+                    logging.error("Can't find parent interface %s for %s", name, iface_name)
+                    sys.exit(1)
+                iface.parent_names.append(name)
+                parent_iface = interfaces[name]
+                for method in parent_iface.methods.values():
+                    iface.methods[method.name] = method
+
+        # Index methods (all methods in an interface are implicitly virtual)
+        for method_parts in re.findall(
+            r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0\s*)?;",
+            contents,
+        ):
+            return_type, name, arguments_str, _ = method_parts
+
+            # Strip optional 'virtual' keyword (interface methods are always virtual)
+            return_type = return_type.replace("virtual ", "").strip()
+
+            arguments = []
+            if arguments_str.strip() != "":
+                for argument_str in arguments_str.split(","):
+                    argument_parts = re.search(
+                        r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)",
+                        argument_str,
+                    )
+                    if argument_parts is not None:
+                        arguments.append(Argument(argument_parts[2].strip(), argument_parts[1]))
+
+            iface.methods[name] = Method(name, return_type.strip(), False, True, arguments, iface_name, iface_name)
+
+        # ==== Codegen ====
+        c = ""
+
+        c += f"// interface {iface_name}\n"
+        c += f"#define _{iface_name}_ID {iface.id}\n\n"
+
+        # Interface vtable struct (parent methods first, with group comments)
+        c += f"typedef struct {iface_name}Vtbl {{\n"
+        current_origin = ""
+        for method in iface.methods.values():
+            if method.origin_class != current_origin:
+                c += f"    // {method.origin_class}\n"
+                current_origin = method.origin_class
+            c += f"    {method.return_type} (*{method.name})(void* this"
+            for argument in method.arguments:
+                c += f", {argument.type} {argument.name}"
+            c += ");\n"
+        c += f"}} {iface_name}Vtbl;\n\n"
+
+        # Interface fat-pointer struct
+        c += f"typedef struct {iface_name} {{\n"
+        c += "    void* obj;\n"
+        c += f"    const {iface_name}Vtbl* vtbl;\n"
+        c += f"}} {iface_name};\n\n"
+
+        # Method dispatch macros (fat pointer by value: use . not ->)
+        for method in iface.methods.values():
+            c += f"#define {snake_name}_{method.name}(iface"
+            for argument in method.arguments:
+                c += f", {argument.name}"
+            c += f") ((iface).vtbl->{method.name}((iface).obj"
+            for argument in method.arguments:
+                c += f", ({argument.name})"
+            c += "))\n"
+        c += "\n"
+
+        return c
+
+
 # MARK: Convert class
 class ConvertClass:
     """Convert class"""
@@ -134,14 +248,26 @@ class ConvertClass:
     def __init__(self, is_header: bool) -> None:
         self.is_header = is_header
 
-    def __call__(self, match: re.Match[str]) -> str:
+    def __call__(self, class_name: str, supers_raw: Optional[str], contents: str) -> str:
         # ==== Indexing ====
-        class_name, extends_str, contents = match.groups()
 
-        # Get parent class
+        # Parse the unified `: Parent, Iface1, Iface2` list
         parent_name = None if class_name == "Object" else "Object"
-        if extends_str is not None:
-            parent_name = extends_str[1:].strip()
+        explicit_interfaces: List[str] = []
+
+        if supers_raw is not None:
+            for name in supers_raw.strip().lstrip(":").split(","):
+                name = name.strip()
+                if not name:
+                    continue
+                if name in classes:
+                    parent_name = name
+                elif name in interfaces:
+                    if name not in explicit_interfaces:
+                        explicit_interfaces.append(name)
+                else:
+                    logging.error("Unknown class or interface '%s' in class %s", name, class_name)
+                    sys.exit(1)
 
         parent_class = None
         if parent_name is not None:
@@ -155,6 +281,21 @@ class ConvertClass:
         if parent_class is not None:
             class_.fields = copy.deepcopy(parent_class.fields)
             class_.methods = copy.deepcopy(parent_class.methods)
+            class_.interface_names = list(parent_class.interface_names)
+
+        # Add explicitly declared interfaces (and their ancestors)
+        def add_interface(iface_name: str) -> None:
+            if iface_name in class_.interface_names:
+                return
+            class_.interface_names.append(iface_name)
+            # Recurse into parent interfaces (multi-parent support)
+            iface = interfaces[iface_name]
+            for parent_name in iface.parent_names:
+                add_interface(parent_name)
+
+        for iface_name in explicit_interfaces:
+            add_interface(iface_name)
+
         classes[class_.name] = class_
 
         # Index fields
@@ -343,6 +484,7 @@ class ConvertClass:
         # Class Vtbl struct
         c = f"typedef struct {class_.name} {class_.name};\n\n"
         c += f"typedef struct {class_.name}Vtbl {{\n"
+        c += "    const _InterfaceSlot* interfaces;\n"
         current_class_name = ""
         for method in class_.methods.values():
             if method.is_virtual:
@@ -357,7 +499,9 @@ class ConvertClass:
 
         c += f"}} {class_.name}Vtbl;\n\n"
 
-        # Class struct
+        # Extern vtbl instance declaration (needed for instanceof<> checks)
+        if not class_.is_abstract:
+            c += f"extern {class_.name}Vtbl _{class_.name}Vtbl;\n\n"
         c += f"struct {class_.name} {{\n"
         c += f"    {class_.name}Vtbl* vtbl;\n"
         current_class_name = ""
@@ -390,7 +534,45 @@ class ConvertClass:
 
         # Class Vtbl instance
         if not self.is_header and not class_.is_abstract:
+            # Per-interface vtable instances and slot array
+            if class_.interface_names:
+                for iface_name in class_.interface_names:
+                    iface = interfaces[iface_name]
+                    c += f"static const {iface_name}Vtbl _{class_.name}{iface_name}Vtbl = {{\n"
+                    for method in iface.methods.values():
+                        c += f"    ({method.return_type}(*)(void*"
+                        for argument in method.arguments:
+                            c += f", {argument.type}"
+                        c += "))"
+                        if method.name in class_.methods:
+                            # Class (or ancestor) provides the implementation
+                            impl_class = to_snake_case(class_.methods[method.name].class_)
+                            c += f"&_{impl_class}_{method.name},\n"
+                        elif method.name in iface.default_bodies:
+                            # Fall back to interface default
+                            c += f"&_iface_{iface.snake_name}_{method.name}_default,\n"
+                        else:
+                            logging.error(
+                                "Class %s implements %s but does not provide '%s' and there is no default",
+                                class_.name,
+                                iface_name,
+                                method.name,
+                            )
+                            sys.exit(1)
+                    c += "};\n\n"
+
+                c += f"static const _InterfaceSlot _{class_.name}Interfaces[] = {{\n"
+                for iface_name in class_.interface_names:
+                    iface = interfaces[iface_name]
+                    c += f"    {{ _{iface_name}_ID, &_{class_.name}{iface_name}Vtbl }},\n"
+                c += "    { 0, NULL }\n"
+                c += "};\n\n"
+
             c += f"{class_.name}Vtbl _{class_.name}Vtbl = {{\n"
+            if class_.interface_names:
+                c += f"    _{class_.name}Interfaces,\n"
+            else:
+                c += "    NULL,\n"
             current_class_name = ""
             for method in class_.methods.values():
                 if method.is_virtual:
@@ -503,27 +685,293 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
         ConvertInclude(path),
         text,
     )
-    # Convert class defines
-    text = re.sub(
-        r"class\s+([_A-Za-z][_A-Za-z0-9]*)\s*(:\s*[_A-Za-z][_A-Za-z0-9]*\s*)?{([^}]*)};",
-        ConvertClass(is_header),
-        text,
-    )
+
+    # Convert @"..." string literals to string_new("...") early (any context)
+    text = re.sub(r'@"([^"]*)"', lambda sm: f'string_new("{sm.group(1)}")', text)
+
+    # ── Phase 1: Convert interface declarations (class IXxx, where X is uppercase) ──
+    convert_iface = ConvertInterface(is_header)
+    while True:
+        m = re.search(
+            r"class\s+(I[A-Z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{",
+            text,
+        )
+        if not m:
+            break
+        iface_name = m.group(1)
+        supers_raw = m.group(2)
+        # Find matching closing brace
+        start = m.end() - 1  # points at opening {
+        depth = 0
+        pos = start
+        while pos < len(text):
+            if text[pos] == "{":
+                depth += 1
+            elif text[pos] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            pos += 1
+        body = text[start + 1 : pos]
+        end = pos + 1
+        if end < len(text) and text[end] == ";":
+            end += 1
+        replacement = convert_iface(iface_name, supers_raw, body)
+        text = text[: m.start()] + replacement + text[end:]
 
     if not is_header:
-        # Convert method defines
+        # ── Phase 2: Pre-scan interface default method bodies to populate default_bodies flags ──
+        # This must run before Phase 3 (class declarations) so vtable construction knows which
+        # methods have defaults. Both IFoo::method and Foo::method syntax are accepted.
+        for iface_name, iface in interfaces.items():
+            impl_names = [iface_name]
+            # Also accept Foo::method as shorthand for IFoo::method
+            if iface_name.startswith("I") and len(iface_name) > 1 and iface_name[1].isupper():
+                impl_names.append(iface_name[1:])
+            for impl_name in impl_names:
+                for dm in re.finditer(
+                    rf"[_A-Za-z][_A-Za-z0-9 ]*[\**|\s+]\s*{re.escape(impl_name)}::([_A-Za-z][_A-Za-z0-9]*)\(",
+                    text,
+                ):
+                    method_name = dm.group(1)
+                    if method_name in iface.methods:
+                        iface.default_bodies[method_name] = ""  # flag: default exists
+
+    # ── Phase 3: Convert class declarations ──
+    convert_class = ConvertClass(is_header)
+    while True:
+        m = re.search(
+            r"class\s+([_A-Za-z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{",
+            text,
+        )
+        if not m:
+            break
+        class_name = m.group(1)
+        supers_raw = m.group(2)
+        # Find matching closing brace
+        start = m.end() - 1
+        depth = 0
+        pos = start
+        while pos < len(text):
+            if text[pos] == "{":
+                depth += 1
+            elif text[pos] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            pos += 1
+        body = text[start + 1 : pos]
+        end = pos + 1
+        if end < len(text) and text[end] == ";":
+            end += 1
+        replacement = convert_class(class_name, supers_raw, body)
+        text = text[: m.start()] + replacement + text[end:]
+
+    if not is_header:
+        # ── Phase 4: Replace interface default method bodies with static functions (in-place) ──
+        # Supports both IFoo::method_name and Foo::method_name (shorthand for IFoo).
+        # The replacement happens at the same text position so static functions always
+        # appear before any vtable inits that reference them.
+        while True:
+            found = False
+            for cur_iface_name, cur_iface in interfaces.items():
+                impl_names = [cur_iface_name]
+                if cur_iface_name.startswith("I") and len(cur_iface_name) > 1 and cur_iface_name[1].isupper():
+                    impl_names.append(cur_iface_name[1:])
+                for impl_name in impl_names:
+                    dm = re.search(
+                        rf"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*{re.escape(impl_name)}::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{{",
+                        text,
+                    )
+                    if dm:
+                        ret_type, method_name, arguments_str = dm.group(1), dm.group(2), dm.group(3)
+                        if method_name not in cur_iface.methods:
+                            logging.error("Interface %s has no method '%s'", cur_iface_name, method_name)
+                            sys.exit(1)
+                        # Find matching closing brace
+                        dstart = dm.end() - 1
+                        ddepth = 0
+                        dpos = dstart
+                        while dpos < len(text):
+                            if text[dpos] == "{":
+                                ddepth += 1
+                            elif text[dpos] == "}":
+                                ddepth -= 1
+                                if ddepth == 0:
+                                    break
+                            dpos += 1
+                        dend = dpos + 1
+                        body_text = text[dstart + 1 : dpos]
+
+                        # Parse arguments
+                        def_arguments = []
+                        if arguments_str.strip():
+                            for arg_str in arguments_str.split(","):
+                                arg_parts = re.search(
+                                    r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)",
+                                    arg_str,
+                                )
+                                if arg_parts:
+                                    def_arguments.append(Argument(arg_parts[2].strip(), arg_parts[1]))
+
+                        snake_iface = cur_iface.snake_name
+                        fn_code = f"static {ret_type.strip()} _iface_{snake_iface}_{method_name}_default(void* this"
+                        for arg in def_arguments:
+                            fn_code += f", {arg.type} {arg.name}"
+                        fn_code += ") {\n"
+                        # Inject vtbl lookup
+                        fn_code += f"    const {cur_iface_name}Vtbl* _vtbl;\n"
+                        fn_code += "    {\n"
+                        fn_code += (
+                            "        const _InterfaceSlot* _s = *(const _InterfaceSlot* const*)*(void* const*)this;\n"
+                        )
+                        fn_code += "        _vtbl = NULL;\n"
+                        fn_code += "        if (_s) for (; _s->id; _s++) {\n"
+                        fn_code += f"            if (_s->id == _{cur_iface_name}_ID) {{ _vtbl = (const {cur_iface_name}Vtbl*)_s->vtbl; break; }}\n"
+                        fn_code += "        }\n"
+                        fn_code += "    }\n"
+                        # Transform method(this, ...) calls to vtbl dispatch in body
+                        transformed_body = body_text
+                        for m_name in cur_iface.methods:
+                            transformed_body = re.sub(
+                                rf"\b{re.escape(m_name)}\(this\b",
+                                f"_vtbl->{m_name}(this",
+                                transformed_body,
+                            )
+                        fn_code += transformed_body
+                        fn_code += "}\n\n"
+
+                        cur_iface.default_bodies[method_name] = fn_code
+                        text = text[: dm.start()] + fn_code + text[dend:]
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                break
+
+        # ── Phase 5: Convert method defines ──
         text = re.sub(
             r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*{",
             convert_method,
             text,
         )
 
-        # Convert super calls
+        # ── Phase 6: Convert super calls ──
         text = re.sub(
             r"([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*;",
             convert_super_call,
             text,
         )
+
+        # ── Phase 7: Convert cast<Iface>(x) to inline fat-pointer construction ──
+        # Collect all interfaces used so we can emit per-interface lookup functions.
+        ifaces_for_lookup: Dict[str, str] = {}
+        for cast_m in re.finditer(r"cast<([_A-Za-z][_A-Za-z0-9]*)>", text):
+            cast_iface_name = cast_m.group(1)
+            if cast_iface_name in interfaces and cast_iface_name not in ifaces_for_lookup:
+                ifaces_for_lookup[cast_iface_name] = interfaces[cast_iface_name].snake_name
+
+        if ifaces_for_lookup:
+            lookup_code = ""
+            for lk_iface_name, lk_snake in ifaces_for_lookup.items():
+                lookup_code += f"static inline const {lk_iface_name}Vtbl* _iface_get_{lk_snake}(const void* obj) {{\n"
+                lookup_code += "    const _InterfaceSlot* s = *(const _InterfaceSlot* const*)*(void* const*)obj;\n"
+                lookup_code += "    if (!s) return NULL;\n"
+                lookup_code += f"    for (; s->id; s++) {{\n"
+                lookup_code += (
+                    f"        if (s->id == _{lk_iface_name}_ID) return (const {lk_iface_name}Vtbl*)s->vtbl;\n"
+                )
+                lookup_code += "    }\n"
+                lookup_code += "    return NULL;\n"
+                lookup_code += "}\n"
+                lookup_code += f"static inline {lk_iface_name} _iface_make_{lk_snake}(void* obj) {{\n"
+                lookup_code += f"    return ({lk_iface_name}){{ .obj = obj, .vtbl = _iface_get_{lk_snake}(obj) }};\n"
+                lookup_code += "}\n\n"
+            insert_marker = re.search(r"(}\n\n)(?=[a-zA-Z#])", text)
+            if insert_marker:
+                ins_pos = insert_marker.end()
+                text = text[:ins_pos] + lookup_code + text[ins_pos:]
+            else:
+                text += lookup_code
+
+        # cast<Iface>(expr) - brace-aware to handle nested parens in expr
+        while True:
+            cast_m = re.search(r"cast<([_A-Za-z][_A-Za-z0-9]*)>\(", text)
+            if not cast_m:
+                break
+            cast_iface_name = cast_m.group(1)
+            if cast_iface_name not in interfaces:
+                break
+            cstart = cast_m.end() - 1
+            cdepth = 0
+            cpos = cstart
+            while cpos < len(text):
+                if text[cpos] == "(":
+                    cdepth += 1
+                elif text[cpos] == ")":
+                    cdepth -= 1
+                    if cdepth == 0:
+                        break
+                cpos += 1
+            obj_expr = text[cstart + 1 : cpos].strip()
+            cend = cpos + 1
+            lk_snake = interfaces[cast_iface_name].snake_name
+            cast_repl = f"_iface_make_{lk_snake}((void*)({obj_expr}))"
+            text = text[: cast_m.start()] + cast_repl + text[cend:]
+
+        # ── Phase 8: Convert instanceof<X>(expr) to bool check ──
+        types_for_instanceof: List[str] = []
+        for inst_m2 in re.finditer(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>", text):
+            type_name = inst_m2.group(1)
+            if type_name not in types_for_instanceof:
+                types_for_instanceof.append(type_name)
+
+        if types_for_instanceof:
+            instanceof_code = ""
+            for type_name in types_for_instanceof:
+                if type_name in interfaces:
+                    instanceof_code += f"static inline bool _instanceof_{type_name}(const void* obj) {{\n"
+                    instanceof_code += (
+                        "    const _InterfaceSlot* s = *(const _InterfaceSlot* const*)*(void* const*)obj;\n"
+                    )
+                    instanceof_code += "    if (!s) return false;\n"
+                    instanceof_code += "    for (; s->id; s++)\n"
+                    instanceof_code += f"        if (s->id == _{type_name}_ID) return true;\n"
+                    instanceof_code += "    return false;\n"
+                    instanceof_code += "}\n\n"
+                elif type_name in classes:
+                    instanceof_code += f"static inline bool _instanceof_{type_name}(const void* obj) {{\n"
+                    instanceof_code += f"    return *(const void* const*)obj == (const void*)&_{type_name}Vtbl;\n"
+                    instanceof_code += "}\n\n"
+            main_marker = re.search(r"\bint\s+main\s*\(", text)
+            if main_marker:
+                ins_pos2 = main_marker.start()
+            else:
+                insert_marker2 = re.search(r"(}\n\n)(?=[a-zA-Z#])", text)
+                ins_pos2 = insert_marker2.end() if insert_marker2 else len(text)
+            text = text[:ins_pos2] + instanceof_code + text[ins_pos2:]
+
+        # instanceof<X>(expr) - brace-aware
+        while True:
+            inst_m = re.search(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>\(", text)
+            if not inst_m:
+                break
+            inst_type_name = inst_m.group(1)
+            istart = inst_m.end() - 1
+            idepth = 0
+            ipos = istart
+            while ipos < len(text):
+                if text[ipos] == "(":
+                    idepth += 1
+                elif text[ipos] == ")":
+                    idepth -= 1
+                    if idepth == 0:
+                        break
+                ipos += 1
+            inst_expr = text[istart + 1 : ipos].strip()
+            iend = ipos + 1
+            text = text[: inst_m.start()] + f"_instanceof_{inst_type_name}({inst_expr})" + text[iend:]
 
     return text
 
@@ -569,6 +1017,10 @@ if __name__ == "__main__":
                 else path.replace(".cc", ".c").replace(".hh", ".h") if args.source else tempfile.mktemp(".c")
             )
             ConvertInclude.processed_includes = []
+            # Reset global state so each file gets consistent interface IDs
+            next_interface_id = 1  # type: ignore[assignment]
+            interfaces = {}  # type: ignore[assignment]
+            classes = {}  # type: ignore[assignment]
             file_write(source_path, transpile_text(path, path.endswith(".hh"), file_read(path)))
             if args.source:
                 sys.exit(0)
@@ -582,7 +1034,7 @@ if __name__ == "__main__":
         object_paths.append(object_path)
         subprocess.run(
             [cc]
-            + ["--std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror"]
+            + ["--std=c23", "-Wall", "-Wextra", "-Wpedantic", "-Werror"]
             + [f"-I{include_path}" for include_path in include_paths]
             + ["-c", source_path, "-o", object_path],
             check=True,

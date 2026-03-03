@@ -1,4 +1,5 @@
 #include <List.hh>
+#include <String.hh>
 
 // Context
 class Context {};
@@ -36,7 +37,7 @@ class Box : Container {
 
 // Label
 class Label : Widget {
-    @prop @init(strdup) @deinit char* text;
+    @prop @init @deinit String* text;
 };
 
 // Main
@@ -44,9 +45,9 @@ int main(void) {
     Context* context = context_new();
 
     Box* box = box_new(context, ORIENTATION_VERTICAL);
-    box_add(box, label_new(context, "Line 1"));
-    box_add(box, label_new(context, "Line 2"));
-    box_add(box, label_new(context, "Line 3"));
+    box_add(box, label_new(context, @"Line 1"));
+    box_add(box, label_new(context, @"Line 2"));
+    box_add(box, label_new(context, @"Line 3"));
     box_free(box);
 
     context_free(context);

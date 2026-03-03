@@ -1,5 +1,2 @@
-*.c
-*.exe
-catdog
-hello
-widgets
+*
+!*.cc

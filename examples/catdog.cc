@@ -36,6 +36,18 @@ int main(void) {
         animal_jump(animal);
     }
 
+    // instanceof checks
+    if (instanceof<Cat>(list_get(animals, 0))) {
+        printf("First animal is a cat\n");
+    } else {
+        printf("First animal is not a cat\n");
+    }
+    if (instanceof<Dog>(list_get(animals, 0))) {
+        printf("First animal is a dog\n");
+    } else {
+        printf("First animal is not a dog\n");
+    }
+
     list_free(animals);
     return EXIT_SUCCESS;
 }
