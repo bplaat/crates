@@ -123,6 +123,37 @@ def find_class_for_method(class_: Class, method_name: str) -> Class:
     return find_class_for_method(classes[class_.parent_name], method_name)
 
 
+def find_matching_close(text: str, start: int) -> int:
+    """Return index of the closing char that matches the opening char at text[start]"""
+    open_char = text[start]
+    close_char = "}" if open_char == "{" else ")"
+    depth = 0
+    pos = start
+    while pos < len(text):
+        if text[pos] == open_char:
+            depth += 1
+        elif text[pos] == close_char:
+            depth -= 1
+            if depth == 0:
+                return pos
+        pos += 1
+    return pos
+
+
+def parse_arguments(arguments_str: str) -> List[Argument]:
+    """Parse a comma-separated argument list string into Argument objects"""
+    arguments = []
+    if arguments_str.strip():
+        for argument_str in arguments_str.split(","):
+            argument_parts = re.search(
+                r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)",
+                argument_str,
+            )
+            if argument_parts is not None:
+                arguments.append(Argument(argument_parts[2].strip(), argument_parts[1]))
+    return arguments
+
+
 # MARK: Convert include
 class ConvertInclude:
     """Convert class"""
@@ -190,15 +221,7 @@ class ConvertInterface:
             # Strip optional 'virtual' keyword (interface methods are always virtual)
             return_type = return_type.replace("virtual ", "").strip()
 
-            arguments = []
-            if arguments_str.strip() != "":
-                for argument_str in arguments_str.split(","):
-                    argument_parts = re.search(
-                        r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)",
-                        argument_str,
-                    )
-                    if argument_parts is not None:
-                        arguments.append(Argument(argument_parts[2].strip(), argument_parts[1]))
+            arguments = parse_arguments(arguments_str)
 
             iface.methods[name] = Method(name, return_type.strip(), False, True, arguments, iface_name, iface_name)
 
@@ -303,23 +326,14 @@ class ConvertClass:
             attributes_and_type_str, name, default_str = field_parts
 
             # Parse attributes
-            attributes = {}
-
-            def convert_attribute(match: re.Match[str]) -> str:
-                name, arguments = match.groups()
-                if arguments is not None:
-                    attributes[name] = [  # pylint: disable=cell-var-from-loop
-                        argument.strip() for argument in arguments[1 : len(arguments) - 1].split(",")
-                    ]
+            attributes: Dict[str, List[str]] = {}
+            for attr_m in re.finditer(r"@([_A-Za-z][_A-Za-z0-9]*)(\([^\)]*\))?", attributes_and_type_str):
+                attr_name, attr_args = attr_m.groups()
+                if attr_args is not None:
+                    attributes[attr_name] = [a.strip() for a in attr_args[1 : len(attr_args) - 1].split(",")]
                 else:
-                    attributes[name] = []  # pylint: disable=cell-var-from-loop
-                return ""
-
-            field_type = re.sub(
-                r"@([_A-Za-z][_A-Za-z0-9]*)(\([^\)]*\))?",
-                convert_attribute,
-                attributes_and_type_str,
-            ).strip()
+                    attributes[attr_name] = []
+            field_type = re.sub(r"@([_A-Za-z][_A-Za-z0-9]*)(\([^\)]*\))?", "", attributes_and_type_str).strip()
 
             # Add field to class
             if name in class_.fields:
@@ -336,15 +350,7 @@ class ConvertClass:
         ):
             return_type, name, arguments_str, is_zero = method_parts
 
-            arguments = []
-            if arguments_str != "":
-                for argument_str in arguments_str.split(","):
-                    argument_parts = re.search(
-                        r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)",
-                        argument_str,
-                    )
-                    if argument_parts is not None:
-                        arguments.append(Argument(argument_parts[2].strip(), argument_parts[1]))
+            arguments = parse_arguments(arguments_str)
 
             is_virtual = False
             if "virtual " in return_type:
@@ -410,12 +416,9 @@ class ConvertClass:
                 g += "}\n\n"
 
             # Deinit method
-            field_needs_deinit = False
-            for field in class_.fields.values():
-                if field.class_ == class_.name:
-                    if "deinit" in field.attributes:
-                        field_needs_deinit = True
-                        break
+            field_needs_deinit = any(
+                field.class_ == class_.name and "deinit" in field.attributes for field in class_.fields.values()
+            )
             if field_needs_deinit:
                 class_.methods["deinit"].class_ = class_.name
 
@@ -702,16 +705,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
         supers_raw = m.group(2)
         # Find matching closing brace
         start = m.end() - 1  # points at opening {
-        depth = 0
-        pos = start
-        while pos < len(text):
-            if text[pos] == "{":
-                depth += 1
-            elif text[pos] == "}":
-                depth -= 1
-                if depth == 0:
-                    break
-            pos += 1
+        pos = find_matching_close(text, start)
         body = text[start + 1 : pos]
         end = pos + 1
         if end < len(text) and text[end] == ";":
@@ -722,20 +716,15 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
     if not is_header:
         # ── Phase 2: Pre-scan interface default method bodies to populate default_bodies flags ──
         # This must run before Phase 3 (class declarations) so vtable construction knows which
-        # methods have defaults. Both IFoo::method and Foo::method syntax are accepted.
+        # methods have defaults.
         for iface_name, iface in interfaces.items():
-            impl_names = [iface_name]
-            # Also accept Foo::method as shorthand for IFoo::method
-            if iface_name.startswith("I") and len(iface_name) > 1 and iface_name[1].isupper():
-                impl_names.append(iface_name[1:])
-            for impl_name in impl_names:
-                for dm in re.finditer(
-                    rf"[_A-Za-z][_A-Za-z0-9 ]*[\**|\s+]\s*{re.escape(impl_name)}::([_A-Za-z][_A-Za-z0-9]*)\(",
-                    text,
-                ):
-                    method_name = dm.group(1)
-                    if method_name in iface.methods:
-                        iface.default_bodies[method_name] = ""  # flag: default exists
+            for dm in re.finditer(
+                rf"[_A-Za-z][_A-Za-z0-9 ]*[\**|\s+]\s*{re.escape(iface_name)}::([_A-Za-z][_A-Za-z0-9]*)\(",
+                text,
+            ):
+                method_name = dm.group(1)
+                if method_name in iface.methods:
+                    iface.default_bodies[method_name] = ""  # flag: default exists
 
     # ── Phase 3: Convert class declarations ──
     convert_class = ConvertClass(is_header)
@@ -750,16 +739,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
         supers_raw = m.group(2)
         # Find matching closing brace
         start = m.end() - 1
-        depth = 0
-        pos = start
-        while pos < len(text):
-            if text[pos] == "{":
-                depth += 1
-            elif text[pos] == "}":
-                depth -= 1
-                if depth == 0:
-                    break
-            pos += 1
+        pos = find_matching_close(text, start)
         body = text[start + 1 : pos]
         end = pos + 1
         if end < len(text) and text[end] == ";":
@@ -769,82 +749,58 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
 
     if not is_header:
         # ── Phase 4: Replace interface default method bodies with static functions (in-place) ──
-        # Supports both IFoo::method_name and Foo::method_name (shorthand for IFoo).
         # The replacement happens at the same text position so static functions always
         # appear before any vtable inits that reference them.
         while True:
             found = False
             for cur_iface_name, cur_iface in interfaces.items():
-                impl_names = [cur_iface_name]
-                if cur_iface_name.startswith("I") and len(cur_iface_name) > 1 and cur_iface_name[1].isupper():
-                    impl_names.append(cur_iface_name[1:])
-                for impl_name in impl_names:
-                    dm = re.search(
-                        rf"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*{re.escape(impl_name)}::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{{",
-                        text,
+                dm = re.search(
+                    rf"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*{re.escape(cur_iface_name)}::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{{",
+                    text,
+                )
+                if dm:
+                    ret_type, method_name, arguments_str = dm.group(1), dm.group(2), dm.group(3)
+                    if method_name not in cur_iface.methods:
+                        logging.error("Interface %s has no method '%s'", cur_iface_name, method_name)
+                        sys.exit(1)
+                    # Find matching closing brace
+                    dstart = dm.end() - 1
+                    dpos = find_matching_close(text, dstart)
+                    dend = dpos + 1
+                    body_text = text[dstart + 1 : dpos]
+
+                    def_arguments = parse_arguments(arguments_str)
+
+                    snake_iface = cur_iface.snake_name
+                    fn_code = f"static {ret_type.strip()} _{snake_iface}_{method_name}(void* this"
+                    for arg in def_arguments:
+                        fn_code += f", {arg.type} {arg.name}"
+                    fn_code += ") {\n"
+                    # Inject vtbl lookup
+                    fn_code += f"    const {cur_iface_name}Vtbl* _vtbl;\n"
+                    fn_code += "    {\n"
+                    fn_code += (
+                        "        const _InterfaceSlot* _s = *(const _InterfaceSlot* const*)*(void* const*)this;\n"
                     )
-                    if dm:
-                        ret_type, method_name, arguments_str = dm.group(1), dm.group(2), dm.group(3)
-                        if method_name not in cur_iface.methods:
-                            logging.error("Interface %s has no method '%s'", cur_iface_name, method_name)
-                            sys.exit(1)
-                        # Find matching closing brace
-                        dstart = dm.end() - 1
-                        ddepth = 0
-                        dpos = dstart
-                        while dpos < len(text):
-                            if text[dpos] == "{":
-                                ddepth += 1
-                            elif text[dpos] == "}":
-                                ddepth -= 1
-                                if ddepth == 0:
-                                    break
-                            dpos += 1
-                        dend = dpos + 1
-                        body_text = text[dstart + 1 : dpos]
-
-                        # Parse arguments
-                        def_arguments = []
-                        if arguments_str.strip():
-                            for arg_str in arguments_str.split(","):
-                                arg_parts = re.search(
-                                    r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)",
-                                    arg_str,
-                                )
-                                if arg_parts:
-                                    def_arguments.append(Argument(arg_parts[2].strip(), arg_parts[1]))
-
-                        snake_iface = cur_iface.snake_name
-                        fn_code = f"static {ret_type.strip()} _{snake_iface}_{method_name}(void* this"
-                        for arg in def_arguments:
-                            fn_code += f", {arg.type} {arg.name}"
-                        fn_code += ") {\n"
-                        # Inject vtbl lookup
-                        fn_code += f"    const {cur_iface_name}Vtbl* _vtbl;\n"
-                        fn_code += "    {\n"
-                        fn_code += (
-                            "        const _InterfaceSlot* _s = *(const _InterfaceSlot* const*)*(void* const*)this;\n"
+                    fn_code += "        _vtbl = NULL;\n"
+                    fn_code += "        if (_s) for (; _s->id; _s++) {\n"
+                    fn_code += f"            if (_s->id == _{cur_iface_name}_ID) {{ _vtbl = (const {cur_iface_name}Vtbl*)_s->vtbl; break; }}\n"
+                    fn_code += "        }\n"
+                    fn_code += "    }\n"
+                    # Transform method(this, ...) calls to vtbl dispatch in body
+                    transformed_body = body_text
+                    for m_name in cur_iface.methods:
+                        transformed_body = re.sub(
+                            rf"\b{re.escape(m_name)}\(this\b",
+                            f"_vtbl->{m_name}(this",
+                            transformed_body,
                         )
-                        fn_code += "        _vtbl = NULL;\n"
-                        fn_code += "        if (_s) for (; _s->id; _s++) {\n"
-                        fn_code += f"            if (_s->id == _{cur_iface_name}_ID) {{ _vtbl = (const {cur_iface_name}Vtbl*)_s->vtbl; break; }}\n"
-                        fn_code += "        }\n"
-                        fn_code += "    }\n"
-                        # Transform method(this, ...) calls to vtbl dispatch in body
-                        transformed_body = body_text
-                        for m_name in cur_iface.methods:
-                            transformed_body = re.sub(
-                                rf"\b{re.escape(m_name)}\(this\b",
-                                f"_vtbl->{m_name}(this",
-                                transformed_body,
-                            )
-                        fn_code += transformed_body
-                        fn_code += "}\n\n"
+                    fn_code += transformed_body
+                    fn_code += "}\n\n"
 
-                        cur_iface.default_bodies[method_name] = fn_code
-                        text = text[: dm.start()] + fn_code + text[dend:]
-                        found = True
-                        break
+                    cur_iface.default_bodies[method_name] = fn_code
+                    text = text[: dm.start()] + fn_code + text[dend:]
+                    found = True
                 if found:
                     break
             if not found:
@@ -880,9 +836,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
                 lookup_code += "    const _InterfaceSlot* s = _obj->vtbl->interfaces;\n"
                 lookup_code += f"    const {lk_iface_name}Vtbl* vtbl = NULL;\n"
                 lookup_code += "    if (s) for (; s->id; s++) {\n"
-                lookup_code += (
-                    f"        if (s->id == _{lk_iface_name}_ID) {{ vtbl = (const {lk_iface_name}Vtbl*)s->vtbl; break; }}\n"
-                )
+                lookup_code += f"        if (s->id == _{lk_iface_name}_ID) {{ vtbl = (const {lk_iface_name}Vtbl*)s->vtbl; break; }}\n"
                 lookup_code += "    }\n"
                 lookup_code += f"    return ({lk_iface_name}){{ .obj = _obj, .vtbl = vtbl }};\n"
                 lookup_code += "}\n\n"
@@ -893,7 +847,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
             else:
                 text += lookup_code
 
-        # cast<Iface>(expr) - brace-aware to handle nested parens in expr
+        # cast<Iface>(expr) - paren-aware to handle nested parens in expr
         while True:
             cast_m = re.search(r"cast<([_A-Za-z][_A-Za-z0-9]*)>\(", text)
             if not cast_m:
@@ -902,16 +856,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
             if cast_iface_name not in interfaces:
                 break
             cstart = cast_m.end() - 1
-            cdepth = 0
-            cpos = cstart
-            while cpos < len(text):
-                if text[cpos] == "(":
-                    cdepth += 1
-                elif text[cpos] == ")":
-                    cdepth -= 1
-                    if cdepth == 0:
-                        break
-                cpos += 1
+            cpos = find_matching_close(text, cstart)
             obj_expr = text[cstart + 1 : cpos].strip()
             cend = cpos + 1
             cast_repl = f"_cast_{cast_iface_name}((void*)({obj_expr}))"
@@ -963,7 +908,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
                 func_marker = re.search(r"\n(?:typedef|extern|#|struct|}\s*;)", text)
                 if func_marker:
                     # Find the next function definition after this marker
-                    rest = text[func_marker.end():]
+                    rest = text[func_marker.end() :]
                     # Look for patterns like: return_type function_name( or return_type *function_name(
                     func_impl = re.search(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(", rest)
                     if func_impl:
@@ -974,7 +919,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
                     ins_pos2 = len(text)
             text = text[:ins_pos2] + instanceof_code + text[ins_pos2:]
 
-        # instanceof<X>(expr) - brace-aware
+        # instanceof<X>(expr) - paren-aware
         while True:
             inst_m = re.search(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>\(", text)
             if not inst_m:
@@ -982,19 +927,10 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
             inst_type_name = inst_m.group(1)
             if inst_type_name not in interfaces and inst_type_name not in classes:
                 logging.error(f"Type '{inst_type_name}' used in instanceof<> is not defined as a class or interface")
-                text = text[:inst_m.start()] + "false" + text[inst_m.end():]
+                text = text[: inst_m.start()] + "false" + text[inst_m.end() :]
                 continue
             istart = inst_m.end() - 1
-            idepth = 0
-            ipos = istart
-            while ipos < len(text):
-                if text[ipos] == "(":
-                    idepth += 1
-                elif text[ipos] == ")":
-                    idepth -= 1
-                    if idepth == 0:
-                        break
-                ipos += 1
+            ipos = find_matching_close(text, istart)
             inst_expr = text[istart + 1 : ipos].strip()
             iend = ipos + 1
             text = text[: inst_m.start()] + f"_instanceof_{inst_type_name}({inst_expr})" + text[iend:]
