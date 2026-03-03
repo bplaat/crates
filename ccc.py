@@ -691,6 +691,12 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
 
     # Convert @"..." string literals to string_new("...") early (any context)
     text = re.sub(r'@"([^"]*)"', lambda sm: f'string_new("{sm.group(1)}")', text)
+    # Convert @true/@false bool literals to bool_new(...)
+    text = re.sub(r"@(true|false)(?![_A-Za-z0-9])", lambda sm: f"bool_new({sm.group(1)})", text)
+    # Convert @1.0 float literals to float_new(...) - must come before int to match x.y first
+    text = re.sub(r"@([0-9]+\.[0-9]+)", lambda sm: f"float_new({sm.group(1)})", text)
+    # Convert @42 int literals to int_new(...)
+    text = re.sub(r"@([0-9]+)", lambda sm: f"int_new({sm.group(1)})", text)
 
     # ── Phase 1: Convert interface declarations (class IXxx, where X is uppercase) ──
     convert_iface = ConvertInterface(is_header)

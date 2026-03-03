@@ -109,12 +109,15 @@ Generated dispatch macros use the snake_case of the interface name:
 - `IComparable` → `i_comparable_less_than(c, other)`
 - `IHashable` → `i_hashable_hash(h)`
 
-### String literals
+### Literals
 
-`@"..."` string literals are sugar for `string_new("...")`:
+`@"..."`, `@true`/`@false`, `@<int>`, and `@<float>` are sugar for the corresponding boxed-type constructors:
 
 ```cpp
 String* s = @"hello";  // → string_new("hello")
+Bool*   b = @true;     // → bool_new(true)
+Int*    i = @42;       // → int_new(42)
+Float*  f = @3.14;     // → float_new(3.14)
 ```
 
 ### Type checks
