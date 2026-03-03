@@ -139,11 +139,31 @@ Object* object_ref(Object* obj)   // Increment reference count; returns obj
 void    object_free(Object* obj)  // Decrement reference count; frees when it reaches zero
 ```
 
-### `String` — heap string
+### `Bool` — heap boolean
 
-```cpp
-#include <String.hh>
+```c
+Bool* bool_new(bool value)        // Create a new Bool
+void  bool_free(Bool* b)          // Free the Bool
+bool  bool_get_value(Bool* b)     // Get the raw bool value
 ```
+
+### `Int` — heap integer
+
+```c
+Int* int_new(i32 value)          // Create a new Int
+void int_free(Int* i)            // Free the Int
+i32  int_get_value(Int* i)       // Get the raw i32 value
+```
+
+### `Float` — heap float
+
+```c
+Float* float_new(f32 value)      // Create a new Float
+void  float_free(Float* f)       // Free the Float
+f32   float_get_value(Float* f)  // Get the raw f32 value
+```
+
+### `String` — heap string
 
 Implements `IEquatable`, `IHashable`, and `IKeyable`. Stores an owned copy of the string.
 

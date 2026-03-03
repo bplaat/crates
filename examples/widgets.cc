@@ -1,5 +1,4 @@
 #include <List.hh>
-#include <String.hh>
 
 // Context
 class Context {};

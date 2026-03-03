@@ -1,6 +1,5 @@
 #include <List.hh>
 #include <Map.hh>
-#include <String.hh>
 
 class Person {
     @get @init @deinit String* name;

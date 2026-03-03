@@ -28,8 +28,10 @@ typedef ptrdiff_t isize;
 
 char* strdup(const char* s);
 
+u32 fnv1a_32(const void* data, usize length);
+
 // Internals
 typedef struct _InterfaceSlot {
-    size_t id;
+    usize id;
     const void* vtbl;
 } _InterfaceSlot;

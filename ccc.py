@@ -550,7 +550,7 @@ class ConvertClass:
                             c += f"&_{impl_class}_{method.name},\n"
                         elif method.name in iface.default_bodies:
                             # Fall back to interface default
-                            c += f"&_iface_{iface.snake_name}_{method.name}_default,\n"
+                            c += f"&_{iface.snake_name}_{method.name},\n"
                         else:
                             logging.error(
                                 "Class %s implements %s but does not provide '%s' and there is no default",
@@ -815,7 +815,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
                                     def_arguments.append(Argument(arg_parts[2].strip(), arg_parts[1]))
 
                         snake_iface = cur_iface.snake_name
-                        fn_code = f"static {ret_type.strip()} _iface_{snake_iface}_{method_name}_default(void* this"
+                        fn_code = f"static {ret_type.strip()} _{snake_iface}_{method_name}(void* this"
                         for arg in def_arguments:
                             fn_code += f", {arg.type} {arg.name}"
                         fn_code += ") {\n"
@@ -875,18 +875,16 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
         if ifaces_for_lookup:
             lookup_code = ""
             for lk_iface_name, lk_snake in ifaces_for_lookup.items():
-                lookup_code += f"static inline const {lk_iface_name}Vtbl* _iface_get_{lk_snake}(const void* obj) {{\n"
-                lookup_code += "    const _InterfaceSlot* s = *(const _InterfaceSlot* const*)*(void* const*)obj;\n"
-                lookup_code += "    if (!s) return NULL;\n"
-                lookup_code += f"    for (; s->id; s++) {{\n"
+                lookup_code += f"static {lk_iface_name} _cast_{lk_iface_name}(void* obj) {{\n"
+                lookup_code += "    Object* _obj = (Object*)obj;\n"
+                lookup_code += "    const _InterfaceSlot* s = _obj->vtbl->interfaces;\n"
+                lookup_code += f"    const {lk_iface_name}Vtbl* vtbl = NULL;\n"
+                lookup_code += "    if (s) for (; s->id; s++) {\n"
                 lookup_code += (
-                    f"        if (s->id == _{lk_iface_name}_ID) return (const {lk_iface_name}Vtbl*)s->vtbl;\n"
+                    f"        if (s->id == _{lk_iface_name}_ID) {{ vtbl = (const {lk_iface_name}Vtbl*)s->vtbl; break; }}\n"
                 )
                 lookup_code += "    }\n"
-                lookup_code += "    return NULL;\n"
-                lookup_code += "}\n"
-                lookup_code += f"static inline {lk_iface_name} _iface_make_{lk_snake}(void* obj) {{\n"
-                lookup_code += f"    return ({lk_iface_name}){{ .obj = obj, .vtbl = _iface_get_{lk_snake}(obj) }};\n"
+                lookup_code += f"    return ({lk_iface_name}){{ .obj = _obj, .vtbl = vtbl }};\n"
                 lookup_code += "}\n\n"
             insert_marker = re.search(r"(}\n\n)(?=[a-zA-Z#])", text)
             if insert_marker:
@@ -916,8 +914,7 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
                 cpos += 1
             obj_expr = text[cstart + 1 : cpos].strip()
             cend = cpos + 1
-            lk_snake = interfaces[cast_iface_name].snake_name
-            cast_repl = f"_iface_make_{lk_snake}((void*)({obj_expr}))"
+            cast_repl = f"_cast_{cast_iface_name}((void*)({obj_expr}))"
             text = text[: cast_m.start()] + cast_repl + text[cend:]
 
         # ── Phase 8: Convert instanceof<X>(expr) to bool check ──
@@ -929,27 +926,52 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
 
         if types_for_instanceof:
             instanceof_code = ""
+            # Add forward declarations and extern declarations for class vtables
+            for type_name in types_for_instanceof:
+                if type_name in classes:
+                    instanceof_code += f"typedef struct {type_name}Vtbl {type_name}Vtbl;\n"
+                    instanceof_code += f"extern {type_name}Vtbl _{type_name}Vtbl;\n"
+            instanceof_code += "\n"
+
             for type_name in types_for_instanceof:
                 if type_name in interfaces:
-                    instanceof_code += f"static inline bool _instanceof_{type_name}(const void* obj) {{\n"
-                    instanceof_code += (
-                        "    const _InterfaceSlot* s = *(const _InterfaceSlot* const*)*(void* const*)obj;\n"
-                    )
+                    instanceof_code += f"static bool _instanceof_{type_name}(void* obj) {{\n"
+                    instanceof_code += "    Object* _obj = (Object*)obj;\n"
+                    instanceof_code += "    const _InterfaceSlot* s = _obj->vtbl->interfaces;\n"
                     instanceof_code += "    if (!s) return false;\n"
                     instanceof_code += "    for (; s->id; s++)\n"
                     instanceof_code += f"        if (s->id == _{type_name}_ID) return true;\n"
                     instanceof_code += "    return false;\n"
                     instanceof_code += "}\n\n"
                 elif type_name in classes:
-                    instanceof_code += f"static inline bool _instanceof_{type_name}(const void* obj) {{\n"
-                    instanceof_code += f"    return *(const void* const*)obj == (const void*)&_{type_name}Vtbl;\n"
+                    instanceof_code += f"static bool _instanceof_{type_name}(void* obj) {{\n"
+                    instanceof_code += "    Object* _obj = (Object*)obj;\n"
+                    instanceof_code += f"    return _obj->vtbl == (void*)&_{type_name}Vtbl;\n"
                     instanceof_code += "}\n\n"
+                else:
+                    logging.warning(f"Type '{type_name}' used in instanceof<> is not defined as a class or interface")
+
+            # Try to find a good insertion point:
+            # 1. If there's a main function, insert before it
+            # 2. Otherwise, look for the first function definition after struct definitions
             main_marker = re.search(r"\bint\s+main\s*\(", text)
             if main_marker:
                 ins_pos2 = main_marker.start()
             else:
-                insert_marker2 = re.search(r"(}\n\n)(?=[a-zA-Z#])", text)
-                ins_pos2 = insert_marker2.end() if insert_marker2 else len(text)
+                # Find first function definition (starts with a type name followed by * and function name)
+                # This pattern looks for lines that might be function implementations
+                func_marker = re.search(r"\n(?:typedef|extern|#|struct|}\s*;)", text)
+                if func_marker:
+                    # Find the next function definition after this marker
+                    rest = text[func_marker.end():]
+                    # Look for patterns like: return_type function_name( or return_type *function_name(
+                    func_impl = re.search(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(", rest)
+                    if func_impl:
+                        ins_pos2 = func_marker.end() + func_impl.start()
+                    else:
+                        ins_pos2 = len(text)
+                else:
+                    ins_pos2 = len(text)
             text = text[:ins_pos2] + instanceof_code + text[ins_pos2:]
 
         # instanceof<X>(expr) - brace-aware
@@ -958,6 +980,10 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
             if not inst_m:
                 break
             inst_type_name = inst_m.group(1)
+            if inst_type_name not in interfaces and inst_type_name not in classes:
+                logging.error(f"Type '{inst_type_name}' used in instanceof<> is not defined as a class or interface")
+                text = text[:inst_m.start()] + "false" + text[inst_m.end():]
+                continue
             istart = inst_m.end() - 1
             idepth = 0
             ipos = istart

@@ -18,7 +18,37 @@ class IEquatable {
 };
 
 class IHashable {
-    uint32_t hash();
+    u32 hash();
 };
 
 class IKeyable : IEquatable, IHashable {};
+
+// Boxed types
+class Bool : IKeyable {
+    @get @init bool value;
+
+    virtual bool equals(Object* other);
+    virtual u32 hash();
+};
+
+class Int : IKeyable {
+    @get @init i64 value;
+
+    virtual bool equals(Object* other);
+    virtual u32 hash();
+};
+
+class Float : IKeyable {
+    @get @init f64 value;
+
+    virtual bool equals(Object* other);
+    virtual u32 hash();
+};
+
+class String : IKeyable {
+    @get @init(strdup) @deinit char* cstr;
+    @get usize length = strlen(cstr);
+
+    virtual bool equals(Object* other);
+    virtual u32 hash();
+};
