@@ -1,5 +1,6 @@
 #include <List.hh>
 
+// List
 void List::init() {
     Object::init();
     this->items = malloc(sizeof(Object*) * this->capacity);
@@ -50,4 +51,17 @@ void List::remove(usize index) {
     for (usize i = index; i < this->size; i++)
         this->items[i] = this->items[i + 1];
     this->size--;
+}
+
+IIterator List::iterator() {
+    return cast<IIterator>(list_iterator_new(this));
+}
+
+// ListIterator
+bool ListIterator::has_next() {
+    return this->index < this->list->size;
+}
+
+Object* ListIterator::next() {
+    return this->list->items[this->index++];
 }

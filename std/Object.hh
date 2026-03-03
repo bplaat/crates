@@ -23,6 +23,15 @@ class IHashable {
 
 class IKeyable : IEquatable, IHashable {};
 
+class IIterator {
+    bool has_next();
+    Object* next();
+};
+
+class IIterable {
+    IIterator iterator();
+};
+
 // Boxed types
 class Bool : IKeyable {
     @get @init bool value;
@@ -40,14 +49,6 @@ class Int : IKeyable {
 
 class Float : IKeyable {
     @get @init f64 value;
-
-    virtual bool equals(Object* other);
-    virtual u32 hash();
-};
-
-class String : IKeyable {
-    @get @init(strdup) @deinit char* cstr;
-    @get usize length = strlen(cstr);
 
     virtual bool equals(Object* other);
     virtual u32 hash();

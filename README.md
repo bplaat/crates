@@ -120,6 +120,20 @@ Int*    i = @42;       // → int_new(42)
 Float*  f = @3.14;     // → float_new(3.14)
 ```
 
+### for-in loop
+
+Iterate over any `IIterable` (e.g. `List`) with sugar syntax:
+
+```cpp
+for (Person* person in persons) {
+    person_greet(person);
+}
+```
+
+Transpiles to a scoped block that calls `iterator()`, loops with `has_next()`/`next()`,
+and frees the iterator after. Nested loops are fully supported.
+Regular C `for` loops (with semicolons) are passed through unchanged.
+
 ### Type checks
 
 `instanceof<Type>(expr)` returns a `bool`. Checks exact class for classes, interface slot for interfaces:
@@ -142,6 +156,16 @@ Object* object_ref(Object* obj)   // Increment reference count; returns obj
 void    object_free(Object* obj)  // Decrement reference count; frees when it reaches zero
 ```
 
+### Interfaces
+
+| Interface    | Methods                            | Notes                         |
+| ------------ | ---------------------------------- | ----------------------------- |
+| `IEquatable` | `equals(Object*)`                  | Value equality                |
+| `IHashable`  | `hash()` → `u32`                   | Hash code                     |
+| `IKeyable`   | _(extends both)_                   | Suitable as a `Map`/`Set` key |
+| `IIterator`  | `has_next()`, `next()` → `Object*` | One-pass forward iterator     |
+| `IIterable`  | `iterator()` → `IIterator`         | Any iterable collection       |
+
 ### `Bool` — heap boolean
 
 ```c
@@ -153,30 +177,54 @@ bool  bool_get_value(Bool* b)     // Get the raw bool value
 ### `Int` — heap integer
 
 ```c
-Int* int_new(i32 value)          // Create a new Int
+Int* int_new(i64 value)          // Create a new Int
 void int_free(Int* i)            // Free the Int
-i32  int_get_value(Int* i)       // Get the raw i32 value
+i64  int_get_value(Int* i)       // Get the raw i64 value
 ```
 
 ### `Float` — heap float
 
 ```c
-Float* float_new(f32 value)      // Create a new Float
+Float* float_new(f64 value)      // Create a new Float
 void  float_free(Float* f)       // Free the Float
-f32   float_get_value(Float* f)  // Get the raw f32 value
+f64   float_get_value(Float* f)  // Get the raw f64 value
 ```
 
 ### `String` — heap string
 
-Implements `IEquatable`, `IHashable`, and `IKeyable`. Stores an owned copy of the string.
+Implements `IKeyable`. Stores an owned copy of the string.
 
 ```c
-String* string_new(char* cstr)                  // Create a new String (copies cstr with strdup)
-void    string_free(String* s)                  // Free the string
-char*   string_get_cstr(String* s)              // Get the raw char* pointer
-usize   string_get_length(String* s)            // Get the string length
-bool    string_equals(String* s, Object* other) // Compare two strings by content
-u32     string_hash(String* s)                  // FNV-1a hash of the string
+String* string_new(char* cstr)                              // Create (copies cstr with strdup)
+void    string_free(String* s)                              // Free
+char*   string_get_cstr(String* s)                          // Raw char* pointer
+usize   string_get_length(String* s)                        // Length in bytes
+bool    string_equals(String* s, Object* other)             // Content equality
+u32     string_hash(String* s)                              // FNV-1a hash
+bool    string_contains(String* s, char* substr)            // Substring test
+bool    string_starts_with(String* s, char* prefix)         // Prefix test
+bool    string_ends_with(String* s, char* suffix)           // Suffix test
+String* string_to_upper(String* s)                          // New uppercase copy
+String* string_to_lower(String* s)                          // New lowercase copy
+String* string_trim(String* s)                              // New copy with whitespace stripped
+i32     string_index_of(String* s, char* substr)            // First index; -1 if absent
+String* string_substring(String* s, usize start, usize len) // New substring copy
+```
+
+### `StringBuilder` — mutable string builder
+
+```cpp
+#include <StringBuilder.hh>
+```
+
+```c
+StringBuilder* string_builder_new()                          // Create empty builder
+void           string_builder_free(StringBuilder* sb)        // Free
+void           string_builder_append_cstr(StringBuilder* sb, char* s)    // Append C string
+void           string_builder_append_char(StringBuilder* sb, char c)     // Append single char
+void           string_builder_append_string(StringBuilder* sb, String* s) // Append String
+String*        string_builder_build(StringBuilder* sb)       // Build → new String*
+usize          string_builder_get_length(StringBuilder* sb)  // Current length
 ```
 
 ### `List` — dynamic array
@@ -185,7 +233,7 @@ u32     string_hash(String* s)                  // FNV-1a hash of the string
 #include <List.hh>
 ```
 
-A growable array of `Object*` values.
+Implements `IIterable`. A growable array of `Object*` values.
 
 ```c
 List*    list_new()                                         // Create an empty list
@@ -196,6 +244,7 @@ void     list_set(List* list, usize index, Object* item)    // Set item at index
 void     list_add(List* list, Object* item)                 // Append item
 void     list_insert(List* list, usize index, Object* item) // Insert item at index
 void     list_remove(List* list, usize index)               // Remove item at index
+IIterator list_iterator(List* list)                         // Get a forward iterator
 ```
 
 ### `Map` — hash map
@@ -222,6 +271,23 @@ usize    map_get_filled(Map* map)                       // Number of stored entr
 Object*  map_get(Map* map, IKeyable key)                // Lookup by key; returns NULL if absent
 void     map_set(Map* map, IKeyable key, Object* value) // Insert or update entry
 void     map_remove(Map* map, IKeyable key)             // Remove entry (frees key and value)
+```
+
+### `Set` — hash set
+
+```cpp
+#include <Set.hh>
+```
+
+An unordered set of unique `IKeyable` values.
+
+```c
+Set*  set_new()                              // Create an empty set
+void  set_free(Set* set)                     // Free the set and all stored keys
+usize set_get_size(Set* set)                 // Number of entries
+bool  set_contains(Set* set, IKeyable key)   // Membership test
+void  set_add(Set* set, IKeyable key)        // Insert (no-op if already present)
+void  set_remove(Set* set, IKeyable key)     // Remove entry
 ```
 
 ## Built-in types

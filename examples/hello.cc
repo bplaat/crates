@@ -1,5 +1,6 @@
 #include <List.hh>
 #include <Map.hh>
+#include <String.hh>
 
 class Person {
     @get @init @deinit String* name;
@@ -26,8 +27,7 @@ int main(void) {
     list_add(persons, person_new(@"Leonard", 17));
     list_add(persons, person_new(@"Jiska", 16));
 
-    for (usize i = 0; i < list_get_size(persons); i++) {
-        Person* person = (Person*)list_get(persons, i);
+    for (Person* person in persons) {
         person_greet(person);
     }
 

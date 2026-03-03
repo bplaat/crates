@@ -154,6 +154,21 @@ def parse_arguments(arguments_str: str) -> List[Argument]:
     return arguments
 
 
+def concrete_subclasses(target_name: str) -> List[str]:
+    """Return names of all concrete classes that are equal to or inherit from target_name"""
+    result = []
+    for cls in classes.values():
+        if cls.is_abstract:
+            continue
+        cur: Optional[Class] = cls
+        while cur is not None:
+            if cur.name == target_name:
+                result.append(cls.name)
+                break
+            cur = classes.get(cur.parent_name) if cur.parent_name else None
+    return result
+
+
 # MARK: Convert include
 class ConvertInclude:
     """Convert class"""
@@ -732,6 +747,9 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
                 if method_name in iface.methods:
                     iface.default_bodies[method_name] = ""  # flag: default exists
 
+    # ── Phase 2.5: Convert class forward declarations ──
+    text = re.sub(r"class\s+([_A-Za-z][_A-Za-z0-9]*)\s*;", r"typedef struct \1 \1;", text)
+
     # ── Phase 3: Convert class declarations ──
     convert_class = ConvertClass(is_header)
     while True:
@@ -826,6 +844,38 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
             text,
         )
 
+        # ── Phase 6.5: Convert for-in loops ──
+        # Syntax: for (Type* var in expr) { body }
+        # Expands to a scoped block using IIterator fat-pointer dispatch.
+        foreach_counter = [0]
+        while True:
+            fm = re.search(
+                r"for\s*\(\s*([_A-Za-z][_A-Za-z0-9 \*]*\*?)\s+([_A-Za-z][_A-Za-z0-9]*)\s+in\s+([^\)]+)\)\s*\{",
+                text,
+            )
+            if not fm:
+                break
+            var_type = fm.group(1).strip()
+            var_name = fm.group(2).strip()
+            iterable_expr = fm.group(3).strip()
+            iter_var = f"_iter_{foreach_counter[0]}"
+            foreach_counter[0] += 1
+            fstart = fm.end() - 1
+            fpos = find_matching_close(text, fstart)
+            body = text[fstart + 1 : fpos]
+            fend = fpos + 1
+            replacement = (
+                f"{{\n"
+                f"    IIterator {iter_var} = i_iterable_iterator(cast<IIterable>({iterable_expr}));\n"
+                f"    while (i_iterator_has_next({iter_var})) {{\n"
+                f"        {var_type} {var_name} = ({var_type})i_iterator_next({iter_var});\n"
+                f"        {body.strip()}\n"
+                f"    }}\n"
+                f"    object_free((Object*){iter_var}.obj);\n"
+                f"}}"
+            )
+            text = text[: fm.start()] + replacement + text[fend:]
+
         # ── Phase 7: Convert cast<Iface>(x) to inline fat-pointer construction ──
         # Collect all interfaces used so we can emit per-interface lookup functions.
         ifaces_for_lookup: Dict[str, str] = {}
@@ -877,11 +927,15 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
 
         if types_for_instanceof:
             instanceof_code = ""
-            # Add forward declarations and extern declarations for class vtables
+            # Forward declarations for all vtables needed (target + all concrete subclasses)
+            declared_vtbls: List[str] = []
             for type_name in types_for_instanceof:
                 if type_name in classes:
-                    instanceof_code += f"typedef struct {type_name}Vtbl {type_name}Vtbl;\n"
-                    instanceof_code += f"extern {type_name}Vtbl _{type_name}Vtbl;\n"
+                    for sub in concrete_subclasses(type_name):
+                        if sub not in declared_vtbls:
+                            instanceof_code += f"typedef struct {sub}Vtbl {sub}Vtbl;\n"
+                            instanceof_code += f"extern {sub}Vtbl _{sub}Vtbl;\n"
+                            declared_vtbls.append(sub)
             instanceof_code += "\n"
 
             for type_name in types_for_instanceof:
@@ -895,9 +949,14 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
                     instanceof_code += "    return false;\n"
                     instanceof_code += "}\n\n"
                 elif type_name in classes:
+                    subs = concrete_subclasses(type_name)
                     instanceof_code += f"static bool _instanceof_{type_name}(void* obj) {{\n"
                     instanceof_code += "    Object* _obj = (Object*)obj;\n"
-                    instanceof_code += f"    return _obj->vtbl == (void*)&_{type_name}Vtbl;\n"
+                    if subs:
+                        checks = " ||\n        ".join(f"_obj->vtbl == (void*)&_{s}Vtbl" for s in subs)
+                        instanceof_code += f"    return {checks};\n"
+                    else:
+                        instanceof_code += "    return false;\n"
                     instanceof_code += "}\n\n"
                 else:
                     logging.warning(f"Type '{type_name}' used in instanceof<> is not defined as a class or interface")

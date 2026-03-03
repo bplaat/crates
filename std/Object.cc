@@ -49,14 +49,3 @@ bool Float::equals(Object* other) {
 u32 Float::hash() {
     return fnv1a_32(&this->value, sizeof(this->value));
 }
-
-// String
-bool String::equals(Object* other) {
-    if (other == NULL || !instanceof<String>(other))
-        return false;
-    return strcmp(this->cstr, ((String*)other)->cstr) == 0;
-}
-
-u32 String::hash() {
-    return fnv1a_32(this->cstr, this->length);
-}
