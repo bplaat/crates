@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2021-2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "Object.hh"
 
 // Object

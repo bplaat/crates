@@ -1,12 +1,19 @@
 [package]
 name = "ccontinue"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [[bin]]
 name = "ccc"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
-regex = "1"
-indexmap = "2"
+regex = { version = "1.11", default-features = false, features = [
+    "unicode-perl",
+] }
+indexmap = "2.12"

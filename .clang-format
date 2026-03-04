@@ -4,8 +4,11 @@ IndentWidth: 4
 ColumnLimit: 120
 DerivePointerAlignment: false
 PointerAlignment: Left
-AllowShortFunctionsOnASingleLine: Empty
 SpaceAfterCStyleCast: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
 
 # C++
 AccessModifierOffset: -4

@@ -12,7 +12,7 @@ clean() {
 check_copyright() {
     echo "Checking copyright headers..."
     exit=0
-    for file in $(find . -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*.min.js"); do
+    for file in $(find . -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.cc" -o -name "*.hh" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*.min.js" ! -path "*bob/examples/*" ! -path "*ccontinue/tests/*.cc"); do
         if ! grep -E -q "Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+" "$file"; then
             echo "Bad copyright header in: $file"
             exit=1
@@ -97,6 +97,7 @@ build_install_freedesktop() {
 
 install() {
     cargo install --force --path bin/bob
+    cargo install --force --path bin/ccontinue
     cargo install --force --path bin/music-dl
 
     if [ "$(uname)" = "Darwin" ]; then

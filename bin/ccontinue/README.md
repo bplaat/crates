@@ -7,7 +7,8 @@ I like C and I like C++, both are powerful languages in their own right. But C++
 ## Usage
 
 ```sh
-ccc <file.cc> [options]
+cargo install --path .
+ccc [options] <file.cc>
 ```
 
 | Flag        | Description                                        |

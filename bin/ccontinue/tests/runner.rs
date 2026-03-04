@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+//! Integration tests for the ccc transpiler.
+
+#![allow(dead_code)]
+
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -15,7 +25,7 @@ const ENTITLEMENTS_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 fn get_entitlements_path() -> String {
     let path = std::env::temp_dir().join("ccc_test.entitlements");
     fs::write(&path, ENTITLEMENTS_XML).expect("write entitlements");
-    path.to_str().unwrap().to_owned()
+    path.to_str().expect("temp path is valid UTF-8").to_owned()
 }
 
 fn parse_test_meta(filepath: &str) -> (i32, String) {
@@ -46,8 +56,11 @@ fn parse_test_meta(filepath: &str) -> (i32, String) {
 fn build_test(test_file: &str) -> Result<String, String> {
     let ccc_bin = env!("CARGO_BIN_EXE_ccc");
     let exe_path = test_file.trim_end_matches(".cc").to_owned();
+    let std_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/std");
     let result = Command::new(ccc_bin)
         .arg(test_file)
+        .arg("-I")
+        .arg(std_dir)
         .output()
         .map_err(|e| format!("failed to run ccc: {e}"))?;
 
@@ -87,8 +100,7 @@ fn run_normal(exe_path: &str, expected_exit: i32, expected_stdout: &str) -> Resu
     let actual_exit = result.status.code().unwrap_or(-1);
     if actual_exit != expected_exit {
         return Err(format!(
-            "exit code {} (expected {})",
-            actual_exit, expected_exit
+            "exit code {actual_exit} (expected {expected_exit})"
         ));
     }
     let actual_stdout = String::from_utf8_lossy(&result.stdout).into_owned();
@@ -96,8 +108,7 @@ fn run_normal(exe_path: &str, expected_exit: i32, expected_stdout: &str) -> Resu
         let exp_repr = format!("{:?}", &expected_stdout[..expected_stdout.len().min(300)]);
         let got_repr = format!("{:?}", &actual_stdout[..actual_stdout.len().min(300)]);
         return Err(format!(
-            "stdout mismatch\n    expected: {}\n    got:      {}",
-            exp_repr, got_repr
+            "stdout mismatch\n    expected: {exp_repr}\n    got:      {got_repr}"
         ));
     }
     Ok(())
@@ -126,7 +137,7 @@ fn run_leaks(exe_path: &str) -> Result<(), String> {
                 .chars()
                 .rev()
                 .collect();
-            return Err(format!("leaks detected\n{}", tail));
+            return Err(format!("leaks detected\n{tail}"));
         }
         Ok(())
     } else if cfg!(target_os = "linux") {
@@ -150,7 +161,7 @@ fn run_leaks(exe_path: &str) -> Result<(), String> {
                 .chars()
                 .rev()
                 .collect();
-            return Err(format!("valgrind errors\n{}", tail));
+            return Err(format!("valgrind errors\n{tail}"));
         }
         Ok(())
     } else {
@@ -163,7 +174,7 @@ fn run_test(test_file: &str) {
 
     let exe_path = match build_test(test_file) {
         Ok(p) => p,
-        Err(e) => panic!("build error: {}", e),
+        Err(e) => panic!("build error: {e}"),
     };
 
     let run_result = run_normal(&exe_path, expected_exit, &expected_stdout);
@@ -176,7 +187,7 @@ fn run_test(test_file: &str) {
         panic!("{}", e);
     }
     if let Err(e) = leaks_result {
-        panic!("[leaks] {}", e);
+        panic!("[leaks] {e}");
     }
 }
 

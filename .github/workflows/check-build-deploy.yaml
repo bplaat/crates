@@ -23,7 +23,7 @@ jobs:
       - name: Install Debian packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcunit1-dev libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libcunit1-dev libgtk-3-dev libwebkit2gtk-4.1-dev valgrind
       - uses: actions/cache@v4
         id: cache-rust-toolchain
         with:
@@ -47,7 +47,7 @@ jobs:
       - name: Install Debian packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcunit1-dev libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libcunit1-dev libgtk-3-dev libwebkit2gtk-4.1-dev valgrind
       - uses: actions/cache@v4
         id: cache-rust-toolchain
         with:

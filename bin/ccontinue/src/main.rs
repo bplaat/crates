@@ -1,4 +1,11 @@
-// MARK: Main
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#![doc = include_str!("../README.md")]
+
 mod args;
 mod transpiler;
 mod types;
@@ -18,7 +25,9 @@ fn tempfile_path(ext: &str) -> String {
     let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let name = format!("ccc_{}_{n}{ext}", std::process::id());
     tmp.push(name);
-    tmp.to_str().expect("temp dir path is valid UTF-8").to_owned()
+    tmp.to_str()
+        .expect("temp dir path is valid UTF-8")
+        .to_owned()
 }
 
 fn main() {
@@ -45,13 +54,29 @@ fn main() {
 
     let mut include_paths: Vec<String> = vec![
         ".".to_owned(),
-        std_dir.to_str().expect("std dir path is valid UTF-8").to_owned(),
+        std_dir
+            .to_str()
+            .expect("std dir path is valid UTF-8")
+            .to_owned(),
     ];
-    include_paths.extend(args.include_paths);
+    include_paths.extend(args.include_paths.clone());
+
+    // Find effective std dir: prefer discovered std_dir, fall back to an include path
+    // that contains Object.hh (needed when ccc is run from a non-project location, e.g. tests)
+    let effective_std_dir = if std_dir.exists() {
+        Some(std_dir)
+    } else {
+        args.include_paths
+            .iter()
+            .map(std::path::PathBuf::from)
+            .find(|p| p.join("Object.hh").exists())
+    };
 
     let mut source_paths = args.files.clone();
-    if !args.flag_source && !args.flag_compile
-        && let Ok(entries) = std::fs::read_dir(&std_dir)
+    if !args.flag_source
+        && !args.flag_compile
+        && let Some(dir) = effective_std_dir
+        && let Ok(entries) = std::fs::read_dir(&dir)
     {
         for entry in entries.flatten() {
             let p = entry.path();
@@ -81,12 +106,12 @@ fn main() {
             };
             transpiler.reset();
             let text = std::fs::read_to_string(path).unwrap_or_else(|e| {
-                eprintln!("[ERROR] Can't read {}: {}", path, e);
+                eprintln!("[ERROR] Can't read {path}: {e}");
                 std::process::exit(1);
             });
             let result = transpiler.transpile(path, path.ends_with(".hh"), &text);
             std::fs::write(&sp, &result).unwrap_or_else(|e| {
-                eprintln!("[ERROR] Can't write {}: {}", sp, e);
+                eprintln!("[ERROR] Can't write {sp}: {e}");
                 std::process::exit(1);
             });
             if args.flag_source {
@@ -107,13 +132,13 @@ fn main() {
         object_paths.push(object_path.clone());
 
         let mut cmd = Command::new(&cc);
-        cmd.args(["--std=c23", "-Wall", "-Wextra", "-Wpedantic", "-Werror"]);
+        cmd.args(["--std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror"]);
         for inc in &include_paths {
-            cmd.arg(format!("-I{}", inc));
+            cmd.arg(format!("-I{inc}"));
         }
         cmd.args(["-c", &source_path, "-o", &object_path]);
         let status = cmd.status().unwrap_or_else(|e| {
-            eprintln!("[ERROR] Failed to run compiler: {}", e);
+            eprintln!("[ERROR] Failed to run compiler: {e}");
             std::process::exit(1);
         });
         if !status.success() {
@@ -137,7 +162,7 @@ fn main() {
     link_cmd.args(&object_paths);
     link_cmd.args(["-o", &exe_path]);
     let status = link_cmd.status().unwrap_or_else(|e| {
-        eprintln!("[ERROR] Failed to run linker: {}", e);
+        eprintln!("[ERROR] Failed to run linker: {e}");
         std::process::exit(1);
     });
     if !status.success() {
@@ -146,7 +171,7 @@ fn main() {
 
     if args.flag_run {
         std::process::exit(
-            Command::new(format!("./{}", exe_path))
+            Command::new(format!("./{exe_path}"))
                 .status()
                 .map(|s| s.code().unwrap_or(0))
                 .unwrap_or(1),
@@ -155,7 +180,7 @@ fn main() {
         if cfg!(target_os = "macos") {
             std::process::exit(
                 Command::new("leaks")
-                    .args(["--atExit", "--", &format!("./{}", exe_path)])
+                    .args(["--atExit", "--", &format!("./{exe_path}")])
                     .status()
                     .map(|s| s.code().unwrap_or(0))
                     .unwrap_or(1),
@@ -167,7 +192,7 @@ fn main() {
                         "--leak-check=full",
                         "--show-leak-kinds=all",
                         "--track-origins=yes",
-                        &format!("./{}", exe_path),
+                        &format!("./{exe_path}"),
                     ])
                     .status()
                     .map(|s| s.code().unwrap_or(0))

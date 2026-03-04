@@ -165,9 +165,7 @@
 
               if ([json[@"status"] integerValue] == 429) {
                   NSLog(@"[WARN] Too many requests");
-                  dispatch_async(dispatch_get_main_queue(), ^{
-                      [self openToManyRequestsAlert];
-                  });
+                  dispatch_async(dispatch_get_main_queue(), ^{ [self openToManyRequestsAlert]; });
                   return;
               }
 
@@ -233,9 +231,7 @@
               if ([json[@"status"] integerValue] == 429) {
                   NSLog(@"[WARN] Too many requests");
                   if (userInitiated) {
-                      dispatch_async(dispatch_get_main_queue(), ^{
-                          [self openToManyRequestsAlert];
-                      });
+                      dispatch_async(dispatch_get_main_queue(), ^{ [self openToManyRequestsAlert]; });
                   }
                   return;
               }
@@ -259,7 +255,8 @@
                               break;
                           }
                       }
-                      if (!foundPost) break;
+                      if (!foundPost)
+                          break;
                   }
                   NSLog(@"[INFO] Current streak: %ld days", streakDays);
 

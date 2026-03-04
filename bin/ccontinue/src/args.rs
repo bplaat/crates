@@ -1,18 +1,23 @@
-// MARK: Args
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use std::env;
 
 #[derive(Debug)]
-pub struct Args {
-    pub files: Vec<String>,
-    pub output: Option<String>,
-    pub include_paths: Vec<String>,
-    pub flag_source: bool,
-    pub flag_compile: bool,
-    pub flag_run: bool,
-    pub flag_run_leaks: bool,
+pub(crate) struct Args {
+    pub(crate) files: Vec<String>,
+    pub(crate) output: Option<String>,
+    pub(crate) include_paths: Vec<String>,
+    pub(crate) flag_source: bool,
+    pub(crate) flag_compile: bool,
+    pub(crate) flag_run: bool,
+    pub(crate) flag_run_leaks: bool,
 }
 
-pub fn parse_args() -> Args {
+pub(crate) fn parse_args() -> Args {
     let raw: Vec<String> = env::args().collect();
     let mut files = Vec::new();
     let mut output = None;

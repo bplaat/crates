@@ -26,26 +26,35 @@ x11_cookie_t* parse_xauthority(const char* xauth_path) {
     if (xauth_file) {
         while (1) {
             uint16_t family, address_len, display_len, local_name_len, local_data_len;
-            if (fread(&family, 2, 1, xauth_file) != 1) break;
+            if (fread(&family, 2, 1, xauth_file) != 1)
+                break;
             family = ntohs(family);
 
-            if (fread(&address_len, 2, 1, xauth_file) != 1) break;
+            if (fread(&address_len, 2, 1, xauth_file) != 1)
+                break;
             address_len = ntohs(address_len);
-            if (fseek(xauth_file, address_len, SEEK_CUR) != 0) break;
+            if (fseek(xauth_file, address_len, SEEK_CUR) != 0)
+                break;
 
-            if (fread(&display_len, 2, 1, xauth_file) != 1) break;
+            if (fread(&display_len, 2, 1, xauth_file) != 1)
+                break;
             display_len = ntohs(display_len);
-            if (fseek(xauth_file, display_len, SEEK_CUR) != 0) break;
+            if (fseek(xauth_file, display_len, SEEK_CUR) != 0)
+                break;
 
-            if (fread(&local_name_len, 2, 1, xauth_file) != 1) break;
+            if (fread(&local_name_len, 2, 1, xauth_file) != 1)
+                break;
             local_name_len = ntohs(local_name_len);
             char local_name[local_name_len];
-            if (fread(local_name, 1, local_name_len, xauth_file) != local_name_len) break;
+            if (fread(local_name, 1, local_name_len, xauth_file) != local_name_len)
+                break;
 
-            if (fread(&local_data_len, 2, 1, xauth_file) != 1) break;
+            if (fread(&local_data_len, 2, 1, xauth_file) != 1)
+                break;
             local_data_len = ntohs(local_data_len);
             uint8_t local_data[local_data_len];
-            if (fread(local_data, 1, local_data_len, xauth_file) != local_data_len) break;
+            if (fread(local_data, 1, local_data_len, xauth_file) != local_data_len)
+                break;
 
             if (local_name_len == 18 && memcmp(local_name, "MIT-MAGIC-COOKIE-1", 18) == 0) {
                 x11_cookie_t* cookie = malloc(sizeof(x11_cookie_t));
@@ -104,9 +113,11 @@ bool x11_connect(x11_connection_t* conn) {
     if (cookie) {
         uint8_t pad[4] = {0};
         write(conn->fd, cookie->name, cookie->name_len);
-        if (cookie->name_len % 4 != 0) write(conn->fd, pad, 4 - (cookie->name_len % 4));
+        if (cookie->name_len % 4 != 0)
+            write(conn->fd, pad, 4 - (cookie->name_len % 4));
         write(conn->fd, cookie->data, cookie->data_len);
-        if (cookie->data_len % 4 != 0) write(conn->fd, pad, 4 - (cookie->data_len % 4));
+        if (cookie->data_len % 4 != 0)
+            write(conn->fd, pad, 4 - (cookie->data_len % 4));
 
         free(cookie->name);
         free(cookie->data);

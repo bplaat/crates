@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2023-2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include <Map.hh>
 
 void Map::init() {

@@ -1,4 +1,9 @@
-// MARK: Utils
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -6,10 +11,11 @@ use regex::Regex;
 use crate::types::Argument;
 
 static RE_ARGUMENT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)").unwrap()
+    Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)")
+        .expect("valid regex")
 });
 
-pub fn to_snake_case(camel_case: &str) -> String {
+pub(crate) fn to_snake_case(camel_case: &str) -> String {
     let mut s = String::new();
     for ch in camel_case.chars() {
         if ch.is_uppercase() {
@@ -26,7 +32,7 @@ pub fn to_snake_case(camel_case: &str) -> String {
     }
 }
 
-pub fn find_matching_close(text: &str, start: usize) -> usize {
+pub(crate) fn find_matching_close(text: &str, start: usize) -> usize {
     let bytes = text.as_bytes();
     let open_char = bytes[start];
     let close_char = if open_char == b'{' { b'}' } else { b')' };
@@ -46,7 +52,7 @@ pub fn find_matching_close(text: &str, start: usize) -> usize {
     pos
 }
 
-pub fn parse_arguments(arguments_str: &str) -> Vec<Argument> {
+pub(crate) fn parse_arguments(arguments_str: &str) -> Vec<Argument> {
     let mut arguments = Vec::new();
     if !arguments_str.trim().is_empty() {
         for argument_str in arguments_str.split(',') {

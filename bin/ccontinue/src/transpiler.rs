@@ -1,4 +1,9 @@
-// MARK: Transpiler
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::LazyLock;
@@ -9,7 +14,8 @@ use regex::{Captures, Regex};
 use crate::types::{Argument, Class, Field, Interface, Method};
 use crate::utils::{find_matching_close, parse_arguments, to_snake_case};
 
-pub struct Transpiler {
+// MARK: Transpiler
+pub(crate) struct Transpiler {
     include_paths: Vec<String>,
     classes: IndexMap<String, Class>,
     interfaces: IndexMap<String, Interface>,
@@ -18,7 +24,7 @@ pub struct Transpiler {
 }
 
 impl Transpiler {
-    pub fn new(include_paths: Vec<String>) -> Self {
+    pub(crate) fn new(include_paths: Vec<String>) -> Self {
         Transpiler {
             include_paths,
             classes: IndexMap::new(),
@@ -28,7 +34,7 @@ impl Transpiler {
         }
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.next_interface_id = 1;
         self.interfaces = IndexMap::new();
         self.classes = IndexMap::new();
@@ -41,7 +47,7 @@ impl Transpiler {
             return class_;
         }
         if class_.parent_name.is_none() {
-            eprintln!("[ERROR] No class implements method: {}", method_name);
+            eprintln!("[ERROR] No class implements method: {method_name}");
             std::process::exit(1);
         }
         self.find_class_for_method(
@@ -115,25 +121,25 @@ impl Transpiler {
 
     // MARK: Convert includes
     fn convert_include(&mut self, current_path: &str, include_name: &str) -> String {
-        let base_path = format!("{}.hh", include_name);
+        let base_path = format!("{include_name}.hh");
         if self.processed_includes.contains(&base_path) {
             return String::new();
         }
         self.processed_includes.push(base_path.clone());
         for include_path in self.include_paths.clone() {
-            let complete_path = format!("{}/{}", include_path, base_path);
+            let complete_path = format!("{include_path}/{base_path}");
             if Path::new(&complete_path).exists() {
                 let is_header = base_path.ends_with(".hh")
                     && std::fs::canonicalize(&complete_path).ok()
                         != std::fs::canonicalize(current_path.replace(".cc", ".hh")).ok();
                 let text = std::fs::read_to_string(&complete_path).unwrap_or_else(|_| {
-                    eprintln!("[ERROR] Can't read include: {}", complete_path);
+                    eprintln!("[ERROR] Can't read include: {complete_path}");
                     std::process::exit(1);
                 });
                 return self.transpile(&complete_path, is_header, &text);
             }
         }
-        eprintln!("[ERROR] Can't find include: {}", base_path);
+        eprintln!("[ERROR] Can't find include: {base_path}");
         std::process::exit(1);
     }
 
@@ -159,10 +165,7 @@ impl Transpiler {
                     continue;
                 }
                 if !self.interfaces.contains_key(name) {
-                    eprintln!(
-                        "[ERROR] Can't find parent interface {} for {}",
-                        name, iface_name
-                    );
+                    eprintln!("[ERROR] Can't find parent interface {name} for {iface_name}");
                     std::process::exit(1);
                 }
                 iface.parent_names.push(name.to_owned());
@@ -193,10 +196,10 @@ impl Transpiler {
             );
         }
 
-        let mut c = format!("// interface {}\n", iface_name);
+        let mut c = format!("// interface {iface_name}\n");
         c += &format!("#define _{}_ID {}\n\n", iface_name, iface.id);
 
-        c += &format!("typedef struct {}Vtbl {{\n", iface_name);
+        c += &format!("typedef struct {iface_name}Vtbl {{\n");
         let mut current_origin = String::new();
         for method in iface.methods.values() {
             if method.origin_class != current_origin {
@@ -209,12 +212,12 @@ impl Transpiler {
             }
             c += ");\n";
         }
-        c += &format!("}} {}Vtbl;\n\n", iface_name);
+        c += &format!("}} {iface_name}Vtbl;\n\n");
 
-        c += &format!("typedef struct {} {{\n", iface_name);
+        c += &format!("typedef struct {iface_name} {{\n");
         c += "    void* obj;\n";
-        c += &format!("    const {}Vtbl* vtbl;\n", iface_name);
-        c += &format!("}} {};\n\n", iface_name);
+        c += &format!("    const {iface_name}Vtbl* vtbl;\n");
+        c += &format!("}} {iface_name};\n\n");
 
         for method in iface.methods.values() {
             c += &format!("#define {}_{}(iface", snake_name, method.name);
@@ -241,10 +244,12 @@ impl Transpiler {
         contents: &str,
     ) -> (String, Option<String>) {
         static RE_FIELD: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"(.+[^=][\s|\*])([_A-Za-z][_A-Za-z0-9]*)\s*(=\s*[^;]+)?;").expect("valid regex")
+            Regex::new(r"(.+[^=][\s|\*])([_A-Za-z][_A-Za-z0-9]*)\s*(=\s*[^;]+)?;")
+                .expect("valid regex")
         });
-        static RE_FIELD_ATTR: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"@([_A-Za-z][_A-Za-z0-9]*)(\([^\)]*\))?").unwrap());
+        static RE_FIELD_ATTR: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"@([_A-Za-z][_A-Za-z0-9]*)(\([^\)]*\))?").expect("valid regex")
+        });
         static RE_METHOD_DECL: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0)?;").expect("valid regex")
         });
@@ -270,10 +275,7 @@ impl Transpiler {
                         explicit_interfaces.push(name.to_owned());
                     }
                 } else {
-                    eprintln!(
-                        "[ERROR] Unknown class or interface '{}' in class {}",
-                        name, class_name
-                    );
+                    eprintln!("[ERROR] Unknown class or interface '{name}' in class {class_name}");
                     std::process::exit(1);
                 }
             }
@@ -283,10 +285,7 @@ impl Transpiler {
         if let Some(ref pname) = parent_class_name
             && !self.classes.contains_key(pname.as_str())
         {
-            eprintln!(
-                "[ERROR] Can't find parent class {} for {}",
-                pname, class_name
-            );
+            eprintln!("[ERROR] Can't find parent class {pname} for {class_name}");
             std::process::exit(1);
         }
 
@@ -343,7 +342,7 @@ impl Transpiler {
                 .to_owned();
 
             if class_.fields.contains_key(&name) {
-                eprintln!("[ERROR] Can't inherit field: {}", name);
+                eprintln!("[ERROR] Can't inherit field: {name}");
                 std::process::exit(1);
             }
 
@@ -392,7 +391,7 @@ impl Transpiler {
                 if is_virtual {
                     class_.is_abstract = true;
                 } else {
-                    eprintln!("[ERROR] Only virtual methods can be set to zero: {}", name);
+                    eprintln!("[ERROR] Only virtual methods can be set to zero: {name}");
                     std::process::exit(1);
                 }
             }
@@ -433,7 +432,10 @@ impl Transpiler {
         let mut g = String::new();
 
         if parent_class_name.is_some() {
-            let pname = parent_class_name.as_ref().expect("parent class name is set").clone();
+            let pname = parent_class_name
+                .as_ref()
+                .expect("parent class name is set")
+                .clone();
 
             // Auto init
             let field_needs_init = self.classes[class_name]
@@ -476,8 +478,8 @@ impl Transpiler {
                 let snake_name = self.classes[class_name].snake_name.clone();
                 let parent_snake = to_snake_case(&pname);
 
-                g += &format!("void _{}_init(", snake_name);
-                let sig_args: Vec<String> = std::iter::once(format!("{}* this", class_name))
+                g += &format!("void _{snake_name}_init(");
+                let sig_args: Vec<String> = std::iter::once(format!("{class_name}* this"))
                     .chain(init_args.iter().map(|a| format!("{} {}", a.type_, a.name)))
                     .collect();
                 g += &sig_args.join(", ");
@@ -532,7 +534,7 @@ impl Transpiler {
                     .class_ = class_name.to_owned();
 
                 let snake_name = self.classes[class_name].snake_name.clone();
-                g += &format!("void _{}_deinit({}* this) {{\n", snake_name, class_name);
+                g += &format!("void _{snake_name}_deinit({class_name}* this) {{\n");
 
                 let fields: Vec<Field> = self.classes[class_name]
                     .fields
@@ -577,8 +579,7 @@ impl Transpiler {
                     ))
                     .to_owned();
                 g += &format!(
-                    "    _{}_deinit(({}*)this);\n",
-                    class_with_deinit_snake, class_with_deinit
+                    "    _{class_with_deinit_snake}_deinit(({class_with_deinit}*)this);\n"
                 );
                 g += "}\n\n";
             }
@@ -596,19 +597,23 @@ impl Transpiler {
             for field in getter_fields {
                 let method_name = format!("get_{}", field.name);
                 let snake_name = self.classes[class_name].snake_name.clone();
-                self.classes.get_mut(class_name).expect("class exists").methods.insert(
-                    method_name.clone(),
-                    Method {
-                        name: method_name.clone(),
-                        return_type: field.type_.clone(),
-                        is_return_self: false,
-                        is_virtual: false,
-                        is_static: false,
-                        arguments: Vec::new(),
-                        class_: class_name.to_owned(),
-                        origin_class: class_name.to_owned(),
-                    },
-                );
+                self.classes
+                    .get_mut(class_name)
+                    .expect("class exists")
+                    .methods
+                    .insert(
+                        method_name.clone(),
+                        Method {
+                            name: method_name.clone(),
+                            return_type: field.type_.clone(),
+                            is_return_self: false,
+                            is_virtual: false,
+                            is_static: false,
+                            arguments: Vec::new(),
+                            class_: class_name.to_owned(),
+                            origin_class: class_name.to_owned(),
+                        },
+                    );
                 g += &format!(
                     "{} _{}_get_{}({}* this) {{\n",
                     field.type_, snake_name, field.name, class_name
@@ -630,22 +635,26 @@ impl Transpiler {
             for field in setter_fields {
                 let method_name = format!("set_{}", field.name);
                 let snake_name = self.classes[class_name].snake_name.clone();
-                self.classes.get_mut(class_name).expect("class exists").methods.insert(
-                    method_name.clone(),
-                    Method {
-                        name: method_name.clone(),
-                        return_type: "void".to_owned(),
-                        is_return_self: false,
-                        is_virtual: false,
-                        is_static: false,
-                        arguments: vec![Argument {
-                            name: field.name.clone(),
-                            type_: field.type_.clone(),
-                        }],
-                        class_: class_name.to_owned(),
-                        origin_class: class_name.to_owned(),
-                    },
-                );
+                self.classes
+                    .get_mut(class_name)
+                    .expect("class exists")
+                    .methods
+                    .insert(
+                        method_name.clone(),
+                        Method {
+                            name: method_name.clone(),
+                            return_type: "void".to_owned(),
+                            is_return_self: false,
+                            is_virtual: false,
+                            is_static: false,
+                            arguments: vec![Argument {
+                                name: field.name.clone(),
+                                type_: field.type_.clone(),
+                            }],
+                            class_: class_name.to_owned(),
+                            origin_class: class_name.to_owned(),
+                        },
+                    );
                 g += &format!(
                     "void _{}_set_{}({}* this, {} {}) {{\n",
                     snake_name, field.name, class_name, field.type_, field.name
@@ -661,7 +670,7 @@ impl Transpiler {
                 self.classes[class_name].methods["init"].arguments.clone();
             let new_method = Method {
                 name: "new".to_owned(),
-                return_type: format!("{}*", class_name),
+                return_type: format!("{class_name}*"),
                 is_return_self: false,
                 is_virtual: false,
                 is_static: true,
@@ -902,14 +911,14 @@ impl Transpiler {
         let arguments = caps[4].to_owned();
 
         if !self.classes.contains_key(&class_name) {
-            eprintln!("[ERROR] Can't find class: {}", class_name);
+            eprintln!("[ERROR] Can't find class: {class_name}");
             std::process::exit(1);
         }
         let class_ = &self.classes[&class_name];
         let method = match class_.methods.get(&method_name) {
             Some(m) => m,
             None => {
-                eprintln!("[ERROR] Can't find method: {}::{}", class_name, method_name);
+                eprintln!("[ERROR] Can't find method: {class_name}::{method_name}");
                 std::process::exit(1);
             }
         };
@@ -939,7 +948,7 @@ impl Transpiler {
                 method_name,
                 class_name,
                 if !arguments.is_empty() {
-                    format!(", {}", arguments)
+                    format!(", {arguments}")
                 } else {
                     String::new()
                 }
@@ -975,17 +984,14 @@ impl Transpiler {
         let arguments = caps[3].to_owned();
 
         if !self.classes.contains_key(&parent_class_name) {
-            eprintln!("[ERROR] Can't find class: {}", parent_class_name);
+            eprintln!("[ERROR] Can't find class: {parent_class_name}");
             std::process::exit(1);
         }
         let parent_class = &self.classes[&parent_class_name];
         let method = match parent_class.methods.get(&method_name) {
             Some(m) => m,
             None => {
-                eprintln!(
-                    "[ERROR] Can't find method: {}::{}",
-                    parent_class_name, method_name
-                );
+                eprintln!("[ERROR] Can't find method: {parent_class_name}::{method_name}");
                 std::process::exit(1);
             }
         };
@@ -995,7 +1001,7 @@ impl Transpiler {
             method.name,
             method.class_,
             if !arguments.is_empty() {
-                format!(", {}", arguments)
+                format!(", {arguments}")
             } else {
                 String::new()
             }
@@ -1007,27 +1013,26 @@ impl Transpiler {
         static RE_PRAGMA_ONCE: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"#pragma once\n").expect("valid regex"));
         static RE_INCLUDE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"#include\s*["<](.+)\.hh[">]"#).unwrap());
+            LazyLock::new(|| Regex::new(r#"#include\s*["<](.+)\.hh[">]"#).expect("valid regex"));
         static RE_LITERAL_STRING: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"@"([^"]*)""#).unwrap());
+            LazyLock::new(|| Regex::new(r#"@"([^"]*)""#).expect("valid regex"));
         static RE_LITERAL_BOOL: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"@(true|false)\b").unwrap());
+            LazyLock::new(|| Regex::new(r"@(true|false)\b").expect("valid regex"));
         static RE_LITERAL_FLOAT: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"@([0-9]+\.[0-9]+)").unwrap());
+            LazyLock::new(|| Regex::new(r"@([0-9]+\.[0-9]+)").expect("valid regex"));
         static RE_LITERAL_INT: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"@([0-9]+)").unwrap());
+            LazyLock::new(|| Regex::new(r"@([0-9]+)").expect("valid regex"));
         let mut text = if !is_header {
-            format!(
-                "// @generated\n#include \"prelude.h\"\n#include \"Object.hh\"\n{}",
-                text
-            )
+            format!("// @generated\n#include \"prelude.h\"\n#include \"Object.hh\"\n{text}")
         } else {
             text.to_owned()
         };
         text = RE_PRAGMA_ONCE.replace_all(&text, "").into_owned();
         // Inline convert_include using replace loop (can't use closure with &mut self)
         loop {
-            let Some(caps) = RE_INCLUDE.captures(&text) else { break };
+            let Some(caps) = RE_INCLUDE.captures(&text) else {
+                break;
+            };
             let start = caps.get(0).expect("group 0 always present").start();
             let end = caps.get(0).expect("group 0 always present").end();
             let include_name = caps[1].to_owned();
@@ -1060,7 +1065,9 @@ impl Transpiler {
         let mut text = text.to_owned();
         loop {
             let (match_start, match_end, iface_name, supers_raw) = {
-                let Some(caps) = RE_INTERFACE.captures(&text) else { break };
+                let Some(caps) = RE_INTERFACE.captures(&text) else {
+                    break;
+                };
                 let m0 = caps.get(0).expect("group 0 always present");
                 (
                     m0.start(),
@@ -1093,7 +1100,10 @@ impl Transpiler {
             let method_names: Vec<String> =
                 re.captures_iter(text).map(|c| c[1].to_owned()).collect();
             for method_name in method_names {
-                if self.interfaces[iface_name].methods.contains_key(&method_name) {
+                if self.interfaces[iface_name]
+                    .methods
+                    .contains_key(&method_name)
+                {
                     self.interfaces
                         .get_mut(iface_name)
                         .expect("interface exists")
@@ -1105,8 +1115,9 @@ impl Transpiler {
     }
 
     fn step_classes(&mut self, text: &str, is_header: bool) -> String {
-        static RE_CLASS_FWD: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"class\s+([_A-Za-z][_A-Za-z0-9]*)\s*;").unwrap());
+        static RE_CLASS_FWD: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"class\s+([_A-Za-z][_A-Za-z0-9]*)\s*;").expect("valid regex")
+        });
         static RE_CLASS: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"class\s+([_A-Za-z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{")
                 .expect("valid regex")
@@ -1116,7 +1127,9 @@ impl Transpiler {
             .into_owned();
         loop {
             let (match_start, match_end, class_name, supers_raw) = {
-                let Some(caps) = RE_CLASS.captures(&text) else { break };
+                let Some(caps) = RE_CLASS.captures(&text) else {
+                    break;
+                };
                 let m0 = caps.get(0).expect("group 0 always present");
                 (
                     m0.start(),
@@ -1171,7 +1184,8 @@ impl Transpiler {
                         caps[2].to_owned(),
                         caps[3].to_owned(),
                     ))
-                })() else {
+                })(
+                ) else {
                     continue;
                 };
                 {
@@ -1180,8 +1194,7 @@ impl Transpiler {
                         .contains_key(&method_name)
                     {
                         eprintln!(
-                            "[ERROR] Interface {} has no method '{}'",
-                            cur_iface_name, method_name
+                            "[ERROR] Interface {cur_iface_name} has no method '{method_name}'"
                         );
                         std::process::exit(1);
                     }
@@ -1202,14 +1215,13 @@ impl Transpiler {
                         fn_code += &format!(", {} {}", arg.type_, arg.name);
                     }
                     fn_code += ") {\n";
-                    fn_code += &format!("    const {}Vtbl* _vtbl;\n", cur_iface_name);
+                    fn_code += &format!("    const {cur_iface_name}Vtbl* _vtbl;\n");
                     fn_code += "    {\n";
                     fn_code += "        const _InterfaceSlot* _s = *(const _InterfaceSlot* const*)*(void* const*)this;\n";
                     fn_code += "        _vtbl = NULL;\n";
                     fn_code += "        if (_s) for (; _s->id; _s++) {\n";
                     fn_code += &format!(
-                        "            if (_s->id == _{}_ID) {{ _vtbl = (const {}Vtbl*)_s->vtbl; break; }}\n",
-                        cur_iface_name, cur_iface_name
+                        "            if (_s->id == _{cur_iface_name}_ID) {{ _vtbl = (const {cur_iface_name}Vtbl*)_s->vtbl; break; }}\n"
                     );
                     fn_code += "        }\n";
                     fn_code += "    }\n";
@@ -1220,12 +1232,12 @@ impl Transpiler {
                         .cloned()
                         .collect();
                     for m_name in &method_names {
-                        let sub_re =
-                            Regex::new(&format!(r"\b{}\(this\b", regex::escape(m_name))).expect("valid regex");
+                        let sub_re = Regex::new(&format!(r"\b{}\(this\b", regex::escape(m_name)))
+                            .expect("valid regex");
                         transformed_body = sub_re
                             .replace_all(
                                 &transformed_body,
-                                format!("_vtbl->{}(this", m_name).as_str(),
+                                format!("_vtbl->{m_name}(this").as_str(),
                             )
                             .into_owned();
                     }
@@ -1294,7 +1306,9 @@ impl Transpiler {
         let mut counter = 0usize;
         loop {
             let (match_start, match_end, var_type, var_name, iterable_expr) = {
-                let Some(caps) = RE_FOR_IN.captures(&text) else { break };
+                let Some(caps) = RE_FOR_IN.captures(&text) else {
+                    break;
+                };
                 let m0 = caps.get(0).expect("group 0 always present");
                 (
                     m0.start(),
@@ -1304,7 +1318,7 @@ impl Transpiler {
                     caps[3].trim().to_owned(),
                 )
             };
-            let iter_var = format!("_iter_{}", counter);
+            let iter_var = format!("_iter_{counter}");
             counter += 1;
             let fstart = match_end - 1;
             let fpos = find_matching_close(&text, fstart);
@@ -1320,13 +1334,13 @@ impl Transpiler {
 
     fn step_cast(&self, text: &str) -> String {
         static RE_CAST_SCAN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"cast<([_A-Za-z][_A-Za-z0-9]*)>").unwrap());
+            LazyLock::new(|| Regex::new(r"cast<([_A-Za-z][_A-Za-z0-9]*)>").expect("valid regex"));
         static RE_CAST: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"cast<([_A-Za-z][_A-Za-z0-9]*)>\(").unwrap());
+            LazyLock::new(|| Regex::new(r"cast<([_A-Za-z][_A-Za-z0-9]*)>\(").expect("valid regex"));
         static RE_MAIN: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"\bint\s+main\s*\(").expect("valid regex"));
         static RE_INSERT_AFTER_CLOSE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"(}\n\n)([a-zA-Z#])").unwrap());
+            LazyLock::new(|| Regex::new(r"(}\n\n)([a-zA-Z#])").expect("valid regex"));
         let mut text = text.to_owned();
         let mut ifaces_used: Vec<String> = Vec::new();
         for caps in RE_CAST_SCAN.captures_iter(&text.clone()) {
@@ -1339,23 +1353,18 @@ impl Transpiler {
         if !ifaces_used.is_empty() {
             let mut lookup_code = String::new();
             for lk_iface_name in &ifaces_used {
-                lookup_code += &format!(
-                    "static {} _cast_{}(void* obj) {{\n",
-                    lk_iface_name, lk_iface_name
-                );
+                lookup_code +=
+                    &format!("static {lk_iface_name} _cast_{lk_iface_name}(void* obj) {{\n");
                 lookup_code += "    Object* _obj = (Object*)obj;\n";
                 lookup_code += "    const _InterfaceSlot* s = _obj->vtbl->interfaces;\n";
-                lookup_code += &format!("    const {}Vtbl* vtbl = NULL;\n", lk_iface_name);
+                lookup_code += &format!("    const {lk_iface_name}Vtbl* vtbl = NULL;\n");
                 lookup_code += "    if (s) for (; s->id; s++) {\n";
                 lookup_code += &format!(
-                    "        if (s->id == _{}_ID) {{ vtbl = (const {}Vtbl*)s->vtbl; break; }}\n",
-                    lk_iface_name, lk_iface_name
+                    "        if (s->id == _{lk_iface_name}_ID) {{ vtbl = (const {lk_iface_name}Vtbl*)s->vtbl; break; }}\n"
                 );
                 lookup_code += "    }\n";
-                lookup_code += &format!(
-                    "    return ({}){{ .obj = _obj, .vtbl = vtbl }};\n",
-                    lk_iface_name
-                );
+                lookup_code +=
+                    &format!("    return ({lk_iface_name}){{ .obj = _obj, .vtbl = vtbl }};\n");
                 lookup_code += "}\n\n";
             }
             let ins_pos = if let Some(m) = RE_MAIN.find(&text.clone()) {
@@ -1370,7 +1379,9 @@ impl Transpiler {
 
         loop {
             let (match_start, match_end, cast_iface_name) = {
-                let Some(caps) = RE_CAST.captures(&text) else { break };
+                let Some(caps) = RE_CAST.captures(&text) else {
+                    break;
+                };
                 let iface = caps[1].to_owned();
                 if !self.interfaces.contains_key(&iface) {
                     break;
@@ -1394,16 +1405,20 @@ impl Transpiler {
     }
 
     fn step_instanceof(&self, text: &str) -> String {
-        static RE_INSTANCEOF_SCAN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>").unwrap());
-        static RE_INSTANCEOF: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>\(").unwrap());
+        static RE_INSTANCEOF_SCAN: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>").expect("valid regex")
+        });
+        static RE_INSTANCEOF: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>\(").expect("valid regex")
+        });
         static RE_MAIN: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"\bint\s+main\s*\(").expect("valid regex"));
-        static RE_FUNC_MARKER: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"\n(?:typedef|extern|#|struct|}\s*;)").unwrap());
+        static RE_FUNC_MARKER: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"\n(?:typedef|extern|#|struct|}\s*;)").expect("valid regex")
+        });
         static RE_FUNC_IMPL: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(").expect("valid regex")
+            Regex::new(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(")
+                .expect("valid regex")
         });
         let mut text = text.to_owned();
         let mut types_for_instanceof: Vec<String> = Vec::new();
@@ -1421,9 +1436,8 @@ impl Transpiler {
                 if self.classes.contains_key(type_name.as_str()) {
                     for sub in self.concrete_subclasses(type_name) {
                         if !declared_vtbls.contains(&sub) {
-                            instanceof_code +=
-                                &format!("typedef struct {}Vtbl {}Vtbl;\n", sub, sub);
-                            instanceof_code += &format!("extern {}Vtbl _{}Vtbl;\n", sub, sub);
+                            instanceof_code += &format!("typedef struct {sub}Vtbl {sub}Vtbl;\n");
+                            instanceof_code += &format!("extern {sub}Vtbl _{sub}Vtbl;\n");
                             declared_vtbls.push(sub);
                         }
                     }
@@ -1434,35 +1448,34 @@ impl Transpiler {
             for type_name in &types_for_instanceof {
                 if self.interfaces.contains_key(type_name.as_str()) {
                     instanceof_code +=
-                        &format!("static bool _instanceof_{}(void* obj) {{\n", type_name);
+                        &format!("static bool _instanceof_{type_name}(void* obj) {{\n");
                     instanceof_code += "    Object* _obj = (Object*)obj;\n";
                     instanceof_code += "    const _InterfaceSlot* s = _obj->vtbl->interfaces;\n";
                     instanceof_code += "    if (!s) return false;\n";
                     instanceof_code += "    for (; s->id; s++)\n";
                     instanceof_code +=
-                        &format!("        if (s->id == _{}_ID) return true;\n", type_name);
+                        &format!("        if (s->id == _{type_name}_ID) return true;\n");
                     instanceof_code += "    return false;\n";
                     instanceof_code += "}\n\n";
                 } else if self.classes.contains_key(type_name.as_str()) {
                     let subs = self.concrete_subclasses(type_name);
                     instanceof_code +=
-                        &format!("static bool _instanceof_{}(void* obj) {{\n", type_name);
+                        &format!("static bool _instanceof_{type_name}(void* obj) {{\n");
                     instanceof_code += "    Object* _obj = (Object*)obj;\n";
                     if !subs.is_empty() {
                         let checks = subs
                             .iter()
-                            .map(|s| format!("_obj->vtbl == (void*)&_{}Vtbl", s))
+                            .map(|s| format!("_obj->vtbl == (void*)&_{s}Vtbl"))
                             .collect::<Vec<_>>()
                             .join(" ||\n        ");
-                        instanceof_code += &format!("    return {};\n", checks);
+                        instanceof_code += &format!("    return {checks};\n");
                     } else {
                         instanceof_code += "    return false;\n";
                     }
                     instanceof_code += "}\n\n";
                 } else {
                     eprintln!(
-                        "[WARNING] Type '{}' used in instanceof<> is not defined as a class or interface",
-                        type_name
+                        "[WARNING] Type '{type_name}' used in instanceof<> is not defined as a class or interface"
                     );
                 }
             }
@@ -1489,7 +1502,9 @@ impl Transpiler {
 
         loop {
             let (match_start, match_end, inst_type_name) = {
-                let Some(caps) = RE_INSTANCEOF.captures(&text) else { break };
+                let Some(caps) = RE_INSTANCEOF.captures(&text) else {
+                    break;
+                };
                 let m0 = caps.get(0).expect("group 0 always present");
                 (m0.start(), m0.end(), caps[1].to_owned())
             };
@@ -1497,8 +1512,7 @@ impl Transpiler {
                 && !self.classes.contains_key(&inst_type_name)
             {
                 eprintln!(
-                    "[ERROR] Type '{}' used in instanceof<> is not defined as a class or interface",
-                    inst_type_name
+                    "[ERROR] Type '{inst_type_name}' used in instanceof<> is not defined as a class or interface"
                 );
                 text = format!("{}false{}", &text[..match_start], &text[match_end..]);
                 continue;
@@ -1518,7 +1532,7 @@ impl Transpiler {
         text
     }
 
-    pub fn transpile(&mut self, path: &str, is_header: bool, text: &str) -> String {
+    pub(crate) fn transpile(&mut self, path: &str, is_header: bool, text: &str) -> String {
         let text = self.step_prelude_and_includes(path, is_header, text);
         let text = self.step_interfaces(&text);
         if !is_header {

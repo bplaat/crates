@@ -79,6 +79,7 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 
 - [baksteen](bin/baksteen/) A brick laying robot simulator
 - [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
+- [ccontinue](bin/ccontinue) A transpiler that translates an OOP-extension for the C programming language back to C
 - [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
 - [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [plaatnotes](bin/plaatnotes) A self-hosted note taking web app with rich markdown support
@@ -172,6 +173,6 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 
 ## License
 
-Copyright © 2023-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
+Copyright © 2021-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
 Licensed under the [MIT](LICENSE) license.
