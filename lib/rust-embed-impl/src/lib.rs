@@ -115,12 +115,25 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Collect relative file paths for iter()
+    let file_paths: Vec<_> = files
+        .iter()
+        .map(|path| {
+            let (file_path, _) = to_const_name(path);
+            file_path
+        })
+        .collect();
+
     TokenStream::from(quote! {
         #(#embed_files)*
 
         impl #name {
             fn get(file_path: &str) -> Option<rust_embed::EmbeddedFile> {
                 <Self as rust_embed::RustEmbed>::get(file_path)
+            }
+
+            fn iter() -> impl Iterator<Item = std::borrow::Cow<'static, str>> {
+                <Self as rust_embed::RustEmbed>::iter()
             }
         }
 
@@ -130,6 +143,10 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                     #(#embed_mapping)*
                     _ => None,
                 }
+            }
+
+            fn iter() -> impl Iterator<Item = std::borrow::Cow<'static, str>> {
+                [#(std::borrow::Cow::Borrowed(#file_paths),)*].into_iter()
             }
         }
     })

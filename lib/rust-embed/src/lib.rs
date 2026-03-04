@@ -16,6 +16,9 @@ pub use rust_embed_impl::Embed;
 pub trait RustEmbed {
     /// Get an embedded file by its path.
     fn get(file_path: &str) -> Option<EmbeddedFile>;
+
+    /// Iterate over the relative paths of all embedded files.
+    fn iter() -> impl Iterator<Item = Cow<'static, str>>;
 }
 
 /// A file embedded in the binary
