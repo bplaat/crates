@@ -17,6 +17,7 @@ use crate::utils::{find_matching_close, parse_arguments, to_snake_case};
 // MARK: Transpiler
 pub(crate) struct Transpiler {
     include_paths: Vec<String>,
+    embedded_includes: HashMap<String, String>,
     classes: IndexMap<String, Class>,
     interfaces: IndexMap<String, Interface>,
     next_interface_id: usize,
@@ -27,11 +28,16 @@ impl Transpiler {
     pub(crate) fn new(include_paths: Vec<String>) -> Self {
         Transpiler {
             include_paths,
+            embedded_includes: HashMap::new(),
             classes: IndexMap::new(),
             interfaces: IndexMap::new(),
             next_interface_id: 1,
             processed_includes: Vec::new(),
         }
+    }
+
+    pub(crate) fn set_embedded_includes(&mut self, map: HashMap<String, String>) {
+        self.embedded_includes = map;
     }
 
     pub(crate) fn reset(&mut self) {
@@ -126,18 +132,33 @@ impl Transpiler {
             return String::new();
         }
         self.processed_includes.push(base_path.clone());
+
+        // Determine is_header by comparing stems: a .hh file is a "companion header"
+        // (not an independent header) only when its stem matches the current file's stem.
+        let include_stem = include_name
+            .rsplit('/')
+            .next()
+            .expect("include_name has at least one component");
+        let current_stem = Path::new(current_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        let is_header = include_stem != current_stem;
+
         for include_path in self.include_paths.clone() {
             let complete_path = format!("{include_path}/{base_path}");
             if Path::new(&complete_path).exists() {
-                let is_header = base_path.ends_with(".hh")
-                    && std::fs::canonicalize(&complete_path).ok()
-                        != std::fs::canonicalize(current_path.replace(".cc", ".hh")).ok();
                 let text = std::fs::read_to_string(&complete_path).unwrap_or_else(|_| {
                     eprintln!("[ERROR] Can't read include: {complete_path}");
                     std::process::exit(1);
                 });
                 return self.transpile(&complete_path, is_header, &text);
             }
+        }
+        // Fallback: look up in embedded includes map
+        if let Some(text) = self.embedded_includes.get(&base_path).cloned() {
+            let virtual_path = format!("<embedded>/{base_path}");
+            return self.transpile(&virtual_path, is_header, &text);
         }
         eprintln!("[ERROR] Can't find include: {base_path}");
         std::process::exit(1);
@@ -329,10 +350,18 @@ impl Transpiler {
                 if iface.parent_names.is_empty() {
                     continue;
                 }
-                if iface.methods.values().any(|m| &m.origin_class == iface_name) {
+                if iface
+                    .methods
+                    .values()
+                    .any(|m| &m.origin_class == iface_name)
+                {
                     continue;
                 }
-                if iface.parent_names.iter().all(|p| class_.interface_names.contains(p)) {
+                if iface
+                    .parent_names
+                    .iter()
+                    .all(|p| class_.interface_names.contains(p))
+                {
                     class_.interface_names.push(iface_name.clone());
                     changed = true;
                 }

@@ -17,3 +17,4 @@ regex = { version = "1.11", default-features = false, features = [
     "unicode-perl",
 ] }
 indexmap = "2.12"
+rust-embed = "8.7.0"

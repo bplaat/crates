@@ -10,6 +10,9 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
+    println!("cargo:rerun-if-changed=std/");
+    println!("cargo:rerun-if-changed=tests/");
+
     // Generate test functions for each .cc file in tests/
     let tests_dir = Path::new("tests");
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR must be set by cargo");
@@ -50,5 +53,4 @@ fn main() {
     }
 
     fs::write(&dest, test_fns).expect("write generated tests file");
-    println!("cargo:rerun-if-changed=tests/");
 }
