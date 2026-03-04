@@ -95,7 +95,7 @@ Note: Constructor methods (`ClassName_new()`) are generated as static methods in
 
 ### Interfaces
 
-Interfaces are declared as `class IFoo` (name starts with `I` + uppercase). Implement with `: IFace`. Methods must **not** have bodies inside the declaration — define defaults outside with `IFoo::method()`. Dispatch via `cast<IFoo>(obj)` (fat pointer). Interfaces can extend other interfaces (multi-parent):
+Interfaces are declared as `class IFoo` (name starts with `I` + uppercase). Implement with `: IFace`. Methods can have defaults with `IFoo::method()`. Dispatch via `cast<IFoo>(obj)` (fat pointer). Interfaces can extend other interfaces (multi-parent).
 
 ```cpp
 class IEquatable {
@@ -126,6 +126,25 @@ Generated dispatch macros use the snake_case of the interface name:
 
 - `IComparable` → `i_comparable_less_than(c, other)`
 - `IHashable` → `i_hashable_hash(h)`
+
+#### Auto interfaces
+
+An interface with **no own methods** (only inherited from parents) is an _auto interface_. Any class that implements all of its parent interfaces automatically implements the auto interface — no explicit declaration needed. This mirrors Rust's auto traits:
+
+```cpp
+class IEquatable { bool equals(Object* other); };
+class IHashable  { u32 hash(); };
+class IKeyable : IEquatable, IHashable {};  // auto interface — zero own methods
+
+class Point : IEquatable, IHashable {       // automatically implements IKeyable too
+    @init i32 x;
+    @init i32 y;
+    virtual bool equals(Object* other);
+    virtual u32  hash();
+};
+
+IKeyable k = cast<IKeyable>(point_new(1, 2));  // works without `: IKeyable` on Point
+```
 
 ### Literals
 

@@ -8,7 +8,7 @@
 
 #include "Object.hh"
 
-class String : IKeyable {
+class String : IEquatable, IHashable {
     @get @init(strdup) @deinit char* cstr;
     @get usize length = strlen(cstr);
 

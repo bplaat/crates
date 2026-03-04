@@ -316,6 +316,32 @@ impl Transpiler {
             add_interface(iface_name, &mut class_, &self.interfaces);
         }
 
+        // Auto-implement interfaces: if a class satisfies all parents of a zero-own-method
+        // interface, automatically implement it (like Rust auto traits). Repeat until stable.
+        loop {
+            let mut changed = false;
+            let all_iface_names: Vec<String> = self.interfaces.keys().cloned().collect();
+            for iface_name in &all_iface_names {
+                if class_.interface_names.contains(iface_name) {
+                    continue;
+                }
+                let iface = &self.interfaces[iface_name.as_str()];
+                if iface.parent_names.is_empty() {
+                    continue;
+                }
+                if iface.methods.values().any(|m| &m.origin_class == iface_name) {
+                    continue;
+                }
+                if iface.parent_names.iter().all(|p| class_.interface_names.contains(p)) {
+                    class_.interface_names.push(iface_name.clone());
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+
         // Index fields
         for caps in RE_FIELD.captures_iter(contents) {
             let attributes_and_type_str = &caps[1];

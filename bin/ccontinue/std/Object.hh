@@ -39,21 +39,21 @@ class IIterable {
 };
 
 // Boxed types
-class Bool : IKeyable {
+class Bool : IEquatable, IHashable {
     @get @init bool value;
 
     virtual bool equals(Object* other);
     virtual u32 hash();
 };
 
-class Int : IKeyable {
+class Int : IEquatable, IHashable {
     @get @init i64 value;
 
     virtual bool equals(Object* other);
     virtual u32 hash();
 };
 
-class Float : IKeyable {
+class Float : IEquatable, IHashable {
     @get @init f64 value;
 
     virtual bool equals(Object* other);
