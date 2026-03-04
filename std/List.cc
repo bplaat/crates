@@ -48,7 +48,8 @@ void List::insert(usize index, Object* item) {
 }
 
 void List::remove(usize index) {
-    for (usize i = index; i < this->size; i++)
+    object_free(this->items[index]);
+    for (usize i = index; i < this->size - 1; i++)
         this->items[i] = this->items[i + 1];
     this->size--;
 }

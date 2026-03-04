@@ -239,7 +239,9 @@ class ConvertInterface:
 
             arguments = parse_arguments(arguments_str)
 
-            iface.methods[name] = Method(name, return_type.strip(), False, True, False, arguments, iface_name, iface_name)
+            iface.methods[name] = Method(
+                name, return_type.strip(), False, True, False, arguments, iface_name, iface_name
+            )
 
         # ==== Codegen ====
         c = ""
@@ -289,7 +291,7 @@ def codegen_static_method_definition(class_: "Class", method: Method) -> str:
     else:
         code += "void"
     code += ") {\n"
-    
+
     # Special case: _new() constructor
     if method.name == "new":
         code += f"    {class_.name}* this = malloc(sizeof({class_.name}));\n"
@@ -298,7 +300,7 @@ def codegen_static_method_definition(class_: "Class", method: Method) -> str:
         code += ", ".join(["this"] + [argument.name for argument in method.arguments])
         code += ");\n"
         code += "    return this;\n"
-    
+
     code += "}\n\n"
     return code
 
@@ -511,7 +513,14 @@ class ConvertClass:
                 if field.class_ == class_.name and ("set" in field.attributes or "prop" in field.attributes):
                     method_name = f"set_{field.name}"
                     class_.methods[method_name] = Method(
-                        method_name, "void", False, False, False, [Argument(field.name, field.type)], class_.name, class_.name
+                        method_name,
+                        "void",
+                        False,
+                        False,
+                        False,
+                        [Argument(field.name, field.type)],
+                        class_.name,
+                        class_.name,
                     )
 
                     g += f"void _{class_.snake_name}_set_{field.name}({class_.name}* this, "
@@ -525,8 +534,7 @@ class ConvertClass:
             # Create or update _new() as a static method in the methods dictionary
             # Always update it (not just if it doesn't exist) because inherited "new" methods need to be corrected
             class_.methods["new"] = Method(
-                "new", f"{class_.name}*", False, False, True, 
-                init_method.arguments, class_.name, class_.name
+                "new", f"{class_.name}*", False, False, True, init_method.arguments, class_.name, class_.name
             )
             # Generate implementation code (only for non-header files)
             if not self.is_header:
@@ -571,13 +579,17 @@ class ConvertClass:
                 c += codegen_static_method_declaration(class_, class_.methods["new"])
         for method in class_.methods.values():
             if method.class_ == class_.name and method.name != "new":
-                c += (
-                    f"{method.return_type} _{class_.snake_name}_{method.name}("
-                    + ", ".join(
-                        [f"{class_.name}* this"] + [f"{argument.type} {argument.name}" for argument in method.arguments]
+                if method.is_static:
+                    c += codegen_static_method_declaration(class_, method)
+                else:
+                    c += (
+                        f"{method.return_type} _{class_.snake_name}_{method.name}("
+                        + ", ".join(
+                            [f"{class_.name}* this"]
+                            + [f"{argument.type} {argument.name}" for argument in method.arguments]
+                        )
+                        + ");\n"
                     )
-                    + ");\n"
-                )
         c += "\n"
 
         # Class Vtbl instance
@@ -635,7 +647,7 @@ class ConvertClass:
             # Skip static methods - they don't need macros
             if method.is_static:
                 continue
-            
+
             return_cast = ""
             if method.is_return_self:
                 return_cast = f"({class_.name}*)"
@@ -681,8 +693,11 @@ def convert_method(match: re.Match[str]) -> str:
     if method.is_return_self:
         return_type = return_type.replace("Self", class_.name)
 
-    arguments_str = f", {arguments}" if len(arguments) > 0 else ""
-    c = f"{return_type.strip()} _{class_.snake_name}_{method_name}({class_name}* this{arguments_str}) {{"
+    if method.is_static:
+        c = f"{return_type.strip()} {class_.snake_name}_{method_name}({arguments if arguments.strip() else 'void'}) {{"
+    else:
+        arguments_str = f", {arguments}" if len(arguments) > 0 else ""
+        c = f"{return_type.strip()} _{class_.snake_name}_{method_name}({class_name}* this{arguments_str}) {{"
 
     if method_name == "init":
         for field in class_.fields.values():
@@ -930,12 +945,13 @@ def transpile_text(path: str, is_header: bool, text: str) -> str:
                 lookup_code += "    }\n"
                 lookup_code += f"    return ({lk_iface_name}){{ .obj = _obj, .vtbl = vtbl }};\n"
                 lookup_code += "}\n\n"
-            insert_marker = re.search(r"(}\n\n)(?=[a-zA-Z#])", text)
-            if insert_marker:
-                ins_pos = insert_marker.end()
-                text = text[:ins_pos] + lookup_code + text[ins_pos:]
+            cast_main_marker = re.search(r"\bint\s+main\s*\(", text)
+            if cast_main_marker:
+                ins_pos = cast_main_marker.start()
             else:
-                text += lookup_code
+                insert_marker = re.search(r"(}\n\n)(?=[a-zA-Z#])", text)
+                ins_pos = insert_marker.end() if insert_marker else len(text)
+            text = text[:ins_pos] + lookup_code + text[ins_pos:]
 
         # cast<Iface>(expr) - paren-aware to handle nested parens in expr
         while True:
