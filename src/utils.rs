@@ -14,13 +14,13 @@ pub fn to_snake_case(camel_case: &str) -> String {
     for ch in camel_case.chars() {
         if ch.is_uppercase() {
             s.push('_');
-            s.push(ch.to_lowercase().next().unwrap());
+            s.push(ch.to_lowercase().next().expect("char has lowercase"));
         } else {
             s.push(ch);
         }
     }
-    if s.starts_with('_') {
-        s[1..].to_owned()
+    if let Some(stripped) = s.strip_prefix('_') {
+        stripped.to_owned()
     } else {
         s
     }

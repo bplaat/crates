@@ -18,7 +18,7 @@ fn tempfile_path(ext: &str) -> String {
     let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let name = format!("ccc_{}_{n}{ext}", std::process::id());
     tmp.push(name);
-    tmp.to_str().unwrap().to_owned()
+    tmp.to_str().expect("temp dir path is valid UTF-8").to_owned()
 }
 
 fn main() {
@@ -26,8 +26,8 @@ fn main() {
 
     let cc = env::var("CC").unwrap_or_else(|_| "gcc".to_owned());
     let script_dir = {
-        let exe = env::current_exe().unwrap();
-        let exe_dir = exe.parent().unwrap().to_owned();
+        let exe = env::current_exe().expect("cannot get current exe path");
+        let exe_dir = exe.parent().expect("exe has parent directory").to_owned();
         // During cargo run/test, exe is in target/debug/ — walk up to find std/
         let mut d = exe_dir.clone();
         loop {
@@ -43,18 +43,21 @@ fn main() {
     };
     let std_dir = script_dir.join("std");
 
-    let mut include_paths: Vec<String> = vec![".".to_owned(), std_dir.to_str().unwrap().to_owned()];
+    let mut include_paths: Vec<String> = vec![
+        ".".to_owned(),
+        std_dir.to_str().expect("std dir path is valid UTF-8").to_owned(),
+    ];
     include_paths.extend(args.include_paths);
 
     let mut source_paths = args.files.clone();
-    if !args.flag_source && !args.flag_compile {
-        if let Ok(entries) = std::fs::read_dir(&std_dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
-                if ext == "c" || ext == "cc" {
-                    source_paths.push(p.to_str().unwrap().to_owned());
-                }
+    if !args.flag_source && !args.flag_compile
+        && let Ok(entries) = std::fs::read_dir(&std_dir)
+    {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+            if ext == "c" || ext == "cc" {
+                source_paths.push(p.to_str().expect("source path is valid UTF-8").to_owned());
             }
         }
     }
@@ -143,7 +146,7 @@ fn main() {
 
     if args.flag_run {
         std::process::exit(
-            Command::new(&format!("./{}", exe_path))
+            Command::new(format!("./{}", exe_path))
                 .status()
                 .map(|s| s.code().unwrap_or(0))
                 .unwrap_or(1),

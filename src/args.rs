@@ -1,6 +1,7 @@
 // MARK: Args
 use std::env;
 
+#[derive(Debug)]
 pub struct Args {
     pub files: Vec<String>,
     pub output: Option<String>,

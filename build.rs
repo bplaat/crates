@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
+    // Generate test functions for each .cc file in tests/
     let tests_dir = Path::new("tests");
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let dest = Path::new(&out_dir).join("generated_tests.rs");

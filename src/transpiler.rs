@@ -1,4 +1,5 @@
 // MARK: Transpiler
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -9,11 +10,11 @@ use crate::types::{Argument, Class, Field, Interface, Method};
 use crate::utils::{find_matching_close, parse_arguments, to_snake_case};
 
 pub struct Transpiler {
-    pub include_paths: Vec<String>,
-    pub classes: IndexMap<String, Class>,
-    pub interfaces: IndexMap<String, Interface>,
-    pub next_interface_id: usize,
-    pub processed_includes: Vec<String>,
+    include_paths: Vec<String>,
+    classes: IndexMap<String, Class>,
+    interfaces: IndexMap<String, Interface>,
+    next_interface_id: usize,
+    processed_includes: Vec<String>,
 }
 
 impl Transpiler {
@@ -35,7 +36,7 @@ impl Transpiler {
     }
 
     // MARK: Helpers
-    fn _find_class_for_method<'a>(&'a self, class_: &'a Class, method_name: &str) -> &'a Class {
+    fn find_class_for_method<'a>(&'a self, class_: &'a Class, method_name: &str) -> &'a Class {
         if class_.methods[method_name].class_ == class_.name {
             return class_;
         }
@@ -43,13 +44,13 @@ impl Transpiler {
             eprintln!("[ERROR] No class implements method: {}", method_name);
             std::process::exit(1);
         }
-        self._find_class_for_method(
-            &self.classes[class_.parent_name.as_ref().unwrap()],
+        self.find_class_for_method(
+            &self.classes[class_.parent_name.as_ref().expect("parent_name is Some")],
             method_name,
         )
     }
 
-    fn _concrete_subclasses(&self, target_name: &str) -> Vec<String> {
+    fn concrete_subclasses(&self, target_name: &str) -> Vec<String> {
         let mut result = Vec::new();
         for cls in self.classes.values() {
             if cls.is_abstract {
@@ -67,7 +68,7 @@ impl Transpiler {
         result
     }
 
-    fn _static_method_signature(&self, class_: &Class, method: &Method) -> String {
+    fn static_method_signature(&self, class_: &Class, method: &Method) -> String {
         let mut sig = format!(
             "{} {}_{}(",
             method.return_type, class_.snake_name, method.name
@@ -88,12 +89,12 @@ impl Transpiler {
         sig
     }
 
-    fn _codegen_static_method_declaration(&self, class_: &Class, method: &Method) -> String {
-        self._static_method_signature(class_, method) + ";\n"
+    fn codegen_static_method_declaration(&self, class_: &Class, method: &Method) -> String {
+        self.static_method_signature(class_, method) + ";\n"
     }
 
-    fn _codegen_static_method_definition(&self, class_: &Class, method: &Method) -> String {
-        let mut code = self._static_method_signature(class_, method) + " {\n";
+    fn codegen_static_method_definition(&self, class_: &Class, method: &Method) -> String {
+        let mut code = self.static_method_signature(class_, method) + " {\n";
         if method.name == "new" {
             code += &format!(
                 "    {}* this = malloc(sizeof({}));\n",
@@ -113,8 +114,8 @@ impl Transpiler {
     }
 
     // MARK: Convert includes
-    fn _convert_include(&mut self, current_path: &str, caps: &Captures) -> String {
-        let base_path = format!("{}.hh", &caps[1]);
+    fn convert_include(&mut self, current_path: &str, include_name: &str) -> String {
+        let base_path = format!("{}.hh", include_name);
         if self.processed_includes.contains(&base_path) {
             return String::new();
         }
@@ -137,14 +138,14 @@ impl Transpiler {
     }
 
     // MARK: Convert interfaces
-    fn _convert_interface(
+    fn convert_interface(
         &mut self,
         iface_name: &str,
         supers_raw: Option<&str>,
         contents: &str,
     ) -> String {
         static RE_IFACE_METHOD: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0\s*)?;").unwrap()
+            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0\s*)?;").expect("valid regex")
         });
         let snake_name = to_snake_case(iface_name);
         let id = self.next_interface_id;
@@ -233,22 +234,22 @@ impl Transpiler {
     }
 
     // MARK: Convert classes: indexing
-    fn _index_class(
+    fn index_class(
         &mut self,
         class_name: &str,
         supers_raw: Option<&str>,
         contents: &str,
     ) -> (String, Option<String>) {
         static RE_FIELD: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"(.+[^=][\s|\*])([_A-Za-z][_A-Za-z0-9]*)\s*(=\s*[^;]+)?;").unwrap()
+            Regex::new(r"(.+[^=][\s|\*])([_A-Za-z][_A-Za-z0-9]*)\s*(=\s*[^;]+)?;").expect("valid regex")
         });
         static RE_FIELD_ATTR: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"@([_A-Za-z][_A-Za-z0-9]*)(\([^\)]*\))?").unwrap());
         static RE_METHOD_DECL: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0)?;").unwrap()
+            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0)?;").expect("valid regex")
         });
         static RE_SELF_RETURN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"Self\s*\*").unwrap());
+            LazyLock::new(|| Regex::new(r"Self\s*\*").expect("valid regex"));
         let mut parent_name: Option<String> = if class_name == "Object" {
             None
         } else {
@@ -279,14 +280,14 @@ impl Transpiler {
         }
 
         let parent_class_name: Option<String> = parent_name.clone();
-        if let Some(ref pname) = parent_class_name {
-            if !self.classes.contains_key(pname.as_str()) {
-                eprintln!(
-                    "[ERROR] Can't find parent class {} for {}",
-                    pname, class_name
-                );
-                std::process::exit(1);
-            }
+        if let Some(ref pname) = parent_class_name
+            && !self.classes.contains_key(pname.as_str())
+        {
+            eprintln!(
+                "[ERROR] Can't find parent class {} for {}",
+                pname, class_name
+            );
+            std::process::exit(1);
         }
 
         let mut class_ = Class::new(class_name, parent_name.clone());
@@ -423,7 +424,7 @@ impl Transpiler {
     }
 
     // MARK: Convert classes: codegen
-    fn _codegen_missing_methods(
+    fn codegen_missing_methods(
         &mut self,
         class_name: &str,
         parent_class_name: &Option<String>,
@@ -432,7 +433,7 @@ impl Transpiler {
         let mut g = String::new();
 
         if parent_class_name.is_some() {
-            let pname = parent_class_name.as_ref().unwrap().clone();
+            let pname = parent_class_name.as_ref().expect("parent class name is set").clone();
 
             // Auto init
             let field_needs_init = self.classes[class_name]
@@ -459,17 +460,17 @@ impl Transpiler {
 
                 self.classes
                     .get_mut(class_name)
-                    .unwrap()
+                    .expect("class exists")
                     .methods
                     .get_mut("init")
-                    .unwrap()
+                    .expect("init method exists")
                     .class_ = class_name.to_owned();
                 self.classes
                     .get_mut(class_name)
-                    .unwrap()
+                    .expect("class exists")
                     .methods
                     .get_mut("init")
-                    .unwrap()
+                    .expect("init method exists")
                     .arguments = init_args.clone();
 
                 let snake_name = self.classes[class_name].snake_name.clone();
@@ -524,10 +525,10 @@ impl Transpiler {
             if field_needs_deinit {
                 self.classes
                     .get_mut(class_name)
-                    .unwrap()
+                    .expect("class exists")
                     .methods
                     .get_mut("deinit")
-                    .unwrap()
+                    .expect("deinit method exists")
                     .class_ = class_name.to_owned();
 
                 let snake_name = self.classes[class_name].snake_name.clone();
@@ -559,7 +560,7 @@ impl Transpiler {
                     }
                 }
                 let class_with_deinit = self
-                    ._find_class_for_method(&self.classes[&pname], "deinit")
+                    .find_class_for_method(&self.classes[&pname], "deinit")
                     .name
                     .clone();
                 let class_with_deinit_snake = to_snake_case(&class_with_deinit);
@@ -595,7 +596,7 @@ impl Transpiler {
             for field in getter_fields {
                 let method_name = format!("get_{}", field.name);
                 let snake_name = self.classes[class_name].snake_name.clone();
-                self.classes.get_mut(class_name).unwrap().methods.insert(
+                self.classes.get_mut(class_name).expect("class exists").methods.insert(
                     method_name.clone(),
                     Method {
                         name: method_name.clone(),
@@ -629,7 +630,7 @@ impl Transpiler {
             for field in setter_fields {
                 let method_name = format!("set_{}", field.name);
                 let snake_name = self.classes[class_name].snake_name.clone();
-                self.classes.get_mut(class_name).unwrap().methods.insert(
+                self.classes.get_mut(class_name).expect("class exists").methods.insert(
                     method_name.clone(),
                     Method {
                         name: method_name.clone(),
@@ -670,19 +671,19 @@ impl Transpiler {
             };
             self.classes
                 .get_mut(class_name)
-                .unwrap()
+                .expect("class exists")
                 .methods
                 .insert("new".to_owned(), new_method.clone());
             if !is_header {
                 let class_ = &self.classes[class_name];
-                g += &self._codegen_static_method_definition(class_, &new_method);
+                g += &self.codegen_static_method_definition(class_, &new_method);
             }
         }
 
         g
     }
 
-    fn _codegen_class_struct(&self, class_name: &str) -> String {
+    fn codegen_class_struct(&self, class_name: &str) -> String {
         let class_ = &self.classes[class_name];
         let mut c = format!("typedef struct {0} {0};\n\n", class_.name);
         c += &format!("typedef struct {}Vtbl {{\n", class_.name);
@@ -725,18 +726,18 @@ impl Transpiler {
         c
     }
 
-    fn _codegen_class_forward_decls(&self, class_name: &str) -> String {
+    fn codegen_class_forward_decls(&self, class_name: &str) -> String {
         let class_ = &self.classes[class_name];
         let mut c = String::new();
-        if !class_.is_abstract {
-            if let Some(new_m) = class_.methods.get("new") {
-                c += &self._codegen_static_method_declaration(class_, new_m);
-            }
+        if !class_.is_abstract
+            && let Some(new_m) = class_.methods.get("new")
+        {
+            c += &self.codegen_static_method_declaration(class_, new_m);
         }
         for method in class_.methods.values() {
             if method.class_ == class_.name && method.name != "new" {
                 if method.is_static {
-                    c += &self._codegen_static_method_declaration(class_, method);
+                    c += &self.codegen_static_method_declaration(class_, method);
                 } else {
                     c += &format!(
                         "{} _{}_{}(",
@@ -759,7 +760,7 @@ impl Transpiler {
         c
     }
 
-    fn _codegen_class_vtbl_instance(&self, class_name: &str) -> String {
+    fn codegen_class_vtbl_instance(&self, class_name: &str) -> String {
         let class_ = &self.classes[class_name];
         let mut c = String::new();
 
@@ -797,12 +798,10 @@ impl Transpiler {
                 class_.name
             );
             for iface_name in &class_.interface_names {
-                let iface = &self.interfaces[iface_name];
                 c += &format!(
                     "    {{ _{}_ID, &_{}{}Vtbl }},\n",
                     iface_name, class_.name, iface_name
                 );
-                let _ = iface;
             }
             c += "    { 0, NULL }\n";
             c += "};\n\n";
@@ -828,7 +827,7 @@ impl Transpiler {
         c
     }
 
-    fn _codegen_class_macros(&self, class_name: &str) -> String {
+    fn codegen_class_macros(&self, class_name: &str) -> String {
         let class_ = &self.classes[class_name];
         let mut c = String::new();
         for method in class_.methods.values() {
@@ -873,22 +872,22 @@ impl Transpiler {
         c
     }
 
-    fn _convert_class(
+    fn convert_class(
         &mut self,
         is_header: bool,
         class_name: &str,
         supers_raw: Option<&str>,
         contents: &str,
     ) -> String {
-        let (cn, parent_cn) = self._index_class(class_name, supers_raw, contents);
-        let g = self._codegen_missing_methods(&cn, &parent_cn, is_header);
+        let (cn, parent_cn) = self.index_class(class_name, supers_raw, contents);
+        let g = self.codegen_missing_methods(&cn, &parent_cn, is_header);
 
-        let mut c = self._codegen_class_struct(&cn);
-        c += &self._codegen_class_forward_decls(&cn);
+        let mut c = self.codegen_class_struct(&cn);
+        c += &self.codegen_class_forward_decls(&cn);
         if !is_header && !self.classes[&cn].is_abstract {
-            c += &self._codegen_class_vtbl_instance(&cn);
+            c += &self.codegen_class_vtbl_instance(&cn);
         }
-        c += &self._codegen_class_macros(&cn);
+        c += &self.codegen_class_macros(&cn);
         if !is_header {
             c += &g;
         }
@@ -896,7 +895,7 @@ impl Transpiler {
     }
 
     // MARK: Convert method / super calls
-    fn _convert_method(&self, caps: &Captures) -> String {
+    fn convert_method(&self, caps: &Captures) -> String {
         let return_type = caps[1].to_owned();
         let class_name = caps[2].to_owned();
         let method_name = caps[3].to_owned();
@@ -948,10 +947,10 @@ impl Transpiler {
         }
         if method_name == "init" {
             for field in class_.fields.values() {
-                if field.class_ == class_name {
-                    if let Some(ref default) = field.default {
-                        c += &format!("\n    this->{} = {};", field.name, default);
-                    }
+                if field.class_ == class_name
+                    && let Some(ref default) = field.default
+                {
+                    c += &format!("\n    this->{} = {};", field.name, default);
                 }
             }
         }
@@ -970,7 +969,7 @@ impl Transpiler {
         c
     }
 
-    fn _convert_super_call(&self, caps: &Captures) -> String {
+    fn convert_super_call(&self, caps: &Captures) -> String {
         let parent_class_name = caps[1].to_owned();
         let method_name = caps[2].to_owned();
         let arguments = caps[3].to_owned();
@@ -1004,9 +1003,9 @@ impl Transpiler {
     }
 
     // MARK: Transpile steps
-    fn _step_prelude_and_includes(&mut self, path: &str, is_header: bool, text: &str) -> String {
+    fn step_prelude_and_includes(&mut self, path: &str, is_header: bool, text: &str) -> String {
         static RE_PRAGMA_ONCE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"#pragma once\n").unwrap());
+            LazyLock::new(|| Regex::new(r"#pragma once\n").expect("valid regex"));
         static RE_INCLUDE: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r#"#include\s*["<](.+)\.hh[">]"#).unwrap());
         static RE_LITERAL_STRING: LazyLock<Regex> =
@@ -1026,18 +1025,14 @@ impl Transpiler {
             text.to_owned()
         };
         text = RE_PRAGMA_ONCE.replace_all(&text, "").into_owned();
-        // Inline _convert_include using replace loop (can't use closure with &mut self)
+        // Inline convert_include using replace loop (can't use closure with &mut self)
         loop {
-            let _t = text.clone();
-            let m = RE_INCLUDE.captures(&_t);
-            if m.is_none() {
-                break;
-            }
-            let caps = m.unwrap();
-            let full_match = caps.get(0).unwrap();
-            let start = full_match.start();
-            let end = full_match.end();
-            let replacement = self._convert_include(path, &caps);
+            let Some(caps) = RE_INCLUDE.captures(&text) else { break };
+            let start = caps.get(0).expect("group 0 always present").start();
+            let end = caps.get(0).expect("group 0 always present").end();
+            let include_name = caps[1].to_owned();
+            drop(caps);
+            let replacement = self.convert_include(path, &include_name);
             text = format!("{}{}{}", &text[..start], replacement, &text[end..]);
         }
         text = RE_LITERAL_STRING
@@ -1057,21 +1052,23 @@ impl Transpiler {
         text
     }
 
-    fn _step_interfaces(&mut self, text: &str) -> String {
+    fn step_interfaces(&mut self, text: &str) -> String {
         static RE_INTERFACE: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"class\s+(I[A-Z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{")
-                .unwrap()
+                .expect("valid regex")
         });
         let mut text = text.to_owned();
         loop {
-            let _t = text.clone();
-            let m = RE_INTERFACE.captures(&_t);
-            if m.is_none() {
-                break;
-            }
-            let caps = m.unwrap();
-            let match_start = caps.get(0).unwrap().start();
-            let match_end = caps.get(0).unwrap().end();
+            let (match_start, match_end, iface_name, supers_raw) = {
+                let Some(caps) = RE_INTERFACE.captures(&text) else { break };
+                let m0 = caps.get(0).expect("group 0 always present");
+                (
+                    m0.start(),
+                    m0.end(),
+                    caps[1].to_owned(),
+                    caps.get(2).map(|m| m.as_str().to_owned()),
+                )
+            };
             let start = match_end - 1;
             let pos = find_matching_close(&text, start);
             let body = text[start + 1..pos].to_owned();
@@ -1079,32 +1076,27 @@ impl Transpiler {
             if end < text.len() && text.as_bytes()[end] == b';' {
                 end += 1;
             }
-            let iface_name = caps[1].to_owned();
-            let supers_raw = caps.get(2).map(|m| m.as_str().to_owned());
-            let replacement = self._convert_interface(&iface_name, supers_raw.as_deref(), &body);
+            let replacement = self.convert_interface(&iface_name, supers_raw.as_deref(), &body);
             text = format!("{}{}{}", &text[..match_start], replacement, &text[end..]);
         }
         text
     }
 
-    fn _step_prescan_default_bodies(&mut self, text: &str) {
+    fn step_prescan_default_bodies(&mut self, text: &str) {
         let iface_names: Vec<String> = self.interfaces.keys().cloned().collect();
-        for iface_name in iface_names {
+        for iface_name in &iface_names {
             let pattern = format!(
                 r"[_A-Za-z][_A-Za-z0-9 ]*[\**|\s+]\s*{}::([_A-Za-z][_A-Za-z0-9]*)\(",
-                regex::escape(&iface_name)
+                regex::escape(iface_name)
             );
-            let re = Regex::new(&pattern).unwrap();
+            let re = Regex::new(&pattern).expect("valid prescan regex");
             let method_names: Vec<String> =
                 re.captures_iter(text).map(|c| c[1].to_owned()).collect();
             for method_name in method_names {
-                if self.interfaces[&iface_name]
-                    .methods
-                    .contains_key(&method_name)
-                {
+                if self.interfaces[iface_name].methods.contains_key(&method_name) {
                     self.interfaces
-                        .get_mut(&iface_name)
-                        .unwrap()
+                        .get_mut(iface_name)
+                        .expect("interface exists")
                         .default_bodies
                         .insert(method_name.clone(), String::new());
                 }
@@ -1112,25 +1104,27 @@ impl Transpiler {
         }
     }
 
-    fn _step_classes(&mut self, text: &str, is_header: bool) -> String {
+    fn step_classes(&mut self, text: &str, is_header: bool) -> String {
         static RE_CLASS_FWD: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"class\s+([_A-Za-z][_A-Za-z0-9]*)\s*;").unwrap());
         static RE_CLASS: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"class\s+([_A-Za-z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{")
-                .unwrap()
+                .expect("valid regex")
         });
         let mut text = RE_CLASS_FWD
             .replace_all(text, "typedef struct $1 $1;")
             .into_owned();
         loop {
-            let _t = text.clone();
-            let m = RE_CLASS.captures(&_t);
-            if m.is_none() {
-                break;
-            }
-            let caps = m.unwrap();
-            let match_start = caps.get(0).unwrap().start();
-            let match_end = caps.get(0).unwrap().end();
+            let (match_start, match_end, class_name, supers_raw) = {
+                let Some(caps) = RE_CLASS.captures(&text) else { break };
+                let m0 = caps.get(0).expect("group 0 always present");
+                (
+                    m0.start(),
+                    m0.end(),
+                    caps[1].to_owned(),
+                    caps.get(2).map(|m| m.as_str().to_owned()),
+                )
+            };
             let start = match_end - 1;
             let pos = find_matching_close(&text, start);
             let body = text[start + 1..pos].to_owned();
@@ -1138,31 +1132,49 @@ impl Transpiler {
             if end < text.len() && text.as_bytes()[end] == b';' {
                 end += 1;
             }
-            let class_name = caps[1].to_owned();
-            let supers_raw = caps.get(2).map(|m| m.as_str().to_owned());
             let replacement =
-                self._convert_class(is_header, &class_name, supers_raw.as_deref(), &body);
+                self.convert_class(is_header, &class_name, supers_raw.as_deref(), &body);
             text = format!("{}{}{}", &text[..match_start], replacement, &text[end..]);
         }
         text
     }
 
-    fn _step_default_body_implementations(&mut self, text: &str) -> String {
+    fn step_default_body_implementations(&mut self, text: &str) -> String {
         let mut text = text.to_owned();
+        // Build regex cache once to avoid recompiling per-interface patterns in each outer iteration
+        let iface_names: Vec<String> = self.interfaces.keys().cloned().collect();
+        let re_cache: HashMap<String, Regex> = iface_names
+            .iter()
+            .map(|name| {
+                let pattern = format!(
+                    r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*{}::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{{",
+                    regex::escape(name)
+                );
+                (
+                    name.clone(),
+                    Regex::new(&pattern).expect("valid per-interface regex"),
+                )
+            })
+            .collect();
         loop {
             let mut found = false;
             let iface_names: Vec<String> = self.interfaces.keys().cloned().collect();
             for cur_iface_name in iface_names {
-                let pattern = format!(
-                    r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*{}::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{{",
-                    regex::escape(&cur_iface_name)
-                );
-                let re = Regex::new(&pattern).unwrap();
-                let _t = text.clone();
-                if let Some(dm) = re.captures(&_t) {
-                    let ret_type = dm[1].to_owned();
-                    let method_name = dm[2].to_owned();
-                    let arguments_str = dm[3].to_owned();
+                let re = &re_cache[&cur_iface_name];
+                let Some((dm_start, dm_end, ret_type, method_name, arguments_str)) = (|| {
+                    let caps = re.captures(&text)?;
+                    let m0 = caps.get(0)?;
+                    Some((
+                        m0.start(),
+                        m0.end(),
+                        caps[1].to_owned(),
+                        caps[2].to_owned(),
+                        caps[3].to_owned(),
+                    ))
+                })() else {
+                    continue;
+                };
+                {
                     if !self.interfaces[&cur_iface_name]
                         .methods
                         .contains_key(&method_name)
@@ -1173,8 +1185,6 @@ impl Transpiler {
                         );
                         std::process::exit(1);
                     }
-                    let dm_start = dm.get(0).unwrap().start();
-                    let dm_end = dm.get(0).unwrap().end();
                     let dstart = dm_end - 1;
                     let dpos = find_matching_close(&text, dstart);
                     let dend = dpos + 1;
@@ -1211,7 +1221,7 @@ impl Transpiler {
                         .collect();
                     for m_name in &method_names {
                         let sub_re =
-                            Regex::new(&format!(r"\b{}\(this\b", regex::escape(m_name))).unwrap();
+                            Regex::new(&format!(r"\b{}\(this\b", regex::escape(m_name))).expect("valid regex");
                         transformed_body = sub_re
                             .replace_all(
                                 &transformed_body,
@@ -1224,7 +1234,7 @@ impl Transpiler {
 
                     self.interfaces
                         .get_mut(&cur_iface_name)
-                        .unwrap()
+                        .expect("interface exists")
                         .default_bodies
                         .insert(method_name.clone(), fn_code.clone());
                     text = format!("{}{}{}", &text[..dm_start], fn_code, &text[dend..]);
@@ -1241,62 +1251,61 @@ impl Transpiler {
         text
     }
 
-    fn _step_methods_and_super_calls(&self, text: &str) -> String {
+    fn step_methods_and_super_calls(&self, text: &str) -> String {
         static RE_METHOD_DEF: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{").unwrap()
+            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{").expect("valid regex")
         });
         static RE_SUPER_CALL: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*;")
-                .unwrap()
+                .expect("valid regex")
         });
         // replace_all with closure needs shared ref; clone self data via closure capture
         let text = {
             let mut result = String::new();
             let mut last = 0;
             for caps in RE_METHOD_DEF.captures_iter(text) {
-                let m = caps.get(0).unwrap();
+                let m = caps.get(0).expect("group 0 always present");
                 result.push_str(&text[last..m.start()]);
-                result.push_str(&self._convert_method(&caps));
+                result.push_str(&self.convert_method(&caps));
                 last = m.end();
             }
             result.push_str(&text[last..]);
             result
         };
-        let text = {
+        {
             let mut result = String::new();
             let mut last = 0;
             for caps in RE_SUPER_CALL.captures_iter(&text.clone()) {
-                let m = caps.get(0).unwrap();
+                let m = caps.get(0).expect("group 0 always present");
                 result.push_str(&text[last..m.start()]);
-                result.push_str(&self._convert_super_call(&caps));
+                result.push_str(&self.convert_super_call(&caps));
                 last = m.end();
             }
             result.push_str(&text[last..]);
             result
-        };
-        text
+        }
     }
 
-    fn _step_for_in(&self, text: &str) -> String {
+    fn step_for_in(&self, text: &str) -> String {
         static RE_FOR_IN: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"for\s*\(\s*([_A-Za-z][_A-Za-z0-9 \*]*\*?)\s+([_A-Za-z][_A-Za-z0-9]*)\s+in\s+([^\)]+)\)\s*\{").unwrap()
+            Regex::new(r"for\s*\(\s*([_A-Za-z][_A-Za-z0-9 \*]*\*?)\s+([_A-Za-z][_A-Za-z0-9]*)\s+in\s+([^\)]+)\)\s*\{").expect("valid regex")
         });
         let mut text = text.to_owned();
         let mut counter = 0usize;
         loop {
-            let _t = text.clone();
-            let m = RE_FOR_IN.captures(&_t);
-            if m.is_none() {
-                break;
-            }
-            let caps = m.unwrap();
-            let var_type = caps[1].trim().to_owned();
-            let var_name = caps[2].trim().to_owned();
-            let iterable_expr = caps[3].trim().to_owned();
+            let (match_start, match_end, var_type, var_name, iterable_expr) = {
+                let Some(caps) = RE_FOR_IN.captures(&text) else { break };
+                let m0 = caps.get(0).expect("group 0 always present");
+                (
+                    m0.start(),
+                    m0.end(),
+                    caps[1].trim().to_owned(),
+                    caps[2].trim().to_owned(),
+                    caps[3].trim().to_owned(),
+                )
+            };
             let iter_var = format!("_iter_{}", counter);
             counter += 1;
-            let match_end = caps.get(0).unwrap().end();
-            let match_start = caps.get(0).unwrap().start();
             let fstart = match_end - 1;
             let fpos = find_matching_close(&text, fstart);
             let body = text[fstart + 1..fpos].trim().to_owned();
@@ -1309,13 +1318,13 @@ impl Transpiler {
         text
     }
 
-    fn _step_cast(&self, text: &str) -> String {
+    fn step_cast(&self, text: &str) -> String {
         static RE_CAST_SCAN: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"cast<([_A-Za-z][_A-Za-z0-9]*)>").unwrap());
         static RE_CAST: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"cast<([_A-Za-z][_A-Za-z0-9]*)>\(").unwrap());
         static RE_MAIN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"\bint\s+main\s*\(").unwrap());
+            LazyLock::new(|| Regex::new(r"\bint\s+main\s*\(").expect("valid regex"));
         static RE_INSERT_AFTER_CLOSE: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"(}\n\n)([a-zA-Z#])").unwrap());
         let mut text = text.to_owned();
@@ -1360,18 +1369,15 @@ impl Transpiler {
         }
 
         loop {
-            let _t = text.clone();
-            let m = RE_CAST.captures(&_t);
-            if m.is_none() {
-                break;
-            }
-            let caps = m.unwrap();
-            let cast_iface_name = caps[1].to_owned();
-            if !self.interfaces.contains_key(&cast_iface_name) {
-                break;
-            }
-            let match_start = caps.get(0).unwrap().start();
-            let match_end = caps.get(0).unwrap().end();
+            let (match_start, match_end, cast_iface_name) = {
+                let Some(caps) = RE_CAST.captures(&text) else { break };
+                let iface = caps[1].to_owned();
+                if !self.interfaces.contains_key(&iface) {
+                    break;
+                }
+                let m0 = caps.get(0).expect("group 0 always present");
+                (m0.start(), m0.end(), iface)
+            };
             let cstart = match_end - 1;
             let cpos = find_matching_close(&text, cstart);
             let obj_expr = text[cstart + 1..cpos].trim().to_owned();
@@ -1387,17 +1393,17 @@ impl Transpiler {
         text
     }
 
-    fn _step_instanceof(&self, text: &str) -> String {
+    fn step_instanceof(&self, text: &str) -> String {
         static RE_INSTANCEOF_SCAN: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>").unwrap());
         static RE_INSTANCEOF: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>\(").unwrap());
         static RE_MAIN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"\bint\s+main\s*\(").unwrap());
+            LazyLock::new(|| Regex::new(r"\bint\s+main\s*\(").expect("valid regex"));
         static RE_FUNC_MARKER: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"\n(?:typedef|extern|#|struct|}\s*;)").unwrap());
         static RE_FUNC_IMPL: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(").unwrap()
+            Regex::new(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(").expect("valid regex")
         });
         let mut text = text.to_owned();
         let mut types_for_instanceof: Vec<String> = Vec::new();
@@ -1413,7 +1419,7 @@ impl Transpiler {
             let mut declared_vtbls: Vec<String> = Vec::new();
             for type_name in &types_for_instanceof {
                 if self.classes.contains_key(type_name.as_str()) {
-                    for sub in self._concrete_subclasses(type_name) {
+                    for sub in self.concrete_subclasses(type_name) {
                         if !declared_vtbls.contains(&sub) {
                             instanceof_code +=
                                 &format!("typedef struct {}Vtbl {}Vtbl;\n", sub, sub);
@@ -1438,7 +1444,7 @@ impl Transpiler {
                     instanceof_code += "    return false;\n";
                     instanceof_code += "}\n\n";
                 } else if self.classes.contains_key(type_name.as_str()) {
-                    let subs = self._concrete_subclasses(type_name);
+                    let subs = self.concrete_subclasses(type_name);
                     instanceof_code +=
                         &format!("static bool _instanceof_{}(void* obj) {{\n", type_name);
                     instanceof_code += "    Object* _obj = (Object*)obj;\n";
@@ -1482,15 +1488,11 @@ impl Transpiler {
         }
 
         loop {
-            let _t = text.clone();
-            let m = RE_INSTANCEOF.captures(&_t);
-            if m.is_none() {
-                break;
-            }
-            let caps = m.unwrap();
-            let inst_type_name = caps[1].to_owned();
-            let match_start = caps.get(0).unwrap().start();
-            let match_end = caps.get(0).unwrap().end();
+            let (match_start, match_end, inst_type_name) = {
+                let Some(caps) = RE_INSTANCEOF.captures(&text) else { break };
+                let m0 = caps.get(0).expect("group 0 always present");
+                (m0.start(), m0.end(), caps[1].to_owned())
+            };
             if !self.interfaces.contains_key(&inst_type_name)
                 && !self.classes.contains_key(&inst_type_name)
             {
@@ -1517,18 +1519,18 @@ impl Transpiler {
     }
 
     pub fn transpile(&mut self, path: &str, is_header: bool, text: &str) -> String {
-        let text = self._step_prelude_and_includes(path, is_header, text);
-        let text = self._step_interfaces(&text);
+        let text = self.step_prelude_and_includes(path, is_header, text);
+        let text = self.step_interfaces(&text);
         if !is_header {
-            self._step_prescan_default_bodies(&text);
+            self.step_prescan_default_bodies(&text);
         }
-        let text = self._step_classes(&text, is_header);
+        let text = self.step_classes(&text, is_header);
         if !is_header {
-            let text = self._step_default_body_implementations(&text);
-            let text = self._step_methods_and_super_calls(&text);
-            let text = self._step_for_in(&text);
-            let text = self._step_cast(&text);
-            let text = self._step_instanceof(&text);
+            let text = self.step_default_body_implementations(&text);
+            let text = self.step_methods_and_super_calls(&text);
+            let text = self.step_for_in(&text);
+            let text = self.step_cast(&text);
+            let text = self.step_instanceof(&text);
             return text;
         }
         text

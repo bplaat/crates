@@ -1,12 +1,10 @@
 // MARK: Types
 
-#![allow(unused)]
-
 use indexmap::IndexMap;
 
 use crate::utils::to_snake_case;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Field {
     pub name: String,
     pub type_: String,
@@ -15,13 +13,13 @@ pub struct Field {
     pub class_: String,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Argument {
     pub name: String,
     pub type_: String,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Method {
     pub name: String,
     pub return_type: String,
@@ -33,6 +31,7 @@ pub struct Method {
     pub origin_class: String,
 }
 
+#[derive(Debug)]
 pub struct Class {
     pub name: String,
     pub snake_name: String,
@@ -57,8 +56,8 @@ impl Class {
     }
 }
 
+#[derive(Debug)]
 pub struct Interface {
-    pub name: String,
     pub snake_name: String,
     pub id: usize,
     pub parent_names: Vec<String>,
@@ -70,7 +69,6 @@ impl Interface {
     pub fn new(name: &str, id: usize) -> Self {
         Interface {
             snake_name: to_snake_case(name),
-            name: name.to_owned(),
             id,
             parent_names: Vec::new(),
             methods: IndexMap::new(),
