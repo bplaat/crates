@@ -75,6 +75,23 @@ void Dog::speak() {
 }
 ```
 
+### Static methods
+
+Mark methods `static` to create class-level functions that don't take a `this` parameter. Static methods generate regular C functions without vtable dispatch:
+
+```cpp
+class Math {
+    static i32 add(i32 a, i32 b);
+    static i32 multiply(i32 a, i32 b);
+};
+i32 Math::add(i32 a, i32 b) { return a + b; }
+i32 Math::multiply(i32 a, i32 b) { return a * b; }
+
+i32 result = math_add(5, 3);
+```
+
+Note: Constructor methods (`ClassName_new()`) are generated as static methods internally.
+
 ### Interfaces
 
 Interfaces are declared as `class IFoo` (name starts with `I` + uppercase). Implement with `: IFace`. Methods must **not** have bodies inside the declaration — define defaults outside with `IFoo::method()`. Dispatch via `cast<IFoo>(obj)` (fat pointer). Interfaces can extend other interfaces (multi-parent):
