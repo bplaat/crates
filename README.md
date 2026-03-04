@@ -2,12 +2,12 @@
 
 _A transpiler that translates an OOP-extension for the C programming language back to C_
 
-I like C and I like C++, both are powerful languages in their own right. But C++ is quite complicated and sometimes I just want to create some classes with inheritance in my C project. So I've created this weird hacky Python transpiler that translates a C++ like syntax with a Java like class system back to C code 🤓.
+I like C and I like C++, both are powerful languages in their own right. But C++ is quite complicated and sometimes I just want to create some classes with inheritance in my C project. So I've created this weird hacky Rust transpiler that translates a C++ like syntax with a Java like class system back to C code 🤓.
 
 ## Usage
 
 ```sh
-./ccc.py <file.cc> [options]
+ccc <file.cc> [options]
 ```
 
 | Flag        | Description                                        |
