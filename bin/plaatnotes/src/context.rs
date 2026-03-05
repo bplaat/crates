@@ -66,12 +66,65 @@ impl Context {
 
 // MARK: Database helpers
 pub(crate) trait DatabaseHelpers {
+    fn create_fts_tables(&self, table: &str, columns: &[&str]);
     fn insert_user(&self, user: User);
     fn insert_session(&self, session: Session);
     fn insert_note(&self, note: Note);
 }
 
 impl DatabaseHelpers for Connection {
+    fn create_fts_tables(&self, table: &str, columns: &[&str]) {
+        let cols = columns.join(", ");
+        let new_cols = columns
+            .iter()
+            .map(|c| format!("new.{c}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let set_cols = columns
+            .iter()
+            .map(|c| format!("{c} = new.{c}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        self.execute(
+            format!(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS {table}_fts USING fts5({cols}, id UNINDEXED)"
+            ),
+            (),
+        )
+        .expect("Database error");
+
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_ai AFTER INSERT ON {table} BEGIN
+                    INSERT INTO {table}_fts({cols}, id) VALUES ({new_cols}, new.id);
+                END"
+            ),
+            (),
+        )
+        .expect("Database error");
+
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_au AFTER UPDATE ON {table} BEGIN
+                    UPDATE {table}_fts SET {set_cols} WHERE id = old.id;
+                END"
+            ),
+            (),
+        )
+        .expect("Database error");
+
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_ad BEFORE DELETE ON {table} BEGIN
+                    DELETE FROM {table}_fts WHERE id = old.id;
+                END"
+            ),
+            (),
+        )
+        .expect("Database error");
+    }
+
     fn insert_user(&self, user: User) {
         self.execute(
             formatcp!(

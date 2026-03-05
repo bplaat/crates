@@ -43,73 +43,131 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Response {
     }
 
     // Get notes for authenticated user or all notes if admin
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
     let (total, notes) = match user.role {
         UserRole::Admin => {
             // Admin sees all notes
-            let total = query_args!(
-                i64,
-                ctx.database,
-                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND (title LIKE :search_query OR body LIKE :search_query)",
-                Args {
-                    search_query: search_query.clone()
-                }
-            )
-            .expect("Database error")
-            .next()
-            .map(|r| r.expect("Database error"))
-            .unwrap_or(0);
-            let notes = query_args!(
-                Note,
-                ctx.database,
-                formatcp!(
-                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                    Note::columns()
-                ),
-                Args {
-                    search_query: search_query,
-                    limit: query.limit,
-                    offset: (query.page - 1) * query.limit
-                }
-            )
-            .expect("Database error")
-            .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-            .collect::<Vec<_>>();
-            (total, notes)
+            if query.query.is_empty() {
+                let total = ctx
+                    .database
+                    .query_some::<i64>(
+                        "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0",
+                        (),
+                    )
+                    .expect("Database error");
+                let notes = query_args!(
+                    Note,
+                    ctx.database,
+                    formatcp!(
+                        "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0
+                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                        Note::columns()
+                    ),
+                    Args {
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                .expect("Database error")
+                .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+                .collect::<Vec<_>>();
+                (total, notes)
+            } else {
+                let total = query_args!(
+                    i64,
+                    ctx.database,
+                    "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND
+                    id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
+                    Args { fts_query: query.query.clone() }
+                )
+                .expect("Database error")
+                .next()
+                .map(|r| r.expect("Database error"))
+                .unwrap_or(0);
+                let notes = query_args!(
+                    Note,
+                    ctx.database,
+                    formatcp!(
+                        "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND
+                        id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
+                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                        Note::columns()
+                    ),
+                    Args {
+                        fts_query: query.query,
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                .expect("Database error")
+                .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+                .collect::<Vec<_>>();
+                (total, notes)
+            }
         }
         UserRole::Normal => {
             // Normal user sees only their own notes
-            let total = query_args!(
-                i64,
-                ctx.database,
-                "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query)",
-                Args {
-                    user_id: user.id,
-                    search_query: search_query.clone()
-                }
-            )
-            .expect("Database error")
-            .next()
-            .map(|r| r.expect("Database error"))
-            .unwrap_or(0);
-            let notes = query_args!(
-                Note,
-                ctx.database,
-                formatcp!(
-                    "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                    Note::columns()
-                ),
-                Args {
-                    user_id: user.id,
-                    search_query: search_query,
-                    limit: query.limit,
-                    offset: (query.page - 1) * query.limit
-                }
-            )
-            .expect("Database error")
-            .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-            .collect::<Vec<_>>();
-            (total, notes)
+            if query.query.is_empty() {
+                let total = query_args!(
+                    i64,
+                    ctx.database,
+                    "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id",
+                    Args { user_id: user.id }
+                )
+                .expect("Database error")
+                .next()
+                .map(|r| r.expect("Database error"))
+                .unwrap_or(0);
+                let notes = query_args!(
+                    Note,
+                    ctx.database,
+                    formatcp!(
+                        "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id
+                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                        Note::columns()
+                    ),
+                    Args {
+                        user_id: user.id,
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                .expect("Database error")
+                .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+                .collect::<Vec<_>>();
+                (total, notes)
+            } else {
+                let total = query_args!(
+                    i64,
+                    ctx.database,
+                    "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
+                    id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
+                    Args { user_id: user.id, fts_query: query.query.clone() }
+                )
+                .expect("Database error")
+                .next()
+                .map(|r| r.expect("Database error"))
+                .unwrap_or(0);
+                let notes = query_args!(
+                    Note,
+                    ctx.database,
+                    formatcp!(
+                        "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
+                        id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
+                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                        Note::columns()
+                    ),
+                    Args {
+                        user_id: user.id,
+                        fts_query: query.query,
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                .expect("Database error")
+                .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+                .collect::<Vec<_>>();
+                (total, notes)
+            }
         }
     };
 
@@ -404,77 +462,135 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
     }
 
     // Get filtered notes
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
     let (total, notes) = match user.role {
         UserRole::Admin => {
             // Admin sees all filtered notes
-            let total = query_args!(
-                i64,
-                ctx.database,
-                &format!(
-                    "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND (title LIKE :search_query OR body LIKE :search_query)"
-                ),
-                Args {
-                    search_query: search_query.clone()
-                }
-            )
-            .expect("Database error")
-            .next()
-            .map(|r| r.expect("Database error"))
-            .unwrap_or(0);
-            let notes = query_args!(
-                Note,
-                ctx.database,
-                format!(
-                    "SELECT {} FROM notes WHERE {} = 1 AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                    Note::columns(),
-                    filter
-                ),
-                Args {
-                    search_query: search_query,
-                    limit: query.limit,
-                    offset: (query.page - 1) * query.limit
-                }
-            )
-            .expect("Database error")
-            .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-            .collect::<Vec<_>>();
-            (total, notes)
+            if query.query.is_empty() {
+                let total = ctx
+                    .database
+                    .query_some::<i64>(
+                        &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1"),
+                        (),
+                    )
+                    .expect("Database error");
+                let notes = query_args!(
+                    Note,
+                    ctx.database,
+                    format!(
+                        "SELECT {} FROM notes WHERE {filter} = 1 ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                        Note::columns()
+                    ),
+                    Args {
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                .expect("Database error")
+                .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+                .collect::<Vec<_>>();
+                (total, notes)
+            } else {
+                let total = query_args!(
+                    i64,
+                    ctx.database,
+                    &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)"),
+                    Args { fts_query: query.query.clone() }
+                )
+                .expect("Database error")
+                .next()
+                .map(|r| r.expect("Database error"))
+                .unwrap_or(0);
+                let notes = query_args!(
+                    Note,
+                    ctx.database,
+                    format!(
+                        "SELECT {} FROM notes WHERE {filter} = 1 AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
+                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                        Note::columns()
+                    ),
+                    Args {
+                        fts_query: query.query,
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                .expect("Database error")
+                .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+                .collect::<Vec<_>>();
+                (total, notes)
+            }
         }
         UserRole::Normal => {
             // Normal user sees only their own filtered notes
-            let total = query_args!(
-                i64,
-                ctx.database,
-                &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query)"),
-                Args {
-                    user_id: user.id,
-                    search_query: search_query.clone()
-                }
-            )
-            .expect("Database error")
-            .next()
-            .map(|r| r.expect("Database error"))
-            .unwrap_or(0);
-            let notes = query_args!(
-                Note,
-                ctx.database,
-                format!(
-                    "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                    Note::columns(),
-                    filter
-                ),
-                Args {
-                    user_id: user.id,
-                    search_query: search_query,
-                    limit: query.limit,
-                    offset: (query.page - 1) * query.limit
-                }
-            )
-            .expect("Database error")
-            .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-            .collect::<Vec<_>>();
-            (total, notes)
+            if query.query.is_empty() {
+                let total = query_args!(
+                    i64,
+                    ctx.database,
+                    &format!(
+                        "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id"
+                    ),
+                    Args { user_id: user.id }
+                )
+                .expect("Database error")
+                .next()
+                .map(|r| r.expect("Database error"))
+                .unwrap_or(0);
+                let notes = query_args!(
+                    Note,
+                    ctx.database,
+                    format!(
+                        "SELECT {} FROM notes WHERE {filter} = 1 AND user_id = :user_id
+                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                        Note::columns()
+                    ),
+                    Args {
+                        user_id: user.id,
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                .expect("Database error")
+                .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+                .collect::<Vec<_>>();
+                (total, notes)
+            } else {
+                let total = query_args!(
+                    i64,
+                    ctx.database,
+                    &format!(
+                        "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND
+                        id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)"
+                    ),
+                    Args {
+                        user_id: user.id,
+                        fts_query: query.query.clone()
+                    }
+                )
+                .expect("Database error")
+                .next()
+                .map(|r| r.expect("Database error"))
+                .unwrap_or(0);
+                let notes = query_args!(
+                    Note,
+                    ctx.database,
+                    format!(
+                        "SELECT {} FROM notes WHERE {filter} = 1 AND user_id = :user_id AND
+                        id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
+                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
+                        Note::columns()
+                    ),
+                    Args {
+                        user_id: user.id,
+                        fts_query: query.query,
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                .expect("Database error")
+                .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+                .collect::<Vec<_>>();
+                (total, notes)
+            }
         }
     };
 
@@ -769,6 +885,96 @@ mod test {
         let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].title, Some("ProjectAlpha".to_string()));
+    }
+
+    #[test]
+    fn test_notes_index_fts5_search() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (user, token) = create_test_user_with_session(&ctx);
+
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Alice Smith".to_string()),
+            body: "Notes from Alice".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Alice Johnson".to_string()),
+            body: "Notes from Alice".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Bob Smith".to_string()),
+            body: "Notes from Bob".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_note(Note {
+            user_id: user.id,
+            title: Some("Carol White".to_string()),
+            body: "Notes from Carol".to_string(),
+            ..Default::default()
+        });
+
+        // Prefix search
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes?q=Al*")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 2);
+
+        // AND search
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes?q=Alice AND Smith")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Alice Smith".to_string()));
+
+        // OR search
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes?q=Alice OR Bob")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 3);
+
+        // NOT search
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes?q=Alice NOT Smith")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Alice Johnson".to_string()));
+
+        // Phrase search
+        let res = router.handle(
+            &Request::get(r#"http://localhost/api/notes?q="Alice Smith""#)
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Alice Smith".to_string()));
+
+        // Column-scoped search (body field only)
+        let res = router.handle(
+            &Request::get("http://localhost/api/notes?q=body:Carol")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].title, Some("Carol White".to_string()));
     }
 
     #[test]

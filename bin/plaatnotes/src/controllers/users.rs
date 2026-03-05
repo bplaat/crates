@@ -44,31 +44,54 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
     }
 
     // Get users
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
-    let total = ctx.database.query_some::<i64>(
-        "SELECT COUNT(id) FROM users WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ?",
-        (
-            search_query.clone(),
-            search_query.clone(),
-            search_query.clone(),
-        ),
-    ).expect("Database error");
-    let users = query_args!(
-        User,
-        ctx.database,
-        formatcp!(
-            "SELECT {} FROM users WHERE first_name LIKE :search_query OR last_name LIKE :search_query OR email LIKE :search_query ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
-            User::columns()
-        ),
-        Args {
-            search_query: search_query,
-            limit: query.limit,
-            offset: (query.page - 1) * query.limit
-        }
-    )
-    .expect("Database error")
-    .map(|r| Into::<api::User>::into(r.expect("Database error")))
-    .collect::<Vec<_>>();
+    let (total, users) = if query.query.is_empty() {
+        let total = ctx
+            .database
+            .query_some::<i64>("SELECT COUNT(id) FROM users", ())
+            .expect("Database error");
+        let users = query_args!(
+            User,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM users ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                User::columns()
+            ),
+            Args {
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )
+        .expect("Database error")
+        .map(|r| Into::<api::User>::into(r.expect("Database error")))
+        .collect::<Vec<_>>();
+        (total, users)
+    } else {
+        let total = ctx
+            .database
+            .query_some::<i64>(
+                "SELECT COUNT(id) FROM users WHERE id IN (SELECT id FROM users_fts WHERE users_fts MATCH ?)",
+                query.query.clone(),
+            )
+            .expect("Database error");
+        let users = query_args!(
+            User,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM users WHERE id IN (SELECT id FROM users_fts WHERE users_fts MATCH :fts_query)
+                ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                User::columns()
+            ),
+            Args {
+                fts_query: query.query,
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )
+        .expect("Database error")
+        .map(|r| Into::<api::User>::into(r.expect("Database error")))
+        .collect::<Vec<_>>();
+        (total, users)
+    };
 
     // Return users
     Response::with_json(api::UserIndexResponse {
@@ -394,37 +417,68 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
     }
 
     // Get notes for the user
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
-    let total = query_args!(
-        i64,
-        ctx.database,
-        "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query)",
-        Args {
-            user_id: user.id,
-            search_query: search_query.clone()
-        }
-    )
-    .expect("Database error")
-    .next()
-    .map(|r| r.expect("Database error"))
-    .unwrap_or(0);
-    let notes = query_args!(
-        Note,
-        ctx.database,
-        formatcp!(
-            "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
-            Note::columns()
-        ),
-        Args {
-            user_id: user.id,
-            search_query: search_query,
-            limit: query.limit,
-            offset: (query.page - 1) * query.limit
-        }
-    )
-    .expect("Database error")
-    .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-    .collect::<Vec<_>>();
+    let (total, notes) = if query.query.is_empty() {
+        let total = query_args!(
+            i64,
+            ctx.database,
+            "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id",
+            Args { user_id: user.id }
+        )
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"))
+        .unwrap_or(0);
+        let notes = query_args!(
+            Note,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id
+                ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                Note::columns()
+            ),
+            Args {
+                user_id: user.id,
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )
+        .expect("Database error")
+        .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+        .collect::<Vec<_>>();
+        (total, notes)
+    } else {
+        let total = query_args!(
+            i64,
+            ctx.database,
+            "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
+            id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
+            Args { user_id: user.id, fts_query: query.query.clone() }
+        )
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"))
+        .unwrap_or(0);
+        let notes = query_args!(
+            Note,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
+                id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
+                ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                Note::columns()
+            ),
+            Args {
+                user_id: user.id,
+                fts_query: query.query,
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )
+        .expect("Database error")
+        .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+        .collect::<Vec<_>>();
+        (total, notes)
+    };
 
     // Return notes
     Response::with_json(api::NoteIndexResponse {
@@ -481,38 +535,72 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response 
     }
 
     // Get filtered notes for specific user
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
-    let total = query_args!(
-        i64,
-        ctx.database,
-        &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query)"),
-        Args {
-            user_id: user.id,
-            search_query: search_query.clone()
-        }
-    )
-    .expect("Database error")
-    .next()
-    .map(|r| r.expect("Database error"))
-    .unwrap_or(0);
-    let notes = query_args!(
-        Note,
-        ctx.database,
-        format!(
-            "SELECT {} FROM notes WHERE {} = 1 AND user_id = :user_id AND (title LIKE :search_query OR body LIKE :search_query) ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
-            Note::columns(),
-            filter
-        ),
-        Args {
-            user_id: user.id,
-            search_query: search_query,
-            limit: query.limit,
-            offset: (query.page - 1) * query.limit
-        }
-    )
-    .expect("Database error")
-    .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-    .collect::<Vec<_>>();
+    let (total, notes) = if query.query.is_empty() {
+        let total = query_args!(
+            i64,
+            ctx.database,
+            &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id"),
+            Args { user_id: user.id }
+        )
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"))
+        .unwrap_or(0);
+        let notes = query_args!(
+            Note,
+            ctx.database,
+            format!(
+                "SELECT {} FROM notes WHERE {filter} = 1 AND user_id = :user_id ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                Note::columns()
+            ),
+            Args {
+                user_id: user.id,
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )
+        .expect("Database error")
+        .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+        .collect::<Vec<_>>();
+        (total, notes)
+    } else {
+        let total = query_args!(
+            i64,
+            ctx.database,
+            &format!(
+                "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND
+                id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)"
+            ),
+            Args {
+                user_id: user.id,
+                fts_query: query.query.clone()
+            }
+        )
+        .expect("Database error")
+        .next()
+        .map(|r| r.expect("Database error"))
+        .unwrap_or(0);
+        let notes = query_args!(
+            Note,
+            ctx.database,
+            format!(
+                "SELECT {} FROM notes WHERE {filter} = 1 AND user_id = :user_id AND
+                id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
+                ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
+                Note::columns()
+            ),
+            Args {
+                user_id: user.id,
+                fts_query: query.query,
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )
+        .expect("Database error")
+        .map(|r| Into::<api::Note>::into(r.expect("Database error")))
+        .collect::<Vec<_>>();
+        (total, notes)
+    };
 
     // Return filtered notes
     Response::with_json(api::NoteIndexResponse {
@@ -606,6 +694,102 @@ mod test {
         let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].first_name, "Alice");
+    }
+
+    #[test]
+    fn test_users_index_fts5_search() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        ctx.database.insert_user(User {
+            first_name: "Alice".to_string(),
+            last_name: "Smith".to_string(),
+            email: "alice.smith@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_user(User {
+            first_name: "Alice".to_string(),
+            last_name: "Johnson".to_string(),
+            email: "alice.johnson@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_user(User {
+            first_name: "Bob".to_string(),
+            last_name: "Smith".to_string(),
+            email: "bob.smith@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_user(User {
+            first_name: "Carol".to_string(),
+            last_name: "White".to_string(),
+            email: "carol@example.com".to_string(),
+            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+            ..Default::default()
+        });
+
+        // Prefix search
+        let res = router.handle(
+            &Request::get("http://localhost/api/users?q=Al*")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 2);
+
+        // AND search
+        let res = router.handle(
+            &Request::get("http://localhost/api/users?q=Alice AND Smith")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].first_name, "Alice");
+        assert_eq!(response.data[0].last_name, "Smith");
+
+        // OR search
+        let res = router.handle(
+            &Request::get("http://localhost/api/users?q=Alice OR Bob")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 3);
+
+        // NOT search
+        let res = router.handle(
+            &Request::get("http://localhost/api/users?q=Alice NOT Smith")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].last_name, "Johnson");
+
+        // Phrase search
+        let res = router.handle(
+            &Request::get(r#"http://localhost/api/users?q="Alice Smith""#)
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].first_name, "Alice");
+        assert_eq!(response.data[0].last_name, "Smith");
+
+        // Column-scoped search (email field only)
+        let res = router.handle(
+            &Request::get("http://localhost/api/users?q=email:carol")
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::UserIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].first_name, "Carol");
     }
 
     #[test]

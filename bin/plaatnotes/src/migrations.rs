@@ -6,6 +6,8 @@
 
 use bsqlite::Connection;
 
+use crate::context::DatabaseHelpers;
+
 pub(crate) fn database_migrate(database: &Connection) {
     // Ensure migrations tracking table exists
     database
@@ -131,6 +133,34 @@ pub(crate) fn database_migrate(database: &Connection) {
         database
             .execute(
                 "INSERT INTO schema_migrations (version, applied_at) VALUES (2, unixepoch())",
+                (),
+            )
+            .expect("Database error");
+    }
+
+    // Migration 3: create notes FTS tables
+    if applied_version < 3 {
+        log::info!("Applying database migration 3: create notes FTS tables");
+
+        database.create_fts_tables("notes", &["title", "body"]);
+        database
+            .execute(
+                "INSERT INTO notes_fts(title, body, id) SELECT title, body, id FROM notes",
+                (),
+            )
+            .expect("Database error");
+
+        database.create_fts_tables("users", &["first_name", "last_name", "email"]);
+        database
+            .execute(
+                "INSERT INTO users_fts(first_name, last_name, email, id) SELECT first_name, last_name, email, id FROM users",
+                (),
+            )
+            .expect("Database error");
+
+        database
+            .execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (3, unixepoch())",
                 (),
             )
             .expect("Database error");
