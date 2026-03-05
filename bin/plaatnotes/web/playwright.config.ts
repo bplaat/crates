@@ -12,7 +12,7 @@ export default defineConfig({
     forbidOnly: !!process.env.CI,
     retries: 2,
     workers: process.env.CI ? 1 : undefined,
-    reporter: 'list',
+    reporter: process.env.CI ? [['list'], ['junit', { outputFile: 'test-results/junit.xml' }]] : 'list',
     use: {
         baseURL: 'http://localhost:8080',
         trace: 'on-first-retry',

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
   pages: write
   id-token: write
 
@@ -38,6 +39,14 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y cargo-deny cargo-nextest
       - run: ./meta.sh check-rust
+      - name: Report test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Tests (Linux x86_64)
+          path: target/nextest/ci/junit.xml
+          reporter: java-junit
+          fail-on-error: 'false'
 
   # MARK: Linux aarch64
   check-linux-aarch64:
@@ -62,6 +71,14 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y cargo-deny cargo-nextest
       - run: ./meta.sh check-rust
+      - name: Report test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Tests (Linux aarch64)
+          path: target/nextest/ci/junit.xml
+          reporter: java-junit
+          fail-on-error: 'false'
 
   # MARK: macOS aarch64
   check-macos-aarch64:
@@ -88,6 +105,14 @@ jobs:
         with:
           xcode-version: latest-stable
       - run: ./meta.sh check-rust
+      - name: Report test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Tests (macOS aarch64)
+          path: target/nextest/ci/junit.xml
+          reporter: java-junit
+          fail-on-error: 'false'
 
   # MARK: Windows x86_64
   check-windows-x86_64:
@@ -109,6 +134,14 @@ jobs:
           cargo binstall -y cargo-deny cargo-nextest
       - run: ./meta.sh check-rust
         shell: bash
+      - name: Report test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Tests (Windows x86_64)
+          path: target/nextest/ci/junit.xml
+          reporter: java-junit
+          fail-on-error: 'false'
 
   # MARK: Windows aarch64
   check-windows-aarch64:
@@ -130,6 +163,14 @@ jobs:
           cargo binstall -y cargo-deny cargo-nextest
       - run: ./meta.sh check-rust
         shell: bash
+      - name: Report test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Tests (Windows aarch64)
+          path: target/nextest/ci/junit.xml
+          reporter: java-junit
+          fail-on-error: 'false'
 
   # MARK: End-to-end
   check-e2e:
@@ -150,6 +191,14 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y cargo-deny cargo-nextest
       - run: ./meta.sh check-e2e
+      - name: Report E2E test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: E2E Tests
+          path: bin/plaatnotes/web/test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: 'false'
 
   # MARK: Build deploy pages
   build-deploy-pages:
