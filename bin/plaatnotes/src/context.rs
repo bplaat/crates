@@ -34,6 +34,7 @@ impl Default for Context {
 }
 
 impl Context {
+    #[allow(dead_code)]
     pub(crate) fn with_database(path: impl AsRef<Path>) -> Self {
         log::info!("Using database at {}", path.as_ref().display());
         let database =

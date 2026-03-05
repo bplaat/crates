@@ -18,7 +18,7 @@ unwrap_used = "deny"
 
 [profile.release]
 opt-level = "z"
-lto = "fat"
+lto = "thin"
 strip = true
 panic = "abort"
 overflow-checks = false

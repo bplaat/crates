@@ -31,10 +31,9 @@ jobs:
           VERSION=$(grep '^version' bin/plaatnotes/Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
           docker buildx build --platform linux/amd64,linux/arm64 \
             --tag ghcr.io/bplaat/plaatnotes:${VERSION} \
-            --file bin/plaatnotes/Dockerfile .
-          docker tag ghcr.io/bplaat/plaatnotes:${VERSION} ghcr.io/bplaat/plaatnotes:latest
-          docker push ghcr.io/bplaat/plaatnotes:${VERSION}
-          docker push ghcr.io/bplaat/plaatnotes:latest
+            --tag ghcr.io/bplaat/plaatnotes:latest \
+            --file bin/plaatnotes/Dockerfile \
+            --push .
       - name: Create Git tag and GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -20,7 +20,7 @@ RUN apt-get update && \
         rustup target add x86_64-unknown-linux-musl; \
     fi
 
-COPY --exclude=target --exclude=dist --exclude=node_modules . .
+COPY . .
 
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         cargo build --release --target aarch64-unknown-linux-musl --bin plaatnotes && \
@@ -36,5 +36,7 @@ FROM scratch
 COPY --from=builder /plaatnotes /app/plaatnotes
 
 WORKDIR /app
+
+EXPOSE 8080
 
 ENTRYPOINT ["/app/plaatnotes"]

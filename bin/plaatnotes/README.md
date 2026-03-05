@@ -15,7 +15,7 @@ A self-hosted note taking web app with rich markdown support
 Example command to build the Docker image for PlaatNotes locally (from the root of the repository):
 
 ```sh
-docker build -t ghcr.io/bplaat/plaatnotes:latest -f bin/plaatnotes/Dockerfile .
+docker build --platform linux/amd64,linux/arm64 --tag ghcr.io/bplaat/plaatnotes:latest --file bin/plaatnotes/Dockerfile .
 ```
 
 ## Screenshot
