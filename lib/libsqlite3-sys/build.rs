@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -13,6 +13,7 @@ fn main() {
         cc::Build::new()
             .file("sqlite3/sqlite3.c")
             .define("SQLITE_ENABLE_COLUMN_METADATA", None)
+            .define("SQLITE_ENABLE_FTS5", None)
             .compile("sqlite3");
     }
     // Or link to the system SQLite library

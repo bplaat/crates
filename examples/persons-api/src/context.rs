@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ * Copyright (c) 2023-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -37,9 +37,51 @@ impl Context {
 
 // MARK: Database Helpers
 pub(crate) trait DatabaseHelpers {
+    fn create_fts_tables(&self, table: &str);
     fn insert_person(&self, person: Person);
 }
+
 impl DatabaseHelpers for Connection {
+    fn create_fts_tables(&self, table: &str) {
+        self.execute(
+            format!(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS {table}_fts USING fts5(name, id UNINDEXED)"
+            ),
+            (),
+        )
+        .expect("Database error");
+
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_ai AFTER INSERT ON {table} BEGIN
+                    INSERT INTO {table}_fts(name, id) VALUES (new.name, new.id);
+                END"
+            ),
+            (),
+        )
+        .expect("Database error");
+
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_au AFTER UPDATE ON {table} BEGIN
+                    UPDATE {table}_fts SET name = new.name WHERE id = old.id;
+                END"
+            ),
+            (),
+        )
+        .expect("Database error");
+
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_ad BEFORE DELETE ON {table} BEGIN
+                    DELETE FROM {table}_fts WHERE id = old.id;
+                END"
+            ),
+            (),
+        )
+        .expect("Database error");
+    }
+
     fn insert_person(&self, person: Person) {
         self.execute(
             formatcp!(
@@ -66,6 +108,7 @@ fn database_create_tables(database: &Connection) {
             (),
         )
         .expect("Database error");
+    database.create_fts_tables("persons");
 }
 
 fn database_seed(database: &Connection) {

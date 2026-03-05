@@ -31,30 +31,55 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Response {
     }
 
     // Get persons
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
-    let total = ctx
-        .database
-        .query_some::<i64>(
-            "SELECT COUNT(id) FROM persons WHERE name LIKE ?",
-            search_query.clone(),
+    let (total, persons) = if query.query.is_empty() {
+        let total = ctx
+            .database
+            .query_some::<i64>("SELECT COUNT(id) FROM persons", ())
+            .expect("Database error");
+        let persons = query_args!(
+            Person,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM persons ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                Person::columns()
+            ),
+            Args {
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
         )
-        .expect("Database error");
-    let persons = query_args!(
-        Person,
-        ctx.database,
-        formatcp!(
-            "SELECT {} FROM persons WHERE name LIKE :search_query LIMIT :limit OFFSET :offset",
-            Person::columns()
-        ),
-        Args {
-            search_query: search_query,
-            limit: query.limit,
-            offset: (query.page - 1) * query.limit
-        }
-    )
-    .expect("Database error")
-    .map(|r| Into::<api::Person>::into(r.expect("Database error")))
-    .collect::<Vec<_>>();
+        .expect("Database error")
+        .map(|r| Into::<api::Person>::into(r.expect("Database error")))
+        .collect::<Vec<_>>();
+        (total, persons)
+    } else {
+        let total = ctx
+            .database
+            .query_some::<i64>(
+                "SELECT COUNT(rowid) FROM persons_fts WHERE persons_fts MATCH ?",
+                query.query.clone(),
+            )
+            .expect("Database error");
+        let persons = query_args!(
+            Person,
+            ctx.database,
+            formatcp!(
+                "SELECT p.id, p.name, p.age, p.relation, p.created_at FROM persons p
+                JOIN persons_fts fts ON p.id = fts.id
+                WHERE persons_fts MATCH :fts_query
+                ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset",
+            ),
+            Args {
+                fts_query: query.query,
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )
+        .expect("Database error")
+        .map(|r| Into::<api::Person>::into(r.expect("Database error")))
+        .collect::<Vec<_>>();
+        (total, persons)
+    };
 
     // Return persons
     Response::with_json(api::PersonIndexResponse {
@@ -257,6 +282,62 @@ mod test {
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].name, "Alice");
+    }
+
+    #[test]
+    fn test_persons_index_fts5_search() {
+        let ctx = Context::with_test_database();
+        let router = router(ctx.clone());
+
+        ctx.database.insert_person(Person {
+            name: "Alice Smith".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_person(Person {
+            name: "Alice Johnson".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_person(Person {
+            name: "Bob Smith".to_string(),
+            ..Default::default()
+        });
+        ctx.database.insert_person(Person {
+            name: "Carol White".to_string(),
+            ..Default::default()
+        });
+
+        // Prefix search
+        let res = router.handle(&Request::get("http://localhost/persons?q=Al*"));
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 2);
+
+        // AND search
+        let res = router.handle(&Request::get("http://localhost/persons?q=Alice AND Smith"));
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].name, "Alice Smith");
+
+        // OR search
+        let res = router.handle(&Request::get("http://localhost/persons?q=Alice OR Bob"));
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 3);
+
+        // NOT search
+        let res = router.handle(&Request::get("http://localhost/persons?q=Alice NOT Smith"));
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].name, "Alice Johnson");
+
+        // Phrase search
+        let res = router.handle(&Request::get("http://localhost/persons?q=\"Alice Smith\""));
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].name, "Alice Smith");
     }
 
     #[test]
