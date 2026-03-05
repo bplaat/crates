@@ -41,7 +41,7 @@ check_rust() {
     # Test
     echo "Running Rust tests..."
     cargo test --doc --all-features --locked
-    cargo nextest run --all-features --locked --no-fail-fast --retries 2
+    cargo nextest run --all-features --locked --config-file nextest.toml ${CI:+--profile ci}
 }
 
 check_e2e() {
