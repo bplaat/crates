@@ -1,12 +1,23 @@
-# This is a example docker-compose.yaml for deploying/running PlaatNotes
+# This is an example docker-compose.yaml for PlaatNotes
 
 services:
   plaatnotes:
-    image: ghcr.io/bplaat/plaatnotes:0.1.0
+    image: ghcr.io/bplaat/plaatnotes:latest
+    container_name: plaatnotes
     restart: unless-stopped
     environment:
+      SERVER_PORT: 8080
       DATABASE_PATH: 'data/database.db'
     ports:
       - '8080:8080'
     volumes:
       - ./data/:/app/data/
+
+  # Use Watchtower to automatically update the PlaatNotes container when a new image is available
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 plaatnotes
+    restart: unless-stopped
