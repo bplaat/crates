@@ -3,16 +3,13 @@ set -e
 
 clean() {
     cargo clean
-    find . -name "*.db*" -delete
-    find . -type d -name "target" -exec rm -rf {} +
-    find . -type d -name "node_modules" -exec rm -rf {} +
-    find . -type d -name "dist" -exec rm -rf {} +
+    find . \( -name "*.db*" -o -type d -name "target" -o -type d -name "node_modules" -o -type d -name "playwright" -o -type d -name "playwright-report" -o -type d -name "test-results" \) -exec rm -rf {} +
 }
 
 check_copyright() {
     echo "Checking copyright headers..."
     exit=0
-    for file in $(find . -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.cc" -o -name "*.hh" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*.min.js" ! -path "*bob/examples/*" ! -path "*ccontinue/tests/*.cc"); do
+    for file in $(find . -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.cc" -o -name "*.hh" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*.min.js" ! -path "*bob/examples/*" ! -path "*ccontinue/tests/*.cc" ! -path "*playwright-report/*"); do
         if ! grep -E -q "Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+" "$file"; then
             echo "Bad copyright header in: $file"
             exit=1
@@ -25,7 +22,7 @@ check_copyright() {
 
 check_formatting() {
     echo "Checking prettier formatting..."
-    npx --prefer-offline --yes prettier --check $(find . -type f \( -name "*.md" -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*/.vscode/*" ! -path "*.min.js")
+    npx --prefer-offline --yes prettier --check $(find . -type f \( -name "*.md" -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*/.vscode/*" ! -path "*.min.js" ! -path "*playwright/*" ! -path "*playwright-report/*" ! -path "*test-results/*")
 
     echo "Checking clang-format formatting..."
     clang-format --dry-run --Werror $(find bin/bob/examples -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.m" -o -name "*.mm" -o -name "*.java" \) ! -path "*/target/*")
@@ -47,10 +44,17 @@ check_rust() {
     cargo nextest run --all-features --locked --no-fail-fast --retries 2
 }
 
-check() {
-    check_copyright
-    check_formatting
-    check_rust
+check_e2e() {
+    echo "Running end-to-end tests..."
+    (cd bin/plaatnotes/web && check_e2e_plaatnotes)
+}
+
+check_e2e_plaatnotes() {
+    if [ ! -d node_modules ]; then
+        npm ci --prefer-offline
+    fi
+    npx playwright install
+    npm test
 }
 
 coverage() {
@@ -133,7 +137,18 @@ case "${1:-check}" in
         clean
         ;;
     check)
-        check
+        check_copyright
+        check_formatting
+        check_rust
+        check_e2e
+        ;;
+    check-rust)
+        check_copyright
+        check_formatting
+        check_rust
+        ;;
+    check-e2e)
+        check_e2e
         ;;
     coverage)
         coverage
@@ -142,7 +157,7 @@ case "${1:-check}" in
         install
         ;;
     *)
-        echo "Usage: $0 {build-pages|build-bundle|clean|check|coverage|install}"
+        echo "Usage: $0 {build-pages|build-bundle|clean|check|check-rust|check-e2e|coverage|install}"
         exit 1
         ;;
 esac

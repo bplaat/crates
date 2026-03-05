@@ -18,6 +18,7 @@ use small_router::{Router, RouterBuilder};
 use crate::args::{Subcommand, parse_args, subcommand_help};
 use crate::context::Context;
 use crate::controllers::*;
+use crate::models::{User, UserRole};
 
 mod api {
     include!(concat!(env!("OUT_DIR"), "/api.rs"));
@@ -107,11 +108,33 @@ fn main() {
     simple_logger::init().expect("Failed to init logger");
 
     // Init context
-    let context = Context::with_database(if let Ok(path) = env::var("DATABASE_PATH") {
-        path
+    let context = if cfg!(feature = "test-e2e") {
+        let ctx = Context::with_test_database();
+        use crate::context::DatabaseHelpers;
+        ctx.database.insert_user(User {
+            first_name: "Test".to_string(),
+            last_name: "User".to_string(),
+            email: "test@example.com".to_string(),
+            password: pbkdf2::password_hash("password"),
+            role: UserRole::Normal,
+            ..Default::default()
+        });
+        ctx.database.insert_user(User {
+            first_name: "Test".to_string(),
+            last_name: "Admin".to_string(),
+            email: "testadmin@example.com".to_string(),
+            password: pbkdf2::password_hash("password"),
+            role: UserRole::Admin,
+            ..Default::default()
+        });
+        ctx
     } else {
-        "database.db".to_string()
-    });
+        Context::with_database(if let Ok(path) = env::var("DATABASE_PATH") {
+            path
+        } else {
+            "database.db".to_string()
+        })
+    };
 
     if args.subcommand == Subcommand::ImportGoogleKeep {
         let path = args.path.unwrap_or_else(|| {
