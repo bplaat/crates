@@ -20,7 +20,6 @@ These libraries are not published to [crates.io](https://crates.io) and are more
 
 - [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
-- [ini](lib/ini) A simple INI file parser library
 - [js](lib/js) A WIP JavaScript interpreter
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 - [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
@@ -83,7 +82,6 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 - [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
 - [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [plaatnotes](bin/plaatnotes) A self-hosted note taking web app with rich markdown support
-- [webhook-puller](bin/webhook-puller) A small service that pulls a Git repo when requested by a webhook
 
 ### Replacement libraries
 

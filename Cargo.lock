@@ -310,10 +310,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ini"
-version = "0.1.0"
-
-[[package]]
 name = "itoa"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -889,16 +885,6 @@ checksum = "9367c417a924a74cae129e6a2ae3b47fabb1f8995595ab474029da749a8be120"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "webhook-puller"
-version = "0.1.0"
-dependencies = [
- "ini",
- "log",
- "simple_logger",
- "small-http",
 ]
 
 [[package]]
