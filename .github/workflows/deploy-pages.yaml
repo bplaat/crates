@@ -1,0 +1,47 @@
+name: deploy-pages
+
+on:
+  workflow_run:
+    workflows: [check]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-pages:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache-rust-toolchain
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+          key: build-deploy-pages-rust-with-tools-toolchain
+      - name: Install extra Rust tooling
+        if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
+        run: |
+          rustup target add wasm32-unknown-unknown
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y wasm-bindgen-cli --version 0.2.104
+      - name: Build pages
+        run: ./meta.sh build-pages
+      - name: Upload pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './target/pages'
+      - id: deployment
+        name: Deploy pages
+        uses: actions/deploy-pages@v4
