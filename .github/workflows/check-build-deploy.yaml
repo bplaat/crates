@@ -161,6 +161,7 @@ jobs:
       - check-macos-aarch64
       - check-windows-x86_64
       - check-windows-aarch64
+      - check-e2e
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -53,7 +53,7 @@ check_e2e_plaatnotes() {
     if [ ! -d node_modules ]; then
         npm ci --prefer-offline
     fi
-    npx playwright install
+    npx playwright install --with-deps
     npm test
 }
 
