@@ -29,7 +29,11 @@ export function Dialog({ title, onClose, children }: DialogProps) {
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60"
             onMouseDown={(e) => e.target === e.currentTarget && onClose()}
         >
-            <div class="bg-white dark:bg-zinc-800 rounded-2xl shadow-xl w-full max-w-md mx-4">
+            <div
+                role="dialog"
+                aria-modal="true"
+                class="bg-white dark:bg-zinc-800 rounded-2xl shadow-xl w-full max-w-md mx-4"
+            >
                 <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-700">
                     <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
                     <IconButton onClick={onClose} class="text-gray-500 dark:text-gray-400">

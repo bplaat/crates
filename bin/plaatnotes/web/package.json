@@ -6,7 +6,8 @@
     "scripts": {
         "dev": "vite --mode debug",
         "build-debug": "vite build --mode debug --minify=false",
-        "build-release": "vite build --mode release"
+        "build-release": "vite build --mode release",
+        "test": "playwright test"
     },
     "dependencies": {
         "@preact/signals": "^2.3.1",
@@ -17,8 +18,10 @@
         "turndown": "^7.2.2"
     },
     "devDependencies": {
+        "@playwright/test": "1.58.2",
         "@preact/preset-vite": "^2.10.1",
         "@tailwindcss/vite": "^4.2.1",
+        "baseline-browser-mapping": "^2.10.0",
         "tailwindcss": "^4.2.1",
         "vite": "^7.0.0"
     }

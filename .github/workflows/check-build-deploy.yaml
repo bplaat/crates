@@ -37,7 +37,7 @@ jobs:
           rustup toolchain add nightly --component rustfmt
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y cargo-deny cargo-nextest
-      - run: ./meta.sh check
+      - run: ./meta.sh check-rust
 
   # MARK: Linux aarch64
   check-linux-aarch64:
@@ -61,7 +61,7 @@ jobs:
           rustup toolchain add nightly --component rustfmt
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y cargo-deny cargo-nextest
-      - run: ./meta.sh check
+      - run: ./meta.sh check-rust
 
   # MARK: macOS aarch64
   check-macos-aarch64:
@@ -87,7 +87,7 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
-      - run: ./meta.sh check
+      - run: ./meta.sh check-rust
 
   # MARK: Windows x86_64
   check-windows-x86_64:
@@ -107,7 +107,7 @@ jobs:
           rustup toolchain add nightly --component rustfmt
           iex (iwr "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.ps1").Content
           cargo binstall -y cargo-deny cargo-nextest
-      - run: ./meta.sh check
+      - run: ./meta.sh check-rust
         shell: bash
 
   # MARK: Windows aarch64
@@ -128,8 +128,28 @@ jobs:
           rustup toolchain add nightly --component rustfmt
           iex (iwr "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.ps1").Content
           cargo binstall -y cargo-deny cargo-nextest
-      - run: ./meta.sh check
+      - run: ./meta.sh check-rust
         shell: bash
+
+  # MARK: End-to-end
+  check-e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache-rust-toolchain
+        with:
+          path: |
+            ~/.cargo
+            ~/.rustup
+          key: linux-x86_64-rust-with-tools-toolchain
+      - name: Install extra Rust tooling
+        if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain add nightly --component rustfmt
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y cargo-deny cargo-nextest
+      - run: ./meta.sh check-e2e
 
   # MARK: Build deploy pages
   build-deploy-pages:

@@ -40,3 +40,6 @@ bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
 [build-dependencies]
 openapi-generator = { path = "../../lib/openapi-generator" }
 copy_dir = "0.1.3"
+
+[features]
+test-e2e = []

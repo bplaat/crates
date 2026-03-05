@@ -51,7 +51,7 @@ impl Context {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-e2e"))]
     pub(crate) fn with_test_database() -> Self {
         let database = Connection::open_memory().expect("Can't open in-memory database");
         database_migrate(&database);
