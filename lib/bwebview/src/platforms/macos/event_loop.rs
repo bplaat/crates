@@ -8,6 +8,7 @@ use std::ffi::{CStr, c_void};
 use std::ptr::null;
 
 use block2::Block;
+use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool, ClassBuilder, Sel};
 use objc2::{class, msg_send, sel};
 
@@ -221,14 +222,14 @@ impl crate::EventLoopInterface for PlatformEventLoop {
 
     fn run(mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
         self.event_handler = Some(Box::new(event_handler));
-        unsafe {
+        autoreleasepool(|_| unsafe {
             let delegate: *mut Object = msg_send![self.application, delegate];
             #[allow(deprecated)]
             let prt_to_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_PTR);
             *prt_to_ptr = &mut self as *mut Self as *const c_void;
-        };
-        let _: () = unsafe { msg_send![self.application, run] };
-        unreachable!();
+            let _: () = msg_send![self.application, run];
+        });
+        unreachable!()
     }
 
     fn create_proxy(&self) -> PlatformEventLoopProxy {
