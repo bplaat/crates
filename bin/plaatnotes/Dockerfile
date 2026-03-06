@@ -3,10 +3,6 @@ FROM rust:1.93.0-slim-bookworm AS builder
 
 ARG TARGETARCH
 
-LABEL org.opencontainers.image.source="https://github.com/bplaat/crates"
-LABEL org.opencontainers.image.description="A simple note-taking app"
-LABEL org.opencontainers.image.licenses=MIT
-
 WORKDIR /src
 
 RUN apt-get update && \
@@ -32,6 +28,10 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # Run container
 FROM scratch
+
+LABEL org.opencontainers.image.source="https://github.com/bplaat/crates"
+LABEL org.opencontainers.image.description="A simple note-taking app"
+LABEL org.opencontainers.image.licenses=MIT
 
 COPY --from=builder /plaatnotes /app/plaatnotes
 
