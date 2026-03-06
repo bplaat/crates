@@ -262,8 +262,8 @@ impl PlatformWebview {
                 },
             ));
             if CreateCoreWebView2EnvironmentWithOptions(
-                null(),
-                config_dir().display().to_string().to_wide_string().as_ptr(),
+                null_mut(),
+                config_dir().display().to_string().to_wide_string().as_ptr() as *mut _,
                 null_mut(),
                 completed_handler,
             ) != S_OK
@@ -389,7 +389,7 @@ impl crate::WebviewInterface for PlatformWebview {
                 let url = replace_custom_protocol_in_url(url.as_ref(), &self.0.custom_protocols);
                 #[cfg(not(feature = "custom_protocol"))]
                 let url: &str = url.as_ref();
-                (*webview).Navigate(url.to_wide_string().as_ptr());
+                (*webview).Navigate(url.to_wide_string().as_ptr() as *mut _);
             }
         }
     }
@@ -397,7 +397,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn load_html(&mut self, html: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                (*webview).NavigateToString(html.as_ref().to_wide_string().as_ptr());
+                (*webview).NavigateToString(html.as_ref().to_wide_string().as_ptr() as *mut _);
             }
         }
     }
@@ -405,7 +405,10 @@ impl crate::WebviewInterface for PlatformWebview {
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.0.webview {
-                (*webview).ExecuteScript(script.as_ref().to_wide_string().as_ptr(), null_mut());
+                (*webview).ExecuteScript(
+                    script.as_ref().to_wide_string().as_ptr() as *mut _,
+                    null_mut(),
+                );
             }
         }
     }
@@ -420,7 +423,7 @@ impl crate::WebviewInterface for PlatformWebview {
                     );
                 }
                 (*webview).AddScriptToExecuteOnDocumentCreated(
-                    script.to_wide_string().as_ptr(),
+                    script.to_wide_string().as_ptr() as *mut _,
                     null_mut(),
                 );
             }
@@ -626,7 +629,12 @@ extern "system" fn controller_created(
                 &IID_ICoreWebView2Controller2,
                 &mut controller2 as *mut _ as *mut *mut c_void,
             );
-            (*controller2).put_DefaultBackgroundColor(0x00000000);
+            (*controller2).put_DefaultBackgroundColor(COREWEBVIEW2_COLOR {
+                A: 0,
+                R: 0,
+                G: 0,
+                B: 0,
+            });
         }
 
         // Set user agent
@@ -643,7 +651,7 @@ extern "system" fn controller_created(
             &IID_ICoreWebView2Settings2,
             &mut settings2 as *mut _ as *mut *mut c_void,
         );
-        (*settings2).put_UserAgent(useragent.to_wide_string().as_ptr());
+        (*settings2).put_UserAgent(useragent.to_wide_string().as_ptr() as *mut _);
 
         // Set custom protocols
         #[cfg(feature = "custom_protocol")]
@@ -652,7 +660,7 @@ extern "system" fn controller_created(
                 (*webview).AddWebResourceRequestedFilter(
                     format!("http://{}.localhost/*", custom_protocol.scheme)
                         .to_wide_string()
-                        .as_ptr(),
+                        .as_ptr() as *mut _,
                     COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
                 );
             }
@@ -684,6 +692,7 @@ extern "system" fn controller_created(
             let navigation_starting_handler =
                 Box::into_raw(Box::new(ICoreWebView2NavigationStartingEventHandler {
                     lpVtbl: &VTBL,
+                    user_data: null_mut(),
                 }));
             (*webview).add_NavigationStarting(navigation_starting_handler, null_mut());
         }
@@ -698,6 +707,7 @@ extern "system" fn controller_created(
             let navigation_completed_handler =
                 Box::into_raw(Box::new(ICoreWebView2NavigationCompletedEventHandler {
                     lpVtbl: &VTBL,
+                    user_data: null_mut(),
                 }));
             (*webview).add_NavigationCompleted(navigation_completed_handler, null_mut());
         }
@@ -712,6 +722,7 @@ extern "system" fn controller_created(
             let document_title_changed_handler =
                 Box::into_raw(Box::new(ICoreWebView2DocumentTitleChangedEventHandler {
                     lpVtbl: &VTBL,
+                    user_data: null_mut(),
                 }));
             (*webview).add_DocumentTitleChanged(document_title_changed_handler, null_mut());
         }
@@ -726,6 +737,7 @@ extern "system" fn controller_created(
             let new_window_requested_handler =
                 Box::into_raw(Box::new(ICoreWebView2NewWindowRequestedEventHandler {
                     lpVtbl: &VTBL,
+                    user_data: null_mut(),
                 }));
             (*webview).add_NewWindowRequested(new_window_requested_handler, null_mut());
         }
@@ -740,8 +752,10 @@ extern "system" fn controller_created(
         let script = IPC_SCRIPT;
         #[cfg(feature = "log")]
         let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
-        (*webview)
-            .AddScriptToExecuteOnDocumentCreated(script.to_wide_string().as_ptr(), null_mut());
+        (*webview).AddScriptToExecuteOnDocumentCreated(
+            script.to_wide_string().as_ptr() as *mut _,
+            null_mut(),
+        );
 
         static VTBL: ICoreWebView2WebMessageReceivedEventHandlerVtbl =
             ICoreWebView2WebMessageReceivedEventHandlerVtbl {
@@ -753,6 +767,7 @@ extern "system" fn controller_created(
         let message_received_handler =
             Box::into_raw(Box::new(ICoreWebView2WebMessageReceivedEventHandler {
                 lpVtbl: &VTBL,
+                user_data: null_mut(),
             }));
         (*webview).add_WebMessageReceived(message_received_handler, null_mut());
 
@@ -762,10 +777,10 @@ extern "system" fn controller_created(
             let url = replace_custom_protocol_in_url(url, &_self.custom_protocols);
             #[cfg(not(feature = "custom_protocol"))]
             let url: &str = url.as_ref();
-            (*webview).Navigate(url.to_wide_string().as_ptr());
+            (*webview).Navigate(url.to_wide_string().as_ptr() as *mut _);
         }
         if let Some(html) = &_self.should_load_html {
-            (*webview).NavigateToString(html.to_wide_string().as_ptr());
+            (*webview).NavigateToString(html.to_wide_string().as_ptr() as *mut _);
         }
 
         S_OK
@@ -775,7 +790,7 @@ extern "system" fn controller_created(
 extern "system" fn navigation_starting(
     _this: *mut ICoreWebView2NavigationStartingEventHandler,
     _sender: *mut ICoreWebView2,
-    _args: *mut c_void,
+    _args: *mut ICoreWebView2NavigationStartingEventArgs,
 ) -> HRESULT {
     send_event(Event::PageLoadStarted);
     S_OK
@@ -784,7 +799,7 @@ extern "system" fn navigation_starting(
 extern "system" fn navigation_completed(
     _this: *mut ICoreWebView2NavigationCompletedEventHandler,
     _sender: *mut ICoreWebView2,
-    _args: *mut c_void,
+    _args: *mut ICoreWebView2NavigationCompletedEventArgs,
 ) -> HRESULT {
     send_event(Event::PageLoadFinished);
     S_OK
@@ -962,8 +977,8 @@ fn http_response_to_webview2_response(
         let mut webview2_response = null_mut();
         (*environment).CreateWebResourceResponse(
             body_stream,
-            response.status as u32,
-            response.status.to_string().to_wide_string().as_ptr(),
+            response.status as i32,
+            response.status.to_string().to_wide_string().as_ptr() as *mut _,
             response
                 .headers
                 .iter()
@@ -971,7 +986,7 @@ fn http_response_to_webview2_response(
                 .collect::<Vec<_>>()
                 .join("\n")
                 .to_wide_string()
-                .as_ptr(),
+                .as_ptr() as *mut _,
             &mut webview2_response,
         );
         (*body_stream).Release();

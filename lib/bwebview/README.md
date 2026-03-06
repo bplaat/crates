@@ -46,8 +46,13 @@ sudo dnf install gtk3-devel webkit2gtk4.1-devel
 - **remember_window_state** Adds remembers window position and size between launches options (default).
 - **rust-embed** Adds support for serving embedded assets using the `rust-embed` crate.
 
+## Sources binary blobs
+
+- `webview2/{arm64, x64, x86}/` [Microsoft.Web.WebView2 nuget](https://www.nuget.org/packages/Microsoft.Web.WebView2/)
+- `webview2/*.winmd` [Microsoft.Web.WebView2 win32 windmd generator](https://github.com/wravery/webview2-win32md/tree/main)
+
 ## License
 
-Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
+Copyright © 2025-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
 Licensed under the [MIT](../../LICENSE) license.

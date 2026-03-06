@@ -307,6 +307,12 @@ unsafe extern "system" {
         lpDirectory: *const c_char,
         nShowCmd: i32,
     ) -> isize;
+    pub(crate) fn SHCreateItemFromParsingName(
+        pszPath: *const u16,
+        pbc: *mut c_void,
+        riid: *const GUID,
+        ppv: *mut *mut c_void,
+    ) -> HRESULT;
 }
 
 // MARK: shcore.dll
@@ -371,6 +377,13 @@ unsafe extern "system" {
     pub(crate) fn CoInitializeEx(pvReserved: *mut c_void, dwCoInit: u32) -> HRESULT;
     pub(crate) fn CoUninitialize();
     pub(crate) fn CoTaskMemFree(pv: *mut c_void);
+    pub(crate) fn CoCreateInstance(
+        rclsid: *const GUID,
+        pUnkOuter: *mut c_void,
+        dwClsContext: u32,
+        riid: *const GUID,
+        ppv: *mut *mut c_void,
+    ) -> HRESULT;
 }
 
 // MARK: IStream
@@ -724,25 +737,4 @@ pub(crate) struct IFileSaveDialogVtbl {
     _add_place: usize, // AddPlace
     pub(crate) SetDefaultExtension: unsafe extern "system" fn(*mut c_void, *const u16) -> HRESULT,
     // Close, SetClientGuid, ClearClientData, SetFilter, then IFileSaveDialog methods
-}
-
-#[link(name = "ole32")]
-unsafe extern "system" {
-    pub(crate) fn CoCreateInstance(
-        rclsid: *const GUID,
-        pUnkOuter: *mut c_void,
-        dwClsContext: u32,
-        riid: *const GUID,
-        ppv: *mut *mut c_void,
-    ) -> HRESULT;
-}
-
-#[link(name = "shell32")]
-unsafe extern "system" {
-    pub(crate) fn SHCreateItemFromParsingName(
-        pszPath: *const u16,
-        pbc: *mut c_void,
-        riid: *const GUID,
-        ppv: *mut *mut c_void,
-    ) -> HRESULT;
 }
