@@ -88,6 +88,7 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 These libraries are created as minimal / smaller replacements for common used crates
 
 - [anyhow](lib/anyhow) A minimal replacement for the [anyhow](https://crates.io/crates/anyhow) crate
+- [block2](lib/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
 - [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 - [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
 - [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
@@ -98,6 +99,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
 - [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
 - [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
+- [objc2](lib/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
 - [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 - [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 - [semver](lib/semver) A minimal replacement for the [semver](https://crates.io/crates/semver) crate

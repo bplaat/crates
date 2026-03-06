@@ -1,0 +1,12 @@
+[package]
+name = "block2"
+version = "0.6.0+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+objc2 = "0.6.0"
+
+[lints]
+workspace = true
