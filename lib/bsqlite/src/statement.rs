@@ -218,6 +218,9 @@ impl RawStatement {
             }
             SQLITE_BLOB => {
                 let blob = unsafe { sqlite3_column_blob(self.0, index) };
+                if blob.is_null() {
+                    return Value::Blob(Vec::new());
+                }
                 let len = unsafe { sqlite3_column_bytes(self.0, index) };
                 let slice = unsafe { std::slice::from_raw_parts(blob as *const u8, len as usize) };
                 Value::Blob(slice.to_vec())
