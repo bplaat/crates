@@ -13,9 +13,10 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
     #[cfg(all(unix, not(any(target_os = "macos", target_os = "openbsd"))))]
     {
         unsafe extern "C" {
-            fn getrandom(buf: *mut u8, size: usize, flags: u32) -> usize;
+            fn getrandom(buf: *mut u8, size: usize, flags: u32) -> isize;
         }
-        if unsafe { getrandom(buf.as_mut_ptr(), buf.len(), 0) } != buf.len() {
+        let n = unsafe { getrandom(buf.as_mut_ptr(), buf.len(), 0) };
+        if n < 0 || n as usize != buf.len() {
             return Err(Error::other("getrandom failed"));
         }
     }
