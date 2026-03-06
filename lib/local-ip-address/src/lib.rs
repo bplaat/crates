@@ -16,14 +16,8 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
     // MARK: Unix
     #[cfg(unix)]
     {
-        let socket = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
-        if socket < 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-
         let mut ifaddrs: *mut libc::ifaddrs = std::ptr::null_mut();
         if unsafe { libc::getifaddrs(&mut ifaddrs) } != 0 {
-            unsafe { libc::close(socket) };
             return Err(std::io::Error::last_os_error());
         }
         let mut result = Err(std::io::Error::new(
@@ -59,7 +53,6 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
         }
 
         unsafe { libc::freeifaddrs(ifaddrs) };
-        unsafe { libc::close(socket) };
         result
     }
 
