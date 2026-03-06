@@ -5,7 +5,7 @@
  */
 
 #![doc = include_str!("../README.md")]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 use std::time::Duration;
 

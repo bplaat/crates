@@ -196,6 +196,7 @@ mod test {
 
     #[test]
     #[cfg(feature = "cgi")]
+    #[allow(unsafe_code)]
     fn test_parse_cgi_get() {
         use std::env;
         env::set_var("GATEWAY_INTERFACE", "CGI/1.1");
