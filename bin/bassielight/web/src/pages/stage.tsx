@@ -56,7 +56,7 @@ function TapTempoButton({
 
     return (
         <button
-            class={`button is-text ${isSelected ? 'is-selected' : ''}`}
+            class={`flex items-center gap-2 justify-center min-w-20 h-12 px-2 border-2 rounded-lg font-medium bg-zinc-700 text-zinc-200 cursor-pointer transition-all hover:bg-zinc-600 hover:border-blue-500 active:bg-zinc-500 active:scale-95 outline-none ${isSelected ? 'border-blue-500' : 'border-transparent'}`}
             onClick={() => {
                 const now = window.performance.now();
                 if (taps.current.length > 0 && now - taps.current[taps.current.length - 1] > 2000) {
@@ -137,14 +137,14 @@ export function StagePage() {
 
     return (
         <>
-            <div class="main">
-                <div class="flex"></div>
+            <div class="flex-1 flex flex-col">
+                <div class="flex-1" />
 
-                <div class="buttons is-centered">
+                <div class="flex flex-wrap gap-2 my-4 items-center justify-center">
                     {MODES.map((mode) => (
                         <button
                             key={mode}
-                            class={`button is-text is-large ${mode.type === selectedMode ? 'is-selected' : ''}`}
+                            class={`flex items-center gap-2 justify-center flex-1 max-w-48 h-12 px-2 border-2 rounded-lg font-medium bg-zinc-700 text-zinc-200 cursor-pointer transition-all hover:bg-zinc-600 hover:border-blue-500 active:bg-zinc-500 active:scale-95 outline-none ${mode.type === selectedMode ? 'border-blue-500' : 'border-transparent'}`}
                             onClick={() => setSelectedMode(mode.type)}
                         >
                             <mode.icon />
@@ -154,34 +154,34 @@ export function StagePage() {
                 </div>
             </div>
 
-            <div class="sidebar">
-                <h2 class="subtitle">Color</h2>
-                <div class="buttons">
+            <div class="w-80 bg-zinc-800 p-4 overflow-y-auto">
+                <h2 class="font-bold mt-0 mb-4 text-[1.35rem] border-b border-zinc-600 pb-2">Color</h2>
+                <div class="flex flex-wrap gap-2 mb-4">
                     {COLORS.map((color) => (
                         <button
                             key={color}
-                            class={`button is-color ${color === selectedColor ? 'is-selected' : ''}`}
+                            class={`w-14 h-14 rounded-lg border-2 cursor-pointer transition-all active:scale-95 ${color === selectedColor ? 'border-white' : 'border-white/10 hover:border-white'}`}
                             style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
                             onClick={() => setSelectedColor(color)}
                         />
                     ))}
                 </div>
 
-                <h2 class="subtitle">Toggle Color</h2>
-                <div class="buttons">
+                <h2 class="font-bold my-4 text-[1.35rem] border-b border-zinc-600 pb-2">Toggle Color</h2>
+                <div class="flex flex-wrap gap-2 mb-4">
                     {COLORS.map((color) => (
                         <button
                             key={color}
-                            class={`button is-color ${color === selectedToggleColor ? 'is-selected' : ''}`}
+                            class={`w-14 h-14 rounded-lg border-2 cursor-pointer transition-all active:scale-95 ${color === selectedToggleColor ? 'border-white' : 'border-white/10 hover:border-white'}`}
                             style={{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }}
                             onClick={() => setSelectedToggleColor(color)}
                         />
                     ))}
                 </div>
 
-                <h2 class="subtitle">Intensity</h2>
+                <h2 class="font-bold my-4 text-[1.35rem] border-b border-zinc-600 pb-2">Intensity</h2>
                 <input
-                    class="slider is-fullwidth"
+                    class="slider"
                     type="range"
                     min="0"
                     max="1"
@@ -190,12 +190,12 @@ export function StagePage() {
                     onInput={(e) => setIntensity(parseFloat((e.target as HTMLInputElement).value))}
                 />
 
-                <h2 class="subtitle">Toggle Tween</h2>
-                <div class="buttons">
+                <h2 class="font-bold my-4 text-[1.35rem] border-b border-zinc-600 pb-2">Toggle Tween</h2>
+                <div class="flex flex-wrap gap-2 mb-4">
                     {TWEENS.map((tween) => (
                         <button
                             key={tween.type}
-                            class={`button is-icon ${tween.type === selectedToggleTween ? 'is-selected' : ''}`}
+                            class={`p-2 border-2 rounded-lg bg-zinc-700 text-zinc-200 cursor-pointer transition-all hover:bg-zinc-600 hover:border-blue-500 active:bg-zinc-500 active:scale-95 outline-none ${tween.type === selectedToggleTween ? 'border-blue-500' : 'border-transparent'}`}
                             onClick={() => setSelectedToggleTween(tween.type)}
                             title={capitalize(tween.type)}
                         >
@@ -204,12 +204,12 @@ export function StagePage() {
                     ))}
                 </div>
 
-                <h2 class="subtitle">Toggle Speed</h2>
-                <div class="buttons">
+                <h2 class="font-bold my-4 text-[1.35rem] border-b border-zinc-600 pb-2">Toggle Speed</h2>
+                <div class="flex flex-wrap gap-2 mb-4">
                     {SPEEDS.map((speed) => (
                         <button
                             key={speed}
-                            class={`button is-text ${speed === selectedToggleSpeed ? 'is-selected' : ''}`}
+                            class={`flex items-center gap-2 justify-center min-w-20 h-12 px-2 border-2 rounded-lg font-medium bg-zinc-700 text-zinc-200 cursor-pointer transition-all hover:bg-zinc-600 hover:border-blue-500 active:bg-zinc-500 active:scale-95 outline-none ${speed === selectedToggleSpeed ? 'border-blue-500' : 'border-transparent'}`}
                             onClick={() => setSelectedToggleSpeed(speed)}
                         >
                             {speed == null ? 'Off' : `${speed}ms`}
@@ -218,12 +218,12 @@ export function StagePage() {
                     <TapTempoButton selectedSpeed={selectedToggleSpeed} onSpeedChange={setSelectedToggleSpeed} />
                 </div>
 
-                <h2 class="subtitle">Strobe Speed</h2>
-                <div class="buttons">
+                <h2 class="font-bold my-4 text-[1.35rem] border-b border-zinc-600 pb-2">Strobe Speed</h2>
+                <div class="flex flex-wrap gap-2 mb-4">
                     {SPEEDS.map((speed) => (
                         <button
                             key={speed}
-                            class={`button is-text ${speed === selectedStrobeSpeed ? 'is-selected' : ''}`}
+                            class={`flex items-center gap-2 justify-center min-w-20 h-12 px-2 border-2 rounded-lg font-medium bg-zinc-700 text-zinc-200 cursor-pointer transition-all hover:bg-zinc-600 hover:border-blue-500 active:bg-zinc-500 active:scale-95 outline-none ${speed === selectedStrobeSpeed ? 'border-blue-500' : 'border-transparent'}`}
                             onClick={() => setSelectedStrobeSpeed(speed)}
                         >
                             {speed == null ? 'Off' : `${speed}ms`}
@@ -234,13 +234,13 @@ export function StagePage() {
 
                 {switchesLabels && (
                     <>
-                        <h2 class="subtitle">Switches</h2>
-                        <p>Toggle</p>
-                        <div class="buttons">
+                        <h2 class="font-bold my-4 text-[1.35rem] border-b border-zinc-600 pb-2">Switches</h2>
+                        <p class="my-4">Toggle</p>
+                        <div class="flex flex-wrap gap-2 mb-4">
                             {switchesLabels.map((label, index) => (
                                 <button
                                     key={`toggle-${index}`}
-                                    class={`button is-text ${switchesToggle[index] ? 'is-selected' : ''}`}
+                                    class={`flex items-center gap-2 justify-center min-w-20 h-12 px-2 border-2 rounded-lg font-medium bg-zinc-700 text-zinc-200 cursor-pointer transition-all hover:bg-zinc-600 hover:border-blue-500 active:bg-zinc-500 active:scale-95 outline-none ${switchesToggle[index] ? 'border-blue-500' : 'border-transparent'}`}
                                     onClick={() => {
                                         const newToggles = [...switchesToggle];
                                         newToggles[index] = !newToggles[index];
@@ -252,12 +252,12 @@ export function StagePage() {
                             ))}
                         </div>
 
-                        <p>Press</p>
-                        <div class="buttons">
+                        <p class="my-4">Press</p>
+                        <div class="flex flex-wrap gap-2 mb-4">
                             {switchesLabels.map((label, index) => (
                                 <button
                                     key={`press-${index}`}
-                                    class={`button is-text ${switchesPress[index] ? 'is-selected' : ''}`}
+                                    class={`flex items-center gap-2 justify-center min-w-20 h-12 px-2 border-2 rounded-lg font-medium bg-zinc-700 text-zinc-200 cursor-pointer transition-all hover:bg-zinc-600 hover:border-blue-500 active:bg-zinc-500 active:scale-95 outline-none ${switchesPress[index] ? 'border-blue-500' : 'border-transparent'}`}
                                     onMouseDown={() => {
                                         const newPresses = [...switchesPress];
                                         newPresses[index] = true;

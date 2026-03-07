@@ -6,63 +6,24 @@
 
 import { useContext, useEffect, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
+import { Link, useRoute } from 'wouter-preact';
 import { QrModal } from './qrmodal.tsx';
 import { CogIcon, MotionPlayOutlineIcon, QrcodeIcon, SquareEditOutlineIcon } from './icons.tsx';
-import { Link } from '../router.tsx';
 import { IpcContext } from '../app.tsx';
 
 export const $dmxLive = signal(false);
 
-const classes = css`
-    /* Menubar */
-    .menubar {
-        background-color: var(--sidebar-bg);
-        display: flex;
-        flex-direction: column;
-        padding: 1rem;
-    }
+const NAV_BASE =
+    'flex items-center gap-2 w-full px-2 h-12 rounded-lg font-medium text-zinc-200 cursor-pointer transition-all border-2 border-transparent hover:bg-zinc-700 hover:border-blue-500 mb-2 no-underline! outline-none';
 
-    :global(body.is-bwebview-macos:not(.is-fullscreen)) .menubar {
-        padding-top: var(--macos-titlebar-height);
-    }
-
-    .logo {
-        font-size: 1.2rem;
-        font-weight: bold;
-        margin-bottom: 0.75rem;
-    }
-
-    .menubar > :global(.button) {
-        width: 100%;
-        justify-content: start;
-        margin-bottom: 0.5rem;
-    }
-    .menubar > :global(.button):last-child {
-        margin-bottom: 0;
-    }
-
-    /* DMX state */
-    .dmx-state {
-        display: flex;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-    .dmx-state.is-live:before,
-    .dmx-state.is-off:before {
-        content: '';
-        display: block;
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 50%;
-        margin-right: 0.5rem;
-    }
-    .dmx-state.is-live:before {
-        background-color: var(--success-color);
-    }
-    .dmx-state.is-off:before {
-        background-color: var(--danger-color);
-    }
-`;
+function NavLink({ href, children }: { href: string; children: any }) {
+    const [isActive] = useRoute(href);
+    return (
+        <Link href={href} class={`${NAV_BASE} ${isActive ? 'border-blue-500!' : ''}`}>
+            {children}
+        </Link>
+    );
+}
 
 export function Menubar() {
     const ipc = useContext(IpcContext)!;
@@ -78,32 +39,33 @@ export function Menubar() {
 
     return (
         <>
-            <div class={classes['menubar']}>
-                <h1 class={classes['logo']}>BassieLight</h1>
+            <div id="menubar" class="bg-zinc-800 flex flex-col p-4">
+                <h1 class="text-xl font-bold mb-3">BassieLight</h1>
 
-                <Link class="button is-text" href="/">
+                <NavLink href="/">
                     <MotionPlayOutlineIcon />
                     Stage
-                </Link>
-                <Link class="button is-text" href="/editor">
+                </NavLink>
+                <NavLink href="/editor">
                     <SquareEditOutlineIcon />
                     Editor
-                </Link>
-                <Link class="button is-text" href="/settings">
+                </NavLink>
+                <NavLink href="/settings">
                     <CogIcon />
                     Settings
-                </Link>
+                </NavLink>
 
-                <div class="flex"></div>
+                <div class="flex-1" />
 
-                <div class={`${classes['dmx-state']} ${$dmxLive.value ? classes['is-live'] : classes['is-off']}`}>
+                <div class="flex items-center gap-2 mb-2">
+                    <span class={`w-2 h-2 rounded-full ${$dmxLive.value ? 'bg-green-500' : 'bg-red-500'}`} />
                     {$dmxLive.value ? 'DMX is live' : 'DMX is off'}
                 </div>
 
-                <div class="button is-text" onClick={() => setShowQrCode(true)}>
+                <button class={`${NAV_BASE} mb-0`} onClick={() => setShowQrCode(true)}>
                     <QrcodeIcon />
                     QR-code
-                </div>
+                </button>
             </div>
             {showQrCode && (
                 <QrModal contents={`http://${window.location.host}/`} onClose={() => setShowQrCode(false)} />

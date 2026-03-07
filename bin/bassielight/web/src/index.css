@@ -1,228 +1,72 @@
 /*
  * Copyright (c) 2025 Leonard van der Plaat
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-@import url(minireset.css);
+@import 'tailwindcss';
 
-/* Colors */
-:root {
-    --background-color: #1a1a1a;
-    --text-color: #e0e0e0;
-    --sidebar-bg: #222;
-    --primary-color: #007bff;
-    --border-color: #444;
-    --button-bg: #333;
-    --button-hover-bg: #444;
-    --button-active-bg: #555;
-    --success-color: #28a745;
-    --danger-color: #dc3545;
-}
+@layer base {
+    html {
+        @apply select-none overflow-hidden;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    }
 
-/* Base */
-html {
-    font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        'Segoe UI',
-        Roboto,
-        Oxygen,
-        Ubuntu,
-        Cantarell,
-        'Open Sans',
-        'Helvetica Neue',
-        sans-serif;
-    font-size: 16px;
-    line-height: 1.6;
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
 
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    body {
+        @apply bg-zinc-900 text-zinc-200;
+    }
 
-    overscroll-behavior: none;
-    cursor: default;
-    -webkit-user-select: none;
-    user-select: none;
+    #app {
+        @apply flex h-screen;
+    }
 
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
+    a {
+        @apply text-current no-underline font-medium;
+        -webkit-user-drag: none;
+    }
+    a:hover,
+    a:focus {
+        @apply underline;
+    }
 
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-::-webkit-scrollbar-track,
-::-webkit-scrollbar-corner {
-    background: transparent;
-}
-::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    body.is-bwebview-macos:not(.is-fullscreen) #menubar {
+        padding-top: var(--macos-titlebar-height) !important;
+    }
+
+    .icon {
+        display: block;
+        width: 24px;
+        height: 24px;
+        fill: currentColor;
+    }
 }
 
-body {
-    background-color: var(--background-color);
-    color: var(--text-color);
-}
-
-p {
-    margin: 1rem 0;
-}
-
-a {
-    color: currentColor;
-    text-decoration: none;
-    font-weight: 500;
-    -webkit-user-drag: none;
-}
-a:hover,
-a:focus {
-    text-decoration: underline;
-}
-
-/* App */
-#app {
-    display: flex;
-    height: 100vh;
-}
-
-/* Main */
-.main {
-    flex: 1;
-}
-.main:not(.has-content) {
-    display: flex;
-    flex-direction: column;
-}
-.main.has-content {
-    padding: 2rem;
-    overflow-y: auto;
-}
-
-/* Sidebar */
-.sidebar {
-    width: 20rem;
-    background-color: var(--sidebar-bg);
-    padding: 1rem;
-    overflow-y: auto;
-}
-
-/* Flex */
-.flex {
-    flex: 1;
-}
-
-/* Subtitle */
-.subtitle {
-    font-weight: 700;
-    margin: 1rem 0;
-    font-size: 1.35rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.5rem;
-}
-.subtitle:first-child {
-    margin-top: 0;
-}
-
-/* Buttons Containers */
-.buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin: 1rem 0;
-}
-
-.buttons.is-centered {
-    align-items: center;
-    justify-content: center;
-}
-
-/* Button */
-.button {
-    padding: 0;
-    border: 2px solid transparent;
-    border-radius: 0.5rem;
-    font-family: inherit;
-    font-size: inherit;
-    font-weight: 500;
-    background-color: var(--button-bg);
-    color: var(--text-color);
-    text-decoration: none !important;
-    cursor: pointer;
-    transition:
-        background-color 0.2s ease,
-        border-color 0.2s ease,
-        transform 0.1s ease;
-    outline: none;
-}
-
-.button:hover,
-.button:focus {
-    background-color: var(--button-hover-bg);
-    border-color: var(--primary-color);
-}
-.button:active {
-    background-color: var(--button-active-bg);
-    transform: scale(0.96);
-}
-.button:focus-visible {
-    border-color: var(--primary-color);
-    box-shadow:
-        0 0 0 2px var(--background-color),
-        0 0 0 4px var(--primary-color);
-}
-
-.button.is-color {
-    width: 3.5rem;
-    height: 3.5rem;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-}
-.button.is-color:hover {
-    border-color: #fff;
-}
-
-.button.is-icon {
-    padding: 0.5rem;
-}
-
-.button.is-text {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 5rem;
-    height: 3rem;
-    padding: 0 0.5rem;
-}
-.button.is-text > .icon {
-    margin-right: 0.5rem;
-}
-
-.button.is-large {
-    flex-grow: 1;
-    max-width: 12rem;
-}
-
-.button.is-selected,
-.button.is-selected:hover {
-    border-color: var(--primary-color);
-}
-
-/* Slider */
-.slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 0.5rem;
-    border-radius: 0.25rem;
-    background: var(--button-bg);
-    outline: none;
-    cursor: pointer;
+@layer components {
+    .slider {
+        @apply appearance-none w-full h-2 rounded-sm bg-zinc-700 outline-none cursor-pointer;
+    }
+    .slider::-webkit-slider-thumb {
+        @apply appearance-none w-4 h-4 rounded-full bg-blue-500 cursor-pointer;
+    }
+    .slider::-moz-range-thumb {
+        @apply w-4 h-4 rounded-full bg-blue-500 cursor-pointer border-0;
+    }
 }

@@ -12,9 +12,9 @@ export function SettingsPage() {
     }, []);
 
     return (
-        <div class="main has-content">
-            <h2 class="subtitle">Settings</h2>
-            <p>
+        <div class="flex-1 p-8 overflow-y-auto">
+            <h2 class="font-bold mt-0 mb-4 text-[1.35rem] border-b border-zinc-600 pb-2">Settings</h2>
+            <p class="my-4">
                 Made by{' '}
                 <a href="https://bplaat.nl/" target="_blank">
                     Bastiaan van der Plaat

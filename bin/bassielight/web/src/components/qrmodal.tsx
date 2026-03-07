@@ -7,43 +7,21 @@
 import encodeQR from 'qr';
 import { CloseIcon } from './icons.tsx';
 
-const classes = css`
-    .qr-modal {
-        position: fixed;
-        top: 0px;
-        left: 0px;
-        width: 100vw;
-        height: 100vh;
-        z-index: 999;
-        background-color: rgba(0, 0, 0, 0.8);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .qr-code {
-        width: 60vw;
-        max-width: 60vh;
-        background-color: #fff;
-    }
-
-    .close-button {
-        position: absolute;
-        top: 1rem;
-        right: 1rem;
-    }
-`;
-
 export function QrModal({ contents, onClose }: { contents: string; onClose: () => void }) {
     return (
-        <div class={classes['qr-modal']} onClick={onClose}>
-            <button class={`button is-icon ${classes['close-button']}`} onClick={onClose}>
+        <div class="fixed inset-0 z-[999] bg-black/80 flex flex-col items-center justify-center" onClick={onClose}>
+            <button
+                class="absolute top-4 right-4 p-2 border-2 border-transparent rounded-lg bg-zinc-700 text-zinc-200 cursor-pointer transition-all hover:bg-zinc-600 hover:border-blue-500 active:scale-95 outline-none"
+                onClick={onClose}
+            >
                 <CloseIcon />
             </button>
 
-            <div class={classes['qr-code']} dangerouslySetInnerHTML={{ __html: encodeQR(contents, 'svg') }} />
-            <p>
+            <div
+                class="w-[60vw] max-w-[60vh] bg-white"
+                dangerouslySetInnerHTML={{ __html: encodeQR(contents, 'svg') }}
+            />
+            <p class="mt-4">
                 <a href={contents} target="_blank">
                     {contents}
                 </a>

@@ -5,7 +5,7 @@
  */
 
 import { createContext } from 'preact';
-import { Route, Router } from './router.tsx';
+import { Route, Switch } from 'wouter-preact';
 import { StagePage } from './pages/stage.tsx';
 import { SettingsPage } from './pages/settings.tsx';
 import { NotFoundPage } from './pages/notfound.tsx';
@@ -20,12 +20,12 @@ export function App() {
         <IpcContext.Provider value={new Ipc()}>
             <Menubar />
 
-            <Router>
+            <Switch>
                 <Route path="/" component={StagePage} />
                 <Route path="/editor" component={EditorPage} />
                 <Route path="/settings" component={SettingsPage} />
-                <Route fallback component={NotFoundPage} />
-            </Router>
+                <Route component={NotFoundPage} />
+            </Switch>
         </IpcContext.Provider>
     );
 }
