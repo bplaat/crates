@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Link, route } from 'preact-router';
+import { Link, useLocation } from 'wouter-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type ComponentChildren } from 'preact';
 import { $authUser, logout } from '../services/auth.service.ts';
@@ -27,6 +27,7 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
     const user = $authUser.value;
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const [, navigate] = useLocation();
 
     useEffect(() => {
         if (!showSearch) $searchQuery.value = '';
@@ -47,7 +48,7 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
     async function handleLogout() {
         setDropdownOpen(false);
         await logout();
-        route('/auth/login');
+        navigate('/auth/login');
     }
 
     return (
@@ -98,7 +99,7 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
                                         <DropdownItem
                                             onClick={() => {
                                                 setDropdownOpen(false);
-                                                route('/admin/users');
+                                                navigate('/admin/users');
                                             }}
                                         >
                                             <svg
@@ -116,7 +117,7 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
                                 <DropdownItem
                                     onClick={() => {
                                         setDropdownOpen(false);
-                                        route('/settings');
+                                        navigate('/settings');
                                     }}
                                 >
                                     <svg

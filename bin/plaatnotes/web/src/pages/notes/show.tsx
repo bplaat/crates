@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { route } from 'preact-router';
+import { useLocation, useParams } from 'wouter-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
 import { Navbar } from '../../components/navbar.tsx';
@@ -14,7 +14,9 @@ import { RichEditor } from '../../components/rich-editor.tsx';
 import { getNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
 
-export function NotesShow({ note_id }: { note_id?: string }) {
+export function NotesShow() {
+    const { note_id } = useParams<{ note_id: string }>();
+    const [, navigate] = useLocation();
     const [note, setNote] = useState<Note | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,13 +63,13 @@ export function NotesShow({ note_id }: { note_id?: string }) {
     async function handleArchive() {
         if (!note) return;
         await updateNote(note, { isArchived: !note.isArchived });
-        route(note.isArchived ? '/' : '/archive');
+        navigate(note.isArchived ? '/' : '/archive');
     }
 
     async function handleTrash() {
         if (!note) return;
         await updateNote(note, { isTrashed: !note.isTrashed });
-        route(note.isTrashed ? '/' : '/trash');
+        navigate(note.isTrashed ? '/' : '/trash');
     }
 
     async function handlePin() {
@@ -93,7 +95,7 @@ export function NotesShow({ note_id }: { note_id?: string }) {
             <main class="flex-1 flex flex-col min-h-0 max-w-2xl w-full mx-auto px-4 py-8">
                 <div class="flex items-center gap-3 mb-6">
                     <IconButton
-                        onClick={() => route(note.isArchived ? '/archive' : note.isTrashed ? '/trash' : '/')}
+                        onClick={() => navigate(note.isArchived ? '/archive' : note.isTrashed ? '/trash' : '/')}
                         class="text-gray-500 dark:text-gray-400"
                         title={t('notes_show.back')}
                     >

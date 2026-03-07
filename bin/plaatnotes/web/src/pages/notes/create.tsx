@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { route } from 'preact-router';
+import { useLocation } from 'wouter-preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, IconButton, SecondaryButton } from '../../components/form.tsx';
 import { Navbar } from '../../components/navbar.tsx';
@@ -16,6 +16,7 @@ export function NotesCreate() {
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [isPinned, setIsPinned] = useState(false);
+    const [, navigate] = useLocation();
 
     useEffect(() => {
         document.title = `PlaatNotes - ${t('page.create')}`;
@@ -26,7 +27,7 @@ export function NotesCreate() {
         if (!body.trim()) return;
         const note = await createNote({ body, title: title || undefined, isPinned });
         if (note?.id) {
-            route(`/notes/${note.id}`);
+            navigate(`/notes/${note.id}`);
         }
     }
 
@@ -36,7 +37,7 @@ export function NotesCreate() {
             <main class="max-w-2xl mx-auto px-4 py-8">
                 <div class="flex items-center gap-3 mb-6">
                     <IconButton
-                        onClick={() => route('/')}
+                        onClick={() => navigate('/')}
                         class="text-gray-500 dark:text-gray-400"
                         title={t('notes_create.back')}
                     >
@@ -76,7 +77,7 @@ export function NotesCreate() {
                             </svg>
                         </IconButton>
                         <div class="flex gap-2">
-                            <SecondaryButton type="button" onClick={() => route('/')}>
+                            <SecondaryButton type="button" onClick={() => navigate('/')}>
                                 {t('notes_create.cancel')}
                             </SecondaryButton>
                             <Button type="submit" class="inline-flex items-center gap-1.5 px-4 py-1.5">

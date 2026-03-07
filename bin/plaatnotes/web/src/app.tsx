@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import Router from 'preact-router';
+import { Route, Switch } from 'wouter-preact';
 import { useEffect } from 'preact/hooks';
 import { AdminUsers } from './pages/admin/users.tsx';
 import { ArchivePage } from './pages/archive.tsx';
@@ -64,17 +64,17 @@ export function App() {
     }
 
     return (
-        <Router>
-            <Home path="/" />
-            <ArchivePage path="/archive" />
-            <TrashPage path="/trash" />
-            <NotesCreate path="/notes/create" />
-            <NotesShow path="/notes/:note_id" />
-            <SettingsAccount path="/settings" />
-            <SettingsSessions path="/settings/sessions" />
-            <SettingsImports path="/settings/imports" />
-            <AdminUsers path="/admin/users" />
-            <NotFound default />
-        </Router>
+        <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/archive" component={ArchivePage} />
+            <Route path="/trash" component={TrashPage} />
+            <Route path="/notes/create" component={NotesCreate} />
+            <Route path="/notes/:note_id" component={NotesShow} />
+            <Route path="/settings" component={SettingsAccount} />
+            <Route path="/settings/sessions" component={SettingsSessions} />
+            <Route path="/settings/imports" component={SettingsImports} />
+            <Route path="/admin/users" component={AdminUsers} />
+            <Route component={NotFound} />
+        </Switch>
     );
 }

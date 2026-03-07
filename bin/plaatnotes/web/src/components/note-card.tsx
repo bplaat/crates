@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Link } from 'preact-router';
+import { Link } from 'wouter-preact';
 import { type Note } from '../../src-gen/api.ts';
 import { t } from '../services/i18n.service.ts';
 

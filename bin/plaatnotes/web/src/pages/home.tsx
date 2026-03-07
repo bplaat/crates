@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { route } from 'preact-router';
+import { useLocation } from 'wouter-preact';
 import { useEffect } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
@@ -17,6 +17,7 @@ import { useSearchQuery } from '../hooks/use-search-query.ts';
 
 export function Home() {
     const query = useSearchQuery();
+    const [, navigate] = useLocation();
     const {
         items: pinnedItems,
         loading: pinnedLoading,
@@ -128,7 +129,7 @@ export function Home() {
             </div>
 
             <button
-                onClick={() => route('/notes/create')}
+                onClick={() => navigate('/notes/create')}
                 class="fixed bottom-6 right-6 w-14 h-14 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 dark:text-yellow-400 text-white rounded-full shadow-lg flex items-center justify-center transition-colors cursor-pointer"
                 title={t('home.create')}
             >

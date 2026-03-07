@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { route } from 'preact-router';
+import { useLocation } from 'wouter-preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, FormField, FormInput } from '../../components/form.tsx';
 import { login } from '../../services/auth.service.ts';
@@ -15,6 +15,7 @@ export function AuthLogin() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [, navigate] = useLocation();
 
     useEffect(() => {
         document.title = `PlaatNotes - ${t('page.login')}`;
@@ -27,7 +28,7 @@ export function AuthLogin() {
         const success = await login(email, password);
         setLoading(false);
         if (success) {
-            route('/');
+            navigate('/');
         } else {
             setError(true);
         }

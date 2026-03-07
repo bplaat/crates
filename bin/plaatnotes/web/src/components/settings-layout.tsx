@@ -5,33 +5,30 @@
  */
 
 import { type ComponentChildren } from 'preact';
-import Match from 'preact-router/match';
-import { route } from 'preact-router';
+import { useLocation, useRoute } from 'wouter-preact';
 import { Navbar } from './navbar.tsx';
 import { t } from '../services/i18n.service.ts';
 
 function SettingsSidebarLink({ href, label, children }: { href: string; label: string; children: ComponentChildren }) {
+    const [matches] = useRoute(href);
+    const [, navigate] = useLocation();
     return (
-        <Match path={href}>
-            {({ matches }: { matches: boolean }) => (
-                <a
-                    href={href}
-                    onClick={(e: MouseEvent) => {
-                        e.preventDefault();
-                        route(href);
-                    }}
-                    title={label}
-                    class={`flex items-center gap-3 px-3 py-2.5 rounded-full transition-colors no-underline ${
-                        matches
-                            ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                            : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-zinc-700'
-                    }`}
-                >
-                    {children}
-                    <span class="hidden sm:block text-sm font-medium">{label}</span>
-                </a>
-            )}
-        </Match>
+        <a
+            href={href}
+            onClick={(e: MouseEvent) => {
+                e.preventDefault();
+                navigate(href);
+            }}
+            title={label}
+            class={`flex items-center gap-3 px-3 py-2.5 rounded-full transition-colors no-underline ${
+                matches
+                    ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-zinc-700'
+            }`}
+        >
+            {children}
+            <span class="hidden sm:block text-sm font-medium">{label}</span>
+        </a>
     );
 }
 
