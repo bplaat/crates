@@ -6,13 +6,13 @@
 
 //! A bwebview file dialog example
 
-use bwebview::{Event, EventLoop, FileDialog, WebviewBuilder};
+use bwebview::{Event, EventLoop, FileDialog, WebviewBuilder, WebviewEvent, WindowBuilder};
 
 fn main() {
     let event_loop = EventLoop::new();
 
-    let mut webview = WebviewBuilder::new()
-        .title("File Dialog Example")
+    let window = WindowBuilder::new().title("File Dialog Example").build();
+    let mut webview = WebviewBuilder::new(&window)
         .load_html(
             r#"<!DOCTYPE html>
 <html>
@@ -43,7 +43,7 @@ window.ipc.addEventListener('message', e => {
         .build();
 
     event_loop.run(move |event| {
-        if let Event::PageMessageReceived(msg) = event {
+        if let Event::Webview(WebviewEvent::MessageReceive(msg)) = event {
             let result = match msg.as_str() {
                 "pick_file" => match FileDialog::new()
                     .title("Open a file")

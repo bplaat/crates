@@ -6,7 +6,7 @@
 
 //! A simple bwebview multi-monitor example
 
-use bwebview::{EventLoop, WebviewBuilder};
+use bwebview::{EventLoop, WebviewBuilder, WindowBuilder};
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -31,17 +31,21 @@ fn main() {
         );
     }
 
-    let mut _webview_a = WebviewBuilder::new()
+    let window_a = WindowBuilder::new()
         .title("Window A")
         .monitor(&monitors[0])
         .center()
+        .build();
+    let mut _webview_a = WebviewBuilder::new(&window_a)
         .load_url("https://example.com")
         .build();
 
-    let mut _webview_b = WebviewBuilder::new()
+    let window_b = WindowBuilder::new()
         .title("Window B")
         .monitor(monitors.get(1).unwrap_or(&monitors[0]))
         .center()
+        .build();
+    let mut _webview_b = WebviewBuilder::new(&window_b)
         .load_url("https://example.com")
         .build();
 

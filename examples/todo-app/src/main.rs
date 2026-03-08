@@ -11,7 +11,7 @@
 
 use std::fs;
 
-use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder};
+use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder};
 use directories::ProjectDirs;
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -41,12 +41,15 @@ fn main() {
         .app_id("nl", "bplaat", "TodoApp")
         .build();
 
-    let mut webview = WebviewBuilder::new()
+    let window = WindowBuilder::new()
         .title("Todo App")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state()
+        .build();
+
+    let mut webview = WebviewBuilder::new(&window)
         .load_rust_embed::<WebAssets>()
         .build();
 
@@ -56,7 +59,7 @@ fn main() {
     let todos_config_path = config_dir.join("todos.json");
 
     event_loop.run(move |event| {
-        if let Event::PageMessageReceived(message) = event {
+        if let Event::Webview(WebviewEvent::MessageReceive(message)) = event {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::GetTodos => {
                     let todos: Vec<Todo> = fs::read_to_string(&todos_config_path)

@@ -70,6 +70,9 @@ pub(crate) const NS_APPLICATION_ACTIVATION_POLICY_REGULAR: i64 = 0;
 
 pub(crate) const NS_UTF8_STRING_ENCODING: u64 = 4;
 
+pub(crate) const NS_VIEW_WIDTH_SIZABLE: u64 = 2;
+pub(crate) const NS_VIEW_HEIGHT_SIZABLE: u64 = 16;
+
 pub(crate) const NS_WINDOW_STYLE_MASK_TITLED: u64 = 1 << 0;
 pub(crate) const NS_WINDOW_STYLE_MASK_CLOSABLE: u64 = 1 << 1;
 pub(crate) const NS_WINDOW_STYLE_MASK_MINIATURIZABLE: u64 = 1 << 2;

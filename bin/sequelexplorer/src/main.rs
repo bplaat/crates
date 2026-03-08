@@ -13,7 +13,9 @@ use std::sync::{Arc, Mutex};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use bsqlite::{ColumnType, Connection, OpenMode, StatementError, Value};
-use bwebview::{Event, EventLoopBuilder, FileDialog, LogicalSize, WebviewBuilder};
+use bwebview::{
+    Event, EventLoopBuilder, FileDialog, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder,
+};
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -307,12 +309,15 @@ fn main() {
         .build();
 
     #[allow(unused_mut)]
-    let mut webview_builder = WebviewBuilder::new()
+    let mut window = WindowBuilder::new()
         .title("Sequel Explorer")
         .size(LogicalSize::new(1200.0, 768.0))
         .min_size(LogicalSize::new(800.0, 480.0))
         .center()
         .remember_window_state()
+        .build();
+
+    let mut webview = WebviewBuilder::new(&window)
         .load_rust_embed_with_custom_handler::<WebAssets>(move |req| {
             let res = router.handle(req);
             if res.status != Status::NotFound {
@@ -320,12 +325,12 @@ fn main() {
             } else {
                 None
             }
-        });
-    let mut webview = webview_builder.build();
+        })
+        .build();
 
     event_loop.run(move |event| match event {
-        Event::PageTitleChanged(title) => webview.set_title(title),
-        Event::PageMessageReceived(message) => {
+        Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
+        Event::Webview(WebviewEvent::MessageReceive(message)) => {
             match serde_json::from_str(&message).expect("Can't parse IPC message") {
                 IpcMessage::OpenFileDialog => {
                     let path = FileDialog::new()

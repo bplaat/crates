@@ -13,9 +13,7 @@ use std::ptr::{null, null_mut};
 use std::{env, fs, iter};
 
 use super::headers::*;
-use crate::{
-    AppId, Event, EventLoopBuilder, InjectionTime, LogicalPoint, LogicalSize, WebviewBuilder,
-};
+use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize};
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop;
