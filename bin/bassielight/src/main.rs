@@ -12,7 +12,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
+use bwebview::{
+    Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
+};
 use log::{error, info};
 use rust_embed::Embed;
 use small_http::Response;
@@ -132,27 +134,27 @@ fn main() {
 
     // Create webview
     #[allow(unused_mut)]
-    let mut webview_builder = WebviewBuilder::new()
+    let mut window_builder = WindowBuilder::new()
         .title("BassieLight")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state()
         .theme(Theme::Dark)
-        .background_color(0x1a1a1a)
-        .load_url(&url);
+        .background_color(0x1a1a1a);
     #[cfg(target_os = "macos")]
     {
-        webview_builder =
-            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+        window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
     }
-    let mut webview = webview_builder.build();
+    let mut window = window_builder.build();
+
+    let mut webview = WebviewBuilder::new(&window).load_url(&url).build();
 
     #[cfg(target_os = "macos")]
     webview.add_user_script(
         format!(
             "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
-            webview.macos_titlebar_size().height
+            window.macos_titlebar_size().height
         ),
         bwebview::InjectionTime::DocumentStart,
     );
@@ -160,9 +162,9 @@ fn main() {
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {
         // Window events
-        Event::PageTitleChanged(title) => webview.set_title(title),
+        Event::Webview(_, WebviewEvent::PageTitleChanged(title)) => window.set_title(title),
         #[cfg(target_os = "macos")]
-        Event::MacosWindowFullscreenChanged(is_fullscreen) => {
+        Event::Window(_, bwebview::WindowEvent::MacosFullscreenChanged(is_fullscreen)) => {
             if is_fullscreen {
                 webview.evaluate_script("document.body.classList.add('is-fullscreen');");
             } else {
@@ -171,13 +173,13 @@ fn main() {
         }
 
         // IPC events
-        Event::PageLoadStarted => {
+        Event::Webview(_, WebviewEvent::PageLoadStarted) => {
             IPC_CONNECTIONS
                 .lock()
                 .expect("Failed to lock IPC connections")
                 .push(IpcConnection::WebviewIpc(event_loop_proxy.clone()));
         }
-        Event::PageMessageReceived(message) => ipc_message_handler(
+        Event::Webview(_, WebviewEvent::MessageReceived(message)) => ipc_message_handler(
             IpcConnection::WebviewIpc(event_loop_proxy.clone()),
             &message,
         ),

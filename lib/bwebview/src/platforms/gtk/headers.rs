@@ -182,7 +182,7 @@ unsafe extern "C" {
     pub(crate) fn gtk_window_set_resizable(window: *mut GtkWindow, resizable: bool);
     pub(crate) fn gtk_window_is_maximized(window: *mut GtkWindow) -> bool;
     pub(crate) fn gtk_window_maximize(window: *mut GtkWindow);
-    pub(crate) fn gtk_widget_show_all(window: *mut GtkWindow);
+    pub(crate) fn gtk_widget_show_all(window: *mut GtkWidget);
     pub(crate) fn gtk_show_uri_on_window(
         parent: *mut GtkWindow,
         uri: *const c_char,

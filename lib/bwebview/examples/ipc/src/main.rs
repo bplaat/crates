@@ -6,7 +6,10 @@
 
 //! A bwebview ipc example
 
-use bwebview::{Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder};
+use bwebview::{
+    Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
+    WindowEvent,
+};
 use serde::{Deserialize, Serialize};
 
 const APP_HTML: &str = include_str!("../app.html");
@@ -22,44 +25,44 @@ fn main() {
         .app_id("nl", "bplaat", "WebviewIpcExample")
         .build();
 
-    let mut webview = WebviewBuilder::new()
+    let mut window = WindowBuilder::new()
         .title("Webview IPC Example")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
         .center()
         .remember_window_state()
         .theme(Theme::Dark)
-        .load_html(APP_HTML)
         .build();
+    let mut webview = WebviewBuilder::new(&window).load_html(APP_HTML).build();
 
     event_loop.run(move |event| match event {
         // Window events
-        Event::WindowCreated => {
+        Event::Window(_, WindowEvent::Created) => {
             println!("Window created");
         }
-        Event::WindowMoved(point) => {
+        Event::Window(_, WindowEvent::Moved(point)) => {
             println!("Window moved: {point:?}");
         }
-        Event::WindowResized(size) => {
+        Event::Window(_, WindowEvent::Resized(size)) => {
             println!("Window resized: {}x{}", size.width, size.height);
-            webview.set_title(format!(
+            window.set_title(format!(
                 "Webview IPC Example ({}x{})",
                 size.width, size.height
             ));
         }
-        Event::WindowClosed => {
+        Event::Window(_, WindowEvent::Closed) => {
             println!("Window closed");
         }
         #[cfg(target_os = "macos")]
-        Event::MacosWindowFullscreenChanged(is_fullscreen) => {
+        Event::Window(_, WindowEvent::MacosFullscreenChanged(is_fullscreen)) => {
             println!("Window fullscreen changed: {is_fullscreen}");
         }
 
-        // Page events
-        Event::PageLoadStarted => {
+        // Webview events
+        Event::Webview(_, WebviewEvent::PageLoadStarted) => {
             println!("Page load started");
         }
-        Event::PageLoadFinished => {
+        Event::Webview(_, WebviewEvent::PageLoadFinished) => {
             println!("Page load finished");
             let message = IpcMessage::Hello {
                 name: "Webview".to_string(),
@@ -68,11 +71,11 @@ fn main() {
                 serde_json::to_string(&message).expect("Should serialize message"),
             );
         }
-        Event::PageTitleChanged(title) => {
+        Event::Webview(_, WebviewEvent::PageTitleChanged(title)) => {
             println!("Title changed: {title}");
-            webview.set_title(title);
+            window.set_title(title);
         }
-        Event::PageMessageReceived(message) => {
+        Event::Webview(_, WebviewEvent::MessageReceived(message)) => {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::Hello { name } => {
                     println!("Hello, {name}!");
@@ -80,6 +83,6 @@ fn main() {
             }
         }
 
-        _ => unimplemented!(),
+        _ => {}
     });
 }

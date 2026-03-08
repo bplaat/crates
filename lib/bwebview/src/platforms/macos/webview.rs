@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CStr, c_void};
-use std::ptr::null;
+use std::ffi::c_void;
+use std::ptr::{null, null_mut};
 
 use block2::Block;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool, ClassBuilder, Sel};
@@ -14,42 +14,25 @@ use objc2::{class, msg_send, sel};
 use super::cocoa::*;
 use super::event_loop::{IVAR_PTR, IVAR_PTR_CSTR, send_event};
 use super::webkit::*;
-use crate::{
-    Event, InjectionTime, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WebviewBuilder,
-};
+use super::window::{PlatformWindow, PlatformWindowData};
+use crate::{InjectionTime, LogicalSize, WebviewBuilder, WebviewEvent, WindowId};
 
-pub(crate) struct PlatformWebview {
-    window: *mut Object,
-    webview: *mut Object,
+pub(crate) struct PlatformWebview(pub(super) *mut PlatformWindowData);
+
+impl PlatformWebview {
+    pub(crate) fn new(window: &PlatformWindow) -> Self {
+        PlatformWebview(&*window.0 as *const PlatformWindowData as *mut _)
+    }
 }
 
 impl PlatformWebview {
-    pub(crate) fn new(builder: WebviewBuilder) -> Self {
-        // Register WindowDelegate class
-        if AnyClass::get(c"WindowDelegate").is_none() {
-            let mut decl = ClassBuilder::new(c"WindowDelegate", class!(NSObject))
-                .expect("Can't create WindowDelegate class");
+    pub(crate) fn init_webview(&mut self, builder: WebviewBuilder<'_>) {
+        // Register WebviewDelegate class once
+        if AnyClass::get(c"WebviewDelegate").is_none() {
+            let mut decl = ClassBuilder::new(c"WebviewDelegate", class!(NSObject))
+                .expect("Can't create WebviewDelegate class");
+            decl.add_ivar::<*const c_void>(IVAR_PTR_CSTR);
             unsafe {
-                decl.add_method(
-                    sel!(windowDidMove:),
-                    window_did_move as extern "C" fn(_, _, _),
-                );
-                decl.add_method(
-                    sel!(windowDidResize:),
-                    window_did_resize as extern "C" fn(_, _, _),
-                );
-                decl.add_method(
-                    sel!(windowWillClose:),
-                    window_will_close as extern "C" fn(_, _, _),
-                );
-                decl.add_method(
-                    sel!(windowWillEnterFullScreen:),
-                    window_will_enter_fullscreen as extern "C" fn(_, _, _),
-                );
-                decl.add_method(
-                    sel!(windowWillExitFullScreen:),
-                    window_will_exit_fullscreen as extern "C" fn(_, _, _),
-                );
                 decl.add_method(
                     sel!(webView:didStartProvisionalNavigation:),
                     webview_did_start_provisional_navigation as extern "C" fn(_, _, _, _),
@@ -72,92 +55,14 @@ impl PlatformWebview {
                 );
             }
             decl.register();
-            let _: () =
-                unsafe { msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing:Bool::NO] };
         }
 
-        // Create WindowDelegate instance
-        let window_delegate: *mut Object = unsafe { msg_send![class!(WindowDelegate), new] };
-
-        // Create window
-        let screen_rect: NSRect = if let Some(monitor) = builder.monitor {
-            unsafe { msg_send![monitor.screen, frame] }
-        } else {
-            let screen: *mut Object = unsafe { msg_send![class!(NSScreen), mainScreen] };
-            unsafe { msg_send![screen, frame] }
-        };
-        let window_rect = if builder.should_fullscreen {
-            screen_rect
-        } else {
-            NSRect::new(
-                if let Some(position) = builder.position {
-                    NSPoint::new(
-                        screen_rect.origin.x + position.x as f64,
-                        screen_rect.origin.y
-                            + (screen_rect.size.height - builder.size.height as f64)
-                            - position.y as f64,
-                    )
-                } else {
-                    NSPoint::new(
-                        screen_rect.origin.x
-                            + (screen_rect.size.width - builder.size.width as f64) / 2.0,
-                        screen_rect.origin.y
-                            + (screen_rect.size.height - builder.size.height as f64) / 2.0,
-                    )
-                },
-                NSSize::new(builder.size.width as f64, builder.size.height as f64),
-            )
-        };
-
-        let mut window_style_mask = NS_WINDOW_STYLE_MASK_TITLED
-            | NS_WINDOW_STYLE_MASK_CLOSABLE
-            | NS_WINDOW_STYLE_MASK_MINIATURIZABLE;
-        if builder.resizable {
-            window_style_mask |= NS_WINDOW_STYLE_MASK_RESIZABLE;
-        }
-        if builder.should_fullscreen {
-            window_style_mask = 0;
-        }
-
-        let window = unsafe {
-            let window: *mut Object = msg_send![class!(NSWindow), alloc];
-            let window: *mut Object = msg_send![window, initWithContentRect:NSRect::new(NSPoint::new(0.0, 0.0), window_rect.size),
-                styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:false];
-            let _: () = msg_send![window, setFrameOrigin:window_rect.origin];
-            let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title)];
-            if builder.should_fullscreen {
-                let _: () = msg_send![window, setLevel: 25i64];
-            }
-            if let Some(color) = builder.background_color {
-                let color: *mut Object = msg_send![class!(NSColor), colorWithRed:((color >> 16) & 0xFF) as f64 / 255.0,
-                    green:((color >> 8) & 0xFF) as f64 / 255.0,
-                    blue:(color & 0xFF) as f64 / 255.0, alpha:1.0];
-                let _: () = msg_send![window, setBackgroundColor:color];
-            }
-            if builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
-                || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden
-            {
-                let _: () = msg_send![window, setTitlebarAppearsTransparent:Bool::YES];
-            }
-            if builder.macos_titlebar_style == MacosTitlebarStyle::Hidden {
-                let _: () = msg_send![window, setTitleVisibility:NS_WINDOW_TITLE_VISIBILITY_HIDDEN];
-            }
-            if let Some(theme) = builder.theme {
-                let appearance: *mut Object = msg_send![class!(NSAppearance), appearanceNamed:match theme {
-                    Theme::Light => NSAppearanceNameAqua,
-                    Theme::Dark => NSAppearanceNameDarkAqua,
-                }];
-                let _: () = msg_send![window, setAppearance:appearance];
-            }
-            if let Some(min_size) = builder.min_size {
-                let _: () = msg_send![window, setMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
-            }
-            #[cfg(feature = "remember_window_state")]
-            if builder.remember_window_state {
-                let _: Bool = msg_send![window, setFrameAutosaveName:NSString::from_str("window")];
-            }
-            let _: () = msg_send![window, setDelegate:window_delegate];
-            window
+        // Create WebviewDelegate and set _ptr to PlatformWindowData
+        let webview_delegate: *mut Object = unsafe { msg_send![class!(WebviewDelegate), new] };
+        unsafe {
+            #[allow(deprecated)]
+            let ptr_ivar = (*webview_delegate).get_mut_ivar::<*const c_void>(IVAR_PTR);
+            *ptr_ivar = self.0 as *const PlatformWindowData as *const c_void;
         };
 
         // Create webview
@@ -171,6 +76,8 @@ impl PlatformWebview {
 
             #[cfg(feature = "custom_protocol")]
             for custom_protocol in builder.custom_protocols {
+                use objc2::runtime::ClassBuilder;
+
                 let url_scheme = NSString::from_str(&custom_protocol.scheme);
 
                 let class_name = std::ffi::CString::new(format!(
@@ -182,7 +89,7 @@ impl PlatformWebview {
                     .expect("Can't create custom protocol delegate class");
                 decl.add_ivar::<*const c_void>(IVAR_PTR_CSTR);
                 decl.add_method(
-                    sel!(webView:startURLSchemeTask:),
+                    objc2::sel!(webView:startURLSchemeTask:),
                     custom_protocol_start_url_scheme_task as extern "C" fn(_, _, _, _),
                 );
                 let class = decl.register();
@@ -196,11 +103,10 @@ impl PlatformWebview {
             }
 
             // Get content view rect
-            let content_view: *mut Object = msg_send![window, contentView];
-            let webview_rect = if builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
-                || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden
+            let content_view: *mut Object = msg_send![(*self.0).window, contentView];
+            let webview_rect = if unsafe { msg_send![(*self.0).window, titlebarAppearsTransparent] }
             {
-                let mut window_frame: NSRect = msg_send![window, frame];
+                let mut window_frame: NSRect = msg_send![(*self.0).window, frame];
                 window_frame.origin.x = 0.0;
                 window_frame.origin.y = 0.0;
                 window_frame
@@ -212,9 +118,10 @@ impl PlatformWebview {
             let webview: *mut Object = msg_send![class!(WKWebView), alloc];
             let webview: *mut Object =
                 msg_send![webview, initWithFrame:webview_rect, configuration:webview_config];
-            let _: () = msg_send![webview, setNavigationDelegate:window_delegate];
+            let _: () = msg_send![webview, setNavigationDelegate:webview_delegate];
             let _: () = msg_send![content_view, addSubview:webview];
-            if builder.background_color.is_some() {
+            let _: () = msg_send![webview, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
+            if unsafe { (*self.0).background_color }.is_some() {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
                 let _: () = msg_send![webview, setValue:value, forKey:NSString::from_str("drawsBackground")];
             }
@@ -226,7 +133,7 @@ impl PlatformWebview {
             let _: () = msg_send![webview, setCustomUserAgent:NSString::from_str(&useragent)];
             let _: () = msg_send![
                 webview,
-                addObserver:window_delegate,
+                addObserver:webview_delegate,
                 forKeyPath:NSString::from_str("title"),
                 options:NS_KEY_VALUE_OBSERVING_OPTION_NEW,
                 context:null::<c_void>()
@@ -271,84 +178,21 @@ impl PlatformWebview {
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
                     forMainFrameOnly:true];
             let _: () = msg_send![user_content_controller, addUserScript:user_script];
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:window_delegate, name:NSString::from_str("ipc")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate, name:NSString::from_str("ipc")];
             #[cfg(feature = "log")]
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:window_delegate, name:NSString::from_str("console")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate, name:NSString::from_str("console")];
         }
 
-        Self { window, webview }
+        unsafe {
+            (*self.0).webview = webview;
+        }
     }
 }
 
 impl crate::WebviewInterface for PlatformWebview {
-    fn set_title(&mut self, title: impl AsRef<str>) {
-        unsafe { msg_send![self.window, setTitle:NSString::from_str(title)] }
-    }
-
-    fn position(&self) -> LogicalPoint {
-        let frame: NSRect = unsafe { msg_send![self.window, frame] };
-        LogicalPoint::new(frame.origin.x as f32, frame.origin.y as f32)
-    }
-
-    fn size(&self) -> LogicalSize {
-        let frame: NSRect = unsafe { msg_send![self.webview, frame] };
-        LogicalSize::new(frame.size.width as f32, frame.size.height as f32)
-    }
-
-    fn set_position(&mut self, point: LogicalPoint) {
-        unsafe {
-            msg_send![self.window, setFrameTopLeftPoint:NSPoint::new(point.x as f64, point.y as f64)]
-        }
-    }
-
-    fn set_size(&mut self, size: LogicalSize) {
-        let frame: NSRect = unsafe { msg_send![self.window, frame] };
-        unsafe {
-            msg_send![self.window, setFrame:NSRect::new(frame.origin, NSSize::new(size.width as f64, size.height as f64)), display:true]
-        }
-    }
-
-    fn set_min_size(&mut self, min_size: LogicalSize) {
-        unsafe {
-            msg_send![self.window, setMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)]
-        }
-    }
-
-    fn set_resizable(&mut self, resizable: bool) {
-        let mut style_mask: u64 = unsafe { msg_send![self.window, styleMask] };
-        if resizable {
-            style_mask |= NS_WINDOW_STYLE_MASK_RESIZABLE;
-        } else {
-            style_mask &= !NS_WINDOW_STYLE_MASK_RESIZABLE;
-        }
-        unsafe { msg_send![self.window, setStyleMask:style_mask] }
-    }
-
-    fn set_theme(&mut self, theme: Theme) {
-        unsafe {
-            let appearance: *mut Object = msg_send![class!(NSAppearance), appearanceNamed:match theme {
-                Theme::Light => NSAppearanceNameAqua,
-                Theme::Dark => NSAppearanceNameDarkAqua,
-            }];
-            let _: () = msg_send![self.window, setAppearance:appearance];
-        }
-    }
-
-    fn set_background_color(&mut self, color: u32) {
-        unsafe {
-            let color: *mut Object = msg_send![class!(NSColor), colorWithRed:((color >> 16) & 0xFF) as f64 / 255.0,
-                green:((color >> 8) & 0xFF) as f64 / 255.0,
-                blue:(color & 0xFF) as f64 / 255.0, alpha:1.0];
-            let _: () = msg_send![self.window, setBackgroundColor:color];
-
-            let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
-            let _: () = msg_send![self.webview, setValue:value, forKey:NSString::from_str("drawsBackground")];
-        }
-    }
-
     fn url(&self) -> Option<String> {
         unsafe {
-            let url: *mut Object = msg_send![self.webview, URL];
+            let url: *mut Object = msg_send![(*self.0).webview, URL];
             if !url.is_null() {
                 let url: NSString = msg_send![url, absoluteString];
                 Some(url.to_string())
@@ -362,27 +206,27 @@ impl crate::WebviewInterface for PlatformWebview {
         unsafe {
             let url: *mut Object = msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
             let request: *mut Object = msg_send![class!(NSURLRequest), requestWithURL:url];
-            msg_send![self.webview, loadRequest:request]
+            msg_send![(*self.0).webview, loadRequest:request]
         }
     }
 
     fn load_html(&mut self, html: impl AsRef<str>) {
         unsafe {
-            msg_send![self.webview, loadHTMLString:NSString::from_str(html), baseURL:null::<c_void>()]
+            msg_send![(*self.0).webview, loadHTMLString:NSString::from_str(html), baseURL:null::<c_void>()]
         }
     }
 
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         let script = script.as_ref();
         let _: () = unsafe {
-            msg_send![self.webview, evaluateJavaScript:NSString::from_str(script), completionHandler:null::<Object>()]
+            msg_send![(*self.0).webview, evaluateJavaScript:NSString::from_str(script), completionHandler:null::<Object>()]
         };
     }
 
     fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime) {
         let script = script.as_ref();
         unsafe {
-            let webview_configuration: *mut Object = msg_send![self.webview, configuration];
+            let webview_configuration: *mut Object = msg_send![(*self.0).webview, configuration];
             let user_content_controller: *mut Object =
                 msg_send![webview_configuration, userContentController];
             let user_script: *mut Object = msg_send![class!(WKUserScript), alloc];
@@ -396,95 +240,36 @@ impl crate::WebviewInterface for PlatformWebview {
             let _: () = msg_send![user_content_controller, addUserScript:user_script];
         }
     }
-
-    fn macos_titlebar_size(&self) -> LogicalSize {
-        let window_frame: NSRect = unsafe { msg_send![self.window, frame] };
-        let content_rect: NSRect =
-            unsafe { msg_send![self.window, contentRectForFrameRect:window_frame] };
-        LogicalSize::new(
-            window_frame.size.width as f32,
-            (window_frame.size.height - content_rect.size.height) as f32,
-        )
-    }
-}
-
-extern "C" fn window_did_move(_this: *mut Object, _sel: Sel, notification: *mut Object) {
-    // Send window moved event
-    let window: *mut Object = unsafe { msg_send![notification, object] };
-    let frame: NSRect = unsafe { msg_send![window, frame] };
-    send_event(Event::WindowMoved(LogicalPoint::new(
-        frame.origin.x as f32,
-        frame.origin.y as f32,
-    )));
-}
-
-extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mut Object) {
-    let window: *mut Object = unsafe { msg_send![notification, object] };
-    let content_view: *mut Object = unsafe { msg_send![window, contentView] };
-    let subviews: *mut Object = unsafe { msg_send![content_view, subviews] };
-
-    // Update webview size
-    let webview_rect = if unsafe { msg_send![window, titlebarAppearsTransparent] } {
-        let mut webview_rect: NSRect = unsafe { msg_send![window, frame] };
-        webview_rect.origin.x = 0.0;
-        webview_rect.origin.y = 0.0;
-        webview_rect
-    } else {
-        unsafe { msg_send![content_view, frame] }
-    };
-    let webview: *mut Object = unsafe { msg_send![subviews, objectAtIndex:0u64] };
-    let _: () = unsafe { msg_send![webview, setFrame:webview_rect] };
-
-    // Send window resized event
-    let frame: NSRect = unsafe { msg_send![webview, frame] };
-    send_event(Event::WindowResized(LogicalSize::new(
-        frame.size.width as f32,
-        frame.size.height as f32,
-    )));
-}
-
-extern "C" fn window_will_close(_this: *mut Object, _sel: Sel, _notification: *mut Object) {
-    send_event(Event::WindowClosed);
-}
-
-extern "C" fn window_will_enter_fullscreen(
-    _this: *mut Object,
-    _sel: Sel,
-    _notification: *mut Object,
-) {
-    send_event(Event::MacosWindowFullscreenChanged(true));
-}
-
-extern "C" fn window_will_exit_fullscreen(
-    _this: *mut Object,
-    _sel: Sel,
-    _notification: *mut Object,
-) {
-    send_event(Event::MacosWindowFullscreenChanged(false));
 }
 
 extern "C" fn webview_did_start_provisional_navigation(
-    _this: *mut Object,
+    this: *mut Object,
     _sel: Sel,
     _webview: *mut Object,
     _navigation: *mut Object,
 ) {
-    // Send page load started event
-    send_event(Event::PageLoadStarted);
+    let window_id = super::window::get_window_id(this);
+    send_event(crate::Event::Webview(
+        window_id,
+        WebviewEvent::PageLoadStarted,
+    ));
 }
 
 extern "C" fn webview_did_finish_navigation(
-    _this: *mut Object,
+    this: *mut Object,
     _sel: Sel,
     _webview: *mut Object,
     _navigation: *mut Object,
 ) {
-    // Send page load finished event
-    send_event(Event::PageLoadFinished);
+    let window_id = super::window::get_window_id(this);
+    send_event(crate::Event::Webview(
+        window_id,
+        WebviewEvent::PageLoadFinished,
+    ));
 }
 
 extern "C" fn webview_observe_value_for_key_path(
-    _this: *mut Object,
+    this: *mut Object,
     _sel: Sel,
     key_path: NSString,
     _of_object: *mut Object,
@@ -493,8 +278,12 @@ extern "C" fn webview_observe_value_for_key_path(
 ) {
     let key_path = key_path.to_string();
     if key_path == "title" {
+        let window_id = super::window::get_window_id(this);
         let change: NSString = unsafe { msg_send![change, objectForKey:NSKeyValueChangeNewKey] };
-        send_event(Event::PageTitleChanged(change.to_string()));
+        send_event(crate::Event::Webview(
+            window_id,
+            WebviewEvent::PageTitleChanged(change.to_string()),
+        ));
     }
 }
 
@@ -520,7 +309,7 @@ extern "C" fn webview_decide_policy_for_navigation_action(
 }
 
 extern "C" fn webview_did_receive_script_message(
-    _this: *mut Object,
+    this: *mut Object,
     _sel: Sel,
     _user_content_controller: *mut Object,
     message: *mut Object,
@@ -543,8 +332,11 @@ extern "C" fn webview_did_receive_script_message(
         }
     }
     if name == "ipc" {
-        // Send ipc message received event
-        send_event(Event::PageMessageReceived(body));
+        let window_id = super::window::get_window_id(this);
+        send_event(crate::Event::Webview(
+            window_id,
+            WebviewEvent::MessageReceived(body),
+        ));
     }
 }
 

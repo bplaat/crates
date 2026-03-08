@@ -6,24 +6,26 @@
 
 //! A bwebview background example
 
-use bwebview::{EventLoop, Theme, WebviewBuilder};
+use bwebview::{EventLoop, Theme, WebviewBuilder, WindowBuilder};
 
 fn main() {
     let event_loop = EventLoop::new();
 
     #[allow(unused_mut)]
-    let mut webview_builder = WebviewBuilder::new()
+    let mut window_builder = WindowBuilder::new()
         .title("Webview Background Example")
         .background_color(0x05445e)
         .theme(Theme::Dark)
-        .center()
-        .load_html("<body style=\"height:100vh;margin:0;display:flex;align-items:center;justify-content:center\"><h1 style=\"color:#fff\">Hello Webview!</h1>");
+        .center();
     #[cfg(target_os = "macos")]
     {
-        webview_builder =
-            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
+        window_builder =
+            window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
     }
-    let _webview = webview_builder.build();
+    let window = window_builder.build();
+    let mut _webview = WebviewBuilder::new(&window)
+        .load_html("<body style=\"height:100vh;margin:0;display:flex;align-items:center;justify-content:center\"><h1 style=\"color:#fff\">Hello Webview!</h1>")
+        .build();
 
     event_loop.run(|_| {});
 }

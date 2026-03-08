@@ -6,22 +6,26 @@
 
 //! A simple bwebview multi-window example
 
-use bwebview::{EventLoop, LogicalPoint, LogicalSize, WebviewBuilder};
+use bwebview::{EventLoop, LogicalPoint, LogicalSize, WebviewBuilder, WindowBuilder};
 
 fn main() {
     let event_loop = EventLoop::new();
 
-    let mut _webview_a = WebviewBuilder::new()
+    let window_a = WindowBuilder::new()
         .title("Window A")
         .position(LogicalPoint::new(100.0, 100.0))
         .size(LogicalSize::new(1024.0, 768.0))
+        .build();
+    let mut _webview_a = WebviewBuilder::new(&window_a)
         .load_url("https://example.com")
         .build();
 
-    let mut _webview_b = WebviewBuilder::new()
+    let window_b = WindowBuilder::new()
         .title("Window B")
         .position(LogicalPoint::new(100.0 + 1024.0, 100.0))
         .size(LogicalSize::new(1024.0, 768.0))
+        .build();
+    let mut _webview_b = WebviewBuilder::new(&window_b)
         .load_url("https://example.com")
         .build();
 
