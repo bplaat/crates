@@ -14,7 +14,7 @@ use objc2::{class, msg_send, sel};
 
 use super::cocoa::*;
 use super::webkit::*;
-use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize};
+use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, WindowEvent};
 
 pub(super) const IVAR_PTR: &str = "_ptr";
 pub(super) const IVAR_PTR_CSTR: &CStr = c"_ptr";
@@ -265,7 +265,7 @@ extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notificati
             let _: () = msg_send![window, makeKeyAndOrderFront:null::<Object>()];
 
             // Send window created event
-            send_event(Event::WindowCreated);
+            send_event(Event::Window(WindowEvent::Create));
         }
     }
 }

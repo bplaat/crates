@@ -6,15 +6,15 @@
 
 //! A simple bwebview example
 
-use bwebview::{EventLoop, WebviewBuilder};
+use bwebview::{EventLoop, WebviewBuilder, WindowBuilder};
 
 fn main() {
     let event_loop = EventLoop::new();
 
-    let mut _webview = WebviewBuilder::new()
-        .title("Webview Simple Example")
+    let window = WindowBuilder::new().title("Webview Simple Example").build();
+    let mut _webview = WebviewBuilder::new(&window)
         .load_url("https://github.com/bplaat/crates")
         .build();
 
-    event_loop.run(|_| {});
+    event_loop.run(|_event| {});
 }

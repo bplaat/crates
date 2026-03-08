@@ -8,7 +8,9 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 
-use bwebview::{EventLoopBuilder, InjectionTime, LogicalSize, Theme, WebviewBuilder};
+use bwebview::{
+    EventLoopBuilder, InjectionTime, LogicalSize, Theme, WebviewBuilder, WindowBuilder,
+};
 
 fn main() {
     let event_loop = EventLoopBuilder::new()
@@ -16,7 +18,7 @@ fn main() {
         .build();
 
     #[allow(unused_mut)]
-    let mut webview_builder = WebviewBuilder::new()
+    let mut window_builder = WindowBuilder::new()
         .title("Navidrome")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
@@ -26,13 +28,17 @@ fn main() {
         .theme(Theme::Dark);
     #[cfg(target_os = "macos")]
     {
-        webview_builder =
-            webview_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
+        window_builder =
+            window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
     }
-    let mut webview = webview_builder.load_url("https://music.bplaat.nl/").build();
+    let window = window_builder.build();
+
+    let mut webview = WebviewBuilder::new(&window)
+        .load_url("https://music.bplaat.nl/")
+        .build();
 
     #[cfg(target_os = "macos")]
-    let titlebar_height = webview.macos_titlebar_size().height;
+    let titlebar_height = window.macos_titlebar_size().height;
     #[cfg(not(target_os = "macos"))]
     let titlebar_height = 28.0;
 
@@ -80,7 +86,7 @@ fn main() {
 
     // Inject some styles to make the player look better
     #[cfg(target_os = "macos")]
-    let titlebar_height = webview.macos_titlebar_size().height;
+    let titlebar_height = window.macos_titlebar_size().height;
     #[cfg(not(target_os = "macos"))]
     let titlebar_height = 28.0;
     webview.add_user_script(
@@ -128,7 +134,10 @@ fn main() {
     #[allow(unused)]
     event_loop.run(move |event| {
         #[cfg(target_os = "macos")]
-        if let bwebview::Event::MacosWindowFullscreenChanged(is_fullscreen) = event {
+        if let bwebview::Event::Window(bwebview::WindowEvent::MacosFullscreenChange(
+            is_fullscreen,
+        )) = event
+        {
             if is_fullscreen {
                 webview.evaluate_script("document.documentElement.classList.add('is-fullscreen');");
             } else {
