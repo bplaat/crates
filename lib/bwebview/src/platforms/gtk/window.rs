@@ -4,27 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 
-#[cfg(feature = "remember_window_state")]
 use std::env;
 use std::ffi::{CStr, CString, c_void};
-#[cfg(feature = "remember_window_state")]
 use std::fs;
 use std::mem::MaybeUninit;
 use std::ptr::{null, null_mut};
 
-#[cfg(feature = "remember_window_state")]
 use super::event_loop::APP_ID;
-use super::event_loop::send_event;
 use super::headers::*;
-use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent, WindowId};
+use crate::{Key, LogicalPoint, LogicalSize, Modifiers, MouseButton, Theme, WindowBuilder, WindowHandler, WindowId};
 
 pub(super) struct WindowData {
     pub(super) window_id: WindowId,
     pub(super) window: *mut GtkWindow,
+    #[cfg(feature = "webview")]
     pub(super) webview: *mut WebKitWebView,
     pub(super) background_color: Option<u32>,
-    #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
+    pub(super) window_handler: Option<*mut dyn WindowHandler>,
+    #[cfg(feature = "webview")]
+    pub(super) webview_handler: Option<*mut dyn crate::WebviewHandler>,
 }
 
 pub(crate) struct PlatformWindow(pub(super) Box<WindowData>);
@@ -53,10 +52,13 @@ impl PlatformWindow {
         let mut window_data = Box::new(WindowData {
             window_id,
             window: null_mut(),
+            #[cfg(feature = "webview")]
             webview: null_mut(),
             background_color: builder.background_color,
-            #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
+            window_handler: builder.window_handler,
+            #[cfg(feature = "webview")]
+            webview_handler: None,
         });
 
         // Create window
@@ -127,18 +129,77 @@ impl PlatformWindow {
                     gtk_window_set_position(window, GTK_WIN_POS_CENTER);
                 }
             }
-            #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
                 Self::load_window_state(window);
             }
 
             g_signal_connect_data(
                 window as *mut GObject,
-                c"destroy".as_ptr(),
-                gtk_main_quit as *const c_void,
-                null(),
+                c"focus-in-event".as_ptr(),
+                window_on_focus as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
                 null(),
                 G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"focus-out-event".as_ptr(),
+                window_on_blur as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"key-press-event".as_ptr(),
+                window_on_key_press as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"key-release-event".as_ptr(),
+                window_on_key_release as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"motion-notify-event".as_ptr(),
+                window_on_mouse_move as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"button-press-event".as_ptr(),
+                window_on_button_press as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"button-release-event".as_ptr(),
+                window_on_button_release as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"scroll-event".as_ptr(),
+                window_on_scroll as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            gtk_widget_add_events(
+                window as *mut GtkWidget,
+                GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK | GDK_SCROLL_MASK,
             );
             if !is_wayland {
                 g_signal_connect_data(
@@ -173,7 +234,6 @@ impl PlatformWindow {
         PlatformWindow(window_data)
     }
 
-    #[cfg(feature = "remember_window_state")]
     fn load_window_state(window: *mut GtkWindow) {
         unsafe {
             let settings = g_key_file_new();
@@ -204,7 +264,6 @@ impl PlatformWindow {
         }
     }
 
-    #[cfg(feature = "remember_window_state")]
     fn save_window_state(window: *mut GtkWindow) {
         fs::create_dir_all(config_dir()).expect("Can't create settings directory");
         let settings_path = config_dir().join("settings.ini");
@@ -318,6 +377,7 @@ impl crate::WindowInterface for PlatformWindow {
                 GTK_STATE_FLAG_NORMAL,
                 &rgba,
             );
+            #[cfg(feature = "webview")]
             if !self.0.webview.is_null() {
                 webkit_web_view_set_background_color(self.0.webview, &rgba);
             }
@@ -330,13 +390,17 @@ extern "C" fn window_on_move(
     _allocation: *mut c_void,
     _self: &mut WindowData,
 ) -> bool {
-    let mut x = 0;
-    let mut y = 0;
-    unsafe { gtk_window_get_position(_self.window, &mut x, &mut y) };
-    send_event(crate::Event::Window(
-        _self.window_id,
-        WindowEvent::Moved(LogicalPoint::new(x as f32, y as f32)),
-    ));
+    if let Some(h_ptr) = _self.window_handler {
+        let mut x = 0;
+        let mut y = 0;
+        unsafe { gtk_window_get_position(_self.window, &mut x, &mut y) };
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_move(&mut window, x, y);
+            std::mem::forget(window.platform.0);
+        }
+    }
     false
 }
 
@@ -345,13 +409,17 @@ extern "C" fn window_on_resize(
     _allocation: *mut c_void,
     _self: &mut WindowData,
 ) {
-    let mut width = 0;
-    let mut height = 0;
-    unsafe { gtk_window_get_size(_self.window, &mut width, &mut height) };
-    send_event(crate::Event::Window(
-        _self.window_id,
-        WindowEvent::Resized(LogicalSize::new(width as f32, height as f32)),
-    ));
+    if let Some(h_ptr) = _self.window_handler {
+        let mut width = 0;
+        let mut height = 0;
+        unsafe { gtk_window_get_size(_self.window, &mut width, &mut height) };
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_resize(&mut window, width as u32, height as u32);
+            std::mem::forget(window.platform.0);
+        }
+    }
 }
 
 extern "C" fn window_on_close(
@@ -360,17 +428,249 @@ extern "C" fn window_on_close(
     _self: &mut WindowData,
 ) -> bool {
     // Save window state
-    #[cfg(feature = "remember_window_state")]
     if _self.remember_window_state {
         PlatformWindow::save_window_state(_self.window);
     }
 
-    // Send window closed event
-    send_event(crate::Event::Window(_self.window_id, WindowEvent::Closed));
+    let allow = if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            let result = handler.on_close(&mut window);
+            std::mem::forget(window.platform.0);
+            result
+        }
+    } else {
+        true
+    };
+    // Return TRUE to prevent close, FALSE to allow
+    !allow
+}
+
+extern "C" fn window_on_focus(
+    _window: *mut GtkWindow,
+    _event: *mut c_void,
+    _self: &mut WindowData,
+) -> bool {
+    if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_focus(&mut window);
+            std::mem::forget(window.platform.0);
+        }
+    }
     false
 }
 
-#[cfg(feature = "remember_window_state")]
+extern "C" fn window_on_blur(
+    _window: *mut GtkWindow,
+    _event: *mut c_void,
+    _self: &mut WindowData,
+) -> bool {
+    if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_blur(&mut window);
+            std::mem::forget(window.platform.0);
+        }
+    }
+    false
+}
+
+extern "C" fn window_on_key_press(
+    _window: *mut GtkWindow,
+    event: *mut GdkEventKey,
+    _self: &mut WindowData,
+) -> bool {
+    if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let key = gdk_keyval_to_key((*event).keyval);
+            let mods = gdk_state_to_modifiers((*event).state);
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_key_down(&mut window, key, mods);
+            std::mem::forget(window.platform.0);
+        }
+    }
+    false
+}
+
+extern "C" fn window_on_key_release(
+    _window: *mut GtkWindow,
+    event: *mut GdkEventKey,
+    _self: &mut WindowData,
+) -> bool {
+    if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let key = gdk_keyval_to_key((*event).keyval);
+            let mods = gdk_state_to_modifiers((*event).state);
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_key_up(&mut window, key, mods);
+            std::mem::forget(window.platform.0);
+        }
+    }
+    false
+}
+
+extern "C" fn window_on_mouse_move(
+    _window: *mut GtkWindow,
+    event: *mut GdkEventMotion,
+    _self: &mut WindowData,
+) -> bool {
+    if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_mouse_move(&mut window, (*event).x, (*event).y);
+            std::mem::forget(window.platform.0);
+        }
+    }
+    false
+}
+
+extern "C" fn window_on_button_press(
+    _window: *mut GtkWindow,
+    event: *mut GdkEventButton,
+    _self: &mut WindowData,
+) -> bool {
+    if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let button = gdk_button_to_mouse_button((*event).button);
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_mouse_down(&mut window, button, (*event).x, (*event).y);
+            std::mem::forget(window.platform.0);
+        }
+    }
+    false
+}
+
+extern "C" fn window_on_button_release(
+    _window: *mut GtkWindow,
+    event: *mut GdkEventButton,
+    _self: &mut WindowData,
+) -> bool {
+    if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let button = gdk_button_to_mouse_button((*event).button);
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_mouse_up(&mut window, button, (*event).x, (*event).y);
+            std::mem::forget(window.platform.0);
+        }
+    }
+    false
+}
+
+extern "C" fn window_on_scroll(
+    _window: *mut GtkWindow,
+    event: *mut GdkEventScroll,
+    _self: &mut WindowData,
+) -> bool {
+    if let Some(h_ptr) = _self.window_handler {
+        unsafe {
+            let (dx, dy) = match (*event).direction {
+                GDK_SCROLL_UP => (0.0, -3.0),
+                GDK_SCROLL_DOWN => (0.0, 3.0),
+                GDK_SCROLL_LEFT => (-3.0, 0.0),
+                GDK_SCROLL_RIGHT => (3.0, 0.0),
+                GDK_SCROLL_SMOOTH => ((*event).delta_x, (*event).delta_y),
+                _ => (0.0, 0.0),
+            };
+            let handler = &mut *h_ptr;
+            let mut window = make_temp_window(_self);
+            handler.on_wheel(&mut window, dx, dy);
+            std::mem::forget(window.platform.0);
+        }
+    }
+    false
+}
+
+// --- GDK keysym to Key mapping ---
+fn gdk_keyval_to_key(keyval: u32) -> Key {
+    match keyval {
+        0x061 => Key::A, 0x062 => Key::B, 0x063 => Key::C, 0x064 => Key::D,
+        0x065 => Key::E, 0x066 => Key::F, 0x067 => Key::G, 0x068 => Key::H,
+        0x069 => Key::I, 0x06A => Key::J, 0x06B => Key::K, 0x06C => Key::L,
+        0x06D => Key::M, 0x06E => Key::N, 0x06F => Key::O, 0x070 => Key::P,
+        0x071 => Key::Q, 0x072 => Key::R, 0x073 => Key::S, 0x074 => Key::T,
+        0x075 => Key::U, 0x076 => Key::V, 0x077 => Key::W, 0x078 => Key::X,
+        0x079 => Key::Y, 0x07A => Key::Z,
+        0x041 => Key::A, 0x042 => Key::B, 0x043 => Key::C, 0x044 => Key::D,
+        0x045 => Key::E, 0x046 => Key::F, 0x047 => Key::G, 0x048 => Key::H,
+        0x049 => Key::I, 0x04A => Key::J, 0x04B => Key::K, 0x04C => Key::L,
+        0x04D => Key::M, 0x04E => Key::N, 0x04F => Key::O, 0x050 => Key::P,
+        0x051 => Key::Q, 0x052 => Key::R, 0x053 => Key::S, 0x054 => Key::T,
+        0x055 => Key::U, 0x056 => Key::V, 0x057 => Key::W, 0x058 => Key::X,
+        0x059 => Key::Y, 0x05A => Key::Z,
+        0x030 => Key::Digit0, 0x031 => Key::Digit1, 0x032 => Key::Digit2,
+        0x033 => Key::Digit3, 0x034 => Key::Digit4, 0x035 => Key::Digit5,
+        0x036 => Key::Digit6, 0x037 => Key::Digit7, 0x038 => Key::Digit8, 0x039 => Key::Digit9,
+        0xFFBE => Key::F1, 0xFFBF => Key::F2, 0xFFC0 => Key::F3, 0xFFC1 => Key::F4,
+        0xFFC2 => Key::F5, 0xFFC3 => Key::F6, 0xFFC4 => Key::F7, 0xFFC5 => Key::F8,
+        0xFFC6 => Key::F9, 0xFFC7 => Key::F10, 0xFFC8 => Key::F11, 0xFFC9 => Key::F12,
+        0xFF1B => Key::Escape, 0xFF0D => Key::Enter, 0xFF08 => Key::Backspace,
+        0xFF09 => Key::Tab, 0x020 => Key::Space, 0xFFFF => Key::Delete, 0xFF63 => Key::Insert,
+        0xFF52 => Key::ArrowUp, 0xFF54 => Key::ArrowDown,
+        0xFF51 => Key::ArrowLeft, 0xFF53 => Key::ArrowRight,
+        0xFF50 => Key::Home, 0xFF57 => Key::End,
+        0xFF55 => Key::PageUp, 0xFF56 => Key::PageDown,
+        0xFFE1 | 0xFFE2 => Key::Shift,
+        0xFFE3 | 0xFFE4 => Key::Control,
+        0xFFE9 | 0xFFEA => Key::Alt,
+        0xFFEB | 0xFFEC => Key::Meta,
+        0xFFE5 => Key::CapsLock,
+        0xFFB0 => Key::Numpad0, 0xFFB1 => Key::Numpad1, 0xFFB2 => Key::Numpad2,
+        0xFFB3 => Key::Numpad3, 0xFFB4 => Key::Numpad4, 0xFFB5 => Key::Numpad5,
+        0xFFB6 => Key::Numpad6, 0xFFB7 => Key::Numpad7, 0xFFB8 => Key::Numpad8, 0xFFB9 => Key::Numpad9,
+        0xFFAB => Key::NumpadAdd, 0xFFAD => Key::NumpadSubtract,
+        0xFFAA => Key::NumpadMultiply, 0xFFAF => Key::NumpadDivide,
+        0xFF8D => Key::NumpadEnter, 0xFFAE => Key::NumpadDecimal,
+        0x02D => Key::Minus, 0x03D => Key::Equal, 0x05B => Key::BracketLeft,
+        0x05D => Key::BracketRight, 0x05C => Key::Backslash, 0x03B => Key::Semicolon,
+        0x027 => Key::Quote, 0x02C => Key::Comma, 0x02E => Key::Period, 0x02F => Key::Slash,
+        0x060 => Key::Backtick,
+        _ => Key::Unknown,
+    }
+}
+
+// GDK modifier masks
+const GDK_SHIFT_MASK: u32 = 1 << 0;
+const GDK_CONTROL_MASK: u32 = 1 << 2;
+const GDK_MOD1_MASK: u32 = 1 << 3;  // Alt
+const GDK_SUPER_MASK: u32 = 1 << 26; // Meta/Super
+
+fn gdk_state_to_modifiers(state: u32) -> Modifiers {
+    let mut mods = Modifiers::empty();
+    if state & GDK_SHIFT_MASK != 0 { mods = mods | Modifiers::SHIFT; }
+    if state & GDK_CONTROL_MASK != 0 { mods = mods | Modifiers::CTRL; }
+    if state & GDK_MOD1_MASK != 0 { mods = mods | Modifiers::ALT; }
+    if state & GDK_SUPER_MASK != 0 { mods = mods | Modifiers::META; }
+    mods
+}
+
+fn gdk_button_to_mouse_button(button: u32) -> MouseButton {
+    match button {
+        1 => MouseButton::Left,
+        2 => MouseButton::Middle,
+        3 => MouseButton::Right,
+        8 => MouseButton::Back,
+        9 => MouseButton::Forward,
+        n => MouseButton::Other(n as u8),
+    }
+}
+
+unsafe fn make_temp_window(data: &mut WindowData) -> std::mem::ManuallyDrop<crate::Window> {
+    std::mem::ManuallyDrop::new(crate::Window {
+        id: data.window_id,
+        platform: PlatformWindow(Box::from_raw(data as *mut WindowData)),
+        window_handler: data.window_handler,
+    })
+}
+
 pub(super) fn config_dir() -> std::path::PathBuf {
     let project_dirs = unsafe {
         if let Some(ref app_id) = APP_ID {

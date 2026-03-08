@@ -5,66 +5,37 @@
  */
 
 use std::ffi::{CStr, CString, c_char, c_void};
-use std::fs::File;
 use std::mem::MaybeUninit;
-use std::os::unix::io::AsRawFd;
 use std::process::exit;
 use std::ptr::{null, null_mut};
-use std::{env, fs, iter};
+use std::{env, iter};
 
 use super::headers::*;
-use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize};
+use crate::{AppId, EventLoopBuilder, EventLoopHandler, LogicalPoint, LogicalSize};
 
 // MARK: EventLoop
-pub(crate) struct PlatformEventLoop;
+pub(crate) struct PlatformEventLoop {
+    app_id: Option<AppId>,
+    event_loop_handler: Option<*mut dyn EventLoopHandler>,
+}
 
 pub(super) static mut APP_ID: Option<AppId> = None;
-static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
+static mut GTK_APPLICATION: *mut GtkApplication = null_mut();
+static mut EVENT_LOOP_HANDLER: Option<*mut dyn EventLoopHandler> = None;
 
 impl PlatformEventLoop {
     pub(crate) fn new(builder: EventLoopBuilder) -> Self {
-        // Ensure single instance
-        // FIXME: Use GtkApplication for this
-        if let Some(app_id) = builder.app_id {
-            let lock_file = env::temp_dir()
-                .join(format!(
-                    "{}.{}.{}",
-                    app_id.qualifier, app_id.organization, app_id.application
-                ))
-                .join(".lock");
-            if let Some(parent) = lock_file.parent() {
-                fs::create_dir_all(parent).expect("Failed to create lock file directory");
-            }
-            let file = File::create(&lock_file).expect("Failed to open lock file");
-            if unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) } != 0 {
-                exit(0);
-            }
-            std::mem::forget(file);
-            unsafe { APP_ID = Some(app_id) };
+        Self {
+            app_id: builder.app_id,
+            event_loop_handler: builder.event_loop_handler,
         }
-
-        // Init GTK
-        unsafe {
-            let args = env::args()
-                .map(|arg| CString::new(arg.as_str()).expect("Can't convert to CString"))
-                .collect::<Vec<CString>>();
-            let mut argc = args.len() as i32;
-            let mut argv: Vec<*mut c_char> = args
-                .iter()
-                .map(|arg| arg.as_ptr() as *mut c_char)
-                .chain(iter::once(null_mut()))
-                .collect();
-            let mut argv_ptr = argv.as_mut_ptr();
-            gtk_init(&mut argc, &mut argv_ptr);
-        }
-
-        Self
     }
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
     fn primary_monitor(&self) -> PlatformMonitor {
         unsafe {
+            // GTK must be initialized before monitor queries; init lazily here
             let mut primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
             if primary_monitor.is_null() {
                 primary_monitor = gdk_display_get_monitor(gdk_display_get_default(), 0);
@@ -84,12 +55,56 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         }
     }
 
-    fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
-        unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
+    fn run(self) -> ! {
+        unsafe {
+            EVENT_LOOP_HANDLER = self.event_loop_handler;
 
-        // Start event loop
-        unsafe { gtk_main() };
-        exit(0);
+            // Build app_id string for GtkApplication
+            let app_id_str = if let Some(ref app_id) = self.app_id {
+                APP_ID = Some(app_id.clone());
+                format!(
+                    "{}.{}.{}",
+                    app_id.qualifier, app_id.organization, app_id.application
+                )
+            } else {
+                "org.bwebview.app".to_string()
+            };
+            let app_id_c = CString::new(app_id_str).expect("Can't convert app_id to CString");
+
+            let app = gtk_application_new(app_id_c.as_ptr(), G_APPLICATION_FLAGS_NONE);
+            GTK_APPLICATION = app;
+
+            // Connect "activate" signal to on_init
+            g_signal_connect_data(
+                app as *mut GObject,
+                c"activate".as_ptr(),
+                app_activate as *const c_void,
+                null(),
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+
+            // Run the application
+            let args = env::args()
+                .map(|arg| CString::new(arg.as_str()).expect("Can't convert to CString"))
+                .collect::<Vec<CString>>();
+            let mut argv: Vec<*mut c_char> = args
+                .iter()
+                .map(|arg| arg.as_ptr() as *mut c_char)
+                .chain(iter::once(null_mut()))
+                .collect();
+            let ret = g_application_run(app, args.len() as i32, argv.as_mut_ptr());
+            exit(ret);
+        }
+    }
+
+    fn quit() {
+        unsafe {
+            #[allow(static_mut_refs)]
+            if !GTK_APPLICATION.is_null() {
+                g_application_quit(GTK_APPLICATION);
+            }
+        }
     }
 
     fn create_proxy(&self) -> PlatformEventLoopProxy {
@@ -97,11 +112,11 @@ impl crate::EventLoopInterface for PlatformEventLoop {
     }
 }
 
-pub(super) fn send_event(event: Event) {
+extern "C" fn app_activate(_app: *mut GtkApplication, _user_data: *const c_void) {
     unsafe {
         #[allow(static_mut_refs)]
-        if let Some(handler) = &mut EVENT_HANDLER {
-            handler(event);
+        if let Some(h_ptr) = EVENT_LOOP_HANDLER {
+            (*h_ptr).on_init();
         }
     }
 }
@@ -117,14 +132,19 @@ impl PlatformEventLoopProxy {
 
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
-        let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
-        unsafe { g_idle_add(send_event_callback, ptr) };
+        let ptr = Box::leak(Box::new(data)) as *mut String as *mut c_void;
+        unsafe { g_idle_add(send_user_event_callback, ptr) };
     }
 }
 
-extern "C" fn send_event_callback(ptr: *mut c_void) -> i32 {
-    let event = unsafe { Box::from_raw(ptr as *mut Event) };
-    send_event(*event);
+extern "C" fn send_user_event_callback(ptr: *mut c_void) -> i32 {
+    let data = unsafe { Box::from_raw(ptr as *mut String) };
+    unsafe {
+        #[allow(static_mut_refs)]
+        if let Some(h_ptr) = EVENT_LOOP_HANDLER {
+            (*h_ptr).on_user_event(*data);
+        }
+    }
     0
 }
 
@@ -154,8 +174,6 @@ impl crate::MonitorInterface for PlatformMonitor {
         }
         let rect = unsafe { rect.assume_init() };
 
-        // The GTK monitors are not offset by primary monitor position,
-        // so we need to calculate the position relative to the primary monitor.
         let primary_monitor_rect = unsafe {
             let mut primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
             if primary_monitor.is_null() {

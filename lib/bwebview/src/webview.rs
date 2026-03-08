@@ -7,6 +7,27 @@
 use crate::platforms::PlatformWebview;
 use crate::{Window, WindowId};
 
+// MARK: WebviewHandler
+/// Webview event handler trait
+pub trait WebviewHandler {
+    /// Called when page navigation starts
+    fn on_load_start(&mut self, webview: &mut Webview) {
+        let _ = webview;
+    }
+    /// Called when page navigation finishes and the page is loaded
+    fn on_load(&mut self, webview: &mut Webview) {
+        let _ = webview;
+    }
+    /// Called when the page title changes
+    fn on_title_change(&mut self, webview: &mut Webview, title: String) {
+        let _ = (webview, title);
+    }
+    /// Called when an IPC message is received from JavaScript
+    fn on_message(&mut self, webview: &mut Webview, message: String) {
+        let _ = (webview, message);
+    }
+}
+
 // MARK: CustomProtocol
 #[cfg(feature = "custom_protocol")]
 pub(crate) struct CustomProtocol {
@@ -40,6 +61,7 @@ pub struct WebviewBuilder<'a> {
     embed_assets_get: Option<fn(&str) -> Option<rust_embed::EmbeddedFile>>,
     #[cfg(feature = "rust-embed")]
     embed_custom_handler: Option<Box<EmbedCustomHandler>>,
+    pub(crate) webview_handler: Option<*mut dyn WebviewHandler>,
 }
 
 impl<'a> WebviewBuilder<'a> {
@@ -55,6 +77,7 @@ impl<'a> WebviewBuilder<'a> {
             embed_assets_get: None,
             #[cfg(feature = "rust-embed")]
             embed_custom_handler: None,
+            webview_handler: None,
         }
     }
 
@@ -102,6 +125,12 @@ impl<'a> WebviewBuilder<'a> {
         self
     }
 
+    /// Set webview event handler
+    pub fn handler<H: WebviewHandler + 'static>(mut self, handler: &mut H) -> Self {
+        self.webview_handler = Some(handler as *mut dyn WebviewHandler);
+        self
+    }
+
     /// Build webview
     #[allow(unused_mut)]
     pub fn build(mut self) -> Webview {
@@ -135,9 +164,14 @@ impl<'a> WebviewBuilder<'a> {
         }
 
         let id = self.window.id;
+        let webview_handler = self.webview_handler;
         let mut platform = PlatformWebview::new(&self.window.platform);
         platform.init_webview(self);
-        Webview { id, platform }
+        Webview {
+            id,
+            platform,
+            webview_handler,
+        }
     }
 }
 
@@ -155,9 +189,26 @@ pub(crate) trait WebviewInterface {
 pub struct Webview {
     pub(crate) id: WindowId,
     pub(crate) platform: PlatformWebview,
+    pub(crate) webview_handler: Option<*mut dyn WebviewHandler>,
 }
 
 impl Webview {
+    /// Construct a temporary non-owning Webview from raw parts for use in callbacks.
+    ///
+    /// # Safety
+    /// Must call `std::mem::forget` on the returned value to prevent double-free.
+    pub(crate) unsafe fn from_raw(
+        id: WindowId,
+        platform: PlatformWebview,
+        webview_handler: Option<*mut dyn WebviewHandler>,
+    ) -> std::mem::ManuallyDrop<Webview> {
+        std::mem::ManuallyDrop::new(Webview {
+            id,
+            platform,
+            webview_handler,
+        })
+    }
+
     /// Get webview window ID
     pub fn id(&self) -> WindowId {
         self.id

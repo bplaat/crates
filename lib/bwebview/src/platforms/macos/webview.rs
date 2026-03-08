@@ -12,10 +12,10 @@ use objc2::runtime::{AnyClass, AnyObject as Object, Bool, ClassBuilder, Sel};
 use objc2::{class, msg_send, sel};
 
 use super::cocoa::*;
-use super::event_loop::{IVAR_PTR, IVAR_PTR_CSTR, send_event};
+use super::event_loop::{IVAR_PTR, IVAR_PTR_CSTR};
 use super::webkit::*;
 use super::window::{PlatformWindow, PlatformWindowData};
-use crate::{InjectionTime, LogicalSize, WebviewBuilder, WebviewEvent, WindowId};
+use crate::{InjectionTime, WebviewBuilder, WebviewHandler, WindowId};
 
 pub(crate) struct PlatformWebview(pub(super) *mut PlatformWindowData);
 
@@ -185,6 +185,7 @@ impl PlatformWebview {
 
         unsafe {
             (*self.0).webview = webview;
+            (*self.0).webview_handler = builder.webview_handler;
         }
     }
 }
@@ -242,17 +243,33 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 }
 
+
+// --- Helper: construct a temporary ManuallyDrop<Webview> from raw data pointer ---
+unsafe fn make_temp_webview(data: *mut PlatformWindowData) -> std::mem::ManuallyDrop<crate::Webview> {
+    std::mem::ManuallyDrop::new(crate::Webview {
+        id: unsafe { (*data).window_id },
+        platform: PlatformWebview(data),
+        webview_handler: unsafe { (*data).webview_handler },
+    })
+}
+
 extern "C" fn webview_did_start_provisional_navigation(
     this: *mut Object,
     _sel: Sel,
     _webview: *mut Object,
     _navigation: *mut Object,
 ) {
-    let window_id = super::window::get_window_id(this);
-    send_event(crate::Event::Webview(
-        window_id,
-        WebviewEvent::PageLoadStarted,
-    ));
+    unsafe {
+        #[allow(deprecated)]
+        let ptr = *(*this).get_ivar::<*const c_void>(IVAR_PTR);
+        let data = ptr as *mut PlatformWindowData;
+        if let Some(h_ptr) = (*data).webview_handler {
+            let handler = &mut *h_ptr;
+            let mut webview = make_temp_webview(data);
+            handler.on_load_start(&mut webview);
+            std::mem::forget(webview);
+        }
+    }
 }
 
 extern "C" fn webview_did_finish_navigation(
@@ -261,11 +278,17 @@ extern "C" fn webview_did_finish_navigation(
     _webview: *mut Object,
     _navigation: *mut Object,
 ) {
-    let window_id = super::window::get_window_id(this);
-    send_event(crate::Event::Webview(
-        window_id,
-        WebviewEvent::PageLoadFinished,
-    ));
+    unsafe {
+        #[allow(deprecated)]
+        let ptr = *(*this).get_ivar::<*const c_void>(IVAR_PTR);
+        let data = ptr as *mut PlatformWindowData;
+        if let Some(h_ptr) = (*data).webview_handler {
+            let handler = &mut *h_ptr;
+            let mut webview = make_temp_webview(data);
+            handler.on_load(&mut webview);
+            std::mem::forget(webview);
+        }
+    }
 }
 
 extern "C" fn webview_observe_value_for_key_path(
@@ -278,12 +301,19 @@ extern "C" fn webview_observe_value_for_key_path(
 ) {
     let key_path = key_path.to_string();
     if key_path == "title" {
-        let window_id = super::window::get_window_id(this);
-        let change: NSString = unsafe { msg_send![change, objectForKey:NSKeyValueChangeNewKey] };
-        send_event(crate::Event::Webview(
-            window_id,
-            WebviewEvent::PageTitleChanged(change.to_string()),
-        ));
+        unsafe {
+            #[allow(deprecated)]
+            let ptr = *(*this).get_ivar::<*const c_void>(IVAR_PTR);
+            let data = ptr as *mut PlatformWindowData;
+            if let Some(h_ptr) = (*data).webview_handler {
+                let handler = &mut *h_ptr;
+                let change: NSString = msg_send![change, objectForKey:NSKeyValueChangeNewKey];
+                let title = change.to_string();
+                let mut webview = make_temp_webview(data);
+                handler.on_title_change(&mut webview, title);
+                std::mem::forget(webview);
+            }
+        }
     }
 }
 
@@ -332,11 +362,17 @@ extern "C" fn webview_did_receive_script_message(
         }
     }
     if name == "ipc" {
-        let window_id = super::window::get_window_id(this);
-        send_event(crate::Event::Webview(
-            window_id,
-            WebviewEvent::MessageReceived(body),
-        ));
+        unsafe {
+            #[allow(deprecated)]
+            let ptr = *(*this).get_ivar::<*const c_void>(IVAR_PTR);
+            let data = ptr as *mut PlatformWindowData;
+            if let Some(h_ptr) = (*data).webview_handler {
+                let handler = &mut *h_ptr;
+                let mut webview = make_temp_webview(data);
+                handler.on_message(&mut webview, body);
+                std::mem::forget(webview);
+            }
+        }
     }
 }
 

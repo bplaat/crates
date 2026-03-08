@@ -100,6 +100,7 @@ unsafe extern "C" {
 // MARK: GIO
 #[repr(C)]
 pub(crate) struct GInputStream([u8; 0]);
+pub(crate) const G_APPLICATION_FLAGS_NONE: u32 = 0;
 #[link(name = "gio-2.0")]
 unsafe extern "C" {
     pub(crate) fn g_memory_input_stream_new_from_data(
@@ -115,6 +116,12 @@ unsafe extern "C" {
         cancellable: *mut c_void,
         error: *mut *mut GError,
     ) -> bool;
+    pub(crate) fn g_application_run(
+        application: *mut GtkApplication,
+        argc: i32,
+        argv: *mut *mut c_char,
+    ) -> i32;
+    pub(crate) fn g_application_quit(application: *mut GtkApplication);
 }
 
 // MARK: GDK
@@ -136,6 +143,76 @@ pub(crate) struct GdkRGBA {
     pub blue: f64,
     pub alpha: f64,
 }
+#[repr(C)]
+pub(crate) struct GdkEventKey {
+    pub _type: i32,
+    pub window: *mut c_void,
+    pub send_event: i8,
+    pub time: u32,
+    pub state: u32,
+    pub keyval: u32,
+    pub length: i32,
+    pub string: *mut c_char,
+    pub hardware_keycode: u16,
+    pub group: u8,
+    pub is_modifier: u32,
+}
+#[repr(C)]
+pub(crate) struct GdkEventButton {
+    pub _type: i32,
+    pub window: *mut c_void,
+    pub send_event: i8,
+    pub time: u32,
+    pub x: f64,
+    pub y: f64,
+    pub axes: *mut f64,
+    pub state: u32,
+    pub button: u32,
+    pub device: *mut c_void,
+    pub x_root: f64,
+    pub y_root: f64,
+}
+#[repr(C)]
+pub(crate) struct GdkEventMotion {
+    pub _type: i32,
+    pub window: *mut c_void,
+    pub send_event: i8,
+    pub time: u32,
+    pub x: f64,
+    pub y: f64,
+    pub axes: *mut f64,
+    pub state: u32,
+    pub is_hint: i16,
+    pub device: *mut c_void,
+    pub x_root: f64,
+    pub y_root: f64,
+}
+#[repr(C)]
+pub(crate) struct GdkEventScroll {
+    pub _type: i32,
+    pub window: *mut c_void,
+    pub send_event: i8,
+    pub time: u32,
+    pub x: f64,
+    pub y: f64,
+    pub state: u32,
+    pub direction: u32,
+    pub device: *mut c_void,
+    pub x_root: f64,
+    pub y_root: f64,
+    pub delta_x: f64,
+    pub delta_y: f64,
+    pub is_stop: u32,
+}
+pub(crate) const GDK_SCROLL_UP: u32 = 0;
+pub(crate) const GDK_SCROLL_DOWN: u32 = 1;
+pub(crate) const GDK_SCROLL_LEFT: u32 = 2;
+pub(crate) const GDK_SCROLL_RIGHT: u32 = 3;
+pub(crate) const GDK_SCROLL_SMOOTH: u32 = 4;
+pub(crate) const GDK_BUTTON_PRESS_MASK: i32 = 1 << 8;
+pub(crate) const GDK_BUTTON_RELEASE_MASK: i32 = 1 << 9;
+pub(crate) const GDK_POINTER_MOTION_MASK: i32 = 1 << 2;
+pub(crate) const GDK_SCROLL_MASK: i32 = 1 << 21;
 #[link(name = "gdk-3")]
 unsafe extern "C" {
     pub(crate) fn gdk_display_get_default() -> *mut GdkDisplay;
@@ -166,11 +243,16 @@ pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
 pub(crate) const GTK_STATE_FLAG_NORMAL: i32 = 0;
 #[link(name = "gtk-3")]
 unsafe extern "C" {
+    pub(crate) fn gtk_application_new(
+        application_id: *const c_char,
+        flags: u32,
+    ) -> *mut GtkApplication;
     pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
     pub(crate) fn gtk_main();
     pub(crate) fn gtk_main_quit();
     pub(crate) fn gtk_window_new(r#type: i32) -> *mut GtkWindow;
     pub(crate) fn gtk_widget_set_size_request(widget: *mut GtkWidget, width: i32, height: i32);
+    pub(crate) fn gtk_widget_add_events(widget: *mut GtkWidget, events: i32);
     pub(crate) fn gtk_window_fullscreen(window: *mut GtkWindow);
     pub(crate) fn gtk_container_add(container: *mut GtkWidget, widget: *mut GtkWidget);
     pub(crate) fn gtk_window_get_position(window: *mut GtkWindow, x: *mut i32, y: *mut i32);

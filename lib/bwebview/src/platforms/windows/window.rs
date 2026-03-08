@@ -11,10 +11,11 @@ use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
 
-use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event};
+use super::event_loop::{APP_ID, EVENT_LOOP_HANDLER, FIRST_HWND, WM_SEND_MESSAGE};
+#[cfg(feature = "webview")]
 use super::webview2::*;
 use super::win32::*;
-use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent, WindowId};
+use crate::{Key, LogicalPoint, LogicalSize, Modifiers, MouseButton, Theme, WindowBuilder, WindowHandler, WindowId};
 
 pub(super) struct WindowData {
     pub(super) window_id: WindowId,
@@ -22,9 +23,12 @@ pub(super) struct WindowData {
     pub(super) dpi: u32,
     pub(super) min_size: Option<LogicalSize>,
     pub(super) background_color: Option<u32>,
-    #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
+    #[cfg(feature = "webview")]
     pub(super) controller: Option<*mut ICoreWebView2Controller>,
+    pub(super) window_handler: Option<*mut dyn WindowHandler>,
+    #[cfg(feature = "webview")]
+    pub(super) webview_handler: Option<*mut dyn crate::WebviewHandler>,
 }
 
 pub(crate) struct PlatformWindow(pub(super) Box<WindowData>);
@@ -173,7 +177,6 @@ impl PlatformWindow {
                 );
             }
 
-            #[cfg(feature = "remember_window_state")]
             let should_show_window = if builder.remember_window_state {
                 if let Ok(mut file) = File::open(config_dir().join("window.bin")) {
                     let size = size_of::<WINDOWPLACEMENT>();
@@ -191,8 +194,6 @@ impl PlatformWindow {
             } else {
                 true
             };
-            #[cfg(not(feature = "remember_window_state"))]
-            let should_show_window = true;
             if should_show_window {
                 ShowWindow(hwnd, SW_SHOWDEFAULT);
             }
@@ -214,9 +215,12 @@ impl PlatformWindow {
             dpi,
             min_size: builder.min_size,
             background_color: builder.background_color,
-            #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
+            #[cfg(feature = "webview")]
             controller: None,
+            window_handler: builder.window_handler,
+            #[cfg(feature = "webview")]
+            webview_handler: None,
         });
         unsafe {
             SetWindowLong(
@@ -316,6 +320,7 @@ impl crate::WindowInterface for PlatformWindow {
     fn set_background_color(&mut self, color: u32) {
         self.0.background_color = Some(color);
         unsafe { InvalidateRect(self.0.hwnd, null_mut(), TRUE) };
+        #[cfg(feature = "webview")]
         if let Some(controller) = self.0.controller {
             unsafe {
                 let mut controller2: *mut ICoreWebView2Controller2 = null_mut();
@@ -336,6 +341,98 @@ impl crate::WindowInterface for PlatformWindow {
     }
 }
 
+
+// --- Win32 VK -> Key ---
+fn vk_to_key(vk: u32) -> Key {
+    match vk {
+        0x41 => Key::A, 0x42 => Key::B, 0x43 => Key::C, 0x44 => Key::D,
+        0x45 => Key::E, 0x46 => Key::F, 0x47 => Key::G, 0x48 => Key::H,
+        0x49 => Key::I, 0x4A => Key::J, 0x4B => Key::K, 0x4C => Key::L,
+        0x4D => Key::M, 0x4E => Key::N, 0x4F => Key::O, 0x50 => Key::P,
+        0x51 => Key::Q, 0x52 => Key::R, 0x53 => Key::S, 0x54 => Key::T,
+        0x55 => Key::U, 0x56 => Key::V, 0x57 => Key::W, 0x58 => Key::X,
+        0x59 => Key::Y, 0x5A => Key::Z,
+        0x30 => Key::Digit0, 0x31 => Key::Digit1, 0x32 => Key::Digit2,
+        0x33 => Key::Digit3, 0x34 => Key::Digit4, 0x35 => Key::Digit5,
+        0x36 => Key::Digit6, 0x37 => Key::Digit7, 0x38 => Key::Digit8, 0x39 => Key::Digit9,
+        0x70 => Key::F1, 0x71 => Key::F2, 0x72 => Key::F3, 0x73 => Key::F4,
+        0x74 => Key::F5, 0x75 => Key::F6, 0x76 => Key::F7, 0x77 => Key::F8,
+        0x78 => Key::F9, 0x79 => Key::F10, 0x7A => Key::F11, 0x7B => Key::F12,
+        0x7C => Key::F13, 0x7D => Key::F14,
+        0x1B => Key::Escape, 0x0D => Key::Enter, 0x08 => Key::Backspace,
+        0x09 => Key::Tab, 0x20 => Key::Space, 0x2E => Key::Delete, 0x2D => Key::Insert,
+        0x26 => Key::ArrowUp, 0x28 => Key::ArrowDown,
+        0x25 => Key::ArrowLeft, 0x27 => Key::ArrowRight,
+        0x24 => Key::Home, 0x23 => Key::End,
+        0x21 => Key::PageUp, 0x22 => Key::PageDown,
+        0x10 => Key::Shift, 0x11 => Key::Control, 0x12 => Key::Alt,
+        0x5B | 0x5C => Key::Meta, 0x14 => Key::CapsLock,
+        0x60 => Key::Numpad0, 0x61 => Key::Numpad1, 0x62 => Key::Numpad2,
+        0x63 => Key::Numpad3, 0x64 => Key::Numpad4, 0x65 => Key::Numpad5,
+        0x66 => Key::Numpad6, 0x67 => Key::Numpad7, 0x68 => Key::Numpad8, 0x69 => Key::Numpad9,
+        0x6B => Key::NumpadAdd, 0x6D => Key::NumpadSubtract,
+        0x6A => Key::NumpadMultiply, 0x6F => Key::NumpadDivide,
+        0x6E => Key::NumpadDecimal,
+        0xBD => Key::Minus, 0xBB => Key::Equal, 0xDB => Key::BracketLeft,
+        0xDD => Key::BracketRight, 0xDC => Key::Backslash, 0xBA => Key::Semicolon,
+        0xDE => Key::Quote, 0xBC => Key::Comma, 0xBE => Key::Period, 0xBF => Key::Slash,
+        0xC0 => Key::Backtick,
+        _ => Key::Unknown,
+    }
+}
+
+fn get_key_modifiers() -> Modifiers {
+    let mut mods = Modifiers::empty();
+    unsafe {
+        if GetKeyState(VK_SHIFT as i32) as u16 & 0x8000 != 0 { mods = mods | Modifiers::SHIFT; }
+        if GetKeyState(VK_CONTROL as i32) as u16 & 0x8000 != 0 { mods = mods | Modifiers::CTRL; }
+        if GetKeyState(VK_MENU as i32) as u16 & 0x8000 != 0 { mods = mods | Modifiers::ALT; }
+        if GetKeyState(VK_LWIN as i32) as u16 & 0x8000 != 0
+            || GetKeyState(VK_RWIN as i32) as u16 & 0x8000 != 0 {
+            mods = mods | Modifiers::META;
+        }
+    }
+    mods
+}
+
+unsafe fn make_temp_window(data: &mut WindowData) -> std::mem::ManuallyDrop<crate::Window> {
+    std::mem::ManuallyDrop::new(crate::Window {
+        id: data.window_id,
+        platform: PlatformWindow(Box::from_raw(data as *mut WindowData)),
+        window_handler: data.window_handler,
+    })
+}
+
+fn dispatch_mouse_down(data: &mut WindowData, l_param: LPARAM, button: MouseButton) {
+    if let Some(h_ptr) = data.window_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let x = (l_param as u16) as f64;
+            let y = ((l_param >> 16) as u16) as f64;
+            let lx = x * USER_DEFAULT_SCREEN_DPI as f64 / data.dpi as f64;
+            let ly = y * USER_DEFAULT_SCREEN_DPI as f64 / data.dpi as f64;
+            let mut window = make_temp_window(data);
+            handler.on_mouse_down(&mut window, button, lx, ly);
+            std::mem::forget(window.platform.0);
+        }
+    }
+}
+
+fn dispatch_mouse_up(data: &mut WindowData, l_param: LPARAM, button: MouseButton) {
+    if let Some(h_ptr) = data.window_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let x = (l_param as u16) as f64;
+            let y = ((l_param >> 16) as u16) as f64;
+            let lx = x * USER_DEFAULT_SCREEN_DPI as f64 / data.dpi as f64;
+            let ly = y * USER_DEFAULT_SCREEN_DPI as f64 / data.dpi as f64;
+            let mut window = make_temp_window(data);
+            handler.on_mouse_up(&mut window, button, lx, ly);
+            std::mem::forget(window.platform.0);
+        }
+    }
+}
+
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
     msg: u32,
@@ -351,7 +448,6 @@ unsafe extern "system" fn window_proc(
     };
     match msg {
         WM_CREATE => {
-            send_event(crate::Event::Window(_self.window_id, WindowEvent::Created));
             0
         }
         WM_ERASEBKGND => {
@@ -372,27 +468,30 @@ unsafe extern "system" fn window_proc(
             }
         }
         WM_MOVE => {
-            let x = l_param as u16 as i32;
-            let y = (l_param >> 16) as u16 as i32;
-            send_event(crate::Event::Window(
-                _self.window_id,
-                WindowEvent::Moved(LogicalPoint::new(
-                    (x * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
-                    (y * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
-                )),
-            ));
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let x = l_param as u16 as i32;
+                let y = (l_param >> 16) as u16 as i32;
+                let lx = x * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32;
+                let ly = y * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32;
+                let mut window = make_temp_window(_self);
+                handler.on_move(&mut window, lx, ly);
+                std::mem::forget(window.platform.0);
+            }
             0
         }
         WM_SIZE => {
             let width = (l_param as u16) as i32;
             let height = ((l_param >> 16) as u16) as i32;
-            send_event(crate::Event::Window(
-                _self.window_id,
-                WindowEvent::Resized(LogicalSize::new(
-                    (width * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
-                    (height * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as f32,
-                )),
-            ));
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let lw = (width * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as u32;
+                let lh = (height * USER_DEFAULT_SCREEN_DPI as i32 / _self.dpi as i32) as u32;
+                let mut window = make_temp_window(_self);
+                handler.on_resize(&mut window, lw, lh);
+                std::mem::forget(window.platform.0);
+            }
+            #[cfg(feature = "webview")]
             if let Some(controller) = _self.controller {
                 unsafe {
                     (*controller).put_Bounds(RECT {
@@ -435,14 +534,115 @@ unsafe extern "system" fn window_proc(
             }
             0
         }
+        WM_SETFOCUS => {
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let mut window = make_temp_window(_self);
+                handler.on_focus(&mut window);
+                std::mem::forget(window.platform.0);
+            }
+            0
+        }
+        WM_KILLFOCUS => {
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let mut window = make_temp_window(_self);
+                handler.on_blur(&mut window);
+                std::mem::forget(window.platform.0);
+            }
+            0
+        }
+        WM_KEYDOWN | WM_SYSKEYDOWN => {
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let key = vk_to_key(w_param as u32);
+                let mods = get_key_modifiers();
+                let mut window = make_temp_window(_self);
+                handler.on_key_down(&mut window, key, mods);
+                std::mem::forget(window.platform.0);
+            }
+            DefWindowProcA(hwnd, msg, w_param, l_param)
+        }
+        WM_KEYUP | WM_SYSKEYUP => {
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let key = vk_to_key(w_param as u32);
+                let mods = get_key_modifiers();
+                let mut window = make_temp_window(_self);
+                handler.on_key_up(&mut window, key, mods);
+                std::mem::forget(window.platform.0);
+            }
+            DefWindowProcA(hwnd, msg, w_param, l_param)
+        }
+        WM_MOUSEMOVE => {
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let x = (l_param as u16) as f64;
+                let y = ((l_param >> 16) as u16) as f64;
+                let lx = x * USER_DEFAULT_SCREEN_DPI as f64 / _self.dpi as f64;
+                let ly = y * USER_DEFAULT_SCREEN_DPI as f64 / _self.dpi as f64;
+                let mut window = make_temp_window(_self);
+                handler.on_mouse_move(&mut window, lx, ly);
+                std::mem::forget(window.platform.0);
+            }
+            0
+        }
+        WM_LBUTTONDOWN => {
+            dispatch_mouse_down(_self, l_param, MouseButton::Left);
+            0
+        }
+        WM_RBUTTONDOWN => {
+            dispatch_mouse_down(_self, l_param, MouseButton::Right);
+            0
+        }
+        WM_MBUTTONDOWN => {
+            dispatch_mouse_down(_self, l_param, MouseButton::Middle);
+            0
+        }
+        WM_LBUTTONUP => {
+            dispatch_mouse_up(_self, l_param, MouseButton::Left);
+            0
+        }
+        WM_RBUTTONUP => {
+            dispatch_mouse_up(_self, l_param, MouseButton::Right);
+            0
+        }
+        WM_MBUTTONUP => {
+            dispatch_mouse_up(_self, l_param, MouseButton::Middle);
+            0
+        }
+        WM_MOUSEWHEEL => {
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let delta = (w_param >> 16) as i16 as f64 / 120.0 * 3.0;
+                let mut window = make_temp_window(_self);
+                handler.on_wheel(&mut window, 0.0, -delta);
+                std::mem::forget(window.platform.0);
+            }
+            0
+        }
+        WM_MOUSEHWHEEL => {
+            if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let delta = (w_param >> 16) as i16 as f64 / 120.0 * 3.0;
+                let mut window = make_temp_window(_self);
+                handler.on_wheel(&mut window, delta, 0.0);
+                std::mem::forget(window.platform.0);
+            }
+            0
+        }
         WM_SEND_MESSAGE => {
             let ptr = w_param as *mut c_void;
-            let event = unsafe { Box::from_raw(ptr as *mut crate::Event) };
-            send_event(*event);
+            let data = unsafe { Box::from_raw(ptr as *mut String) };
+            unsafe {
+                #[allow(static_mut_refs)]
+                if let Some(h_ptr) = EVENT_LOOP_HANDLER {
+                    (*h_ptr).on_user_event(*data);
+                }
+            }
             0
         }
         WM_CLOSE => {
-            #[cfg(feature = "remember_window_state")]
             if _self.remember_window_state {
                 unsafe {
                     use std::io::Write;
@@ -457,8 +657,18 @@ unsafe extern "system" fn window_proc(
                 }
             }
 
-            send_event(crate::Event::Window(_self.window_id, WindowEvent::Closed));
-            unsafe { DestroyWindow(hwnd) };
+            let allow = if let Some(h_ptr) = _self.window_handler {
+                let handler = &mut *h_ptr;
+                let mut window = make_temp_window(_self);
+                let result = handler.on_close(&mut window);
+                std::mem::forget(window.platform.0);
+                result
+            } else {
+                true
+            };
+            if allow {
+                unsafe { DestroyWindow(hwnd) };
+            }
             0
         }
         WM_DESTROY => {

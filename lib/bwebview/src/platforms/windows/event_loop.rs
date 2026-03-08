@@ -11,10 +11,10 @@ use std::ptr::{null, null_mut};
 
 use super::webview2::*;
 use super::win32::*;
-use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize};
+use crate::{AppId, EventLoopBuilder, EventLoopHandler, LogicalPoint, LogicalSize};
 
 pub(super) static mut APP_ID: Option<AppId> = None;
-static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
+static mut EVENT_LOOP_HANDLER: Option<*mut dyn EventLoopHandler> = None;
 pub(super) static mut FIRST_HWND: Option<HWND> = None;
 
 // MARK: EventLoop
@@ -41,6 +41,8 @@ impl PlatformEventLoop {
                 }
                 APP_ID = Some(app_id);
             }
+
+            EVENT_LOOP_HANDLER = builder.event_loop_handler;
 
             // Initialize COM
             CoInitializeEx(
@@ -86,8 +88,14 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         }
     }
 
-    fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
-        unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
+    fn run(self) -> ! {
+        // Call on_init handler
+        unsafe {
+            #[allow(static_mut_refs)]
+            if let Some(h_ptr) = EVENT_LOOP_HANDLER {
+                (*h_ptr).on_init();
+            }
+        }
 
         // Start message loop
         unsafe {
@@ -101,19 +109,15 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         }
     }
 
+    fn quit() {
+        unsafe { PostQuitMessage(0) };
+    }
+
     fn create_proxy(&self) -> PlatformEventLoopProxy {
         PlatformEventLoopProxy::new()
     }
 }
 
-pub(crate) fn send_event(event: Event) {
-    unsafe {
-        #[allow(static_mut_refs)]
-        if let Some(handler) = &mut EVENT_HANDLER {
-            handler(event);
-        }
-    }
-}
 
 // MARK: EventLoopProxy
 pub(super) const WM_SEND_MESSAGE: u32 = WM_USER + 1;
@@ -129,8 +133,7 @@ impl PlatformEventLoopProxy {
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
         if let Some(hwnd) = unsafe { FIRST_HWND } {
-            let ptr =
-                Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut std::ffi::c_void;
+            let ptr = Box::leak(Box::new(data)) as *mut String as *mut std::ffi::c_void;
             unsafe { PostMessageA(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
         }
     }

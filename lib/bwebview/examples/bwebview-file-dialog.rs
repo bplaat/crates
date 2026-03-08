@@ -6,15 +6,26 @@
 
 //! A bwebview file dialog example
 
-use bwebview::{Event, EventLoop, FileDialog, WebviewBuilder, WebviewEvent, WindowBuilder};
+use bwebview::{
+    EventLoop, EventLoopBuilder, EventLoopHandler, FileDialog, WebviewBuilder, WebviewHandler,
+    Window, Webview, WindowBuilder, WindowHandler,
+};
 
-fn main() {
-    let event_loop = EventLoop::new();
+#[derive(Default)]
+struct App {
+    window: Option<Window>,
+    webview: Option<Webview>,
+}
 
-    let window = WindowBuilder::new().title("File Dialog Example").build();
-    let mut webview = WebviewBuilder::new(&window)
-        .load_html(
-            r#"<!DOCTYPE html>
+impl EventLoopHandler for App {
+    fn on_init(&mut self) {
+        let window = WindowBuilder::new()
+            .title("File Dialog Example")
+            .handler(self)
+            .build();
+        let webview = WebviewBuilder::new(&window)
+            .load_html(
+                r#"<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -39,51 +50,67 @@ window.ipc.addEventListener('message', e => {
 </script>
 </body>
 </html>"#,
-        )
-        .build();
+            )
+            .handler(self)
+            .build();
+        self.window = Some(window);
+        self.webview = Some(webview);
+    }
+}
 
-    event_loop.run(move |event| {
-        if let Event::Webview(_, WebviewEvent::MessageReceived(msg)) = event {
-            let result = match msg.as_str() {
-                "pick_file" => match FileDialog::new()
-                    .title("Open a file")
-                    .add_filter("Text files", &["txt", "md"])
-                    .add_filter("Rust files", &["rs", "toml"])
-                    .pick_file()
-                {
-                    Some(path) => format!("Picked file:\n{}", path.display()),
-                    None => "No file selected".to_string(),
-                },
+impl WindowHandler for App {
+    fn on_close(&mut self, _window: &mut Window) -> bool {
+        EventLoop::quit();
+        true
+    }
+}
 
-                "pick_files" => match FileDialog::new()
-                    .title("Open files")
-                    .add_filter("Images", &["png", "jpg", "jpeg", "gif"])
-                    .pick_files()
-                {
-                    Some(paths) => {
-                        let list = paths
-                            .iter()
-                            .map(|p| p.display().to_string())
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        format!("Picked {} file(s):\n{}", paths.len(), list)
-                    }
-                    None => "No files selected".to_string(),
-                },
+impl WebviewHandler for App {
+    fn on_message(&mut self, webview: &mut Webview, message: String) {
+        let result = match message.as_str() {
+            "pick_file" => match FileDialog::new()
+                .title("Open a file")
+                .add_filter("Text files", &["txt", "md"])
+                .add_filter("Rust files", &["rs", "toml"])
+                .pick_file()
+            {
+                Some(path) => format!("Picked file:\n{}", path.display()),
+                None => "No file selected".to_string(),
+            },
 
-                "save_file" => match FileDialog::new()
-                    .title("Save a file")
-                    .set_file_name("output.txt")
-                    .add_filter("Text files", &["txt"])
-                    .save_file()
-                {
-                    Some(path) => format!("Save to:\n{}", path.display()),
-                    None => "Cancelled".to_string(),
-                },
+            "pick_files" => match FileDialog::new()
+                .title("Open files")
+                .add_filter("Images", &["png", "jpg", "jpeg", "gif"])
+                .pick_files()
+            {
+                Some(paths) => {
+                    let list = paths
+                        .iter()
+                        .map(|p| p.display().to_string())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    format!("Picked {} file(s):\n{}", paths.len(), list)
+                }
+                None => "No files selected".to_string(),
+            },
 
-                _ => return,
-            };
-            webview.send_ipc_message(result);
-        }
-    });
+            "save_file" => match FileDialog::new()
+                .title("Save a file")
+                .set_file_name("output.txt")
+                .add_filter("Text files", &["txt"])
+                .save_file()
+            {
+                Some(path) => format!("Save to:\n{}", path.display()),
+                None => "Cancelled".to_string(),
+            },
+
+            _ => return,
+        };
+        webview.send_ipc_message(result);
+    }
+}
+
+fn main() {
+    let mut app = App::default();
+    EventLoopBuilder::new().handler(&mut app).build().run();
 }

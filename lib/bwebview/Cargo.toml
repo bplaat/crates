@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-directories = { version = "6.0.0", optional = true }
+directories = "6.0.0"
 mime_guess = { version = "2.0", default-features = false, optional = true }
 log = { version = "0.4.28", optional = true }
 rust-embed = { version = "8.7", optional = true }
@@ -23,12 +23,12 @@ objc2 = "0.6"
 windows-metadata = "0.59.0"
 
 [features]
-default = ["log", "remember_window_state"]
-custom_protocol = ["dep:small-http"]
+default = ["log", "webview"]
+custom_protocol = ["webview", "dep:small-http"]
 file_dialog = []
 log = ["dep:log"]
-remember_window_state = ["dep:directories"]
 rust-embed = ["custom_protocol", "dep:rust-embed", "dep:mime_guess"]
+webview = []
 
 [[example]]
 name = "bwebview-file-dialog"

@@ -5,7 +5,19 @@
  */
 
 use crate::platforms::{PlatformEventLoop, PlatformEventLoopProxy, PlatformMonitor};
-use crate::{Event, LogicalPoint, LogicalSize};
+use crate::{LogicalPoint, LogicalSize};
+
+// MARK: EventLoopHandler
+/// Event loop handler trait
+pub trait EventLoopHandler {
+    /// Called once when the application has finished launching, before the event loop starts.
+    /// Create your windows and webviews here.
+    fn on_init(&mut self) {}
+    /// Called when a user event is received (sent via `EventLoopProxy::send_user_event`)
+    fn on_user_event(&mut self, data: String) {
+        let _ = data;
+    }
+}
 
 // MARK: AppId
 pub(crate) struct AppId {
@@ -19,6 +31,7 @@ pub(crate) struct AppId {
 #[derive(Default)]
 pub struct EventLoopBuilder {
     pub(crate) app_id: Option<AppId>,
+    pub(crate) event_loop_handler: Option<*mut dyn EventLoopHandler>,
 }
 
 impl EventLoopBuilder {
@@ -42,6 +55,12 @@ impl EventLoopBuilder {
         self
     }
 
+    /// Set event loop handler
+    pub fn handler<H: EventLoopHandler + 'static>(mut self, handler: &mut H) -> Self {
+        self.event_loop_handler = Some(handler as *mut dyn EventLoopHandler);
+        self
+    }
+
     /// Create new event loop
     pub fn build(self) -> EventLoop {
         EventLoop::from_platform(PlatformEventLoop::new(self))
@@ -53,7 +72,8 @@ pub(crate) trait EventLoopInterface {
     fn primary_monitor(&self) -> PlatformMonitor;
     fn available_monitors(&self) -> Vec<PlatformMonitor>;
     fn create_proxy(&self) -> PlatformEventLoopProxy;
-    fn run(self, event_handler: impl FnMut(Event) + 'static) -> !;
+    fn run(self) -> !;
+    fn quit();
 }
 
 /// Event loop
@@ -89,9 +109,14 @@ impl EventLoop {
         EventLoopProxy::new(self.0.create_proxy())
     }
 
+    /// Quit the event loop and exit the application
+    pub fn quit() {
+        PlatformEventLoop::quit();
+    }
+
     /// Run the event loop
-    pub fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
-        self.0.run(event_handler)
+    pub fn run(self) -> ! {
+        self.0.run()
     }
 }
 

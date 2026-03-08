@@ -8,10 +8,9 @@ use std::env;
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr::{null, null_mut};
 
-use super::event_loop::send_event;
 use super::headers::*;
 use super::window::{PlatformWindow, WindowData};
-use crate::{InjectionTime, WebviewBuilder, WebviewEvent, WindowEvent};
+use crate::{InjectionTime, WebviewBuilder, WebviewHandler};
 
 pub(crate) struct PlatformWebview(pub(super) *mut WindowData);
 
@@ -186,12 +185,25 @@ impl PlatformWebview {
         };
 
         data.webview = webview;
+        data.webview_handler = builder.webview_handler;
 
         // Show window
         unsafe { gtk_widget_show_all(data.window as *mut GtkWidget) };
+    }
+}
 
-        // Send window created event
-        send_event(crate::Event::Window(data.window_id, WindowEvent::Created));
+fn call_webview_handler<F>(data: &mut WindowData, f: F)
+where
+    F: FnOnce(&mut dyn crate::WebviewHandler, &mut crate::Webview),
+{
+    if let Some(h_ptr) = data.webview_handler {
+        let handler = unsafe { &mut *h_ptr };
+        let window_id = data.window_id;
+        let webview_handler = data.webview_handler;
+        let mut wv = unsafe {
+            crate::Webview::from_raw(window_id, PlatformWebview(data as *mut WindowData), webview_handler)
+        };
+        f(handler, &mut *wv);
     }
 }
 
@@ -258,16 +270,10 @@ extern "C" fn webview_on_load_changed(
     _self: &mut WindowData,
 ) {
     if event == WEBKIT_LOAD_STARTED {
-        send_event(crate::Event::Webview(
-            _self.window_id,
-            WebviewEvent::PageLoadStarted,
-        ))
+        call_webview_handler(_self, |handler, wv| handler.on_load_start(wv));
     }
     if event == WEBKIT_LOAD_FINISHED {
-        send_event(crate::Event::Webview(
-            _self.window_id,
-            WebviewEvent::PageLoadFinished,
-        ))
+        call_webview_handler(_self, |handler, wv| handler.on_load(wv));
     }
 }
 
@@ -277,11 +283,8 @@ extern "C" fn webview_on_title_changed(
     _self: &mut WindowData,
 ) {
     let title = unsafe { webkit_web_view_get_title(webview) };
-    let title = unsafe { CStr::from_ptr(title) }.to_string_lossy();
-    send_event(crate::Event::Webview(
-        _self.window_id,
-        WebviewEvent::PageTitleChanged(title.to_string()),
-    ));
+    let title = unsafe { CStr::from_ptr(title) }.to_string_lossy().to_string();
+    call_webview_handler(_self, |handler, wv| handler.on_title_change(wv, title.clone()));
 }
 
 extern "C" fn webview_on_navigation_policy_decision(
@@ -306,11 +309,8 @@ extern "C" fn webview_on_message_ipc(
 ) {
     let message = unsafe { webkit_javascript_result_get_js_value(_message) };
     let message = unsafe { jsc_value_to_string(message) };
-    let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
-    send_event(crate::Event::Webview(
-        _self.window_id,
-        WebviewEvent::MessageReceived(message.to_string()),
-    ));
+    let message = unsafe { CStr::from_ptr(message) }.to_string_lossy().to_string();
+    call_webview_handler(_self, |handler, wv| handler.on_message(wv, message.clone()));
 }
 
 #[cfg(feature = "log")]

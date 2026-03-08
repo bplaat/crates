@@ -14,15 +14,18 @@ use objc2::{class, msg_send, sel};
 
 use super::cocoa::*;
 use super::webkit::*;
-use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, WindowEvent, WindowId};
+use crate::{EventLoopBuilder, EventLoopHandler, LogicalPoint, LogicalSize, WindowId};
 
 pub(super) const IVAR_PTR: &str = "_ptr";
 pub(super) const IVAR_PTR_CSTR: &CStr = c"_ptr";
 
+// Global handler pointer for user events (accessed from proxy)
+static mut EVENT_LOOP_HANDLER: Option<*mut dyn EventLoopHandler> = None;
+
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
     application: *mut Object,
-    event_handler: Option<Box<dyn FnMut(Event) + 'static>>,
+    event_loop_handler: Option<*mut dyn EventLoopHandler>,
 }
 
 impl PlatformEventLoop {
@@ -36,11 +39,7 @@ impl PlatformEventLoop {
                 sel!(applicationDidFinishLaunching:),
                 app_did_finish_launching as extern "C" fn(_, _, _),
             );
-            decl.add_method(
-                sel!(applicationShouldTerminateAfterLastWindowClosed:),
-                app_should_terminate_after_last_window_closed as extern "C" fn(_, _, _) -> Bool,
-            );
-            decl.add_method(sel!(sendEvent:), app_send_event as extern "C" fn(_, _, _));
+            decl.add_method(sel!(performUserEvent:), app_perform_user_event as extern "C" fn(_, _, _));
             decl.add_method(
                 sel!(openAboutDialog:),
                 app_open_about_dialog as extern "C" fn(_, _, _),
@@ -194,7 +193,7 @@ impl PlatformEventLoop {
 
         Self {
             application,
-            event_handler: None,
+            event_loop_handler: _builder.event_loop_handler,
         }
     }
 }
@@ -220,8 +219,10 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         monitors
     }
 
-    fn run(mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
-        self.event_handler = Some(Box::new(event_handler));
+    fn run(mut self) -> ! {
+        unsafe {
+            EVENT_LOOP_HANDLER = self.event_loop_handler;
+        }
         autoreleasepool(|_| unsafe {
             let delegate: *mut Object = msg_send![self.application, delegate];
             #[allow(deprecated)]
@@ -232,25 +233,26 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         unreachable!()
     }
 
+    fn quit() {
+        unsafe {
+            let _: () = msg_send![NSApp, terminate:null::<Object>()];
+        }
+    }
+
     fn create_proxy(&self) -> PlatformEventLoopProxy {
         PlatformEventLoopProxy::new()
     }
 }
 
-pub(crate) fn send_event(event: Event) {
-    let _self = unsafe {
-        let app_delegate: *mut Object = msg_send![NSApp, delegate];
-        #[allow(deprecated)]
-        let ptr = *(*app_delegate).get_ivar::<*const c_void>(IVAR_PTR);
-        &mut *(ptr as *mut PlatformEventLoop)
-    };
-
-    if let Some(handler) = _self.event_handler.as_mut() {
-        handler(event);
-    }
-}
-
 extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notification: *mut Object) {
+    // Call on_init handler
+    unsafe {
+        #[allow(static_mut_refs)]
+        if let Some(h_ptr) = EVENT_LOOP_HANDLER {
+            (*h_ptr).on_init();
+        }
+    }
+
     // Focus windows
     unsafe {
         let application: *mut Object = msg_send![notification, object];
@@ -263,27 +265,19 @@ extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notificati
         for i in 0..windows_count {
             let window: *mut Object = msg_send![windows, objectAtIndex:i];
             let _: () = msg_send![window, makeKeyAndOrderFront:null::<Object>()];
-
-            // Send window created event
-            let delegate: *mut Object = msg_send![window, delegate];
-            let window_id = super::window::get_window_id(delegate);
-            send_event(Event::Window(window_id, WindowEvent::Created));
         }
     }
 }
 
-extern "C" fn app_should_terminate_after_last_window_closed(
-    _this: *mut Object,
-    _sel: Sel,
-    _sender: *mut Object,
-) -> Bool {
-    Bool::YES
-}
-
-extern "C" fn app_send_event(_this: *mut Object, _sel: Sel, value: *mut Object) {
+extern "C" fn app_perform_user_event(_this: *mut Object, _sel: Sel, value: *mut Object) {
     let ptr: *mut c_void = unsafe { msg_send![value, pointerValue] };
-    let event = unsafe { Box::from_raw(ptr as *mut Event) };
-    send_event(*event);
+    let data = unsafe { Box::from_raw(ptr as *mut String) };
+    unsafe {
+        #[allow(static_mut_refs)]
+        if let Some(h_ptr) = EVENT_LOOP_HANDLER {
+            (*h_ptr).on_user_event(*data);
+        }
+    }
 }
 
 extern "C" fn app_open_about_dialog(_this: *mut Object, _sel: Sel, _sender: *mut Object) {
@@ -302,10 +296,10 @@ impl PlatformEventLoopProxy {
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
         unsafe {
-            let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
+            let ptr = Box::leak(Box::new(data)) as *mut String as *mut c_void;
             let value: *mut Object = msg_send![class!(NSValue), valueWithPointer:ptr];
             let app_delegate: *mut Object = msg_send![NSApp, delegate];
-            let _: () = msg_send![app_delegate, performSelectorOnMainThread:sel!(sendEvent:),
+            let _: () = msg_send![app_delegate, performSelectorOnMainThread:sel!(performUserEvent:),
                        withObject:value,
                     waitUntilDone:Bool::NO];
         }

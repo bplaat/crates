@@ -9,7 +9,10 @@
 
 use std::process::Command;
 
-use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder};
+use bwebview::{
+    EventLoop, EventLoopBuilder, EventLoopHandler, LogicalSize, WebviewBuilder, WebviewHandler,
+    Window, Webview, WindowBuilder, WindowHandler,
+};
 use rust_embed::Embed;
 use serde::Serialize;
 use small_http::{Request, Response, Status};
@@ -26,7 +29,6 @@ struct ManPage {
 }
 
 fn man_index(_req: &Request, _ctx: &()) -> Response {
-    // List all directories in /usr/share/man
     let mut pages = Vec::new();
     if let Ok(dir_iter) = std::fs::read_dir("/usr/share/man") {
         for dir in dir_iter.flatten() {
@@ -34,17 +36,14 @@ fn man_index(_req: &Request, _ctx: &()) -> Response {
             if path.is_dir()
                 && let Some(page_str) = path.file_name().and_then(|n| n.to_str())
             {
-                // Try to parse the page number from "man1", "man2", etc.
                 if let Some(page_num) = page_str
                     .strip_prefix("man")
                     .and_then(|n| n.parse::<i32>().ok())
                 {
-                    // List all files in this manX directory
                     let mut names = Vec::new();
                     if let Ok(file_iter) = std::fs::read_dir(&path) {
                         for file in file_iter.flatten() {
                             if let Some(file_name) = file.file_name().to_str() {
-                                // Remove file extension if present (e.g., "ls.1.gz" -> "ls")
                                 let name =
                                     file_name.split('.').next().unwrap_or(file_name).to_string();
                                 if !name.is_empty() && !names.contains(&name) {
@@ -89,60 +88,96 @@ fn man_show(req: &Request, _ctx: &()) -> Response {
     Response::with_body(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-fn main() {
-    let event_loop = EventLoopBuilder::new()
-        .app_id("nl", "bplaat", "ManExplorer")
-        .build();
+struct App {
+    window: Option<Window>,
+    webview: Option<Webview>,
+}
 
-    let router = RouterBuilder::new()
-        .get("/api/man", man_index)
-        .get("/api/man/:page/:name", man_show)
-        .build();
-
-    #[allow(unused_mut)]
-    let mut window_builder = WindowBuilder::new()
-        .title("Man Explorer")
-        .size(LogicalSize::new(1024.0, 768.0))
-        .min_size(LogicalSize::new(800.0, 480.0))
-        .center()
-        .remember_window_state();
-    #[cfg(target_os = "macos")]
-    {
-        window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            window: None,
+            webview: None,
+        }
     }
-    let mut window = window_builder.build();
+}
 
-    #[allow(unused)]
-    let mut webview = WebviewBuilder::new(&window)
-        .load_rust_embed_with_custom_handler::<WebAssets>(move |req| {
-            let res = router.handle(req);
-            if res.status != Status::NotFound {
-                Some(res)
-            } else {
-                None
-            }
-        })
-        .build();
+impl EventLoopHandler for App {
+    fn on_init(&mut self) {
+        let router = RouterBuilder::new()
+            .get("/api/man", man_index)
+            .get("/api/man/:page/:name", man_show)
+            .build();
+
+        #[allow(unused_mut)]
+        let mut window_builder = WindowBuilder::new()
+            .title("Man Explorer")
+            .size(LogicalSize::new(1024.0, 768.0))
+            .min_size(LogicalSize::new(800.0, 480.0))
+            .center()
+            .remember_window_state()
+            .handler(self);
+        #[cfg(target_os = "macos")]
+        {
+            window_builder =
+                window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+        }
+        let window = window_builder.build();
+
+        #[allow(unused_mut)]
+        let mut webview = WebviewBuilder::new(&window)
+            .load_rust_embed_with_custom_handler::<WebAssets>(move |req| {
+                let res = router.handle(req);
+                if res.status != Status::NotFound { Some(res) } else { None }
+            })
+            .handler(self)
+            .build();
+
+        #[cfg(target_os = "macos")]
+        webview.add_user_script(
+            format!(
+                "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
+                window.macos_titlebar_size().height
+            ),
+            bwebview::InjectionTime::DocumentStart,
+        );
+
+        self.window = Some(window);
+        self.webview = Some(webview);
+    }
+}
+
+impl WindowHandler for App {
+    fn on_close(&mut self, _window: &mut Window) -> bool {
+        EventLoop::quit();
+        true
+    }
 
     #[cfg(target_os = "macos")]
-    webview.add_user_script(
-        format!(
-            "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
-            window.macos_titlebar_size().height
-        ),
-        bwebview::InjectionTime::DocumentStart,
-    );
-
-    event_loop.run(move |event| match event {
-        Event::Webview(_, WebviewEvent::PageTitleChanged(title)) => window.set_title(title),
-        #[cfg(target_os = "macos")]
-        Event::Window(_, bwebview::WindowEvent::MacosFullscreenChanged(is_fullscreen)) => {
+    fn on_fullscreen_change(&mut self, _window: &mut Window, is_fullscreen: bool) {
+        if let Some(webview) = self.webview.as_mut() {
             if is_fullscreen {
                 webview.evaluate_script("document.body.classList.add('is-fullscreen');");
             } else {
                 webview.evaluate_script("document.body.classList.remove('is-fullscreen');");
             }
         }
-        _ => {}
-    });
+    }
+}
+
+impl WebviewHandler for App {
+    fn on_title_change(&mut self, _webview: &mut Webview, title: String) {
+        if let Some(window) = self.window.as_mut() {
+            window.set_title(title);
+        }
+    }
+}
+
+fn main() {
+    let mut app = App::default();
+    EventLoopBuilder::new()
+        .app_id("nl", "bplaat", "ManExplorer")
+        .handler(&mut app)
+        .build()
+        .run();
 }

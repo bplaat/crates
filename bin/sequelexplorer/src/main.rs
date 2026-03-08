@@ -14,7 +14,8 @@ use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use bsqlite::{ColumnType, Connection, OpenMode, StatementError, Value};
 use bwebview::{
-    Event, EventLoopBuilder, FileDialog, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder,
+    EventLoop, EventLoopBuilder, EventLoopHandler, FileDialog, LogicalSize, WebviewBuilder,
+    WebviewHandler, Window, Webview, WindowBuilder, WindowHandler,
 };
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -293,73 +294,111 @@ fn db_query(req: &Request, state: &State) -> Response {
     }
 }
 
-// MARK: Main
+// MARK: App
+struct App {
+    state: State,
+    window: Option<Window>,
+    webview: Option<Webview>,
+}
 
+impl App {
+    fn new(state: State) -> Self {
+        Self {
+            state,
+            window: None,
+            webview: None,
+        }
+    }
+}
+
+impl EventLoopHandler for App {
+    fn on_init(&mut self) {
+        let router = RouterBuilder::<State>::with(Arc::clone(&self.state))
+            .get("/api/tables", db_tables)
+            .get("/api/table/:name/data", db_table_data)
+            .get("/api/table/:name/schema", db_table_schema)
+            .post("/api/query", db_query)
+            .build();
+
+        let window = WindowBuilder::new()
+            .title("Sequel Explorer")
+            .size(LogicalSize::new(1200.0, 768.0))
+            .min_size(LogicalSize::new(800.0, 480.0))
+            .center()
+            .remember_window_state()
+            .handler(self)
+            .build();
+
+        let webview = WebviewBuilder::new(&window)
+            .load_rust_embed_with_custom_handler::<WebAssets>(move |req| {
+                let res = router.handle(req);
+                if res.status != Status::NotFound { Some(res) } else { None }
+            })
+            .handler(self)
+            .build();
+
+        self.window = Some(window);
+        self.webview = Some(webview);
+    }
+}
+
+impl WindowHandler for App {
+    fn on_close(&mut self, _window: &mut Window) -> bool {
+        EventLoop::quit();
+        true
+    }
+}
+
+impl WebviewHandler for App {
+    fn on_title_change(&mut self, _webview: &mut Webview, title: String) {
+        if let Some(window) = self.window.as_mut() {
+            window.set_title(title);
+        }
+    }
+
+    fn on_message(&mut self, _webview: &mut Webview, message: String) {
+        match serde_json::from_str(&message).expect("Can't parse IPC message") {
+            IpcMessage::OpenFileDialog => {
+                let path = FileDialog::new()
+                    .title("Open SQLite Database")
+                    .add_filter("SQLite databases", &["db", "sqlite", "sqlite3"])
+                    .pick_file()
+                    .map(|p| p.to_string_lossy().into_owned());
+                let response = IpcMessage::OpenFileDialogResponse { path };
+                if let Some(webview) = self.webview.as_mut() {
+                    webview.send_ipc_message(
+                        serde_json::to_string(&response).expect("Failed to serialize response"),
+                    );
+                }
+            }
+            IpcMessage::OpenDatabase { path } => {
+                let result = Connection::open(&path, OpenMode::ReadOnly);
+                let (ok, error) = match result {
+                    Ok(conn) => {
+                        *self.state.lock().expect("mutex poisoned") = Some(conn);
+                        (true, None)
+                    }
+                    Err(e) => (false, Some(e.to_string())),
+                };
+                let response = IpcMessage::OpenDatabaseResponse { ok, error };
+                if let Some(webview) = self.webview.as_mut() {
+                    webview.send_ipc_message(
+                        serde_json::to_string(&response).expect("Failed to serialize response"),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+// MARK: Main
 fn main() {
     let state: State = Arc::new(Mutex::new(None));
-    let event_loop = EventLoopBuilder::new()
+    let mut app = App::new(state);
+    EventLoopBuilder::new()
         .app_id("nl", "bplaat", "SequelExplorer")
-        .build();
-
-    let router = RouterBuilder::<State>::with(Arc::clone(&state))
-        .get("/api/tables", db_tables)
-        .get("/api/table/:name/data", db_table_data)
-        .get("/api/table/:name/schema", db_table_schema)
-        .post("/api/query", db_query)
-        .build();
-
-    #[allow(unused_mut)]
-    let mut window = WindowBuilder::new()
-        .title("Sequel Explorer")
-        .size(LogicalSize::new(1200.0, 768.0))
-        .min_size(LogicalSize::new(800.0, 480.0))
-        .center()
-        .remember_window_state()
-        .build();
-
-    let mut webview = WebviewBuilder::new(&window)
-        .load_rust_embed_with_custom_handler::<WebAssets>(move |req| {
-            let res = router.handle(req);
-            if res.status != Status::NotFound {
-                Some(res)
-            } else {
-                None
-            }
-        })
-        .build();
-
-    event_loop.run(move |event| match event {
-        Event::Webview(_, WebviewEvent::PageTitleChanged(title)) => window.set_title(title),
-        Event::Webview(_, WebviewEvent::MessageReceived(message)) => {
-            match serde_json::from_str(&message).expect("Can't parse IPC message") {
-                IpcMessage::OpenFileDialog => {
-                    let path = FileDialog::new()
-                        .title("Open SQLite Database")
-                        .add_filter("SQLite databases", &["db", "sqlite", "sqlite3"])
-                        .pick_file()
-                        .map(|p| p.to_string_lossy().into_owned());
-                    let response = IpcMessage::OpenFileDialogResponse { path };
-                    webview.send_ipc_message(
-                        serde_json::to_string(&response).expect("Failed to serialize response"),
-                    );
-                }
-                IpcMessage::OpenDatabase { path } => {
-                    let result = Connection::open(&path, OpenMode::ReadOnly);
-                    let (ok, error) = match result {
-                        Ok(conn) => {
-                            *state.lock().expect("mutex poisoned") = Some(conn);
-                            (true, None)
-                        }
-                        Err(e) => (false, Some(e.to_string())),
-                    };
-                    let response = IpcMessage::OpenDatabaseResponse { ok, error };
-                    webview.send_ipc_message(
-                        serde_json::to_string(&response).expect("Failed to serialize response"),
-                    );
-                }
-                _ => {}
-            }
-        }
-        _ => {}
-    });
+        .handler(&mut app)
+        .build()
+        .run();
 }

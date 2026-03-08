@@ -8,13 +8,12 @@ use std::ffi::{CString, c_void};
 use std::ptr::{null, null_mut};
 use std::{env, mem};
 
-use super::event_loop::send_event;
 use super::webview2::*;
 use super::win32::*;
 use super::window::{PlatformWindow, WindowData, config_dir};
 #[cfg(feature = "custom_protocol")]
 use crate::CustomProtocol;
-use crate::{InjectionTime, WebviewBuilder, WebviewEvent, WindowId};
+use crate::{InjectionTime, WebviewBuilder, WebviewHandler, WindowId};
 
 pub(super) struct WebviewData {
     pub(super) window_id: WindowId,
@@ -27,6 +26,7 @@ pub(super) struct WebviewData {
     pub(super) environment: Option<*mut ICoreWebView2Environment>,
     pub(super) webview: Option<*mut ICoreWebView2>,
     pub(super) window_data: *mut WindowData,
+    pub(super) webview_handler: Option<*mut dyn WebviewHandler>,
 }
 
 pub(crate) struct PlatformWebview {
@@ -168,6 +168,16 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 }
 
+
+// --- Helper: construct a temporary ManuallyDrop<Webview> from WebviewData ---
+unsafe fn make_temp_webview(data: &WebviewData) -> std::mem::ManuallyDrop<crate::Webview> {
+    std::mem::ManuallyDrop::new(crate::Webview {
+        id: data.window_id,
+        platform: PlatformWebview(data.window_data),
+        webview_handler: data.webview_handler,
+    })
+}
+
 extern "system" fn unimplemented_query_interface(
     _this: *mut c_void,
     _riid: *const GUID,
@@ -221,6 +231,7 @@ extern "system" fn controller_created(
         let _self = &mut *((*_this).user_data as *mut WebviewData);
         (*controller).AddRef();
         (*_self.window_data).controller = Some(controller);
+        (*_self.window_data).webview_handler = _self.webview_handler;
 
         // Set bounds
         let mut rect: RECT = mem::zeroed();
@@ -403,10 +414,14 @@ extern "system" fn navigation_starting(
     _args: *mut ICoreWebView2NavigationStartingEventArgs,
 ) -> HRESULT {
     let _self = unsafe { &*((*_this).user_data as *const WebviewData) };
-    send_event(crate::Event::Webview(
-        _self.window_id,
-        WebviewEvent::PageLoadStarted,
-    ));
+    if let Some(h_ptr) = _self.webview_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut webview = make_temp_webview(_self);
+            handler.on_load_start(&mut webview);
+            std::mem::forget(webview);
+        }
+    }
     S_OK
 }
 
@@ -416,10 +431,14 @@ extern "system" fn navigation_completed(
     _args: *mut ICoreWebView2NavigationCompletedEventArgs,
 ) -> HRESULT {
     let _self = unsafe { &*((*_this).user_data as *const WebviewData) };
-    send_event(crate::Event::Webview(
-        _self.window_id,
-        WebviewEvent::PageLoadFinished,
-    ));
+    if let Some(h_ptr) = _self.webview_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut webview = make_temp_webview(_self);
+            handler.on_load(&mut webview);
+            std::mem::forget(webview);
+        }
+    }
     S_OK
 }
 
@@ -429,13 +448,16 @@ extern "system" fn document_title_changed(
     _args: *mut c_void,
 ) -> HRESULT {
     let _self = unsafe { &*((*_this).user_data as *const WebviewData) };
-    unsafe {
-        let mut title = LPWSTR::default();
-        (*_sender).get_DocumentTitle(title.as_mut_ptr());
-        send_event(crate::Event::Webview(
-            _self.window_id,
-            WebviewEvent::PageTitleChanged(title.to_string()),
-        ));
+    if let Some(h_ptr) = _self.webview_handler {
+        unsafe {
+            let handler = &mut *h_ptr;
+            let mut title = LPWSTR::default();
+            (*_sender).get_DocumentTitle(title.as_mut_ptr());
+            let title_str = title.to_string();
+            let mut webview = make_temp_webview(_self);
+            handler.on_title_change(&mut webview, title_str);
+            std::mem::forget(webview);
+        }
     }
     S_OK
 }
@@ -486,10 +508,15 @@ extern "system" fn web_message_received(
         }
     }
     if r#type == "i" {
-        send_event(crate::Event::Webview(
-            _self.window_id,
-            WebviewEvent::MessageReceived(message.to_string()),
-        ));
+        if let Some(h_ptr) = _self.webview_handler {
+            unsafe {
+                let handler = &mut *h_ptr;
+                let msg_str = message.to_string();
+                let mut webview = make_temp_webview(_self);
+                handler.on_message(&mut webview, msg_str);
+                std::mem::forget(webview);
+            }
+        }
     }
 
     S_OK
