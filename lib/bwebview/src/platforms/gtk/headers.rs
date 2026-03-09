@@ -123,6 +123,8 @@ pub(crate) struct GdkDisplay([u8; 0]);
 #[repr(C)]
 pub(crate) struct GdkMonitor([u8; 0]);
 #[repr(C)]
+pub(crate) struct GdkWindow([u8; 0]);
+#[repr(C)]
 pub(crate) struct GdkRectangle {
     pub x: i32,
     pub y: i32,
@@ -136,6 +138,149 @@ pub(crate) struct GdkRGBA {
     pub blue: f64,
     pub alpha: f64,
 }
+
+// GDK event type constants
+pub(crate) const GDK_FOCUS_CHANGE: i32 = 12;
+pub(crate) const GDK_KEY_PRESS: i32 = 8;
+pub(crate) const GDK_KEY_RELEASE: i32 = 9;
+pub(crate) const GDK_BUTTON_PRESS: i32 = 4;
+pub(crate) const GDK_2BUTTON_PRESS: i32 = 5;
+pub(crate) const GDK_BUTTON_RELEASE: i32 = 7;
+pub(crate) const GDK_MOTION_NOTIFY: i32 = 3;
+pub(crate) const GDK_ENTER_NOTIFY: i32 = 10;
+pub(crate) const GDK_LEAVE_NOTIFY: i32 = 11;
+pub(crate) const GDK_SCROLL: i32 = 31;
+
+// GDK event mask bits
+pub(crate) const GDK_POINTER_MOTION_MASK: i32 = 1 << 2;
+pub(crate) const GDK_BUTTON_PRESS_MASK: i32 = 1 << 8;
+pub(crate) const GDK_BUTTON_RELEASE_MASK: i32 = 1 << 9;
+pub(crate) const GDK_KEY_PRESS_MASK: i32 = 1 << 10;
+pub(crate) const GDK_KEY_RELEASE_MASK: i32 = 1 << 11;
+pub(crate) const GDK_ENTER_NOTIFY_MASK: i32 = 1 << 12;
+pub(crate) const GDK_LEAVE_NOTIFY_MASK: i32 = 1 << 13;
+pub(crate) const GDK_FOCUS_CHANGE_MASK: i32 = 1 << 14;
+pub(crate) const GDK_SCROLL_MASK: i32 = 1 << 21;
+
+// GDK modifier state bits
+pub(crate) const GDK_SHIFT_MASK: u32 = 1 << 0;
+pub(crate) const GDK_CONTROL_MASK: u32 = 1 << 2;
+pub(crate) const GDK_MOD1_MASK: u32 = 1 << 3;
+pub(crate) const GDK_META_MASK: u32 = 1 << 28;
+
+// GDK key values
+pub(crate) const GDK_KEY_BackSpace: u32 = 0xFF08;
+pub(crate) const GDK_KEY_Tab: u32 = 0xFF09;
+pub(crate) const GDK_KEY_Return: u32 = 0xFF0D;
+pub(crate) const GDK_KEY_Escape: u32 = 0xFF1B;
+pub(crate) const GDK_KEY_Delete: u32 = 0xFFFF;
+pub(crate) const GDK_KEY_Insert: u32 = 0xFF63;
+pub(crate) const GDK_KEY_Home: u32 = 0xFF50;
+pub(crate) const GDK_KEY_Left: u32 = 0xFF51;
+pub(crate) const GDK_KEY_Up: u32 = 0xFF52;
+pub(crate) const GDK_KEY_Right: u32 = 0xFF53;
+pub(crate) const GDK_KEY_Down: u32 = 0xFF54;
+pub(crate) const GDK_KEY_Page_Up: u32 = 0xFF55;
+pub(crate) const GDK_KEY_Page_Down: u32 = 0xFF56;
+pub(crate) const GDK_KEY_End: u32 = 0xFF57;
+pub(crate) const GDK_KEY_F1: u32 = 0xFFBE;
+pub(crate) const GDK_KEY_F12: u32 = 0xFFC9;
+pub(crate) const GDK_KEY_space: u32 = 0x0020;
+pub(crate) const GDK_KEY_Shift_L: u32 = 0xFFE1;
+pub(crate) const GDK_KEY_Shift_R: u32 = 0xFFE2;
+pub(crate) const GDK_KEY_Control_L: u32 = 0xFFE3;
+pub(crate) const GDK_KEY_Control_R: u32 = 0xFFE4;
+pub(crate) const GDK_KEY_Caps_Lock: u32 = 0xFFE5;
+pub(crate) const GDK_KEY_Alt_L: u32 = 0xFFE9;
+pub(crate) const GDK_KEY_Alt_R: u32 = 0xFFEA;
+pub(crate) const GDK_KEY_Super_L: u32 = 0xFFEB;
+pub(crate) const GDK_KEY_Super_R: u32 = 0xFFEC;
+
+// GDK scroll direction
+pub(crate) type GdkScrollDirection = i32;
+pub(crate) const GDK_SCROLL_UP: GdkScrollDirection = 0;
+pub(crate) const GDK_SCROLL_DOWN: GdkScrollDirection = 1;
+pub(crate) const GDK_SCROLL_LEFT: GdkScrollDirection = 2;
+pub(crate) const GDK_SCROLL_RIGHT: GdkScrollDirection = 3;
+pub(crate) const GDK_SCROLL_SMOOTH: GdkScrollDirection = 4;
+
+// GDK filter return
+pub(crate) type GdkFilterReturn = i32;
+pub(crate) const GDK_FILTER_CONTINUE: GdkFilterReturn = 0;
+
+// GDK event structs
+#[repr(C)]
+pub(crate) struct GdkEventFocus {
+    pub(crate) type_: i32,
+    pub(crate) window: *mut GdkWindow,
+    pub(crate) send_event: i8,
+    pub(crate) in_: i16,
+}
+
+#[repr(C)]
+pub(crate) struct GdkEventKey {
+    pub(crate) type_: i32,
+    pub(crate) window: *mut GdkWindow,
+    pub(crate) send_event: i8,
+    pub(crate) time: u32,
+    pub(crate) state: u32,
+    pub(crate) keyval: u32,
+    pub(crate) length: i32,
+    pub(crate) string: *mut c_char,
+    pub(crate) hardware_keycode: u16,
+    pub(crate) group: u8,
+    pub(crate) is_modifier: u32,
+}
+
+#[repr(C)]
+pub(crate) struct GdkEventButton {
+    pub(crate) type_: i32,
+    pub(crate) window: *mut GdkWindow,
+    pub(crate) send_event: i8,
+    pub(crate) time: u32,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) axes: *mut f64,
+    pub(crate) state: u32,
+    pub(crate) button: u32,
+    pub(crate) device: *mut c_void,
+    pub(crate) x_root: f64,
+    pub(crate) y_root: f64,
+}
+
+#[repr(C)]
+pub(crate) struct GdkEventScroll {
+    pub(crate) type_: i32,
+    pub(crate) window: *mut GdkWindow,
+    pub(crate) send_event: i8,
+    pub(crate) time: u32,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) state: u32,
+    pub(crate) direction: GdkScrollDirection,
+    pub(crate) device: *mut c_void,
+    pub(crate) x_root: f64,
+    pub(crate) y_root: f64,
+    pub(crate) delta_x: f64,
+    pub(crate) delta_y: f64,
+}
+
+#[repr(C)]
+pub(crate) struct GdkEventMotion {
+    pub(crate) type_: i32,
+    pub(crate) window: *mut GdkWindow,
+    pub(crate) send_event: i8,
+    pub(crate) time: u32,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) axes: *mut f64,
+    pub(crate) state: u32,
+    pub(crate) is_hint: i16,
+    pub(crate) device: *mut c_void,
+    pub(crate) x_root: f64,
+    pub(crate) y_root: f64,
+}
+
 #[link(name = "gdk-3")]
 unsafe extern "C" {
     pub(crate) fn gdk_display_get_default() -> *mut GdkDisplay;
@@ -150,6 +295,16 @@ unsafe extern "C" {
     pub(crate) fn gdk_monitor_get_geometry(monitor: *mut GdkMonitor, geometry: *mut GdkRectangle);
     pub(crate) fn gdk_monitor_get_scale_factor(monitor: *mut GdkMonitor) -> i32;
     pub(crate) fn gdk_monitor_is_primary(monitor: *mut GdkMonitor) -> bool;
+    pub(crate) fn gdk_window_add_filter(
+        window: *mut GdkWindow,
+        function: unsafe extern "C" fn(
+            xevent: *mut c_void,
+            event: *mut c_void,
+            data: *mut c_void,
+        ) -> GdkFilterReturn,
+        data: *mut c_void,
+    );
+    pub(crate) fn gdk_keyval_to_unicode(symbol: u32) -> u32;
 }
 
 // MARK: GTK
@@ -195,6 +350,9 @@ unsafe extern "C" {
         state: i32,
         color: *const GdkRGBA,
     );
+    pub(crate) fn gtk_widget_add_events(widget: *mut GtkWidget, events: i32);
+    pub(crate) fn gtk_widget_get_window(widget: *mut GtkWidget) -> *mut GdkWindow;
+    pub(crate) fn gtk_widget_realize(widget: *mut GtkWidget);
 }
 
 // MARK: GTK File Chooser

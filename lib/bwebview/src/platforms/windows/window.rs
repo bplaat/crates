@@ -24,6 +24,7 @@ pub(super) struct WindowData {
     #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
     pub(super) resize_callback: Option<Box<dyn Fn(i32, i32)>>,
+    pub(super) tracking_mouse: bool,
 }
 
 pub(crate) struct PlatformWindow(pub(super) Box<WindowData>);
@@ -215,6 +216,7 @@ impl PlatformWindow {
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
             resize_callback: None,
+            tracking_mouse: false,
         });
         unsafe {
             SetWindowLong(
@@ -333,6 +335,19 @@ unsafe extern "system" fn window_proc(
     match msg {
         WM_CREATE => {
             send_event(crate::Event::Window(WindowEvent::Create));
+            0
+        }
+        WM_ACTIVATE => {
+            if w_param & 0xFFFF != 0 {
+                send_event(crate::Event::Window(WindowEvent::Focus));
+            } else {
+                send_event(crate::Event::Window(WindowEvent::Unfocus));
+            }
+            0
+        }
+        WM_MOUSELEAVE => {
+            _self.tracking_mouse = false;
+            send_event(crate::Event::Window(WindowEvent::MouseLeave));
             0
         }
         WM_ERASEBKGND => {

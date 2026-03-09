@@ -26,7 +26,7 @@ struct BlockDescriptor {
     size: u64,
 }
 
-const BLOCK_HAS_DESCRIPTOR: i32 = 1 << 25;
+const BLOCK_NEEDS_FREE: i32 = 1 << 24;
 
 static BLOCK_DESCRIPTOR: BlockDescriptor = BlockDescriptor {
     reserved: 0,
@@ -91,7 +91,7 @@ impl<F> RcBlock<F> {
         let inner = Box::new(RcBlockInner {
             block: Block {
                 _isa: unsafe { _NSConcreteMallocBlock },
-                _flags: BLOCK_HAS_DESCRIPTOR,
+                _flags: BLOCK_NEEDS_FREE,
                 _reserved: 0,
                 _invoke: invoke,
                 _descriptor: &BLOCK_DESCRIPTOR,
@@ -124,6 +124,20 @@ impl<F> RcBlock<F> {
             unsafe { ((*block).closure)(a) };
         }
         Self::make(closure, invoke_impl::<F, A> as *const c_void)
+    }
+
+    /// Create a new heap-allocated block from a single-argument closure that returns a value.
+    pub fn new_ret<A: 'static + Copy, R: 'static + Copy>(closure: F) -> Self
+    where
+        F: Fn(A) -> R + 'static,
+    {
+        extern "C" fn invoke_impl<F: Fn(A) -> R, A: Copy, R: Copy>(
+            block: *const RcBlockInner<F>,
+            a: A,
+        ) -> R {
+            unsafe { ((*block).closure)(a) }
+        }
+        Self::make(closure, invoke_impl::<F, A, R> as *const c_void)
     }
 
     /// Create a new heap-allocated block from a two-argument closure.
@@ -216,7 +230,6 @@ mod test {
 
     #[test]
     fn test_block_call_via_ref() {
-        // Simulate how bwebview passes &*block to ObjC and then Rust calls it
         static RESULT: AtomicI32 = AtomicI32::new(0);
         let block = RcBlock::new::<i32>(|x: i32| {
             RESULT.store(x + 10, Ordering::SeqCst);

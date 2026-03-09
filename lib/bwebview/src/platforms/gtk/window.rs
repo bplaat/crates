@@ -16,7 +16,9 @@ use std::ptr::{null, null_mut};
 use super::event_loop::APP_ID;
 use super::event_loop::send_event;
 use super::headers::*;
-use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
+use crate::{
+    KeyCode, LogicalPoint, LogicalSize, Modifiers, MouseButton, Theme, WindowBuilder, WindowEvent,
+};
 
 pub(super) struct WindowData {
     pub(super) window: *mut GtkWindow,
@@ -162,6 +164,85 @@ impl PlatformWindow {
                 null(),
                 G_CONNECT_DEFAULT,
             );
+
+            // Add event masks for key, mouse, and focus events
+            let event_masks = GDK_KEY_PRESS_MASK
+                | GDK_KEY_RELEASE_MASK
+                | GDK_BUTTON_PRESS_MASK
+                | GDK_BUTTON_RELEASE_MASK
+                | GDK_POINTER_MOTION_MASK
+                | GDK_ENTER_NOTIFY_MASK
+                | GDK_LEAVE_NOTIFY_MASK
+                | GDK_FOCUS_CHANGE_MASK
+                | GDK_SCROLL_MASK;
+            gtk_widget_add_events(window as *mut GtkWidget, event_masks);
+
+            // Connect focus signals
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"focus-in-event".as_ptr(),
+                window_on_focus_in as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"focus-out-event".as_ptr(),
+                window_on_focus_out as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+
+            // Connect key signals
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"key-press-event".as_ptr(),
+                window_on_key_press as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"key-release-event".as_ptr(),
+                window_on_key_release as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+
+            // Connect enter/leave signals
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"enter-notify-event".as_ptr(),
+                window_on_enter_notify as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"leave-notify-event".as_ptr(),
+                window_on_leave_notify as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
+
+            // Realize window to get the underlying GdkWindow, then add a GDK filter for
+            // button and motion events (which may be captured by WebKit child windows)
+            gtk_widget_realize(window as *mut GtkWidget);
+            let gdk_window = gtk_widget_get_window(window as *mut GtkWidget);
+            if !gdk_window.is_null() {
+                gdk_window_add_filter(
+                    gdk_window,
+                    window_gdk_filter,
+                    window_data.as_mut() as *mut _ as *mut c_void,
+                );
+            }
+
             window
         };
 
@@ -360,6 +441,224 @@ extern "C" fn window_on_close(
     // Send window closed event
     send_event(crate::Event::Window(WindowEvent::Close));
     false
+}
+
+extern "C" fn window_on_focus_in(
+    _window: *mut GtkWindow,
+    _event: *mut GdkEventFocus,
+    _self: &mut WindowData,
+) -> bool {
+    send_event(crate::Event::Window(WindowEvent::Focus));
+    false
+}
+
+extern "C" fn window_on_focus_out(
+    _window: *mut GtkWindow,
+    _event: *mut GdkEventFocus,
+    _self: &mut WindowData,
+) -> bool {
+    send_event(crate::Event::Window(WindowEvent::Unfocus));
+    false
+}
+
+extern "C" fn window_on_key_press(
+    _window: *mut GtkWindow,
+    event: *mut GdkEventKey,
+    _self: &mut WindowData,
+) -> bool {
+    let (keyval, state) = unsafe { ((*event).keyval, (*event).state) };
+    let key = gdk_keyval_to_keycode(keyval);
+    let modifiers = gdk_state_to_modifiers(state);
+    send_event(crate::Event::Window(WindowEvent::KeyDown {
+        key,
+        modifiers,
+    }));
+    let ch_code = unsafe { gdk_keyval_to_unicode(keyval) };
+    if let Some(ch) = char::from_u32(ch_code) {
+        if ch != '\0' && !ch.is_control() {
+            send_event(crate::Event::Window(WindowEvent::Char(ch)));
+        }
+    }
+    false
+}
+
+extern "C" fn window_on_key_release(
+    _window: *mut GtkWindow,
+    event: *mut GdkEventKey,
+    _self: &mut WindowData,
+) -> bool {
+    let (keyval, state) = unsafe { ((*event).keyval, (*event).state) };
+    let key = gdk_keyval_to_keycode(keyval);
+    let modifiers = gdk_state_to_modifiers(state);
+    send_event(crate::Event::Window(WindowEvent::KeyUp { key, modifiers }));
+    false
+}
+
+extern "C" fn window_on_enter_notify(
+    _window: *mut GtkWindow,
+    _event: *mut c_void,
+    _self: &mut WindowData,
+) -> bool {
+    send_event(crate::Event::Window(WindowEvent::MouseEnter));
+    false
+}
+
+extern "C" fn window_on_leave_notify(
+    _window: *mut GtkWindow,
+    _event: *mut c_void,
+    _self: &mut WindowData,
+) -> bool {
+    send_event(crate::Event::Window(WindowEvent::MouseLeave));
+    false
+}
+
+unsafe extern "C" fn window_gdk_filter(
+    _xevent: *mut c_void,
+    event: *mut c_void,
+    data: *mut c_void,
+) -> GdkFilterReturn {
+    let event_type = unsafe { *(event as *const i32) };
+    let _self = unsafe { &mut *(data as *mut WindowData) };
+    match event_type {
+        GDK_BUTTON_PRESS | GDK_2BUTTON_PRESS => {
+            let btn = unsafe { &*(event as *const GdkEventButton) };
+            let button = match btn.button {
+                1 => MouseButton::Left,
+                2 => MouseButton::Middle,
+                3 => MouseButton::Right,
+                8 => MouseButton::Back,
+                9 => MouseButton::Forward,
+                _ => return GDK_FILTER_CONTINUE,
+            };
+            send_event(crate::Event::Window(WindowEvent::MouseDown {
+                button,
+                position: LogicalPoint::new(btn.x as f32, btn.y as f32),
+            }));
+        }
+        GDK_BUTTON_RELEASE => {
+            let btn = unsafe { &*(event as *const GdkEventButton) };
+            let button = match btn.button {
+                1 => MouseButton::Left,
+                2 => MouseButton::Middle,
+                3 => MouseButton::Right,
+                8 => MouseButton::Back,
+                9 => MouseButton::Forward,
+                _ => return GDK_FILTER_CONTINUE,
+            };
+            send_event(crate::Event::Window(WindowEvent::MouseUp {
+                button,
+                position: LogicalPoint::new(btn.x as f32, btn.y as f32),
+            }));
+        }
+        GDK_MOTION_NOTIFY => {
+            let motion = unsafe { &*(event as *const GdkEventMotion) };
+            send_event(crate::Event::Window(WindowEvent::MouseMove(
+                LogicalPoint::new(motion.x as f32, motion.y as f32),
+            )));
+        }
+        GDK_SCROLL => {
+            let scroll = unsafe { &*(event as *const GdkEventScroll) };
+            let (delta_x, delta_y) = match scroll.direction {
+                GDK_SCROLL_UP => (0.0, -1.0),
+                GDK_SCROLL_DOWN => (0.0, 1.0),
+                GDK_SCROLL_LEFT => (-1.0, 0.0),
+                GDK_SCROLL_RIGHT => (1.0, 0.0),
+                GDK_SCROLL_SMOOTH => (scroll.delta_x as f32, scroll.delta_y as f32),
+                _ => return GDK_FILTER_CONTINUE,
+            };
+            send_event(crate::Event::Window(WindowEvent::MouseWheel {
+                delta_x,
+                delta_y,
+            }));
+        }
+        _ => {}
+    }
+    GDK_FILTER_CONTINUE
+}
+
+fn gdk_keyval_to_keycode(keyval: u32) -> KeyCode {
+    match keyval {
+        0x61 | 0x41 => KeyCode::A,
+        0x62 | 0x42 => KeyCode::B,
+        0x63 | 0x43 => KeyCode::C,
+        0x64 | 0x44 => KeyCode::D,
+        0x65 | 0x45 => KeyCode::E,
+        0x66 | 0x46 => KeyCode::F,
+        0x67 | 0x47 => KeyCode::G,
+        0x68 | 0x48 => KeyCode::H,
+        0x69 | 0x49 => KeyCode::I,
+        0x6A | 0x4A => KeyCode::J,
+        0x6B | 0x4B => KeyCode::K,
+        0x6C | 0x4C => KeyCode::L,
+        0x6D | 0x4D => KeyCode::M,
+        0x6E | 0x4E => KeyCode::N,
+        0x6F | 0x4F => KeyCode::O,
+        0x70 | 0x50 => KeyCode::P,
+        0x71 | 0x51 => KeyCode::Q,
+        0x72 | 0x52 => KeyCode::R,
+        0x73 | 0x53 => KeyCode::S,
+        0x74 | 0x54 => KeyCode::T,
+        0x75 | 0x55 => KeyCode::U,
+        0x76 | 0x56 => KeyCode::V,
+        0x77 | 0x57 => KeyCode::W,
+        0x78 | 0x58 => KeyCode::X,
+        0x79 | 0x59 => KeyCode::Y,
+        0x7A | 0x5A => KeyCode::Z,
+        0x30 => KeyCode::Key0,
+        0x31 => KeyCode::Key1,
+        0x32 => KeyCode::Key2,
+        0x33 => KeyCode::Key3,
+        0x34 => KeyCode::Key4,
+        0x35 => KeyCode::Key5,
+        0x36 => KeyCode::Key6,
+        0x37 => KeyCode::Key7,
+        0x38 => KeyCode::Key8,
+        0x39 => KeyCode::Key9,
+        k if k >= GDK_KEY_F1 && k <= GDK_KEY_F12 => match k - GDK_KEY_F1 {
+            0 => KeyCode::F1,
+            1 => KeyCode::F2,
+            2 => KeyCode::F3,
+            3 => KeyCode::F4,
+            4 => KeyCode::F5,
+            5 => KeyCode::F6,
+            6 => KeyCode::F7,
+            7 => KeyCode::F8,
+            8 => KeyCode::F9,
+            9 => KeyCode::F10,
+            10 => KeyCode::F11,
+            _ => KeyCode::F12,
+        },
+        GDK_KEY_BackSpace => KeyCode::Backspace,
+        GDK_KEY_Tab => KeyCode::Tab,
+        GDK_KEY_Return => KeyCode::Enter,
+        GDK_KEY_Escape => KeyCode::Escape,
+        GDK_KEY_space => KeyCode::Space,
+        GDK_KEY_Delete => KeyCode::Delete,
+        GDK_KEY_Insert => KeyCode::Insert,
+        GDK_KEY_Left => KeyCode::Left,
+        GDK_KEY_Right => KeyCode::Right,
+        GDK_KEY_Up => KeyCode::Up,
+        GDK_KEY_Down => KeyCode::Down,
+        GDK_KEY_Home => KeyCode::Home,
+        GDK_KEY_End => KeyCode::End,
+        GDK_KEY_Page_Up => KeyCode::PageUp,
+        GDK_KEY_Page_Down => KeyCode::PageDown,
+        GDK_KEY_Shift_L | GDK_KEY_Shift_R => KeyCode::Shift,
+        GDK_KEY_Control_L | GDK_KEY_Control_R => KeyCode::Control,
+        GDK_KEY_Alt_L | GDK_KEY_Alt_R => KeyCode::Alt,
+        GDK_KEY_Super_L | GDK_KEY_Super_R => KeyCode::Meta,
+        GDK_KEY_Caps_Lock => KeyCode::CapsLock,
+        _ => KeyCode::Unknown(keyval),
+    }
+}
+
+fn gdk_state_to_modifiers(state: u32) -> Modifiers {
+    Modifiers {
+        shift: (state & GDK_SHIFT_MASK) != 0,
+        ctrl: (state & GDK_CONTROL_MASK) != 0,
+        alt: (state & GDK_MOD1_MASK) != 0,
+        meta: (state & GDK_META_MASK) != 0,
+    }
 }
 
 #[cfg(feature = "remember_window_state")]

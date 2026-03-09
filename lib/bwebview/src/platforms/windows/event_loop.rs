@@ -11,7 +11,11 @@ use std::ptr::{null, null_mut};
 
 use super::webview2::*;
 use super::win32::*;
-use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize};
+use super::window::WindowData;
+use crate::{
+    AppId, Event, EventLoopBuilder, KeyCode, LogicalPoint, LogicalSize, Modifiers, MouseButton,
+    WindowEvent,
+};
 
 pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
@@ -93,6 +97,8 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         unsafe {
             let mut msg = mem::zeroed();
             while GetMessageA(&mut msg, null_mut(), 0, 0) != 0 {
+                // Intercept keyboard and mouse events before dispatch
+                intercept_msg(&msg);
                 TranslateMessage(&msg);
                 DispatchMessageA(&msg);
             }
@@ -112,6 +118,226 @@ pub(crate) fn send_event(event: Event) {
         if let Some(handler) = &mut EVENT_HANDLER {
             handler(event);
         }
+    }
+}
+
+fn intercept_msg(msg: &MSG) {
+    let window_data = unsafe {
+        let ptr = GetWindowLong(msg.hwnd, GWL_USERDATA) as *mut WindowData;
+        if ptr.is_null() {
+            return;
+        }
+        &mut *ptr
+    };
+    let dpi = window_data.dpi;
+
+    match msg.message {
+        WM_KEYDOWN | WM_SYSKEYDOWN => {
+            let key = vk_to_keycode(msg.wParam as u32);
+            let modifiers = get_modifiers();
+            send_event(Event::Window(WindowEvent::KeyDown { key, modifiers }));
+        }
+        WM_KEYUP | WM_SYSKEYUP => {
+            let key = vk_to_keycode(msg.wParam as u32);
+            let modifiers = get_modifiers();
+            send_event(Event::Window(WindowEvent::KeyUp { key, modifiers }));
+        }
+        WM_CHAR => {
+            if let Some(ch) = char::from_u32(msg.wParam as u32) {
+                if !ch.is_control() {
+                    send_event(Event::Window(WindowEvent::Char(ch)));
+                }
+            }
+        }
+        WM_LBUTTONDOWN => {
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            send_event(Event::Window(WindowEvent::MouseDown {
+                button: MouseButton::Left,
+                position: pos,
+            }));
+        }
+        WM_LBUTTONUP => {
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            send_event(Event::Window(WindowEvent::MouseUp {
+                button: MouseButton::Left,
+                position: pos,
+            }));
+        }
+        WM_RBUTTONDOWN => {
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            send_event(Event::Window(WindowEvent::MouseDown {
+                button: MouseButton::Right,
+                position: pos,
+            }));
+        }
+        WM_RBUTTONUP => {
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            send_event(Event::Window(WindowEvent::MouseUp {
+                button: MouseButton::Right,
+                position: pos,
+            }));
+        }
+        WM_MBUTTONDOWN => {
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            send_event(Event::Window(WindowEvent::MouseDown {
+                button: MouseButton::Middle,
+                position: pos,
+            }));
+        }
+        WM_MBUTTONUP => {
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            send_event(Event::Window(WindowEvent::MouseUp {
+                button: MouseButton::Middle,
+                position: pos,
+            }));
+        }
+        WM_XBUTTONDOWN => {
+            let xbutton = GET_XBUTTON_WPARAM(msg.wParam);
+            let button = if xbutton == 1 {
+                MouseButton::Back
+            } else {
+                MouseButton::Forward
+            };
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            send_event(Event::Window(WindowEvent::MouseDown { button, position: pos }));
+        }
+        WM_XBUTTONUP => {
+            let xbutton = GET_XBUTTON_WPARAM(msg.wParam);
+            let button = if xbutton == 1 {
+                MouseButton::Back
+            } else {
+                MouseButton::Forward
+            };
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            send_event(Event::Window(WindowEvent::MouseUp { button, position: pos }));
+        }
+        WM_MOUSEWHEEL => {
+            let delta = GET_WHEEL_DELTA_WPARAM(msg.wParam) as f32 / WHEEL_DELTA;
+            send_event(Event::Window(WindowEvent::MouseWheel {
+                delta_x: 0.0,
+                delta_y: -delta,
+            }));
+        }
+        WM_MOUSEHWHEEL => {
+            let delta = GET_WHEEL_DELTA_WPARAM(msg.wParam) as f32 / WHEEL_DELTA;
+            send_event(Event::Window(WindowEvent::MouseWheel {
+                delta_x: delta,
+                delta_y: 0.0,
+            }));
+        }
+        WM_MOUSEMOVE => {
+            let pos = lparam_to_logical_point(msg.lParam, dpi);
+            if !window_data.tracking_mouse {
+                window_data.tracking_mouse = true;
+                unsafe {
+                    let mut tme = TRACKMOUSEEVENT {
+                        cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+                        dwFlags: TME_LEAVE,
+                        hwndTrack: msg.hwnd,
+                        dwHoverTime: 0,
+                    };
+                    TrackMouseEvent(&mut tme);
+                }
+                send_event(Event::Window(WindowEvent::MouseEnter));
+            }
+            send_event(Event::Window(WindowEvent::MouseMove(pos)));
+        }
+        _ => {}
+    }
+}
+
+fn lparam_to_logical_point(lparam: LPARAM, dpi: u32) -> LogicalPoint {
+    let x = GET_X_LPARAM(lparam);
+    let y = GET_Y_LPARAM(lparam);
+    LogicalPoint::new(
+        (x * USER_DEFAULT_SCREEN_DPI as i32 / dpi as i32) as f32,
+        (y * USER_DEFAULT_SCREEN_DPI as i32 / dpi as i32) as f32,
+    )
+}
+
+fn get_modifiers() -> Modifiers {
+    Modifiers {
+        shift: unsafe { GetKeyState(VK_SHIFT as i32) } < 0,
+        ctrl: unsafe { GetKeyState(VK_CONTROL as i32) } < 0,
+        alt: unsafe { GetKeyState(VK_MENU as i32) } < 0,
+        meta: unsafe { GetKeyState(VK_LWIN as i32) } < 0
+            || unsafe { GetKeyState(VK_RWIN as i32) } < 0,
+    }
+}
+
+fn vk_to_keycode(vk: u32) -> KeyCode {
+    match vk {
+        0x41 => KeyCode::A,
+        0x42 => KeyCode::B,
+        0x43 => KeyCode::C,
+        0x44 => KeyCode::D,
+        0x45 => KeyCode::E,
+        0x46 => KeyCode::F,
+        0x47 => KeyCode::G,
+        0x48 => KeyCode::H,
+        0x49 => KeyCode::I,
+        0x4A => KeyCode::J,
+        0x4B => KeyCode::K,
+        0x4C => KeyCode::L,
+        0x4D => KeyCode::M,
+        0x4E => KeyCode::N,
+        0x4F => KeyCode::O,
+        0x50 => KeyCode::P,
+        0x51 => KeyCode::Q,
+        0x52 => KeyCode::R,
+        0x53 => KeyCode::S,
+        0x54 => KeyCode::T,
+        0x55 => KeyCode::U,
+        0x56 => KeyCode::V,
+        0x57 => KeyCode::W,
+        0x58 => KeyCode::X,
+        0x59 => KeyCode::Y,
+        0x5A => KeyCode::Z,
+        0x30 => KeyCode::Key0,
+        0x31 => KeyCode::Key1,
+        0x32 => KeyCode::Key2,
+        0x33 => KeyCode::Key3,
+        0x34 => KeyCode::Key4,
+        0x35 => KeyCode::Key5,
+        0x36 => KeyCode::Key6,
+        0x37 => KeyCode::Key7,
+        0x38 => KeyCode::Key8,
+        0x39 => KeyCode::Key9,
+        vk if vk >= VK_F1 && vk <= VK_F12 => match vk - VK_F1 {
+            0 => KeyCode::F1,
+            1 => KeyCode::F2,
+            2 => KeyCode::F3,
+            3 => KeyCode::F4,
+            4 => KeyCode::F5,
+            5 => KeyCode::F6,
+            6 => KeyCode::F7,
+            7 => KeyCode::F8,
+            8 => KeyCode::F9,
+            9 => KeyCode::F10,
+            10 => KeyCode::F11,
+            _ => KeyCode::F12,
+        },
+        VK_BACK => KeyCode::Backspace,
+        VK_TAB => KeyCode::Tab,
+        VK_RETURN => KeyCode::Enter,
+        VK_ESCAPE => KeyCode::Escape,
+        VK_SPACE => KeyCode::Space,
+        VK_DELETE => KeyCode::Delete,
+        VK_INSERT => KeyCode::Insert,
+        VK_LEFT => KeyCode::Left,
+        VK_RIGHT => KeyCode::Right,
+        VK_UP => KeyCode::Up,
+        VK_DOWN => KeyCode::Down,
+        VK_HOME => KeyCode::Home,
+        VK_END => KeyCode::End,
+        VK_PRIOR => KeyCode::PageUp,
+        VK_NEXT => KeyCode::PageDown,
+        VK_SHIFT | VK_LSHIFT | VK_RSHIFT => KeyCode::Shift,
+        VK_CONTROL | VK_LCONTROL | VK_RCONTROL => KeyCode::Control,
+        VK_MENU | VK_LMENU | VK_RMENU => KeyCode::Alt,
+        VK_LWIN | VK_RWIN => KeyCode::Meta,
+        VK_CAPITAL => KeyCode::CapsLock,
+        _ => KeyCode::Unknown(vk),
     }
 }
 

@@ -57,6 +57,42 @@ fn main() {
         Event::Window(WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
             println!("Window fullscreen changed: {is_fullscreen}");
         }
+        Event::Window(WindowEvent::Focus) => {
+            println!("Window focused");
+        }
+        Event::Window(WindowEvent::Unfocus) => {
+            println!("Window unfocused");
+        }
+        Event::Window(WindowEvent::KeyDown { key, modifiers }) => {
+            println!(
+                "KeyDown: {:?} (shift={} ctrl={} alt={} meta={})",
+                key, modifiers.shift, modifiers.ctrl, modifiers.alt, modifiers.meta,
+            );
+        }
+        Event::Window(WindowEvent::KeyUp { key, .. }) => {
+            println!("KeyUp: {:?}", key);
+        }
+        Event::Window(WindowEvent::Char(ch)) => {
+            println!("Char: {ch:?}");
+        }
+        Event::Window(WindowEvent::MouseDown { button, position }) => {
+            println!("MouseDown: {:?} ({}, {})", button, position.x, position.y);
+        }
+        Event::Window(WindowEvent::MouseUp { button, position }) => {
+            println!("MouseUp: {:?} ({}, {})", button, position.x, position.y);
+        }
+        Event::Window(WindowEvent::MouseMove(position)) => {
+            println!("MouseMove: ({}, {})", position.x, position.y);
+        }
+        Event::Window(WindowEvent::MouseEnter) => {
+            println!("MouseEnter");
+        }
+        Event::Window(WindowEvent::MouseLeave) => {
+            println!("MouseLeave");
+        }
+        Event::Window(WindowEvent::MouseWheel { delta_x, delta_y }) => {
+            println!("MouseWheel: ({delta_x}, {delta_y})");
+        }
 
         // Webview events
         Event::Webview(WebviewEvent::PageLoadStart) => {

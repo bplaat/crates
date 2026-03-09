@@ -153,11 +153,87 @@ pub(crate) const WM_CREATE: u32 = 0x0001;
 pub(crate) const WM_DESTROY: u32 = 0x0002;
 pub(crate) const WM_MOVE: u32 = 0x0003;
 pub(crate) const WM_SIZE: u32 = 0x0005;
+pub(crate) const WM_ACTIVATE: u32 = 0x0006;
 pub(crate) const WM_CLOSE: u32 = 0x0010;
 pub(crate) const WM_ERASEBKGND: u32 = 0x0014;
 pub(crate) const WM_GETMINMAXINFO: u32 = 0x0024;
+pub(crate) const WM_KEYDOWN: u32 = 0x0100;
+pub(crate) const WM_KEYUP: u32 = 0x0101;
+pub(crate) const WM_CHAR: u32 = 0x0102;
+pub(crate) const WM_SYSKEYDOWN: u32 = 0x0104;
+pub(crate) const WM_SYSKEYUP: u32 = 0x0105;
+pub(crate) const WM_MOUSEMOVE: u32 = 0x0200;
+pub(crate) const WM_LBUTTONDOWN: u32 = 0x0201;
+pub(crate) const WM_LBUTTONUP: u32 = 0x0202;
+pub(crate) const WM_RBUTTONDOWN: u32 = 0x0204;
+pub(crate) const WM_RBUTTONUP: u32 = 0x0205;
+pub(crate) const WM_MBUTTONDOWN: u32 = 0x0207;
+pub(crate) const WM_MBUTTONUP: u32 = 0x0208;
+pub(crate) const WM_MOUSEWHEEL: u32 = 0x020A;
+pub(crate) const WM_XBUTTONDOWN: u32 = 0x020B;
+pub(crate) const WM_XBUTTONUP: u32 = 0x020C;
+pub(crate) const WM_MOUSEHWHEEL: u32 = 0x020E;
+pub(crate) const WM_MOUSELEAVE: u32 = 0x02A3;
+
+pub(crate) const WHEEL_DELTA: f32 = 120.0;
 pub(crate) const WM_DPICHANGED: u32 = 0x02E0;
 pub(crate) const WM_USER: u32 = 0x0400;
+
+pub(crate) const TME_LEAVE: u32 = 0x00000002;
+
+// Virtual key codes
+pub(crate) const VK_BACK: u32 = 0x08;
+pub(crate) const VK_TAB: u32 = 0x09;
+pub(crate) const VK_RETURN: u32 = 0x0D;
+pub(crate) const VK_SHIFT: u32 = 0x10;
+pub(crate) const VK_CONTROL: u32 = 0x11;
+pub(crate) const VK_MENU: u32 = 0x12;
+pub(crate) const VK_CAPITAL: u32 = 0x14;
+pub(crate) const VK_ESCAPE: u32 = 0x1B;
+pub(crate) const VK_SPACE: u32 = 0x20;
+pub(crate) const VK_PRIOR: u32 = 0x21;
+pub(crate) const VK_NEXT: u32 = 0x22;
+pub(crate) const VK_END: u32 = 0x23;
+pub(crate) const VK_HOME: u32 = 0x24;
+pub(crate) const VK_LEFT: u32 = 0x25;
+pub(crate) const VK_UP: u32 = 0x26;
+pub(crate) const VK_RIGHT: u32 = 0x27;
+pub(crate) const VK_DOWN: u32 = 0x28;
+pub(crate) const VK_INSERT: u32 = 0x2D;
+pub(crate) const VK_DELETE: u32 = 0x2E;
+pub(crate) const VK_LWIN: u32 = 0x5B;
+pub(crate) const VK_RWIN: u32 = 0x5C;
+pub(crate) const VK_F1: u32 = 0x70;
+pub(crate) const VK_F12: u32 = 0x7B;
+pub(crate) const VK_LSHIFT: u32 = 0xA0;
+pub(crate) const VK_RSHIFT: u32 = 0xA1;
+pub(crate) const VK_LCONTROL: u32 = 0xA2;
+pub(crate) const VK_RCONTROL: u32 = 0xA3;
+pub(crate) const VK_LMENU: u32 = 0xA4;
+pub(crate) const VK_RMENU: u32 = 0xA5;
+
+pub(crate) fn GET_X_LPARAM(lp: LPARAM) -> i32 {
+    (lp & 0xFFFF) as i16 as i32
+}
+pub(crate) fn GET_Y_LPARAM(lp: LPARAM) -> i32 {
+    ((lp >> 16) & 0xFFFF) as i16 as i32
+}
+
+pub(crate) fn GET_XBUTTON_WPARAM(wp: WPARAM) -> u16 {
+    ((wp >> 16) & 0xFFFF) as u16
+}
+
+pub(crate) fn GET_WHEEL_DELTA_WPARAM(wp: WPARAM) -> i16 {
+    ((wp >> 16) & 0xFFFF) as i16
+}
+
+#[repr(C)]
+pub(crate) struct TRACKMOUSEEVENT {
+    pub(crate) cbSize: u32,
+    pub(crate) dwFlags: u32,
+    pub(crate) hwndTrack: HWND,
+    pub(crate) dwHoverTime: u32,
+}
 
 pub(crate) const SW_SHOWNORMAL: i32 = 1;
 pub(crate) const SW_RESTORE: i32 = 9;
@@ -276,6 +352,8 @@ unsafe extern "system" {
     pub(crate) fn SetWindowPlacement(hWnd: HWND, lpwndpl: *const WINDOWPLACEMENT) -> BOOL;
     pub(crate) fn FindWindowA(lpClassName: *const c_char, lpWindowName: *const c_char) -> HWND;
     pub(crate) fn SetForegroundWindow(hWnd: HWND) -> BOOL;
+    pub(crate) fn TrackMouseEvent(lpEventTrack: *mut TRACKMOUSEEVENT) -> BOOL;
+    pub(crate) fn GetKeyState(nVirtKey: i32) -> i16;
 }
 
 #[cfg(target_pointer_width = "32")]
