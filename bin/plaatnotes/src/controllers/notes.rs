@@ -18,26 +18,7 @@ use crate::context::{Context, DatabaseHelpers};
 use crate::controllers::not_found;
 use crate::models::note::policies;
 use crate::models::{IndexQuery, Note, User, UserRole};
-
-fn preprocess_fts_query(q: &str) -> String {
-    // If the query already uses FTS5 syntax, pass it through unchanged
-    if q.contains(" AND ")
-        || q.contains(" OR ")
-        || q.contains(" NOT ")
-        || q.contains('"')
-        || q.contains('(')
-        || q.contains(')')
-        || q.contains('*')
-        || q.contains('-')
-    {
-        return q.to_string();
-    }
-    // Otherwise wrap each whitespace-separated token with a trailing * for prefix matching
-    q.split_whitespace()
-        .map(|token| format!("{token}*"))
-        .collect::<Vec<_>>()
-        .join(" OR ")
-}
+use crate::utils::preprocess_fts_query;
 
 pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication

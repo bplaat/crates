@@ -123,9 +123,9 @@ pub(crate) fn database_migrate(database: &Connection) -> Result<()> {
         )?;
     }
 
-    // Migration 3: create notes FTS tables
+    // Migration 3: create notes, users FTS tables
     if applied_version < 3 {
-        log::info!("Applying database migration 3: create notes FTS tables");
+        log::info!("Applying database migration 3: create notes, users FTS tables");
 
         database.create_fts_tables("notes", &["title", "body"])?;
         database.execute(
@@ -141,6 +141,31 @@ pub(crate) fn database_migrate(database: &Connection) -> Result<()> {
 
         database.execute(
             "INSERT INTO schema_migrations (version, applied_at) VALUES (3, unixepoch())",
+            (),
+        )?;
+    }
+
+    // Migration 4: create sessions FTS tables
+    if applied_version < 4 {
+        log::info!("Applying database migration 4: create sessions FTS tables");
+
+        database.create_fts_tables(
+            "sessions",
+            &[
+                "ip_address",
+                "ip_country",
+                "ip_city",
+                "client_name",
+                "client_os",
+            ],
+        )?;
+        database.execute(
+            "INSERT INTO sessions_fts(ip_address, ip_country, ip_city, client_name, client_os, id) SELECT ip_address, ip_country, ip_city, client_name, client_os, id FROM sessions",
+            (),
+        )?;
+
+        database.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (4, unixepoch())",
             (),
         )?;
     }

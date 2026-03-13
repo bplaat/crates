@@ -17,6 +17,7 @@ use crate::controllers::not_found;
 use crate::controllers::users::get_user;
 use crate::models::session::policies;
 use crate::models::{IndexQuery, Session, UserRole};
+use crate::utils::preprocess_fts_query;
 
 pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
@@ -40,73 +41,119 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Result<Response> {
     }
 
     // Get sessions for authenticated user or all sessions if admin
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
     let (total, sessions) = match policies::can_index(auth_user) {
         true => {
             // Admin sees all sessions
-            let total = query_args!(
-                i64,
-                ctx.database,
-                "SELECT COUNT(id) FROM sessions WHERE (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
-                Args {
-                    search_query: search_query.clone()
-                }
-            )
-            ?
-            .next()
-            .transpose()?
-            .unwrap_or(0);
-            let sessions = query_args!(
-                Session,
-                ctx.database,
-                formatcp!(
-                    "SELECT {} FROM sessions WHERE (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
-                    Session::columns()
-                ),
-                Args {
-                    search_query: search_query,
-                    limit: query.limit,
-                    offset: (query.page - 1) * query.limit
-                }
-            )
-            ?
-            .map(|r| r.map(Into::into))
-            .collect::<Result<Vec<_>, _>>()?;
-            (total, sessions)
+            if query.query.is_empty() {
+                let total = ctx
+                    .database
+                    .query_some::<i64>("SELECT COUNT(id) FROM sessions", ())?;
+                let sessions = query_args!(
+                    Session,
+                    ctx.database,
+                    formatcp!(
+                        "SELECT {} FROM sessions ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                        Session::columns()
+                    ),
+                    Args {
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                ?
+                .map(|r| r.map(Into::into))
+                .collect::<Result<Vec<_>, _>>()?;
+                (total, sessions)
+            } else {
+                let total = ctx
+                    .database
+                    .query_some::<i64>(
+                        "SELECT COUNT(id) FROM sessions WHERE id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH ?)",
+                        preprocess_fts_query(&query.query),
+                    )?;
+                let sessions = query_args!(
+                    Session,
+                    ctx.database,
+                    formatcp!(
+                        "SELECT {} FROM sessions WHERE id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                        Session::columns()
+                    ),
+                    Args {
+                        fts_query: preprocess_fts_query(&query.query),
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                ?
+                .map(|r| r.map(Into::into))
+                .collect::<Result<Vec<_>, _>>()?;
+                (total, sessions)
+            }
         }
         false => {
             // Normal user sees only their own sessions
-            let total = query_args!(
-                i64,
-                ctx.database,
-                "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
-                Args {
-                    user_id: auth_user.id,
-                    search_query: search_query.clone()
-                }
-            )
-            ?
-            .next()
-            .transpose()?
-            .unwrap_or(0);
-            let sessions = query_args!(
-                Session,
-                ctx.database,
-                formatcp!(
-                    "SELECT {} FROM sessions WHERE user_id = :user_id AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
-                    Session::columns()
-                ),
-                Args {
-                    user_id: auth_user.id,
-                    search_query: search_query,
-                    limit: query.limit,
-                    offset: (query.page - 1) * query.limit
-                }
-            )
-            ?
-            .map(|r| r.map(Into::into))
-            .collect::<Result<Vec<_>, _>>()?;
-            (total, sessions)
+            if query.query.is_empty() {
+                let total = query_args!(
+                    i64,
+                    ctx.database,
+                    "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id",
+                    Args {
+                        user_id: auth_user.id
+                    }
+                )?
+                .next()
+                .transpose()?
+                .unwrap_or(0);
+                let sessions = query_args!(
+                    Session,
+                    ctx.database,
+                    formatcp!(
+                        "SELECT {} FROM sessions WHERE user_id = :user_id ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                        Session::columns()
+                    ),
+                    Args {
+                        user_id: auth_user.id,
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                ?
+                .map(|r| r.map(Into::into))
+                .collect::<Result<Vec<_>, _>>()?;
+                (total, sessions)
+            } else {
+                let total = query_args!(
+                    i64,
+                    ctx.database,
+                    "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query)",
+                    Args {
+                        user_id: auth_user.id,
+                        fts_query: preprocess_fts_query(&query.query)
+                    }
+                )
+                ?
+                .next()
+                .transpose()?
+                .unwrap_or(0);
+                let sessions = query_args!(
+                    Session,
+                    ctx.database,
+                    formatcp!(
+                        "SELECT {} FROM sessions WHERE user_id = :user_id AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                        Session::columns()
+                    ),
+                    Args {
+                        user_id: auth_user.id,
+                        fts_query: preprocess_fts_query(&query.query),
+                        limit: query.limit,
+                        offset: (query.page - 1) * query.limit
+                    }
+                )
+                ?
+                .map(|r| r.map(Into::into))
+                .collect::<Result<Vec<_>, _>>()?;
+                (total, sessions)
+            }
         }
     };
 
@@ -201,23 +248,71 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Result<
         );
     }
 
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
     let now = chrono::Utc::now();
-    let (total, sessions) = if active_only {
+    let (total, sessions) = if query.query.is_empty() {
+        if active_only {
+            let total = query_args!(
+                i64,
+                ctx.database,
+                "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now",
+                Args {
+                    user_id: user.id,
+                    now: now
+                }
+            )?
+            .next()
+            .transpose()?
+            .unwrap_or(0);
+            let sessions = query_args!(
+                Session,
+                ctx.database,
+                formatcp!(
+                    "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                    Session::columns()
+                ),
+                Args { user_id: user.id, now: now, limit: query.limit, offset: (query.page - 1) * query.limit }
+            )?
+            .map(|r| r.map(Into::into))
+            .collect::<Result<Vec<_>, _>>()?;
+            (total, sessions)
+        } else {
+            let total = query_args!(
+                i64,
+                ctx.database,
+                "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id",
+                Args { user_id: user.id }
+            )?
+            .next()
+            .transpose()?
+            .unwrap_or(0);
+            let sessions = query_args!(
+                Session,
+                ctx.database,
+                formatcp!(
+                    "SELECT {} FROM sessions WHERE user_id = :user_id ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                    Session::columns()
+                ),
+                Args { user_id: user.id, limit: query.limit, offset: (query.page - 1) * query.limit }
+            )?
+            .map(|r| r.map(Into::into))
+            .collect::<Result<Vec<_>, _>>()?;
+            (total, sessions)
+        }
+    } else if active_only {
         let total = query_args!(
             i64,
             ctx.database,
-            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
-            Args { user_id: user.id, now: now, search_query: search_query.clone() }
+            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query)",
+            Args { user_id: user.id, now: now, fts_query: preprocess_fts_query(&query.query) }
         )?.next().transpose()?.unwrap_or(0);
         let sessions = query_args!(
             Session,
             ctx.database,
             formatcp!(
-                "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                 Session::columns()
             ),
-            Args { user_id: user.id, now: now, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
+            Args { user_id: user.id, now: now, fts_query: preprocess_fts_query(&query.query), limit: query.limit, offset: (query.page - 1) * query.limit }
         )?
         .map(|r| r.map(Into::into))
         .collect::<Result<Vec<_>, _>>()?;
@@ -226,10 +321,10 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Result<
         let total = query_args!(
             i64,
             ctx.database,
-            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
+            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query)",
             Args {
                 user_id: user.id,
-                search_query: search_query.clone()
+                fts_query: preprocess_fts_query(&query.query)
             }
         )
         ?
@@ -240,10 +335,10 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Result<
             Session,
             ctx.database,
             formatcp!(
-                "SELECT {} FROM sessions WHERE user_id = :user_id AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                "SELECT {} FROM sessions WHERE user_id = :user_id AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                 Session::columns()
             ),
-            Args { user_id: user.id, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
+            Args { user_id: user.id, fts_query: preprocess_fts_query(&query.query), limit: query.limit, offset: (query.page - 1) * query.limit }
         )?
         .map(|r| r.map(Into::into))
         .collect::<Result<Vec<_>, _>>()?;
@@ -289,25 +384,52 @@ pub(crate) fn sessions_active(req: &Request, ctx: &Context) -> Result<Response> 
         );
     }
 
-    let search_query = format!("%{}%", query.query.replace("%", "\\%"));
     let now = chrono::Utc::now();
-    let total = query_args!(
-        i64,
-        ctx.database,
-        "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
-        Args { user_id: auth_user.id, now: now, search_query: search_query.clone() }
-    )?.next().transpose()?.unwrap_or(0);
-    let sessions = query_args!(
-        Session,
-        ctx.database,
-        formatcp!(
-            "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
-            Session::columns()
-        ),
-        Args { user_id: auth_user.id, now: now, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
-    )?
-    .map(|r| r.map(Into::into))
-    .collect::<Result<Vec<_>, _>>()?;
+    let (total, sessions) = if query.query.is_empty() {
+        let total = query_args!(
+            i64,
+            ctx.database,
+            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now",
+            Args {
+                user_id: auth_user.id,
+                now: now
+            }
+        )?
+        .next()
+        .transpose()?
+        .unwrap_or(0);
+        let sessions = query_args!(
+            Session,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                Session::columns()
+            ),
+            Args { user_id: auth_user.id, now: now, limit: query.limit, offset: (query.page - 1) * query.limit }
+        )?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
+        (total, sessions)
+    } else {
+        let total = query_args!(
+            i64,
+            ctx.database,
+            "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query)",
+            Args { user_id: auth_user.id, now: now, fts_query: preprocess_fts_query(&query.query) }
+        )?.next().transpose()?.unwrap_or(0);
+        let sessions = query_args!(
+            Session,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                Session::columns()
+            ),
+            Args { user_id: auth_user.id, now: now, fts_query: preprocess_fts_query(&query.query), limit: query.limit, offset: (query.page - 1) * query.limit }
+        )?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
+        (total, sessions)
+    };
 
     Ok(Response::with_json(api::SessionIndexResponse {
         pagination: api::Pagination {

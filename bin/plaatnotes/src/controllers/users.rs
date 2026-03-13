@@ -19,6 +19,7 @@ use crate::controllers::not_found;
 use crate::models::user::validators::{is_unique_email, is_unique_email_or_target_user_email};
 use crate::models::user::{UserRole, UserTheme, policies};
 use crate::models::{IndexQuery, Note, User};
+use crate::utils::preprocess_fts_query;
 
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
@@ -71,7 +72,7 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
             .database
             .query_some::<i64>(
                 "SELECT COUNT(id) FROM users WHERE id IN (SELECT id FROM users_fts WHERE users_fts MATCH ?)",
-                query.query.clone(),
+                preprocess_fts_query(&query.query),
             )?;
         let users = query_args!(
             User,
@@ -82,7 +83,7 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
                 User::columns()
             ),
             Args {
-                fts_query: query.query,
+                fts_query: preprocess_fts_query(&query.query),
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }
@@ -457,7 +458,7 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Result<Response> {
             ctx.database,
             "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
             id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
-            Args { user_id: user.id, fts_query: query.query.clone() }
+            Args { user_id: user.id, fts_query: preprocess_fts_query(&query.query) }
         )
         ?
         .next()
@@ -474,7 +475,7 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Result<Response> {
             ),
             Args {
                 user_id: user.id,
-                fts_query: query.query,
+                fts_query: preprocess_fts_query(&query.query),
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }
@@ -579,7 +580,7 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Re
             ),
             Args {
                 user_id: user.id,
-                fts_query: query.query.clone()
+                fts_query: preprocess_fts_query(&query.query)
             }
         )?
         .next()
@@ -596,7 +597,7 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Re
             ),
             Args {
                 user_id: user.id,
-                fts_query: query.query,
+                fts_query: preprocess_fts_query(&query.query),
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }

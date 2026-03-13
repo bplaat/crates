@@ -33,6 +33,7 @@ mod models;
 mod tasks;
 #[cfg(test)]
 mod test_utils;
+mod utils;
 
 pub(crate) fn router(ctx: Context) -> Router<Context> {
     // Guests routes
