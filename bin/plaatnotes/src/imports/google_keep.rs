@@ -52,7 +52,7 @@ fn import_note_from_json(json_bytes: &[u8], ctx: &Context, user_id: uuid::Uuid, 
             .unwrap_or_else(Utc::now),
         ..Default::default()
     };
-    ctx.database.insert_note(note);
+    ctx.database.insert_note(note).expect("Database error");
     *count += 1;
 }
 

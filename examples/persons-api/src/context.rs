@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
 
@@ -16,40 +17,37 @@ pub(crate) struct Context {
 }
 
 impl Context {
-    pub(crate) fn with_database(path: &str) -> Self {
-        let database = Connection::open(path, OpenMode::ReadWrite).expect("Can't open database");
-        database.enable_wal_logging().expect("Database error");
-        database
-            .apply_various_performance_settings()
-            .expect("Database error");
-        database_create_tables(&database);
-        database_seed(&database);
-        Self { database }
+    pub(crate) fn with_database(path: &str) -> Result<Self> {
+        let database = Connection::open(path, OpenMode::ReadWrite)?;
+        database.enable_wal_logging()?;
+        database.apply_various_performance_settings()?;
+        database_create_tables(&database)?;
+        database_seed(&database)?;
+        Ok(Self { database })
     }
 
     #[cfg(test)]
     pub(crate) fn with_test_database() -> Self {
-        let database = Connection::open_memory().expect("Can't open database");
-        database_create_tables(&database);
+        let database = Connection::open_memory().expect("Can't open in memory database");
+        database_create_tables(&database).expect("Can't create tables in database");
         Self { database }
     }
 }
 
 // MARK: Database Helpers
 pub(crate) trait DatabaseHelpers {
-    fn create_fts_tables(&self, table: &str);
-    fn insert_person(&self, person: Person);
+    fn create_fts_tables(&self, table: &str) -> Result<()>;
+    fn insert_person(&self, person: Person) -> Result<()>;
 }
 
 impl DatabaseHelpers for Connection {
-    fn create_fts_tables(&self, table: &str) {
+    fn create_fts_tables(&self, table: &str) -> Result<()> {
         self.execute(
             format!(
                 "CREATE VIRTUAL TABLE IF NOT EXISTS {table}_fts USING fts5(name, id UNINDEXED)"
             ),
             (),
-        )
-        .expect("Database error");
+        )?;
 
         self.execute(
             format!(
@@ -58,8 +56,7 @@ impl DatabaseHelpers for Connection {
                 END"
             ),
             (),
-        )
-        .expect("Database error");
+        )?;
 
         self.execute(
             format!(
@@ -68,8 +65,7 @@ impl DatabaseHelpers for Connection {
                 END"
             ),
             (),
-        )
-        .expect("Database error");
+        )?;
 
         self.execute(
             format!(
@@ -78,11 +74,12 @@ impl DatabaseHelpers for Connection {
                 END"
             ),
             (),
-        )
-        .expect("Database error");
+        )?;
+
+        Ok(())
     }
 
-    fn insert_person(&self, person: Person) {
+    fn insert_person(&self, person: Person) -> Result<()> {
         self.execute(
             formatcp!(
                 "INSERT INTO persons ({}) VALUES ({})",
@@ -90,57 +87,53 @@ impl DatabaseHelpers for Connection {
                 Person::values()
             ),
             person,
-        )
-        .expect("Database error");
+        )?;
+        Ok(())
     }
 }
 
-fn database_create_tables(database: &Connection) {
-    database
-        .execute(
-            "CREATE TABLE IF NOT EXISTS persons(
+fn database_create_tables(database: &Connection) -> Result<()> {
+    database.execute(
+        "CREATE TABLE IF NOT EXISTS persons(
             id BLOB PRIMARY KEY,
             name TEXT NOT NULL,
             age INTEGER NOT NULL,
             relation INTEGER NOT NULL,
             created_at INTEGER NOT NULL
         ) STRICT",
-            (),
-        )
-        .expect("Database error");
-    database.create_fts_tables("persons");
+        (),
+    )?;
+    database.create_fts_tables("persons")?;
+    Ok(())
 }
 
-fn database_seed(database: &Connection) {
+fn database_seed(database: &Connection) -> Result<()> {
     // Insert persons
-    if database
-        .query_some::<i64>("SELECT COUNT(id) FROM persons", ())
-        .expect("Database error")
-        == 0
-    {
+    if database.query_some::<i64>("SELECT COUNT(id) FROM persons", ())? == 0 {
         database.insert_person(Person {
             name: "Bastiaan".to_string(),
             age_in_years: 20,
             relation: Relation::Me,
             ..Default::default()
-        });
+        })?;
         database.insert_person(Person {
             name: "Sander".to_string(),
             age_in_years: 19,
             relation: Relation::Brother,
             ..Default::default()
-        });
+        })?;
         database.insert_person(Person {
             name: "Leonard".to_string(),
             age_in_years: 16,
             relation: Relation::Brother,
             ..Default::default()
-        });
+        })?;
         database.insert_person(Person {
             name: "Jiska".to_string(),
             age_in_years: 14,
             relation: Relation::Sister,
             ..Default::default()
-        });
+        })?;
     }
+    Ok(())
 }

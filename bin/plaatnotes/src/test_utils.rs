@@ -35,7 +35,9 @@ pub(crate) fn create_test_user_with_session_and_role(
         role,
         ..Default::default()
     };
-    ctx.database.insert_user(user.clone());
+    ctx.database
+        .insert_user(user.clone())
+        .expect("Database error");
 
     // Create session with token
     let token = format!("test-token-{}", user.id);
@@ -45,7 +47,9 @@ pub(crate) fn create_test_user_with_session_and_role(
         expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
         ..Default::default()
     };
-    ctx.database.insert_session(session);
+    ctx.database
+        .insert_session(session)
+        .expect("Database error");
 
     (user, token)
 }

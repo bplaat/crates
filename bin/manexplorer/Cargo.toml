@@ -15,6 +15,7 @@ icon = "meta/macos/icon.icon"
 workspace = true
 
 [dependencies]
+anyhow = "1"
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
 rust-embed = "8.7"
 serde = { version = "1.0", features = ["derive"] }

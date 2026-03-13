@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use small_http::{Request, Response, Status};
 
 pub(crate) use self::persons::*;
@@ -11,12 +12,15 @@ use crate::Context;
 
 pub(crate) mod persons;
 
-pub(crate) fn home(_: &Request, _: &Context) -> Response {
-    Response::with_body(concat!("Persons v", env!("CARGO_PKG_VERSION")))
+pub(crate) fn home(_: &Request, _: &Context) -> Result<Response> {
+    Ok(Response::with_body(concat!(
+        "Persons v",
+        env!("CARGO_PKG_VERSION")
+    )))
 }
 
-pub(crate) fn not_found(_: &Request, _: &Context) -> Response {
-    Response::with_status(Status::NotFound).body("404 Not found")
+pub(crate) fn not_found(_: &Request, _: &Context) -> Result<Response> {
+    Ok(Response::with_status(Status::NotFound).body("404 Not found"))
 }
 
 // MARK: Tests

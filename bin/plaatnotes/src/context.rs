@@ -6,6 +6,7 @@
 
 use std::path::Path;
 
+use anyhow::Result;
 use bsqlite::{Connection, OpenMode};
 use const_format::formatcp;
 use uuid::Uuid;
@@ -22,59 +23,45 @@ pub(crate) struct Context {
     pub update_target_user_id: Option<Uuid>,
 }
 
-impl Default for Context {
-    fn default() -> Self {
-        Self {
-            database: Connection::open_memory().expect("Can't open in-memory database"),
-            auth_session: None,
-            auth_user: None,
-            update_target_user_id: None,
-        }
-    }
-}
-
 impl Context {
     #[allow(dead_code)]
-    pub(crate) fn with_database(path: impl AsRef<Path>) -> Self {
+    pub(crate) fn with_database(path: impl AsRef<Path>) -> Result<Self> {
         log::info!("Using database at {}", path.as_ref().display());
-        let database =
-            Connection::open(path.as_ref(), OpenMode::ReadWrite).expect("Can't open database");
-        database.enable_wal_logging().expect("Database error");
-        database
-            .apply_various_performance_settings()
-            .expect("Database error");
-        database_migrate(&database);
-        Self {
+        let database = Connection::open(path.as_ref(), OpenMode::ReadWrite)?;
+        database.enable_wal_logging()?;
+        database.apply_various_performance_settings()?;
+        database_migrate(&database)?;
+        Ok(Self {
             database,
             auth_session: None,
             auth_user: None,
             update_target_user_id: None,
-        }
+        })
     }
 
     #[cfg(any(test, feature = "test-e2e"))]
-    pub(crate) fn with_test_database() -> Self {
-        let database = Connection::open_memory().expect("Can't open in-memory database");
-        database_migrate(&database);
-        Self {
+    pub(crate) fn with_test_database() -> Result<Self> {
+        let database = Connection::open_memory()?;
+        database_migrate(&database)?;
+        Ok(Self {
             database,
             auth_session: None,
             auth_user: None,
             update_target_user_id: None,
-        }
+        })
     }
 }
 
 // MARK: Database helpers
 pub(crate) trait DatabaseHelpers {
-    fn create_fts_tables(&self, table: &str, columns: &[&str]);
-    fn insert_user(&self, user: User);
-    fn insert_session(&self, session: Session);
-    fn insert_note(&self, note: Note);
+    fn create_fts_tables(&self, table: &str, columns: &[&str]) -> Result<()>;
+    fn insert_user(&self, user: User) -> Result<()>;
+    fn insert_session(&self, session: Session) -> Result<()>;
+    fn insert_note(&self, note: Note) -> Result<()>;
 }
 
 impl DatabaseHelpers for Connection {
-    fn create_fts_tables(&self, table: &str, columns: &[&str]) {
+    fn create_fts_tables(&self, table: &str, columns: &[&str]) -> Result<()> {
         let cols = columns.join(", ");
         let new_cols = columns
             .iter()
@@ -92,8 +79,7 @@ impl DatabaseHelpers for Connection {
                 "CREATE VIRTUAL TABLE IF NOT EXISTS {table}_fts USING fts5({cols}, id UNINDEXED)"
             ),
             (),
-        )
-        .expect("Database error");
+        )?;
 
         self.execute(
             format!(
@@ -102,8 +88,7 @@ impl DatabaseHelpers for Connection {
                 END"
             ),
             (),
-        )
-        .expect("Database error");
+        )?;
 
         self.execute(
             format!(
@@ -112,8 +97,7 @@ impl DatabaseHelpers for Connection {
                 END"
             ),
             (),
-        )
-        .expect("Database error");
+        )?;
 
         self.execute(
             format!(
@@ -122,11 +106,12 @@ impl DatabaseHelpers for Connection {
                 END"
             ),
             (),
-        )
-        .expect("Database error");
+        )?;
+
+        Ok(())
     }
 
-    fn insert_user(&self, user: User) {
+    fn insert_user(&self, user: User) -> Result<()> {
         self.execute(
             formatcp!(
                 "INSERT INTO users ({}) VALUES ({})",
@@ -134,11 +119,11 @@ impl DatabaseHelpers for Connection {
                 User::values()
             ),
             user,
-        )
-        .expect("Database error");
+        )?;
+        Ok(())
     }
 
-    fn insert_session(&self, session: Session) {
+    fn insert_session(&self, session: Session) -> Result<()> {
         self.execute(
             formatcp!(
                 "INSERT INTO sessions ({}) VALUES ({})",
@@ -146,11 +131,11 @@ impl DatabaseHelpers for Connection {
                 Session::values()
             ),
             session,
-        )
-        .expect("Database error");
+        )?;
+        Ok(())
     }
 
-    fn insert_note(&self, note: Note) {
+    fn insert_note(&self, note: Note) -> Result<()> {
         self.execute(
             formatcp!(
                 "INSERT INTO notes ({}) VALUES ({})",
@@ -158,7 +143,7 @@ impl DatabaseHelpers for Connection {
                 Note::values()
             ),
             note,
-        )
-        .expect("Database error");
+        )?;
+        Ok(())
     }
 }

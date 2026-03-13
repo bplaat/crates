@@ -54,7 +54,7 @@ fn main() {
 
     // Create router and load database
     let database_path = env::var("DATABASE_PATH").unwrap_or_else(|_| "database.db".to_string());
-    let context = Context::with_database(&database_path);
+    let context = Context::with_database(&database_path).expect("Can't open/create database");
     let router = router(context);
 
     if env::var("GATEWAY_INTERFACE").is_ok() {

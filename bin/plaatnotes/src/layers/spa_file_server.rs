@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use rust_embed::Embed;
 use small_http::{Request, Response};
 
@@ -13,7 +14,10 @@ use crate::Context;
 #[folder = "$OUT_DIR/web"]
 struct WebAssets;
 
-pub(crate) fn spa_file_server_pre_layer(req: &Request, _: &mut Context) -> Option<Response> {
+pub(crate) fn spa_file_server_pre_layer(
+    req: &Request,
+    _: &mut Context,
+) -> Option<Result<Response>> {
     let path = req.url.path();
     if path.starts_with("/api") {
         return None;
@@ -25,14 +29,14 @@ pub(crate) fn spa_file_server_pre_layer(req: &Request, _: &mut Context) -> Optio
     }
     if let Some(file) = WebAssets::get(path.trim_start_matches('/')) {
         let mime = mime_guess::from_path(&path).first_or_octet_stream();
-        Some(Response::with_header("Content-Type", mime.to_string()).body(file.data))
+        Some(Ok(
+            Response::with_header("Content-Type", mime.to_string()).body(file.data)
+        ))
     } else {
-        Some(
-            Response::with_header("Content-Type", "text/html").body(
-                WebAssets::get("index.html")
-                    .expect("index.html should exists")
-                    .data,
-            ),
-        )
+        Some(Ok(Response::with_header("Content-Type", "text/html").body(
+            WebAssets::get("index.html")
+                .expect("index.html should exists")
+                .data,
+        )))
     }
 }

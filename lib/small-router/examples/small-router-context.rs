@@ -9,6 +9,7 @@
 use std::net::{Ipv4Addr, TcpListener};
 use std::sync::{Arc, RwLock};
 
+use anyhow::Result;
 use small_http::{Request, Response, Status};
 use small_router::RouterBuilder;
 
@@ -17,28 +18,28 @@ struct Context {
     shared_data: Arc<RwLock<String>>,
 }
 
-fn home(_req: &Request, ctx: &Context) -> Response {
+fn home(_req: &Request, ctx: &Context) -> Result<Response> {
     ctx.shared_data
         .write()
         .expect("Can't lock")
         .push_str(" World");
     println!("{}", ctx.shared_data.read().expect("Can't lock"));
 
-    Response::with_body("Home")
+    Ok(Response::with_body("Home"))
 }
 
-fn about(_req: &Request, ctx: &Context) -> Response {
+fn about(_req: &Request, ctx: &Context) -> Result<Response> {
     ctx.shared_data
         .write()
         .expect("Can't lock")
         .push_str(" About");
     println!("{}", ctx.shared_data.read().expect("Can't lock"));
 
-    Response::with_body("About")
+    Ok(Response::with_body("About"))
 }
 
-fn not_found(_req: &Request, _ctx: &Context) -> Response {
-    Response::with_status(Status::NotFound).body("404 Not Found")
+fn not_found(_req: &Request, _ctx: &Context) -> Result<Response> {
+    Ok(Response::with_status(Status::NotFound).body("404 Not Found"))
 }
 
 fn main() {

@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple small-router example
+//! A small-router example with error handling
 
 use std::net::{Ipv4Addr, TcpListener};
 
@@ -16,22 +16,18 @@ fn home(_req: &Request, _ctx: &()) -> Result<Response> {
     Ok(Response::with_body("Home"))
 }
 
-fn hello(req: &Request, _ctx: &()) -> Result<Response> {
-    Ok(Response::with_body(format!(
-        "Hello, {}!",
-        req.params.get("name").unwrap_or(&"World".to_string())
-    )))
-}
-
-fn not_found(_req: &Request, _ctx: &()) -> Result<Response> {
-    Ok(Response::with_status(Status::NotFound).body("404 Not Found"))
+fn error(_req: &Request, _ctx: &()) -> Result<Response> {
+    Err(anyhow::anyhow!("Something went wrong"))
 }
 
 fn main() {
     let router = RouterBuilder::new()
         .get("/", home)
-        .get("/hello/:name", hello)
-        .fallback(not_found)
+        .get("/error", error)
+        .error(|_req, _ctx, err| {
+            eprintln!("Oops, an error occurred: {err}");
+            Response::with_status(Status::InternalServerError).body("500 Internal Server Error")
+        })
         .build();
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 8080))

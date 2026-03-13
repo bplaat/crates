@@ -109,25 +109,29 @@ fn main() {
     // Init context
     #[cfg(feature = "test-e2e")]
     let context = {
-        use crate::models::{User, UserRole};
-        let ctx = Context::with_test_database();
         use crate::context::DatabaseHelpers;
-        ctx.database.insert_user(User {
-            first_name: "Test".to_string(),
-            last_name: "User".to_string(),
-            email: "test@example.com".to_string(),
-            password: pbkdf2::password_hash("password"),
-            role: UserRole::Normal,
-            ..Default::default()
-        });
-        ctx.database.insert_user(User {
-            first_name: "Test".to_string(),
-            last_name: "Admin".to_string(),
-            email: "testadmin@example.com".to_string(),
-            password: pbkdf2::password_hash("password"),
-            role: UserRole::Admin,
-            ..Default::default()
-        });
+        use crate::models::{User, UserRole};
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        ctx.database
+            .insert_user(User {
+                first_name: "Test".to_string(),
+                last_name: "User".to_string(),
+                email: "test@example.com".to_string(),
+                password: pbkdf2::password_hash("password"),
+                role: UserRole::Normal,
+                ..Default::default()
+            })
+            .expect("Database error");
+        ctx.database
+            .insert_user(User {
+                first_name: "Test".to_string(),
+                last_name: "Admin".to_string(),
+                email: "testadmin@example.com".to_string(),
+                password: pbkdf2::password_hash("password"),
+                role: UserRole::Admin,
+                ..Default::default()
+            })
+            .expect("Database error");
         ctx
     };
     #[cfg(not(feature = "test-e2e"))]
@@ -135,7 +139,8 @@ fn main() {
         path
     } else {
         "database.db".to_string()
-    });
+    })
+    .expect("Can't open/create database");
 
     if args.subcommand == Subcommand::ImportGoogleKeep {
         let path = args.path.unwrap_or_else(|| {

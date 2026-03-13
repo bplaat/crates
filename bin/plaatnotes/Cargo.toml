@@ -9,6 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+anyhow = "1"
 base64 = "0.22"
 bsqlite = { version = "0.1.2", features = ["uuid", "chrono"] }
 chrono = { version = "0.4", default-features = false, features = [

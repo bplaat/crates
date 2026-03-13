@@ -9,6 +9,7 @@
 
 use std::process::Command;
 
+use anyhow::Result;
 use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder};
 use rust_embed::Embed;
 use serde::Serialize;
@@ -25,7 +26,7 @@ struct ManPage {
     names: Vec<String>,
 }
 
-fn man_index(_req: &Request, _ctx: &()) -> Response {
+fn man_index(_req: &Request, _ctx: &()) -> Result<Response> {
     // List all directories in /usr/share/man
     let mut pages = Vec::new();
     if let Ok(dir_iter) = std::fs::read_dir("/usr/share/man") {
@@ -67,26 +68,21 @@ fn man_index(_req: &Request, _ctx: &()) -> Response {
         }
     }
     pages.sort_by_key(|entry| entry.page);
-    Response::with_json(&pages)
+    Ok(Response::with_json(&pages))
 }
 
-fn man_show(req: &Request, _ctx: &()) -> Response {
-    let page = req
-        .params
-        .get("page")
-        .expect("page param should be present");
-    let name = req
-        .params
-        .get("name")
-        .expect("name param should be present");
+fn man_show(req: &Request, _ctx: &()) -> Result<Response> {
+    let page = req.params.get("page").expect("Should be some");
+    let name = req.params.get("name").expect("Should be some");
     let output = Command::new("man")
         .arg("-P")
         .arg("col -b")
         .arg(page)
         .arg(name)
-        .output()
-        .expect("Failed to execute man command");
-    Response::with_body(String::from_utf8_lossy(&output.stdout).to_string())
+        .output()?;
+    Ok(Response::with_body(
+        String::from_utf8_lossy(&output.stdout).to_string(),
+    ))
 }
 
 fn main() {
