@@ -19,6 +19,26 @@ use crate::controllers::not_found;
 use crate::models::note::policies;
 use crate::models::{IndexQuery, Note, User, UserRole};
 
+fn preprocess_fts_query(q: &str) -> String {
+    // If the query already uses FTS5 syntax, pass it through unchanged
+    if q.contains(" AND ")
+        || q.contains(" OR ")
+        || q.contains(" NOT ")
+        || q.contains('"')
+        || q.contains('(')
+        || q.contains(')')
+        || q.contains('*')
+        || q.contains('-')
+    {
+        return q.to_string();
+    }
+    // Otherwise wrap each whitespace-separated token with a trailing * for prefix matching
+    q.split_whitespace()
+        .map(|token| format!("{token}*"))
+        .collect::<Vec<_>>()
+        .join(" OR ")
+}
+
 pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let user = match &ctx.auth_user {
@@ -79,7 +99,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Result<Response> {
                     ctx.database,
                     "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND
                     id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
-                    Args { fts_query: query.query.clone() }
+                    Args { fts_query: preprocess_fts_query(&query.query) }
                 )
                 ?
                 .next()
@@ -95,7 +115,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Result<Response> {
                         Note::columns()
                     ),
                     Args {
-                        fts_query: query.query,
+                        fts_query: preprocess_fts_query(&query.query),
                         limit: query.limit,
                         offset: (query.page - 1) * query.limit
                     }
@@ -143,7 +163,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Result<Response> {
                     ctx.database,
                     "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
                     id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
-                    Args { user_id: user.id, fts_query: query.query.clone() }
+                    Args { user_id: user.id, fts_query: preprocess_fts_query(&query.query) }
                 )
                 ?
                 .next()
@@ -160,7 +180,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Result<Response> {
                     ),
                     Args {
                         user_id: user.id,
-                        fts_query: query.query,
+                        fts_query: preprocess_fts_query(&query.query),
                         limit: query.limit,
                         offset: (query.page - 1) * query.limit
                     }
@@ -229,6 +249,21 @@ pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Result<Response> {
         is_trashed: false,
         ..Default::default()
     };
+
+    // Shift all existing notes in the same category down so the new note appears first
+    let position_filter = if note.is_pinned {
+        "is_trashed = 0 AND is_pinned = 1"
+    } else {
+        "is_trashed = 0 AND is_archived = 0 AND is_pinned = 0"
+    };
+    execute_args!(
+        ctx.database,
+        &format!(
+            "UPDATE notes SET position = position + 1 WHERE {position_filter} AND user_id = :user_id"
+        ),
+        Args { user_id: user.id }
+    )?;
+
     ctx.database.insert_note(note.clone())?;
 
     // Return created note
@@ -502,7 +537,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response
                     i64,
                     ctx.database,
                     &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)"),
-                    Args { fts_query: query.query.clone() }
+                    Args { fts_query: preprocess_fts_query(&query.query) }
                 )
                 ?
                 .next()
@@ -517,7 +552,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response
                         Note::columns()
                     ),
                     Args {
-                        fts_query: query.query,
+                        fts_query: preprocess_fts_query(&query.query),
                         limit: query.limit,
                         offset: (query.page - 1) * query.limit
                     }
@@ -569,7 +604,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response
                     ),
                     Args {
                         user_id: user.id,
-                        fts_query: query.query.clone()
+                        fts_query: preprocess_fts_query(&query.query)
                     }
                 )?
                 .next()
@@ -586,7 +621,7 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response
                     ),
                     Args {
                         user_id: user.id,
-                        fts_query: query.query,
+                        fts_query: preprocess_fts_query(&query.query),
                         limit: query.limit,
                         offset: (query.page - 1) * query.limit
                     }

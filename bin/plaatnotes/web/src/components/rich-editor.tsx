@@ -66,10 +66,12 @@ interface RichEditorProps {
     onInput: (markdown: string) => void;
     placeholder?: string;
     class?: string;
+    autoFocus?: boolean;
 }
 
-export function RichEditor({ value, onInput, placeholder, class: className }: RichEditorProps) {
+export function RichEditor({ value, onInput, placeholder, class: className, autoFocus }: RichEditorProps) {
     const editorRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const lastEmittedRef = useRef<string>(value);
     const [isEmpty, setIsEmpty] = useState(!value.trim());
     const [plainMode, setPlainMode] = useState(() => localStorage.getItem('editor-mode') === 'plain');
@@ -79,6 +81,16 @@ export function RichEditor({ value, onInput, placeholder, class: className }: Ri
         if (!editorRef.current) return;
         editorRef.current.innerHTML = marked.parse(value || '') as string;
         setIsEmpty(!value.trim());
+    }, []);
+
+    // Programmatic autofocus on mount — works on every SPA navigation unlike HTML autofocus attribute
+    useEffect(() => {
+        if (!autoFocus) return;
+        const id = requestAnimationFrame(() => {
+            if (plainMode) textareaRef.current?.focus();
+            else editorRef.current?.focus();
+        });
+        return () => cancelAnimationFrame(id);
     }, []);
 
     useEffect(() => {
@@ -248,6 +260,7 @@ export function RichEditor({ value, onInput, placeholder, class: className }: Ri
             </div>
             {plainMode ? (
                 <textarea
+                    ref={textareaRef}
                     class="flex-1 p-5 outline-none min-h-[12rem] font-mono text-sm text-gray-700 dark:text-gray-300 bg-transparent resize-none placeholder-gray-400 dark:placeholder-gray-600"
                     placeholder={placeholder}
                     value={value}
