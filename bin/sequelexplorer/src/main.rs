@@ -10,6 +10,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use anyhow::Result;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use bsqlite::{ColumnType, Connection, OpenMode, StatementError, Value};
@@ -52,10 +53,10 @@ fn get_connection(
 }
 
 // MARK: Tables
-fn db_tables(_req: &Request, state: &State) -> Response {
+fn db_tables(_req: &Request, state: &State) -> Result<Response> {
     let guard = match get_connection(state) {
         Ok(g) => g,
-        Err(e) => return e,
+        Err(e) => return Ok(e),
     };
     let conn = guard.as_ref().expect("Connection should be present");
 
@@ -63,11 +64,9 @@ fn db_tables(_req: &Request, state: &State) -> Response {
         .query::<String>(
             "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
             (),
-        )
-        .expect("Database error")
-        .collect::<Result<Vec<_>, _>>()
-        .expect("Database error");
-    Response::with_json(&table_names)
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Response::with_json(&table_names))
 }
 
 // MARK: Table data
@@ -114,17 +113,18 @@ struct ColumnForeignKey {
     column: String,
 }
 
-fn get_foreign_key(conn: &Connection, table: &str, column: &str) -> Option<ColumnForeignKey> {
-    conn.query::<(String, String, String)>(
+fn get_foreign_key(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+) -> Result<Option<ColumnForeignKey>> {
+    Ok(conn.query::<(String, String, String)>(
         &format!("SELECT \"from\", \"table\", \"to\" FROM pragma_foreign_key_list(\"{table}\") WHERE \"from\" = ?"),
         column.to_string(),
-    )
-    .expect("Database error")
+    )?
     .next()
-    .map(|r| {
-        let (_, table, column) = r.expect("Database error");
-        ColumnForeignKey { table, column }
-    })
+    .transpose()?
+    .map(|(_, table, column)| ColumnForeignKey { table, column }))
 }
 
 // MARK: Statement processing
@@ -159,7 +159,7 @@ fn process_statement(
                                 stmt.column_origin_name(j),
                             ) {
                                 (Some(table), Some(column)) => {
-                                    get_foreign_key(conn, &table, &column)
+                                    get_foreign_key(conn, &table, &column).ok().flatten()
                                 }
                                 _ => None,
                             },
@@ -179,16 +179,17 @@ fn process_statement(
     Ok((columns.unwrap_or_default(), rows))
 }
 
-fn db_table_data(req: &Request, state: &State) -> Response {
-    let name = req
-        .params
-        .get("name")
-        .expect("name param should be present");
+fn db_table_data(req: &Request, state: &State) -> Result<Response> {
+    let name = req.params.get("name").expect("Should be some");
 
     let query = match req.url.query() {
         Some(q) => match serde_urlencoded::from_str::<TableDataQuery>(q) {
             Ok(query) => query,
-            Err(_) => return Response::with_json(json!({ "error": "Invalid query parameters" })),
+            Err(_) => {
+                return Ok(Response::with_json(
+                    json!({ "error": "Invalid query parameters" }),
+                ));
+            }
         },
         None => TableDataQuery {
             offset: 0,
@@ -198,26 +199,22 @@ fn db_table_data(req: &Request, state: &State) -> Response {
 
     let guard = match get_connection(state) {
         Ok(g) => g,
-        Err(e) => return e,
+        Err(e) => return Ok(e),
     };
     let conn = guard.as_ref().expect("Connection should be present");
 
-    let total: i64 = conn
-        .query_some::<i64>(&format!("SELECT COUNT(*) FROM \"{name}\""), ())
-        .expect("Database error");
+    let total: i64 = conn.query_some::<i64>(&format!("SELECT COUNT(*) FROM \"{name}\""), ())?;
 
-    let mut stmt = conn
-        .prepare::<()>(format!("SELECT * FROM \"{name}\" LIMIT ? OFFSET ?"))
-        .expect("Database error");
-    stmt.bind_value(0, query.limit).expect("Database error");
-    stmt.bind_value(1, query.offset).expect("Database error");
+    let mut stmt = conn.prepare::<()>(format!("SELECT * FROM \"{name}\" LIMIT ? OFFSET ?"))?;
+    stmt.bind_value(0, query.limit)?;
+    stmt.bind_value(1, query.offset)?;
 
-    let (columns, rows) = process_statement(&mut stmt, conn).expect("Database error");
-    Response::with_json(&TableData {
+    let (columns, rows) = process_statement(&mut stmt, conn)?;
+    Ok(Response::with_json(&TableData {
         columns,
         rows,
         total,
-    })
+    }))
 }
 
 // MARK: Table schema
@@ -226,15 +223,12 @@ struct TableSchema {
     sql: String,
 }
 
-fn db_table_schema(req: &Request, state: &State) -> Response {
-    let name = req
-        .params
-        .get("name")
-        .expect("name param should be present");
+fn db_table_schema(req: &Request, state: &State) -> Result<Response> {
+    let name = req.params.get("name").expect("Should be some");
 
     let guard = match get_connection(state) {
         Ok(g) => g,
-        Err(e) => return e,
+        Err(e) => return Ok(e),
     };
     let conn = guard.as_ref().expect("Connection should be present");
 
@@ -242,17 +236,16 @@ fn db_table_schema(req: &Request, state: &State) -> Response {
         .query::<String>(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
             name.to_string(),
-        )
-        .expect("Database error")
+        )?
         .next()
-        .map(|r| r.expect("Database error"));
+        .transpose()?;
 
     match sql {
         Some(sql) => {
             let sql = sql.replace("   ", " ").replace("\n    )", "\n)");
-            Response::with_json(&TableSchema { sql })
+            Ok(Response::with_json(&TableSchema { sql }))
         }
-        None => Response::with_json(json!({ "error": "Table not found" })),
+        None => Ok(Response::with_json(json!({ "error": "Table not found" }))),
     }
 }
 
@@ -268,15 +261,15 @@ struct QueryResult {
     rows: Vec<Vec<serde_json::Value>>,
 }
 
-fn db_query(req: &Request, state: &State) -> Response {
+fn db_query(req: &Request, state: &State) -> Result<Response> {
     let body: QueryBody = match serde_json::from_slice(req.body.as_deref().unwrap_or(&[])) {
         Ok(b) => b,
-        Err(e) => return Response::with_json(json!({ "error": e.to_string() })),
+        Err(e) => return Ok(Response::with_json(json!({ "error": e.to_string() }))),
     };
 
     let guard = match get_connection(state) {
         Ok(g) => g,
-        Err(e) => return e,
+        Err(e) => return Ok(e),
     };
     let conn = guard.as_ref().expect("Connection should be present");
 
@@ -285,11 +278,11 @@ fn db_query(req: &Request, state: &State) -> Response {
         .and_then(|mut stmt| process_statement(&mut stmt, conn));
 
     match result {
-        Ok(qr) => Response::with_json(&QueryResult {
+        Ok(qr) => Ok(Response::with_json(&QueryResult {
             columns: qr.0,
             rows: qr.1,
-        }),
-        Err(e) => Response::with_json(json!({ "error": e.to_string() })),
+        })),
+        Err(e) => Ok(Response::with_json(json!({ "error": e.to_string() }))),
     }
 }
 

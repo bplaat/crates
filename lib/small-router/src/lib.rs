@@ -9,16 +9,19 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::error::Error;
 use std::sync::Arc;
 
+use anyhow::Result;
 use small_http::{Method, Request, Response, Status};
 
 // MARK: Handler
 
-/// Parsed path parameters
-type HandlerFn<T> = fn(&Request, &T) -> Response;
-type PreLayerFn<T> = fn(&Request, &mut T) -> Option<Response>;
-type PostLayerFn<T> = fn(&Request, &mut T, Response) -> Response;
+// Parsed path parameters
+type HandlerFn<T> = fn(&Request, &T) -> Result<Response>;
+type PreLayerFn<T> = fn(&Request, &mut T) -> Option<Result<Response>>;
+type PostLayerFn<T> = fn(&Request, &T, Response) -> Result<Response>;
+type ErrorHandlerFn<T> = fn(&Request, &T, &dyn Error) -> Response;
 
 struct Handler<T> {
     handler: HandlerFn<T>,
@@ -39,20 +42,21 @@ impl<T> Handler<T> {
         }
     }
 
-    fn call(&self, req: &Request, ctx: &mut T) -> Response {
+    fn call(&self, req: &Request, ctx: &mut T) -> Result<Response> {
         for pre_layer in &self.pre_layers {
-            if let Some(mut res) = pre_layer(req, ctx) {
+            if let Some(res) = pre_layer(req, ctx) {
+                let mut res = res?;
                 for post_layer in &self.post_layers {
-                    res = post_layer(req, ctx, res);
+                    res = post_layer(req, ctx, res)?;
                 }
-                return res;
+                return Ok(res);
             }
         }
-        let mut res = (self.handler)(req, ctx);
+        let mut res = (self.handler)(req, ctx)?;
         for post_layer in &self.post_layers {
-            res = post_layer(req, ctx, res);
+            res = post_layer(req, ctx, res)?;
         }
-        res
+        Ok(res)
     }
 }
 
@@ -145,6 +149,7 @@ pub struct RouterBuilder<T: Clone> {
     routes: Vec<Route<T>>,
     not_allowed_method_handler: Option<Handler<T>>,
     fallback_handler: Option<Handler<T>>,
+    error_handler: Option<ErrorHandlerFn<T>>,
 }
 
 impl Default for RouterBuilder<()> {
@@ -170,6 +175,7 @@ impl<T: Clone> RouterBuilder<T> {
             routes: Vec::new(),
             not_allowed_method_handler: None,
             fallback_handler: None,
+            error_handler: None,
         }
     }
 
@@ -258,6 +264,16 @@ impl<T: Clone> RouterBuilder<T> {
         self.route(&[Method::Patch], route.into(), handler)
     }
 
+    /// Set not allowed method handler (called when a route matches but method doesn't)
+    pub fn not_allowed_method(mut self, handler: HandlerFn<T>) -> Self {
+        self.not_allowed_method_handler = Some(Handler::new(
+            handler,
+            self.pre_layers.clone(),
+            self.post_layers.clone(),
+        ));
+        self
+    }
+
     /// Set fallback handler
     pub fn fallback(mut self, handler: HandlerFn<T>) -> Self {
         self.fallback_handler = Some(Handler::new(
@@ -265,6 +281,12 @@ impl<T: Clone> RouterBuilder<T> {
             self.pre_layers.clone(),
             self.post_layers.clone(),
         ));
+        self
+    }
+
+    /// Set error handler (called when a handler returns an error)
+    pub fn error(mut self, handler: ErrorHandlerFn<T>) -> Self {
+        self.error_handler = Some(handler);
         self
     }
 
@@ -293,8 +315,8 @@ impl<T: Clone> RouterBuilder<T> {
             not_allowed_method_handler: self.not_allowed_method_handler.unwrap_or_else(|| {
                 Handler::new(
                     |_, _| {
-                        Response::with_status(Status::MethodNotAllowed)
-                            .body("405 Method Not Allowed")
+                        Ok(Response::with_status(Status::MethodNotAllowed)
+                            .body("405 Method Not Allowed"))
                     },
                     self.pre_layers.clone(),
                     self.post_layers.clone(),
@@ -302,10 +324,23 @@ impl<T: Clone> RouterBuilder<T> {
             }),
             fallback_handler: self.fallback_handler.unwrap_or_else(|| {
                 Handler::new(
-                    |_, _| Response::with_status(Status::NotFound).body("404 Not Found"),
+                    |_, _| Ok(Response::with_status(Status::NotFound).body("404 Not Found")),
                     self.pre_layers.clone(),
                     self.post_layers.clone(),
                 )
+            }),
+            error_handler: self.error_handler.unwrap_or({
+                |req, _, err| {
+                    #[cfg(feature = "log")]
+                    log::error!("Handling request {} {}: {}", req.method, req.url, err);
+                    #[cfg(not(feature = "log"))]
+                    eprintln!(
+                        "[small-router] Error handling request {} {}: {}",
+                        req.method, req.url, err
+                    );
+                    Response::with_status(Status::InternalServerError)
+                        .body("500 Internal Server Error")
+                }
             }),
         }))
     }
@@ -317,12 +352,19 @@ struct InnerRouter<T: Clone> {
     routes: Vec<Route<T>>,
     not_allowed_method_handler: Handler<T>,
     fallback_handler: Handler<T>,
+    error_handler: ErrorHandlerFn<T>,
 }
 
 impl<T: Clone> InnerRouter<T> {
     fn handle(&self, req: &Request) -> Response {
         let mut ctx = self.ctx.clone();
+        match self.handle_inner(req, &mut ctx) {
+            Ok(res) => res,
+            Err(err) => (self.error_handler)(req, &mut ctx, &*err),
+        }
+    }
 
+    fn handle_inner(&self, req: &Request, ctx: &mut T) -> Result<Response> {
         // Match routes
         let path = req.url.path();
         for route in self.routes.iter() {
@@ -333,17 +375,17 @@ impl<T: Clone> InnerRouter<T> {
                 // Find matching route by method
                 for route in self.routes.iter().filter(|r| r.route == route.route) {
                     if route.methods.contains(&req.method) {
-                        return route.handler.call(&req, &mut ctx);
+                        return route.handler.call(&req, ctx);
                     }
                 }
 
                 // Or run not allowed method handler
-                return self.not_allowed_method_handler.call(&req, &mut ctx);
+                return self.not_allowed_method_handler.call(&req, ctx);
             }
         }
 
         // Or run fallback handler
-        self.fallback_handler.call(req, &mut ctx)
+        self.fallback_handler.call(req, ctx)
     }
 }
 
@@ -366,13 +408,17 @@ mod test {
 
     use super::*;
 
-    fn home(_req: &Request, _ctx: &()) -> Response {
-        Response::with_status(Status::Ok).body("Hello, World!")
+    fn home(_req: &Request, _ctx: &()) -> Result<Response> {
+        Ok(Response::with_status(Status::Ok).body("Hello, World!"))
     }
 
-    fn hello(req: &Request, _ctx: &()) -> Response {
+    fn hello(req: &Request, _ctx: &()) -> Result<Response> {
         let name = req.params.get("name").unwrap();
-        Response::with_status(Status::Ok).body(format!("Hello, {name}!"))
+        Ok(Response::with_status(Status::Ok).body(format!("Hello, {name}!")))
+    }
+
+    fn error(_req: &Request, _ctx: &()) -> Result<Response> {
+        Err(anyhow::anyhow!("Test error"))
     }
 
     #[test]
@@ -381,6 +427,7 @@ mod test {
             .get("/", home)
             .get("/hello/:name", hello)
             .get("/hello/:name/i/:am/so/:deep", hello)
+            .get("/error", error)
             .build();
 
         // Test home route
@@ -408,5 +455,10 @@ mod test {
         let res = router.handle(&Request::options("http://localhost/"));
         assert_eq!(res.status, Status::MethodNotAllowed);
         assert_eq!(res.body, b"405 Method Not Allowed");
+
+        // Test error route
+        let res = router.handle(&Request::get("http://localhost/error"));
+        assert_eq!(res.status, Status::InternalServerError);
+        assert_eq!(res.body, b"500 Internal Server Error");
     }
 }

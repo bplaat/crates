@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use bsqlite::query_args;
 use const_format::formatcp;
 use small_http::{Request, Response, Status};
@@ -17,23 +18,25 @@ use crate::controllers::users::get_user;
 use crate::models::session::policies;
 use crate::models::{IndexQuery, Session, UserRole};
 
-pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Parse request query
     let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
-            Err(_) => return Response::with_status(Status::BadRequest),
+            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
         },
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Get sessions for authenticated user or all sessions if admin
@@ -49,9 +52,9 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                     search_query: search_query.clone()
                 }
             )
-            .expect("Database error")
+            ?
             .next()
-            .map(|r| r.expect("Database error"))
+            .transpose()?
             .unwrap_or(0);
             let sessions = query_args!(
                 Session,
@@ -66,9 +69,9 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                     offset: (query.page - 1) * query.limit
                 }
             )
-            .expect("Database error")
-            .map(|r| Into::<api::Session>::into(r.expect("Database error")))
-            .collect::<Vec<_>>();
+            ?
+            .map(|r| r.map(Into::into))
+            .collect::<Result<Vec<_>, _>>()?;
             (total, sessions)
         }
         false => {
@@ -82,9 +85,9 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                     search_query: search_query.clone()
                 }
             )
-            .expect("Database error")
+            ?
             .next()
-            .map(|r| r.expect("Database error"))
+            .transpose()?
             .unwrap_or(0);
             let sessions = query_args!(
                 Session,
@@ -100,101 +103,102 @@ pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Response {
                     offset: (query.page - 1) * query.limit
                 }
             )
-            .expect("Database error")
-            .map(|r| Into::<api::Session>::into(r.expect("Database error")))
-            .collect::<Vec<_>>();
+            ?
+            .map(|r| r.map(Into::into))
+            .collect::<Result<Vec<_>, _>>()?;
             (total, sessions)
         }
     };
 
     // Return sessions
-    Response::with_json(api::SessionIndexResponse {
+    Ok(Response::with_json(api::SessionIndexResponse {
         pagination: api::Pagination {
             page: query.page,
             limit: query.limit,
             total,
         },
         data: sessions,
-    })
+    }))
 }
 
-pub(crate) fn sessions_show(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn sessions_show(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get session
-    let session = match get_session(req, ctx) {
+    let session = match get_session(req, ctx)? {
         Some(session) => session,
         None => return not_found(req, ctx),
     };
 
     // Check authorization
     if !policies::can_show(auth_user, &session) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Return session
-    Response::with_json(Into::<api::Session>::into(session))
+    Ok(Response::with_json(Into::<api::Session>::into(session)))
 }
 
-pub(crate) fn sessions_delete(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn sessions_delete(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get session
-    let session = match get_session(req, ctx) {
+    let session = match get_session(req, ctx)? {
         Some(session) => session,
         None => return not_found(req, ctx),
     };
 
     // Check authorization
     if !policies::can_delete(auth_user, &session) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Delete session
     ctx.database
-        .execute("DELETE FROM sessions WHERE id = ?", session.id)
-        .expect("Database error");
+        .execute("DELETE FROM sessions WHERE id = ?", session.id)?;
 
     // Success response
-    Response::new()
+    Ok(Response::new())
 }
 
-fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Response {
+fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get target user
-    let user = match get_user(req, ctx) {
+    let user = match get_user(req, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
 
     // Check authorization: admin can see any user's sessions; normal user only their own
     if auth_user.role != UserRole::Admin && auth_user.id != user.id {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Parse request query
     let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
-            Err(_) => return Response::with_status(Status::BadRequest),
+            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
         },
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     let search_query = format!("%{}%", query.query.replace("%", "\\%"));
@@ -205,7 +209,7 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Respons
             ctx.database,
             "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
             Args { user_id: user.id, now: now, search_query: search_query.clone() }
-        ).expect("Database error").next().map(|r| r.expect("Database error")).unwrap_or(0);
+        )?.next().transpose()?.unwrap_or(0);
         let sessions = query_args!(
             Session,
             ctx.database,
@@ -214,9 +218,9 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Respons
                 Session::columns()
             ),
             Args { user_id: user.id, now: now, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
-        ).expect("Database error")
-        .map(|r| Into::<api::Session>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        )?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
         (total, sessions)
     } else {
         let total = query_args!(
@@ -228,9 +232,9 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Respons
                 search_query: search_query.clone()
             }
         )
-        .expect("Database error")
+        ?
         .next()
-        .map(|r| r.expect("Database error"))
+        .transpose()?
         .unwrap_or(0);
         let sessions = query_args!(
             Session,
@@ -240,47 +244,49 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Respons
                 Session::columns()
             ),
             Args { user_id: user.id, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
-        ).expect("Database error")
-        .map(|r| Into::<api::Session>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        )?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
         (total, sessions)
     };
 
-    Response::with_json(api::SessionIndexResponse {
+    Ok(Response::with_json(api::SessionIndexResponse {
         pagination: api::Pagination {
             page: query.page,
             limit: query.limit,
             total,
         },
         data: sessions,
-    })
+    }))
 }
 
-pub(crate) fn users_sessions(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_sessions(req: &Request, ctx: &Context) -> Result<Response> {
     sessions_for_user(req, ctx, false)
 }
 
-pub(crate) fn users_sessions_active(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_sessions_active(req: &Request, ctx: &Context) -> Result<Response> {
     sessions_for_user(req, ctx, true)
 }
 
-pub(crate) fn sessions_active(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn sessions_active(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Parse request query
     let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
-            Err(_) => return Response::with_status(Status::BadRequest),
+            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
         },
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     let search_query = format!("%{}%", query.query.replace("%", "\\%"));
@@ -290,7 +296,7 @@ pub(crate) fn sessions_active(req: &Request, ctx: &Context) -> Response {
         ctx.database,
         "SELECT COUNT(id) FROM sessions WHERE user_id = :user_id AND expires_at > :now AND (ip_address LIKE :search_query OR ip_country LIKE :search_query OR ip_city LIKE :search_query OR client_name LIKE :search_query OR client_os LIKE :search_query)",
         Args { user_id: auth_user.id, now: now, search_query: search_query.clone() }
-    ).expect("Database error").next().map(|r| r.expect("Database error")).unwrap_or(0);
+    )?.next().transpose()?.unwrap_or(0);
     let sessions = query_args!(
         Session,
         ctx.database,
@@ -299,42 +305,42 @@ pub(crate) fn sessions_active(req: &Request, ctx: &Context) -> Response {
             Session::columns()
         ),
         Args { user_id: auth_user.id, now: now, search_query: search_query, limit: query.limit, offset: (query.page - 1) * query.limit }
-    ).expect("Database error")
-    .map(|r| Into::<api::Session>::into(r.expect("Database error")))
-    .collect::<Vec<_>>();
+    )?
+    .map(|r| r.map(Into::into))
+    .collect::<Result<Vec<_>, _>>()?;
 
-    Response::with_json(api::SessionIndexResponse {
+    Ok(Response::with_json(api::SessionIndexResponse {
         pagination: api::Pagination {
             page: query.page,
             limit: query.limit,
             total,
         },
         data: sessions,
-    })
+    }))
 }
 
-fn get_session(req: &Request, ctx: &Context) -> Option<Session> {
+fn get_session(req: &Request, ctx: &Context) -> Result<Option<Session>> {
     let session_id = match req
         .params
         .get("session_id")
-        .expect("session_id param should be present")
+        .expect("Should be some")
         .parse::<Uuid>()
     {
         Ok(id) => id,
-        Err(_) => return None,
+        Err(_) => return Ok(None),
     };
 
-    ctx.database
+    Ok(ctx
+        .database
         .query::<Session>(
             formatcp!(
                 "SELECT {} FROM sessions WHERE id = ? LIMIT 1",
                 Session::columns()
             ),
             session_id,
-        )
-        .expect("Database error")
+        )?
         .next()
-        .map(|r| r.expect("Database error"))
+        .transpose()?)
 }
 
 // MARK: Tests
@@ -353,7 +359,7 @@ mod test {
 
     #[test]
     fn test_sessions_index_search() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_user1, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -364,27 +370,31 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user2.clone());
+        ctx.database.insert_user(user2.clone()).unwrap();
 
         // Session with recognizable client_name and country
-        ctx.database.insert_session(Session {
-            user_id: user2.id,
-            token: "token-jane".to_string(),
-            ip_address: "1.2.3.4".to_string(),
-            ip_country: Some("Netherlands".to_string()),
-            client_name: Some("Firefox".to_string()),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_session(Session {
+                user_id: user2.id,
+                token: "token-jane".to_string(),
+                ip_address: "1.2.3.4".to_string(),
+                ip_country: Some("Netherlands".to_string()),
+                client_name: Some("Firefox".to_string()),
+                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+                ..Default::default()
+            })
+            .unwrap();
         // Session with different client
-        ctx.database.insert_session(Session {
-            user_id: user2.id,
-            token: "token-jane2".to_string(),
-            ip_address: "5.6.7.8".to_string(),
-            client_name: Some("Chrome".to_string()),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_session(Session {
+                user_id: user2.id,
+                token: "token-jane2".to_string(),
+                ip_address: "5.6.7.8".to_string(),
+                client_name: Some("Chrome".to_string()),
+                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Search by client_name
         let res = router.handle(
@@ -409,7 +419,7 @@ mod test {
 
     #[test]
     fn test_sessions_index_admin() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_user1, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -421,7 +431,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user2.clone());
+        ctx.database.insert_user(user2.clone()).unwrap();
 
         let session2 = Session {
             user_id: user2.id,
@@ -429,7 +439,7 @@ mod test {
             expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
             ..Default::default()
         };
-        ctx.database.insert_session(session2);
+        ctx.database.insert_session(session2).unwrap();
 
         // Admin can see all sessions
         let res = router.handle(
@@ -443,7 +453,7 @@ mod test {
 
     #[test]
     fn test_sessions_index_normal_user() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user1, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
@@ -456,7 +466,7 @@ mod test {
             role: UserRole::Normal,
             ..Default::default()
         };
-        ctx.database.insert_user(user2.clone());
+        ctx.database.insert_user(user2.clone()).unwrap();
 
         let session2 = Session {
             user_id: user2.id,
@@ -464,7 +474,7 @@ mod test {
             expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
             ..Default::default()
         };
-        ctx.database.insert_session(session2);
+        ctx.database.insert_session(session2).unwrap();
 
         // Normal user only sees their own sessions
         let res = router.handle(
@@ -479,7 +489,7 @@ mod test {
 
     #[test]
     fn test_sessions_show_admin() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_admin) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -491,7 +501,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         let session = Session {
             user_id: user.id,
@@ -499,7 +509,7 @@ mod test {
             expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
             ..Default::default()
         };
-        ctx.database.insert_session(session.clone());
+        ctx.database.insert_session(session.clone()).unwrap();
 
         // Admin can view any session
         let res = router.handle(
@@ -513,7 +523,7 @@ mod test {
 
     #[test]
     fn test_sessions_show_own_session() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
@@ -524,7 +534,7 @@ mod test {
             expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
             ..Default::default()
         };
-        ctx.database.insert_session(session.clone());
+        ctx.database.insert_session(session.clone()).unwrap();
 
         // User can view their own session
         let res = router.handle(
@@ -538,7 +548,7 @@ mod test {
 
     #[test]
     fn test_sessions_show_forbidden() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_user1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
@@ -551,7 +561,7 @@ mod test {
             role: UserRole::Normal,
             ..Default::default()
         };
-        ctx.database.insert_user(user2.clone());
+        ctx.database.insert_user(user2.clone()).unwrap();
 
         let session2 = Session {
             user_id: user2.id,
@@ -559,7 +569,7 @@ mod test {
             expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
             ..Default::default()
         };
-        ctx.database.insert_session(session2.clone());
+        ctx.database.insert_session(session2.clone()).unwrap();
 
         // User1 cannot view user2's session
         let res = router.handle(
@@ -571,7 +581,7 @@ mod test {
 
     #[test]
     fn test_sessions_delete() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
@@ -582,7 +592,7 @@ mod test {
             expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
             ..Default::default()
         };
-        ctx.database.insert_session(session.clone());
+        ctx.database.insert_session(session.clone()).unwrap();
 
         // Delete the session
         let res = router.handle(
@@ -601,15 +611,15 @@ mod test {
             ),
             Args { id: session.id }
         )
-        .expect("Database error")
+        .unwrap()
         .next()
-        .map(|r| r.expect("Database error"));
+        .map(|r| r.unwrap());
         assert!(deleted.is_none());
     }
 
     #[test]
     fn test_sessions_delete_forbidden() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_user1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
@@ -622,7 +632,7 @@ mod test {
             role: UserRole::Normal,
             ..Default::default()
         };
-        ctx.database.insert_user(user2.clone());
+        ctx.database.insert_user(user2.clone()).unwrap();
 
         let session2 = Session {
             user_id: user2.id,
@@ -630,7 +640,7 @@ mod test {
             expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
             ..Default::default()
         };
-        ctx.database.insert_session(session2.clone());
+        ctx.database.insert_session(session2.clone()).unwrap();
 
         // User1 cannot delete user2's session
         let res = router.handle(
@@ -649,15 +659,15 @@ mod test {
             ),
             Args { id: session2.id }
         )
-        .expect("Database error")
+        .unwrap()
         .next()
-        .map(|r| r.expect("Database error"));
+        .map(|r| r.unwrap());
         assert!(existing.is_some());
     }
 
     #[test]
     fn test_users_sessions_admin() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_admin) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -669,14 +679,16 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
         for i in 0..2 {
-            ctx.database.insert_session(Session {
-                user_id: user.id,
-                token: format!("token-jane-{i}"),
-                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-                ..Default::default()
-            });
+            ctx.database
+                .insert_session(Session {
+                    user_id: user.id,
+                    token: format!("token-jane-{i}"),
+                    expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+                    ..Default::default()
+                })
+                .unwrap();
         }
 
         // Admin can list any user's sessions
@@ -692,17 +704,19 @@ mod test {
 
     #[test]
     fn test_users_sessions_own() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
         // Add a second session for the same user
-        ctx.database.insert_session(Session {
-            user_id: user.id,
-            token: "token-second".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_session(Session {
+                user_id: user.id,
+                token: "token-second".to_string(),
+                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Normal user can list own sessions
         let res = router.handle(
@@ -716,7 +730,7 @@ mod test {
 
     #[test]
     fn test_users_sessions_forbidden() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_user1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
         let (user2, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
@@ -731,7 +745,7 @@ mod test {
 
     #[test]
     fn test_users_sessions_not_found() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -747,17 +761,19 @@ mod test {
 
     #[test]
     fn test_users_sessions_active_filters_expired() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
         // Add an already-expired session
-        ctx.database.insert_session(Session {
-            user_id: user.id,
-            token: "token-expired".to_string(),
-            expires_at: Utc::now() - Duration::from_secs(3600),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_session(Session {
+                user_id: user.id,
+                token: "token-expired".to_string(),
+                expires_at: Utc::now() - Duration::from_secs(3600),
+                ..Default::default()
+            })
+            .unwrap();
 
         let res = router.handle(
             &Request::get(format!(
@@ -775,7 +791,7 @@ mod test {
 
     #[test]
     fn test_users_sessions_active_forbidden() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_user1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
         let (user2, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
@@ -792,26 +808,30 @@ mod test {
 
     #[test]
     fn test_sessions_active_filters_expired() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
         // Add an expired session for the same user
-        ctx.database.insert_session(Session {
-            user_id: user.id,
-            token: "token-expired".to_string(),
-            expires_at: Utc::now() - Duration::from_secs(3600),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_session(Session {
+                user_id: user.id,
+                token: "token-expired".to_string(),
+                expires_at: Utc::now() - Duration::from_secs(3600),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Add a valid session for another user (must not appear)
         let (other_user, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        ctx.database.insert_session(Session {
-            user_id: other_user.id,
-            token: "token-other".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_session(Session {
+                user_id: other_user.id,
+                token: "token-other".to_string(),
+                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+                ..Default::default()
+            })
+            .unwrap();
 
         let res = router.handle(
             &Request::get("http://localhost/api/sessions/active")
@@ -826,18 +846,20 @@ mod test {
 
     #[test]
     fn test_sessions_active_own_only() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
         // Valid session for a different user
         let (other, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        ctx.database.insert_session(Session {
-            user_id: other.id,
-            token: "token-other-valid".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_session(Session {
+                user_id: other.id,
+                token: "token-other-valid".to_string(),
+                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+                ..Default::default()
+            })
+            .unwrap();
 
         let res = router.handle(
             &Request::get("http://localhost/api/sessions/active")

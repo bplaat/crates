@@ -15,6 +15,7 @@ icon = "meta/macos/icon.icon"
 workspace = true
 
 [dependencies]
+anyhow = "1"
 base64 = "0.22"
 bsqlite = "0.1.2"
 bwebview = { path = "../../lib/bwebview", features = [

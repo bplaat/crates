@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::{Ok, Result};
 use chrono::Utc;
 use const_format::formatcp;
 use small_http::{Request, Response, Status};
@@ -12,7 +13,10 @@ use crate::Context;
 use crate::models::{self, Session};
 
 // MARK: Auth optional
-pub(crate) fn auth_optional_pre_layer(req: &Request, ctx: &mut Context) -> Option<Response> {
+pub(crate) fn auth_optional_pre_layer(
+    req: &Request,
+    ctx: &mut Context,
+) -> Option<Result<Response>> {
     // Get token from Authorization header
     let authorization = req
         .headers
@@ -54,7 +58,10 @@ pub(crate) fn auth_optional_pre_layer(req: &Request, ctx: &mut Context) -> Optio
 }
 
 // MARK: Auth required
-pub(crate) fn auth_required_pre_layer(req: &Request, ctx: &mut Context) -> Option<Response> {
+pub(crate) fn auth_required_pre_layer(
+    req: &Request,
+    ctx: &mut Context,
+) -> Option<Result<Response>> {
     // Get token from Authorization header
     let authorization = match req
         .headers
@@ -63,11 +70,9 @@ pub(crate) fn auth_required_pre_layer(req: &Request, ctx: &mut Context) -> Optio
     {
         Some(authorization) => authorization,
         None => {
-            return Some(
-                Response::new()
-                    .status(Status::Unauthorized)
-                    .body("401 Unauthorized"),
-            );
+            return Some(Ok(Response::new()
+                .status(Status::Unauthorized)
+                .body("401 Unauthorized")));
         }
     };
     let token = authorization[7..].trim().to_string();
@@ -88,11 +93,9 @@ pub(crate) fn auth_required_pre_layer(req: &Request, ctx: &mut Context) -> Optio
     let session = match session {
         Some(session) => session,
         None => {
-            return Some(
-                Response::new()
-                    .status(Status::Unauthorized)
-                    .body("401 Unauthorized"),
-            );
+            return Some(Ok(Response::new()
+                .status(Status::Unauthorized)
+                .body("401 Unauthorized")));
         }
     };
 
@@ -124,7 +127,7 @@ mod test {
 
     #[test]
     fn test_unauthed() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         let res = router.handle(&Request::with_url("http://localhost/api/auth/validate"));
@@ -133,7 +136,7 @@ mod test {
 
     #[test]
     fn test_authed() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create a test user and session

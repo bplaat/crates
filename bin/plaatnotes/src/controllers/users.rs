@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use bsqlite::{execute_args, query_args};
 use chrono::Utc;
 use const_format::formatcp;
@@ -19,36 +20,37 @@ use crate::models::user::validators::{is_unique_email, is_unique_email_or_target
 use crate::models::user::{UserRole, UserTheme, policies};
 use crate::models::{IndexQuery, Note, User};
 
-pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Check authorization
     if !policies::can_index(auth_user) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Parse request query
     let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
-            Err(_) => return Response::with_status(Status::BadRequest),
+            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
         },
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Get users
     let (total, users) = if query.query.is_empty() {
         let total = ctx
             .database
-            .query_some::<i64>("SELECT COUNT(id) FROM users", ())
-            .expect("Database error");
+            .query_some::<i64>("SELECT COUNT(id) FROM users", ())?;
         let users = query_args!(
             User,
             ctx.database,
@@ -60,10 +62,9 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }
-        )
-        .expect("Database error")
-        .map(|r| Into::<api::User>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        )?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
         (total, users)
     } else {
         let total = ctx
@@ -71,8 +72,7 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
             .query_some::<i64>(
                 "SELECT COUNT(id) FROM users WHERE id IN (SELECT id FROM users_fts WHERE users_fts MATCH ?)",
                 query.query.clone(),
-            )
-            .expect("Database error");
+            )?;
         let users = query_args!(
             User,
             ctx.database,
@@ -87,21 +87,21 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Response {
                 offset: (query.page - 1) * query.limit
             }
         )
-        .expect("Database error")
-        .map(|r| Into::<api::User>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        ?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
         (total, users)
     };
 
     // Return users
-    Response::with_json(api::UserIndexResponse {
+    Ok(Response::with_json(api::UserIndexResponse {
         pagination: api::Pagination {
             page: query.page,
             limit: query.limit,
             total,
         },
         data: users,
-    })
+    }))
 }
 
 #[derive(Validate, FromStruct)]
@@ -119,16 +119,16 @@ struct UserCreateBody {
     role: UserRole,
 }
 
-pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_create(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Check authorization
     if !policies::can_create(auth_user) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Parse and validate body
@@ -136,10 +136,12 @@ pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
         req.body.as_deref().unwrap_or(&[]),
     ) {
         Ok(body) => Into::<UserCreateBody>::into(body),
-        Err(_) => return Response::with_status(Status::BadRequest),
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     if let Err(report) = body.validate_with(ctx) {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Hash password
@@ -154,55 +156,55 @@ pub(crate) fn users_create(req: &Request, ctx: &Context) -> Response {
         role: body.role,
         ..Default::default()
     };
-    ctx.database.insert_user(user.clone());
+    ctx.database.insert_user(user.clone())?;
 
     // Return created user
-    Response::with_json(Into::<api::User>::into(user))
+    Ok(Response::with_json(Into::<api::User>::into(user)))
 }
 
-pub(crate) fn get_user(req: &Request, ctx: &Context) -> Option<User> {
+pub(crate) fn get_user(req: &Request, ctx: &Context) -> Result<Option<User>> {
     // Parse user id from url
     let user_id = match req
         .params
         .get("user_id")
-        .expect("user_id param should be present")
+        .expect("Should be some")
         .parse::<Uuid>()
     {
         Ok(id) => id,
-        Err(_) => return None,
+        Err(_) => return Ok(None),
     };
 
     // Get user
-    ctx.database
+    Ok(ctx
+        .database
         .query::<User>(
             formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
             user_id,
-        )
-        .expect("Database error")
+        )?
         .next()
-        .map(|r| r.expect("Database error"))
+        .transpose()?)
 }
 
-pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get user
-    let user = match get_user(_req, ctx) {
+    let user = match get_user(_req, ctx)? {
         Some(user) => user,
         None => return not_found(_req, ctx),
     };
 
     // Check authorization
     if !policies::can_show(auth_user, &user) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Return user
-    Response::with_json(Into::<api::User>::into(user))
+    Ok(Response::with_json(Into::<api::User>::into(user)))
 }
 
 #[derive(Validate, FromStruct)]
@@ -222,22 +224,22 @@ struct UserUpdateBody {
     role: UserRole,
 }
 
-pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get user
-    let mut user = match get_user(req, ctx) {
+    let mut user = match get_user(req, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
 
     // Check authorization
     if !policies::can_update(auth_user, &user) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Parse and validate body
@@ -245,14 +247,16 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
         req.body.as_deref().unwrap_or(&[]),
     ) {
         Ok(body) => Into::<UserUpdateBody>::into(body),
-        Err(_) => return Response::with_status(Status::BadRequest),
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     let validation_ctx = Context {
         update_target_user_id: Some(user.id),
         ..ctx.clone()
     };
     if let Err(report) = body.validate_with(&validation_ctx) {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Update user
@@ -273,8 +277,7 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
                 password: user.password.clone(),
                 id: user.id
             }
-        )
-        .expect("Database error");
+        )?;
     }
     user.updated_at = Utc::now();
     execute_args!(
@@ -290,10 +293,10 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Response {
             updated_at: user.updated_at,
             id: user.id
         }
-    ).expect("Database error");
+    )?;
 
     // Return updated user
-    Response::with_json(Into::<api::User>::into(user))
+    Ok(Response::with_json(Into::<api::User>::into(user)))
 }
 
 #[derive(Validate, FromStruct)]
@@ -305,22 +308,22 @@ struct UserChangePasswordBody {
     new_password: String,
 }
 
-pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get user
-    let mut user = match get_user(req, ctx) {
+    let mut user = match get_user(req, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
 
     // Check authorization
     if !policies::can_update(auth_user, &user) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Parse and validate body
@@ -328,17 +331,19 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
         req.body.as_deref().unwrap_or(&[]),
     ) {
         Ok(body) => Into::<UserChangePasswordBody>::into(body),
-        Err(_) => return Response::with_status(Status::BadRequest),
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     if let Err(report) = body.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Verify old password
     match pbkdf2::password_verify(&body.old_password, &user.password) {
         Ok(true) => {}
-        Ok(false) => return Response::with_status(Status::Unauthorized),
-        Err(_) => return Response::with_status(Status::InternalServerError),
+        Ok(false) => return Ok(Response::with_status(Status::Unauthorized)),
+        Err(_) => return Ok(Response::with_status(Status::InternalServerError)),
     }
 
     // Update password
@@ -352,68 +357,68 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Response {
             updated_at: user.updated_at,
             id: user.id
         }
-    )
-    .expect("Database error");
+    )?;
 
     // Success response
-    Response::new()
+    Ok(Response::new())
 }
 
-pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get user
-    let user = match get_user(_req, ctx) {
+    let user = match get_user(_req, ctx)? {
         Some(user) => user,
         None => return not_found(_req, ctx),
     };
 
     // Check authorization
     if !policies::can_delete(auth_user, &user) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Delete user
     ctx.database
-        .execute("DELETE FROM users WHERE id = ?", user.id)
-        .expect("Database error");
+        .execute("DELETE FROM users WHERE id = ?", user.id)?;
 
     // Success response
-    Response::new()
+    Ok(Response::new())
 }
 
-pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get user
-    let user = match get_user(req, ctx) {
+    let user = match get_user(req, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
 
     // Check authorization
     if !policies::can_show(auth_user, &user) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Parse request query
     let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
-            Err(_) => return Response::with_status(Status::BadRequest),
+            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
         },
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Get notes for the user
@@ -424,9 +429,9 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
             "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id",
             Args { user_id: user.id }
         )
-        .expect("Database error")
+        ?
         .next()
-        .map(|r| r.expect("Database error"))
+        .transpose()?
         .unwrap_or(0);
         let notes = query_args!(
             Note,
@@ -442,9 +447,9 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
                 offset: (query.page - 1) * query.limit
             }
         )
-        .expect("Database error")
-        .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        ?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
         (total, notes)
     } else {
         let total = query_args!(
@@ -454,9 +459,9 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
             id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
             Args { user_id: user.id, fts_query: query.query.clone() }
         )
-        .expect("Database error")
+        ?
         .next()
-        .map(|r| r.expect("Database error"))
+        .transpose()?
         .unwrap_or(0);
         let notes = query_args!(
             Note,
@@ -474,64 +479,66 @@ pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Response {
                 offset: (query.page - 1) * query.limit
             }
         )
-        .expect("Database error")
-        .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        ?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
         (total, notes)
     };
 
     // Return notes
-    Response::with_json(api::NoteIndexResponse {
+    Ok(Response::with_json(api::NoteIndexResponse {
         pagination: api::Pagination {
             page: query.page,
             limit: query.limit,
             total,
         },
         data: notes,
-    })
+    }))
 }
 
-pub(crate) fn users_notes_pinned(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_notes_pinned(req: &Request, ctx: &Context) -> Result<Response> {
     users_notes_filtered(req, ctx, "is_trashed = 0 AND is_pinned")
 }
 
-pub(crate) fn users_notes_archived(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_notes_archived(req: &Request, ctx: &Context) -> Result<Response> {
     users_notes_filtered(req, ctx, "is_trashed = 0 AND is_archived")
 }
 
-pub(crate) fn users_notes_trashed(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn users_notes_trashed(req: &Request, ctx: &Context) -> Result<Response> {
     users_notes_filtered(req, ctx, "is_trashed")
 }
 
 // MARK: Utils
-fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response {
+fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response> {
     // Check authentication
     let auth_user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Get user
-    let user = match get_user(req, ctx) {
+    let user = match get_user(req, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
 
     // Check authorization
     if !policies::can_show(auth_user, &user) {
-        return Response::with_status(Status::Forbidden);
+        return Ok(Response::with_status(Status::Forbidden));
     }
 
     // Parse request query
     let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
-            Err(_) => return Response::with_status(Status::BadRequest),
+            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
         },
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Get filtered notes for specific user
@@ -541,10 +548,9 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response 
             ctx.database,
             &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id"),
             Args { user_id: user.id }
-        )
-        .expect("Database error")
+        )?
         .next()
-        .map(|r| r.expect("Database error"))
+        .transpose()?
         .unwrap_or(0);
         let notes = query_args!(
             Note,
@@ -559,9 +565,9 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response 
                 offset: (query.page - 1) * query.limit
             }
         )
-        .expect("Database error")
-        .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        ?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
         (total, notes)
     } else {
         let total = query_args!(
@@ -575,10 +581,9 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response 
                 user_id: user.id,
                 fts_query: query.query.clone()
             }
-        )
-        .expect("Database error")
+        )?
         .next()
-        .map(|r| r.expect("Database error"))
+        .transpose()?
         .unwrap_or(0);
         let notes = query_args!(
             Note,
@@ -595,22 +600,21 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Response 
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }
-        )
-        .expect("Database error")
-        .map(|r| Into::<api::Note>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        )?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
         (total, notes)
     };
 
     // Return filtered notes
-    Response::with_json(api::NoteIndexResponse {
+    Ok(Response::with_json(api::NoteIndexResponse {
         pagination: api::Pagination {
             page: query.page,
             limit: query.limit,
             total,
         },
         data: notes,
-    })
+    }))
 }
 
 #[cfg(test)]
@@ -624,7 +628,7 @@ mod test {
 
     #[test]
     fn test_users_index() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -649,7 +653,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Fetch /users check if both users are there
         let res = router.handle(
@@ -665,25 +669,29 @@ mod test {
 
     #[test]
     fn test_users_index_search() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create multiple users
-        ctx.database.insert_user(User {
-            first_name: "Alice".to_string(),
-            last_name: "Smith".to_string(),
-            email: "alice@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_user(User {
-            first_name: "Bob".to_string(),
-            last_name: "Jones".to_string(),
-            email: "bob@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_user(User {
+                first_name: "Alice".to_string(),
+                last_name: "Smith".to_string(),
+                email: "alice@example.com".to_string(),
+                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_user(User {
+                first_name: "Bob".to_string(),
+                last_name: "Jones".to_string(),
+                email: "bob@example.com".to_string(),
+                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Search for "Alice"
         let res = router.handle(
@@ -698,38 +706,46 @@ mod test {
 
     #[test]
     fn test_users_index_fts5_search() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        ctx.database.insert_user(User {
-            first_name: "Alice".to_string(),
-            last_name: "Smith".to_string(),
-            email: "alice.smith@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_user(User {
-            first_name: "Alice".to_string(),
-            last_name: "Johnson".to_string(),
-            email: "alice.johnson@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_user(User {
-            first_name: "Bob".to_string(),
-            last_name: "Smith".to_string(),
-            email: "bob.smith@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_user(User {
-            first_name: "Carol".to_string(),
-            last_name: "White".to_string(),
-            email: "carol@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_user(User {
+                first_name: "Alice".to_string(),
+                last_name: "Smith".to_string(),
+                email: "alice.smith@example.com".to_string(),
+                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_user(User {
+                first_name: "Alice".to_string(),
+                last_name: "Johnson".to_string(),
+                email: "alice.johnson@example.com".to_string(),
+                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_user(User {
+                first_name: "Bob".to_string(),
+                last_name: "Smith".to_string(),
+                email: "bob.smith@example.com".to_string(),
+                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_user(User {
+                first_name: "Carol".to_string(),
+                last_name: "White".to_string(),
+                email: "carol@example.com".to_string(),
+                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Prefix search
         let res = router.handle(
@@ -794,19 +810,21 @@ mod test {
 
     #[test]
     fn test_users_index_pagination() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
         // Create multiple users (test user already exists, so create 29 more for 30 total)
         for i in 1..=29 {
-            ctx.database.insert_user(User {
-                first_name: format!("User{i}"),
-                last_name: "Test".to_string(),
-                email: format!("user{i}@example.com"),
-                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-                ..Default::default()
-            });
+            ctx.database
+                .insert_user(User {
+                    first_name: format!("User{i}"),
+                    last_name: "Test".to_string(),
+                    email: format!("user{i}@example.com"),
+                    password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
+                    ..Default::default()
+                })
+                .unwrap();
         }
 
         // Fetch /users with limit 10 and page 1
@@ -836,7 +854,7 @@ mod test {
 
     #[test]
     fn test_users_create() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -857,7 +875,7 @@ mod test {
 
     #[test]
     fn test_users_create_duplicate_email() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -886,7 +904,7 @@ mod test {
 
     #[test]
     fn test_users_show() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -898,7 +916,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Fetch /users/:user_id check if user is there
         let res = router.handle(
@@ -912,7 +930,7 @@ mod test {
 
     #[test]
     fn test_users_show_not_found() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -926,7 +944,7 @@ mod test {
 
     #[test]
     fn test_users_update() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -938,7 +956,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Update user
         let res = router.handle(
@@ -954,7 +972,7 @@ mod test {
 
     #[test]
     fn test_users_update_duplicate_email() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -966,7 +984,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user1.clone());
+        ctx.database.insert_user(user1.clone()).unwrap();
 
         let user2 = User {
             first_name: "Jane".to_string(),
@@ -975,7 +993,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user2.clone());
+        ctx.database.insert_user(user2.clone()).unwrap();
 
         // Try to update user2's email to user1's email
         let res = router.handle(
@@ -990,7 +1008,7 @@ mod test {
 
     #[test]
     fn test_users_update_same_email() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1002,7 +1020,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Update user keeping the same email — should succeed, not be treated as duplicate
         let res = router.handle(
@@ -1017,7 +1035,7 @@ mod test {
 
     #[test]
     fn test_users_update_validation_error() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1029,7 +1047,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Update user with validation errors
         let res = router.handle(
@@ -1042,7 +1060,7 @@ mod test {
 
     #[test]
     fn test_users_change_password() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1054,7 +1072,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Change password with correct old password
         let res = router.handle(
@@ -1074,16 +1092,16 @@ mod test {
                 formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
-            .expect("Database error")
+            .unwrap()
             .next()
-            .map(|r| r.expect("Database error"))
+            .map(|r| r.unwrap())
             .unwrap();
         assert!(pbkdf2::password_verify("newpassword456", &stored_user.password).unwrap());
     }
 
     #[test]
     fn test_users_change_password_incorrect_old_password() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1095,7 +1113,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Try to change password with incorrect old password
         let res = router.handle(
@@ -1111,7 +1129,7 @@ mod test {
 
     #[test]
     fn test_users_change_password_validation_error() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1123,7 +1141,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Try to change password with validation errors (short password)
         let res = router.handle(
@@ -1139,7 +1157,7 @@ mod test {
 
     #[test]
     fn test_users_delete() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1151,7 +1169,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Delete user
         let res = router.handle(
@@ -1174,7 +1192,7 @@ mod test {
 
     #[test]
     fn test_password_hashing() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1194,9 +1212,9 @@ mod test {
                 formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
-            .expect("Database error")
+            .unwrap()
             .next()
-            .map(|r| r.expect("Database error"))
+            .map(|r| r.unwrap())
             .unwrap();
 
         // Password should be hashed (not plain text)
@@ -1212,7 +1230,7 @@ mod test {
     fn test_users_notes() {
         use crate::models::Note;
 
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
@@ -1233,7 +1251,7 @@ mod test {
             body: "My first note".to_string(),
             ..Default::default()
         };
-        ctx.database.insert_note(note.clone());
+        ctx.database.insert_note(note.clone()).unwrap();
 
         // Fetch user's notes
         let res = router.handle(
@@ -1253,27 +1271,33 @@ mod test {
     fn test_users_notes_excludes_pinned_and_archived() {
         use crate::models::Note;
 
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        ctx.database.insert_note(Note {
-            user_id: user.id,
-            body: "Regular".to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_note(Note {
-            user_id: user.id,
-            body: "Pinned".to_string(),
-            is_pinned: true,
-            ..Default::default()
-        });
-        ctx.database.insert_note(Note {
-            user_id: user.id,
-            body: "Archived".to_string(),
-            is_archived: true,
-            ..Default::default()
-        });
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                body: "Regular".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                body: "Pinned".to_string(),
+                is_pinned: true,
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                body: "Archived".to_string(),
+                is_archived: true,
+                ..Default::default()
+            })
+            .unwrap();
 
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}/notes", user.id))
@@ -1289,17 +1313,19 @@ mod test {
     fn test_users_notes_pagination() {
         use crate::models::Note;
 
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
         // Create multiple notes
         for i in 1..=30 {
-            ctx.database.insert_note(Note {
-                user_id: user.id,
-                body: format!("Note {i}"),
-                ..Default::default()
-            });
+            ctx.database
+                .insert_note(Note {
+                    user_id: user.id,
+                    body: format!("Note {i}"),
+                    ..Default::default()
+                })
+                .unwrap();
         }
 
         // Fetch first page
@@ -1335,21 +1361,25 @@ mod test {
     fn test_users_notes_search() {
         use crate::models::Note;
 
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
         // Create notes with different content
-        ctx.database.insert_note(Note {
-            user_id: user.id,
-            body: "Meeting notes from today".to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_note(Note {
-            user_id: user.id,
-            body: "Shopping list for tomorrow".to_string(),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                body: "Meeting notes from today".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                body: "Shopping list for tomorrow".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Search for "meeting"
         let res = router.handle(
@@ -1369,23 +1399,27 @@ mod test {
     fn test_users_notes_search_by_title() {
         use crate::models::Note;
 
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
         // Note where search term is only in title
-        ctx.database.insert_note(Note {
-            user_id: user.id,
-            title: Some("ProjectBeta".to_string()),
-            body: "Some content".to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_note(Note {
-            user_id: user.id,
-            title: None,
-            body: "Other content".to_string(),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                title: Some("ProjectBeta".to_string()),
+                body: "Some content".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                title: None,
+                body: "Other content".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         // "ProjectBeta" only in title of first note
         let res = router.handle(
@@ -1405,17 +1439,19 @@ mod test {
     fn test_users_notes_admin_can_see_any_user_notes() {
         use crate::models::Note;
 
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
         let (user, _user_token) = create_test_user_with_session(&ctx);
 
         // Create notes for the normal user
-        ctx.database.insert_note(Note {
-            user_id: user.id,
-            body: "User's private note".to_string(),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                body: "User's private note".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Admin should be able to see the user's notes
         let res = router.handle(
@@ -1434,17 +1470,19 @@ mod test {
     fn test_users_notes_normal_user_cannot_see_other_notes() {
         use crate::models::Note;
 
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_user1, user1_token) = create_test_user_with_session(&ctx);
         let (user2, _user2_token) = create_test_user_with_session(&ctx);
 
         // Create notes for user2
-        ctx.database.insert_note(Note {
-            user_id: user2.id,
-            body: "User2's private note".to_string(),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_note(Note {
+                user_id: user2.id,
+                body: "User2's private note".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         // User1 should not be able to see user2's notes
         let res = router.handle(
@@ -1456,7 +1494,7 @@ mod test {
 
     #[test]
     fn test_users_notes_not_found() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1473,7 +1511,7 @@ mod test {
 
     #[test]
     fn test_users_notes_pinned() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create user with notes
@@ -1486,7 +1524,7 @@ mod test {
             is_pinned: true,
             ..Default::default()
         };
-        ctx.database.insert_note(pinned_note.clone());
+        ctx.database.insert_note(pinned_note.clone()).unwrap();
 
         let unpinned_note = Note {
             user_id: user.id,
@@ -1495,7 +1533,7 @@ mod test {
             is_pinned: false,
             ..Default::default()
         };
-        ctx.database.insert_note(unpinned_note);
+        ctx.database.insert_note(unpinned_note).unwrap();
 
         // Fetch user's pinned notes
         let res = router.handle(
@@ -1513,7 +1551,7 @@ mod test {
 
     #[test]
     fn test_users_notes_archived() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create user with notes
@@ -1526,7 +1564,7 @@ mod test {
             is_archived: true,
             ..Default::default()
         };
-        ctx.database.insert_note(archived_note.clone());
+        ctx.database.insert_note(archived_note.clone()).unwrap();
 
         let active_note = Note {
             user_id: user.id,
@@ -1535,7 +1573,7 @@ mod test {
             is_archived: false,
             ..Default::default()
         };
-        ctx.database.insert_note(active_note);
+        ctx.database.insert_note(active_note).unwrap();
 
         // Fetch user's archived notes
         let res = router.handle(
@@ -1553,7 +1591,7 @@ mod test {
 
     #[test]
     fn test_users_notes_trashed() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create user with notes
@@ -1566,7 +1604,7 @@ mod test {
             is_trashed: true,
             ..Default::default()
         };
-        ctx.database.insert_note(trashed_note.clone());
+        ctx.database.insert_note(trashed_note.clone()).unwrap();
 
         let kept_note = Note {
             user_id: user.id,
@@ -1575,7 +1613,7 @@ mod test {
             is_trashed: false,
             ..Default::default()
         };
-        ctx.database.insert_note(kept_note);
+        ctx.database.insert_note(kept_note).unwrap();
 
         // Fetch user's trashed notes
         let res = router.handle(
@@ -1593,7 +1631,7 @@ mod test {
 
     #[test]
     fn test_users_update_with_password_admin() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1605,7 +1643,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Admin updates user including a new password (use the same email, admin auth user check allows target user's existing email via update path)
         // Note: we change first_name to avoid the unique-email validator rejecting the unchanged email
@@ -1623,16 +1661,16 @@ mod test {
                 formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
-            .expect("Database error")
+            .unwrap()
             .next()
-            .map(|r| r.expect("Database error"))
+            .map(|r| r.unwrap())
             .unwrap();
         assert!(pbkdf2::password_verify("newpassword99", &stored.password).unwrap());
     }
 
     #[test]
     fn test_users_update_with_password_non_admin_ignored() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
@@ -1652,16 +1690,16 @@ mod test {
                 formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
-            .expect("Database error")
+            .unwrap()
             .next()
-            .map(|r| r.expect("Database error"))
+            .map(|r| r.unwrap())
             .unwrap();
         assert!(pbkdf2::password_verify("password123", &stored.password).unwrap());
     }
 
     #[test]
     fn test_users_update_with_password_too_short() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
@@ -1673,7 +1711,7 @@ mod test {
             password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
             ..Default::default()
         };
-        ctx.database.insert_user(user.clone());
+        ctx.database.insert_user(user.clone()).unwrap();
 
         // Admin sends a password that is too short (< 8 chars)
         let res = router.handle(

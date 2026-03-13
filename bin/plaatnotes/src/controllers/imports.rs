@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use base64::prelude::*;
 use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
@@ -20,11 +21,11 @@ struct ImportGoogleKeepBody {
     file: String,
 }
 
-pub(crate) fn imports_google_keep(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn imports_google_keep(req: &Request, ctx: &Context) -> Result<Response> {
     // Check authentication
     let user = match &ctx.auth_user {
         Some(user) => user,
-        None => return Response::with_status(Status::Unauthorized),
+        None => return Ok(Response::with_status(Status::Unauthorized)),
     };
 
     // Parse and validate body
@@ -32,24 +33,26 @@ pub(crate) fn imports_google_keep(req: &Request, ctx: &Context) -> Response {
         req.body.as_deref().unwrap_or(&[]),
     ) {
         Ok(body) => Into::<ImportGoogleKeepBody>::into(body),
-        Err(_) => return Response::with_status(Status::BadRequest),
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     if let Err(report) = body.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Decode base64 zip
     let zip_bytes = match BASE64_STANDARD.decode(body.file.as_bytes()) {
         Ok(b) => b,
-        Err(_) => return Response::with_status(Status::BadRequest),
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
 
     // Import notes
     let count = google_keep::import_from_zip_bytes(&zip_bytes, ctx, user.id);
 
-    Response::with_json(api::ImportGoogleKeepResponse {
+    Ok(Response::with_json(api::ImportGoogleKeepResponse {
         count: count as i64,
-    })
+    }))
 }
 
 // MARK: Tests
@@ -92,7 +95,7 @@ mod test {
 
     #[test]
     fn test_imports_google_keep() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session(&ctx);
 
@@ -104,7 +107,7 @@ mod test {
 
     #[test]
     fn test_imports_google_keep_empty_notes_skipped() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session(&ctx);
 
@@ -116,7 +119,7 @@ mod test {
 
     #[test]
     fn test_imports_google_keep_invalid_base64() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session(&ctx);
 
@@ -130,7 +133,7 @@ mod test {
 
     #[test]
     fn test_imports_google_keep_unauthorized() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         let res = router.handle(

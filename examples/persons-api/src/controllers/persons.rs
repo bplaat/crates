@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use bsqlite::{execute_args, query_args};
 use const_format::formatcp;
 use from_derive::FromStruct;
@@ -17,25 +18,26 @@ use crate::models::{IndexQuery, Person, Relation};
 use crate::{api, validators};
 
 // MARK: Persons Index
-pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Result<Response> {
     // Parse request query
     let query = match req.url.query() {
         Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
             Ok(query) => query,
-            Err(_) => return Response::with_status(Status::BadRequest),
+            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
         },
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Get persons
     let (total, persons) = if query.query.is_empty() {
         let total = ctx
             .database
-            .query_some::<i64>("SELECT COUNT(id) FROM persons", ())
-            .expect("Database error");
+            .query_some::<i64>("SELECT COUNT(id) FROM persons", ())?;
         let persons = query_args!(
             Person,
             ctx.database,
@@ -47,49 +49,42 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Response {
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }
-        )
-        .expect("Database error")
-        .map(|r| Into::<api::Person>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        )?
+        .map(|r| r.map(Into::into).map_err(anyhow::Error::from))
+        .collect::<Result<Vec<api::Person>>>()?;
         (total, persons)
     } else {
-        let total = ctx
-            .database
-            .query_some::<i64>(
-                "SELECT COUNT(rowid) FROM persons_fts WHERE persons_fts MATCH ?",
-                query.query.clone(),
-            )
-            .expect("Database error");
+        let total = ctx.database.query_some::<i64>(
+            "SELECT COUNT(rowid) FROM persons_fts WHERE persons_fts MATCH ?",
+            query.query.clone(),
+        )?;
         let persons = query_args!(
             Person,
             ctx.database,
-            formatcp!(
-                "SELECT p.id, p.name, p.age, p.relation, p.created_at FROM persons p
-                JOIN persons_fts fts ON p.id = fts.id
-                WHERE persons_fts MATCH :fts_query
-                ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset",
-            ),
+            "SELECT p.id, p.name, p.age, p.relation, p.created_at FROM persons p
+            JOIN persons_fts fts ON p.id = fts.id
+            WHERE persons_fts MATCH :fts_query
+            ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset",
             Args {
                 fts_query: query.query,
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }
-        )
-        .expect("Database error")
-        .map(|r| Into::<api::Person>::into(r.expect("Database error")))
-        .collect::<Vec<_>>();
+        )?
+        .map(|r| r.map(Into::into).map_err(anyhow::Error::from))
+        .collect::<Result<Vec<api::Person>>>()?;
         (total, persons)
     };
 
     // Return persons
-    Response::with_json(api::PersonIndexResponse {
+    Ok(Response::with_json(api::PersonIndexResponse {
         pagination: api::Pagination {
             page: query.page,
             limit: query.limit,
             total,
         },
         data: persons,
-    })
+    }))
 }
 
 // MARK: Persons Create
@@ -103,16 +98,18 @@ struct PersonCreateUpdateBody {
     relation: Relation,
 }
 
-pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Result<Response> {
     // Parse and validate body
     let body = match serde_urlencoded::from_bytes::<api::PersonCreateUpdateBody>(
         req.body.as_deref().unwrap_or(&[]),
     ) {
         Ok(body) => Into::<PersonCreateUpdateBody>::into(body),
-        Err(_) => return Response::with_status(Status::BadRequest),
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     if let Err(report) = body.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Create person
@@ -122,28 +119,28 @@ pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Response {
         relation: body.relation,
         ..Default::default()
     };
-    ctx.database.insert_person(person.clone());
+    ctx.database.insert_person(person.clone())?;
 
     // Return created person
-    Response::with_json(Into::<api::Person>::into(person))
+    Ok(Response::with_json(Into::<api::Person>::into(person)))
 }
 
 // MARK: Persons Show
-pub(crate) fn persons_show(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn persons_show(req: &Request, ctx: &Context) -> Result<Response> {
     // Get person
-    let person = match get_person(req, ctx) {
+    let person = match get_person(req, ctx)? {
         Some(person) => person,
         None => return not_found(req, ctx),
     };
 
     // Return person
-    Response::with_json(Into::<api::Person>::into(person))
+    Ok(Response::with_json(Into::<api::Person>::into(person)))
 }
 
 // MARK: Persons Update
-pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Result<Response> {
     // Get person
-    let mut person = match get_person(req, ctx) {
+    let mut person = match get_person(req, ctx)? {
         Some(person) => person,
         None => return not_found(req, ctx),
     };
@@ -153,10 +150,12 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Response {
         req.body.as_deref().unwrap_or(&[]),
     ) {
         Ok(body) => Into::<PersonCreateUpdateBody>::into(body),
-        Err(_) => return Response::with_status(Status::BadRequest),
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     if let Err(report) = body.validate() {
-        return Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report));
+        return Ok(
+            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
+        );
     }
 
     // Update person
@@ -172,55 +171,50 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Response {
             age: person.age_in_years,
             relation: person.relation
         }
-    )
-    .expect("Database error");
+    )?;
 
     // Return updated person
-    Response::with_json(Into::<api::Person>::into(person))
+    Ok(Response::with_json(Into::<api::Person>::into(person)))
 }
 
 // MARK: Persons Delete
-pub(crate) fn persons_delete(req: &Request, ctx: &Context) -> Response {
+pub(crate) fn persons_delete(req: &Request, ctx: &Context) -> Result<Response> {
     // Get person
-    let person = match get_person(req, ctx) {
+    let person = match get_person(req, ctx)? {
         Some(person) => person,
         None => return not_found(req, ctx),
     };
 
     // Delete person
     ctx.database
-        .execute("DELETE FROM persons WHERE id = ?", person.id)
-        .expect("Database error");
+        .execute("DELETE FROM persons WHERE id = ?", person.id)?;
 
     // Success response
-    Response::new()
+    Ok(Response::with_status(Status::NoContent))
 }
 
 // MARK: Helpers
-fn get_person(req: &Request, ctx: &Context) -> Option<Person> {
+fn get_person(req: &Request, ctx: &Context) -> Result<Option<Person>> {
     // Parse person id from url
-    let person_id = match req
+    let person_id = req
         .params
         .get("person_id")
-        .expect("person_id param should be present")
-        .parse::<Uuid>()
-    {
-        Ok(id) => id,
-        Err(_) => return None,
-    };
+        .expect("Should be some")
+        .parse::<Uuid>()?;
 
     // Get person
-    ctx.database
+    Ok(ctx
+        .database
         .query::<Person>(
             formatcp!(
                 "SELECT {} FROM persons WHERE id = ? LIMIT 1",
                 Person::columns()
             ),
             person_id,
-        )
-        .expect("Database error")
+        )?
         .next()
-        .map(|r| r.expect("Database error"))
+        .transpose()
+        .map_err(Box::new)?)
 }
 
 // MARK: Tests
@@ -249,7 +243,7 @@ mod test {
             relation: Relation::Me,
             ..Default::default()
         };
-        ctx.database.insert_person(person.clone());
+        ctx.database.insert_person(person.clone()).unwrap();
 
         // Fetch /persons check if person is there
         let res = router.handle(&Request::get("http://localhost/persons"));
@@ -267,14 +261,18 @@ mod test {
         let router = router(ctx.clone());
 
         // Create multiple persons
-        ctx.database.insert_person(Person {
-            name: "Alice".to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_person(Person {
-            name: "Bob".to_string(),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_person(Person {
+                name: "Alice".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_person(Person {
+                name: "Bob".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Search for "Alice"
         let res = router.handle(&Request::get("http://localhost/persons?q=Alice"));
@@ -289,22 +287,30 @@ mod test {
         let ctx = Context::with_test_database();
         let router = router(ctx.clone());
 
-        ctx.database.insert_person(Person {
-            name: "Alice Smith".to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_person(Person {
-            name: "Alice Johnson".to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_person(Person {
-            name: "Bob Smith".to_string(),
-            ..Default::default()
-        });
-        ctx.database.insert_person(Person {
-            name: "Carol White".to_string(),
-            ..Default::default()
-        });
+        ctx.database
+            .insert_person(Person {
+                name: "Alice Smith".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_person(Person {
+                name: "Alice Johnson".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_person(Person {
+                name: "Bob Smith".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+        ctx.database
+            .insert_person(Person {
+                name: "Carol White".to_string(),
+                ..Default::default()
+            })
+            .unwrap();
 
         // Prefix search
         let res = router.handle(&Request::get("http://localhost/persons?q=Al*"));
@@ -347,12 +353,14 @@ mod test {
 
         // Create multiple persons
         for i in 1..=30 {
-            ctx.database.insert_person(Person {
-                name: format!("Person {i}"),
-                age_in_years: 20 + i,
-                relation: Relation::Me,
-                ..Default::default()
-            });
+            ctx.database
+                .insert_person(Person {
+                    name: format!("Person {i}"),
+                    age_in_years: 20 + i,
+                    relation: Relation::Me,
+                    ..Default::default()
+                })
+                .unwrap();
         }
 
         // Fetch /persons with limit 10 and page 1
@@ -401,7 +409,7 @@ mod test {
             relation: Relation::Me,
             ..Default::default()
         };
-        ctx.database.insert_person(person.clone());
+        ctx.database.insert_person(person.clone()).unwrap();
 
         // Fetch /persons/:person_id check if person is there
         let res = router.handle(&Request::get(format!(
@@ -432,7 +440,7 @@ mod test {
             relation: Relation::Me,
             ..Default::default()
         };
-        ctx.database.insert_person(person.clone());
+        ctx.database.insert_person(person.clone()).unwrap();
 
         // Update person
         let res = router.handle(
@@ -463,14 +471,14 @@ mod test {
             relation: Relation::Me,
             ..Default::default()
         };
-        ctx.database.insert_person(person.clone());
+        ctx.database.insert_person(person.clone()).unwrap();
 
         // Delete person
         let res = router.handle(&Request::delete(format!(
             "http://localhost/persons/{}",
             person.id
         )));
-        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.status, Status::NoContent);
 
         // Fetch /persons check if empty
         let res = router.handle(&Request::get("http://localhost/persons"));

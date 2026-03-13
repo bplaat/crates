@@ -88,9 +88,6 @@ impl WebSocket {
         sha1.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
         let expected_accept = BASE64_STANDARD.encode(sha1.finalize());
         if *websocket_accept != expected_accept {
-            eprintln!(
-                "WebSocket connection failed: expected Sec-WebSocket-Accept header to be '{expected_accept}', got '{websocket_accept}'",
-            );
             return Err(ConnectError);
         }
 

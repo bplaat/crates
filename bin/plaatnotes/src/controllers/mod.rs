@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use anyhow::Result;
 use small_http::{Request, Response, Status};
 
 pub(crate) use self::auth::{auth_login, auth_logout, auth_validate};
@@ -29,10 +30,13 @@ mod notes;
 mod sessions;
 mod users;
 
-pub(crate) fn home(_: &Request, _: &Context) -> Response {
-    Response::with_body(concat!("PlaatNotes API v", env!("CARGO_PKG_VERSION")))
+pub(crate) fn home(_: &Request, _: &Context) -> Result<Response> {
+    Ok(Response::with_body(concat!(
+        "PlaatNotes API v",
+        env!("CARGO_PKG_VERSION")
+    )))
 }
 
-pub(crate) fn not_found(_: &Request, _: &Context) -> Response {
-    Response::with_status(Status::NotFound).body("404 Not found")
+pub(crate) fn not_found(_: &Request, _: &Context) -> Result<Response> {
+    Ok(Response::with_status(Status::NotFound).body("404 Not found"))
 }

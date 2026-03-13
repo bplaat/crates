@@ -8,47 +8,46 @@
 
 use std::net::{Ipv4Addr, TcpListener};
 
+use anyhow::Result;
 use small_http::{Method, Request, Response, Status};
 use small_router::RouterBuilder;
 
 /// Pre-layer that processes CORS requests
-fn cors_pre_layer(req: &Request, _: &mut ()) -> Option<Response> {
+fn cors_pre_layer(req: &Request, _: &mut ()) -> Option<Result<Response>> {
     if req.method == Method::Options && req.headers.get("Access-Control-Request-Method").is_some() {
-        Some(
-            Response::with_status(Status::NoContent)
-                .header("Access-Control-Allow-Origin", "*")
-                .header(
-                    "Access-Control-Allow-Methods",
-                    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-                )
-                .header("Access-Control-Max-Age", "86400"),
-        )
+        Some(Ok(Response::with_status(Status::NoContent)
+            .header("Access-Control-Allow-Origin", "*")
+            .header(
+                "Access-Control-Allow-Methods",
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+            )
+            .header("Access-Control-Max-Age", "86400")))
     } else {
         None
     }
 }
 
 /// Post-layer that processes CORS requests
-fn cors_post_layer(req: &Request, _: &mut (), res: Response) -> Response {
+fn cors_post_layer(req: &Request, _: &(), res: Response) -> Result<Response> {
     if !(req.method == Method::Options
         && req.headers.get("Access-Control-Request-Method").is_some())
     {
-        res.header("Access-Control-Allow-Origin", "*")
+        Ok(res.header("Access-Control-Allow-Origin", "*"))
     } else {
-        res
+        Ok(res)
     }
 }
 
-fn home(_req: &Request, _ctx: &()) -> Response {
-    Response::with_body("Home")
+fn home(_req: &Request, _ctx: &()) -> Result<Response> {
+    Ok(Response::with_body("Home"))
 }
 
-fn about(_req: &Request, _ctx: &()) -> Response {
-    Response::with_body("About")
+fn about(_req: &Request, _ctx: &()) -> Result<Response> {
+    Ok(Response::with_body("About"))
 }
 
-fn not_found(_req: &Request, _ctx: &()) -> Response {
-    Response::with_status(Status::NotFound).body("404 Not Found")
+fn not_found(_req: &Request, _ctx: &()) -> Result<Response> {
+    Ok(Response::with_status(Status::NotFound).body("404 Not Found"))
 }
 
 fn main() {

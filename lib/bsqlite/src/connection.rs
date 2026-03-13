@@ -210,7 +210,7 @@ impl Connection {
 #[macro_export]
 macro_rules! query_args {
     ($t:tt, $db:expr, $query:expr, Args { $($key:ident : $value:expr),* $(,)? } $(,)?) => {{
-        (|| -> Result<_, $crate::StatementError> {
+        (|| -> std::result::Result<_, $crate::StatementError> {
             let mut stat = $db.prepare::<$t>($query)?;
             $(
                 stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value))?;
@@ -224,7 +224,7 @@ macro_rules! query_args {
 #[macro_export]
 macro_rules! execute_args {
     ($db:expr, $query:expr, Args { $($key:ident : $value:expr),* $(,)? } $(,)?) => {{
-        (|| -> Result<_, $crate::StatementError> {
+        (|| -> std::result::Result<_, $crate::StatementError> {
             let mut stat = $db.prepare::<()>($query)?;
             $(
                 stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value))?;
