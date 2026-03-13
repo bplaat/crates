@@ -124,6 +124,11 @@ test.describe('Notes', () => {
         await expect(page.getByTitle('Pin')).toBeVisible();
     });
 
+    test('rich editor is focused on create page load', async ({ page }) => {
+        await page.goto('/notes/create');
+        await expect(page.locator('[contenteditable]')).toBeFocused();
+    });
+
     test('save button does not submit when body is empty', async ({ page }) => {
         await page.goto('/notes/create');
         await page.getByPlaceholder('Title').fill('Only title no body');

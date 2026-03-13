@@ -8,7 +8,7 @@ import { useLocation } from 'wouter-preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, IconButton, SecondaryButton } from '../../components/form.tsx';
 import { Navbar } from '../../components/navbar.tsx';
-import { RichEditor } from '../../components/rich-editor.tsx';
+import { NoteEditorCard } from '../../components/note-editor-card.tsx';
 import { createNote } from '../../services/notes.service.ts';
 import { t } from '../../services/i18n.service.ts';
 
@@ -32,9 +32,9 @@ export function NotesCreate() {
     }
 
     return (
-        <div class="min-h-screen bg-gray-50 dark:bg-zinc-900">
+        <div class="h-screen flex flex-col bg-gray-50 dark:bg-zinc-900">
             <Navbar />
-            <main class="max-w-2xl mx-auto px-4 py-8">
+            <main class="flex-1 flex flex-col min-h-0 max-w-2xl w-full mx-auto px-4 py-8">
                 <div class="flex items-center gap-3 mb-6">
                     <IconButton
                         onClick={() => navigate('/')}
@@ -48,47 +48,45 @@ export function NotesCreate() {
                     <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('notes_create.heading')}</h1>
                 </div>
 
-                <form
+                <NoteEditorCard
+                    title={title}
+                    onTitleInput={setTitle}
+                    titlePlaceholder={t('notes_create.title_placeholder')}
+                    body={body}
+                    onBodyInput={setBody}
+                    bodyPlaceholder={t('notes_create.body_placeholder')}
                     onSubmit={saveNote}
-                    class="bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-sm overflow-hidden"
-                >
-                    <div class="px-5 pt-5 pb-2">
-                        <input
-                            class="text-xl font-medium text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 bg-transparent outline-none w-full"
-                            type="text"
-                            placeholder={t('notes_create.title_placeholder')}
-                            value={title}
-                            onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-                        />
-                    </div>
-                    <RichEditor value={body} onInput={setBody} placeholder={t('notes_create.body_placeholder')} />
-
-                    <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-3 flex items-center justify-between bg-gray-50 dark:bg-zinc-700/50">
-                        <IconButton
-                            type="button"
-                            onClick={() => setIsPinned(!isPinned)}
-                            class={
-                                isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'
-                            }
-                            title={isPinned ? t('note.unpin') : t('note.pin')}
-                        >
-                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
-                            </svg>
-                        </IconButton>
-                        <div class="flex gap-2">
-                            <SecondaryButton type="button" onClick={() => navigate('/')}>
-                                {t('notes_create.cancel')}
-                            </SecondaryButton>
-                            <Button type="submit" class="inline-flex items-center gap-1.5 px-4 py-1.5">
-                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                    autoFocus
+                    footer={
+                        <div class="flex items-center justify-between">
+                            <IconButton
+                                type="button"
+                                onClick={() => setIsPinned(!isPinned)}
+                                class={
+                                    isPinned
+                                        ? 'text-yellow-500 dark:text-yellow-400'
+                                        : 'text-gray-400 dark:text-gray-500'
+                                }
+                                title={isPinned ? t('note.unpin') : t('note.pin')}
+                            >
+                                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
                                 </svg>
-                                {t('notes_create.save')}
-                            </Button>
+                            </IconButton>
+                            <div class="flex gap-2">
+                                <SecondaryButton type="button" onClick={() => navigate('/')}>
+                                    {t('notes_create.cancel')}
+                                </SecondaryButton>
+                                <Button type="submit" class="inline-flex items-center gap-1.5 px-4 py-1.5">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                    </svg>
+                                    {t('notes_create.save')}
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                </form>
+                    }
+                />
             </main>
         </div>
     );

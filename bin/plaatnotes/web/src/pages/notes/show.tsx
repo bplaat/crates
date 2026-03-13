@@ -8,9 +8,8 @@ import { useLocation, useParams } from 'wouter-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
 import { Navbar } from '../../components/navbar.tsx';
-import { Card } from '../../components/card.tsx';
 import { IconButton } from '../../components/form.tsx';
-import { RichEditor } from '../../components/rich-editor.tsx';
+import { NoteEditorCard } from '../../components/note-editor-card.tsx';
 import { getNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
 
@@ -152,23 +151,14 @@ export function NotesShow() {
                     </IconButton>
                 </div>
 
-                <Card class="flex-1 flex flex-col min-h-0 overflow-hidden">
-                    <div class="px-5 pt-5 pb-2">
-                        <input
-                            class="text-xl font-medium text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 bg-transparent outline-none w-full"
-                            type="text"
-                            placeholder={t('notes_show.title_placeholder')}
-                            value={note.title || ''}
-                            onInput={(e) => scheduleSave({ ...note, title: (e.target as HTMLInputElement).value })}
-                        />
-                    </div>
-                    <RichEditor
-                        class="flex-1 min-h-0"
-                        value={note.body}
-                        onInput={(markdown) => scheduleSave({ ...note, body: markdown })}
-                        placeholder={t('notes_show.body_placeholder')}
-                    />
-                    <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-2 bg-gray-50 dark:bg-zinc-700/50">
+                <NoteEditorCard
+                    title={note.title || ''}
+                    onTitleInput={(title) => scheduleSave({ ...note, title })}
+                    titlePlaceholder={t('notes_show.title_placeholder')}
+                    body={note.body}
+                    onBodyInput={(body) => scheduleSave({ ...note, body })}
+                    bodyPlaceholder={t('notes_show.body_placeholder')}
+                    footer={
                         <p class="text-xs text-gray-400 dark:text-gray-500">
                             {saveStatus === 'saving' && (
                                 <span class="text-yellow-500 dark:text-yellow-400">{t('notes_show.saving')}</span>
@@ -178,8 +168,8 @@ export function NotesShow() {
                             )}
                             {saveStatus === 'idle' && t('notes_show.last_updated', formatDate(note.updatedAt))}
                         </p>
-                    </div>
-                </Card>
+                    }
+                />
             </main>
         </div>
     );
