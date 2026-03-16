@@ -28,9 +28,7 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Result<Response> {
         None => IndexQuery::default(),
     };
     if let Err(report) = query.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
+        return Ok(Response::with_status(Status::BadRequest).json(api::Report::from(report)));
     }
 
     // Get persons
@@ -103,13 +101,11 @@ pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Result<Response> {
     let body = match serde_urlencoded::from_bytes::<api::PersonCreateUpdateBody>(
         req.body.as_deref().unwrap_or(&[]),
     ) {
-        Ok(body) => Into::<PersonCreateUpdateBody>::into(body),
+        Ok(body) => PersonCreateUpdateBody::from(body),
         Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     if let Err(report) = body.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
+        return Ok(Response::with_status(Status::BadRequest).json(api::Report::from(report)));
     }
 
     // Create person
@@ -122,7 +118,7 @@ pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Result<Response> {
     ctx.database.insert_person(person.clone())?;
 
     // Return created person
-    Ok(Response::with_json(Into::<api::Person>::into(person)))
+    Ok(Response::with_json(api::Person::from(person)))
 }
 
 // MARK: Persons Show
@@ -134,7 +130,7 @@ pub(crate) fn persons_show(req: &Request, ctx: &Context) -> Result<Response> {
     };
 
     // Return person
-    Ok(Response::with_json(Into::<api::Person>::into(person)))
+    Ok(Response::with_json(api::Person::from(person)))
 }
 
 // MARK: Persons Update
@@ -149,13 +145,11 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Result<Response> {
     let body = match serde_urlencoded::from_bytes::<api::PersonCreateUpdateBody>(
         req.body.as_deref().unwrap_or(&[]),
     ) {
-        Ok(body) => Into::<PersonCreateUpdateBody>::into(body),
+        Ok(body) => PersonCreateUpdateBody::from(body),
         Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     if let Err(report) = body.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
+        return Ok(Response::with_status(Status::BadRequest).json(api::Report::from(report)));
     }
 
     // Update person
@@ -174,7 +168,7 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Result<Response> {
     )?;
 
     // Return updated person
-    Ok(Response::with_json(Into::<api::Person>::into(person)))
+    Ok(Response::with_json(api::Person::from(person)))
 }
 
 // MARK: Persons Delete

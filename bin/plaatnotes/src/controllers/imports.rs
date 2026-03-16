@@ -12,8 +12,10 @@ use validate::Validate;
 
 use crate::api;
 use crate::context::Context;
+use crate::controllers::{parse_body, require_auth};
 use crate::imports::google_keep;
 
+// MARK: Handlers
 #[derive(Validate, FromStruct)]
 #[from_struct(api::ImportGoogleKeepBody)]
 struct ImportGoogleKeepBody {
@@ -22,24 +24,8 @@ struct ImportGoogleKeepBody {
 }
 
 pub(crate) fn imports_google_keep(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
-
-    // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::ImportGoogleKeepBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
-        Ok(body) => Into::<ImportGoogleKeepBody>::into(body),
-        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-    };
-    if let Err(report) = body.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let user = require_auth!(ctx);
+    let body = parse_body!(req, api::ImportGoogleKeepBody, ImportGoogleKeepBody);
 
     // Decode base64 zip
     let zip_bytes = match BASE64_STANDARD.decode(body.file.as_bytes()) {

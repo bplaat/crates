@@ -15,174 +15,16 @@ use validate::Validate;
 
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
-use crate::controllers::not_found;
-use crate::models::note::policies;
+use crate::controllers::{not_found, parse_body, parse_index_query, require_auth};
+use crate::models::note::{
+    FILTER_ARCHIVED, FILTER_NORMAL, FILTER_PINNED, FILTER_TRASHED, policies,
+};
 use crate::models::{IndexQuery, Note, User, UserRole};
 use crate::utils::preprocess_fts_query;
 
+// MARK: Handlers
 pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
-
-    // Check authorization
-    if !policies::can_index(user) {
-        return Ok(Response::with_status(Status::Forbidden));
-    }
-
-    // Parse request query
-    let query = match req.url.query() {
-        Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
-            Ok(query) => query,
-            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-        },
-        None => IndexQuery::default(),
-    };
-    if let Err(report) = query.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
-
-    // Get notes for authenticated user or all notes if admin
-    let (total, notes) = match user.role {
-        UserRole::Admin => {
-            // Admin sees all notes
-            if query.query.is_empty() {
-                let total = ctx
-                    .database
-                    .query_some::<i64>(
-                        "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0",
-                        (),
-                    )?                    ;
-                let notes = query_args!(
-                    Note,
-                    ctx.database,
-                    formatcp!(
-                        "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0
-                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                        Note::columns()
-                    ),
-                    Args {
-                        limit: query.limit,
-                        offset: (query.page - 1) * query.limit
-                    }
-                )
-                ?
-                .map(|r| r.map(Into::into))
-                .collect::<Result<Vec<_>, _>>()?;
-                (total, notes)
-            } else {
-                let total = query_args!(
-                    i64,
-                    ctx.database,
-                    "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND
-                    id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
-                    Args { fts_query: preprocess_fts_query(&query.query) }
-                )
-                ?
-                .next()
-                .transpose()?
-                .unwrap_or(0);
-                let notes = query_args!(
-                    Note,
-                    ctx.database,
-                    formatcp!(
-                        "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND
-                        id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
-                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                        Note::columns()
-                    ),
-                    Args {
-                        fts_query: preprocess_fts_query(&query.query),
-                        limit: query.limit,
-                        offset: (query.page - 1) * query.limit
-                    }
-                )
-                ?
-                .map(|r| r.map(Into::into))
-                .collect::<Result<Vec<_>, _>>()?;
-                (total, notes)
-            }
-        }
-        UserRole::Normal => {
-            // Normal user sees only their own notes
-            if query.query.is_empty() {
-                let total = query_args!(
-                    i64,
-                    ctx.database,
-                    "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id",
-                    Args { user_id: user.id }
-                )
-                ?
-                .next()
-                .transpose()?
-                .unwrap_or(0);
-                let notes = query_args!(
-                    Note,
-                    ctx.database,
-                    formatcp!(
-                        "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id
-                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                        Note::columns()
-                    ),
-                    Args {
-                        user_id: user.id,
-                        limit: query.limit,
-                        offset: (query.page - 1) * query.limit
-                    }
-                )
-                ?
-                .map(|r| r.map(Into::into))
-                .collect::<Result<Vec<_>, _>>()?;
-                (total, notes)
-            } else {
-                let total = query_args!(
-                    i64,
-                    ctx.database,
-                    "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
-                    id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
-                    Args { user_id: user.id, fts_query: preprocess_fts_query(&query.query) }
-                )
-                ?
-                .next()
-                .transpose()?
-                .unwrap_or(0);
-                let notes = query_args!(
-                    Note,
-                    ctx.database,
-                    formatcp!(
-                        "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
-                        id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
-                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                        Note::columns()
-                    ),
-                    Args {
-                        user_id: user.id,
-                        fts_query: preprocess_fts_query(&query.query),
-                        limit: query.limit,
-                        offset: (query.page - 1) * query.limit
-                    }
-                )
-                ?
-                .map(|r| r.map(Into::into))
-                .collect::<Result<Vec<_>, _>>()?;
-                (total, notes)
-            }
-        }
-    };
-
-    // Return notes
-    Ok(Response::with_json(api::NoteIndexResponse {
-        pagination: api::Pagination {
-            page: query.page,
-            limit: query.limit,
-            total,
-        },
-        data: notes,
-    }))
+    notes_filtered(req, ctx, FILTER_NORMAL)
 }
 
 #[derive(Validate, FromStruct)]
@@ -196,29 +38,14 @@ struct NoteCreateBody {
 }
 
 pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let user = require_auth!(ctx);
 
     // Check authorization
     if !policies::can_create(user) {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::NoteCreateBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
-        Ok(body) => Into::<NoteCreateBody>::into(body),
-        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-    };
-    if let Err(report) = body.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let body = parse_body!(req, api::NoteCreateBody, NoteCreateBody);
 
     // Create note with authenticated user's ID
     let note = Note {
@@ -233,9 +60,9 @@ pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Result<Response> {
 
     // Shift all existing notes in the same category down so the new note appears first
     let position_filter = if note.is_pinned {
-        "is_trashed = 0 AND is_pinned = 1"
+        FILTER_PINNED
     } else {
-        "is_trashed = 0 AND is_archived = 0 AND is_pinned = 0"
+        FILTER_NORMAL
     };
     execute_args!(
         ctx.database,
@@ -248,15 +75,11 @@ pub(crate) fn notes_create(req: &Request, ctx: &Context) -> Result<Response> {
     ctx.database.insert_note(note.clone())?;
 
     // Return created note
-    Ok(Response::with_json(Into::<api::Note>::into(note)))
+    Ok(Response::with_json(api::Note::from(note)))
 }
 
 pub(crate) fn notes_show(_req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let user = require_auth!(ctx);
 
     // Get note (admins can access any note, normal users only their own)
     let note = match fetch_note_for_user(_req, ctx, user)? {
@@ -270,7 +93,7 @@ pub(crate) fn notes_show(_req: &Request, ctx: &Context) -> Result<Response> {
     }
 
     // Return note
-    Ok(Response::with_json(Into::<api::Note>::into(note)))
+    Ok(Response::with_json(api::Note::from(note)))
 }
 
 #[derive(Validate, FromStruct)]
@@ -286,11 +109,7 @@ struct NoteUpdateBody {
 }
 
 pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let user = require_auth!(ctx);
 
     // Get note (admins can access any note, normal users only their own)
     let mut note = match fetch_note_for_user(req, ctx, user)? {
@@ -303,18 +122,7 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Result<Response> {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::NoteUpdateBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
-        Ok(body) => Into::<NoteUpdateBody>::into(body),
-        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-    };
-    if let Err(report) = body.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let body = parse_body!(req, api::NoteUpdateBody, NoteUpdateBody);
 
     // Update note
     let prev_is_archived = note.is_archived;
@@ -342,9 +150,9 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Result<Response> {
     // When archiving or unarchiving, put the note first and shift all others
     if note.is_archived != prev_is_archived && !note.is_trashed {
         let filter = if note.is_archived {
-            "is_archived = 1 AND is_trashed = 0"
+            FILTER_ARCHIVED
         } else {
-            "is_archived = 0 AND is_trashed = 0 AND is_pinned = 0"
+            FILTER_NORMAL
         };
         execute_args!(
             ctx.database,
@@ -367,14 +175,13 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Result<Response> {
     // When trashing or untrashing, reset position in the destination category
     if note.is_trashed != prev_is_trashed {
         let filter = if note.is_trashed {
-            // Trashed notes form their own ordered list
-            "is_trashed = 1"
+            FILTER_TRASHED
         } else if note.is_pinned {
-            "is_trashed = 0 AND is_pinned = 1"
+            FILTER_PINNED
         } else if note.is_archived {
-            "is_trashed = 0 AND is_archived = 1"
+            FILTER_ARCHIVED
         } else {
-            "is_trashed = 0 AND is_archived = 0 AND is_pinned = 0"
+            FILTER_NORMAL
         };
         execute_args!(
             ctx.database,
@@ -395,15 +202,11 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Result<Response> {
     }
 
     // Return updated note
-    Ok(Response::with_json(Into::<api::Note>::into(note)))
+    Ok(Response::with_json(api::Note::from(note)))
 }
 
 pub(crate) fn notes_delete(_req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let user = require_auth!(ctx);
 
     // Get note (admins can access any note, normal users only their own)
     let note = match fetch_note_for_user(_req, ctx, user)? {
@@ -425,23 +228,19 @@ pub(crate) fn notes_delete(_req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 pub(crate) fn notes_pinned(req: &Request, ctx: &Context) -> Result<Response> {
-    notes_filtered(req, ctx, "is_trashed = 0 AND is_pinned")
+    notes_filtered(req, ctx, FILTER_PINNED)
 }
 
 pub(crate) fn notes_archived(req: &Request, ctx: &Context) -> Result<Response> {
-    notes_filtered(req, ctx, "is_trashed = 0 AND is_archived")
+    notes_filtered(req, ctx, FILTER_ARCHIVED)
 }
 
 pub(crate) fn notes_trashed(req: &Request, ctx: &Context) -> Result<Response> {
-    notes_filtered(req, ctx, "is_trashed")
+    notes_filtered(req, ctx, FILTER_TRASHED)
 }
 
 pub(crate) fn notes_trashed_clear(_req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let user = require_auth!(ctx);
 
     // Delete all trashed notes for this user (admins delete all, normal users only their own)
     match user.role {
@@ -461,160 +260,34 @@ pub(crate) fn notes_trashed_clear(_req: &Request, ctx: &Context) -> Result<Respo
     Ok(Response::new())
 }
 
+pub(crate) fn notes_reorder(req: &Request, ctx: &Context) -> Result<Response> {
+    notes_reorder_handler(req, ctx, FILTER_NORMAL)
+}
+
+pub(crate) fn notes_pinned_reorder(req: &Request, ctx: &Context) -> Result<Response> {
+    notes_reorder_handler(req, ctx, FILTER_PINNED)
+}
+
+pub(crate) fn notes_archived_reorder(req: &Request, ctx: &Context) -> Result<Response> {
+    notes_reorder_handler(req, ctx, FILTER_ARCHIVED)
+}
+
 // MARK: Utils
 fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response> {
-    // Check authentication
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let user = require_auth!(ctx);
 
-    // Check authorization
     if !policies::can_index(user) {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Parse request query
-    let query = match req.url.query() {
-        Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
-            Ok(query) => query,
-            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-        },
-        None => IndexQuery::default(),
+    let query = parse_index_query!(req);
+    let user_id = if user.role == UserRole::Admin {
+        None
+    } else {
+        Some(user.id)
     };
-    if let Err(report) = query.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let (total, notes) = fetch_notes_page(ctx, filter, user_id, &query)?;
 
-    // Get filtered notes
-    let (total, notes) = match user.role {
-        UserRole::Admin => {
-            // Admin sees all filtered notes
-            if query.query.is_empty() {
-                let total = ctx.database.query_some::<i64>(
-                    &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1"),
-                    (),
-                )?;
-                let notes = query_args!(
-                    Note,
-                    ctx.database,
-                    format!(
-                        "SELECT {} FROM notes WHERE {filter} = 1 ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                        Note::columns()
-                    ),
-                    Args {
-                        limit: query.limit,
-                        offset: (query.page - 1) * query.limit
-                    }
-                )
-                ?
-                .map(|r| r.map(Into::into))
-                .collect::<Result<Vec<_>, _>>()?;
-                (total, notes)
-            } else {
-                let total = query_args!(
-                    i64,
-                    ctx.database,
-                    &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)"),
-                    Args { fts_query: preprocess_fts_query(&query.query) }
-                )
-                ?
-                .next()
-                .transpose()?
-                .unwrap_or(0);
-                let notes = query_args!(
-                    Note,
-                    ctx.database,
-                    format!(
-                        "SELECT {} FROM notes WHERE {filter} = 1 AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
-                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                        Note::columns()
-                    ),
-                    Args {
-                        fts_query: preprocess_fts_query(&query.query),
-                        limit: query.limit,
-                        offset: (query.page - 1) * query.limit
-                    }
-                )
-                ?
-                .map(|r| r.map(Into::into))
-                .collect::<Result<Vec<_>, _>>()?;
-                (total, notes)
-            }
-        }
-        UserRole::Normal => {
-            // Normal user sees only their own filtered notes
-            if query.query.is_empty() {
-                let total = query_args!(
-                    i64,
-                    ctx.database,
-                    &format!(
-                        "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id"
-                    ),
-                    Args { user_id: user.id }
-                )?
-                .next()
-                .transpose()?
-                .unwrap_or(0);
-                let notes = query_args!(
-                    Note,
-                    ctx.database,
-                    format!(
-                        "SELECT {} FROM notes WHERE {filter} = 1 AND user_id = :user_id
-                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                        Note::columns()
-                    ),
-                    Args {
-                        user_id: user.id,
-                        limit: query.limit,
-                        offset: (query.page - 1) * query.limit
-                    }
-                )?
-                .map(|r| r.map(Into::into))
-                .collect::<Result<Vec<_>, _>>()?;
-                (total, notes)
-            } else {
-                let total = query_args!(
-                    i64,
-                    ctx.database,
-                    &format!(
-                        "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND
-                        id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)"
-                    ),
-                    Args {
-                        user_id: user.id,
-                        fts_query: preprocess_fts_query(&query.query)
-                    }
-                )?
-                .next()
-                .transpose()?
-                .unwrap_or(0);
-                let notes = query_args!(
-                    Note,
-                    ctx.database,
-                    format!(
-                        "SELECT {} FROM notes WHERE {filter} = 1 AND user_id = :user_id AND
-                        id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
-                        ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset",
-                        Note::columns()
-                    ),
-                    Args {
-                        user_id: user.id,
-                        fts_query: preprocess_fts_query(&query.query),
-                        limit: query.limit,
-                        offset: (query.page - 1) * query.limit
-                    }
-                )?
-                .map(|r| r.map(Into::into))
-                .collect::<Result<Vec<_>, _>>()?;
-                (total, notes)
-            }
-        }
-    };
-
-    // Return filtered notes
     Ok(Response::with_json(api::NoteIndexResponse {
         pagination: api::Pagination {
             page: query.page,
@@ -625,52 +298,109 @@ fn notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response
     }))
 }
 
-fn get_note_by_id(req: &Request, _ctx: &Context) -> Option<Uuid> {
-    req.params
+pub(crate) fn fetch_notes_page(
+    ctx: &Context,
+    filter: &str,
+    user_id: Option<Uuid>,
+    query: &IndexQuery,
+) -> Result<(i64, Vec<api::Note>)> {
+    let offset = (query.page - 1) * query.limit;
+    if query.query.is_empty() {
+        match user_id {
+            None => {
+                let total = ctx.database.query_some::<i64>(
+                    &format!("SELECT COUNT(id) FROM notes WHERE {filter}"),
+                    (),
+                )?;
+                let notes = query_args!(
+                    Note, ctx.database,
+                    format!("SELECT {} FROM notes WHERE {filter} ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset", Note::columns()),
+                    Args { limit: query.limit, offset: offset }
+                )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
+                Ok((total, notes))
+            }
+            Some(uid) => {
+                let total = ctx.database.query_some::<i64>(
+                    &format!("SELECT COUNT(id) FROM notes WHERE {filter} AND user_id = ?"),
+                    uid,
+                )?;
+                let notes = query_args!(
+                    Note, ctx.database,
+                    format!("SELECT {} FROM notes WHERE {filter} AND user_id = :user_id ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset", Note::columns()),
+                    Args { user_id: uid, limit: query.limit, offset: offset }
+                )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
+                Ok((total, notes))
+            }
+        }
+    } else {
+        let fts_query = preprocess_fts_query(&query.query);
+        match user_id {
+            None => {
+                let total = ctx.database.query_some::<i64>(
+                    &format!("SELECT COUNT(id) FROM notes WHERE {filter} AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH ?)"),
+                    fts_query.clone(),
+                )?;
+                let notes = query_args!(
+                    Note, ctx.database,
+                    format!("SELECT {} FROM notes WHERE {filter} AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset", Note::columns()),
+                    Args { fts_query: fts_query, limit: query.limit, offset: offset }
+                )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
+                Ok((total, notes))
+            }
+            Some(uid) => {
+                let total = ctx.database.query_some::<i64>(
+                    &format!("SELECT COUNT(id) FROM notes WHERE {filter} AND user_id = ? AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH ?)"),
+                    (uid, fts_query.clone()),
+                )?;
+                let notes = query_args!(
+                    Note, ctx.database,
+                    format!("SELECT {} FROM notes WHERE {filter} AND user_id = :user_id AND id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query) ORDER BY position ASC, updated_at DESC LIMIT :limit OFFSET :offset", Note::columns()),
+                    Args { user_id: uid, fts_query: fts_query, limit: query.limit, offset: offset }
+                )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
+                Ok((total, notes))
+            }
+        }
+    }
+}
+
+fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Result<Option<Note>> {
+    let note_id = match req
+        .params
         .get("note_id")
         .expect("note_id param should be present")
         .parse::<Uuid>()
         .ok()
-}
-
-fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Result<Option<Note>> {
-    let note_id = match get_note_by_id(req, ctx) {
+    {
         Some(id) => id,
         None => return Ok(None),
     };
 
     match user.role {
-        UserRole::Admin => {
-            // Admin can fetch any note
-            Ok(query_args!(
-                Note,
-                ctx.database,
-                formatcp!(
-                    "SELECT {} FROM notes WHERE id = :note_id LIMIT 1",
-                    Note::columns()
-                ),
-                Args { note_id: note_id }
-            )?
-            .next()
-            .transpose()?)
-        }
-        UserRole::Normal => {
-            // Normal user can only fetch their own notes
-            Ok(query_args!(
-                Note,
-                ctx.database,
-                formatcp!(
-                    "SELECT {} FROM notes WHERE id = :note_id AND user_id = :user_id LIMIT 1",
-                    Note::columns()
-                ),
-                Args {
-                    note_id: note_id,
-                    user_id: user.id
-                }
-            )?
-            .next()
-            .transpose()?)
-        }
+        UserRole::Admin => Ok(query_args!(
+            Note,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM notes WHERE id = :note_id LIMIT 1",
+                Note::columns()
+            ),
+            Args { note_id: note_id }
+        )?
+        .next()
+        .transpose()?),
+        UserRole::Normal => Ok(query_args!(
+            Note,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM notes WHERE id = :note_id AND user_id = :user_id LIMIT 1",
+                Note::columns()
+            ),
+            Args {
+                note_id: note_id,
+                user_id: user.id
+            }
+        )?
+        .next()
+        .transpose()?),
     }
 }
 
@@ -702,11 +432,7 @@ fn notes_reorder_for(ctx: &Context, user: &User, ids_str: &str, filter: &str) ->
         .collect();
 
     // Final sequence: provided notes first (in given order), then the rest
-    for (position, note_id) in provided_ids
-        .into_iter()
-        .chain(rest_ids.into_iter())
-        .enumerate()
-    {
+    for (position, note_id) in provided_ids.into_iter().chain(rest_ids).enumerate() {
         execute_args!(
             ctx.database,
             "UPDATE notes SET position = :position WHERE id = :note_id AND user_id = :user_id",
@@ -721,10 +447,7 @@ fn notes_reorder_for(ctx: &Context, user: &User, ids_str: &str, filter: &str) ->
 }
 
 fn notes_reorder_handler(req: &Request, ctx: &Context, filter: &str) -> Result<Response> {
-    let user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let user = require_auth!(ctx);
     let body = match serde_urlencoded::from_bytes::<api::NoteReorderBody>(
         req.body.as_deref().unwrap_or(&[]),
     ) {
@@ -733,22 +456,6 @@ fn notes_reorder_handler(req: &Request, ctx: &Context, filter: &str) -> Result<R
     };
     notes_reorder_for(ctx, user, &body.ids, filter)?;
     Ok(Response::with_status(Status::NoContent))
-}
-
-pub(crate) fn notes_reorder(req: &Request, ctx: &Context) -> Result<Response> {
-    notes_reorder_handler(
-        req,
-        ctx,
-        "is_trashed = 0 AND is_archived = 0 AND is_pinned = 0",
-    )
-}
-
-pub(crate) fn notes_pinned_reorder(req: &Request, ctx: &Context) -> Result<Response> {
-    notes_reorder_handler(req, ctx, "is_trashed = 0 AND is_pinned = 1")
-}
-
-pub(crate) fn notes_archived_reorder(req: &Request, ctx: &Context) -> Result<Response> {
-    notes_reorder_handler(req, ctx, "is_trashed = 0 AND is_archived = 1")
 }
 
 // MARK: Tests

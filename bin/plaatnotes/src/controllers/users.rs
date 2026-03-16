@@ -11,41 +11,28 @@ use const_format::formatcp;
 use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
-use validate::{self, Validate};
+use validate::Validate;
 
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
-use crate::controllers::not_found;
+use crate::controllers::auth::verify_password;
+use crate::controllers::{not_found, parse_body, parse_body_ctx, parse_index_query, require_auth};
+use crate::models::User;
+use crate::models::note::{FILTER_ARCHIVED, FILTER_NORMAL, FILTER_PINNED, FILTER_TRASHED};
 use crate::models::user::validators::{is_unique_email, is_unique_email_or_target_user_email};
 use crate::models::user::{UserRole, UserTheme, policies};
-use crate::models::{IndexQuery, Note, User};
 use crate::utils::preprocess_fts_query;
 
+// MARK: Handlers
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let auth_user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let auth_user = require_auth!(ctx);
 
     // Check authorization
     if !policies::can_index(auth_user) {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Parse request query
-    let query = match req.url.query() {
-        Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
-            Ok(query) => query,
-            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-        },
-        None => IndexQuery::default(),
-    };
-    if let Err(report) = query.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let query = parse_index_query!(req);
 
     // Get users
     let (total, users) = if query.query.is_empty() {
@@ -68,11 +55,12 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
         .collect::<Result<Vec<_>, _>>()?;
         (total, users)
     } else {
+        let fts_query = preprocess_fts_query(&query.query);
         let total = ctx
             .database
             .query_some::<i64>(
                 "SELECT COUNT(id) FROM users WHERE id IN (SELECT id FROM users_fts WHERE users_fts MATCH ?)",
-                preprocess_fts_query(&query.query),
+                fts_query.clone(),
             )?;
         let users = query_args!(
             User,
@@ -83,7 +71,7 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
                 User::columns()
             ),
             Args {
-                fts_query: preprocess_fts_query(&query.query),
+                fts_query: fts_query,
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }
@@ -121,29 +109,14 @@ struct UserCreateBody {
 }
 
 pub(crate) fn users_create(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let auth_user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let auth_user = require_auth!(ctx);
 
     // Check authorization
     if !policies::can_create(auth_user) {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::UserCreateBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
-        Ok(body) => Into::<UserCreateBody>::into(body),
-        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-    };
-    if let Err(report) = body.validate_with(ctx) {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let body = parse_body_ctx!(req, api::UserCreateBody, UserCreateBody, ctx);
 
     // Hash password
     let hashed_password = pbkdf2::password_hash(&body.password);
@@ -160,38 +133,11 @@ pub(crate) fn users_create(req: &Request, ctx: &Context) -> Result<Response> {
     ctx.database.insert_user(user.clone())?;
 
     // Return created user
-    Ok(Response::with_json(Into::<api::User>::into(user)))
-}
-
-pub(crate) fn get_user(req: &Request, ctx: &Context) -> Result<Option<User>> {
-    // Parse user id from url
-    let user_id = match req
-        .params
-        .get("user_id")
-        .expect("Should be some")
-        .parse::<Uuid>()
-    {
-        Ok(id) => id,
-        Err(_) => return Ok(None),
-    };
-
-    // Get user
-    Ok(ctx
-        .database
-        .query::<User>(
-            formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
-            user_id,
-        )?
-        .next()
-        .transpose()?)
+    Ok(Response::with_json(api::User::from(user)))
 }
 
 pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let auth_user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let auth_user = require_auth!(ctx);
 
     // Get user
     let user = match get_user(_req, ctx)? {
@@ -205,7 +151,7 @@ pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Result<Response> {
     }
 
     // Return user
-    Ok(Response::with_json(Into::<api::User>::into(user)))
+    Ok(Response::with_json(api::User::from(user)))
 }
 
 #[derive(Validate, FromStruct)]
@@ -226,11 +172,7 @@ struct UserUpdateBody {
 }
 
 pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let auth_user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let auth_user = require_auth!(ctx);
 
     // Get user
     let mut user = match get_user(req, ctx)? {
@@ -243,22 +185,15 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::UserUpdateBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
-        Ok(body) => Into::<UserUpdateBody>::into(body),
-        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-    };
-    let validation_ctx = Context {
-        update_target_user_id: Some(user.id),
-        ..ctx.clone()
-    };
-    if let Err(report) = body.validate_with(&validation_ctx) {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let body = parse_body_ctx!(
+        req,
+        api::UserUpdateBody,
+        UserUpdateBody,
+        &Context {
+            update_target_user_id: Some(user.id),
+            ..ctx.clone()
+        }
+    );
 
     // Update user
     user.first_name = body.first_name;
@@ -297,7 +232,7 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
     )?;
 
     // Return updated user
-    Ok(Response::with_json(Into::<api::User>::into(user)))
+    Ok(Response::with_json(api::User::from(user)))
 }
 
 #[derive(Validate, FromStruct)]
@@ -310,11 +245,7 @@ struct UserChangePasswordBody {
 }
 
 pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let auth_user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let auth_user = require_auth!(ctx);
 
     // Get user
     let mut user = match get_user(req, ctx)? {
@@ -327,24 +258,11 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Resp
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::UserChangePasswordBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
-        Ok(body) => Into::<UserChangePasswordBody>::into(body),
-        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-    };
-    if let Err(report) = body.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let body = parse_body!(req, api::UserChangePasswordBody, UserChangePasswordBody);
 
     // Verify old password
-    match pbkdf2::password_verify(&body.old_password, &user.password) {
-        Ok(true) => {}
-        Ok(false) => return Ok(Response::with_status(Status::Unauthorized)),
-        Err(_) => return Ok(Response::with_status(Status::InternalServerError)),
+    if let Some(err) = verify_password(&body.old_password, &user.password)? {
+        return Ok(err);
     }
 
     // Update password
@@ -365,11 +283,7 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Resp
 }
 
 pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let auth_user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
+    let auth_user = require_auth!(ctx);
 
     // Get user
     let user = match get_user(_req, ctx)? {
@@ -391,223 +305,61 @@ pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Result<Response> {
-    // Check authentication
-    let auth_user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
-    };
-
-    // Get user
-    let user = match get_user(req, ctx)? {
-        Some(user) => user,
-        None => return not_found(req, ctx),
-    };
-
-    // Check authorization
-    if !policies::can_show(auth_user, &user) {
-        return Ok(Response::with_status(Status::Forbidden));
-    }
-
-    // Parse request query
-    let query = match req.url.query() {
-        Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
-            Ok(query) => query,
-            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-        },
-        None => IndexQuery::default(),
-    };
-    if let Err(report) = query.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
-
-    // Get notes for the user
-    let (total, notes) = if query.query.is_empty() {
-        let total = query_args!(
-            i64,
-            ctx.database,
-            "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id",
-            Args { user_id: user.id }
-        )
-        ?
-        .next()
-        .transpose()?
-        .unwrap_or(0);
-        let notes = query_args!(
-            Note,
-            ctx.database,
-            formatcp!(
-                "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id
-                ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
-                Note::columns()
-            ),
-            Args {
-                user_id: user.id,
-                limit: query.limit,
-                offset: (query.page - 1) * query.limit
-            }
-        )
-        ?
-        .map(|r| r.map(Into::into))
-        .collect::<Result<Vec<_>, _>>()?;
-        (total, notes)
-    } else {
-        let total = query_args!(
-            i64,
-            ctx.database,
-            "SELECT COUNT(id) FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
-            id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)",
-            Args { user_id: user.id, fts_query: preprocess_fts_query(&query.query) }
-        )
-        ?
-        .next()
-        .transpose()?
-        .unwrap_or(0);
-        let notes = query_args!(
-            Note,
-            ctx.database,
-            formatcp!(
-                "SELECT {} FROM notes WHERE is_trashed = 0 AND is_archived = 0 AND is_pinned = 0 AND user_id = :user_id AND
-                id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
-                ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
-                Note::columns()
-            ),
-            Args {
-                user_id: user.id,
-                fts_query: preprocess_fts_query(&query.query),
-                limit: query.limit,
-                offset: (query.page - 1) * query.limit
-            }
-        )
-        ?
-        .map(|r| r.map(Into::into))
-        .collect::<Result<Vec<_>, _>>()?;
-        (total, notes)
-    };
-
-    // Return notes
-    Ok(Response::with_json(api::NoteIndexResponse {
-        pagination: api::Pagination {
-            page: query.page,
-            limit: query.limit,
-            total,
-        },
-        data: notes,
-    }))
+    users_notes_filtered(req, ctx, FILTER_NORMAL)
 }
 
 pub(crate) fn users_notes_pinned(req: &Request, ctx: &Context) -> Result<Response> {
-    users_notes_filtered(req, ctx, "is_trashed = 0 AND is_pinned")
+    users_notes_filtered(req, ctx, FILTER_PINNED)
 }
 
 pub(crate) fn users_notes_archived(req: &Request, ctx: &Context) -> Result<Response> {
-    users_notes_filtered(req, ctx, "is_trashed = 0 AND is_archived")
+    users_notes_filtered(req, ctx, FILTER_ARCHIVED)
 }
 
 pub(crate) fn users_notes_trashed(req: &Request, ctx: &Context) -> Result<Response> {
-    users_notes_filtered(req, ctx, "is_trashed")
+    users_notes_filtered(req, ctx, FILTER_TRASHED)
 }
 
 // MARK: Utils
-fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response> {
-    // Check authentication
-    let auth_user = match &ctx.auth_user {
-        Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
+pub(crate) fn get_user(req: &Request, ctx: &Context) -> Result<Option<User>> {
+    // Parse user id from url
+    let user_id = match req
+        .params
+        .get("user_id")
+        .expect("Should be some")
+        .parse::<Uuid>()
+    {
+        Ok(id) => id,
+        Err(_) => return Ok(None),
     };
 
     // Get user
+    Ok(ctx
+        .database
+        .query::<User>(
+            formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+            user_id,
+        )?
+        .next()
+        .transpose()?)
+}
+
+fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response> {
+    let auth_user = require_auth!(ctx);
+
     let user = match get_user(req, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
 
-    // Check authorization
     if !policies::can_show(auth_user, &user) {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Parse request query
-    let query = match req.url.query() {
-        Some(query) => match serde_urlencoded::from_str::<IndexQuery>(query) {
-            Ok(query) => query,
-            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-        },
-        None => IndexQuery::default(),
-    };
-    if let Err(report) = query.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
-    }
+    let query = parse_index_query!(req);
+    let (total, notes) =
+        crate::controllers::notes::fetch_notes_page(ctx, filter, Some(user.id), &query)?;
 
-    // Get filtered notes for specific user
-    let (total, notes) = if query.query.is_empty() {
-        let total = query_args!(
-            i64,
-            ctx.database,
-            &format!("SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id"),
-            Args { user_id: user.id }
-        )?
-        .next()
-        .transpose()?
-        .unwrap_or(0);
-        let notes = query_args!(
-            Note,
-            ctx.database,
-            format!(
-                "SELECT {} FROM notes WHERE {filter} = 1 AND user_id = :user_id ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
-                Note::columns()
-            ),
-            Args {
-                user_id: user.id,
-                limit: query.limit,
-                offset: (query.page - 1) * query.limit
-            }
-        )
-        ?
-        .map(|r| r.map(Into::into))
-        .collect::<Result<Vec<_>, _>>()?;
-        (total, notes)
-    } else {
-        let total = query_args!(
-            i64,
-            ctx.database,
-            &format!(
-                "SELECT COUNT(id) FROM notes WHERE {filter} = 1 AND user_id = :user_id AND
-                id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)"
-            ),
-            Args {
-                user_id: user.id,
-                fts_query: preprocess_fts_query(&query.query)
-            }
-        )?
-        .next()
-        .transpose()?
-        .unwrap_or(0);
-        let notes = query_args!(
-            Note,
-            ctx.database,
-            format!(
-                "SELECT {} FROM notes WHERE {filter} = 1 AND user_id = :user_id AND
-                id IN (SELECT id FROM notes_fts WHERE notes_fts MATCH :fts_query)
-                ORDER BY updated_at DESC LIMIT :limit OFFSET :offset",
-                Note::columns()
-            ),
-            Args {
-                user_id: user.id,
-                fts_query: preprocess_fts_query(&query.query),
-                limit: query.limit,
-                offset: (query.page - 1) * query.limit
-            }
-        )?
-        .map(|r| r.map(Into::into))
-        .collect::<Result<Vec<_>, _>>()?;
-        (total, notes)
-    };
-
-    // Return filtered notes
     Ok(Response::with_json(api::NoteIndexResponse {
         pagination: api::Pagination {
             page: query.page,
@@ -621,7 +373,7 @@ fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Re
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::models::UserRole;
+    use crate::models::{Note, UserRole};
     use crate::router;
     use crate::test_utils::{
         create_test_user_with_session, create_test_user_with_session_and_role,

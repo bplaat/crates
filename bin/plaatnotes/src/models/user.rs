@@ -32,10 +32,10 @@ impl Default for User {
         let now = Utc::now();
         Self {
             id: Uuid::now_v7(),
-            first_name: String::default(),
-            last_name: String::default(),
-            email: String::default(),
-            password: String::default(),
+            first_name: String::new(),
+            last_name: String::new(),
+            email: String::new(),
+            password: String::new(),
             theme: UserTheme::System,
             language: "en".to_string(),
             role: UserRole::Normal,

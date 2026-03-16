@@ -68,15 +68,12 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .get("/api/users/:user_id/sessions/active", users_sessions_active)
         // Sessions
         .get("/api/sessions", sessions_index)
+        .get("/api/sessions/active", sessions_active)
         .get("/api/sessions/:session_id", sessions_show)
         .delete("/api/sessions/:session_id", sessions_delete)
-        .get("/api/sessions/active", sessions_active)
         // Notes
         .get("/api/notes", notes_index)
         .post("/api/notes", notes_create)
-        .get("/api/notes/:note_id", notes_show)
-        .put("/api/notes/:note_id", notes_update)
-        .delete("/api/notes/:note_id", notes_delete)
         .put("/api/notes/reorder", notes_reorder)
         .get("/api/notes/pinned", notes_pinned)
         .put("/api/notes/pinned/reorder", notes_pinned_reorder)
@@ -84,6 +81,9 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .put("/api/notes/archived/reorder", notes_archived_reorder)
         .get("/api/notes/trashed", notes_trashed)
         .delete("/api/notes/trashed/clear", notes_trashed_clear)
+        .get("/api/notes/:note_id", notes_show)
+        .put("/api/notes/:note_id", notes_update)
+        .delete("/api/notes/:note_id", notes_delete)
         // Imports
         .post("/api/imports/google-keep", imports_google_keep)
         .build()

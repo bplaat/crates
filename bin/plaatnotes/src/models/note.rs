@@ -11,6 +11,13 @@ use uuid::Uuid;
 
 use crate::api;
 use crate::models::user::{User, UserRole};
+
+// MARK: Note filter fragments (used in SQL WHERE clauses)
+pub(crate) const FILTER_NORMAL: &str = "is_trashed = 0 AND is_archived = 0 AND is_pinned = 0";
+pub(crate) const FILTER_PINNED: &str = "is_trashed = 0 AND is_pinned = 1";
+pub(crate) const FILTER_ARCHIVED: &str = "is_trashed = 0 AND is_archived = 1";
+pub(crate) const FILTER_TRASHED: &str = "is_trashed = 1";
+
 #[derive(Clone, FromRow, FromStruct)]
 #[from_struct(api::Note)]
 pub(crate) struct Note {
@@ -33,11 +40,11 @@ impl Default for Note {
             id: Uuid::now_v7(),
             user_id: Uuid::nil(),
             title: None,
-            body: String::default(),
+            body: String::new(),
             is_pinned: false,
             is_archived: false,
             is_trashed: false,
-            position: 0i64,
+            position: 0,
             created_at: now,
             updated_at: now,
         }

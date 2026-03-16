@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -30,6 +30,7 @@ mod notes;
 mod sessions;
 mod users;
 
+// MARK: Handlers
 pub(crate) fn home(_: &Request, _: &Context) -> Result<Response> {
     Ok(Response::with_body(concat!(
         "PlaatNotes API v",
@@ -40,3 +41,85 @@ pub(crate) fn home(_: &Request, _: &Context) -> Result<Response> {
 pub(crate) fn not_found(_: &Request, _: &Context) -> Result<Response> {
     Ok(Response::with_status(Status::NotFound).body("404 Not found"))
 }
+
+// MARK: Macros
+
+/// Unwrap the authenticated user from context. All callers must be behind `auth_required_pre_layer`.
+macro_rules! require_auth {
+    ($ctx:expr) => {
+        $ctx.auth_user.as_ref().expect("Should be some")
+    };
+}
+
+/// Parse and validate the index query parameters from the request URL.
+macro_rules! parse_index_query {
+    ($req:expr) => {{
+        use validate::Validate as _;
+        let query = match $req.url.query() {
+            Some(q) => match serde_urlencoded::from_str::<crate::models::IndexQuery>(q) {
+                Ok(q) => q,
+                Err(_) => {
+                    return Ok(small_http::Response::with_status(
+                        small_http::Status::BadRequest,
+                    ));
+                }
+            },
+            None => crate::models::IndexQuery::default(),
+        };
+        if let Err(report) = query.validate() {
+            return Ok(
+                small_http::Response::with_status(small_http::Status::BadRequest)
+                    .json(crate::api::Report::from(report)),
+            );
+        }
+        query
+    }};
+}
+
+/// Parse and validate a URL-encoded form body. `$api_type` is the API struct, `$internal_type` the validated internal struct.
+macro_rules! parse_body {
+    ($req:expr, $api_type:ty, $internal_type:ty) => {{
+        use validate::Validate as _;
+        let body =
+            match serde_urlencoded::from_bytes::<$api_type>($req.body.as_deref().unwrap_or(&[])) {
+                Ok(b) => Into::<$internal_type>::into(b),
+                Err(_) => {
+                    return Ok(small_http::Response::with_status(
+                        small_http::Status::BadRequest,
+                    ));
+                }
+            };
+        if let Err(report) = body.validate() {
+            return Ok(
+                small_http::Response::with_status(small_http::Status::BadRequest)
+                    .json(crate::api::Report::from(report)),
+            );
+        }
+        body
+    }};
+}
+
+/// Parse and validate a URL-encoded form body where the validator needs the request context.
+macro_rules! parse_body_ctx {
+    ($req:expr, $api_type:ty, $internal_type:ty, $ctx:expr) => {{
+        use validate::Validate as _;
+        let body =
+            match serde_urlencoded::from_bytes::<$api_type>($req.body.as_deref().unwrap_or(&[])) {
+                Ok(b) => Into::<$internal_type>::into(b),
+                Err(_) => {
+                    return Ok(small_http::Response::with_status(
+                        small_http::Status::BadRequest,
+                    ));
+                }
+            };
+        if let Err(report) = body.validate_with($ctx) {
+            return Ok(
+                small_http::Response::with_status(small_http::Status::BadRequest)
+                    .json(crate::api::Report::from(report)),
+            );
+        }
+        body
+    }};
+}
+
+pub(crate) use {parse_body, parse_body_ctx, parse_index_query, require_auth};

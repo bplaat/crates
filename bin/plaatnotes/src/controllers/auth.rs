@@ -23,6 +23,7 @@ use crate::consts::{SESSION_EXPIRY_SECONDS, SESSION_TOKEN_LENGTH};
 use crate::context::{Context, DatabaseHelpers};
 use crate::models::{Session, User};
 
+// MARK: Handlers
 static USER_AGENT_PARSER: LazyLock<UserAgentParser> = LazyLock::new(UserAgentParser::new);
 
 #[derive(Deserialize)]
@@ -45,13 +46,11 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     // Parse and validate body
     let body =
         match serde_urlencoded::from_bytes::<api::LoginBody>(req.body.as_deref().unwrap_or(&[])) {
-            Ok(body) => Into::<LoginBody>::into(body),
+            Ok(body) => LoginBody::from(body),
             Err(_) => return Ok(Response::with_status(Status::BadRequest)),
         };
     if let Err(report) = body.validate() {
-        return Ok(
-            Response::with_status(Status::BadRequest).json(Into::<api::Report>::into(report))
-        );
+        return Ok(Response::with_status(Status::BadRequest).json(api::Report::from(report)));
     }
 
     // Find user by email
@@ -72,16 +71,14 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     };
 
     // Verify password
-    match pbkdf2::password_verify(&body.password, &user.password) {
-        Ok(true) => {}
-        Ok(false) => return Ok(Response::with_status(Status::Unauthorized)),
-        Err(_) => return Ok(Response::with_status(Status::InternalServerError)),
+    if let Some(err) = verify_password(&body.password, &user.password)? {
+        return Ok(err);
     }
 
     // Generate secure random token
     let token = {
         let mut bytes = [0u8; SESSION_TOKEN_LENGTH];
-        getrandom::fill(&mut bytes).expect("Failed to generate random token");
+        getrandom::fill(&mut bytes)?;
         BASE64_URL_SAFE_NO_PAD.encode(bytes)
     };
 
@@ -150,7 +147,12 @@ pub(crate) fn auth_validate(_req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 pub(crate) fn auth_logout(_req: &Request, ctx: &Context) -> Result<Response> {
-    let session = ctx.auth_session.clone().expect("Should be authed");
+    let token = ctx
+        .auth_session
+        .as_ref()
+        .expect("Should be authed")
+        .token
+        .clone();
 
     // Expire the session by setting expires_at to now
     execute_args!(
@@ -158,12 +160,21 @@ pub(crate) fn auth_logout(_req: &Request, ctx: &Context) -> Result<Response> {
         "UPDATE sessions SET expires_at = :now, updated_at = :now WHERE token = :token",
         Args {
             now: Utc::now(),
-            token: session.token
+            token: token
         }
     )?;
 
     // Success response
     Ok(Response::new())
+}
+
+// MARK: Utils
+pub(crate) fn verify_password(plain: &str, hash: &str) -> Result<Option<Response>> {
+    match pbkdf2::password_verify(plain, hash) {
+        Ok(true) => Ok(None),
+        Ok(false) => Ok(Some(Response::with_status(Status::Unauthorized))),
+        Err(_) => Ok(Some(Response::with_status(Status::InternalServerError))),
+    }
 }
 
 // MARK: Tests

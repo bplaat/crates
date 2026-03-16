@@ -35,8 +35,8 @@ impl Default for Session {
         Self {
             id: Uuid::now_v7(),
             user_id: Uuid::nil(),
-            token: String::default(),
-            ip_address: String::default(),
+            token: String::new(),
+            ip_address: String::new(),
             ip_latitude: None,
             ip_longitude: None,
             ip_country: None,
@@ -52,26 +52,26 @@ impl Default for Session {
 }
 
 impl From<Session> for api::Session {
-    fn from(user: Session) -> Self {
+    fn from(session: Session) -> Self {
         Self {
-            id: user.id,
-            user_id: user.user_id,
-            token: user.token,
+            id: session.id,
+            user_id: session.user_id,
+            token: session.token,
             ip: api::SessionIp {
-                address: Some(user.ip_address),
-                latitude: user.ip_latitude,
-                longitude: user.ip_longitude,
-                country: user.ip_country,
-                city: user.ip_city,
+                address: Some(session.ip_address),
+                latitude: session.ip_latitude,
+                longitude: session.ip_longitude,
+                country: session.ip_country,
+                city: session.ip_city,
             },
             client: api::SessionClient {
-                name: user.client_name,
-                version: user.client_version,
-                os: user.client_os,
+                name: session.client_name,
+                version: session.client_version,
+                os: session.client_os,
             },
-            expires_at: user.expires_at,
-            created_at: user.created_at,
-            updated_at: user.updated_at,
+            expires_at: session.expires_at,
+            created_at: session.created_at,
+            updated_at: session.updated_at,
         }
     }
 }
