@@ -201,7 +201,9 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
     user.email = body.email;
     user.theme = body.theme;
     user.language = body.language;
-    user.role = body.role;
+    if auth_user.role == UserRole::Admin {
+        user.role = body.role;
+    }
     if let Some(password) = body.password
         && auth_user.role == UserRole::Admin
     {

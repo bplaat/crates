@@ -97,8 +97,6 @@ paths:
                 $ref: '#/components/schemas/SessionIndexResponse'
         '401':
           description: Unauthorized
-        '403':
-          description: Forbidden
 
   /sessions/{sessionId}:
     get:
@@ -188,6 +186,8 @@ paths:
                 $ref: '#/components/schemas/UserIndexResponse'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden (admin only)
     post:
       tags: [Users]
       summary: Create a new user
@@ -214,6 +214,8 @@ paths:
                 $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden (admin only)
 
   /users/{id}:
     get:
@@ -232,6 +234,8 @@ paths:
                 $ref: '#/components/schemas/User'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: User not found
     put:
@@ -262,6 +266,8 @@ paths:
                 $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: User not found
     delete:
@@ -276,6 +282,8 @@ paths:
           description: User deleted
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: User not found
 
@@ -304,6 +312,8 @@ paths:
                 $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized or old password is incorrect
+        '403':
+          description: Forbidden
         '404':
           description: User not found
 
@@ -685,6 +695,8 @@ paths:
       responses:
         '204':
           description: Notes reordered successfully
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
 
@@ -704,6 +716,8 @@ paths:
       responses:
         '204':
           description: Pinned notes reordered successfully
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
 
@@ -723,6 +737,8 @@ paths:
       responses:
         '204':
           description: Archived notes reordered successfully
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
 
@@ -979,6 +995,8 @@ components:
           format: email
         password:
           type: string
+          minLength: 8
+          maxLength: 128
       required:
         - email
         - password
@@ -988,13 +1006,20 @@ components:
       properties:
         firstName:
           type: string
+          minLength: 1
+          maxLength: 128
         lastName:
           type: string
+          minLength: 1
+          maxLength: 128
         email:
           type: string
           format: email
+          description: Must be unique across all users
         password:
           type: string
+          minLength: 8
+          maxLength: 128
         role:
           $ref: '#/components/schemas/UserRole'
       required:
@@ -1009,19 +1034,29 @@ components:
       properties:
         firstName:
           type: string
+          minLength: 1
+          maxLength: 128
         lastName:
           type: string
+          minLength: 1
+          maxLength: 128
         email:
           type: string
           format: email
+          description: Must be unique across all users (or unchanged from current value)
         password:
           type: string
-          description: Optional new password (only when auth user has admin role)
+          minLength: 8
+          maxLength: 128
+          description: >
+            Optional new password. Only processed when the authenticated user has the admin role;
+            silently ignored for normal users. Use `/change-password` to change your own password.
         theme:
           $ref: '#/components/schemas/UserTheme'
         language:
           type: string
         role:
+          # Only applied when the authenticated user has the admin role; ignored for normal users.
           $ref: '#/components/schemas/UserRole'
       required:
         - firstName
@@ -1036,8 +1071,12 @@ components:
       properties:
         oldPassword:
           type: string
+          minLength: 8
+          maxLength: 128
         newPassword:
           type: string
+          minLength: 8
+          maxLength: 128
       required:
         - oldPassword
         - newPassword
@@ -1047,8 +1086,10 @@ components:
       properties:
         title:
           type: string
+          minLength: 1
         body:
           type: string
+          minLength: 1
         isPinned:
           type: boolean
       required:
@@ -1059,8 +1100,10 @@ components:
       properties:
         title:
           type: string
+          minLength: 1
         body:
           type: string
+          minLength: 1
         isPinned:
           type: boolean
         isArchived:
