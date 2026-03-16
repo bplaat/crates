@@ -461,13 +461,10 @@ fn notes_reorder_handler(req: &Request, ctx: &Context, filter: &str) -> Result<R
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
     use super::*;
-    use crate::models::Session;
     use crate::router;
     use crate::test_utils::{
-        create_test_user_with_session, create_test_user_with_session_and_role,
+        create_test_user_with_session, create_test_user_with_session_and_role, insert_test_note,
     };
 
     #[test]
@@ -476,27 +473,25 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Fetch /notes check if empty
         let res = router.handle(
             &Request::get("http://localhost/api/notes")
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
-        assert!(notes.is_empty());
+        assert!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .is_empty()
+        );
 
-        // Create note for authenticated user
-        let note = Note {
-            user_id: user.id,
-            title: Some("My First Note".to_string()),
-            body: "This is my first note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
+        insert_test_note(
+            &ctx,
+            user.id,
+            Some("My First Note"),
+            "This is my first note",
+        );
 
-        // Fetch /notes check if note is there
         let res = router.handle(
             &Request::get("http://localhost/api/notes")
                 .header("Authorization", format!("Bearer {token}")),
@@ -515,16 +510,7 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create a regular note and a pinned note
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Regular Note".to_string()),
-                body: "Regular".to_string(),
-                is_pinned: false,
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user.id, Some("Regular Note"), "Regular");
         ctx.database
             .insert_note(Note {
                 user_id: user.id,
@@ -535,7 +521,6 @@ mod test {
             })
             .unwrap();
 
-        // /notes should only return the non-pinned note
         let res = router.handle(
             &Request::get("http://localhost/api/notes")
                 .header("Authorization", format!("Bearer {token}")),
@@ -552,25 +537,20 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create multiple notes
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Meeting Notes".to_string()),
-                body: "Meeting notes from today".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Shopping List".to_string()),
-                body: "Shopping list for tomorrow".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(
+            &ctx,
+            user.id,
+            Some("Meeting Notes"),
+            "Meeting notes from today",
+        );
+        insert_test_note(
+            &ctx,
+            user.id,
+            Some("Shopping List"),
+            "Shopping list for tomorrow",
+        );
 
-        // Search for "meeting" finds by body
+        // Search by body
         let res = router.handle(
             &Request::get("http://localhost/api/notes?q=meeting")
                 .header("Authorization", format!("Bearer {token}")),
@@ -580,7 +560,7 @@ mod test {
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].body, "Meeting notes from today");
 
-        // Search for "Shopping" finds by title
+        // Search by title
         let res = router.handle(
             &Request::get("http://localhost/api/notes?q=Shopping")
                 .header("Authorization", format!("Bearer {token}")),
@@ -597,25 +577,9 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Note with a unique title but generic body
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("ProjectAlpha".to_string()),
-                body: "Some content".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: None,
-                body: "Some other content".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user.id, Some("ProjectAlpha"), "Some content");
+        insert_test_note(&ctx, user.id, None, "Some other content");
 
-        // "ProjectAlpha" only appears in the title of the first note
         let res = router.handle(
             &Request::get("http://localhost/api/notes?q=ProjectAlpha")
                 .header("Authorization", format!("Bearer {token}")),
@@ -632,38 +596,10 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Alice Smith".to_string()),
-                body: "Notes from Alice".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Alice Johnson".to_string()),
-                body: "Notes from Alice".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Bob Smith".to_string()),
-                body: "Notes from Bob".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Carol White".to_string()),
-                body: "Notes from Carol".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user.id, Some("Alice Smith"), "Notes from Alice");
+        insert_test_note(&ctx, user.id, Some("Alice Johnson"), "Notes from Alice");
+        insert_test_note(&ctx, user.id, Some("Bob Smith"), "Notes from Bob");
+        insert_test_note(&ctx, user.id, Some("Carol White"), "Notes from Carol");
 
         // Prefix search
         let res = router.handle(
@@ -671,8 +607,13 @@ mod test {
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 2);
+        assert_eq!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .len(),
+            2
+        );
 
         // AND search
         let res = router.handle(
@@ -690,8 +631,13 @@ mod test {
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 3);
+        assert_eq!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .len(),
+            3
+        );
 
         // NOT search
         let res = router.handle(
@@ -730,19 +676,15 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create multiple notes
         for i in 1..=30 {
-            ctx.database
-                .insert_note(Note {
-                    user_id: user.id,
-                    title: Some(format!("Note {i}")),
-                    body: format!("Note number {i}"),
-                    ..Default::default()
-                })
-                .unwrap();
+            insert_test_note(
+                &ctx,
+                user.id,
+                Some(&format!("Note {i}")),
+                &format!("Note number {i}"),
+            );
         }
 
-        // Fetch /notes with limit 10 and page 1
         let res = router.handle(
             &Request::get("http://localhost/api/notes?limit=10&page=1")
                 .header("Authorization", format!("Bearer {token}")),
@@ -754,7 +696,6 @@ mod test {
         assert_eq!(response.pagination.limit, 10);
         assert_eq!(response.pagination.total, 30);
 
-        // Fetch /notes with limit 5 and page 2
         let res = router.handle(
             &Request::get("http://localhost/api/notes?limit=5&page=2")
                 .header("Authorization", format!("Bearer {token}")),
@@ -773,7 +714,6 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create note
         let res = router.handle(
             &Request::post("http://localhost/api/notes")
                 .header("Authorization", format!("Bearer {token}"))
@@ -791,17 +731,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
+        let note = insert_test_note(&ctx, user.id, Some("Important"), "My important note");
 
-        // Create note
-        let note = Note {
-            user_id: user.id,
-            title: Some("Important".to_string()),
-            body: "My important note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
-
-        // Fetch /notes/:note_id check if note is there
         let res = router.handle(
             &Request::get(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {token}")),
@@ -817,7 +748,6 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session(&ctx);
 
-        // Fetch note by random id should be 404 Not Found
         let res = router.handle(
             &Request::get(format!("http://localhost/api/notes/{}", Uuid::now_v7()))
                 .header("Authorization", format!("Bearer {token}")),
@@ -830,17 +760,13 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
+        let note = insert_test_note(
+            &ctx,
+            user.id,
+            Some("Original Title"),
+            "Original note content",
+        );
 
-        // Create note
-        let note = Note {
-            user_id: user.id,
-            title: Some("Original Title".to_string()),
-            body: "Original note content".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
-
-        // Update note
         let res = router.handle(
             &Request::put(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {token}"))
@@ -857,17 +783,13 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
+        let note = insert_test_note(
+            &ctx,
+            user.id,
+            Some("Original Title"),
+            "Original note content",
+        );
 
-        // Create note
-        let note = Note {
-            user_id: user.id,
-            title: Some("Original Title".to_string()),
-            body: "Original note content".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
-
-        // Update note with validation errors (empty body)
         let res = router.handle(
             &Request::put(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {token}"))
@@ -881,94 +803,60 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
+        let note = insert_test_note(&ctx, user.id, Some("To Delete"), "Note to be deleted");
 
-        // Create note
-        let note = Note {
-            user_id: user.id,
-            title: Some("To Delete".to_string()),
-            body: "Note to be deleted".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
-
-        // Delete note
         let res = router.handle(
             &Request::delete(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
 
-        // Fetch /notes check if empty
         let res = router.handle(
             &Request::get("http://localhost/api/notes")
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
-        assert!(notes.is_empty());
+        assert!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .is_empty()
+        );
     }
 
     #[test]
     fn test_notes_index_admin_can_see_all_notes() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create admin user
         let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
-
-        // Create first normal user and their note
         let (user1, _) = create_test_user_with_session(&ctx);
-        let user1_note = Note {
-            user_id: user1.id,
-            title: Some("User 1 Note".to_string()),
-            body: "User 1's note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(user1_note).unwrap();
-
-        // Create second normal user and their note
         let (user2, _) = create_test_user_with_session(&ctx);
-        let user2_note = Note {
-            user_id: user2.id,
-            title: Some("User 2 Note".to_string()),
-            body: "User 2's note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(user2_note).unwrap();
 
-        // Admin should see all notes
+        insert_test_note(&ctx, user1.id, Some("User 1 Note"), "User 1's note");
+        insert_test_note(&ctx, user2.id, Some("User 2 Note"), "User 2's note");
+
         let res = router.handle(
             &Request::get("http://localhost/api/notes")
                 .header("Authorization", format!("Bearer {admin_token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
-        assert_eq!(notes.len(), 2);
+        assert_eq!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .len(),
+            2
+        );
     }
 
     #[test]
     fn test_notes_show_admin_can_access_any_note() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create admin user
         let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
-
-        // Create normal user and their note
         let (user, _) = create_test_user_with_session(&ctx);
-        let note = Note {
-            user_id: user.id,
-            title: Some("Private Note".to_string()),
-            body: "User's private note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
+        let note = insert_test_note(&ctx, user.id, Some("Private Note"), "User's private note");
 
-        // Admin should be able to access the user's note
         let res = router.handle(
             &Request::get(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {admin_token}")),
@@ -983,21 +871,10 @@ mod test {
     fn test_notes_update_admin_can_update_any_note() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create admin user
         let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
-
-        // Create normal user and their note
         let (user, _) = create_test_user_with_session(&ctx);
-        let note = Note {
-            user_id: user.id,
-            title: Some("Original Title".to_string()),
-            body: "Original content".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
+        let note = insert_test_note(&ctx, user.id, Some("Original Title"), "Original content");
 
-        // Admin should be able to update the user's note
         let res = router.handle(
             &Request::put(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {admin_token}"))
@@ -1012,28 +889,16 @@ mod test {
     fn test_notes_delete_admin_can_delete_any_note() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create admin user
         let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
-
-        // Create normal user and their note
         let (user, _) = create_test_user_with_session(&ctx);
-        let note = Note {
-            user_id: user.id,
-            title: Some("To Delete".to_string()),
-            body: "Note to delete".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
+        let note = insert_test_note(&ctx, user.id, Some("To Delete"), "Note to delete");
 
-        // Admin should be able to delete the user's note
         let res = router.handle(
             &Request::delete(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {admin_token}")),
         );
         assert_eq!(res.status, Status::Ok);
 
-        // Verify note is deleted
         let res = router.handle(
             &Request::get(format!("http://localhost/api/notes/{}", note.id))
                 .header("Authorization", format!("Bearer {admin_token}")),
@@ -1045,27 +910,11 @@ mod test {
     fn test_notes_index_user_isolation() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create first user and their note
         let (user1, token1) = create_test_user_with_session(&ctx);
-        let note1 = Note {
-            user_id: user1.id,
-            title: Some("User 1 Note".to_string()),
-            body: "User 1's private note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note1.clone()).unwrap();
-
-        // Create second user and their note
         let (user2, token2) = create_test_user_with_session(&ctx);
 
-        let note2 = Note {
-            user_id: user2.id,
-            title: Some("User 2 Note".to_string()),
-            body: "User 2's private note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note2.clone()).unwrap();
+        insert_test_note(&ctx, user1.id, Some("User 1 Note"), "User 1's private note");
+        insert_test_note(&ctx, user2.id, Some("User 2 Note"), "User 2's private note");
 
         // User 1 should only see their own note
         let res = router.handle(
@@ -1098,34 +947,14 @@ mod test {
     fn test_notes_show_user_cannot_access_other_user_note() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create first user and their note
         let (user1, token1) = create_test_user_with_session(&ctx);
-        let note1 = Note {
-            user_id: user1.id,
-            title: Some("Private Note".to_string()),
-            body: "User 1's private note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note1.clone()).unwrap();
-
-        // Create second user
-        let user2 = User {
-            first_name: "User2".to_string(),
-            last_name: "Test".to_string(),
-            email: "user2@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user2.clone()).unwrap();
-        let token2 = format!("test-token-{}", user2.id);
-        let session2 = Session {
-            user_id: user2.id,
-            token: token2.clone(),
-            expires_at: Utc::now() + Duration::from_secs(3600),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session2).unwrap();
+        let (_, token2) = create_test_user_with_session(&ctx);
+        let note1 = insert_test_note(
+            &ctx,
+            user1.id,
+            Some("Private Note"),
+            "User 1's private note",
+        );
 
         // User 2 should not be able to access User 1's note
         let res = router.handle(
@@ -1148,26 +977,22 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create some notes with different states
-        let pinned_note = Note {
-            user_id: user.id,
-            title: Some("Pinned Note".to_string()),
-            body: "This is a pinned note".to_string(),
-            is_pinned: true,
-            ..Default::default()
-        };
-        ctx.database.insert_note(pinned_note.clone()).unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                title: Some("Pinned Note".to_string()),
+                body: "This is a pinned note".to_string(),
+                is_pinned: true,
+                ..Default::default()
+            })
+            .unwrap();
+        insert_test_note(
+            &ctx,
+            user.id,
+            Some("Unpinned Note"),
+            "This is an unpinned note",
+        );
 
-        let unpinned_note = Note {
-            user_id: user.id,
-            title: Some("Unpinned Note".to_string()),
-            body: "This is an unpinned note".to_string(),
-            is_pinned: false,
-            ..Default::default()
-        };
-        ctx.database.insert_note(unpinned_note).unwrap();
-
-        // Fetch pinned notes
         let res = router.handle(
             &Request::get("http://localhost/api/notes/pinned")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1185,26 +1010,17 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create archived and non-archived notes
-        let archived_note = Note {
-            user_id: user.id,
-            title: Some("Archived Note".to_string()),
-            body: "This is an archived note".to_string(),
-            is_archived: true,
-            ..Default::default()
-        };
-        ctx.database.insert_note(archived_note.clone()).unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                title: Some("Archived Note".to_string()),
+                body: "This is an archived note".to_string(),
+                is_archived: true,
+                ..Default::default()
+            })
+            .unwrap();
+        insert_test_note(&ctx, user.id, Some("Active Note"), "This is an active note");
 
-        let active_note = Note {
-            user_id: user.id,
-            title: Some("Active Note".to_string()),
-            body: "This is an active note".to_string(),
-            is_archived: false,
-            ..Default::default()
-        };
-        ctx.database.insert_note(active_note).unwrap();
-
-        // Fetch archived notes
         let res = router.handle(
             &Request::get("http://localhost/api/notes/archived")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1222,26 +1038,17 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create trashed and non-trashed notes
-        let trashed_note = Note {
-            user_id: user.id,
-            title: Some("Trashed Note".to_string()),
-            body: "This is a trashed note".to_string(),
-            is_trashed: true,
-            ..Default::default()
-        };
-        ctx.database.insert_note(trashed_note.clone()).unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                title: Some("Trashed Note".to_string()),
+                body: "This is a trashed note".to_string(),
+                is_trashed: true,
+                ..Default::default()
+            })
+            .unwrap();
+        insert_test_note(&ctx, user.id, Some("Kept Note"), "This is a kept note");
 
-        let kept_note = Note {
-            user_id: user.id,
-            title: Some("Kept Note".to_string()),
-            body: "This is a kept note".to_string(),
-            is_trashed: false,
-            ..Default::default()
-        };
-        ctx.database.insert_note(kept_note).unwrap();
-
-        // Fetch trashed notes
         let res = router.handle(
             &Request::get("http://localhost/api/notes/trashed")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1259,7 +1066,6 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create two pinned notes with different content
         ctx.database
             .insert_note(Note {
                 user_id: user.id,
@@ -1278,18 +1084,9 @@ mod test {
                 ..Default::default()
             })
             .unwrap();
-        // A non-pinned note that also matches the query – must not appear
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Unpinned Alpha".to_string()),
-                body: "Content about alpha".to_string(),
-                is_pinned: false,
-                ..Default::default()
-            })
-            .unwrap();
+        // Non-pinned note that also matches — must not appear
+        insert_test_note(&ctx, user.id, Some("Unpinned Alpha"), "Content about alpha");
 
-        // ?q=alpha should return only the pinned alpha note
         let res = router.handle(
             &Request::get("http://localhost/api/notes/pinned?q=alpha")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1300,7 +1097,6 @@ mod test {
         assert!(response.data[0].is_pinned);
         assert_eq!(response.data[0].title, Some("Pinned Alpha".to_string()));
 
-        // ?q=beta should return only the pinned beta note
         let res = router.handle(
             &Request::get("http://localhost/api/notes/pinned?q=beta")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1310,14 +1106,18 @@ mod test {
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].title, Some("Pinned Beta".to_string()));
 
-        // Empty query returns all pinned notes
         let res = router.handle(
             &Request::get("http://localhost/api/notes/pinned")
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 2);
+        assert_eq!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .len(),
+            2
+        );
     }
 
     #[test]
@@ -1326,7 +1126,6 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create two archived notes with different content
         ctx.database
             .insert_note(Note {
                 user_id: user.id,
@@ -1345,18 +1144,9 @@ mod test {
                 ..Default::default()
             })
             .unwrap();
-        // Non-archived note that also matches – must not appear
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Active Recipe".to_string()),
-                body: "How to bake bread".to_string(),
-                is_archived: false,
-                ..Default::default()
-            })
-            .unwrap();
+        // Non-archived note that also matches — must not appear
+        insert_test_note(&ctx, user.id, Some("Active Recipe"), "How to bake bread");
 
-        // ?q=recipe should return only the archived recipe note
         let res = router.handle(
             &Request::get("http://localhost/api/notes/archived?q=recipe")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1367,7 +1157,6 @@ mod test {
         assert!(response.data[0].is_archived);
         assert_eq!(response.data[0].title, Some("Archived Recipe".to_string()));
 
-        // ?q=paris finds by body content
         let res = router.handle(
             &Request::get("http://localhost/api/notes/archived?q=paris")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1377,14 +1166,18 @@ mod test {
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].title, Some("Archived Travel".to_string()));
 
-        // No match returns empty list
         let res = router.handle(
             &Request::get("http://localhost/api/notes/archived?q=zzznomatch")
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 0);
+        assert_eq!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .len(),
+            0
+        );
     }
 
     #[test]
@@ -1393,7 +1186,6 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create two trashed notes with different content
         ctx.database
             .insert_note(Note {
                 user_id: user.id,
@@ -1412,18 +1204,14 @@ mod test {
                 ..Default::default()
             })
             .unwrap();
-        // Non-trashed note that also matches – must not appear
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Active Invoice".to_string()),
-                body: "Invoice for February".to_string(),
-                is_trashed: false,
-                ..Default::default()
-            })
-            .unwrap();
+        // Non-trashed note that also matches — must not appear
+        insert_test_note(
+            &ctx,
+            user.id,
+            Some("Active Invoice"),
+            "Invoice for February",
+        );
 
-        // ?q=invoice should return only the trashed invoice
         let res = router.handle(
             &Request::get("http://localhost/api/notes/trashed?q=invoice")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1434,7 +1222,6 @@ mod test {
         assert!(response.data[0].is_trashed);
         assert_eq!(response.data[0].title, Some("Trashed Invoice".to_string()));
 
-        // ?q=draft finds by body
         let res = router.handle(
             &Request::get("http://localhost/api/notes/trashed?q=draft")
                 .header("Authorization", format!("Bearer {token}")),
@@ -1444,14 +1231,18 @@ mod test {
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].title, Some("Trashed Draft".to_string()));
 
-        // No match returns empty list
         let res = router.handle(
             &Request::get("http://localhost/api/notes/trashed?q=zzznomatch")
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 0);
+        assert_eq!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .len(),
+            0
+        );
     }
 
     #[test]
@@ -1460,7 +1251,6 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create two trashed notes and one non-trashed note
         ctx.database
             .insert_note(Note {
                 user_id: user.id,
@@ -1479,31 +1269,25 @@ mod test {
                 ..Default::default()
             })
             .unwrap();
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("Active".to_string()),
-                body: "Non-trashed note".to_string(),
-                is_trashed: false,
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user.id, Some("Active"), "Non-trashed note");
 
-        // Clear trash
         let res = router.handle(
             &Request::delete("http://localhost/api/notes/trashed/clear")
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
 
-        // Trashed endpoint should now be empty
         let res = router.handle(
             &Request::get("http://localhost/api/notes/trashed")
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::NoteIndexResponse>(&res.body).unwrap();
-        assert!(response.data.is_empty());
+        assert!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .is_empty()
+        );
 
         // Non-trashed note must still exist
         let res = router.handle(
@@ -1521,9 +1305,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user1, token1) = create_test_user_with_session(&ctx);
-        let (user2, _token2) = create_test_user_with_session(&ctx);
+        let (user2, _) = create_test_user_with_session(&ctx);
 
-        // Create a trashed note for user1 and user2
         ctx.database
             .insert_note(Note {
                 user_id: user1.id,
@@ -1543,14 +1326,12 @@ mod test {
             })
             .unwrap();
 
-        // User1 clears their trash
         let res = router.handle(
             &Request::delete("http://localhost/api/notes/trashed/clear")
                 .header("Authorization", format!("Bearer {token1}")),
         );
         assert_eq!(res.status, Status::Ok);
 
-        // User2's trashed note must still exist in the database
         let remaining: i64 = ctx
             .database
             .query("SELECT COUNT(id) FROM notes WHERE is_trashed = 1", ())
@@ -1567,7 +1348,6 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create three notes
         let note1 = Note {
             user_id: user.id,
             title: Some("Note 1".to_string()),
@@ -1593,24 +1373,24 @@ mod test {
         };
         ctx.database.insert_note(note3.clone()).unwrap();
 
-        // Reorder notes: 3, 1, 2
-        let ids = format!("{},{},{}", note3.id, note1.id, note2.id);
+        // Reorder: 3, 1, 2
         let res = router.handle(
             &Request::put("http://localhost/api/notes/reorder")
                 .header("Authorization", format!("Bearer {token}"))
-                .body(format!("ids={ids}")),
+                .body(format!("ids={},{},{}", note3.id, note1.id, note2.id)),
         );
         assert_eq!(res.status, Status::NoContent);
 
-        // Fetch notes and verify order
-        let res = router.handle(
-            &Request::get("http://localhost/api/notes")
-                .header("Authorization", format!("Bearer {token}")),
-        );
-        assert_eq!(res.status, Status::Ok);
-        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(
+            &router
+                .handle(
+                    &Request::get("http://localhost/api/notes")
+                        .header("Authorization", format!("Bearer {token}")),
+                )
+                .body,
+        )
+        .unwrap()
+        .data;
         assert_eq!(notes.len(), 3);
         assert_eq!(notes[0].id, note3.id);
         assert_eq!(notes[1].id, note1.id);
@@ -1623,7 +1403,6 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create four notes (simulates two loaded pages of 2)
         let note1 = Note {
             user_id: user.id,
             title: Some("Note 1".to_string()),
@@ -1657,24 +1436,24 @@ mod test {
         };
         ctx.database.insert_note(note4.clone()).unwrap();
 
-        // User reorders only the first "page" (note1, note2) swapping them to (note2, note1)
-        let ids = format!("{},{}", note2.id, note1.id);
+        // Reorder only first page: swap note1 and note2
         let res = router.handle(
             &Request::put("http://localhost/api/notes/reorder")
                 .header("Authorization", format!("Bearer {token}"))
-                .body(format!("ids={ids}")),
+                .body(format!("ids={},{}", note2.id, note1.id)),
         );
         assert_eq!(res.status, Status::NoContent);
 
-        // Full list should be: note2, note1, note3, note4 (unloaded notes keep relative order)
-        let res = router.handle(
-            &Request::get("http://localhost/api/notes")
-                .header("Authorization", format!("Bearer {token}")),
-        );
-        assert_eq!(res.status, Status::Ok);
-        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(
+            &router
+                .handle(
+                    &Request::get("http://localhost/api/notes")
+                        .header("Authorization", format!("Bearer {token}")),
+                )
+                .body,
+        )
+        .unwrap()
+        .data;
         assert_eq!(notes.len(), 4);
         assert_eq!(notes[0].id, note2.id);
         assert_eq!(notes[1].id, note1.id);
@@ -1695,9 +1474,8 @@ mod test {
     fn test_notes_reorder_ignores_other_users_notes() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
         let (user1, token1) = create_test_user_with_session(&ctx);
-        let (user2, _token2) = create_test_user_with_session(&ctx);
+        let (user2, _) = create_test_user_with_session(&ctx);
 
         let note1 = Note {
             user_id: user1.id,
@@ -1714,23 +1492,24 @@ mod test {
         };
         ctx.database.insert_note(note2.clone()).unwrap();
 
-        // User 1 tries to include user 2's note in reorder — should be silently ignored
-        let ids = format!("{},{}", note2.id, note1.id);
+        // User 1 tries to include user 2's note — should be silently ignored
         let res = router.handle(
             &Request::put("http://localhost/api/notes/reorder")
                 .header("Authorization", format!("Bearer {token1}"))
-                .body(format!("ids={ids}")),
+                .body(format!("ids={},{}", note2.id, note1.id)),
         );
         assert_eq!(res.status, Status::NoContent);
 
-        // User 1's note position should have changed (position 1 since note2.id is first but ignored)
-        let res = router.handle(
-            &Request::get("http://localhost/api/notes")
-                .header("Authorization", format!("Bearer {token1}")),
-        );
-        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
+        let notes = serde_json::from_slice::<api::NoteIndexResponse>(
+            &router
+                .handle(
+                    &Request::get("http://localhost/api/notes")
+                        .header("Authorization", format!("Bearer {token1}")),
+                )
+                .body,
+        )
+        .unwrap()
+        .data;
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].id, note1.id);
     }
@@ -1765,35 +1544,39 @@ mod test {
         };
         ctx.database.insert_note(pinned2.clone()).unwrap();
 
-        // Reorder only pinned: swap pinned2 before pinned1
-        let ids = format!("{},{}", pinned2.id, pinned1.id);
+        // Swap pinned2 before pinned1
         let res = router.handle(
             &Request::put("http://localhost/api/notes/pinned/reorder")
                 .header("Authorization", format!("Bearer {token}"))
-                .body(format!("ids={ids}")),
+                .body(format!("ids={},{}", pinned2.id, pinned1.id)),
         );
         assert_eq!(res.status, Status::NoContent);
 
-        // Pinned list order should reflect the reorder
-        let res = router.handle(
-            &Request::get("http://localhost/api/notes/pinned")
-                .header("Authorization", format!("Bearer {token}")),
-        );
-        let pinned = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
+        let pinned = serde_json::from_slice::<api::NoteIndexResponse>(
+            &router
+                .handle(
+                    &Request::get("http://localhost/api/notes/pinned")
+                        .header("Authorization", format!("Bearer {token}")),
+                )
+                .body,
+        )
+        .unwrap()
+        .data;
         assert_eq!(pinned.len(), 2);
         assert_eq!(pinned[0].id, pinned2.id);
         assert_eq!(pinned[1].id, pinned1.id);
 
         // Normal list should be unaffected
-        let res = router.handle(
-            &Request::get("http://localhost/api/notes")
-                .header("Authorization", format!("Bearer {token}")),
-        );
-        let normal = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
+        let normal = serde_json::from_slice::<api::NoteIndexResponse>(
+            &router
+                .handle(
+                    &Request::get("http://localhost/api/notes")
+                        .header("Authorization", format!("Bearer {token}")),
+                )
+                .body,
+        )
+        .unwrap()
+        .data;
         assert_eq!(normal.len(), 1);
         assert_eq!(normal[0].id, normal1.id);
     }
@@ -1812,7 +1595,6 @@ mod test {
         };
         ctx.database.insert_note(note1.clone()).unwrap();
 
-        // Trash the note
         let res = router.handle(
             &Request::put(format!("http://localhost/api/notes/{}", note1.id))
                 .header("Authorization", format!("Bearer {token}"))

@@ -376,7 +376,8 @@ mod test {
     use crate::models::{Note, UserRole};
     use crate::router;
     use crate::test_utils::{
-        create_test_user_with_session, create_test_user_with_session_and_role,
+        create_test_user_with_session, create_test_user_with_session_and_role, insert_test_note,
+        insert_test_user,
     };
 
     #[test]
@@ -385,7 +386,7 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Fetch /users check if user is there (the test user)
+        // Fetch /users — should contain just the test user
         let res = router.handle(
             &Request::get("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}")),
@@ -399,16 +400,9 @@ mod test {
         assert_eq!(users[0].email, user.email);
 
         // Create another user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john.doe@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
+        insert_test_user(&ctx, "John", "Doe", "john.doe@example.com");
 
-        // Fetch /users check if both users are there
+        // Fetch /users — should now contain both users
         let res = router.handle(
             &Request::get("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}")),
@@ -426,27 +420,9 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Create multiple users
-        ctx.database
-            .insert_user(User {
-                first_name: "Alice".to_string(),
-                last_name: "Smith".to_string(),
-                email: "alice@example.com".to_string(),
-                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_user(User {
-                first_name: "Bob".to_string(),
-                last_name: "Jones".to_string(),
-                email: "bob@example.com".to_string(),
-                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_user(&ctx, "Alice", "Smith", "alice@example.com");
+        insert_test_user(&ctx, "Bob", "Jones", "bob@example.com");
 
-        // Search for "Alice"
         let res = router.handle(
             &Request::get("http://localhost/api/users?q=Alice")
                 .header("Authorization", format!("Bearer {token}")),
@@ -463,42 +439,10 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        ctx.database
-            .insert_user(User {
-                first_name: "Alice".to_string(),
-                last_name: "Smith".to_string(),
-                email: "alice.smith@example.com".to_string(),
-                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_user(User {
-                first_name: "Alice".to_string(),
-                last_name: "Johnson".to_string(),
-                email: "alice.johnson@example.com".to_string(),
-                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_user(User {
-                first_name: "Bob".to_string(),
-                last_name: "Smith".to_string(),
-                email: "bob.smith@example.com".to_string(),
-                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_user(User {
-                first_name: "Carol".to_string(),
-                last_name: "White".to_string(),
-                email: "carol@example.com".to_string(),
-                password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_user(&ctx, "Alice", "Smith", "alice.smith@example.com");
+        insert_test_user(&ctx, "Alice", "Johnson", "alice.johnson@example.com");
+        insert_test_user(&ctx, "Bob", "Smith", "bob.smith@example.com");
+        insert_test_user(&ctx, "Carol", "White", "carol@example.com");
 
         // Prefix search
         let res = router.handle(
@@ -567,20 +511,16 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Create multiple users (test user already exists, so create 29 more for 30 total)
+        // Test user already exists, create 29 more for 30 total
         for i in 1..=29 {
-            ctx.database
-                .insert_user(User {
-                    first_name: format!("User{i}"),
-                    last_name: "Test".to_string(),
-                    email: format!("user{i}@example.com"),
-                    password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-                    ..Default::default()
-                })
-                .unwrap();
+            insert_test_user(
+                &ctx,
+                &format!("User{i}"),
+                "Test",
+                &format!("user{i}@example.com"),
+            );
         }
 
-        // Fetch /users with limit 10 and page 1
         let res = router.handle(
             &Request::get("http://localhost/api/users?limit=10&page=1")
                 .header("Authorization", format!("Bearer {token}")),
@@ -592,7 +532,6 @@ mod test {
         assert_eq!(response.pagination.limit, 10);
         assert_eq!(response.pagination.total, 30);
 
-        // Fetch /users with limit 5 and page 2
         let res = router.handle(
             &Request::get("http://localhost/api/users?limit=5&page=2")
                 .header("Authorization", format!("Bearer {token}")),
@@ -611,7 +550,6 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Create user
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
@@ -632,7 +570,6 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Create first user
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
@@ -642,7 +579,7 @@ mod test {
         );
         assert_eq!(res.status, Status::Ok);
 
-        // Try to create another user with same email
+        // Same email again — should fail
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
@@ -660,18 +597,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Fetch /users/:user_id check if user is there
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}")),
@@ -687,7 +614,6 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Fetch user by random id should be 404 Not Found
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}", Uuid::now_v7()))
                 .header("Authorization", format!("Bearer {token}")),
@@ -700,18 +626,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Update user
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
@@ -728,27 +644,9 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user1 = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+        let user2 = insert_test_user(&ctx, "Jane", "Smith", "jane@example.com");
 
-        // Create two users
-        let user1 = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user1.clone()).unwrap();
-
-        let user2 = User {
-            first_name: "Jane".to_string(),
-            last_name: "Smith".to_string(),
-            email: "jane@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user2.clone()).unwrap();
-
-        // Try to update user2's email to user1's email
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user2.id))
                 .header("Authorization", format!("Bearer {token}"))
@@ -757,6 +655,8 @@ mod test {
         assert_eq!(res.status, Status::BadRequest);
         let report = serde_json::from_slice::<api::Report>(&res.body).unwrap();
         assert!(report.0.contains_key("email"));
+        // Silence unused variable warning
+        let _ = user1;
     }
 
     #[test]
@@ -764,18 +664,9 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Update user keeping the same email — should succeed, not be treated as duplicate
+        // Updating with the same email should succeed
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
@@ -791,18 +682,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Update user with validation errors
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
@@ -816,18 +697,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Change password with correct old password
         let res = router.handle(
             &Request::post(format!(
                 "http://localhost/api/users/{}/change-password",
@@ -857,18 +728,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Try to change password with incorrect old password
         let res = router.handle(
             &Request::post(format!(
                 "http://localhost/api/users/{}/change-password",
@@ -885,18 +746,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Try to change password with validation errors (short password)
         let res = router.handle(
             &Request::post(format!(
                 "http://localhost/api/users/{}/change-password",
@@ -913,25 +764,15 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Delete user
         let res = router.handle(
             &Request::delete(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
 
-        // Fetch /users check if only test user remains
+        // Only the original test admin user should remain
         let res = router.handle(
             &Request::get("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}")),
@@ -940,7 +781,7 @@ mod test {
         let users = serde_json::from_slice::<api::UserIndexResponse>(&res.body)
             .unwrap()
             .data;
-        assert_eq!(users.len(), 1); // Only test user remains
+        assert_eq!(users.len(), 1);
     }
 
     #[test]
@@ -949,7 +790,6 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Create user with password
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
@@ -958,7 +798,6 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();
 
-        // Fetch user from database and verify password is hashed
         let stored_user = ctx
             .database
             .query::<User>(
@@ -970,19 +809,14 @@ mod test {
             .map(|r| r.unwrap())
             .unwrap();
 
-        // Password should be hashed (not plain text)
         assert_ne!(stored_user.password, "mypassword");
         assert!(stored_user.password.starts_with("$pbkdf2-sha256$"));
-
-        // Verify password can be verified
         assert!(pbkdf2::password_verify("mypassword", &stored_user.password).unwrap());
         assert!(!pbkdf2::password_verify("wrongpassword", &stored_user.password).unwrap());
     }
 
     #[test]
     fn test_users_notes() {
-        use crate::models::Note;
-
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
@@ -993,20 +827,15 @@ mod test {
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
-        let notes = serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
-            .unwrap()
-            .data;
-        assert!(notes.is_empty());
+        assert!(
+            serde_json::from_slice::<api::NoteIndexResponse>(&res.body)
+                .unwrap()
+                .data
+                .is_empty()
+        );
 
-        // Create a note for the user
-        let note = Note {
-            user_id: user.id,
-            body: "My first note".to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_note(note.clone()).unwrap();
+        let note = insert_test_note(&ctx, user.id, None, "My first note");
 
-        // Fetch user's notes
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}/notes", user.id))
                 .header("Authorization", format!("Bearer {token}")),
@@ -1017,24 +846,16 @@ mod test {
             .data;
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].body, "My first note");
-        assert_eq!(notes[0].user_id, user.id);
+        assert_eq!(notes[0].user_id, note.user_id);
     }
 
     #[test]
     fn test_users_notes_excludes_pinned_and_archived() {
-        use crate::models::Note;
-
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                body: "Regular".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user.id, None, "Regular");
         ctx.database
             .insert_note(Note {
                 user_id: user.id,
@@ -1064,24 +885,14 @@ mod test {
 
     #[test]
     fn test_users_notes_pagination() {
-        use crate::models::Note;
-
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create multiple notes
         for i in 1..=30 {
-            ctx.database
-                .insert_note(Note {
-                    user_id: user.id,
-                    body: format!("Note {i}"),
-                    ..Default::default()
-                })
-                .unwrap();
+            insert_test_note(&ctx, user.id, None, &format!("Note {i}"));
         }
 
-        // Fetch first page
         let res = router.handle(
             &Request::get(format!(
                 "http://localhost/api/users/{}/notes?limit=10&page=1",
@@ -1096,7 +907,6 @@ mod test {
         assert_eq!(response.pagination.limit, 10);
         assert_eq!(response.pagination.total, 30);
 
-        // Fetch second page
         let res = router.handle(
             &Request::get(format!(
                 "http://localhost/api/users/{}/notes?limit=10&page=2",
@@ -1112,29 +922,13 @@ mod test {
 
     #[test]
     fn test_users_notes_search() {
-        use crate::models::Note;
-
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Create notes with different content
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                body: "Meeting notes from today".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                body: "Shopping list for tomorrow".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user.id, None, "Meeting notes from today");
+        insert_test_note(&ctx, user.id, None, "Shopping list for tomorrow");
 
-        // Search for "meeting"
         let res = router.handle(
             &Request::get(format!(
                 "http://localhost/api/users/{}/notes?q=meeting",
@@ -1150,31 +944,13 @@ mod test {
 
     #[test]
     fn test_users_notes_search_by_title() {
-        use crate::models::Note;
-
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session(&ctx);
 
-        // Note where search term is only in title
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: Some("ProjectBeta".to_string()),
-                body: "Some content".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                title: None,
-                body: "Other content".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user.id, Some("ProjectBeta"), "Some content");
+        insert_test_note(&ctx, user.id, None, "Other content");
 
-        // "ProjectBeta" only in title of first note
         let res = router.handle(
             &Request::get(format!(
                 "http://localhost/api/users/{}/notes?q=ProjectBeta",
@@ -1190,23 +966,13 @@ mod test {
 
     #[test]
     fn test_users_notes_admin_can_see_any_user_notes() {
-        use crate::models::Note;
-
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_admin, admin_token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
-        let (user, _user_token) = create_test_user_with_session(&ctx);
+        let (user, _) = create_test_user_with_session(&ctx);
 
-        // Create notes for the normal user
-        ctx.database
-            .insert_note(Note {
-                user_id: user.id,
-                body: "User's private note".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user.id, None, "User's private note");
 
-        // Admin should be able to see the user's notes
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}/notes", user.id))
                 .header("Authorization", format!("Bearer {admin_token}")),
@@ -1221,23 +987,13 @@ mod test {
 
     #[test]
     fn test_users_notes_normal_user_cannot_see_other_notes() {
-        use crate::models::Note;
-
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_user1, user1_token) = create_test_user_with_session(&ctx);
-        let (user2, _user2_token) = create_test_user_with_session(&ctx);
+        let (user2, _) = create_test_user_with_session(&ctx);
 
-        // Create notes for user2
-        ctx.database
-            .insert_note(Note {
-                user_id: user2.id,
-                body: "User2's private note".to_string(),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_note(&ctx, user2.id, None, "User2's private note");
 
-        // User1 should not be able to see user2's notes
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}/notes", user2.id))
                 .header("Authorization", format!("Bearer {user1_token}")),
@@ -1251,7 +1007,6 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Try to fetch notes for non-existent user
         let res = router.handle(
             &Request::get(format!(
                 "http://localhost/api/users/{}/notes",
@@ -1266,29 +1021,24 @@ mod test {
     fn test_users_notes_pinned() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create user with notes
         let (user, token) = create_test_user_with_session(&ctx);
 
-        let pinned_note = Note {
-            user_id: user.id,
-            title: Some("User Pinned Note".to_string()),
-            body: "User's pinned note".to_string(),
-            is_pinned: true,
-            ..Default::default()
-        };
-        ctx.database.insert_note(pinned_note.clone()).unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                title: Some("User Pinned Note".to_string()),
+                body: "User's pinned note".to_string(),
+                is_pinned: true,
+                ..Default::default()
+            })
+            .unwrap();
+        insert_test_note(
+            &ctx,
+            user.id,
+            Some("User Unpinned Note"),
+            "User's unpinned note",
+        );
 
-        let unpinned_note = Note {
-            user_id: user.id,
-            title: Some("User Unpinned Note".to_string()),
-            body: "User's unpinned note".to_string(),
-            is_pinned: false,
-            ..Default::default()
-        };
-        ctx.database.insert_note(unpinned_note).unwrap();
-
-        // Fetch user's pinned notes
         let res = router.handle(
             &Request::get(format!(
                 "http://localhost/api/users/{}/notes/pinned",
@@ -1306,29 +1056,24 @@ mod test {
     fn test_users_notes_archived() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create user with notes
         let (user, token) = create_test_user_with_session(&ctx);
 
-        let archived_note = Note {
-            user_id: user.id,
-            title: Some("User Archived Note".to_string()),
-            body: "User's archived note".to_string(),
-            is_archived: true,
-            ..Default::default()
-        };
-        ctx.database.insert_note(archived_note.clone()).unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                title: Some("User Archived Note".to_string()),
+                body: "User's archived note".to_string(),
+                is_archived: true,
+                ..Default::default()
+            })
+            .unwrap();
+        insert_test_note(
+            &ctx,
+            user.id,
+            Some("User Active Note"),
+            "User's active note",
+        );
 
-        let active_note = Note {
-            user_id: user.id,
-            title: Some("User Active Note".to_string()),
-            body: "User's active note".to_string(),
-            is_archived: false,
-            ..Default::default()
-        };
-        ctx.database.insert_note(active_note).unwrap();
-
-        // Fetch user's archived notes
         let res = router.handle(
             &Request::get(format!(
                 "http://localhost/api/users/{}/notes/archived",
@@ -1346,29 +1091,19 @@ mod test {
     fn test_users_notes_trashed() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-
-        // Create user with notes
         let (user, token) = create_test_user_with_session(&ctx);
 
-        let trashed_note = Note {
-            user_id: user.id,
-            title: Some("User Trashed Note".to_string()),
-            body: "User's trashed note".to_string(),
-            is_trashed: true,
-            ..Default::default()
-        };
-        ctx.database.insert_note(trashed_note.clone()).unwrap();
+        ctx.database
+            .insert_note(Note {
+                user_id: user.id,
+                title: Some("User Trashed Note".to_string()),
+                body: "User's trashed note".to_string(),
+                is_trashed: true,
+                ..Default::default()
+            })
+            .unwrap();
+        insert_test_note(&ctx, user.id, Some("User Kept Note"), "User's kept note");
 
-        let kept_note = Note {
-            user_id: user.id,
-            title: Some("User Kept Note".to_string()),
-            body: "User's kept note".to_string(),
-            is_trashed: false,
-            ..Default::default()
-        };
-        ctx.database.insert_note(kept_note).unwrap();
-
-        // Fetch user's trashed notes
         let res = router.handle(
             &Request::get(format!(
                 "http://localhost/api/users/{}/notes/trashed",
@@ -1387,19 +1122,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Admin updates user including a new password (use the same email, admin auth user check allows target user's existing email via update path)
-        // Note: we change first_name to avoid the unique-email validator rejecting the unchanged email
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
@@ -1407,7 +1131,6 @@ mod test {
         );
         assert_eq!(res.status, Status::Ok);
 
-        // Verify the password was actually changed in the database
         let stored = ctx
             .database
             .query::<User>(
@@ -1427,16 +1150,14 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
-        // Normal user tries to update own profile including a new password
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
                 .body("firstName=Test&lastName=User&email=test@example.com&theme=system&language=en&role=normal&password=newpassword99"),
         );
-        // Should succeed (update is allowed), but password change is silently ignored
+        // Update is allowed but password change is silently ignored
         assert_eq!(res.status, Status::Ok);
 
-        // The original password must still work
         let stored = ctx
             .database
             .query::<User>(
@@ -1455,18 +1176,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Admin sends a password that is too short (< 8 chars)
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))

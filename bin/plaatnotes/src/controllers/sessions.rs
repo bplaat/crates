@@ -256,26 +256,19 @@ mod test {
     use chrono::Utc;
 
     use super::*;
-    use crate::consts::SESSION_EXPIRY_SECONDS;
     use crate::context::DatabaseHelpers;
-    use crate::models::{User, UserRole};
+    use crate::models::UserRole;
     use crate::router;
-    use crate::test_utils::create_test_user_with_session_and_role;
+    use crate::test_utils::{
+        create_test_user_with_session_and_role, insert_test_session, insert_test_user,
+    };
 
     #[test]
     fn test_sessions_index_search() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_user1, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
-
-        let user2 = User {
-            first_name: "Jane".to_string(),
-            last_name: "Doe".to_string(),
-            email: "jane@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user2.clone()).unwrap();
+        let user2 = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
 
         // Session with recognizable client_name and country
         ctx.database
@@ -285,7 +278,7 @@ mod test {
                 ip_address: "1.2.3.4".to_string(),
                 ip_country: Some("Netherlands".to_string()),
                 client_name: Some("Firefox".to_string()),
-                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+                expires_at: Utc::now() + Duration::from_secs(crate::consts::SESSION_EXPIRY_SECONDS),
                 ..Default::default()
             })
             .unwrap();
@@ -296,7 +289,7 @@ mod test {
                 token: "token-jane2".to_string(),
                 ip_address: "5.6.7.8".to_string(),
                 client_name: Some("Chrome".to_string()),
-                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
+                expires_at: Utc::now() + Duration::from_secs(crate::consts::SESSION_EXPIRY_SECONDS),
                 ..Default::default()
             })
             .unwrap();
@@ -327,26 +320,9 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_user1, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user2 = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
+        insert_test_session(&ctx, user2.id, "token-jane");
 
-        // Create another user with session
-        let user2 = User {
-            first_name: "Jane".to_string(),
-            last_name: "Doe".to_string(),
-            email: "jane@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user2.clone()).unwrap();
-
-        let session2 = Session {
-            user_id: user2.id,
-            token: "token-jane".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session2).unwrap();
-
-        // Admin can see all sessions
         let res = router.handle(
             &Request::get("http://localhost/api/sessions")
                 .header("Authorization", format!("Bearer {token1}")),
@@ -361,25 +337,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user1, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-
-        // Create another user with session
-        let user2 = User {
-            first_name: "Jane".to_string(),
-            last_name: "Doe".to_string(),
-            email: "jane@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            role: UserRole::Normal,
-            ..Default::default()
-        };
-        ctx.database.insert_user(user2.clone()).unwrap();
-
-        let session2 = Session {
-            user_id: user2.id,
-            token: "token-jane".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session2).unwrap();
+        let user2 = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
+        insert_test_session(&ctx, user2.id, "token-jane");
 
         // Normal user only sees their own sessions
         let res = router.handle(
@@ -397,26 +356,9 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_admin) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
+        let session = insert_test_session(&ctx, user.id, "token-jane");
 
-        // Create another user with session
-        let user = User {
-            first_name: "Jane".to_string(),
-            last_name: "Doe".to_string(),
-            email: "jane@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        let session = Session {
-            user_id: user.id,
-            token: "token-jane".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session.clone()).unwrap();
-
-        // Admin can view any session
         let res = router.handle(
             &Request::get(format!("http://localhost/api/sessions/{}", session.id))
                 .header("Authorization", format!("Bearer {token_admin}")),
@@ -431,17 +373,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
+        let session = insert_test_session(&ctx, user.id, "token-other");
 
-        // Create another session for the same user
-        let session = Session {
-            user_id: user.id,
-            token: "token-other".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session.clone()).unwrap();
-
-        // User can view their own session
         let res = router.handle(
             &Request::get(format!("http://localhost/api/sessions/{}", session.id))
                 .header("Authorization", format!("Bearer {token}")),
@@ -456,27 +389,9 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_user1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
+        let user2 = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
+        let session2 = insert_test_session(&ctx, user2.id, "token-jane");
 
-        // Create another user with session
-        let user2 = User {
-            first_name: "Jane".to_string(),
-            last_name: "Doe".to_string(),
-            email: "jane@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            role: UserRole::Normal,
-            ..Default::default()
-        };
-        ctx.database.insert_user(user2.clone()).unwrap();
-
-        let session2 = Session {
-            user_id: user2.id,
-            token: "token-jane".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session2.clone()).unwrap();
-
-        // User1 cannot view user2's session
         let res = router.handle(
             &Request::get(format!("http://localhost/api/sessions/{}", session2.id))
                 .header("Authorization", format!("Bearer {token_user1}")),
@@ -489,17 +404,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
+        let session = insert_test_session(&ctx, user.id, "token-to-delete");
 
-        // Create another session for the user
-        let session = Session {
-            user_id: user.id,
-            token: "token-to-delete".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session.clone()).unwrap();
-
-        // Delete the session
         let res = router.handle(
             &Request::delete(format!("http://localhost/api/sessions/{}", session.id))
                 .header("Authorization", format!("Bearer {token}")),
@@ -527,27 +433,9 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_user1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
+        let user2 = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
+        let session2 = insert_test_session(&ctx, user2.id, "token-jane");
 
-        // Create another user with session
-        let user2 = User {
-            first_name: "Jane".to_string(),
-            last_name: "Doe".to_string(),
-            email: "jane@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            role: UserRole::Normal,
-            ..Default::default()
-        };
-        ctx.database.insert_user(user2.clone()).unwrap();
-
-        let session2 = Session {
-            user_id: user2.id,
-            token: "token-jane".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session2.clone()).unwrap();
-
-        // User1 cannot delete user2's session
         let res = router.handle(
             &Request::delete(format!("http://localhost/api/sessions/{}", session2.id))
                 .header("Authorization", format!("Bearer {token_user1}")),
@@ -575,28 +463,11 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (_, token_admin) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
-
-        // Create another user with two sessions
-        let user = User {
-            first_name: "Jane".to_string(),
-            last_name: "Doe".to_string(),
-            email: "jane@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
+        let user = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
         for i in 0..2 {
-            ctx.database
-                .insert_session(Session {
-                    user_id: user.id,
-                    token: format!("token-jane-{i}"),
-                    expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-                    ..Default::default()
-                })
-                .unwrap();
+            insert_test_session(&ctx, user.id, &format!("token-jane-{i}"));
         }
 
-        // Admin can list any user's sessions
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}/sessions", user.id))
                 .header("Authorization", format!("Bearer {token_admin}")),
@@ -612,18 +483,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
+        insert_test_session(&ctx, user.id, "token-second");
 
-        // Add a second session for the same user
-        ctx.database
-            .insert_session(Session {
-                user_id: user.id,
-                token: "token-second".to_string(),
-                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-                ..Default::default()
-            })
-            .unwrap();
-
-        // Normal user can list own sessions
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}/sessions", user.id))
                 .header("Authorization", format!("Bearer {token}")),
@@ -640,7 +501,6 @@ mod test {
         let (_, token_user1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
         let (user2, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
-        // Normal user cannot list another user's sessions
         let res = router.handle(
             &Request::get(format!("http://localhost/api/users/{}/sessions", user2.id))
                 .header("Authorization", format!("Bearer {token_user1}")),
@@ -670,7 +530,7 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
-        // Add an already-expired session
+        // Expired session — can't use insert_test_session since it sets a future expiry
         ctx.database
             .insert_session(Session {
                 user_id: user.id,
@@ -689,7 +549,6 @@ mod test {
         );
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::SessionIndexResponse>(&res.body).unwrap();
-        // Only the valid session from create_test_user_with_session_and_role is returned
         assert_eq!(response.data.len(), 1);
         assert!(response.data.iter().all(|s| s.user_id == user.id));
     }
@@ -717,7 +576,7 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
-        // Add an expired session for the same user
+        // Expired session — can't use insert_test_session since it sets a future expiry
         ctx.database
             .insert_session(Session {
                 user_id: user.id,
@@ -727,16 +586,9 @@ mod test {
             })
             .unwrap();
 
-        // Add a valid session for another user (must not appear)
+        // Valid session for another user (must not appear)
         let (other_user, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        ctx.database
-            .insert_session(Session {
-                user_id: other_user.id,
-                token: "token-other".to_string(),
-                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_session(&ctx, other_user.id, "token-other");
 
         let res = router.handle(
             &Request::get("http://localhost/api/sessions/active")
@@ -744,7 +596,6 @@ mod test {
         );
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::SessionIndexResponse>(&res.body).unwrap();
-        // Only the one valid session belonging to this user
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].user_id, user.id);
     }
@@ -754,17 +605,8 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-
-        // Valid session for a different user
         let (other, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        ctx.database
-            .insert_session(Session {
-                user_id: other.id,
-                token: "token-other-valid".to_string(),
-                expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-                ..Default::default()
-            })
-            .unwrap();
+        insert_test_session(&ctx, other.id, "token-other-valid");
 
         let res = router.handle(
             &Request::get("http://localhost/api/sessions/active")

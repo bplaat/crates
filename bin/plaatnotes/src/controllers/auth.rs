@@ -183,25 +183,15 @@ mod test {
     use bsqlite::query_args;
 
     use super::*;
-    use crate::consts::SESSION_EXPIRY_SECONDS;
     use crate::router;
+    use crate::test_utils::{insert_test_session, insert_test_user};
 
     #[test]
     fn test_auth_login() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
+        insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Login with correct credentials
         let res = router.handle(
             &Request::post("http://localhost/api/auth/login")
                 .body("email=john@example.com&password=password123"),
@@ -215,18 +205,8 @@ mod test {
     fn test_auth_login_incorrect_password() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
+        insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        // Login with incorrect password
         let res = router.handle(
             &Request::post("http://localhost/api/auth/login")
                 .body("email=john@example.com&password=wrongpassword"),
@@ -239,7 +219,6 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
-        // Login with non-existent email
         let res = router.handle(
             &Request::post("http://localhost/api/auth/login")
                 .body("email=notfound@example.com&password=password123"),
@@ -251,26 +230,9 @@ mod test {
     fn test_auth_logout() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+        insert_test_session(&ctx, user.id, "test-token-123");
 
-        // Create user and session
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        let session = Session {
-            user_id: user.id,
-            token: "test-token-123".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session.clone()).unwrap();
-
-        // Logout with valid token
         let res = router.handle(
             &Request::post("http://localhost/api/auth/logout")
                 .header("Authorization", "Bearer test-token-123"),
@@ -300,29 +262,13 @@ mod test {
     fn test_get_authenticated_user_valid_token() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+        insert_test_session(&ctx, user.id, "valid-token-456");
 
-        // Create user and session
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
-
-        let session = Session {
-            user_id: user.id,
-            token: "valid-token-456".to_string(),
-            expires_at: Utc::now() + Duration::from_secs(SESSION_EXPIRY_SECONDS),
-            ..Default::default()
-        };
-        ctx.database.insert_session(session.clone()).unwrap();
-
-        // Test with valid token
-        let req = Request::get("http://localhost/api/auth/validate")
-            .header("Authorization", "Bearer valid-token-456");
-        let res = router.handle(&req);
+        let res = router.handle(
+            &Request::get("http://localhost/api/auth/validate")
+                .header("Authorization", "Bearer valid-token-456"),
+        );
         assert_eq!(res.status, Status::Ok);
     }
 
@@ -331,10 +277,10 @@ mod test {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
-        // Test with invalid token
-        let req = Request::get("http://localhost/api/auth/validate")
-            .header("Authorization", "Bearer invalid-token");
-        let res = router.handle(&req);
+        let res = router.handle(
+            &Request::get("http://localhost/api/auth/validate")
+                .header("Authorization", "Bearer invalid-token"),
+        );
         assert_eq!(res.status, Status::Unauthorized);
     }
 
@@ -342,29 +288,22 @@ mod test {
     fn test_get_authenticated_user_expired_session() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Create user and expired session
-        let user = User {
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            email: "john@example.com".to_string(),
-            password: crate::test_utils::TEST_PASSWORD_HASH.to_string(),
-            ..Default::default()
-        };
-        ctx.database.insert_user(user.clone()).unwrap();
+        // Expired session — can't use insert_test_session since it sets a future expiry
+        ctx.database
+            .insert_session(Session {
+                user_id: user.id,
+                token: "expired-token-789".to_string(),
+                expires_at: Utc::now() - Duration::from_secs(3600),
+                ..Default::default()
+            })
+            .unwrap();
 
-        let expired_session = Session {
-            user_id: user.id,
-            token: "expired-token-789".to_string(),
-            expires_at: Utc::now() - Duration::from_secs(3600),
-            ..Default::default()
-        };
-        ctx.database.insert_session(expired_session).unwrap();
-
-        // Test with expired session
-        let req = Request::get("http://localhost/api/auth/validate")
-            .header("Authorization", "Bearer expired-token-789");
-        let res = router.handle(&req);
+        let res = router.handle(
+            &Request::get("http://localhost/api/auth/validate")
+                .header("Authorization", "Bearer expired-token-789"),
+        );
         assert_eq!(res.status, Status::Unauthorized);
     }
 }
