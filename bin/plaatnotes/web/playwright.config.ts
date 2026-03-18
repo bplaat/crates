@@ -18,7 +18,7 @@ export default defineConfig({
         trace: 'on-first-retry',
     },
     projects: [
-        // Setup projects — run before test projects that depend on them
+        // Setup projects - run before test projects that depend on them
         {
             name: 'setup-normal',
             testMatch: /auth-normal\.setup\.ts/,

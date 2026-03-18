@@ -129,12 +129,12 @@ Generated dispatch macros use the snake_case of the interface name:
 
 #### Auto interfaces
 
-An interface with **no own methods** (only inherited from parents) is an _auto interface_. Any class that implements all of its parent interfaces automatically implements the auto interface — no explicit declaration needed. This mirrors Rust's auto traits:
+An interface with **no own methods** (only inherited from parents) is an _auto interface_. Any class that implements all of its parent interfaces automatically implements the auto interface - no explicit declaration needed. This mirrors Rust's auto traits:
 
 ```cpp
 class IEquatable { bool equals(Object* other); };
 class IHashable  { u32 hash(); };
-class IKeyable : IEquatable, IHashable {};  // auto interface — zero own methods
+class IKeyable : IEquatable, IHashable {};  // auto interface - zero own methods
 
 class Point : IEquatable, IHashable {       // automatically implements IKeyable too
     @init i32 x;
@@ -184,7 +184,7 @@ if (instanceof<Dog>(obj)) { ... }
 
 Include stdlib classes with `#include <ClassName.hh>`.
 
-### `Object` — base class
+### `Object` - base class
 
 Every class implicitly extends `Object`. Provides reference counting:
 
@@ -203,7 +203,7 @@ void    object_free(Object* obj)  // Decrement reference count; frees when it re
 | `IIterator`  | `has_next()`, `next()` → `Object*` | One-pass forward iterator     |
 | `IIterable`  | `iterator()` → `IIterator`         | Any iterable collection       |
 
-### `Bool` — heap boolean
+### `Bool` - heap boolean
 
 ```c
 Bool* bool_new(bool value)        // Create a new Bool
@@ -211,7 +211,7 @@ void  bool_free(Bool* b)          // Free the Bool
 bool  bool_get_value(Bool* b)     // Get the raw bool value
 ```
 
-### `Int` — heap integer
+### `Int` - heap integer
 
 ```c
 Int* int_new(i64 value)          // Create a new Int
@@ -219,7 +219,7 @@ void int_free(Int* i)            // Free the Int
 i64  int_get_value(Int* i)       // Get the raw i64 value
 ```
 
-### `Float` — heap float
+### `Float` - heap float
 
 ```c
 Float* float_new(f64 value)      // Create a new Float
@@ -227,7 +227,7 @@ void  float_free(Float* f)       // Free the Float
 f64   float_get_value(Float* f)  // Get the raw f64 value
 ```
 
-### `String` — heap string
+### `String` - heap string
 
 Implements `IKeyable`. Stores an owned copy of the string.
 
@@ -248,7 +248,7 @@ i32     string_index_of(String* s, char* substr)            // First index; -1 i
 String* string_substring(String* s, usize start, usize len) // New substring copy
 ```
 
-### `StringBuilder` — mutable string builder
+### `StringBuilder` - mutable string builder
 
 ```cpp
 #include <StringBuilder.hh>
@@ -264,7 +264,7 @@ String*        string_builder_build(StringBuilder* sb)       // Build → new St
 usize          string_builder_get_length(StringBuilder* sb)  // Current length
 ```
 
-### `List` — dynamic array
+### `List` - dynamic array
 
 ```cpp
 #include <List.hh>
@@ -284,7 +284,7 @@ void     list_remove(List* list, usize index)               // Remove item at in
 IIterator list_iterator(List* list)                         // Get a forward iterator
 ```
 
-### `Map` — hash map
+### `Map` - hash map
 
 ```cpp
 #include <Map.hh>
@@ -310,7 +310,7 @@ void     map_set(Map* map, IKeyable key, Object* value) // Insert or update entr
 void     map_remove(Map* map, IKeyable key)             // Remove entry (frees key and value)
 ```
 
-### `Set` — hash set
+### `Set` - hash set
 
 ```cpp
 #include <Set.hh>

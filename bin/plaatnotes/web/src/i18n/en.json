@@ -10,6 +10,7 @@
     "page.notfound": "Not Found",
     "login.tagline": "Sign in to your account",
     "login.error": "Invalid email or password.",
+    "login.error_rate_limited": "Too many login attempts. Please try again later.",
     "login.email": "Email",
     "login.email_placeholder": "you@example.com",
     "login.password": "Password",

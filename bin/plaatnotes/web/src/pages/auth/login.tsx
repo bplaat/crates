@@ -13,7 +13,7 @@ import { t } from '../../services/i18n.service.ts';
 export function AuthLogin() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState(false);
+    const [error, setError] = useState<'error' | 'rate_limited' | null>(null);
     const [loading, setLoading] = useState(false);
     const [, navigate] = useLocation();
 
@@ -23,14 +23,14 @@ export function AuthLogin() {
 
     async function handleSubmit(event: SubmitEvent) {
         event.preventDefault();
-        setError(false);
+        setError(null);
         setLoading(true);
-        const success = await login(email, password);
+        const result = await login(email, password);
         setLoading(false);
-        if (success) {
+        if (result === 'success') {
             navigate('/');
         } else {
-            setError(true);
+            setError(result);
         }
     }
 
@@ -46,7 +46,7 @@ export function AuthLogin() {
             <div class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-gray-200 dark:border-zinc-700 w-full max-w-sm p-8">
                 {error && (
                     <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-red-600 dark:text-red-400 text-sm">
-                        {t('login.error')}
+                        {t(error === 'rate_limited' ? 'login.error_rate_limited' : 'login.error')}
                     </div>
                 )}
 

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import TurndownService from 'turndown';
@@ -79,11 +80,11 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
 
     useEffect(() => {
         if (!editorRef.current) return;
-        editorRef.current.innerHTML = marked.parse(value || '') as string;
+        editorRef.current.innerHTML = DOMPurify.sanitize(marked.parse(value || '') as string);
         setIsEmpty(!value.trim());
     }, []);
 
-    // Programmatic autofocus on mount — works on every SPA navigation unlike HTML autofocus attribute
+    // Programmatic autofocus on mount - works on every SPA navigation unlike HTML autofocus attribute
     useEffect(() => {
         if (!autoFocus) return;
         const id = requestAnimationFrame(() => {
@@ -98,10 +99,10 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
         setIsEmpty(!value.trim());
         if (value !== lastEmittedRef.current) {
             lastEmittedRef.current = value;
-            // Don't reset DOM while the editor has focus — user is actively typing
+            // Don't reset DOM while the editor has focus - user is actively typing
             // and their local content is authoritative. Only update for external changes.
             if (!editorRef.current.contains(document.activeElement)) {
-                editorRef.current.innerHTML = marked.parse(value || '') as string;
+                editorRef.current.innerHTML = DOMPurify.sanitize(marked.parse(value || '') as string);
             }
         }
     }, [value]);
@@ -110,7 +111,7 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
     useEffect(() => {
         if (switchedToRichRef.current && editorRef.current) {
             switchedToRichRef.current = false;
-            editorRef.current.innerHTML = marked.parse(value || '') as string;
+            editorRef.current.innerHTML = DOMPurify.sanitize(marked.parse(value || '') as string);
             lastEmittedRef.current = value;
         }
     }, [plainMode]);

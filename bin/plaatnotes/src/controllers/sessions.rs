@@ -530,7 +530,7 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
-        // Expired session — can't use insert_test_session since it sets a future expiry
+        // Expired session - can't use insert_test_session since it sets a future expiry
         ctx.database
             .insert_session(Session {
                 user_id: user.id,
@@ -576,7 +576,7 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
-        // Expired session — can't use insert_test_session since it sets a future expiry
+        // Expired session - can't use insert_test_session since it sets a future expiry
         ctx.database
             .insert_session(Session {
                 user_id: user.id,
