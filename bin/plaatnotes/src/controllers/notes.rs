@@ -1084,7 +1084,7 @@ mod test {
                 ..Default::default()
             })
             .unwrap();
-        // Non-pinned note that also matches — must not appear
+        // Non-pinned note that also matches - must not appear
         insert_test_note(&ctx, user.id, Some("Unpinned Alpha"), "Content about alpha");
 
         let res = router.handle(
@@ -1144,7 +1144,7 @@ mod test {
                 ..Default::default()
             })
             .unwrap();
-        // Non-archived note that also matches — must not appear
+        // Non-archived note that also matches - must not appear
         insert_test_note(&ctx, user.id, Some("Active Recipe"), "How to bake bread");
 
         let res = router.handle(
@@ -1204,7 +1204,7 @@ mod test {
                 ..Default::default()
             })
             .unwrap();
-        // Non-trashed note that also matches — must not appear
+        // Non-trashed note that also matches - must not appear
         insert_test_note(
             &ctx,
             user.id,
@@ -1492,7 +1492,7 @@ mod test {
         };
         ctx.database.insert_note(note2.clone()).unwrap();
 
-        // User 1 tries to include user 2's note — should be silently ignored
+        // User 1 tries to include user 2's note - should be silently ignored
         let res = router.handle(
             &Request::put("http://localhost/api/notes/reorder")
                 .header("Authorization", format!("Bearer {token1}"))

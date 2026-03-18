@@ -129,11 +129,12 @@ test.describe('Notes', () => {
         await expect(page.locator('[contenteditable]')).toBeFocused();
     });
 
-    test('save button does not submit when body is empty', async ({ page }) => {
+    test('save button is disabled when body is empty', async ({ page }) => {
         await page.goto('/notes/create');
+        await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+
         await page.getByPlaceholder('Title').fill('Only title no body');
-        await page.getByRole('button', { name: 'Save' }).click();
-        await expect(page).toHaveURL('/notes/create');
+        await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
     });
 
     test('back button on archived note navigates to archive', async ({ page }) => {

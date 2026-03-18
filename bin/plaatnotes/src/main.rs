@@ -136,11 +136,14 @@ fn main() {
         ctx
     };
     #[cfg(not(feature = "test-e2e"))]
-    let context = Context::with_database(if let Ok(path) = env::var("DATABASE_PATH") {
-        path
-    } else {
-        "database.db".to_string()
-    })
+    let context = Context::with_database(
+        if let Ok(path) = env::var("DATABASE_PATH") {
+            path
+        } else {
+            "database.db".to_string()
+        },
+        env::var("SERVER_ORIGIN").unwrap_or_else(|_| "*".to_string()),
+    )
     .expect("Can't open/create database");
 
     if args.subcommand == Subcommand::ImportGoogleKeep {

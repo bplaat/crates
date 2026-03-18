@@ -16,10 +16,10 @@ const BTN_PRIMARY_CLASS =
 const BTN_SECONDARY_CLASS =
     'px-4 py-1.5 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-600 transition-colors cursor-pointer';
 
-// Round icon button — page toolbars and action bars (caller must supply a text-color class)
+// Round icon button - page toolbars and action bars (caller must supply a text-color class)
 const BTN_ICON_CLASS = 'p-2 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer';
 
-// Small square icon button — table rows and tight form contexts
+// Small square icon button - table rows and tight form contexts
 const BTN_SMALL_ICON_CLASS =
     'p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer';
 

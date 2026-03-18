@@ -14,6 +14,16 @@ use crate::Context;
 #[folder = "$OUT_DIR/web"]
 struct WebAssets;
 
+const CSP_VALUE: &str = concat!(
+    "default-src 'self'; ",
+    "script-src 'self'; ",
+    "style-src 'self' 'unsafe-inline'; ",
+    "img-src 'self' data:; ",
+    "connect-src 'self'; ",
+    "object-src 'none'; ",
+    "frame-ancestors 'none'",
+);
+
 pub(crate) fn spa_file_server_pre_layer(
     req: &Request,
     _: &mut Context,
@@ -29,14 +39,19 @@ pub(crate) fn spa_file_server_pre_layer(
     }
     if let Some(file) = WebAssets::get(path.trim_start_matches('/')) {
         let mime = mime_guess::from_path(&path).first_or_octet_stream();
-        Some(Ok(
-            Response::with_header("Content-Type", mime.to_string()).body(file.data)
-        ))
+        let res = Response::with_header("Content-Type", mime.to_string()).body(file.data);
+        Some(Ok(if mime.type_() == "text" && mime.subtype() == "html" {
+            res.header("Content-Security-Policy", CSP_VALUE)
+        } else {
+            res
+        }))
     } else {
-        Some(Ok(Response::with_header("Content-Type", "text/html").body(
-            WebAssets::get("index.html")
-                .expect("index.html should exists")
-                .data,
-        )))
+        Some(Ok(Response::with_header("Content-Type", "text/html")
+            .header("Content-Security-Policy", CSP_VALUE)
+            .body(
+                WebAssets::get("index.html")
+                    .expect("index.html should exists")
+                    .data,
+            )))
     }
 }

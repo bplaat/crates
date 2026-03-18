@@ -22,10 +22,10 @@ pub(crate) fn log_pre_layer(req: &Request, _: &mut Context) -> Option<Result<Res
 }
 
 // MARK: CORS layer
-pub(crate) fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Result<Response>> {
+pub(crate) fn cors_pre_layer(req: &Request, ctx: &mut Context) -> Option<Result<Response>> {
     if req.method == Method::Options && req.headers.get("Access-Control-Request-Method").is_some() {
         Some(Ok(Response::with_status(Status::NoContent)
-            .header("Access-Control-Allow-Origin", "*")
+            .header("Access-Control-Allow-Origin", ctx.server_origin.clone())
             .header(
                 "Access-Control-Allow-Methods",
                 "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -37,11 +37,11 @@ pub(crate) fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Result<Re
     }
 }
 
-pub(crate) fn cors_post_layer(req: &Request, _: &Context, res: Response) -> Result<Response> {
+pub(crate) fn cors_post_layer(req: &Request, ctx: &Context, res: Response) -> Result<Response> {
     if !(req.method == Method::Options
         && req.headers.get("Access-Control-Request-Method").is_some())
     {
-        Ok(res.header("Access-Control-Allow-Origin", "*"))
+        Ok(res.header("Access-Control-Allow-Origin", ctx.server_origin.clone()))
     } else {
         Ok(res)
     }

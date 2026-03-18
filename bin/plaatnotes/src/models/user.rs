@@ -116,6 +116,27 @@ pub(crate) mod validators {
         }
         is_unique_email(value, context)
     }
+
+    /// Validate password complexity: requires at least one uppercase letter, one lowercase letter,
+    /// one digit, and one special character (anything that is not alphanumeric).
+    pub(crate) fn has_password_complexity(value: &str) -> validate::Result {
+        let has_upper = value.chars().any(|c| c.is_ascii_uppercase());
+        let has_lower = value.chars().any(|c| c.is_ascii_lowercase());
+        let has_digit = value.chars().any(|c| c.is_ascii_digit());
+        let has_special = value.chars().any(|c| !c.is_alphanumeric());
+        if has_upper && has_lower && has_digit && has_special {
+            Ok(())
+        } else {
+            Err(validate::Error::new(
+                "Must contain at least one uppercase letter, one lowercase letter, one digit, and one special character",
+            ))
+        }
+    }
+
+    // Context-aware wrapper so complexity can be used on context-validated structs
+    pub(crate) fn has_password_complexity_ctx(value: &str, _ctx: &Context) -> validate::Result {
+        has_password_complexity(value)
+    }
 }
 
 // MARK: Policies

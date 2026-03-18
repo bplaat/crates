@@ -19,7 +19,10 @@ use crate::controllers::auth::verify_password;
 use crate::controllers::{not_found, parse_body, parse_body_ctx, parse_index_query, require_auth};
 use crate::models::User;
 use crate::models::note::{FILTER_ARCHIVED, FILTER_NORMAL, FILTER_PINNED, FILTER_TRASHED};
-use crate::models::user::validators::{is_unique_email, is_unique_email_or_target_user_email};
+use crate::models::user::validators::{
+    has_password_complexity, has_password_complexity_ctx, is_unique_email,
+    is_unique_email_or_target_user_email,
+};
 use crate::models::user::{UserRole, UserTheme, policies};
 use crate::utils::preprocess_fts_query;
 
@@ -103,7 +106,7 @@ struct UserCreateBody {
     last_name: String,
     #[validate(email, custom(is_unique_email))]
     email: String,
-    #[validate(ascii, length(min = 8, max = 128))]
+    #[validate(ascii, length(min = 8, max = 128), custom(has_password_complexity_ctx))]
     password: String,
     role: UserRole,
 }
@@ -164,7 +167,7 @@ struct UserUpdateBody {
     last_name: String,
     #[validate(email, custom(is_unique_email_or_target_user_email))]
     email: String,
-    #[validate(ascii, length(min = 8, max = 128))]
+    #[validate(ascii, length(min = 8, max = 128), custom(has_password_complexity_ctx))]
     password: Option<String>,
     theme: UserTheme,
     language: String,
@@ -242,7 +245,7 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
 struct UserChangePasswordBody {
     #[validate(ascii, length(min = 8, max = 128))]
     old_password: String,
-    #[validate(ascii, length(min = 8, max = 128))]
+    #[validate(ascii, length(min = 8, max = 128), custom(has_password_complexity))]
     new_password: String,
 }
 
@@ -388,7 +391,7 @@ mod test {
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
 
-        // Fetch /users — should contain just the test user
+        // Fetch /users - should contain just the test user
         let res = router.handle(
             &Request::get("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}")),
@@ -404,7 +407,7 @@ mod test {
         // Create another user
         insert_test_user(&ctx, "John", "Doe", "john.doe@example.com");
 
-        // Fetch /users — should now contain both users
+        // Fetch /users - should now contain both users
         let res = router.handle(
             &Request::get("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}")),
@@ -556,7 +559,7 @@ mod test {
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
                 .body(
-                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=securepass123&role=normal",
+                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=Secur3P%40ss!&role=normal",
                 ),
         );
         assert_eq!(res.status, Status::Ok);
@@ -576,17 +579,17 @@ mod test {
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
                 .body(
-                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=securepass123&role=normal",
+                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=Secur3P%40ss!&role=normal",
                 ),
         );
         assert_eq!(res.status, Status::Ok);
 
-        // Same email again — should fail
+        // Same email again - should fail
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
                 .body(
-                    "firstName=John&lastName=Doe&email=jane@example.com&password=securepass123&role=normal",
+                    "firstName=John&lastName=Doe&email=jane@example.com&password=Secur3P%40ss!&role=normal",
                 ),
         );
         assert_eq!(res.status, Status::BadRequest);
@@ -707,7 +710,7 @@ mod test {
                 user.id
             ))
             .header("Authorization", format!("Bearer {token}"))
-            .body("oldPassword=password123&newPassword=newpassword456"),
+            .body("oldPassword=password123&newPassword=NewP%40ssw0rd!"),
         );
         assert_eq!(res.status, Status::Ok);
 
@@ -722,7 +725,7 @@ mod test {
             .next()
             .map(|r| r.unwrap())
             .unwrap();
-        assert!(pbkdf2::password_verify("newpassword456", &stored_user.password).unwrap());
+        assert!(pbkdf2::password_verify("NewP@ssw0rd!", &stored_user.password).unwrap());
     }
 
     #[test]
@@ -738,7 +741,7 @@ mod test {
                 user.id
             ))
             .header("Authorization", format!("Bearer {token}"))
-            .body("oldPassword=wrongpassword&newPassword=anotherpassword"),
+            .body("oldPassword=wrongpassword&newPassword=Anoth3rP%40ss!"),
         );
         assert_eq!(res.status, Status::Unauthorized);
     }
@@ -795,7 +798,7 @@ mod test {
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=Test&lastName=User&email=test2@example.com&password=mypassword&role=normal"),
+                .body("firstName=Test&lastName=User&email=test2@example.com&password=MyP%40ssw0rd1!&role=normal"),
         );
         assert_eq!(res.status, Status::Ok);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();
@@ -811,9 +814,9 @@ mod test {
             .map(|r| r.unwrap())
             .unwrap();
 
-        assert_ne!(stored_user.password, "mypassword");
+        assert_ne!(stored_user.password, "MyP@ssw0rd1!");
         assert!(stored_user.password.starts_with("$pbkdf2-sha256$"));
-        assert!(pbkdf2::password_verify("mypassword", &stored_user.password).unwrap());
+        assert!(pbkdf2::password_verify("MyP@ssw0rd1!", &stored_user.password).unwrap());
         assert!(!pbkdf2::password_verify("wrongpassword", &stored_user.password).unwrap());
     }
 
@@ -1129,7 +1132,7 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=John&lastName=Doe&email=john.new@example.com&theme=system&language=en&role=normal&password=newpassword99"),
+                .body("firstName=John&lastName=Doe&email=john.new@example.com&theme=system&language=en&role=normal&password=NewP%40ssw0rd9!"),
         );
         assert_eq!(res.status, Status::Ok);
 
@@ -1143,7 +1146,7 @@ mod test {
             .next()
             .map(|r| r.unwrap())
             .unwrap();
-        assert!(pbkdf2::password_verify("newpassword99", &stored.password).unwrap());
+        assert!(pbkdf2::password_verify("NewP@ssw0rd9!", &stored.password).unwrap());
     }
 
     #[test]
@@ -1155,7 +1158,7 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=Test&lastName=User&email=test@example.com&theme=system&language=en&role=normal&password=newpassword99"),
+                .body("firstName=Test&lastName=User&email=test@example.com&theme=system&language=en&role=normal&password=NewP%40ssw0rd9!"),
         );
         // Update is allowed but password change is silently ignored
         assert_eq!(res.status, Status::Ok);
