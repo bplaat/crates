@@ -10,7 +10,7 @@ use std::{env, fs};
 
 use semver::Version;
 
-use crate::executor::ExecutorBuilder;
+use taskrunner::ExecutorBuilder;
 use crate::manifest::AndroidMetadata;
 use crate::tasks::jvm::{find_modules, get_class_name};
 use crate::utils::{index_files, write_file_when_different};

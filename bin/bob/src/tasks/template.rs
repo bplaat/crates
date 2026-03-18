@@ -7,7 +7,7 @@
 use std::{env, fs};
 
 use crate::Bobje;
-use crate::executor::ExecutorBuilder;
+use taskrunner::ExecutorBuilder;
 use crate::utils::write_file_when_different;
 
 // MARK: Template tasks

@@ -13,17 +13,15 @@ use std::{env, fs};
 
 use crate::args::{Profile, Subcommand, parse_args, subcommand_help};
 use crate::bobje::Bobje;
-use crate::executor::ExecutorBuilder;
 use crate::tasks::android::{detect_android, run_android_apk};
 use crate::tasks::bundle::{detect_bundle, run_bundle};
 use crate::tasks::cx::{detect_cx, run_ld, run_ld_cunit_tests};
 use crate::tasks::jvm::{detect_jar, detect_java_kotlin, run_jar, run_java_class, run_junit_tests};
 use crate::utils::{cache_dir, format_bytes, index_files};
+use taskrunner::ExecutorBuilder;
 
 mod args;
 mod bobje;
-mod executor;
-mod log;
 mod manifest;
 mod services;
 mod tasks;
@@ -147,7 +145,31 @@ fn main() {
         services::javac::start_javac_server();
     }
 
-    executor.execute(args.verbose, args.thread_count);
+    executor.execute(args.thread_count, {
+        let pretty_print =
+            !args.verbose && env::var("NO_COLOR").is_err() && env::var("CI").is_err();
+        if pretty_print {
+            println!();
+        }
+        move |current, total, label| {
+            let line = format!("[{current}/{total}] {label}");
+            if pretty_print {
+                let term_width = terminal_size::terminal_size()
+                    .map(|(w, _)| w.0 as usize)
+                    .unwrap_or(80);
+                println!(
+                    "\x1B[1A\x1B[2K{}",
+                    if line.len() > term_width {
+                        format!("{}...", &line[..term_width - 3])
+                    } else {
+                        line
+                    }
+                );
+            } else {
+                println!("{line}");
+            }
+        }
+    });
 
     // Show time taken
     if executor.total_tasks() > 0 && args.show_time {

@@ -11,7 +11,7 @@ use std::process::{Command, exit};
 use regex::Regex;
 
 use crate::Bobje;
-use crate::executor::ExecutorBuilder;
+use taskrunner::ExecutorBuilder;
 use crate::manifest::BundleMetadata;
 use crate::utils::{index_files, write_file_when_different};
 

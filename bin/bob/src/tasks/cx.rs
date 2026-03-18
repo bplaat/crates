@@ -13,7 +13,7 @@ use regex::Regex;
 
 use crate::args::Profile;
 use crate::bobje::{Bobje, PackageType};
-use crate::executor::ExecutorBuilder;
+use taskrunner::ExecutorBuilder;
 use crate::manifest::{Dependency, LibraryType};
 use crate::utils::write_file_when_different;
 

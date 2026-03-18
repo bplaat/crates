@@ -9,7 +9,7 @@ use std::fs;
 use std::process::exit;
 
 use crate::args::{Args, Profile};
-use crate::executor::ExecutorBuilder;
+use taskrunner::ExecutorBuilder;
 use crate::manifest::{Dependency, JarDependency, LibraryType, Manifest};
 use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,

@@ -13,7 +13,7 @@ use regex::Regex;
 
 use crate::Bobje;
 use crate::args::Profile;
-use crate::executor::{ExecutorBuilder, TaskAction};
+use taskrunner::{ExecutorBuilder, TaskAction};
 use crate::manifest::JarDependency;
 use crate::utils::cache_dir;
 
