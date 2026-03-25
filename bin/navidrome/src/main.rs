@@ -126,6 +126,30 @@ fn main() {
                         document.documentElement.classList.add('is-bwebview-macos');
                     }}
                     window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+                    // Fix: WKWebView sends a 'play' media remote command when a BT headset disconnects.
+                    // Intercept the MediaSession play action and block the first one after a device change.
+                    (function () {{
+                        let blockNextPlay = false;
+                        navigator.mediaDevices.addEventListener('devicechange', () => {{
+                            const anyPlaying = Array.from(document.querySelectorAll('audio, video'))
+                                .some(m => !m.paused);
+                            if (!anyPlaying) blockNextPlay = true;
+                        }});
+                        ['pointerdown', 'keydown'].forEach(type =>
+                            window.addEventListener(type, () => {{ blockNextPlay = false; }}, true)
+                        );
+                        const origSet = navigator.mediaSession.setActionHandler.bind(navigator.mediaSession);
+                        navigator.mediaSession.setActionHandler = function (action, handler) {{
+                            if (action === 'play' && handler) {{
+                                return origSet(action, function (details) {{
+                                    if (blockNextPlay) {{ blockNextPlay = false; return; }}
+                                    handler.call(this, details);
+                                }});
+                            }}
+                            return origSet(action, handler);
+                        }};
+                    }})();
                     "#
                 ),
                 InjectionTime::DocumentStart
