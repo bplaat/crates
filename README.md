@@ -128,7 +128,7 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
     ```sh
     rustup toolchain add nightly --component rustfmt
     curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-    cargo binstall -y cargo-deny cargo-nextest
+    cargo binstall -y --locked cargo-deny cargo-nextest
     ```
 
 - Run checks, or run an example:
@@ -145,7 +145,7 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 
     ```sh
     rustup component add llvm-tools
-    cargo binstall -y cargo-llvm-cov
+    cargo binstall -y --locked cargo-llvm-cov
     ./meta.sh coverage
     ```
 
@@ -153,7 +153,7 @@ The [meta.sh](meta.sh) script is contains all the main tasks, these are used fro
 
     ```sh
     rustup target add wasm32-unknown-unknown
-    cargo binstall -y wasm-bindgen-cli --version 0.2.104
+    cargo binstall -y --locked wasm-bindgen-cli --version 0.2.104
     ./meta.sh build-pages
     ```
 

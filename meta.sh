@@ -35,13 +35,15 @@ check_rust() {
     # Lint
     echo "Linting Rust code..."
     cargo clippy --locked --all-targets --all-features -- -D warnings -W clippy::uninlined_format_args
-    # Dependencies
-    echo "Checking Rust dependencies..."
-    cargo deny check --hide-inclusion-graph
     # Test
     echo "Running Rust tests..."
     cargo test --doc --all-features --locked
     cargo nextest run --all-features --locked --config-file nextest.toml ${CI:+--profile ci}
+}
+
+check_rust_deps() {
+    echo "Checking Rust dependencies..."
+    cargo deny check --hide-inclusion-graph
 }
 
 check_e2e() {
@@ -140,11 +142,15 @@ case "${1:-check}" in
         check_copyright
         check_formatting
         check_rust
+        check_rust_deps
         check_e2e
         ;;
-    check-rust)
+    check-shared)
         check_copyright
         check_formatting
+        check_rust_deps
+        ;;
+    check-rust)
         check_rust
         ;;
     check-e2e)
@@ -157,7 +163,7 @@ case "${1:-check}" in
         install
         ;;
     *)
-        echo "Usage: $0 {build-pages|build-bundle|clean|check|check-rust|check-e2e|coverage|install}"
+        echo "Usage: $0 {build-pages|build-bundle|clean|check|check-shared|check-rust|check-e2e|coverage|install}"
         exit 1
         ;;
 esac

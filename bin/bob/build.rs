@@ -67,12 +67,12 @@ fn main() {
             .to_string();
 
         if env::var("CI").is_ok() {
-            // Skip Objective-C tests on non macOS GitHub runners
+            // FIXME: Skip Objective-C tests on non macOS GitHub runners
             if !cfg!(target_os = "macos") && dir_name.starts_with("objc") {
                 continue;
             }
 
-            // Skip Android tests on Linux aarch64 GitHub runner
+            // FIXME: Skip Android tests on Linux aarch64 GitHub runner
             if cfg!(target_os = "linux")
                 && cfg!(target_arch = "aarch64")
                 && dir_name.starts_with("android")

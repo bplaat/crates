@@ -178,7 +178,16 @@ fn run_test(test_file: &str) {
     };
 
     let run_result = run_normal(&exe_path, expected_exit, &expected_stdout);
-    let leaks_result = run_leaks(&exe_path);
+
+    // FIXME: Skip leaks on CI Linux riscv64 since valgrind is not available
+    let leaks_result = if std::env::var("CI").is_ok()
+        && cfg!(target_os = "linux")
+        && cfg!(target_arch = "riscv64")
+    {
+        Ok(())
+    } else {
+        run_leaks(&exe_path)
+    };
 
     // Clean up binary
     let _ = fs::remove_file(&exe_path);
