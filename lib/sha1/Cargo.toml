@@ -5,5 +5,8 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[dependencies]
+cfg-if = "1"
+
 [lints]
 workspace = true
