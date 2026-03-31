@@ -42,7 +42,7 @@ test.describe('Admin - Users', () => {
         await dialog.getByLabel('First name').fill('New');
         await dialog.getByLabel('Last name').fill('Person');
         await dialog.getByLabel('Email').fill(`newperson-${Date.now()}@example.com`);
-        await dialog.getByLabel('Password').fill('password123');
+        await dialog.getByLabel('Password').fill('Password123!');
 
         const email = await dialog.getByLabel('Email').inputValue();
 
@@ -72,7 +72,7 @@ test.describe('Admin - Users', () => {
                 firstName: 'Edit',
                 lastName: 'Me',
                 email,
-                password: 'password123',
+                password: 'Password123!',
                 role: 'normal',
             }).toString(),
         });
@@ -110,7 +110,7 @@ test.describe('Admin - Users', () => {
                 firstName: 'Delete',
                 lastName: 'Me',
                 email,
-                password: 'password123',
+                password: 'Password123!',
                 role: 'normal',
             }).toString(),
         });

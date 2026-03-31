@@ -53,6 +53,27 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
         return Ok(Response::with_status(Status::BadRequest).json(api::Report::from(report)));
     }
 
+    // Check login rate limit
+    let ip_address = req.ip().to_string();
+    if !ctx.is_e2e {
+        let mut attempts = ctx.login_attempts.lock().expect("Mutex poisoned");
+        let now = std::time::Instant::now();
+        let window = Duration::from_secs(crate::consts::LOGIN_RATE_LIMIT_WINDOW_SECONDS);
+        if let Some((count, window_start)) = attempts.get_mut(&ip_address) {
+            if now.duration_since(*window_start) < window {
+                if *count >= crate::consts::LOGIN_RATE_LIMIT_MAX_ATTEMPTS {
+                    return Ok(Response::with_status(Status::TooManyRequests));
+                }
+                *count += 1;
+            } else {
+                *count = 1;
+                *window_start = now;
+            }
+        } else {
+            attempts.insert(ip_address.clone(), (1, now));
+        }
+    }
+
     // Find user by email
     let user = match ctx
         .database
@@ -83,7 +104,6 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     };
 
     // Get IP information
-    let ip_address = req.ip().to_string();
     let (ip_latitude, ip_longitude, ip_country, ip_city) = {
         match Request::get(format!("https://ipinfo.io/{ip_address}/json")).fetch() {
             Ok(res) => {
@@ -119,7 +139,7 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     let session = Session {
         user_id: user.id,
         token: token.clone(),
-        ip_address,
+        ip_address: ip_address.clone(),
         ip_latitude,
         ip_longitude,
         ip_country,
@@ -131,6 +151,14 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
         ..Default::default()
     };
     ctx.database.insert_session(session)?;
+
+    // Clear rate limit counter on successful login
+    if !ctx.is_e2e {
+        ctx.login_attempts
+            .lock()
+            .expect("Mutex poisoned")
+            .remove(&ip_address);
+    }
 
     // Return session token
     Ok(Response::with_json(api::LoginResponse {
@@ -183,6 +211,7 @@ mod test {
     use bsqlite::query_args;
 
     use super::*;
+    use crate::consts::LOGIN_RATE_LIMIT_MAX_ATTEMPTS;
     use crate::router;
     use crate::test_utils::{insert_test_session, insert_test_user};
 
@@ -290,7 +319,7 @@ mod test {
         let router = router(ctx.clone());
         let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
 
-        // Expired session — can't use insert_test_session since it sets a future expiry
+        // Expired session - can't use insert_test_session since it sets a future expiry
         ctx.database
             .insert_session(Session {
                 user_id: user.id,
@@ -305,5 +334,28 @@ mod test {
                 .header("Authorization", "Bearer expired-token-789"),
         );
         assert_eq!(res.status, Status::Unauthorized);
+    }
+
+    #[test]
+    fn test_auth_login_rate_limiting() {
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        let router = router(ctx.clone());
+        insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
+
+        // The first LOGIN_RATE_LIMIT_MAX_ATTEMPTS attempts should proceed (wrong password → 401)
+        for _ in 0..LOGIN_RATE_LIMIT_MAX_ATTEMPTS {
+            let res = router.handle(
+                &Request::post("http://localhost/api/auth/login")
+                    .body("email=jane@example.com&password=wrongpassword"),
+            );
+            assert_eq!(res.status, Status::Unauthorized);
+        }
+
+        // The next attempt must be rejected with 429 before even checking credentials
+        let res = router.handle(
+            &Request::post("http://localhost/api/auth/login")
+                .body("email=jane@example.com&password=password123"),
+        );
+        assert_eq!(res.status, Status::TooManyRequests);
     }
 }

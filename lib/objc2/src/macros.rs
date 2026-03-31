@@ -142,7 +142,6 @@ mod test {
 
     #[test]
     fn test_message_send_three_args() {
-        // NSString initWithBytes:length:encoding: — UTF-8 encoding constant = 4
         unsafe {
             let hello = b"hello";
             let ns: *mut AnyObject = msg_send![class!(NSString), alloc];

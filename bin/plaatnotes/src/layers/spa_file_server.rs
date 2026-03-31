@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -13,6 +13,22 @@ use crate::Context;
 #[derive(Embed)]
 #[folder = "$OUT_DIR/web"]
 struct WebAssets;
+
+const CSP_VALUE: &str = concat!(
+    "default-src 'self'; ",
+    "script-src 'self'; ",
+    "script-src-attr 'none'; ",
+    "style-src 'self'; ",
+    "style-src-attr 'none'; ",
+    "img-src 'self' data:; ",
+    "connect-src 'self'; ",
+    "object-src 'none'; ",
+    "frame-src 'none'; ",
+    "frame-ancestors 'none'; ",
+    "base-uri 'self'; ",
+    "form-action 'self'; ",
+    "worker-src 'none'",
+);
 
 pub(crate) fn spa_file_server_pre_layer(
     req: &Request,
@@ -29,14 +45,16 @@ pub(crate) fn spa_file_server_pre_layer(
     }
     if let Some(file) = WebAssets::get(path.trim_start_matches('/')) {
         let mime = mime_guess::from_path(&path).first_or_octet_stream();
-        Some(Ok(
-            Response::with_header("Content-Type", mime.to_string()).body(file.data)
-        ))
+        Some(Ok(Response::with_header("Content-Type", mime.to_string())
+            .header("Content-Security-Policy", CSP_VALUE)
+            .body(file.data)))
     } else {
-        Some(Ok(Response::with_header("Content-Type", "text/html").body(
-            WebAssets::get("index.html")
-                .expect("index.html should exists")
-                .data,
-        )))
+        Some(Ok(Response::with_header("Content-Type", "text/html")
+            .header("Content-Security-Policy", CSP_VALUE)
+            .body(
+                WebAssets::get("index.html")
+                    .expect("index.html should exists")
+                    .data,
+            )))
     }
 }

@@ -57,6 +57,7 @@ impl Default for Config {
 
 impl Config {
     fn default_path() -> PathBuf {
+        // FIXME: Don't use debug_assertions to determine the config path
         if !cfg!(debug_assertions) {
             let project_dirs = directories::ProjectDirs::from("nl", "bplaat", "BassieLight")
                 .expect("Can't get dirs");

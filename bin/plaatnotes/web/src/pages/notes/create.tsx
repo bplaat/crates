@@ -77,7 +77,11 @@ export function NotesCreate() {
                                 <SecondaryButton type="button" onClick={() => navigate('/')}>
                                     {t('notes_create.cancel')}
                                 </SecondaryButton>
-                                <Button type="submit" class="inline-flex items-center gap-1.5 px-4 py-1.5">
+                                <Button
+                                    type="submit"
+                                    disabled={!body.trim()}
+                                    class="inline-flex items-center gap-1.5 px-4 py-1.5"
+                                >
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                                     </svg>

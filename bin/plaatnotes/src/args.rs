@@ -10,6 +10,7 @@ use std::process::exit;
 #[derive(PartialEq, Eq)]
 pub(crate) enum Subcommand {
     Serve,
+    ServeE2e,
     ImportGoogleKeep,
     Help,
     Version,
@@ -37,6 +38,7 @@ pub(crate) fn parse_args() -> Args {
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
             "serve" => args.subcommand = Subcommand::Serve,
+            "serve-e2e" => args.subcommand = Subcommand::ServeE2e,
             "import-google-keep" => {
                 args.subcommand = Subcommand::ImportGoogleKeep;
                 args.path = args_iter.next();
@@ -61,6 +63,7 @@ pub(crate) fn subcommand_help() {
 
 Subcommands:
   serve                   Start the HTTP server (default)
+  serve-e2e               Start the HTTP server with in-memory test database (for E2E testing)
   import-google-keep      Import notes from a Google Keep Takeout folder or zip
     --email <email>         Email of the user to import notes for
   help                    Print this help message

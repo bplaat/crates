@@ -49,16 +49,19 @@ export function authFetch(url: string, init: RequestInit = {}): Promise<Response
     return fetch(url, { ...init, headers });
 }
 
-export async function login(email: string, password: string): Promise<boolean> {
+export type LoginResult = 'success' | 'error' | 'rate_limited';
+
+export async function login(email: string, password: string): Promise<LoginResult> {
     const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         body: new URLSearchParams({ email, password }),
     });
-    if (!res.ok) return false;
+    if (res.status === 429) return 'rate_limited';
+    if (!res.ok) return 'error';
     const { token }: LoginResponse = await res.json();
     localStorage.setItem(TOKEN_KEY, token);
     await applyValidate(token);
-    return true;
+    return 'success';
 }
 
 export async function logout() {

@@ -8,7 +8,7 @@ import { Link } from 'wouter-preact';
 import { type Note } from '../../src-gen/api.ts';
 import { t } from '../services/i18n.service.ts';
 
-// Icon button for use on colored card backgrounds — uses semi-transparent hover overlay
+// Icon button for use on colored card backgrounds - uses semi-transparent hover overlay
 const CARD_BTN_BASE = 'p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/15 transition-colors cursor-pointer';
 
 function NoteIconButton({ class: extraClass, ...props }: preact.JSX.IntrinsicElements['button']) {

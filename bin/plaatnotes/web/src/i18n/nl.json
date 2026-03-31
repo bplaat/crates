@@ -10,6 +10,7 @@
     "page.notfound": "Niet gevonden",
     "login.tagline": "Meld je aan bij je account",
     "login.error": "Ongeldig e-mailadres of wachtwoord.",
+    "login.error_rate_limited": "Te veel inlogpogingen. Probeer het later opnieuw.",
     "login.email": "E-mail",
     "login.email_placeholder": "jij@voorbeeld.nl",
     "login.password": "Wachtwoord",

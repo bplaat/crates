@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use anyhow::Result;
 use bsqlite::{Connection, OpenMode};
@@ -17,37 +20,60 @@ use crate::models::{Note, Session, User};
 // MARK: Context
 #[derive(Clone)]
 pub(crate) struct Context {
+    pub server_origin: String,
     pub database: Connection,
     pub auth_session: Option<Session>,
     pub auth_user: Option<User>,
     pub update_target_user_id: Option<Uuid>,
+    pub login_attempts: Arc<Mutex<HashMap<String, (u32, Instant)>>>,
+    pub is_e2e: bool,
 }
 
 impl Context {
     #[allow(dead_code)]
-    pub(crate) fn with_database(path: impl AsRef<Path>) -> Result<Self> {
+    pub(crate) fn with_database(path: impl AsRef<Path>, server_origin: String) -> Result<Self> {
         log::info!("Using database at {}", path.as_ref().display());
         let database = Connection::open(path.as_ref(), OpenMode::ReadWrite)?;
         database.enable_wal_logging()?;
         database.apply_various_performance_settings()?;
         database_migrate(&database)?;
         Ok(Self {
+            server_origin,
             database,
             auth_session: None,
             auth_user: None,
             update_target_user_id: None,
+            login_attempts: Arc::new(Mutex::new(HashMap::new())),
+            is_e2e: false,
         })
     }
 
-    #[cfg(any(test, feature = "test-e2e"))]
+    #[cfg(test)]
     pub(crate) fn with_test_database() -> Result<Self> {
         let database = Connection::open_memory()?;
         database_migrate(&database)?;
         Ok(Self {
+            server_origin: "*".to_string(),
             database,
             auth_session: None,
             auth_user: None,
             update_target_user_id: None,
+            login_attempts: Arc::new(Mutex::new(HashMap::new())),
+            is_e2e: false,
+        })
+    }
+
+    pub(crate) fn with_e2e_database() -> Result<Self> {
+        let database = Connection::open_memory()?;
+        database_migrate(&database)?;
+        Ok(Self {
+            server_origin: "*".to_string(),
+            database,
+            auth_session: None,
+            auth_user: None,
+            update_target_user_id: None,
+            login_attempts: Arc::new(Mutex::new(HashMap::new())),
+            is_e2e: true,
         })
     }
 }

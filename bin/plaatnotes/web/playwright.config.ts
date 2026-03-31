@@ -18,7 +18,7 @@ export default defineConfig({
         trace: 'on-first-retry',
     },
     projects: [
-        // Setup projects — run before test projects that depend on them
+        // Setup projects - run before test projects that depend on them
         {
             name: 'setup-normal',
             testMatch: /auth-normal\.setup\.ts/,
@@ -65,7 +65,7 @@ export default defineConfig({
     ],
     webServer: [
         {
-            command: 'cargo run --features test-e2e',
+            command: 'cargo run -- serve-e2e',
             cwd: '..',
             url: 'http://localhost:8080/',
             reuseExistingServer: !process.env.CI,

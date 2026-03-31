@@ -108,11 +108,10 @@ fn main() {
     simple_logger::init().expect("Failed to init logger");
 
     // Init context
-    #[cfg(feature = "test-e2e")]
-    let context = {
+    let context = if args.subcommand == Subcommand::ServeE2e {
         use crate::context::DatabaseHelpers;
         use crate::models::{User, UserRole};
-        let ctx = Context::with_test_database().expect("Can't create test database");
+        let ctx = Context::with_e2e_database().expect("Can't create E2E test database");
         ctx.database
             .insert_user(User {
                 first_name: "Test".to_string(),
@@ -134,14 +133,17 @@ fn main() {
             })
             .expect("Database error");
         ctx
-    };
-    #[cfg(not(feature = "test-e2e"))]
-    let context = Context::with_database(if let Ok(path) = env::var("DATABASE_PATH") {
-        path
     } else {
-        "database.db".to_string()
-    })
-    .expect("Can't open/create database");
+        Context::with_database(
+            if let Ok(path) = env::var("DATABASE_PATH") {
+                path
+            } else {
+                "database.db".to_string()
+            },
+            env::var("SERVER_ORIGIN").unwrap_or_else(|_| "*".to_string()),
+        )
+        .expect("Can't open/create database")
+    };
 
     if args.subcommand == Subcommand::ImportGoogleKeep {
         let path = args.path.unwrap_or_else(|| {
