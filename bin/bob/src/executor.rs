@@ -221,30 +221,29 @@ impl TaskAction {
                 command.clone()
             }
             TaskAction::SendMsg(socket_path, line) => {
-                #[cfg(unix)]
-                {
-                    use std::io::{Read, Write};
-                    let mut stream = std::os::unix::net::UnixStream::connect(socket_path)
-                        .expect("Failed to connect to socket");
-                    _ = stream.write_all(line.as_bytes());
-                    _ = stream.flush();
+                cfg_if::cfg_if! {
+                    if #[cfg(unix)] {
+                        use std::io::{Read, Write};
+                        let mut stream = std::os::unix::net::UnixStream::connect(socket_path)
+                            .expect("Failed to connect to socket");
+                        _ = stream.write_all(line.as_bytes());
+                        _ = stream.flush();
 
-                    let mut response = Vec::new();
-                    _ = stream.read_to_end(&mut response);
+                        let mut response = Vec::new();
+                        _ = stream.read_to_end(&mut response);
 
-                    let read_line = String::from_utf8_lossy(&response);
-                    let (exit_code, stderr) = read_line.split_once('\n').expect("Invalid response");
-                    if exit_code.parse::<i32>().expect("Invalid exit code") != 0 {
-                        eprintln!("Command failed: {line}\n{stderr}");
+                        let read_line = String::from_utf8_lossy(&response);
+                        let (exit_code, stderr) = read_line.split_once('\n').expect("Invalid response");
+                        if exit_code.parse::<i32>().expect("Invalid exit code") != 0 {
+                            eprintln!("Command failed: {line}\n{stderr}");
+                            exit(1);
+                        }
+
+                        line.clone()
+                    } else {
+                        eprintln!("SendMsg is only supported on Unix systems");
                         exit(1);
                     }
-
-                    line.clone()
-                }
-                #[cfg(not(unix))]
-                {
-                    eprintln!("SendMsg is only supported on Unix systems");
-                    exit(1);
                 }
             }
             TaskAction::Multiple(actions) => {

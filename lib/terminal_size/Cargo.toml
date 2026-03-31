@@ -7,3 +7,6 @@ authors.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+cfg-if = "1"

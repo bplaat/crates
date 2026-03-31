@@ -9,6 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+cfg-if = "1"
 basic-toml = "0.1.9"
 directories = "6.0"
 dotenv = "0.15.0"

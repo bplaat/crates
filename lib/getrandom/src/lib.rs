@@ -10,53 +10,44 @@ use std::io::Error;
 
 /// Fill buffer with crypto random bytes
 pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
-    #[cfg(all(unix, not(any(target_os = "macos", target_os = "openbsd"))))]
-    {
-        unsafe extern "C" {
-            fn getrandom(buf: *mut u8, size: usize, flags: u32) -> isize;
-        }
-        let n = unsafe { getrandom(buf.as_mut_ptr(), buf.len(), 0) };
-        if n < 0 || n as usize != buf.len() {
-            return Err(Error::other("getrandom failed"));
-        }
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "openbsd"))]
-    {
-        unsafe extern "C" {
-            fn getentropy(buf: *mut u8, buflen: usize) -> i32;
-        }
-        for chunk in buf.chunks_mut(256) {
-            if unsafe { getentropy(chunk.as_mut_ptr(), chunk.len()) } != 0 {
-                return Err(Error::other("getentropy failed"));
+    cfg_if::cfg_if! {
+        if #[cfg(all(unix, not(any(target_os = "macos", target_os = "openbsd"))))] {
+            unsafe extern "C" {
+                fn getrandom(buf: *mut u8, size: usize, flags: u32) -> isize;
             }
+            let n = unsafe { getrandom(buf.as_mut_ptr(), buf.len(), 0) };
+            if n < 0 || n as usize != buf.len() {
+                return Err(Error::other("getrandom failed"));
+            }
+        } else if #[cfg(any(target_os = "macos", target_os = "openbsd"))] {
+            unsafe extern "C" {
+                fn getentropy(buf: *mut u8, buflen: usize) -> i32;
+            }
+            for chunk in buf.chunks_mut(256) {
+                if unsafe { getentropy(chunk.as_mut_ptr(), chunk.len()) } != 0 {
+                    return Err(Error::other("getentropy failed"));
+                }
+            }
+        } else if #[cfg(windows)] {
+            #[cfg(not(target_arch = "x86"))]
+            #[link(name = "bcryptprimitives", kind = "raw-dylib")]
+            unsafe extern "system" {
+                fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
+            }
+            #[cfg(target_arch = "x86")]
+            #[link(
+                name = "bcryptprimitives",
+                kind = "raw-dylib",
+                import_name_type = "undecorated"
+            )]
+            unsafe extern "system" {
+                fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
+            }
+            unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) };
+        } else {
+            compile_error!("Unsupported platform");
         }
     }
-
-    #[cfg(windows)]
-    {
-        #[cfg(not(target_arch = "x86"))]
-        #[link(name = "bcryptprimitives", kind = "raw-dylib")]
-        unsafe extern "system" {
-            fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
-        }
-        #[cfg(target_arch = "x86")]
-        #[link(
-            name = "bcryptprimitives",
-            kind = "raw-dylib",
-            import_name_type = "undecorated"
-        )]
-        unsafe extern "system" {
-            fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
-        }
-        unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) };
-    }
-
-    #[cfg(not(any(unix, windows)))]
-    {
-        compile_error!("Unsupported platform");
-    }
-
     Ok(())
 }
 
