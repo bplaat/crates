@@ -11,7 +11,7 @@ use std::net::{Ipv4Addr, TcpListener};
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use sha1::{Digest, Sha1};
+use sha1::Sha1;
 use small_http::{Request, Response, Status};
 
 fn handler(req: &Request) -> Response {

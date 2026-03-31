@@ -9,6 +9,7 @@ use std::fmt::{self, Display, Formatter};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64_NO_PAD;
+use subtle::ConstantTimeEq;
 
 use crate::pbkdf2_hmac_sha256;
 
@@ -30,6 +31,9 @@ pub fn password_hash(password: &str) -> String {
 /// Verify password using hash string in PHC standard
 pub fn password_verify(password: &str, hash: &str) -> Result<bool, PasswordHashDecodeError> {
     let parts = hash.split('$').collect::<Vec<&str>>();
+    if parts.len() < 5 {
+        return Err(PasswordHashDecodeError);
+    }
     let iterations = parts[2]
         .split('=')
         .nth(1)
@@ -43,7 +47,7 @@ pub fn password_verify(password: &str, hash: &str) -> Result<bool, PasswordHashD
         .decode(parts[4])
         .map_err(|_| PasswordHashDecodeError)?;
     let computed_hash = pbkdf2_hmac_sha256(password.as_bytes(), &salt, iterations, 32);
-    Ok(stored_hash == computed_hash)
+    Ok(stored_hash.ct_eq(&computed_hash).into())
 }
 
 // MARK: PasswordHashDecodeError

@@ -8,43 +8,40 @@
 
 #![forbid(unsafe_code)]
 
-/// Digest
-pub trait Digest {
-    /// New instance of the digest
-    fn new() -> Self;
-    /// Update the digest with new data
-    fn update(&mut self, data: impl AsRef<[u8]>);
-    /// Finalize the digest and return the hash
-    fn finalize(self) -> Vec<u8>;
-}
-
-/// A simple SHA1 implementation
+/// A simple SHA-1 hasher
+#[derive(Default)]
 pub struct Sha1 {
     buffer: Vec<u8>,
 }
 
 impl Sha1 {
-    /// Compute the SHA1 digest of the given data
-    pub fn digest(data: impl AsRef<[u8]>) -> Vec<u8> {
+    /// Create a new SHA-1 hasher
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Compute the SHA-1 digest of the given data
+    pub fn digest(data: impl AsRef<[u8]>) -> [u8; 20] {
         let mut hasher = Sha1::new();
         hasher.update(data);
         hasher.finalize()
     }
-}
 
-impl Digest for Sha1 {
-    fn new() -> Self {
-        Sha1 { buffer: Vec::new() }
-    }
-
-    fn update(&mut self, data: impl AsRef<[u8]>) {
+    /// Update the hasher with new data
+    pub fn update(&mut self, data: impl AsRef<[u8]>) {
         self.buffer.extend_from_slice(data.as_ref());
     }
 
-    #[allow(unused_mut)]
-    fn finalize(mut self) -> Vec<u8> {
-        let hash = sha1(&self.buffer);
-        hash.to_vec()
+    /// Finalize the hash and return the digest
+    pub fn finalize(self) -> [u8; 20] {
+        sha1(&self.buffer)
+    }
+
+    /// Finalize the hash, reset the hasher, and return the digest
+    pub fn finalize_reset(&mut self) -> [u8; 20] {
+        let result = sha1(&self.buffer);
+        self.buffer.clear();
+        result
     }
 }
 
@@ -147,5 +144,17 @@ mod test {
             let hash = Sha1::digest(input.as_bytes());
             assert_eq!(to_hex(&hash), expected, "Failed for input: {input}");
         }
+    }
+
+    #[test]
+    fn test_sha1_reset() {
+        let mut hasher = Sha1::new();
+        hasher.update(b"abc");
+        hasher.finalize_reset();
+        hasher.update(b"hello world");
+        assert_eq!(
+            to_hex(&hasher.finalize_reset()),
+            "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed"
+        );
     }
 }

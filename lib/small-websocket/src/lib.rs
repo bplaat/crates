@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use sha1::{Digest, Sha1};
+use sha1::Sha1;
 use small_http::{Request, Response, Status};
 
 /// WebSocket message

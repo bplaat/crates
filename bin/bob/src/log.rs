@@ -14,7 +14,7 @@ use std::time::Duration;
 pub(crate) struct LogEntry {
     pub path: String,
     pub mtime: Duration,
-    pub hash: Option<Vec<u8>>,
+    pub hash: Option<[u8; 20]>,
 }
 
 impl FromStr for LogEntry {
@@ -36,12 +36,13 @@ impl FromStr for LogEntry {
 
         let hash = if parts.len() == 4 {
             let hash_str = parts[3];
-            let mut hash = Vec::with_capacity(hash_str.len() / 2);
-            for i in (0..hash_str.len()).step_by(2) {
-                hash.push(
-                    u8::from_str_radix(&hash_str[i..i + 2], 16)
-                        .map_err(|_| "Invalid hash format".to_string())?,
-                );
+            if hash_str.len() != 40 {
+                return Err("Invalid hash format".to_string());
+            }
+            let mut hash = [0u8; 20];
+            for (i, byte) in hash.iter_mut().enumerate() {
+                *byte = u8::from_str_radix(&hash_str[i * 2..i * 2 + 2], 16)
+                    .map_err(|_| "Invalid hash format".to_string())?;
             }
             Some(hash)
         } else {

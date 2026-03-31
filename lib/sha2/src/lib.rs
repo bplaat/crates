@@ -1,10 +1,25 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-/// SHA256
+//! A minimal replacement for the [sha2](https://crates.io/crates/sha2) crate
+
+#![forbid(unsafe_code)]
+
+const K: [u32; 64] = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+];
+
+/// A SHA-256 hasher
 pub struct Sha256 {
     state: [u32; 8],
     buffer: [u8; 64],
@@ -24,26 +39,22 @@ impl Default for Sha256 {
     }
 }
 
-const K: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-];
-
 impl Sha256 {
-    /// Create a new SHA256 instance
+    /// Create a new SHA-256 hasher
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Update the hash with new data
-    pub fn update(&mut self, data: &[u8]) {
-        let mut data = data;
+    /// Compute the SHA-256 digest of the given data
+    pub fn digest(data: impl AsRef<[u8]>) -> [u8; 32] {
+        let mut h = Self::new();
+        h.update(data);
+        h.finalize_reset()
+    }
+
+    /// Update the hasher with new data
+    pub fn update(&mut self, data: impl AsRef<[u8]>) {
+        let mut data = data.as_ref();
         while !data.is_empty() {
             let buffer_len = self.length as usize % 64;
             let to_copy = std::cmp::min(64 - buffer_len, data.len());
@@ -56,7 +67,12 @@ impl Sha256 {
         }
     }
 
-    /// Finalize the hash, reset and return the hash
+    /// Finalize the hash and return the digest
+    pub fn finalize(mut self) -> [u8; 32] {
+        self.finalize_reset()
+    }
+
+    /// Finalize the hash, reset the hasher, and return the digest
     pub fn finalize_reset(&mut self) -> [u8; 32] {
         let mut padding = [0u8; 64];
         padding[0] = 0x80;
@@ -67,7 +83,7 @@ impl Sha256 {
             64 + 56 - self.length % 64
         };
         self.update(&padding[..padding_len as usize]);
-        self.update(&length_bits.to_be_bytes());
+        self.update(length_bits.to_be_bytes());
         let mut result = [0u8; 32];
         for (i, chunk) in result.chunks_mut(4).enumerate() {
             chunk.copy_from_slice(&self.state[i].to_be_bytes());
@@ -141,48 +157,31 @@ impl Sha256 {
 mod test {
     use super::*;
 
-    #[test]
-    fn test_sha256_empty() {
-        let mut hasher = Sha256::new();
-        let result = hasher.finalize_reset();
-        assert_eq!(
-            result,
-            [
-                0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f,
-                0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b,
-                0x78, 0x52, 0xb8, 0x55
-            ]
-        );
+    fn to_hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     #[test]
-    fn test_sha256_abc() {
-        let mut hasher = Sha256::new();
-        hasher.update(b"abc");
-        let result = hasher.finalize_reset();
-        assert_eq!(
-            result,
-            [
-                0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
-                0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
-                0xf2, 0x00, 0x15, 0xad
-            ]
-        );
-    }
+    fn test_sha256() {
+        let test_cases = [
+            (
+                "",
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            ),
+            (
+                "abc",
+                "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            ),
+            (
+                "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+                "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+            ),
+        ];
 
-    #[test]
-    fn test_sha256_long() {
-        let mut hasher = Sha256::new();
-        hasher.update(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
-        let result = hasher.finalize_reset();
-        assert_eq!(
-            result,
-            [
-                0x24, 0x8d, 0x6a, 0x61, 0xd2, 0x06, 0x38, 0xb8, 0xe5, 0xc0, 0x26, 0x93, 0x0c, 0x3e,
-                0x60, 0x39, 0xa3, 0x3c, 0xe4, 0x59, 0x64, 0xff, 0x21, 0x67, 0xf6, 0xec, 0xed, 0xd4,
-                0x19, 0xdb, 0x06, 0xc1
-            ]
-        );
+        for (input, expected) in test_cases {
+            let hash = Sha256::digest(input.as_bytes());
+            assert_eq!(to_hex(&hash), expected, "Failed for input: {input}");
+        }
     }
 
     #[test]
@@ -191,14 +190,9 @@ mod test {
         hasher.update(b"abc");
         hasher.finalize_reset();
         hasher.update(b"test");
-        let result = hasher.finalize_reset();
         assert_eq!(
-            result,
-            [
-                0x9f, 0x86, 0xd0, 0x81, 0x88, 0x4c, 0x7d, 0x65, 0x9a, 0x2f, 0xea, 0xa0, 0xc5, 0x5a,
-                0xd0, 0x15, 0xa3, 0xbf, 0x4f, 0x1b, 0x2b, 0x0b, 0x82, 0x2c, 0xd1, 0x5d, 0x6c, 0x15,
-                0xb0, 0xf0, 0x0a, 0x08
-            ]
+            to_hex(&hasher.finalize_reset()),
+            "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
         );
     }
 }

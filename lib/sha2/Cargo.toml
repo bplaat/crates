@@ -1,5 +1,5 @@
 [package]
-name = "sha1"
+name = "sha2"
 version = "0.11.0+patch"
 edition.workspace = true
 license.workspace = true

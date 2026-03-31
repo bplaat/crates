@@ -12,9 +12,8 @@ use crate::consts::SESSION_EXPIRY_SECONDS;
 use crate::context::{Context, DatabaseHelpers};
 use crate::models::{Note, Session, User, UserRole};
 
-// Precomputed hash for "password123" to avoid computing it in every test
 pub(crate) const TEST_PASSWORD_HASH: &str =
-    "$pbkdf2-sha256$t=100000$ehJ7aeA7FWwbPkeY4a2pJA$mqqvN/B9sR2BW6bk9wPUWjcsz03E6bJXWIkCis7GvJk";
+    include_str!(concat!(env!("OUT_DIR"), "/test_password_hash.txt"));
 
 // Creates a test user and returns (user, token)
 pub(crate) fn create_test_user_with_session(ctx: &Context) -> (User, String) {
