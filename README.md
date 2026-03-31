@@ -22,7 +22,7 @@ These libraries are not published to [crates.io](https://crates.io) and are more
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
 - [js](lib/js) A WIP JavaScript interpreter
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
-- [pbkdf2](lib/pbkdf2) A unsecure PBKDF2-HMAC-SHA256 password hashing library
+- [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [small-websocket](lib/small-websocket) A simple and small websocket library for the [small-http](lib/small-http) library
 - [validate](lib/validate) A simple struct validation library
 - [validate_derive](lib/validate_derive) Validation derive macro's library

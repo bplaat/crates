@@ -50,9 +50,11 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
 
     let mut ikey = [0u8; 64];
     let mut okey = [0u8; 64];
-    for i in 0..64 {
-        ikey[i] = key_block[i] ^ 0x36;
-        okey[i] = key_block[i] ^ 0x5c;
+    for (ik, &kb) in ikey.iter_mut().zip(key_block.iter()) {
+        *ik = kb ^ 0x36;
+    }
+    for (ok, &kb) in okey.iter_mut().zip(key_block.iter()) {
+        *ok = kb ^ 0x5c;
     }
 
     let mut h = Sha256::new();

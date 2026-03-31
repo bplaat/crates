@@ -167,10 +167,11 @@ impl WebSocket {
         };
 
         // Unmask and collect payload
-        let mut payload = Vec::with_capacity(payload_len);
-        for i in 0..payload_len {
-            let byte = buf[mask_offset + i];
-            payload.push(if masked { byte ^ mask[i % 4] } else { byte });
+        let mut payload = buf[mask_offset..mask_offset + payload_len].to_vec();
+        if masked {
+            for (byte, &key) in payload.iter_mut().zip(mask.iter().cycle()) {
+                *byte ^= key;
+            }
         }
 
         // Return appropriate message type
