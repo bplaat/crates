@@ -697,10 +697,16 @@ dependencies = [
 [[package]]
 name = "sha1"
 version = "0.11.0+patch"
+dependencies = [
+ "cfg-if",
+]
 
 [[package]]
 name = "sha2"
 version = "0.11.0+patch"
+dependencies = [
+ "cfg-if",
+]
 
 [[package]]
 name = "shlex"
