@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -131,7 +131,7 @@ impl ProjectDirs {
                     } else if #[cfg(windows)] {
                         PathBuf::from(organization).join(application)
                     } else {
-                        compile_error!("Unsupported platform")
+                        unreachable!()
                     }
                 }
             },
