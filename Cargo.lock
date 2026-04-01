@@ -118,6 +118,7 @@ dependencies = [
  "log",
  "mime_guess",
  "objc2",
+ "pkg-config",
  "rust-embed",
  "small-http",
  "windows-metadata",

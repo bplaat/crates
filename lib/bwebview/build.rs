@@ -13,7 +13,38 @@ fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set");
 
-    if env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set") == "windows" {
+    // GTK platform WebKit version detection.
+    println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_1)");
+    println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_0)");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
+    if target_os != "macos" && target_os != "windows" {
+        if pkg_config::Config::new()
+            .atleast_version("2.40")
+            .probe("webkit2gtk-4.1")
+            .is_ok()
+        {
+            println!("cargo:rustc-cfg=webkit2gtk_4_1");
+        } else if pkg_config::Config::new()
+            .atleast_version("2.22")
+            .probe("webkit2gtk-4.0")
+            .is_ok()
+        {
+            // webkit2gtk-4.0 does not enforce a GTK minimum that covers all APIs we use
+            pkg_config::Config::new()
+                .atleast_version("3.22")
+                .cargo_metadata(false)
+                .probe("gtk+-3.0")
+                .unwrap_or_else(|_| {
+                    panic!("bwebview requires gtk+-3.0 >= 3.22 when building with webkit2gtk-4.0")
+                });
+            println!("cargo:rustc-cfg=webkit2gtk_4_0");
+        } else {
+            panic!("bwebview requires webkit2gtk-4.1 >= 2.40 or webkit2gtk-4.0 >= 2.22");
+        }
+    }
+
+    // Windows requires generating bindings from the WebView2 winmd and linking with WebView2Loader
+    if target_os == "windows" {
         generate_webview2_bindings(&manifest_dir, &out_dir);
 
         // Link with the correct WebView2Loader library based on architecture

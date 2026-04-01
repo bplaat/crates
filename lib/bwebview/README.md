@@ -10,12 +10,14 @@ On some platforms, you may need to install additional dependencies before using 
 
 ```sh
 sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
+sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev # for older systems
 ```
 
 ### Linux (Fedora)
 
 ```sh
 sudo dnf install gtk3-devel webkit2gtk4.1-devel
+sudo dnf install gtk3-devel webkit2gtk4.0-devel # for older systems
 ```
 
 ## Screenshots

@@ -237,7 +237,8 @@ unsafe extern "C" {
 #[repr(C)]
 pub(crate) struct SoupMessageHeaders([u8; 0]);
 pub(crate) const SOUP_MESSAGE_HEADERS_RESPONSE: i32 = 1;
-#[link(name = "soup-3.0")]
+#[cfg_attr(webkit2gtk_4_1, link(name = "soup-3.0"))]
+#[cfg_attr(webkit2gtk_4_0, link(name = "soup-2.4"))]
 unsafe extern "C" {
     pub(crate) fn soup_message_headers_new(r#type: i32) -> *mut SoupMessageHeaders;
     pub(crate) fn soup_message_headers_foreach(
@@ -279,7 +280,8 @@ pub(crate) const WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION: i32 = 1;
 pub(crate) const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
 pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
 pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END: i32 = 1;
-#[link(name = "webkit2gtk-4.1")]
+#[cfg_attr(webkit2gtk_4_1, link(name = "webkit2gtk-4.1"))]
+#[cfg_attr(webkit2gtk_4_0, link(name = "webkit2gtk-4.0"))]
 unsafe extern "C" {
     pub(crate) fn webkit_web_context_get_default() -> *mut WebKitWebContext;
     pub(crate) fn webkit_web_context_register_uri_scheme(
@@ -290,39 +292,54 @@ unsafe extern "C" {
         user_data_destroy_func: *const c_void,
     );
 
+    #[cfg(webkit2gtk_4_1)]
     pub(crate) fn webkit_uri_scheme_response_new(
         input_stream: *mut GInputStream,
         stream_length: i64,
     ) -> *mut WebKitURISchemeResponse;
+    #[cfg(webkit2gtk_4_1)]
     pub(crate) fn webkit_uri_scheme_response_set_status(
         response: *mut WebKitURISchemeResponse,
         status_code: u32,
         reason_phrase: *const c_char,
     );
+    #[cfg(webkit2gtk_4_1)]
     pub(crate) fn webkit_uri_scheme_response_set_http_headers(
         response: *mut WebKitURISchemeResponse,
         headers: *mut SoupMessageHeaders,
     );
+    #[cfg(webkit2gtk_4_1)]
     pub(crate) fn webkit_uri_scheme_response_set_content_type(
         response: *mut WebKitURISchemeResponse,
         content_type: *const c_char,
     );
 
-    pub(crate) fn webkit_uri_scheme_request_get_http_method(
-        request: *mut WebKitURISchemeRequest,
-    ) -> *const c_char;
     pub(crate) fn webkit_uri_scheme_request_get_uri(
         request: *mut WebKitURISchemeRequest,
     ) -> *const c_char;
+    #[cfg(webkit2gtk_4_1)]
+    pub(crate) fn webkit_uri_scheme_request_get_http_method(
+        request: *mut WebKitURISchemeRequest,
+    ) -> *const c_char;
+    #[cfg(webkit2gtk_4_1)]
     pub(crate) fn webkit_uri_scheme_request_get_http_headers(
         request: *mut WebKitURISchemeRequest,
     ) -> *mut SoupMessageHeaders;
+    #[cfg(webkit2gtk_4_1)]
     pub(crate) fn webkit_uri_scheme_request_get_http_body(
         request: *mut WebKitURISchemeRequest,
     ) -> *mut GInputStream;
+    #[cfg(webkit2gtk_4_1)]
     pub(crate) fn webkit_uri_scheme_request_finish_with_response(
         request: *mut WebKitURISchemeRequest,
         response: *mut WebKitURISchemeResponse,
+    );
+    #[cfg(webkit2gtk_4_0)]
+    pub(crate) fn webkit_uri_scheme_request_finish(
+        request: *mut WebKitURISchemeRequest,
+        stream: *mut GInputStream,
+        stream_length: i64,
+        content_type: *const c_char,
     );
 
     pub(crate) fn webkit_web_view_get_type() -> *mut c_void;
@@ -336,12 +353,21 @@ unsafe extern "C" {
     );
     pub(crate) fn webkit_web_view_get_title(web_view: *mut WebKitWebView) -> *mut c_char;
     pub(crate) fn webkit_web_view_get_uri(web_view: *mut WebKitWebView) -> *mut c_char;
+    #[cfg(webkit2gtk_4_1)]
     pub(crate) fn webkit_web_view_evaluate_javascript(
         web_view: *mut WebKitWebView,
         script: *const c_char,
         length: usize,
         world_name: *const c_char,
         source_uri: *const c_char,
+        cancellable: *const c_void,
+        callback: *const c_void,
+        user_data: *const c_void,
+    );
+    #[cfg(webkit2gtk_4_0)]
+    pub(crate) fn webkit_web_view_run_javascript(
+        web_view: *mut WebKitWebView,
+        script: *const c_char,
         cancellable: *const c_void,
         callback: *const c_void,
         user_data: *const c_void,
@@ -387,7 +413,8 @@ unsafe extern "C" {
 }
 
 // MARK: JavaScriptCoreGtk
-#[link(name = "javascriptcoregtk-4.1")]
+#[cfg_attr(webkit2gtk_4_1, link(name = "javascriptcoregtk-4.1"))]
+#[cfg_attr(webkit2gtk_4_0, link(name = "javascriptcoregtk-4.0"))]
 unsafe extern "C" {
     pub(crate) fn jsc_value_to_string(value: *mut c_void) -> *const c_char;
 }

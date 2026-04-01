@@ -243,6 +243,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         let script = script.as_ref();
         unsafe {
+            #[cfg(webkit2gtk_4_1)]
             webkit_web_view_evaluate_javascript(
                 self.0.webview,
                 script.as_ptr() as *const c_char,
@@ -252,7 +253,18 @@ impl crate::WebviewInterface for PlatformWebview {
                 null(),
                 null(),
                 null(),
-            )
+            );
+            #[cfg(webkit2gtk_4_0)]
+            {
+                let script = CString::new(script).expect("Can't convert to CString");
+                webkit_web_view_run_javascript(
+                    self.0.webview,
+                    script.as_ptr(),
+                    null(),
+                    null(),
+                    null(),
+                );
+            }
         }
     }
 
@@ -357,18 +369,12 @@ extern "C" fn webview_custom_uri_scheme(
     custom_protocol: *mut crate::CustomProtocol,
 ) {
     let custom_protocol = unsafe { &mut *custom_protocol };
-
     let req = webkit_uri_scheme_request_to_http_request(uri_scheme_request);
     let res = (custom_protocol.handler)(&req);
-
-    let uri_scheme_response = http_response_to_webkit_uri_scheme_response(res);
-    unsafe {
-        webkit_uri_scheme_request_finish_with_response(uri_scheme_request, uri_scheme_response);
-        g_object_unref(uri_scheme_response as *mut GObject);
-    };
+    webkit_finish_uri_scheme_response(uri_scheme_request, res);
 }
 
-#[cfg(feature = "custom_protocol")]
+#[cfg(all(feature = "custom_protocol", webkit2gtk_4_1))]
 fn webkit_uri_scheme_request_to_http_request(
     uri_scheme_request: *mut WebKitURISchemeRequest,
 ) -> small_http::Request {
@@ -430,10 +436,22 @@ fn webkit_uri_scheme_request_to_http_request(
     req
 }
 
-#[cfg(feature = "custom_protocol")]
-fn http_response_to_webkit_uri_scheme_response(
+#[cfg(all(feature = "custom_protocol", webkit2gtk_4_0))]
+fn webkit_uri_scheme_request_to_http_request(
+    uri_scheme_request: *mut WebKitURISchemeRequest,
+) -> small_http::Request {
+    // webkit2gtk-4.0 does not expose HTTP method, headers, or body for URI scheme
+    // requests. Only the URI is available, so all requests are treated as GET.
+    let uri = unsafe { webkit_uri_scheme_request_get_uri(uri_scheme_request) };
+    let uri = unsafe { CStr::from_ptr(uri) }.to_string_lossy();
+    small_http::Request::with_method_and_url(small_http::Method::Get, &uri)
+}
+
+#[cfg(all(feature = "custom_protocol", webkit2gtk_4_1))]
+fn webkit_finish_uri_scheme_response(
+    uri_scheme_request: *mut WebKitURISchemeRequest,
     res: small_http::Response,
-) -> *mut WebKitURISchemeResponse {
+) {
     extern "C" fn body_data_destroy(data: *mut c_void) {
         drop(unsafe { Box::from_raw(data as *mut u8) });
     }
@@ -444,13 +462,11 @@ fn http_response_to_webkit_uri_scheme_response(
             body_data_destroy as *const c_void,
         )
     };
-
     let uri_scheme_response =
         unsafe { webkit_uri_scheme_response_new(stream, res.body.len() as i64) };
     unsafe {
         webkit_uri_scheme_response_set_status(uri_scheme_response, res.status as u32, null())
     };
-
     let headers = unsafe {
         let headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
         for (key, value) in &res.headers {
@@ -461,13 +477,44 @@ fn http_response_to_webkit_uri_scheme_response(
         headers
     };
     unsafe { webkit_uri_scheme_response_set_http_headers(uri_scheme_response, headers) };
-
     if let Some(content_type) = res.headers.get("Content-Type") {
         let content_type = CString::new(content_type).expect("Can't convert to CString");
         unsafe {
             webkit_uri_scheme_response_set_content_type(uri_scheme_response, content_type.as_ptr())
         };
     }
+    unsafe {
+        webkit_uri_scheme_request_finish_with_response(uri_scheme_request, uri_scheme_response);
+        g_object_unref(uri_scheme_response as *mut GObject);
+    }
+}
 
-    uri_scheme_response
+#[cfg(all(feature = "custom_protocol", webkit2gtk_4_0))]
+fn webkit_finish_uri_scheme_response(
+    uri_scheme_request: *mut WebKitURISchemeRequest,
+    res: small_http::Response,
+) {
+    extern "C" fn body_data_destroy(data: *mut c_void) {
+        drop(unsafe { Box::from_raw(data as *mut u8) });
+    }
+    let stream = unsafe {
+        g_memory_input_stream_new_from_data(
+            Box::into_raw(res.body.clone().into_boxed_slice()) as *const c_void,
+            res.body.len(),
+            body_data_destroy as *const c_void,
+        )
+    };
+    let content_type = res
+        .headers
+        .get("Content-Type")
+        .map(|ct| CString::new(ct).expect("Can't convert to CString"));
+    unsafe {
+        webkit_uri_scheme_request_finish(
+            uri_scheme_request,
+            stream,
+            res.body.len() as i64,
+            content_type.as_ref().map_or(null(), |ct| ct.as_ptr()),
+        );
+        g_object_unref(stream as *mut GObject);
+    }
 }
