@@ -11,11 +11,14 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <signal.h>
+#include <netinet/tcp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -98,6 +101,30 @@ static bool x11_read_intern_atom_reply(int fd, uint32_t* atom) {
     return true;
 }
 
+static bool x11_query_extension(int fd, const char* name) {
+    size_t name_len = strlen(name);
+    size_t padded = (name_len + 3) & ~3;
+    x11_query_extension_request_t req = {
+        .major_opcode = X11_QUERY_EXTENSION,
+        .length = (uint16_t)((sizeof(x11_query_extension_request_t) + padded) / 4),
+        .name_len = (uint16_t)name_len,
+    };
+    if (!x11_write_all(fd, &req, sizeof(req)))
+        return false;
+    return x11_write_padded(fd, name, name_len);
+}
+
+static bool x11_read_query_extension_reply(int fd, bool* present, uint8_t* major_opcode) {
+    x11_query_extension_reply_t reply;
+    if (!x11_read_all(fd, &reply, sizeof(reply)))
+        return false;
+    if (reply.reply != 1)
+        return false;
+    *present = reply.present != 0;
+    *major_opcode = reply.major_opcode;
+    return true;
+}
+
 // MARK: Xauthority parsing
 
 typedef struct {
@@ -144,8 +171,18 @@ static x11_cookie_t* parse_xauthority(const char* xauth_path, int display_number
         if (fread(&local_name_len, 2, 1, xauth_file) != 1)
             break;
         local_name_len = ntohs(local_name_len);
-        if (local_name_len > 256)
-            break;
+        if (local_name_len > 256) {
+            if (fseek(xauth_file, local_name_len, SEEK_CUR) != 0)
+                break;
+            // Skip data length + data
+            uint16_t skip_data_len;
+            if (fread(&skip_data_len, 2, 1, xauth_file) != 1)
+                break;
+            skip_data_len = ntohs(skip_data_len);
+            if (fseek(xauth_file, skip_data_len, SEEK_CUR) != 0)
+                break;
+            continue;
+        }
         char* local_name = malloc(local_name_len + 1);
         if (!local_name)
             break;
@@ -161,7 +198,9 @@ static x11_cookie_t* parse_xauthority(const char* xauth_path, int display_number
         local_data_len = ntohs(local_data_len);
         if (local_data_len > 256) {
             free(local_name);
-            break;
+            if (fseek(xauth_file, local_data_len, SEEK_CUR) != 0)
+                break;
+            continue;
         }
         uint8_t* local_data = malloc(local_data_len + 1);
         if (!local_data) {
@@ -206,9 +245,6 @@ static void free_cookie(x11_cookie_t* cookie) {
 // MARK: Connection
 
 bool x11_connect(x11_connection_t* conn) {
-    // Ignore SIGPIPE so writes to a dead server don't kill us
-    signal(SIGPIPE, SIG_IGN);
-
     // Parse DISPLAY (formats: ":0", "host:0", "/path/to/socket:0")
     char host[256] = "";
     char socket_path[256] = "";
@@ -260,7 +296,12 @@ bool x11_connect(x11_connection_t* conn) {
         }
         conn->fd = -1;
         for (struct addrinfo* ai = res; ai; ai = ai->ai_next) {
+#ifdef SOCK_CLOEXEC
+            conn->fd = socket(ai->ai_family, ai->ai_socktype | SOCK_CLOEXEC, ai->ai_protocol);
+#else
             conn->fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+            if (conn->fd >= 0) fcntl(conn->fd, F_SETFD, FD_CLOEXEC);
+#endif
             if (conn->fd < 0)
                 continue;
             if (connect(conn->fd, ai->ai_addr, ai->ai_addrlen) == 0)
@@ -273,6 +314,8 @@ bool x11_connect(x11_connection_t* conn) {
             free_cookie(cookie);
             return false;
         }
+        int flag = 1;
+        setsockopt(conn->fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
     } else {
 #ifdef SOCK_CLOEXEC
         conn->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -294,23 +337,11 @@ bool x11_connect(x11_connection_t* conn) {
         struct sockaddr_un saddr = {.sun_family = AF_UNIX};
         bool connected = false;
 
-        // Try XDG_RUNTIME_DIR socket path first (some distros/containers use this)
-        const char* xdg_runtime = getenv("XDG_RUNTIME_DIR");
-        if (xdg_runtime) {
-            char xdg_socket[256];
-            snprintf(xdg_socket, sizeof(xdg_socket), "%s/.X11-unix/X%d", xdg_runtime, display_number);
+#ifdef __linux__
+        // Try abstract socket first (primary X11 socket on Linux)
+        {
             memset(&saddr, 0, sizeof(saddr));
             saddr.sun_family = AF_UNIX;
-            snprintf(saddr.sun_path, sizeof(saddr.sun_path), "%s", xdg_socket);
-            if (connect(conn->fd, (struct sockaddr*)&saddr, sizeof(saddr)) == 0) {
-                connected = true;
-            }
-        }
-
-#ifdef __linux__
-        if (!connected) {
-            // Try abstract socket (Linux-specific)
-            memset(saddr.sun_path, 0, sizeof(saddr.sun_path));
             size_t path_len = strlen(socket_path);
             if (path_len + 1 <= sizeof(saddr.sun_path)) {
                 saddr.sun_path[0] = '\0';
@@ -322,6 +353,21 @@ bool x11_connect(x11_connection_t* conn) {
             }
         }
 #endif
+
+        // Try XDG_RUNTIME_DIR socket path (some distros/containers use this)
+        if (!connected) {
+            const char* xdg_runtime = getenv("XDG_RUNTIME_DIR");
+            if (xdg_runtime) {
+                char xdg_socket[256];
+                snprintf(xdg_socket, sizeof(xdg_socket), "%s/.X11-unix/X%d", xdg_runtime, display_number);
+                memset(&saddr, 0, sizeof(saddr));
+                saddr.sun_family = AF_UNIX;
+                snprintf(saddr.sun_path, sizeof(saddr.sun_path), "%s", xdg_socket);
+                if (connect(conn->fd, (struct sockaddr*)&saddr, sizeof(saddr)) == 0) {
+                    connected = true;
+                }
+            }
+        }
 
         if (!connected) {
             // Try filesystem socket
@@ -336,10 +382,7 @@ bool x11_connect(x11_connection_t* conn) {
         }
     }
 
-    // Set CLOEXEC for TCP sockets too
-    if (use_tcp) {
-        fcntl(conn->fd, F_SETFD, FD_CLOEXEC);
-    }
+    // No separate CLOEXEC needed — all socket paths now set it at creation time
 
     // Send setup request message
     x11_setup_request_t setup_request = {
@@ -372,6 +415,7 @@ bool x11_connect(x11_connection_t* conn) {
         goto fail;
     conn->id = setup.resource_id_base;
     conn->id_inc = setup.resource_id_mask & -(setup.resource_id_mask);
+    conn->max_request_len = setup.maximum_request_length;
 
     // Read vendor (padded to 4-byte boundary)
     size_t vendor_padded = (setup.vendor_len + 3) & ~3;
@@ -409,6 +453,10 @@ bool x11_connect(x11_connection_t* conn) {
         goto fail;
     if (!x11_intern_atom(conn->fd, "UTF8_STRING"))
         goto fail;
+    if (!x11_intern_atom(conn->fd, "_NET_WM_WINDOW_TYPE"))
+        goto fail;
+    if (!x11_intern_atom(conn->fd, "_NET_WM_WINDOW_TYPE_NORMAL"))
+        goto fail;
 
     if (!x11_read_intern_atom_reply(conn->fd, &conn->wm_protocols))
         goto fail;
@@ -420,6 +468,58 @@ bool x11_connect(x11_connection_t* conn) {
         goto fail;
     if (!x11_read_intern_atom_reply(conn->fd, &conn->utf8_string))
         goto fail;
+    if (!x11_read_intern_atom_reply(conn->fd, &conn->net_wm_window_type))
+        goto fail;
+    if (!x11_read_intern_atom_reply(conn->fd, &conn->net_wm_window_type_normal))
+        goto fail;
+
+    // Query MIT-SHM and BIG-REQUESTS extensions together (pipelined)
+    if (!x11_query_extension(conn->fd, "MIT-SHM"))
+        goto fail;
+    if (!x11_query_extension(conn->fd, "BIG-REQUESTS"))
+        goto fail;
+    {
+        bool shm_present = false;
+        uint8_t shm_opcode = 0;
+        if (!x11_read_query_extension_reply(conn->fd, &shm_present, &shm_opcode))
+            goto fail;
+        conn->has_shm = shm_present;
+        conn->shm_opcode = shm_opcode;
+    }
+    {
+        bool big_present = false;
+        uint8_t big_opcode = 0;
+        if (!x11_read_query_extension_reply(conn->fd, &big_present, &big_opcode))
+            goto fail;
+        if (big_present) {
+            x11_big_req_enable_request_t br_req = {
+                .major_opcode = big_opcode,
+                .minor_opcode = 0,
+                .length = sizeof(br_req) / 4,
+            };
+            if (!x11_write_all(conn->fd, &br_req, sizeof(br_req)))
+                goto fail;
+            x11_big_req_enable_reply_t br_reply;
+            if (!x11_read_all(conn->fd, &br_reply, sizeof(br_reply)) || br_reply.reply != 1)
+                goto fail;
+            conn->max_request_len = br_reply.maximum_request_length;
+        }
+    }
+
+    // Verify SHM is actually functional via a round-trip QueryVersion
+    if (conn->has_shm) {
+        x11_shm_query_version_request_t qv = {
+            .major_opcode = conn->shm_opcode,
+            .minor_opcode = 0,
+            .length = sizeof(qv) / 4,
+        };
+        if (!x11_write_all(conn->fd, &qv, sizeof(qv)))
+            goto fail;
+        x11_shm_query_version_reply_t qv_reply;
+        if (!x11_read_all(conn->fd, &qv_reply, sizeof(qv_reply)) || qv_reply.reply != 1) {
+            conn->has_shm = false;
+        }
+    }
 
     return true;
 
@@ -433,35 +533,6 @@ uint32_t x11_generate_id(x11_connection_t* conn) {
     uint32_t id = conn->id;
     conn->id += conn->id_inc;
     return id;
-}
-
-void x11_open_font(x11_connection_t* conn, uint32_t fid, const char* name, size_t name_size) {
-    size_t aligned_name_size = (name_size + 3) & ~3;
-    x11_open_font_request_t open_font_request = {
-        .major_opcode = X11_OPEN_FONT,
-        .length = (sizeof(x11_open_font_request_t) + aligned_name_size) / 4,
-        .fid = fid,
-        .name_len = name_size,
-    };
-    x11_write_all(conn->fd, &open_font_request, sizeof(x11_open_font_request_t));
-    x11_write_padded(conn->fd, name, name_size);
-}
-
-void x11_close_font(x11_connection_t* conn, uint32_t font) {
-    x11_close_font_request_t close_font_request = {
-        .major_opcode = X11_CLOSE_FONT, .length = (sizeof(x11_close_font_request_t)) / 4, .font = font};
-    x11_write_all(conn->fd, &close_font_request, sizeof(x11_close_font_request_t));
-}
-
-void x11_create_gc(x11_connection_t* conn, uint32_t cid, uint32_t drawable, uint32_t value_mask, uint32_t* value_list,
-                   size_t value_list_size) {
-    x11_create_gc_request_t create_gc_request = {.major_opcode = X11_CREATE_GC,
-                                                 .length = (sizeof(x11_create_gc_request_t) + value_list_size) / 4,
-                                                 .cid = cid,
-                                                 .drawable = drawable,
-                                                 .value_mask = value_mask};
-    x11_write_all(conn->fd, &create_gc_request, sizeof(x11_create_gc_request_t));
-    x11_write_all(conn->fd, value_list, value_list_size);
 }
 
 void x11_create_window(x11_connection_t* conn, uint8_t depth, uint32_t wid, uint32_t parent, int16_t x, int16_t y,
@@ -539,33 +610,289 @@ void x11_map_window(x11_connection_t* conn, uint32_t window) {
     x11_write_all(conn->fd, &map_window_request, sizeof(x11_map_window_request_t));
 }
 
-void x11_poly_rectangle(x11_connection_t* conn, uint32_t drawable, uint32_t gc, x11_rectangle_t* rectangles,
-                        size_t rectangles_size) {
-    x11_poly_rectangle_request_t poly_rectangle_request = {
-        .major_opcode = X11_POLY_RECTANGLE,
-        .length = (sizeof(x11_poly_rectangle_request_t) + rectangles_size) / 4,
-        .drawable = drawable,
-        .gc = gc};
-    x11_write_all(conn->fd, &poly_rectangle_request, sizeof(x11_poly_rectangle_request_t));
-    x11_write_all(conn->fd, rectangles, rectangles_size);
+bool x11_create_image(x11_connection_t* conn, x11_image_t* img, uint32_t window, int32_t width, int32_t height) {
+    size_t size = (size_t)width * (size_t)height * sizeof(uint32_t);
+
+    // Create a minimal GC (no graphics exposures)
+    img->gc = x11_generate_id(conn);
+    uint32_t gc_values[] = {0};  // GraphicsExposures = False
+    x11_create_gc_request_t gc_req = {
+        .major_opcode = X11_CREATE_GC,
+        .length = (sizeof(x11_create_gc_request_t) + sizeof(gc_values)) / 4,
+        .cid = img->gc,
+        .drawable = window,
+        .value_mask = X11_GC_GRAPHICS_EXPOSURES,
+    };
+    x11_write_all(conn->fd, &gc_req, sizeof(gc_req));
+    x11_write_all(conn->fd, gc_values, sizeof(gc_values));
+
+    if (conn->has_shm) {
+        img->shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0600);
+        if (img->shmid >= 0) {
+            img->pixels = shmat(img->shmid, NULL, 0);
+            if (img->pixels == (uint32_t*)-1) {
+                shmctl(img->shmid, IPC_RMID, NULL);
+                img->shmid = -1;
+                img->pixels = NULL;
+            }
+        }
+        if (img->shmid >= 0) {
+            img->shmseg = x11_generate_id(conn);
+            x11_shm_attach_request_t attach = {
+                .major_opcode = conn->shm_opcode,
+                .minor_opcode = X11_SHM_ATTACH,
+                .length = sizeof(attach) / 4,
+                .shmseg = img->shmseg,
+                .shmid = (uint32_t)img->shmid,
+                .read_only = 0,
+            };
+            x11_write_all(conn->fd, &attach, sizeof(attach));
+            // NOTE: do NOT call shmctl(IPC_RMID) here; the X server needs the shmid to attach.
+            // IPC_RMID is called in x11_destroy_image after ShmDetach + shmdt.
+        } else {
+            conn->has_shm = false;
+        }
+    }
+
+    if (!conn->has_shm) {
+        img->shmid = -1;
+        img->shmseg = 0;
+        img->pixels = calloc(size, 1);
+        if (!img->pixels)
+            return false;
+    }
+
+    img->width = width;
+    img->height = height;
+    img->capacity = width * height;
+    return true;
 }
 
-void x11_image_text_8(x11_connection_t* conn, uint32_t drawable, uint32_t gc, int16_t x, int16_t y, const char* string,
-                      size_t string_size) {
-    if (string_size > 255)
-        string_size = 255;
-    size_t aligned_string_size = (string_size + 3) & ~3;
-    x11_image_text_8_request_t image_text_8_request = {
-        .major_opcode = X11_IMAGE_TEXT_8,
-        .string_len = string_size,
-        .length = (sizeof(x11_image_text_8_request_t) + aligned_string_size) / 4,
-        .drawable = drawable,
-        .gc = gc,
-        .x = x,
-        .y = y,
+bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, int32_t new_h) {
+    int32_t new_cap = new_w * new_h;
+
+    if (new_cap <= img->capacity) {
+        // Buffer is large enough — reuse it, just update the visible dimensions
+        img->width = new_w;
+        img->height = new_h;
+        return true;
+    }
+
+    // Buffer too small: free old pixels (GC stays alive)
+    if (img->shmseg != 0) {
+        x11_shm_detach_request_t detach = {
+            .major_opcode = conn->shm_opcode,
+            .minor_opcode = X11_SHM_DETACH,
+            .length = sizeof(detach) / 4,
+            .shmseg = img->shmseg,
+        };
+        x11_write_all(conn->fd, &detach, sizeof(detach));
+        if (img->pixels && img->pixels != (uint32_t*)-1)
+            shmdt(img->pixels);
+        shmctl(img->shmid, IPC_RMID, NULL);
+        img->shmseg = 0;
+        img->shmid = -1;
+        img->pixels = NULL;
+    } else {
+        free(img->pixels);
+        img->pixels = NULL;
+    }
+
+    // Allocate with 25% headroom to avoid repeated reallocs during drag-resize
+    int32_t alloc_cap = new_cap + (new_cap >> 2);
+    size_t size = (size_t)alloc_cap * sizeof(uint32_t);
+
+    if (conn->has_shm) {
+        img->shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0600);
+        if (img->shmid >= 0) {
+            img->pixels = shmat(img->shmid, NULL, 0);
+            if (img->pixels == (uint32_t*)-1) {
+                shmctl(img->shmid, IPC_RMID, NULL);
+                img->shmid = -1;
+                img->pixels = NULL;
+            }
+        }
+        if (img->shmid >= 0) {
+            img->shmseg = x11_generate_id(conn);
+            x11_shm_attach_request_t attach = {
+                .major_opcode = conn->shm_opcode,
+                .minor_opcode = X11_SHM_ATTACH,
+                .length = sizeof(attach) / 4,
+                .shmseg = img->shmseg,
+                .shmid = (uint32_t)img->shmid,
+                .read_only = 0,
+            };
+            x11_write_all(conn->fd, &attach, sizeof(attach));
+        } else {
+            conn->has_shm = false;
+        }
+    }
+
+    if (!conn->has_shm) {
+        img->shmid = -1;
+        img->shmseg = 0;
+        img->pixels = calloc(size, 1);
+        if (!img->pixels)
+            return false;
+    }
+
+    img->width = new_w;
+    img->height = new_h;
+    img->capacity = alloc_cap;
+    return true;
+}
+
+void x11_put_image(x11_connection_t* conn, uint32_t window, x11_image_t* img) {
+    uint8_t depth = conn->screen.root_depth;
+    if (conn->has_shm && img->shmseg != 0) {
+        x11_shm_put_image_request_t req = {
+            .major_opcode = conn->shm_opcode,
+            .minor_opcode = X11_SHM_PUT_IMAGE,
+            .length = sizeof(req) / 4,
+            .drawable = window,
+            .gc = img->gc,
+            .total_width = (uint16_t)img->width,
+            .total_height = (uint16_t)img->height,
+            .src_x = 0,
+            .src_y = 0,
+            .src_width = (uint16_t)img->width,
+            .src_height = (uint16_t)img->height,
+            .dst_x = 0,
+            .dst_y = 0,
+            .depth = depth,
+            .format = X11_IMAGE_FORMAT_Z_PIXMAP,
+            .send_event = 0,
+            .shmseg = img->shmseg,
+            .offset = 0,
+        };
+        x11_write_all(conn->fd, &req, sizeof(req));
+    } else {
+        // PutImage fallback: batch as many rows as fit within max_request_len.
+        // With BigRequests (max_request_len > 65535) the entire frame usually fits
+        // in a single atomic request, eliminating visible tearing on XQuartz/remote X.
+        // writev() combines the header and pixel data into one syscall per chunk.
+        uint32_t row_bytes = (uint32_t)img->width * sizeof(uint32_t);
+        bool use_big_req = conn->max_request_len > 65535;
+        uint32_t header_words = use_big_req ? 7 : 6;  // 28 or 24 bytes
+        uint32_t max_rows = (conn->max_request_len - header_words) * 4 / row_bytes;
+        if (max_rows < 1) max_rows = 1;
+
+        int32_t y = 0;
+        while (y < img->height) {
+            uint32_t rows = (uint32_t)(img->height - y);
+            if (rows > max_rows) rows = max_rows;
+            uint32_t data_bytes = row_bytes * rows;
+            uint32_t req_units = header_words + data_bytes / 4;
+
+            struct iovec iov[2];
+            uint8_t header[28];  // large enough for both request variants
+            size_t header_size;
+            if (use_big_req) {
+                x11_put_image_big_request_t req = {
+                    .major_opcode = X11_PUT_IMAGE,
+                    .format = X11_IMAGE_FORMAT_Z_PIXMAP,
+                    .length = 0,
+                    .big_length = req_units,
+                    .drawable = window,
+                    .gc = img->gc,
+                    .width = (uint16_t)img->width,
+                    .height = (uint16_t)rows,
+                    .dst_x = 0,
+                    .dst_y = (int16_t)y,
+                    .left_pad = 0,
+                    .depth = depth,
+                };
+                memcpy(header, &req, sizeof(req));
+                header_size = sizeof(req);
+            } else {
+                x11_put_image_request_t req = {
+                    .major_opcode = X11_PUT_IMAGE,
+                    .format = X11_IMAGE_FORMAT_Z_PIXMAP,
+                    .length = (uint16_t)req_units,
+                    .drawable = window,
+                    .gc = img->gc,
+                    .width = (uint16_t)img->width,
+                    .height = (uint16_t)rows,
+                    .dst_x = 0,
+                    .dst_y = (int16_t)y,
+                    .left_pad = 0,
+                    .depth = depth,
+                };
+                memcpy(header, &req, sizeof(req));
+                header_size = sizeof(req);
+            }
+            iov[0].iov_base = header;
+            iov[0].iov_len = header_size;
+            iov[1].iov_base = img->pixels + y * img->width;
+            iov[1].iov_len = data_bytes;
+
+            size_t total = iov[0].iov_len + iov[1].iov_len;
+            size_t sent = 0;
+            int iov_idx = 0;
+            size_t iov_off = 0;
+            while (sent < total) {
+                struct iovec viov[2];
+                int vcnt = 0;
+                size_t remaining = iov[iov_idx].iov_len - iov_off;
+                viov[vcnt].iov_base = (uint8_t*)iov[iov_idx].iov_base + iov_off;
+                viov[vcnt].iov_len = remaining;
+                vcnt++;
+                if (iov_idx == 0 && iov[1].iov_len > 0) {
+                    viov[vcnt] = iov[1];
+                    vcnt++;
+                }
+                ssize_t n = writev(conn->fd, viov, vcnt);
+                if (n <= 0) {
+                    if (n < 0 && errno == EINTR)
+                        continue;
+                    break;
+                }
+                sent += (size_t)n;
+                size_t advance = (size_t)n;
+                while (advance > 0 && iov_idx < 2) {
+                    size_t avail = iov[iov_idx].iov_len - iov_off;
+                    if (advance >= avail) {
+                        advance -= avail;
+                        iov_idx++;
+                        iov_off = 0;
+                    } else {
+                        iov_off += advance;
+                        advance = 0;
+                    }
+                }
+            }
+            y += (int32_t)rows;
+        }
+    }
+}
+
+void x11_destroy_image(x11_connection_t* conn, x11_image_t* img) {
+    // Free the server-side GC
+    x11_free_gc_request_t free_gc = {
+        .major_opcode = X11_FREE_GC,
+        .length = sizeof(free_gc) / 4,
+        .gc = img->gc,
     };
-    x11_write_all(conn->fd, &image_text_8_request, sizeof(x11_image_text_8_request_t));
-    x11_write_padded(conn->fd, string, string_size);
+    x11_write_all(conn->fd, &free_gc, sizeof(free_gc));
+
+    if (img->shmseg != 0) {
+        x11_shm_detach_request_t detach = {
+            .major_opcode = conn->shm_opcode,
+            .minor_opcode = X11_SHM_DETACH,
+            .length = sizeof(detach) / 4,
+            .shmseg = img->shmseg,
+        };
+        x11_write_all(conn->fd, &detach, sizeof(detach));
+        if (img->pixels && img->pixels != (uint32_t*)-1)
+            shmdt(img->pixels);
+        shmctl(img->shmid, IPC_RMID, NULL);
+        img->shmseg = 0;
+        img->shmid = -1;
+        img->pixels = NULL;
+    } else {
+        free(img->pixels);
+        img->pixels = NULL;
+    }
 }
 
 bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
@@ -574,6 +901,8 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
         return false;
     event->type = buf[0] & ~0x80;
     event->expose_count = 0;
+    event->configure_width = 0;
+    event->configure_height = 0;
 
     if (event->type == X11_ERROR) {
         uint8_t error_code = buf[1];
@@ -585,6 +914,11 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
 
     if (event->type == X11_EXPOSE) {
         memcpy(&event->expose_count, &buf[16], 2);
+    }
+
+    if (event->type == X11_CONFIGURE_NOTIFY) {
+        memcpy(&event->configure_width, &buf[20], 2);
+        memcpy(&event->configure_height, &buf[22], 2);
     }
 
     if (event->type == X11_CLIENT_MESSAGE) {

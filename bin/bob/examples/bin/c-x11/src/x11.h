@@ -32,29 +32,37 @@
 #define X11_CONFIGURE_WINDOW 12
 #define X11_INTERN_ATOM 16
 #define X11_CHANGE_PROPERTY 18
-#define X11_OPEN_FONT 45
-#define X11_CLOSE_FONT 46
+#define X11_FREE_GC 60
 #define X11_CREATE_GC 55
-#define X11_POLY_RECTANGLE 67
-#define X11_IMAGE_TEXT_8 76
+#define X11_PUT_IMAGE 72
+#define X11_QUERY_EXTENSION 98
 
 // Event types
 #define X11_ERROR 0
 #define X11_EXPOSE 12
+#define X11_CONFIGURE_NOTIFY 22
 #define X11_CLIENT_MESSAGE 33
 #define X11_CLIENT_MESSAGE_CLOSE 255
 
 // GC value masks
-#define X11_GC_FOREGROUND 4
-#define X11_GC_BACKGROUND 8
-#define X11_GC_FONT 16384
+#define X11_GC_GRAPHICS_EXPOSURES 65536
 
 // Window constants
 #define X11_COPY_FROM_PARENT 0
 #define X11_WINDOW_CLASS_INPUT_OUTPUT 1
+#define X11_CW_BACK_PIXMAP 1
 #define X11_CW_BACK_PIXEL 2
 #define X11_CW_EVENT_MASK 2048
 #define X11_EVENT_MASK_EXPOSURE 32768
+#define X11_EVENT_MASK_STRUCTURE_NOTIFY 131072
+
+// PutImage format
+#define X11_IMAGE_FORMAT_Z_PIXMAP 2
+
+// MIT-SHM sub-opcodes
+#define X11_SHM_ATTACH 1
+#define X11_SHM_DETACH 2
+#define X11_SHM_PUT_IMAGE 3
 
 // Property constants
 #define X11_PROP_MODE_REPLACE 0
@@ -169,31 +177,6 @@ typedef struct X11_PACKED x11_intern_atom_reply_t {
     uint8_t pad1[20];
 } x11_intern_atom_reply_t;
 
-typedef struct X11_PACKED x11_open_font_request_t {
-    uint8_t major_opcode;
-    uint8_t pad0;
-    uint16_t length;
-    uint32_t fid;
-    uint16_t name_len;
-    uint8_t pad1[2];
-} x11_open_font_request_t;
-
-typedef struct X11_PACKED x11_close_font_request_t {
-    uint8_t major_opcode;
-    uint8_t pad0;
-    uint16_t length;
-    uint32_t font;
-} x11_close_font_request_t;
-
-typedef struct X11_PACKED x11_create_gc_request_t {
-    uint8_t major_opcode;
-    uint8_t pad0;
-    uint16_t length;
-    uint32_t cid;
-    uint32_t drawable;
-    uint32_t value_mask;
-} x11_create_gc_request_t;
-
 typedef struct X11_PACKED x11_create_window_request_t {
     uint8_t major_opcode;
     uint8_t depth;
@@ -238,59 +221,185 @@ typedef struct X11_PACKED x11_map_window_request_t {
     uint32_t window;
 } x11_map_window_request_t;
 
-typedef struct X11_PACKED x11_poly_rectangle_request_t {
+typedef struct X11_PACKED x11_query_extension_request_t {
     uint8_t major_opcode;
     uint8_t pad0;
     uint16_t length;
+    uint16_t name_len;
+    uint8_t pad1[2];
+} x11_query_extension_request_t;
+
+typedef struct X11_PACKED x11_query_extension_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint8_t present;
+    uint8_t major_opcode;
+    uint8_t first_event;
+    uint8_t first_error;
+    uint8_t pad1[20];
+} x11_query_extension_reply_t;
+
+typedef struct X11_PACKED x11_create_gc_request_t {
+    uint8_t major_opcode;
+    uint8_t pad0;
+    uint16_t length;
+    uint32_t cid;
+    uint32_t drawable;
+    uint32_t value_mask;
+} x11_create_gc_request_t;
+
+typedef struct X11_PACKED x11_free_gc_request_t {
+    uint8_t major_opcode;
+    uint8_t pad0;
+    uint16_t length;
+    uint32_t gc;
+} x11_free_gc_request_t;
+
+typedef struct X11_PACKED x11_big_req_enable_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+} x11_big_req_enable_request_t;
+
+typedef struct X11_PACKED x11_big_req_enable_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint32_t maximum_request_length;
+    uint8_t pad1[20];
+} x11_big_req_enable_reply_t;
+
+typedef struct X11_PACKED x11_put_image_big_request_t {
+    uint8_t major_opcode;
+    uint8_t format;
+    uint16_t length;      // 0 = BigRequests marker
+    uint32_t big_length;  // actual length in 4-byte units (includes this field)
     uint32_t drawable;
     uint32_t gc;
-} x11_poly_rectangle_request_t;
-
-typedef struct X11_PACKED x11_rectangle_t {
-    int16_t x;
-    int16_t y;
     uint16_t width;
     uint16_t height;
-} x11_rectangle_t;
+    int16_t dst_x;
+    int16_t dst_y;
+    uint8_t left_pad;
+    uint8_t depth;
+    uint8_t pad0[2];
+} x11_put_image_big_request_t;
 
-typedef struct X11_PACKED x11_image_text_8_request_t {
+typedef struct X11_PACKED x11_put_image_request_t {
     uint8_t major_opcode;
-    uint8_t string_len;
+    uint8_t format;
     uint16_t length;
     uint32_t drawable;
     uint32_t gc;
-    int16_t x;
-    int16_t y;
-} x11_image_text_8_request_t;
+    uint16_t width;
+    uint16_t height;
+    int16_t dst_x;
+    int16_t dst_y;
+    uint8_t left_pad;
+    uint8_t depth;
+    uint8_t pad0[2];
+} x11_put_image_request_t;
+
+typedef struct X11_PACKED x11_shm_attach_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t shmseg;
+    uint32_t shmid;
+    uint8_t read_only;
+    uint8_t pad0[3];
+} x11_shm_attach_request_t;
+
+typedef struct X11_PACKED x11_shm_query_version_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+} x11_shm_query_version_request_t;
+
+typedef struct X11_PACKED x11_shm_query_version_reply_t {
+    uint8_t reply;
+    uint8_t shared_pixmaps;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint16_t major_version;
+    uint16_t minor_version;
+    uint16_t uid;
+    uint16_t gid;
+    uint8_t pixmap_format;
+    uint8_t pad0[15];
+} x11_shm_query_version_reply_t;
+
+typedef struct X11_PACKED x11_shm_detach_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t shmseg;
+} x11_shm_detach_request_t;
+
+typedef struct X11_PACKED x11_shm_put_image_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t drawable;
+    uint32_t gc;
+    uint16_t total_width;
+    uint16_t total_height;
+    uint16_t src_x;
+    uint16_t src_y;
+    uint16_t src_width;
+    uint16_t src_height;
+    int16_t dst_x;
+    int16_t dst_y;
+    uint8_t depth;
+    uint8_t format;
+    uint8_t send_event;
+    uint8_t pad0;
+    uint32_t shmseg;
+    uint32_t offset;
+} x11_shm_put_image_request_t;
 
 // X11 structs
 typedef struct x11_connection_t {
     int32_t fd;
     uint32_t id;
     uint32_t id_inc;
+    uint32_t max_request_len;  // in 4-byte units; >65535 means BigRequests is active
     x11_screen_t screen;
     uint32_t wm_protocols;
     uint32_t wm_delete_window;
     uint32_t net_wm_name;
     uint32_t net_wm_pid;
+    uint32_t net_wm_window_type;
+    uint32_t net_wm_window_type_normal;
     uint32_t utf8_string;
+    bool has_shm;
+    uint8_t shm_opcode;
 } x11_connection_t;
 
 typedef struct x11_event_t {
     uint8_t type;
     uint16_t expose_count;
+    uint16_t configure_width;
+    uint16_t configure_height;
 } x11_event_t;
+
+// Image backed by a pixel buffer (MIT-SHM or heap)
+typedef struct x11_image_t {
+    uint32_t gc;
+    uint32_t shmseg;   // 0 if not using SHM
+    int32_t shmid;     // -1 if not using SHM
+    uint32_t* pixels;  // 0x00RRGGBB row-major pixel buffer
+    int32_t width;
+    int32_t height;
+    int32_t capacity;  // allocated pixel count; reuse when new_w*new_h <= capacity
+} x11_image_t;
 
 bool x11_connect(x11_connection_t* conn);
 
 uint32_t x11_generate_id(x11_connection_t* conn);
-
-void x11_open_font(x11_connection_t* conn, uint32_t fid, const char* name, size_t name_size);
-
-void x11_close_font(x11_connection_t* conn, uint32_t font);
-
-void x11_create_gc(x11_connection_t* conn, uint32_t cid, uint32_t drawable, uint32_t value_mask, uint32_t* value_list,
-                   size_t value_list_size);
 
 void x11_create_window(x11_connection_t* conn, uint8_t depth, uint32_t wid, uint32_t parent, int16_t x, int16_t y,
                        uint16_t width, uint16_t height, uint16_t border_width, uint16_t _class, uint32_t visual,
@@ -308,11 +417,18 @@ void x11_set_wm_hints(x11_connection_t* conn, uint32_t window);
 
 void x11_map_window(x11_connection_t* conn, uint32_t window);
 
-void x11_poly_rectangle(x11_connection_t* conn, uint32_t drawable, uint32_t gc, x11_rectangle_t* rectangles,
-                        size_t rectangles_size);
+// Create a framebuffer image backed by MIT-SHM shared memory (or heap fallback)
+bool x11_create_image(x11_connection_t* conn, x11_image_t* img, uint32_t window, int32_t width, int32_t height);
 
-void x11_image_text_8(x11_connection_t* conn, uint32_t drawable, uint32_t gc, int16_t x, int16_t y, const char* string,
-                      size_t string_size);
+// Resize image to new dimensions, reusing the pixel buffer when capacity allows.
+// Keeps the GC alive — much cheaper than destroy + create during window resize.
+bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, int32_t new_h);
+
+// Blit the full image to the window at (0, 0) using ShmPutImage or PutImage
+void x11_put_image(x11_connection_t* conn, uint32_t window, x11_image_t* img);
+
+// Free image resources (SHM or heap)
+void x11_destroy_image(x11_connection_t* conn, x11_image_t* img);
 
 bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event);
 
