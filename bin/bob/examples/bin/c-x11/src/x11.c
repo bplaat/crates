@@ -114,7 +114,7 @@ static bool x11_query_extension(int fd, const char* name) {
     return x11_write_padded(fd, name, name_len);
 }
 
-static bool x11_read_query_extension_reply(int fd, bool* present, uint8_t* major_opcode) {
+static bool x11_read_query_extension_reply(int fd, bool* present, uint8_t* major_opcode, uint8_t* first_event) {
     x11_query_extension_reply_t reply;
     if (!x11_read_all(fd, &reply, sizeof(reply)))
         return false;
@@ -122,6 +122,8 @@ static bool x11_read_query_extension_reply(int fd, bool* present, uint8_t* major
         return false;
     *present = reply.present != 0;
     *major_opcode = reply.major_opcode;
+    if (first_event)
+        *first_event = reply.first_event;
     return true;
 }
 
@@ -242,9 +244,26 @@ static void free_cookie(x11_cookie_t* cookie) {
     }
 }
 
+static float parse_xft_dpi(const char* resources, uint32_t len) {
+    const char key[] = "Xft.dpi:";
+    uint32_t key_len = 8;
+    for (uint32_t i = 0; i + key_len <= len; i++) {
+        if (memcmp(resources + i, key, key_len) != 0)
+            continue;
+        const char* p = resources + i + key_len;
+        while (*p == ' ' || *p == '\t') p++;
+        double val = atof(p);
+        if (val > 0.0)
+            return (float)val;
+    }
+    return 0.0f;
+}
+
 // MARK: Connection
 
 bool x11_connect(x11_connection_t* conn) {
+    memset(conn, 0, sizeof(*conn));
+    conn->max_request_len = 65535;  // default before BigRequests
     // Parse DISPLAY (formats: ":0", "host:0", "/path/to/socket:0")
     char host[256] = "";
     char socket_path[256] = "";
@@ -300,7 +319,8 @@ bool x11_connect(x11_connection_t* conn) {
             conn->fd = socket(ai->ai_family, ai->ai_socktype | SOCK_CLOEXEC, ai->ai_protocol);
 #else
             conn->fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-            if (conn->fd >= 0) fcntl(conn->fd, F_SETFD, FD_CLOEXEC);
+            if (conn->fd >= 0)
+                fcntl(conn->fd, F_SETFD, FD_CLOEXEC);
 #endif
             if (conn->fd < 0)
                 continue;
@@ -426,7 +446,8 @@ bool x11_connect(x11_connection_t* conn) {
     if (!x11_skip(conn->fd, setup.pixmap_formats_len * sizeof(x11_format_t)))
         goto fail;
 
-    // Read screens
+    // Read screens; capture root visual masks for pixel-format validation
+    bool root_visual_found = false;
     x11_screen_t unused_screen;
     for (int32_t i = 0; i < setup.roots_len; i++) {
         x11_screen_t* screen = i == 0 ? &conn->screen : &unused_screen;
@@ -434,11 +455,20 @@ bool x11_connect(x11_connection_t* conn) {
             goto fail;
 
         for (int32_t j = 0; j < screen->allowed_depths_len; j++) {
-            x11_depth_t unused_depth;
-            if (!x11_read_all(conn->fd, &unused_depth, sizeof(x11_depth_t)))
+            x11_depth_t depth;
+            if (!x11_read_all(conn->fd, &depth, sizeof(x11_depth_t)))
                 goto fail;
-            if (!x11_skip(conn->fd, unused_depth.visuals_len * sizeof(x11_visualtype_t)))
-                goto fail;
+            for (int32_t k = 0; k < depth.visuals_len; k++) {
+                x11_visualtype_t vis;
+                if (!x11_read_all(conn->fd, &vis, sizeof(x11_visualtype_t)))
+                    goto fail;
+                if (i == 0 && !root_visual_found && vis.visual_id == conn->screen.root_visual) {
+                    root_visual_found = true;
+                    conn->root_visual_red_mask = vis.red_mask;
+                    conn->root_visual_green_mask = vis.green_mask;
+                    conn->root_visual_blue_mask = vis.blue_mask;
+                }
+            }
         }
     }
 
@@ -457,6 +487,10 @@ bool x11_connect(x11_connection_t* conn) {
         goto fail;
     if (!x11_intern_atom(conn->fd, "_NET_WM_WINDOW_TYPE_NORMAL"))
         goto fail;
+    if (!x11_intern_atom(conn->fd, "_NET_WM_SYNC_REQUEST"))
+        goto fail;
+    if (!x11_intern_atom(conn->fd, "_NET_WM_SYNC_REQUEST_COUNTER"))
+        goto fail;
 
     if (!x11_read_intern_atom_reply(conn->fd, &conn->wm_protocols))
         goto fail;
@@ -472,18 +506,24 @@ bool x11_connect(x11_connection_t* conn) {
         goto fail;
     if (!x11_read_intern_atom_reply(conn->fd, &conn->net_wm_window_type_normal))
         goto fail;
+    if (!x11_read_intern_atom_reply(conn->fd, &conn->net_wm_sync_request))
+        goto fail;
+    if (!x11_read_intern_atom_reply(conn->fd, &conn->net_wm_sync_request_counter))
+        goto fail;
 
-    // Query MIT-SHM, BIG-REQUESTS, and RANDR extensions together (pipelined)
+    // Query MIT-SHM, BIG-REQUESTS, RANDR, and SYNC extensions together (pipelined)
     if (!x11_query_extension(conn->fd, "MIT-SHM"))
         goto fail;
     if (!x11_query_extension(conn->fd, "BIG-REQUESTS"))
         goto fail;
     if (!x11_query_extension(conn->fd, "RANDR"))
         goto fail;
+    if (!x11_query_extension(conn->fd, "SYNC"))
+        goto fail;
     {
         bool shm_present = false;
         uint8_t shm_opcode = 0;
-        if (!x11_read_query_extension_reply(conn->fd, &shm_present, &shm_opcode))
+        if (!x11_read_query_extension_reply(conn->fd, &shm_present, &shm_opcode, NULL))
             goto fail;
         conn->has_shm = shm_present;
         conn->shm_opcode = shm_opcode;
@@ -491,7 +531,7 @@ bool x11_connect(x11_connection_t* conn) {
     {
         bool big_present = false;
         uint8_t big_opcode = 0;
-        if (!x11_read_query_extension_reply(conn->fd, &big_present, &big_opcode))
+        if (!x11_read_query_extension_reply(conn->fd, &big_present, &big_opcode, NULL))
             goto fail;
         if (big_present) {
             x11_big_req_enable_request_t br_req = {
@@ -510,10 +550,20 @@ bool x11_connect(x11_connection_t* conn) {
     {
         bool randr_present = false;
         uint8_t randr_opcode = 0;
-        if (!x11_read_query_extension_reply(conn->fd, &randr_present, &randr_opcode))
+        uint8_t randr_first_event = 0;
+        if (!x11_read_query_extension_reply(conn->fd, &randr_present, &randr_opcode, &randr_first_event))
             goto fail;
         conn->has_randr = randr_present;
         conn->randr_opcode = randr_opcode;
+        conn->randr_first_event = randr_first_event;
+    }
+    {
+        bool sync_present = false;
+        uint8_t sync_opcode = 0;
+        if (!x11_read_query_extension_reply(conn->fd, &sync_present, &sync_opcode, NULL))
+            goto fail;
+        conn->has_sync = sync_present;
+        conn->sync_opcode = sync_opcode;
     }
 
     // Verify SHM is actually functional via a round-trip QueryVersion
@@ -548,6 +598,58 @@ bool x11_connect(x11_connection_t* conn) {
         } else {
             conn->randr_major = vreply.server_major;
             conn->randr_minor = vreply.server_minor;
+        }
+    }
+
+    // Initialize SYNC extension (must be done before using any SYNC requests)
+    if (conn->has_sync) {
+        x11_sync_initialize_request_t sreq = {
+            .major_opcode = conn->sync_opcode,
+            .minor_opcode = X11_SYNC_INITIALIZE,
+            .length = sizeof(sreq) / 4,
+            .major_version = 3,
+            .minor_version = 1,
+        };
+        if (!x11_write_all(conn->fd, &sreq, sizeof(sreq)))
+            goto fail;
+        x11_sync_initialize_reply_t sreply;
+        if (!x11_read_all(conn->fd, &sreply, sizeof(sreply)) || sreply.reply != 1) {
+            conn->has_sync = false;
+        }
+    }
+
+    // Query Xft.dpi from root RESOURCE_MANAGER property
+    {
+        x11_get_property_request_t prop_req = {
+            .major_opcode = X11_GET_PROPERTY,
+            ._delete = 0,
+            .length = sizeof(prop_req) / 4,
+            .window = conn->screen.root,
+            .property = X11_ATOM_RESOURCE_MANAGER,
+            .type = 0,
+            .long_offset = 0,
+            .long_length = 1024,
+        };
+        if (!x11_write_all(conn->fd, &prop_req, sizeof(prop_req)))
+            goto fail;
+        x11_get_property_reply_t prop_reply;
+        if (!x11_read_all(conn->fd, &prop_reply, sizeof(prop_reply)))
+            goto fail;
+        if (prop_reply.reply == 1 && prop_reply.reply_length > 0) {
+            size_t data_bytes = (size_t)prop_reply.reply_length * 4;
+            char* buf = malloc(data_bytes + 1);
+            if (!buf)
+                goto fail;
+            if (!x11_read_all(conn->fd, buf, data_bytes)) {
+                free(buf);
+                goto fail;
+            }
+            uint32_t value_len = prop_reply.value_len < (uint32_t)data_bytes
+                                     ? prop_reply.value_len
+                                     : (uint32_t)data_bytes;
+            buf[value_len] = '\0';
+            conn->xft_dpi = parse_xft_dpi(buf, value_len);
+            free(buf);
         }
     }
 
@@ -619,17 +721,23 @@ void x11_configure_window(x11_connection_t* conn, uint32_t window, uint32_t valu
 }
 
 void x11_set_wm_protocols(x11_connection_t* conn, uint32_t window) {
-    uint32_t atoms[] = {conn->wm_delete_window};
-    x11_change_property(conn, X11_PROP_MODE_REPLACE, window, conn->wm_protocols, X11_ATOM_ATOM, 32, atoms,
-                        sizeof(atoms));
+    if (conn->has_sync) {
+        uint32_t atoms[] = {conn->wm_delete_window, conn->net_wm_sync_request};
+        x11_change_property(conn, X11_PROP_MODE_REPLACE, window, conn->wm_protocols, X11_ATOM_ATOM, 32, atoms,
+                            sizeof(atoms));
+    } else {
+        uint32_t atoms[] = {conn->wm_delete_window};
+        x11_change_property(conn, X11_PROP_MODE_REPLACE, window, conn->wm_protocols, X11_ATOM_ATOM, 32, atoms,
+                            sizeof(atoms));
+    }
 }
 
 void x11_set_wm_hints(x11_connection_t* conn, uint32_t window) {
     // WM_HINTS: flags=InputHint|StateHint, input=True, initial_state=NormalState
     uint32_t wm_hints[9] = {0};
     wm_hints[0] = 1 | 2;  // flags: InputHint | StateHint
-    wm_hints[1] = 1;       // input: True
-    wm_hints[2] = 1;       // initial_state: NormalState
+    wm_hints[1] = 1;      // input: True
+    wm_hints[2] = 1;      // initial_state: NormalState
     x11_change_property(conn, X11_PROP_MODE_REPLACE, window, X11_ATOM_WM_HINTS, X11_ATOM_WM_HINTS, 32, wm_hints,
                         sizeof(wm_hints));
 }
@@ -805,12 +913,14 @@ void x11_put_image(x11_connection_t* conn, uint32_t window, x11_image_t* img) {
         bool use_big_req = conn->max_request_len > 65535;
         uint32_t header_words = use_big_req ? 7 : 6;  // 28 or 24 bytes
         uint32_t max_rows = (conn->max_request_len - header_words) * 4 / row_bytes;
-        if (max_rows < 1) max_rows = 1;
+        if (max_rows < 1)
+            max_rows = 1;
 
         int32_t y = 0;
         while (y < img->height) {
             uint32_t rows = (uint32_t)(img->height - y);
-            if (rows > max_rows) rows = max_rows;
+            if (rows > max_rows)
+                rows = max_rows;
             uint32_t data_bytes = row_bytes * rows;
             uint32_t req_units = header_words + data_bytes / 4;
 
@@ -972,6 +1082,10 @@ bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, in
             result[i].y = info.y;
             result[i].width = info.width;
             result[i].height = info.height;
+            result[i].width_mm = info.width_mm;
+            result[i].height_mm = info.height_mm;
+            result[i].dpi = info.width_mm > 0 ? (float)info.width * 25.4f / (float)info.width_mm : 96.0f;
+            result[i].scale = result[i].dpi / 96.0f;
             result[i].primary = info.primary != 0;
             result[i].name[0] = '\0';
             if (!x11_skip(conn->fd, info.n_output * 4)) {
@@ -1045,6 +1159,17 @@ bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, in
         uint16_t names_len = sreply.names_len;
         uint32_t config_ts = sreply.config_timestamp;
 
+        // Must always consume all variable-length data from the reply
+        size_t names_padded = (names_len + 3) & ~3;
+
+        if (ncrtcs == 0) {
+            if (!x11_skip(conn->fd, noutputs * 4 + nmodes * 32 + names_padded))
+                return false;
+            *monitors = NULL;
+            *count = 0;
+            return true;
+        }
+
         uint32_t* crtcs = malloc(ncrtcs * sizeof(uint32_t));
         if (!crtcs)
             return false;
@@ -1053,7 +1178,6 @@ bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, in
             return false;
         }
         // Skip outputs, modes, names
-        size_t names_padded = (names_len + 3) & ~3;
         if (!x11_skip(conn->fd, noutputs * 4 + nmodes * 32 + names_padded)) {
             free(crtcs);
             return false;
@@ -1100,6 +1224,14 @@ bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, in
             result[active].y = creply.y;
             result[active].width = creply.width;
             result[active].height = creply.height;
+            result[active].width_mm = 0;
+            result[active].height_mm = 0;
+            // Approximate per-CRTC DPI by scaling the screen physical width proportionally
+            float screen_dpi = conn->screen.width_in_millimeters > 0 ? (float)conn->screen.width_in_pixels * 25.4f /
+                                                                           (float)conn->screen.width_in_millimeters
+                                                                     : 96.0f;
+            result[active].dpi = screen_dpi;
+            result[active].scale = screen_dpi / 96.0f;
             result[active].primary = false;
             snprintf(result[active].name, sizeof(result[active].name), "CRTC-%d", i);
             active++;
@@ -1127,12 +1259,27 @@ void x11_randr_free_monitors(x11_monitor_t* monitors) {
     free(monitors);
 }
 
+void x11_randr_select_input(x11_connection_t* conn, uint32_t window) {
+    if (!conn->has_randr)
+        return;
+    x11_randr_select_input_request_t req = {
+        .major_opcode = conn->randr_opcode,
+        .minor_opcode = X11_RANDR_SELECT_INPUT,
+        .length = sizeof(req) / 4,
+        .window = window,
+        .enable = X11_RANDR_SCREEN_CHANGE_NOTIFY_MASK,
+    };
+    x11_write_all(conn->fd, &req, sizeof(req));
+}
+
 bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
     uint8_t buf[32];
     if (!x11_read_all(conn->fd, buf, 32))
         return false;
     event->type = buf[0] & ~0x80;
     event->expose_count = 0;
+    event->configure_x = 0;
+    event->configure_y = 0;
     event->configure_width = 0;
     event->configure_height = 0;
 
@@ -1149,6 +1296,8 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
     }
 
     if (event->type == X11_CONFIGURE_NOTIFY) {
+        memcpy(&event->configure_x, &buf[16], 2);
+        memcpy(&event->configure_y, &buf[18], 2);
         memcpy(&event->configure_width, &buf[20], 2);
         memcpy(&event->configure_height, &buf[22], 2);
     }
@@ -1161,10 +1310,54 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
             memcpy(&data0, &buf[12], 4);
             if (data0 == conn->wm_delete_window) {
                 event->type = X11_CLIENT_MESSAGE_CLOSE;
+            } else if (conn->has_sync && data0 == conn->net_wm_sync_request) {
+                memcpy(&event->sync_value_lo, &buf[20], 4);
+                memcpy(&event->sync_value_hi, &buf[24], 4);
+                event->type = X11_CLIENT_MESSAGE_SYNC_REQUEST;
             }
         }
     }
+
+    // Translate RRScreenChangeNotify into the synthetic type
+    if (conn->has_randr && conn->randr_first_event != 0 && event->type == conn->randr_first_event) {
+        event->type = X11_RANDR_SCREEN_CHANGE_NOTIFY;
+    }
+
     return true;
+}
+
+uint32_t x11_sync_create_counter(x11_connection_t* conn) {
+    uint32_t id = x11_generate_id(conn);
+    x11_sync_create_counter_request_t req = {
+        .major_opcode = conn->sync_opcode,
+        .minor_opcode = X11_SYNC_CREATE_COUNTER,
+        .length = sizeof(req) / 4,
+        .id = id,
+        .initial_value = {.high = 0, .low = 0},
+    };
+    x11_write_all(conn->fd, &req, sizeof(req));
+    return id;
+}
+
+void x11_sync_set_counter(x11_connection_t* conn, uint32_t counter, int32_t lo, int32_t hi) {
+    x11_sync_set_counter_request_t req = {
+        .major_opcode = conn->sync_opcode,
+        .minor_opcode = X11_SYNC_SET_COUNTER,
+        .length = sizeof(req) / 4,
+        .counter = counter,
+        .value = {.high = hi, .low = (uint32_t)lo},
+    };
+    x11_write_all(conn->fd, &req, sizeof(req));
+}
+
+void x11_sync_destroy_counter(x11_connection_t* conn, uint32_t counter) {
+    x11_sync_destroy_counter_request_t req = {
+        .major_opcode = conn->sync_opcode,
+        .minor_opcode = X11_SYNC_DESTROY_COUNTER,
+        .length = sizeof(req) / 4,
+        .counter = counter,
+    };
+    x11_write_all(conn->fd, &req, sizeof(req));
 }
 
 void x11_disconnect(x11_connection_t* conn) {
