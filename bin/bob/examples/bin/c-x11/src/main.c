@@ -46,13 +46,42 @@ int main(void) {
         fprintf(stderr, "Can't connect to X11 display\n");
         return EXIT_FAILURE;
     }
-    printf("Screen: %dx%d, MIT-SHM: %s\n", conn.screen.width_in_pixels, conn.screen.height_in_pixels,
-           conn.has_shm ? "yes" : "no");
+    printf("Screen: %dx%d, MIT-SHM: %s, RANDR: %s (v%d.%d)\n", conn.screen.width_in_pixels,
+           conn.screen.height_in_pixels, conn.has_shm ? "yes" : "no",
+           conn.has_randr ? "yes" : "no", conn.randr_major, conn.randr_minor);
+
+    // Query and print monitors; find the primary one for window centering
+    int32_t primary_x = 0, primary_y = 0;
+    int32_t primary_w = conn.screen.width_in_pixels, primary_h = conn.screen.height_in_pixels;
+
+    x11_monitor_t* monitors = NULL;
+    int32_t monitor_count = 0;
+    if (x11_randr_get_monitors(&conn, &monitors, &monitor_count) && monitor_count > 0) {
+        printf("Monitors (%d):\n", monitor_count);
+        for (int32_t i = 0; i < monitor_count; i++) {
+            printf("  Monitor %d: %s %dx%d at (%d,%d)%s\n", i + 1, monitors[i].name, monitors[i].width,
+                   monitors[i].height, monitors[i].x, monitors[i].y, monitors[i].primary ? " [primary]" : "");
+        }
+
+        // Use primary monitor, or first monitor as fallback
+        int32_t primary_idx = 0;
+        for (int32_t i = 0; i < monitor_count; i++) {
+            if (monitors[i].primary) {
+                primary_idx = i;
+                break;
+            }
+        }
+        primary_x = monitors[primary_idx].x;
+        primary_y = monitors[primary_idx].y;
+        primary_w = monitors[primary_idx].width;
+        primary_h = monitors[primary_idx].height;
+    }
+    x11_randr_free_monitors(monitors);
 
     int32_t window_width = 640;
     int32_t window_height = 480;
-    int32_t window_x = (conn.screen.width_in_pixels - window_width) / 2;
-    int32_t window_y = (conn.screen.height_in_pixels - window_height) / 2;
+    int32_t window_x = primary_x + (primary_w - window_width) / 2;
+    int32_t window_y = primary_y + (primary_h - window_height) / 2;
 
     // Create window — BackPixel = white so any server-side clear during resize
     // is the same colour as the canvas background, making the flash invisible.

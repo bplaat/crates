@@ -473,10 +473,12 @@ bool x11_connect(x11_connection_t* conn) {
     if (!x11_read_intern_atom_reply(conn->fd, &conn->net_wm_window_type_normal))
         goto fail;
 
-    // Query MIT-SHM and BIG-REQUESTS extensions together (pipelined)
+    // Query MIT-SHM, BIG-REQUESTS, and RANDR extensions together (pipelined)
     if (!x11_query_extension(conn->fd, "MIT-SHM"))
         goto fail;
     if (!x11_query_extension(conn->fd, "BIG-REQUESTS"))
+        goto fail;
+    if (!x11_query_extension(conn->fd, "RANDR"))
         goto fail;
     {
         bool shm_present = false;
@@ -505,6 +507,14 @@ bool x11_connect(x11_connection_t* conn) {
             conn->max_request_len = br_reply.maximum_request_length;
         }
     }
+    {
+        bool randr_present = false;
+        uint8_t randr_opcode = 0;
+        if (!x11_read_query_extension_reply(conn->fd, &randr_present, &randr_opcode))
+            goto fail;
+        conn->has_randr = randr_present;
+        conn->randr_opcode = randr_opcode;
+    }
 
     // Verify SHM is actually functional via a round-trip QueryVersion
     if (conn->has_shm) {
@@ -518,6 +528,26 @@ bool x11_connect(x11_connection_t* conn) {
         x11_shm_query_version_reply_t qv_reply;
         if (!x11_read_all(conn->fd, &qv_reply, sizeof(qv_reply)) || qv_reply.reply != 1) {
             conn->has_shm = false;
+        }
+    }
+
+    // Query RANDR version
+    if (conn->has_randr) {
+        x11_randr_query_version_request_t vreq = {
+            .major_opcode = conn->randr_opcode,
+            .minor_opcode = X11_RANDR_QUERY_VERSION,
+            .length = sizeof(vreq) / 4,
+            .major_version = 1,
+            .minor_version = 5,
+        };
+        if (!x11_write_all(conn->fd, &vreq, sizeof(vreq)))
+            goto fail;
+        x11_randr_query_version_reply_t vreply;
+        if (!x11_read_all(conn->fd, &vreply, sizeof(vreply)) || vreply.reply != 1) {
+            conn->has_randr = false;
+        } else {
+            conn->randr_major = vreply.server_major;
+            conn->randr_minor = vreply.server_minor;
         }
     }
 
@@ -893,6 +923,208 @@ void x11_destroy_image(x11_connection_t* conn, x11_image_t* img) {
         free(img->pixels);
         img->pixels = NULL;
     }
+}
+
+bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, int32_t* count) {
+    if (!conn->has_randr)
+        return false;
+
+    // RANDR >= 1.5: use RRGetMonitors (logical monitor objects with names)
+    if (conn->randr_minor >= 5) {
+        x11_randr_get_monitors_request_t req = {
+            .major_opcode = conn->randr_opcode,
+            .minor_opcode = X11_RANDR_GET_MONITORS,
+            .length = sizeof(req) / 4,
+            .window = conn->screen.root,
+            .get_active = 1,
+        };
+        if (!x11_write_all(conn->fd, &req, sizeof(req)))
+            return false;
+
+        x11_randr_get_monitors_reply_t reply;
+        if (!x11_read_all(conn->fd, &reply, sizeof(reply)) || reply.reply != 1)
+            return false;
+
+        uint32_t n = reply.n_monitors;
+        if (n == 0) {
+            *monitors = NULL;
+            *count = 0;
+            return true;
+        }
+
+        uint32_t* atoms = malloc(n * sizeof(uint32_t));
+        x11_monitor_t* result = malloc(n * sizeof(x11_monitor_t));
+        if (!atoms || !result) {
+            free(atoms);
+            free(result);
+            return false;
+        }
+
+        for (uint32_t i = 0; i < n; i++) {
+            x11_randr_monitor_info_t info;
+            if (!x11_read_all(conn->fd, &info, sizeof(info))) {
+                free(atoms);
+                free(result);
+                return false;
+            }
+            atoms[i] = info.name;
+            result[i].x = info.x;
+            result[i].y = info.y;
+            result[i].width = info.width;
+            result[i].height = info.height;
+            result[i].primary = info.primary != 0;
+            result[i].name[0] = '\0';
+            if (!x11_skip(conn->fd, info.n_output * 4)) {
+                free(atoms);
+                free(result);
+                return false;
+            }
+        }
+
+        for (uint32_t i = 0; i < n; i++) {
+            x11_get_atom_name_request_t name_req = {
+                .major_opcode = X11_GET_ATOM_NAME,
+                .length = sizeof(name_req) / 4,
+                .atom = atoms[i],
+            };
+            if (!x11_write_all(conn->fd, &name_req, sizeof(name_req))) {
+                free(atoms);
+                free(result);
+                return false;
+            }
+        }
+        for (uint32_t i = 0; i < n; i++) {
+            x11_get_atom_name_reply_t name_reply;
+            if (!x11_read_all(conn->fd, &name_reply, sizeof(name_reply)) || name_reply.reply != 1) {
+                free(atoms);
+                free(result);
+                return false;
+            }
+            uint16_t name_len = name_reply.name_len;
+            size_t padded = (name_len + 3) & ~3;
+            if (name_len > 0) {
+                char name_buf[256];
+                size_t read_len = padded < sizeof(name_buf) ? padded : sizeof(name_buf) - 1;
+                if (!x11_read_all(conn->fd, name_buf, read_len)) {
+                    free(atoms);
+                    free(result);
+                    return false;
+                }
+                if (padded > read_len)
+                    x11_skip(conn->fd, padded - read_len);
+                size_t copy_len = name_len < sizeof(result[i].name) - 1 ? name_len : sizeof(result[i].name) - 1;
+                memcpy(result[i].name, name_buf, copy_len);
+                result[i].name[copy_len] = '\0';
+            }
+        }
+
+        free(atoms);
+        *monitors = result;
+        *count = (int32_t)n;
+        return true;
+    }
+
+    // RANDR 1.2 fallback: enumerate active CRTCs via RRGetScreenResources
+    {
+        x11_randr_get_screen_resources_request_t sreq = {
+            .major_opcode = conn->randr_opcode,
+            .minor_opcode = X11_RANDR_GET_SCREEN_RESOURCES,
+            .length = sizeof(sreq) / 4,
+            .window = conn->screen.root,
+        };
+        if (!x11_write_all(conn->fd, &sreq, sizeof(sreq)))
+            return false;
+
+        x11_randr_get_screen_resources_reply_t sreply;
+        if (!x11_read_all(conn->fd, &sreply, sizeof(sreply)) || sreply.reply != 1)
+            return false;
+
+        uint16_t ncrtcs = sreply.ncrtcs;
+        uint16_t noutputs = sreply.noutputs;
+        uint16_t nmodes = sreply.nmodes;
+        uint16_t names_len = sreply.names_len;
+        uint32_t config_ts = sreply.config_timestamp;
+
+        uint32_t* crtcs = malloc(ncrtcs * sizeof(uint32_t));
+        if (!crtcs)
+            return false;
+        if (!x11_read_all(conn->fd, crtcs, ncrtcs * sizeof(uint32_t))) {
+            free(crtcs);
+            return false;
+        }
+        // Skip outputs, modes, names
+        size_t names_padded = (names_len + 3) & ~3;
+        if (!x11_skip(conn->fd, noutputs * 4 + nmodes * 32 + names_padded)) {
+            free(crtcs);
+            return false;
+        }
+
+        // Pipeline all RRGetCrtcInfo requests
+        for (uint16_t i = 0; i < ncrtcs; i++) {
+            x11_randr_get_crtc_info_request_t creq = {
+                .major_opcode = conn->randr_opcode,
+                .minor_opcode = X11_RANDR_GET_CRTC_INFO,
+                .length = sizeof(creq) / 4,
+                .crtc = crtcs[i],
+                .config_timestamp = config_ts,
+            };
+            if (!x11_write_all(conn->fd, &creq, sizeof(creq))) {
+                free(crtcs);
+                return false;
+            }
+        }
+        free(crtcs);
+
+        // Read all RRGetCrtcInfo replies, collecting active CRTCs
+        x11_monitor_t* result = malloc(ncrtcs * sizeof(x11_monitor_t));
+        if (!result)
+            return false;
+
+        int32_t active = 0;
+        for (uint16_t i = 0; i < ncrtcs; i++) {
+            x11_randr_get_crtc_info_reply_t creply;
+            if (!x11_read_all(conn->fd, &creply, sizeof(creply)) || creply.reply != 1) {
+                free(result);
+                return false;
+            }
+            // Skip variable-length output lists
+            if (!x11_skip(conn->fd, (creply.noutputs + creply.npossible) * 4)) {
+                free(result);
+                return false;
+            }
+            // CRTC is active when it has a mode and nonzero size
+            if (creply.mode == 0 || creply.width == 0 || creply.height == 0)
+                continue;
+
+            result[active].x = creply.x;
+            result[active].y = creply.y;
+            result[active].width = creply.width;
+            result[active].height = creply.height;
+            result[active].primary = false;
+            snprintf(result[active].name, sizeof(result[active].name), "CRTC-%d", i);
+            active++;
+        }
+
+        // Mark the CRTC at (0,0) as primary; fall back to first active
+        bool found_primary = false;
+        for (int32_t i = 0; i < active; i++) {
+            if (result[i].x == 0 && result[i].y == 0) {
+                result[i].primary = true;
+                found_primary = true;
+                break;
+            }
+        }
+        if (!found_primary && active > 0)
+            result[0].primary = true;
+
+        *monitors = result;
+        *count = active;
+        return true;
+    }
+}
+
+void x11_randr_free_monitors(x11_monitor_t* monitors) {
+    free(monitors);
 }
 
 bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
