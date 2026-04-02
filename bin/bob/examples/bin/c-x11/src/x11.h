@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025 Bastiaan van der Plaat
+ * Copyright (c) 2022-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -10,9 +10,27 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Packed attribute for wire-format structs
+#if defined(__GNUC__) || defined(__clang__)
+#define X11_PACKED __attribute__((packed))
+#else
+#define X11_PACKED
+#endif
+
+// Byte order detection
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__)
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define X11_BIG_ENDIAN 1
+#endif
+#elif defined(__BIG_ENDIAN__) || defined(__ARMEB__) || defined(__MIPSEB__)
+#define X11_BIG_ENDIAN 1
+#endif
+
+// Opcodes
 #define X11_CREATE_WINDOW 1
 #define X11_MAP_WINDOW 8
 #define X11_CONFIGURE_WINDOW 12
+#define X11_INTERN_ATOM 16
 #define X11_CHANGE_PROPERTY 18
 #define X11_OPEN_FONT 45
 #define X11_CLOSE_FONT 46
@@ -20,29 +38,44 @@
 #define X11_POLY_RECTANGLE 67
 #define X11_IMAGE_TEXT_8 76
 
+// Event types
+#define X11_ERROR 0
 #define X11_EXPOSE 12
+#define X11_CLIENT_MESSAGE 33
+#define X11_CLIENT_MESSAGE_CLOSE 255
 
+// GC value masks
 #define X11_GC_FOREGROUND 4
 #define X11_GC_BACKGROUND 8
 #define X11_GC_FONT 16384
 
+// Window constants
 #define X11_COPY_FROM_PARENT 0
 #define X11_WINDOW_CLASS_INPUT_OUTPUT 1
 #define X11_CW_BACK_PIXEL 2
 #define X11_CW_EVENT_MASK 2048
 #define X11_EVENT_MASK_EXPOSURE 32768
 
+// Property constants
 #define X11_PROP_MODE_REPLACE 0
+#define X11_ATOM_ATOM 4
+#define X11_ATOM_CARDINAL 6
 #define X11_ATOM_STRING 31
+#define X11_ATOM_WM_HINTS 35
 #define X11_ATOM_WM_NAME 39
+#define X11_ATOM_WM_NORMAL_HINTS 40
+#define X11_ATOM_WM_SIZE_HINTS 41
+#define X11_ATOM_WM_CLASS 67
+#define X11_ATOM_WM_CLIENT_MACHINE 36
 
+// Configure window masks
 #define X11_CONFIG_WINDOW_X 1
 #define X11_CONFIG_WINDOW_Y 2
 #define X11_CONFIG_WINDOW_WIDTH 4
 #define X11_CONFIG_WINDOW_HEIGHT 8
 
 // X11 requests and responses
-typedef struct x11_setup_request_t {
+typedef struct X11_PACKED x11_setup_request_t {
     uint8_t byte_order;
     uint8_t pad0;
     uint16_t protocol_major_version;
@@ -52,7 +85,7 @@ typedef struct x11_setup_request_t {
     uint8_t pad1[2];
 } x11_setup_request_t;
 
-typedef struct x11_setup_t {
+typedef struct X11_PACKED x11_setup_t {
     uint8_t status;
     uint8_t pad0;
     uint16_t protocol_major_version;
@@ -74,13 +107,15 @@ typedef struct x11_setup_t {
     uint8_t max_keycode;
     uint8_t pad1[4];
 } x11_setup_t;
-typedef struct x11_format_t {
+
+typedef struct X11_PACKED x11_format_t {
     uint8_t depth;
     uint8_t bits_per_pixel;
     uint8_t scanline_pad;
     uint8_t pad0[5];
 } x11_format_t;
-typedef struct x11_screen_t {
+
+typedef struct X11_PACKED x11_screen_t {
     uint32_t root;
     uint32_t default_colormap;
     uint32_t white_pixel;
@@ -98,13 +133,15 @@ typedef struct x11_screen_t {
     uint8_t root_depth;
     uint8_t allowed_depths_len;
 } x11_screen_t;
-typedef struct x11_depth_t {
+
+typedef struct X11_PACKED x11_depth_t {
     uint8_t depth;
     uint8_t pad0;
     uint16_t visuals_len;
     uint8_t pad1[4];
 } x11_depth_t;
-typedef struct x11_visualtype_t {
+
+typedef struct X11_PACKED x11_visualtype_t {
     uint32_t visual_id;
     uint8_t _class;
     uint8_t bits_per_rgb_value;
@@ -115,7 +152,24 @@ typedef struct x11_visualtype_t {
     uint8_t pad0[4];
 } x11_visualtype_t;
 
-typedef struct x11_open_font_request_t {
+typedef struct X11_PACKED x11_intern_atom_request_t {
+    uint8_t major_opcode;
+    uint8_t only_if_exists;
+    uint16_t length;
+    uint16_t name_len;
+    uint8_t pad0[2];
+} x11_intern_atom_request_t;
+
+typedef struct X11_PACKED x11_intern_atom_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint32_t atom;
+    uint8_t pad1[20];
+} x11_intern_atom_reply_t;
+
+typedef struct X11_PACKED x11_open_font_request_t {
     uint8_t major_opcode;
     uint8_t pad0;
     uint16_t length;
@@ -124,14 +178,14 @@ typedef struct x11_open_font_request_t {
     uint8_t pad1[2];
 } x11_open_font_request_t;
 
-typedef struct x11_close_font_request_t {
+typedef struct X11_PACKED x11_close_font_request_t {
     uint8_t major_opcode;
     uint8_t pad0;
     uint16_t length;
     uint32_t font;
 } x11_close_font_request_t;
 
-typedef struct x11_create_gc_request_t {
+typedef struct X11_PACKED x11_create_gc_request_t {
     uint8_t major_opcode;
     uint8_t pad0;
     uint16_t length;
@@ -140,7 +194,7 @@ typedef struct x11_create_gc_request_t {
     uint32_t value_mask;
 } x11_create_gc_request_t;
 
-typedef struct x11_create_window_request_t {
+typedef struct X11_PACKED x11_create_window_request_t {
     uint8_t major_opcode;
     uint8_t depth;
     uint16_t length;
@@ -156,7 +210,7 @@ typedef struct x11_create_window_request_t {
     uint32_t value_mask;
 } x11_create_window_request_t;
 
-typedef struct x11_change_property_request_t {
+typedef struct X11_PACKED x11_change_property_request_t {
     uint8_t major_opcode;
     uint8_t mode;
     uint16_t length;
@@ -168,7 +222,7 @@ typedef struct x11_change_property_request_t {
     uint32_t data_len;
 } x11_change_property_request_t;
 
-typedef struct x11_configure_window_request_t {
+typedef struct X11_PACKED x11_configure_window_request_t {
     uint8_t major_opcode;
     uint8_t pad0;
     uint16_t length;
@@ -177,28 +231,29 @@ typedef struct x11_configure_window_request_t {
     uint8_t pad1[2];
 } x11_configure_window_request_t;
 
-typedef struct x11_map_window_request_t {
+typedef struct X11_PACKED x11_map_window_request_t {
     uint8_t major_opcode;
     uint8_t pad0;
     uint16_t length;
     uint32_t window;
 } x11_map_window_request_t;
 
-typedef struct x11_poly_rectangle_request_t {
+typedef struct X11_PACKED x11_poly_rectangle_request_t {
     uint8_t major_opcode;
     uint8_t pad0;
     uint16_t length;
     uint32_t drawable;
     uint32_t gc;
 } x11_poly_rectangle_request_t;
-typedef struct x11_rectangle_t {
+
+typedef struct X11_PACKED x11_rectangle_t {
     int16_t x;
     int16_t y;
     uint16_t width;
     uint16_t height;
 } x11_rectangle_t;
 
-typedef struct x11_image_text_8_request_t {
+typedef struct X11_PACKED x11_image_text_8_request_t {
     uint8_t major_opcode;
     uint8_t string_len;
     uint16_t length;
@@ -214,17 +269,23 @@ typedef struct x11_connection_t {
     uint32_t id;
     uint32_t id_inc;
     x11_screen_t screen;
+    uint32_t wm_protocols;
+    uint32_t wm_delete_window;
+    uint32_t net_wm_name;
+    uint32_t net_wm_pid;
+    uint32_t utf8_string;
 } x11_connection_t;
 
 typedef struct x11_event_t {
     uint8_t type;
+    uint16_t expose_count;
 } x11_event_t;
 
 bool x11_connect(x11_connection_t* conn);
 
 uint32_t x11_generate_id(x11_connection_t* conn);
 
-void x11_open_font(x11_connection_t* conn, uint32_t fid, char* name, size_t name_size);
+void x11_open_font(x11_connection_t* conn, uint32_t fid, const char* name, size_t name_size);
 
 void x11_close_font(x11_connection_t* conn, uint32_t font);
 
@@ -240,6 +301,10 @@ void x11_change_property(x11_connection_t* conn, uint8_t mode, uint32_t window, 
 
 void x11_configure_window(x11_connection_t* conn, uint32_t window, uint32_t value_mask, uint32_t* value_list,
                           size_t value_list_size);
+
+void x11_set_wm_protocols(x11_connection_t* conn, uint32_t window);
+
+void x11_set_wm_hints(x11_connection_t* conn, uint32_t window);
 
 void x11_map_window(x11_connection_t* conn, uint32_t window);
 
