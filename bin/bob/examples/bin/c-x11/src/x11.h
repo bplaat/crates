@@ -31,11 +31,18 @@
 #define X11_MAP_WINDOW 8
 #define X11_CONFIGURE_WINDOW 12
 #define X11_INTERN_ATOM 16
+#define X11_GET_ATOM_NAME 17
 #define X11_CHANGE_PROPERTY 18
 #define X11_FREE_GC 60
 #define X11_CREATE_GC 55
 #define X11_PUT_IMAGE 72
 #define X11_QUERY_EXTENSION 98
+
+// RANDR minor opcodes
+#define X11_RANDR_QUERY_VERSION 0
+#define X11_RANDR_GET_SCREEN_RESOURCES 8
+#define X11_RANDR_GET_CRTC_INFO 20
+#define X11_RANDR_GET_MONITORS 42
 
 // Event types
 #define X11_ERROR 0
@@ -361,6 +368,119 @@ typedef struct X11_PACKED x11_shm_put_image_request_t {
     uint32_t offset;
 } x11_shm_put_image_request_t;
 
+typedef struct X11_PACKED x11_get_atom_name_request_t {
+    uint8_t major_opcode;
+    uint8_t pad0;
+    uint16_t length;
+    uint32_t atom;
+} x11_get_atom_name_request_t;
+
+typedef struct X11_PACKED x11_get_atom_name_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint16_t name_len;
+    uint8_t pad1[22];
+} x11_get_atom_name_reply_t;
+
+typedef struct X11_PACKED x11_randr_query_version_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t major_version;
+    uint32_t minor_version;
+} x11_randr_query_version_request_t;
+
+typedef struct X11_PACKED x11_randr_query_version_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint32_t server_major;
+    uint32_t server_minor;
+    uint8_t pad1[16];
+} x11_randr_query_version_reply_t;
+
+typedef struct X11_PACKED x11_randr_get_screen_resources_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t window;
+} x11_randr_get_screen_resources_request_t;
+
+typedef struct X11_PACKED x11_randr_get_screen_resources_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint32_t timestamp;
+    uint32_t config_timestamp;
+    uint16_t ncrtcs;
+    uint16_t noutputs;
+    uint16_t nmodes;
+    uint16_t names_len;
+    uint8_t pad1[8];
+} x11_randr_get_screen_resources_reply_t;
+
+typedef struct X11_PACKED x11_randr_get_crtc_info_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t crtc;
+    uint32_t config_timestamp;
+} x11_randr_get_crtc_info_request_t;
+
+typedef struct X11_PACKED x11_randr_get_crtc_info_reply_t {
+    uint8_t reply;
+    uint8_t status;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint32_t timestamp;
+    int16_t x;
+    int16_t y;
+    uint16_t width;
+    uint16_t height;
+    uint32_t mode;
+    uint16_t rotation;
+    uint16_t rotations;
+    uint16_t noutputs;
+    uint16_t npossible;
+} x11_randr_get_crtc_info_reply_t;
+
+typedef struct X11_PACKED x11_randr_get_monitors_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t window;
+    uint8_t get_active;
+    uint8_t pad0[3];
+} x11_randr_get_monitors_request_t;
+
+typedef struct X11_PACKED x11_randr_get_monitors_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint32_t timestamp;
+    uint32_t n_monitors;
+    uint32_t n_outputs;
+    uint8_t pad1[12];
+} x11_randr_get_monitors_reply_t;
+
+typedef struct X11_PACKED x11_randr_monitor_info_t {
+    uint32_t name;      // atom
+    uint8_t primary;
+    uint8_t automatic;
+    uint16_t n_output;
+    int16_t x;
+    int16_t y;
+    uint16_t width;     // pixels
+    uint16_t height;    // pixels
+    uint32_t width_mm;
+    uint32_t height_mm;
+} x11_randr_monitor_info_t;
+
 // X11 structs
 typedef struct x11_connection_t {
     int32_t fd;
@@ -377,6 +497,10 @@ typedef struct x11_connection_t {
     uint32_t utf8_string;
     bool has_shm;
     uint8_t shm_opcode;
+    bool has_randr;
+    uint8_t randr_opcode;
+    uint32_t randr_major;
+    uint32_t randr_minor;
 } x11_connection_t;
 
 typedef struct x11_event_t {
@@ -396,6 +520,15 @@ typedef struct x11_image_t {
     int32_t height;
     int32_t capacity;  // allocated pixel count; reuse when new_w*new_h <= capacity
 } x11_image_t;
+
+typedef struct x11_monitor_t {
+    int16_t x;
+    int16_t y;
+    uint16_t width;
+    uint16_t height;
+    bool primary;
+    char name[256];
+} x11_monitor_t;
 
 bool x11_connect(x11_connection_t* conn);
 
@@ -431,5 +564,11 @@ void x11_put_image(x11_connection_t* conn, uint32_t window, x11_image_t* img);
 void x11_destroy_image(x11_connection_t* conn, x11_image_t* img);
 
 bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event);
+
+// Enumerate monitors via RANDR; returns heap-allocated array of count entries.
+// Returns false if RANDR is unavailable. Free with x11_randr_free_monitors().
+bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, int32_t* count);
+
+void x11_randr_free_monitors(x11_monitor_t* monitors);
 
 void x11_disconnect(x11_connection_t* conn);
