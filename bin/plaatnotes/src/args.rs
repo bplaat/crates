@@ -4,57 +4,28 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::env;
-use std::process::exit;
+use clap::Parser;
 
-#[derive(PartialEq, Eq)]
-pub(crate) enum Subcommand {
-    Serve,
-    ServeE2e,
-    ImportGoogleKeep,
-    Help,
-    Version,
-}
-
+#[derive(Parser)]
+#[command(about = "PlaatNotes note-taking app", version)]
 pub(crate) struct Args {
-    pub subcommand: Subcommand,
-    pub path: Option<String>,
+    #[arg(subcommand)]
+    pub subcommand: Option<Subcommand>,
+
+    #[arg(long, help = "Email address", value_name = "EMAIL")]
     pub email: Option<String>,
 }
 
-impl Default for Args {
-    fn default() -> Self {
-        Args {
-            subcommand: Subcommand::Serve,
-            path: None,
-            email: None,
-        }
-    }
-}
-
-pub(crate) fn parse_args() -> Args {
-    let mut args = Args::default();
-    let mut args_iter = env::args().skip(1);
-    while let Some(arg) = args_iter.next() {
-        match arg.as_str() {
-            "serve" => args.subcommand = Subcommand::Serve,
-            "serve-e2e" => args.subcommand = Subcommand::ServeE2e,
-            "import-google-keep" => {
-                args.subcommand = Subcommand::ImportGoogleKeep;
-                args.path = args_iter.next();
-            }
-            "--email" => {
-                args.email = args_iter.next();
-            }
-            "help" | "-h" | "--help" => args.subcommand = Subcommand::Help,
-            "version" | "--version" => args.subcommand = Subcommand::Version,
-            _ => {
-                eprintln!("Unknown argument: {arg}");
-                exit(1);
-            }
-        }
-    }
-    args
+#[derive(clap::Subcommand, PartialEq, Eq)]
+pub(crate) enum Subcommand {
+    #[command(name = "serve")]
+    Serve,
+    #[command(name = "serve-e2e")]
+    ServeE2e,
+    #[command(name = "import-google-keep")]
+    ImportGoogleKeep { path: Option<String> },
+    Help,
+    Version,
 }
 
 pub(crate) fn subcommand_help() {

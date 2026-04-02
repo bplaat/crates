@@ -6,7 +6,10 @@
 
 use std::env;
 use std::fmt::{self, Display, Formatter};
-use std::process::exit;
+
+use clap::Parser;
+
+// MARK: Public types (unchanged API for main.rs / bobje.rs)
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Subcommand {
@@ -50,78 +53,110 @@ pub(crate) struct Args {
     pub disable_javac_server: bool,
 }
 
-impl Default for Args {
-    fn default() -> Self {
-        Args {
-            subcommand: Subcommand::Help,
-            manifest_dir: ".".to_string(),
-            target_dir: "target".to_string(),
-            profile: Profile::Debug,
-            target: None,
-            verbose: false,
-            thread_count: None,
-            clean_first: false,
-            show_time: false,
-            // Disable javac server on Windows and CI environments
-            #[cfg(feature = "javac-server")]
-            disable_javac_server: cfg!(windows) || env::var("CI").is_ok(),
-        }
-    }
+// MARK: Internal raw args (parsed via derive)
+
+#[derive(Clone, Copy, PartialEq, Eq, clap::Subcommand)]
+enum RawSubcommand {
+    Build,
+    Rebuild,
+    Clean,
+    #[command(name = "clean-cache")]
+    CleanCache,
+    Help,
+    Run,
+    Rerun,
+    Test,
+    Retest,
+    Version,
 }
 
+#[derive(Parser)]
+#[command(about = "Bob build system", version)]
+struct RawArgs {
+    #[arg(subcommand)]
+    subcommand: Option<RawSubcommand>,
+
+    #[arg(short = 'C', long = "manifest-dir", help = "Change to directory", value_name = "DIR", default_value = ".")]
+    manifest_dir: String,
+
+    #[arg(short = 'T', long = "target-dir", help = "Write artifacts to directory", value_name = "DIR", default_value = "target")]
+    target_dir: String,
+
+    #[arg(short = 'r', long, help = "Build in release mode")]
+    release: bool,
+
+    #[arg(short = 't', long = "time", help = "Show time taken")]
+    show_time: bool,
+
+    #[arg(short = 'v', long, help = "Print verbose output")]
+    verbose: bool,
+
+    #[arg(long, help = "Build for target", value_name = "TARGET")]
+    target: Option<String>,
+
+    #[arg(short = '1', long = "single-threaded", help = "Run tasks single threaded")]
+    single_threaded: bool,
+
+    #[arg(short = 'j', long = "jobs", alias = "thread-count", help = "Thread count", value_name = "N")]
+    thread_count: Option<usize>,
+
+    #[cfg(feature = "javac-server")]
+    #[arg(long = "disable-javac-server", help = "Disable the javac server")]
+    disable_javac_server: bool,
+}
+
+// MARK: Parse function
+
 pub(crate) fn parse_args() -> Args {
-    let mut args = Args::default();
-    let mut args_iter = env::args().skip(1);
-    while let Some(arg) = args_iter.next() {
-        match arg.as_str() {
-            "clean" => args.subcommand = Subcommand::Clean,
-            "clean-cache" => args.subcommand = Subcommand::CleanCache,
-            "build" => args.subcommand = Subcommand::Build,
-            "rebuild" => {
-                args.subcommand = Subcommand::Build;
-                args.clean_first = true;
-            }
-            "help" | "-h" | "--help" => args.subcommand = Subcommand::Help,
-            "run" => args.subcommand = Subcommand::Run,
-            "rerun" => {
-                args.subcommand = Subcommand::Run;
-                args.clean_first = true;
-            }
-            "test" => {
-                args.subcommand = Subcommand::Test;
-                args.profile = Profile::Test;
-            }
-            "retest" => {
-                args.subcommand = Subcommand::Test;
-                args.profile = Profile::Test;
-                args.clean_first = true;
-            }
-            "version" | "--version" => args.subcommand = Subcommand::Version,
-            "-C" | "--manifest-dir" => {
-                args.manifest_dir = args_iter.next().expect("Invalid argument")
-            }
-            "-t" | "--time" => args.show_time = true,
-            "-T" | "--target-dir" => {
-                args.target_dir = args_iter.next().expect("Invalid argument");
-            }
-            "--target" => {
-                args.target = Some(args_iter.next().expect("Invalid argument"));
-            }
-            "-r" | "--release" => args.profile = Profile::Release,
-            "-v" | "--verbose" => args.verbose = true,
-            "-1" | "--single-threaded" => args.thread_count = Some(1),
-            "-j" | "--jobs" | "--thread-count" => {
-                args.thread_count = args_iter.next().and_then(|s| s.parse::<usize>().ok());
-            }
-            #[cfg(feature = "javac-server")]
-            "--disable-javac-server" => args.disable_javac_server = true,
-            _ => {
-                eprintln!("Unknown argument: {arg}");
-                exit(1);
+    let raw = RawArgs::parse();
+
+    let clean_first = matches!(
+        raw.subcommand,
+        Some(RawSubcommand::Rebuild) | Some(RawSubcommand::Rerun) | Some(RawSubcommand::Retest)
+    );
+
+    let subcommand = match raw.subcommand {
+        Some(RawSubcommand::Build) | Some(RawSubcommand::Rebuild) => Subcommand::Build,
+        Some(RawSubcommand::Clean) => Subcommand::Clean,
+        Some(RawSubcommand::CleanCache) => Subcommand::CleanCache,
+        Some(RawSubcommand::Run) | Some(RawSubcommand::Rerun) => Subcommand::Run,
+        Some(RawSubcommand::Test) | Some(RawSubcommand::Retest) => Subcommand::Test,
+        Some(RawSubcommand::Version) => Subcommand::Version,
+        Some(RawSubcommand::Help) | None => Subcommand::Help,
+    };
+
+    let profile = match raw.subcommand {
+        Some(RawSubcommand::Test) | Some(RawSubcommand::Retest) => Profile::Test,
+        _ => {
+            if raw.release {
+                Profile::Release
+            } else {
+                Profile::Debug
             }
         }
+    };
+
+    let thread_count = if raw.single_threaded {
+        Some(1)
+    } else {
+        raw.thread_count
+    };
+
+    Args {
+        subcommand,
+        manifest_dir: raw.manifest_dir,
+        target_dir: raw.target_dir,
+        profile,
+        target: raw.target,
+        verbose: raw.verbose,
+        thread_count,
+        clean_first,
+        show_time: raw.show_time,
+        #[cfg(feature = "javac-server")]
+        disable_javac_server: raw.disable_javac_server
+            || cfg!(windows)
+            || env::var("CI").is_ok(),
     }
-    args
 }
 
 pub(crate) fn subcommand_help() {

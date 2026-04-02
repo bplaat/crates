@@ -71,6 +71,7 @@ version = "0.1.0"
 dependencies = [
  "basic-toml",
  "cfg-if",
+ "clap",
  "directories",
  "dotenv",
  "enable-ansi-support",
@@ -129,6 +130,7 @@ name = "cargo-bundle"
 version = "0.1.0"
 dependencies = [
  "basic-toml",
+ "clap",
  "copy_dir",
  "serde",
 ]
@@ -147,6 +149,7 @@ dependencies = [
 name = "ccontinue"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "indexmap",
  "regex",
  "rust-embed",
@@ -163,6 +166,22 @@ name = "chrono"
 version = "0.4.0+patch"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "clap"
+version = "4.0.0"
+dependencies = [
+ "clap_derive",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -435,6 +454,7 @@ name = "music-dl"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "directories",
  "mp4ameta",
  "percent-encoding",
@@ -502,6 +522,7 @@ dependencies = [
  "base64",
  "bsqlite",
  "chrono",
+ "clap",
  "const_format",
  "copy_dir",
  "dotenv",

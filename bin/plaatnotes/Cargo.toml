@@ -16,6 +16,7 @@ chrono = { version = "0.4", default-features = false, features = [
     "now",
     "serde",
 ] }
+clap = "4"
 const_format = "0.2"
 getrandom = "0.3"
 dotenv = "0.15.0"
