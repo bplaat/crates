@@ -6,39 +6,54 @@
 
 #include "canvas.h"
 
-#include <string.h>
-#include <wchar.h>
-
-void canvas_init(canvas_t* canvas, int32_t width, int32_t height, uint32_t* pixels) {
+void canvas_init(canvas_t* canvas, int32_t width, int32_t height, uint32_t* pixels, float scale) {
     canvas->width = width;
     canvas->height = height;
+    canvas->scale = scale > 0.0f ? scale : 1.0f;
+    canvas->phys_width = (int32_t)((float)width * canvas->scale);
+    canvas->phys_height = (int32_t)((float)height * canvas->scale);
     canvas->pixels = pixels;
 }
 
-void canvas_fill_rect(canvas_t* canvas, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
-    // Clip to canvas bounds
-    int32_t x1 = x < 0 ? 0 : x;
-    int32_t y1 = y < 0 ? 0 : y;
-    int32_t x2 = x + w > canvas->width ? canvas->width : x + w;
-    int32_t y2 = y + h > canvas->height ? canvas->height : y + h;
-    if (x1 >= x2 || y1 >= y2)
+void canvas_fill_rect(canvas_t* canvas, float x, float y, float w, float h, uint32_t color) {
+    // All math in float; only convert to int at the pixel boundary
+    float px = x * canvas->scale;
+    float py = y * canvas->scale;
+    float px2 = px + w * canvas->scale;
+    float py2 = py + h * canvas->scale;
+
+    // Clip to physical canvas bounds
+    if (px < 0.0f) px = 0.0f;
+    if (py < 0.0f) py = 0.0f;
+    if (px2 > (float)canvas->phys_width) px2 = (float)canvas->phys_width;
+    if (py2 > (float)canvas->phys_height) py2 = (float)canvas->phys_height;
+    if (px >= px2 || py >= py2)
         return;
 
+    int32_t x1 = (int32_t)px;
+    int32_t y1 = (int32_t)py;
+    int32_t x2 = (int32_t)px2;
+    int32_t y2 = (int32_t)py2;
+    int32_t stride = canvas->phys_width;
     int32_t count = x2 - x1;
     for (int32_t row = y1; row < y2; row++) {
-        wmemset((wchar_t*)(canvas->pixels + row * canvas->width + x1), (wchar_t)color, (size_t)count);
+        uint32_t* dst = canvas->pixels + row * stride + x1;
+        for (int32_t col = 0; col < count; col++) {
+            dst[col] = color;
+        }
     }
 }
 
-void canvas_stroke_rect(canvas_t* canvas, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
-    if (w <= 0 || h <= 0)
+void canvas_stroke_rect(canvas_t* canvas, float x, float y, float w, float h, float line_width, uint32_t color) {
+    if (w <= 0.0f || h <= 0.0f || line_width <= 0.0f)
         return;
+    float lw = line_width;
     // Top and bottom edges
-    canvas_fill_rect(canvas, x, y, w, 1, color);
-    canvas_fill_rect(canvas, x, y + h - 1, w, 1, color);
+    canvas_fill_rect(canvas, x, y, w, lw, color);
+    canvas_fill_rect(canvas, x, y + h - lw, w, lw, color);
     // Left and right edges (excluding corners already drawn)
-    if (h > 2) {
-        canvas_fill_rect(canvas, x, y + 1, 1, h - 2, color);
-        canvas_fill_rect(canvas, x + w - 1, y + 1, 1, h - 2, color);
+    if (h > lw * 2.0f) {
+        canvas_fill_rect(canvas, x, y + lw, lw, h - lw * 2.0f, color);
+        canvas_fill_rect(canvas, x + w - lw, y + lw, lw, h - lw * 2.0f, color);
     }
 }

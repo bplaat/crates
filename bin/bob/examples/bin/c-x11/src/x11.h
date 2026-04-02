@@ -33,6 +33,7 @@
 #define X11_INTERN_ATOM 16
 #define X11_GET_ATOM_NAME 17
 #define X11_CHANGE_PROPERTY 18
+#define X11_GET_PROPERTY 20
 #define X11_FREE_GC 60
 #define X11_CREATE_GC 55
 #define X11_PUT_IMAGE 72
@@ -40,9 +41,19 @@
 
 // RANDR minor opcodes
 #define X11_RANDR_QUERY_VERSION 0
+#define X11_RANDR_SELECT_INPUT 4
 #define X11_RANDR_GET_SCREEN_RESOURCES 8
 #define X11_RANDR_GET_CRTC_INFO 20
 #define X11_RANDR_GET_MONITORS 42
+
+// SYNC sub-opcodes
+#define X11_SYNC_INITIALIZE 0
+#define X11_SYNC_CREATE_COUNTER 2
+#define X11_SYNC_SET_COUNTER 3
+#define X11_SYNC_DESTROY_COUNTER 6
+
+// RANDR event-mask bits (used with RRSelectInput)
+#define X11_RANDR_SCREEN_CHANGE_NOTIFY_MASK 1
 
 // Event types
 #define X11_ERROR 0
@@ -50,6 +61,10 @@
 #define X11_CONFIGURE_NOTIFY 22
 #define X11_CLIENT_MESSAGE 33
 #define X11_CLIENT_MESSAGE_CLOSE 255
+// Synthetic event for _NET_WM_SYNC_REQUEST ClientMessage
+#define X11_CLIENT_MESSAGE_SYNC_REQUEST 253
+// Synthetic event emitted by x11_wait_for_event when an RRScreenChangeNotify arrives
+#define X11_RANDR_SCREEN_CHANGE_NOTIFY 254
 
 // GC value masks
 #define X11_GC_GRAPHICS_EXPOSURES 65536
@@ -82,6 +97,7 @@
 #define X11_ATOM_WM_SIZE_HINTS 41
 #define X11_ATOM_WM_CLASS 67
 #define X11_ATOM_WM_CLIENT_MACHINE 36
+#define X11_ATOM_RESOURCE_MANAGER 23
 
 // Configure window masks
 #define X11_CONFIG_WINDOW_X 1
@@ -469,17 +485,95 @@ typedef struct X11_PACKED x11_randr_get_monitors_reply_t {
 } x11_randr_get_monitors_reply_t;
 
 typedef struct X11_PACKED x11_randr_monitor_info_t {
-    uint32_t name;      // atom
+    uint32_t name;  // atom
     uint8_t primary;
     uint8_t automatic;
     uint16_t n_output;
     int16_t x;
     int16_t y;
-    uint16_t width;     // pixels
-    uint16_t height;    // pixels
+    uint16_t width;   // pixels
+    uint16_t height;  // pixels
     uint32_t width_mm;
     uint32_t height_mm;
 } x11_randr_monitor_info_t;
+
+typedef struct X11_PACKED x11_randr_select_input_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t window;
+    uint16_t enable;
+    uint8_t pad0[2];
+} x11_randr_select_input_request_t;
+
+typedef struct X11_PACKED x11_get_property_request_t {
+    uint8_t major_opcode;
+    uint8_t _delete;
+    uint16_t length;
+    uint32_t window;
+    uint32_t property;
+    uint32_t type;
+    uint32_t long_offset;
+    uint32_t long_length;
+} x11_get_property_request_t;
+
+typedef struct X11_PACKED x11_get_property_reply_t {
+    uint8_t reply;
+    uint8_t format;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint32_t type;
+    uint32_t bytes_after;
+    uint32_t value_len;
+    uint8_t pad[12];
+} x11_get_property_reply_t;
+
+typedef struct X11_PACKED x11_sync_int64_t {
+    int32_t high;
+    uint32_t low;
+} x11_sync_int64_t;
+
+typedef struct X11_PACKED x11_sync_initialize_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint8_t major_version;
+    uint8_t minor_version;
+    uint8_t pad[2];
+} x11_sync_initialize_request_t;
+
+typedef struct X11_PACKED x11_sync_initialize_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint8_t major_version;
+    uint8_t minor_version;
+    uint8_t pad1[22];
+} x11_sync_initialize_reply_t;
+
+typedef struct X11_PACKED x11_sync_create_counter_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t id;
+    x11_sync_int64_t initial_value;
+} x11_sync_create_counter_request_t;
+
+typedef struct X11_PACKED x11_sync_set_counter_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t counter;
+    x11_sync_int64_t value;
+} x11_sync_set_counter_request_t;
+
+typedef struct X11_PACKED x11_sync_destroy_counter_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t counter;
+} x11_sync_destroy_counter_request_t;
 
 // X11 structs
 typedef struct x11_connection_t {
@@ -488,26 +582,39 @@ typedef struct x11_connection_t {
     uint32_t id_inc;
     uint32_t max_request_len;  // in 4-byte units; >65535 means BigRequests is active
     x11_screen_t screen;
+    uint32_t root_visual_red_mask;
+    uint32_t root_visual_green_mask;
+    uint32_t root_visual_blue_mask;
+    float xft_dpi;  // from RESOURCE_MANAGER Xft.dpi; 0 = not set
     uint32_t wm_protocols;
     uint32_t wm_delete_window;
     uint32_t net_wm_name;
     uint32_t net_wm_pid;
     uint32_t net_wm_window_type;
     uint32_t net_wm_window_type_normal;
+    uint32_t net_wm_sync_request;
+    uint32_t net_wm_sync_request_counter;
     uint32_t utf8_string;
     bool has_shm;
     uint8_t shm_opcode;
     bool has_randr;
     uint8_t randr_opcode;
+    uint8_t randr_first_event;
     uint32_t randr_major;
     uint32_t randr_minor;
+    bool has_sync;
+    uint8_t sync_opcode;
 } x11_connection_t;
 
 typedef struct x11_event_t {
     uint8_t type;
     uint16_t expose_count;
+    int16_t configure_x;
+    int16_t configure_y;
     uint16_t configure_width;
     uint16_t configure_height;
+    int32_t sync_value_lo;  // _NET_WM_SYNC_REQUEST counter value (low 32 bits)
+    int32_t sync_value_hi;  // _NET_WM_SYNC_REQUEST counter value (high 32 bits)
 } x11_event_t;
 
 // Image backed by a pixel buffer (MIT-SHM or heap)
@@ -526,6 +633,10 @@ typedef struct x11_monitor_t {
     int16_t y;
     uint16_t width;
     uint16_t height;
+    uint32_t width_mm;
+    uint32_t height_mm;
+    float dpi;
+    float scale;
     bool primary;
     char name[256];
 } x11_monitor_t;
@@ -570,5 +681,19 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event);
 bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, int32_t* count);
 
 void x11_randr_free_monitors(x11_monitor_t* monitors);
+
+// Subscribe to RRScreenChangeNotify events for the given window.
+// Call after mapping the window. Has no effect if RANDR is unavailable.
+void x11_randr_select_input(x11_connection_t* conn, uint32_t window);
+
+// Create a SYNC counter for use with _NET_WM_SYNC_REQUEST; initial value = 0.
+// Only call when conn->has_sync is true. Returns the counter XID.
+uint32_t x11_sync_create_counter(x11_connection_t* conn);
+
+// Set a SYNC counter to the given 64-bit value (split into lo/hi INT32 parts).
+void x11_sync_set_counter(x11_connection_t* conn, uint32_t counter, int32_t lo, int32_t hi);
+
+// Free a SYNC counter created with x11_sync_create_counter.
+void x11_sync_destroy_counter(x11_connection_t* conn, uint32_t counter);
 
 void x11_disconnect(x11_connection_t* conn);
