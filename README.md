@@ -88,6 +88,7 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 These libraries are created as minimal / smaller replacements for common used crates
 
 - [block2](lib/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
+- [cfg-if](lib/cfg-if) A minimal replacement for the [cfg-if](https://crates.io/crates/cfg-if) crate
 - [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 - [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
 - [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
