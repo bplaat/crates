@@ -1,0 +1,9 @@
+[package]
+name = "percent-encoding"
+version = "2.3.3+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "form_urlencoded"
+version = "1.2.2+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+percent-encoding = "2"

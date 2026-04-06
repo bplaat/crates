@@ -94,12 +94,14 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
 - [dotenv](lib/dotenv) A minimal replacement for the [dotenv](https://crates.io/crates/dotenv) crate
 - [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
+- [form_urlencoded](lib/form_urlencoded) A minimal replacement for the [form_urlencoded](https://crates.io/crates/form_urlencoded) crate
 - [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
 - [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 - [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
 - [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
 - [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
 - [objc2](lib/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
+- [percent-encoding](lib/percent-encoding) A minimal replacement for the [percent-encoding](https://crates.io/crates/percent-encoding) crate
 - [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 - [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 - [semver](lib/semver) A minimal replacement for the [semver](https://crates.io/crates/semver) crate

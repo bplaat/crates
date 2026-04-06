@@ -39,12 +39,14 @@ copy_dir = { path = "lib/copy_dir" }
 directories = { path = "lib/directories" }
 dotenv = { path = "lib/dotenv" }
 enable-ansi-support = { path = "lib/enable-ansi-support" }
+form_urlencoded = { path = "lib/form_urlencoded" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 local-ip-address = { path = "lib/local-ip-address" }
 mime = { path = "lib/mime" }
 mime_guess = { path = "lib/mime_guess" }
 objc2 = { path = "lib/objc2" }
+percent-encoding = { path = "lib/percent-encoding" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 semver = { path = "lib/semver" }
