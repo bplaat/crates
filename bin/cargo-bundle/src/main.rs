@@ -277,15 +277,7 @@ fn main() {
     }
 
     // Subcommands
-    let args = args::parse_args();
-    if args.help {
-        args::help();
-        return;
-    }
-    if args.version {
-        println!("cargo-bundle {}", env!("CARGO_PKG_VERSION"));
-        return;
-    }
+    let args = args::Args::cargo_parse();
 
     // Read Cargo.toml manifest
     let manifest = read_manifest(&args.path);

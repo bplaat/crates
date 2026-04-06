@@ -15,7 +15,7 @@ use std::process::exit;
 use log::info;
 use small_router::{Router, RouterBuilder};
 
-use crate::args::{Subcommand, parse_args, subcommand_help};
+use crate::args::{Subcommand, subcommand_help};
 use crate::context::Context;
 use crate::controllers::*;
 
@@ -94,12 +94,13 @@ fn main() {
     _ = dotenv::dotenv();
 
     // Parse args
-    let args = parse_args();
-    if args.subcommand == Subcommand::Help {
+    let args = args::Args::parse();
+    let subcommand = args.subcommand.unwrap_or(Subcommand::Serve);
+    if subcommand == Subcommand::Help {
         subcommand_help();
         return;
     }
-    if args.subcommand == Subcommand::Version {
+    if subcommand == Subcommand::Version {
         println!("plaatnotes v{}", env!("CARGO_PKG_VERSION"));
         return;
     }
@@ -108,7 +109,7 @@ fn main() {
     simple_logger::init().expect("Failed to init logger");
 
     // Init context
-    let context = if args.subcommand == Subcommand::ServeE2e {
+    let context = if subcommand == Subcommand::ServeE2e {
         use crate::context::DatabaseHelpers;
         use crate::models::{User, UserRole};
         let ctx = Context::with_e2e_database().expect("Can't create E2E test database");
@@ -145,8 +146,8 @@ fn main() {
         .expect("Can't open/create database")
     };
 
-    if args.subcommand == Subcommand::ImportGoogleKeep {
-        let path = args.path.unwrap_or_else(|| {
+    if let Subcommand::ImportGoogleKeep { path } = subcommand {
+        let path = path.unwrap_or_else(|| {
             eprintln!("Usage: plaatnotes import-google-keep <path> --email <email>");
             exit(1);
         });

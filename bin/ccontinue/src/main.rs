@@ -4,21 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![doc = include_str!("../README.md")]
+//! C compiler and run helper
+
+use std::collections::HashMap;
+use std::process::Command;
+
+use rust_embed::Embed;
+use temp::TempFileManager;
+use transpiler::Transpiler;
 
 mod args;
 mod temp;
 mod transpiler;
 mod types;
 mod utils;
-
-use std::collections::HashMap;
-use std::process::Command;
-
-use args::parse_args;
-use rust_embed::Embed;
-use temp::TempFileManager;
-use transpiler::Transpiler;
 
 #[derive(Embed)]
 #[folder = "std"]
@@ -231,7 +230,7 @@ fn link_and_run(
 }
 
 fn main() {
-    let args = parse_args();
+    let args = args::Args::parse();
     let cc = std::env::var("CC").unwrap_or_else(|_| "gcc".to_owned());
     let temp_mgr = TempFileManager::new();
 

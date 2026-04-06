@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 cfg-if = "1"
 basic-toml = "0.1.9"
+clap = "4"
 directories = "6.0"
 dotenv = "0.15.0"
 regex = { version = "1.11", default-features = false, features = [
