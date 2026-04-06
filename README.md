@@ -87,6 +87,7 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 
 These libraries are created as minimal / smaller replacements for common used crates
 
+- [base64](lib/base64) A minimal replacement for the [base64](https://crates.io/crates/base64) crate
 - [block2](lib/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
 - [cfg-if](lib/cfg-if) A minimal replacement for the [cfg-if](https://crates.io/crates/cfg-if) crate
 - [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate

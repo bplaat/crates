@@ -32,6 +32,7 @@ small-http = { path = "lib/small-http" }
 small-router = { path = "lib/small-router" }
 
 # Patch some popular crates with my minimal alternatives
+base64 = { path = "lib/base64" }
 block2 = { path = "lib/block2" }
 cfg-if = { path = "lib/cfg-if" }
 chrono = { path = "lib/chrono" }
