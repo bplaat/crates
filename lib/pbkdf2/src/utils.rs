@@ -9,7 +9,6 @@ use std::fmt::{self, Display, Formatter};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64_NO_PAD;
-use subtle::ConstantTimeEq;
 
 use crate::pbkdf2_hmac_sha256;
 
@@ -47,7 +46,19 @@ pub fn password_verify(password: &str, hash: &str) -> Result<bool, PasswordHashD
         .decode(parts[4])
         .map_err(|_| PasswordHashDecodeError)?;
     let computed_hash = pbkdf2_hmac_sha256(password.as_bytes(), &salt, iterations, 32);
-    Ok(stored_hash.ct_eq(&computed_hash).into())
+    Ok(ct_eq(&stored_hash, &computed_hash))
+}
+
+// Constant-time equality check to prevent timing attacks
+fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= std::hint::black_box(x ^ y);
+    }
+    diff == 0
 }
 
 // MARK: PasswordHashDecodeError
