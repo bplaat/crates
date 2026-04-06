@@ -476,9 +476,11 @@ fn find_dependencies(modules: &Vec<Module>) -> HashMap<String, Vec<Module>> {
                     if other_module.name == module.name {
                         continue;
                     }
-                    let re =
-                        Regex::new(&format!(r"import {}\.(?:\w+|\*)[;\n\r]", other_module.name))
-                            .expect("Failed to compile regex");
+                    let re = Regex::new(&format!(
+                        r"import\s+(?:static\s+)?{}\s*\.\s*(?:\w+|\*)\s*[;\n\r]",
+                        other_module.name
+                    ))
+                    .expect("Failed to compile regex");
                     if re.is_match(&contents) {
                         module_deps
                             .entry(module.name.clone())
