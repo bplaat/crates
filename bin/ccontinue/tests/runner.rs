@@ -55,10 +55,20 @@ fn parse_test_meta(filepath: &str) -> (i32, String) {
 
 fn build_test(test_file: &str) -> Result<String, String> {
     let ccc_bin = env!("CARGO_BIN_EXE_ccc");
-    let exe_path = test_file.trim_end_matches(".cc").to_owned();
+    let stem = Path::new(test_file)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("ccc_test");
+    let exe_path = std::env::temp_dir()
+        .join(format!("ccc_test_{stem}"))
+        .to_str()
+        .expect("temp path is valid UTF-8")
+        .to_owned();
     let std_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/std");
     let result = Command::new(ccc_bin)
         .arg(test_file)
+        .arg("-o")
+        .arg(&exe_path)
         .arg("-I")
         .arg(std_dir)
         .output()

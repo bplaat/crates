@@ -110,10 +110,12 @@ fn transpile_and_compile_sources(
         }
 
         let source_path = if path.ends_with(".hh") || path.ends_with(".cc") {
-            let sp = if let Some(o) = output {
-                o.clone()
-            } else if flag_source {
-                path.replace(".cc", ".c").replace(".hh", ".h")
+            let sp = if flag_source {
+                if let Some(o) = output {
+                    o.clone()
+                } else {
+                    path.replace(".cc", ".c").replace(".hh", ".h")
+                }
             } else {
                 temp_mgr.temp_file(".c")
             };
