@@ -18,9 +18,11 @@ fn main() {
     // Generate test password hash at compile time
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     let salt = b"test_salt_fixed!";
-    let hash = pbkdf2::pbkdf2_hmac_sha256(b"password123", salt, 100_000, 32);
+    let hash =
+        pbkdf2::pbkdf2_hmac_sha256(b"password123", salt, pbkdf2::DEFAULT_SAFE_ITERATIONS, 32);
     let test_password_hash = format!(
-        "$pbkdf2-sha256$t=100000${}${}",
+        "$pbkdf2-sha256$t={}${}${}",
+        pbkdf2::DEFAULT_SAFE_ITERATIONS,
         BASE64_NO_PAD.encode(salt),
         BASE64_NO_PAD.encode(hash)
     );

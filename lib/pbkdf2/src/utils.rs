@@ -12,16 +12,18 @@ use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64_NO_PAD;
 
 use crate::pbkdf2_hmac_sha256;
 
-const ITERATIONS: u32 = 100_000;
+/// Default recommended safe amount of iterations for PBKDF2-HMAC-SHA256 (https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2)
+pub const DEFAULT_SAFE_ITERATIONS: u32 = 600_000;
 
 /// Hash password using PBKDF2-HMAC-SHA256 returns string in PHC standard (https://github.com/P-H-C/phc-string-format/blob/master/phc-sf-spec.md)
 pub fn password_hash(password: &str) -> String {
     let mut salt = [0u8; 16];
     getrandom::fill(&mut salt).expect("Can't get random bytes");
-    let hashed_password = pbkdf2_hmac_sha256(password.as_bytes(), &salt, ITERATIONS, 32);
+    let hashed_password =
+        pbkdf2_hmac_sha256(password.as_bytes(), &salt, DEFAULT_SAFE_ITERATIONS, 32);
     format!(
         "$pbkdf2-sha256$t={}${}${}",
-        ITERATIONS,
+        DEFAULT_SAFE_ITERATIONS,
         BASE64_NO_PAD.encode(salt),
         BASE64_NO_PAD.encode(&hashed_password)
     )
