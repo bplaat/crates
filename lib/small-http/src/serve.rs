@@ -31,11 +31,7 @@ pub fn serve_single_threaded(
             Ok(request) => {
                 // Handle request and write response
                 let mut response = handler(&request);
-                response.write_to_stream(
-                    &mut stream,
-                    &request,
-                    request.headers.get("Connection").is_some(),
-                );
+                response.write_to_stream(&mut stream, &request, false);
 
                 // If the response has a takeover function, start thread and move tcp stream
                 if let Some(takeover) = response.takeover.take() {
