@@ -25,7 +25,7 @@ pub(crate) fn auth_optional_pre_layer(
         .headers
         .get("Authorization")
         .or(req.headers.get("authorization"))?;
-    let token = authorization[7..].trim();
+    let token = authorization.strip_prefix("Bearer ")?.trim();
 
     if let Some((session, user)) = lookup_session_and_user(token, &ctx.database) {
         ctx.auth_session = Some(session);
@@ -52,7 +52,14 @@ pub(crate) fn auth_required_pre_layer(
                 .body("401 Unauthorized")));
         }
     };
-    let token = authorization[7..].trim();
+    let token = match authorization.strip_prefix("Bearer ") {
+        Some(t) => t.trim(),
+        None => {
+            return Some(Ok(Response::new()
+                .status(Status::Unauthorized)
+                .body("401 Unauthorized")));
+        }
+    };
 
     match lookup_session_and_user(token, &ctx.database) {
         Some((session, user)) => {
