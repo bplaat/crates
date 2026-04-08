@@ -77,24 +77,34 @@ impl RawStatement {
             Value::Null => unsafe { sqlite3_bind_null(self.0, index) },
             Value::Integer(i) => unsafe { sqlite3_bind_int64(self.0, index, i) },
             Value::Float(f) => unsafe { sqlite3_bind_double(self.0, index, f) },
-            Value::Text(s) => unsafe {
-                sqlite3_bind_text(
-                    self.0,
-                    index,
-                    s.as_ptr() as *const c_char,
-                    s.len() as i32,
-                    SQLITE_TRANSIENT(),
-                )
-            },
-            Value::Blob(b) => unsafe {
-                sqlite3_bind_blob(
-                    self.0,
-                    index,
-                    b.as_ptr() as *const c_void,
-                    b.len() as i32,
-                    SQLITE_TRANSIENT(),
-                )
-            },
+            Value::Text(s) => {
+                let len = i32::try_from(s.len()).map_err(|_| StatementError {
+                    msg: "text value too large to bind".to_string(),
+                })?;
+                unsafe {
+                    sqlite3_bind_text(
+                        self.0,
+                        index,
+                        s.as_ptr() as *const c_char,
+                        len,
+                        SQLITE_TRANSIENT(),
+                    )
+                }
+            }
+            Value::Blob(b) => {
+                let len = i32::try_from(b.len()).map_err(|_| StatementError {
+                    msg: "blob value too large to bind".to_string(),
+                })?;
+                unsafe {
+                    sqlite3_bind_blob(
+                        self.0,
+                        index,
+                        b.as_ptr() as *const c_void,
+                        len,
+                        SQLITE_TRANSIENT(),
+                    )
+                }
+            }
         };
         if result != SQLITE_OK {
             let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0)) }.to_string_lossy();
