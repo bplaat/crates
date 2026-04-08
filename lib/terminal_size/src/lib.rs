@@ -45,9 +45,11 @@ pub fn terminal_size() -> Option<(Width, Height)> {
             }
 
             let mut size = MaybeUninit::<winsize>::uninit();
+            // SAFETY: size is a valid MaybeUninit<winsize> pointer; ioctl with TIOCGWINSZ fills it on success.
             if unsafe { ioctl(STDOUT_FILENO, TIOCGWINSZ, size.as_mut_ptr()) } == -1 {
                 return None;
             }
+            // SAFETY: ioctl returned success, so size was fully initialized by the kernel.
             let size = unsafe { size.assume_init() };
             Some((Width(size.ws_col), Height(size.ws_row)))
         } else if #[cfg(windows)] {
@@ -82,14 +84,17 @@ pub fn terminal_size() -> Option<(Width, Height)> {
                 ) -> i32;
             }
 
+            // SAFETY: STD_OUTPUT_HANDLE is a valid standard handle constant for GetStdHandle.
             let stdout = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
             if stdout == INVALID_HANDLE_VALUE {
                 return None;
             }
             let mut csbi = MaybeUninit::<CONSOLE_SCREEN_BUFFER_INFO>::uninit();
+            // SAFETY: stdout is a valid console handle (checked above); csbi.as_mut_ptr() is a valid output pointer.
             if unsafe { GetConsoleScreenBufferInfo(stdout, csbi.as_mut_ptr()) } == 0 {
                 return None;
             }
+            // SAFETY: GetConsoleScreenBufferInfo returned success, so csbi was fully initialized by the OS.
             let csbi = unsafe { csbi.assume_init() };
             Some((Width(csbi.dwSize.X as u16), Height(csbi.dwSize.Y as u16)))
         } else {

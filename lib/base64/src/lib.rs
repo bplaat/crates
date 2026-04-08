@@ -59,6 +59,7 @@ impl Engine for GeneralPurpose {
                 out.push(b'=');
             }
         }
+        // SAFETY: The encoder only pushes bytes from the base64 alphabet (A-Z, a-z, 0-9, +, /, =), all of which are valid UTF-8.
         unsafe { String::from_utf8_unchecked(out) }
     }
 

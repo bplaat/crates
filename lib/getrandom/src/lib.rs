@@ -17,6 +17,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
                 fn getentropy(buf: *mut u8, buflen: usize) -> i32;
             }
             for chunk in buf.chunks_mut(256) {
+                // SAFETY: chunk is a valid mutable byte slice with length <= 256, satisfying getentropy's requirements.
                 if unsafe { getentropy(chunk.as_mut_ptr(), chunk.len()) } != 0 {
                     return Err(Error::other("getentropy failed"));
                 }
@@ -34,15 +35,18 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
                         symbol: *const std::ffi::c_char,
                     ) -> *mut std::ffi::c_void;
                 }
+                // SAFETY: RTLD_DEFAULT and the c-string literal are valid arguments to dlsym.
                 let ptr = unsafe { dlsym(RTLD_DEFAULT, c"getrandom".as_ptr()) };
                 if ptr.is_null() {
                     None
                 } else {
+                    // SAFETY: dlsym returned a non-null pointer for "getrandom", which has the GetrandomFn signature.
                     Some(unsafe { std::mem::transmute::<*mut std::ffi::c_void, GetrandomFn>(ptr) })
                 }
             }
             static GETRANDOM: std::sync::LazyLock<Option<GetrandomFn>> = std::sync::LazyLock::new(resolve_getrandom);
             if let Some(getrandom) = *GETRANDOM {
+                // SAFETY: buf is a valid mutable byte slice; getrandom was resolved and has the correct signature.
                 let n = unsafe { getrandom(buf.as_mut_ptr(), buf.len(), 0) };
                 if n >= 0 && n as usize == buf.len() {
                     return Ok(());
@@ -72,6 +76,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
             unsafe extern "system" {
                 fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
             }
+            // SAFETY: buf is a valid mutable byte slice; ProcessPrng is a documented Windows API that fills it.
             if !unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) } {
                 return Err(Error::other("ProcessPrng failed"));
             }

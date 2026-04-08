@@ -32,6 +32,7 @@ pub const SQLITE_NULL: i32 = 5;
 
 #[allow(unsafe_code)]
 pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
+    // SAFETY: The SQLite docs say that the value of `SQLITE_TRANSIENT` is -1.
     Some(unsafe { std::mem::transmute::<isize, unsafe extern "C" fn(*mut c_void)>(-1) })
 }
 

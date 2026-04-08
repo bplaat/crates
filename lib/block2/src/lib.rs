@@ -8,6 +8,7 @@
 
 #![cfg(target_vendor = "apple")]
 #![allow(unsafe_code)]
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use std::ffi::c_void;
 use std::marker::PhantomData;

@@ -131,6 +131,7 @@ impl<'a> Iterator for ByteSerialize<'a> {
             .map_or(self.bytes.len(), |i| i + 1);
         let (chunk, rest) = self.bytes.split_at(end);
         self.bytes = rest;
+        // SAFETY: chunk only contains bytes that passed is_unchanged(), which are ASCII alphanumeric and punctuation - all valid UTF-8.
         Some(unsafe { str::from_utf8_unchecked(chunk) })
     }
 }

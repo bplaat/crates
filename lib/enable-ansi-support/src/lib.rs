@@ -23,15 +23,18 @@ pub fn enable_ansi_support() -> Result<(), std::io::Error> {
                 fn SetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, dwMode: u32) -> i32;
             }
 
+            // SAFETY: STD_OUTPUT_HANDLE is a valid standard handle constant for GetStdHandle.
             let stdout = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
             if stdout == INVALID_HANDLE_VALUE {
                 return Err(std::io::Error::last_os_error());
             }
             let mut mode: u32 = 0;
+            // SAFETY: stdout is a valid console handle (checked above); mode is a valid out-pointer.
             if unsafe { GetConsoleMode(stdout, &mut mode) } == 0 {
                 return Err(std::io::Error::last_os_error());
             }
             mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            // SAFETY: stdout is a valid console handle and mode contains the original flags plus ENABLE_VIRTUAL_TERMINAL_PROCESSING.
             if unsafe { SetConsoleMode(stdout, mode) } == 0 {
                 return Err(std::io::Error::last_os_error());
             }

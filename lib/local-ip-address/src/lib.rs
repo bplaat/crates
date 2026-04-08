@@ -17,6 +17,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
     cfg_if::cfg_if! {
         if #[cfg(unix)] {
             let mut ifaddrs: *mut libc::ifaddrs = std::ptr::null_mut();
+            // SAFETY: ifaddrs is a valid out-pointer; getifaddrs will initialize it on success.
             if unsafe { libc::getifaddrs(&mut ifaddrs) } != 0 {
                 return Err(std::io::Error::last_os_error());
             }
@@ -27,15 +28,19 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
 
             let mut current = ifaddrs;
             while !current.is_null() {
+                // SAFETY: current is non-null (checked in the while condition), pointing to a valid ifaddrs node.
                 let addr = unsafe { (*current).ifa_addr };
+                // SAFETY: current is non-null, as above.
                 let flags = unsafe { (*current).ifa_flags };
                 if !addr.is_null()
+                    // SAFETY: addr is non-null (checked above), pointing to a valid sockaddr.
                     && unsafe { (*addr).sa_family } as u32 == libc::AF_INET as u32
                     && (flags & libc::IFF_LOOPBACK as u32 == 0)
                     && (flags & libc::IFF_UP as u32 != 0)
                     && (flags & libc::IFF_RUNNING as u32 != 0)
                 {
                     let mut addr_in = std::mem::MaybeUninit::<libc::sockaddr_in>::uninit();
+                    // SAFETY: addr points to a valid sockaddr_in (verified via AF_INET family check); addr_in is a correctly sized MaybeUninit target.
                     unsafe {
                         std::ptr::copy_nonoverlapping(
                             addr as *const u8,
@@ -43,15 +48,18 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
                             size_of::<libc::sockaddr_in>(),
                         )
                     };
+                    // SAFETY: addr_in was fully initialized by copy_nonoverlapping above.
                     let addr_in = unsafe { addr_in.assume_init() };
                     result = Ok(IpAddr::V4(std::net::Ipv4Addr::from(u32::from_be(
                         addr_in.sin_addr.s_addr,
                     ))));
                     break;
                 }
+                // SAFETY: current is non-null; ifa_next is a valid pointer to the next node or null.
                 current = unsafe { (*current).ifa_next };
             }
 
+            // SAFETY: ifaddrs was obtained from a successful getifaddrs call and has not been freed yet.
             unsafe { libc::freeifaddrs(ifaddrs) };
             result
         } else if #[cfg(windows)] {
@@ -128,6 +136,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
 
             // First call to get the required buffer size
             let mut buffer_size: u32 = 0;
+            // SAFETY: null adapter_addresses pointer is valid for the size-query call; all other arguments are correct constants.
             let result = unsafe {
                 GetAdaptersAddresses(
                     AF_UNSPEC,
@@ -144,6 +153,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
             // Second call to get the actual data
             let mut buffer: Vec<u8> = vec![0u8; buffer_size as usize];
             let adapter_addresses = buffer.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES;
+            // SAFETY: buffer is sized to buffer_size bytes as reported by the previous call; adapter_addresses points into it.
             let result = unsafe {
                 GetAdaptersAddresses(
                     AF_UNSPEC,
@@ -161,16 +171,20 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
             let mut current_adapter = adapter_addresses;
             let mut best_ipv4_addr: Option<IpAddr> = None;
             while !current_adapter.is_null() {
+                // SAFETY: current_adapter is non-null (checked in while condition), pointing to a valid IP_ADAPTER_ADDRESSES node.
                 let adapter = unsafe { &*current_adapter };
 
                 // Iterate through unicast addresses
                 let mut current_address = adapter.first_unicast_address;
                 while !current_address.is_null() {
+                    // SAFETY: current_address is non-null (checked in while condition), pointing to a valid IP_ADAPTER_UNICAST_ADDRESS node.
                     let unicast_addr = unsafe { &*current_address };
                     let socket_addr = unicast_addr.address.lp_socket_addr;
                     if !socket_addr.is_null() {
                         let sockaddr_in = socket_addr as *const SOCKADDR_IN;
+                        // SAFETY: sockaddr_in is cast from a non-null socket_addr pointer; sin_addr.s_addr is a plain u32.
                         let ip_bytes = unsafe { (*sockaddr_in).sin_addr.s_addr.to_ne_bytes() };
+                        // SAFETY: socket_addr is non-null (checked above); sa_family is the first field of SOCKADDR.
                         let family = unsafe { (*socket_addr).sa_family } as u32;
                         if family == AF_INET
                             && ip_bytes[0] != 127
@@ -179,6 +193,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
                             best_ipv4_addr = Some(IpAddr::from(ip_bytes));
                         }
                     }
+                    // SAFETY: current_address is non-null; next is a valid pointer to the next node or null.
                     current_address = unsafe { (*current_address).next };
                 }
                 current_adapter = adapter.next;

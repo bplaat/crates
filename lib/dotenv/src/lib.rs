@@ -54,6 +54,7 @@ pub fn from_str(contents: impl AsRef<str>) -> io::Result<()> {
             }
 
             if !key.is_empty() && !value.is_empty() {
+                // SAFETY: dotenv is intended to be called at program startup before any threads are spawned, so there are no concurrent readers of the environment.
                 unsafe { env::set_var(key, value) };
             }
         }
@@ -68,6 +69,7 @@ mod test {
     use super::*;
 
     #[test]
+    #[allow(clippy::undocumented_unsafe_blocks)]
     fn test_parsing() {
         // Basic key-value parsing
         unsafe { env::remove_var("FOO") };

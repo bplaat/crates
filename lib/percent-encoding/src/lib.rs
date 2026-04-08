@@ -80,6 +80,7 @@ static PERCENT_TABLE: [u8; 1024] = build_percent_table();
 #[allow(unsafe_code)]
 pub fn percent_encode_byte(byte: u8) -> &'static str {
     let idx = (byte as usize) * 4;
+    // SAFETY: PERCENT_TABLE entries at offsets [idx..idx+3] are always '%' followed by two ASCII hex digits, which is valid UTF-8.
     unsafe { str::from_utf8_unchecked(&PERCENT_TABLE[idx..idx + 3]) }
 }
 

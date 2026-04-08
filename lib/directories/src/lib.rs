@@ -50,11 +50,13 @@ pub(crate) mod windows {
                 return Ok(());
             }
             let mut len = 0;
+            // SAFETY: self.0 is a valid non-null Windows wide string pointer (checked above); scanning until the null terminator is safe.
             unsafe {
                 while *self.0.add(len) != 0 {
                     len += 1;
                 }
             }
+            // SAFETY: self.0 is non-null and len is the number of valid u16 code units before the null terminator.
             let str = String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(self.0, len) });
             write!(f, "{str}")
         }
@@ -62,6 +64,7 @@ pub(crate) mod windows {
     impl Drop for LPWSTR {
         fn drop(&mut self) {
             if !self.0.is_null() {
+                // SAFETY: self.0 is a non-null pointer previously allocated by SHGetKnownFolderPath via COM and not yet freed.
                 unsafe { CoTaskMemFree(self.0 as *mut std::ffi::c_void) };
             }
         }
@@ -99,6 +102,7 @@ pub(crate) mod windows {
 
     pub(crate) fn get_known_folder_path(folder_id: &Guid) -> PathBuf {
         let mut path = LPWSTR::default();
+        // SAFETY: folder_id is a valid GUID reference; path.as_mut_ptr() provides a valid output pointer; null token means current user.
         unsafe {
             SHGetKnownFolderPath(
                 folder_id,
