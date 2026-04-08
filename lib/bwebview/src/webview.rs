@@ -189,9 +189,21 @@ impl Webview {
 
     /// Send IPC message
     pub fn send_ipc_message(&mut self, message: impl AsRef<str>) {
-        let message = message.as_ref().replace('\\', "\\\\").replace('`', "\\`");
+        let mut json = String::with_capacity(message.as_ref().len() + 2);
+        json.push('"');
+        for c in message.as_ref().chars() {
+            match c {
+                '"' => json.push_str("\\\""),
+                '\\' => json.push_str("\\\\"),
+                '\n' => json.push_str("\\n"),
+                '\r' => json.push_str("\\r"),
+                '\t' => json.push_str("\\t"),
+                c => json.push(c),
+            }
+        }
+        json.push('"');
         self.evaluate_script(format!(
-            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:`{message}`}}));",
+            "window.ipc.dispatchEvent(new MessageEvent('message',{{data:{json}}}));",
         ));
     }
 }
