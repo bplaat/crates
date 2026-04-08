@@ -19,6 +19,9 @@ use base64::prelude::BASE64_STANDARD;
 use sha1::Sha1;
 use small_http::{Request, Response, Status};
 
+// Maximum allowed WebSocket frame payload in bytes (64 KiB)
+const MAX_FRAME_PAYLOAD: usize = 64 * 1024;
+
 /// WebSocket message
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -131,6 +134,11 @@ impl WebSocket {
     }
 
     fn parse_message(buf: &[u8]) -> Option<Message> {
+        // Need at least 2 bytes for the frame header
+        if buf.len() < 2 {
+            return None;
+        }
+
         // Parse WebSocket frame
         let opcode = buf[0] & 0x0F;
         let masked = (buf[1] & 0x80) != 0;
@@ -139,10 +147,16 @@ impl WebSocket {
         // Handle payload length
         let (payload_offset, payload_len) = match payload_len {
             126 => {
+                if buf.len() < 4 {
+                    return None;
+                }
                 let len = u16::from_be_bytes([buf[2], buf[3]]) as usize;
                 (4, len)
             }
             127 => {
+                if buf.len() < 10 {
+                    return None;
+                }
                 let len = u64::from_be_bytes([
                     buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9],
                 ]) as usize;
@@ -151,8 +165,16 @@ impl WebSocket {
             len => (2, len),
         };
 
+        // Reject frames larger than the maximum allowed payload
+        if payload_len > MAX_FRAME_PAYLOAD {
+            return None;
+        }
+
         // Get masking key if present
         let (mask_offset, mask) = if masked {
+            if buf.len() < payload_offset + 4 {
+                return None;
+            }
             (
                 payload_offset + 4,
                 [
@@ -165,6 +187,11 @@ impl WebSocket {
         } else {
             (payload_offset, [0; 4])
         };
+
+        // Bounds check before slicing the buffer
+        if mask_offset + payload_len > buf.len() {
+            return None;
+        }
 
         // Unmask and collect payload
         let mut payload = buf[mask_offset..mask_offset + payload_len].to_vec();
@@ -266,20 +293,38 @@ impl Display for ConnectError {
 
 impl Error for ConnectError {}
 
-/// Upgrade HTTP request to WebSocket connection
+/// Upgrade HTTP request to WebSocket connection.
+/// Returns a 400 Bad Request response if the request does not conform to RFC 6455.
 pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'static) -> Response {
+    // Validate required WebSocket upgrade headers (RFC 6455 Section 4.2.1)
+    let upgrade_ok = request
+        .headers
+        .get("Upgrade")
+        .is_some_and(|v| v.eq_ignore_ascii_case("websocket"));
+    let connection_ok = request
+        .headers
+        .get("Connection")
+        .is_some_and(|v| v.to_ascii_lowercase().contains("upgrade"));
+    let version_ok = request
+        .headers
+        .get("Sec-WebSocket-Version")
+        .is_some_and(|v| v == "13");
+    let key = request.headers.get("Sec-WebSocket-Key");
+
+    if !upgrade_ok || !connection_ok || !version_ok || key.is_none() {
+        return Response::with_status(Status::BadRequest).body("400 Bad Request");
+    }
+
     let mut res = Response::with_status(Status::SwitchingProtocols)
         .header("Upgrade", "websocket")
         .header("Connection", "Upgrade");
-    if let Some(key) = request.headers.get("Sec-WebSocket-Key") {
-        let mut hasher = Sha1::new();
-        hasher.update(key.as_bytes());
-        hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-        res = res.header(
-            "Sec-WebSocket-Accept",
-            BASE64_STANDARD.encode(hasher.finalize()),
-        );
-    }
+    let mut hasher = Sha1::new();
+    hasher.update(key.expect("checked above").as_bytes());
+    hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+    res = res.header(
+        "Sec-WebSocket-Accept",
+        BASE64_STANDARD.encode(hasher.finalize()),
+    );
     res = res.takeover(|stream| handler(WebSocket::new(stream)));
     res
 }
