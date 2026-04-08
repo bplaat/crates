@@ -11,11 +11,14 @@
 use std::fmt;
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
 
+const MAX_UNCOMPRESSED_SIZE: usize = 128 * 1024 * 1024;
+
 // MARK: Entry metadata
 struct CdEntry {
     name: String,
     compression: u16,
     compressed_size: u32,
+    uncompressed_size: u32,
     local_header_offset: u32,
 }
 
@@ -77,18 +80,47 @@ impl<R: Read + Seek> ZipArchive<R> {
             if bytes.get(pos..pos + 4) != Some(&[0x50, 0x4b, 0x01, 0x02][..]) {
                 return Err(ZipError::InvalidZip("invalid central directory signature"));
             }
+            // Minimum central directory entry is 46 bytes; validate before reading fields
+            if pos + 46 > bytes.len() {
+                return Err(ZipError::InvalidZip("central directory entry truncated"));
+            }
             let compression = read_u16_le(&bytes, pos + 10);
             let compressed_size = read_u32_le(&bytes, pos + 20);
+            let uncompressed_size = read_u32_le(&bytes, pos + 24);
             let name_len = read_u16_le(&bytes, pos + 28) as usize;
             let extra_len = read_u16_le(&bytes, pos + 30) as usize;
             let comment_len = read_u16_le(&bytes, pos + 32) as usize;
             let local_header_offset = read_u32_le(&bytes, pos + 42);
-            let name = String::from_utf8_lossy(&bytes[pos + 46..pos + 46 + name_len]).into_owned();
-            pos += 46 + name_len + extra_len + comment_len;
+            let name_end = pos
+                .checked_add(46)
+                .and_then(|v| v.checked_add(name_len))
+                .ok_or(ZipError::InvalidZip("name length overflow"))?;
+            if name_end > bytes.len() {
+                return Err(ZipError::InvalidZip("entry name extends beyond archive"));
+            }
+            let name = String::from_utf8_lossy(&bytes[pos + 46..name_end]).into_owned();
+            // Reject path traversal sequences in entry names (both / and \ separators)
+            for component in name.split(['/', '\\']) {
+                if component == ".." {
+                    return Err(ZipError::InvalidZip(
+                        "entry name contains path traversal sequence",
+                    ));
+                }
+            }
+            if uncompressed_size as usize > MAX_UNCOMPRESSED_SIZE {
+                return Err(ZipError::InvalidZip(
+                    "uncompressed entry size exceeds limit",
+                ));
+            }
+            pos = name_end
+                .checked_add(extra_len)
+                .and_then(|v| v.checked_add(comment_len))
+                .ok_or(ZipError::InvalidZip("entry length overflow"))?;
             entries.push(CdEntry {
                 name,
                 compression,
                 compressed_size,
+                uncompressed_size,
                 local_header_offset,
             });
         }
@@ -115,6 +147,7 @@ impl<R: Read + Seek> ZipArchive<R> {
         let name = entry.name.clone();
         let compression = entry.compression;
         let compressed_size = entry.compressed_size as usize;
+        let uncompressed_size = entry.uncompressed_size as usize;
         let local_header_offset = entry.local_header_offset as u64;
 
         // Read local file header to find actual data start
@@ -134,8 +167,15 @@ impl<R: Read + Seek> ZipArchive<R> {
 
         let data = match compression {
             0 => compressed, // stored
-            8 => miniz_oxide::inflate::decompress_to_vec(&compressed)
-                .map_err(|_| ZipError::DecompressError)?,
+            8 => {
+                if uncompressed_size > MAX_UNCOMPRESSED_SIZE {
+                    return Err(ZipError::InvalidZip(
+                        "uncompressed entry size exceeds limit",
+                    ));
+                }
+                miniz_oxide::inflate::decompress_to_vec(&compressed)
+                    .map_err(|_| ZipError::DecompressError)?
+            }
             m => return Err(ZipError::UnsupportedCompressionMethod(m)),
         };
 
