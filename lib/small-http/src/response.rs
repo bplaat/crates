@@ -152,31 +152,37 @@ impl Response {
 
         // Read body
         if let Some(transfer_encoding) = res.headers.get("Transfer-Encoding") {
-            if transfer_encoding == "chunked" {
+            if transfer_encoding.eq_ignore_ascii_case("chunked") {
                 let mut body = Vec::new();
                 loop {
-                    // Read chunk size
+                    // Read chunk size line; strip optional chunk extensions (;...)
                     let mut size_line = String::new();
                     reader
                         .read_line(&mut size_line)
                         .map_err(|_| InvalidResponseError)?;
-                    let size = usize::from_str_radix(size_line.trim(), 16)
-                        .map_err(|_| InvalidResponseError)?;
+                    let hex = size_line.split(';').next().unwrap_or("").trim();
+                    let size =
+                        usize::from_str_radix(hex, 16).map_err(|_| InvalidResponseError)?;
                     if size == 0 {
+                        // Consume the trailing CRLF that terminates the trailer section
+                        let mut crlf = [0; 2];
+                        reader
+                            .read_exact(&mut crlf)
+                            .map_err(|_| InvalidResponseError)?;
                         break;
                     }
-                    if body.len() + size > crate::MAX_RESPONSE_BODY {
+                    if body.len().saturating_add(size) > crate::MAX_RESPONSE_BODY {
                         return Err(InvalidResponseError);
                     }
 
-                    // Read chunk
-                    let mut chunk = vec![0; size];
+                    // Read chunk data
+                    let prev_len = body.len();
+                    body.resize(prev_len + size, 0);
                     reader
-                        .read_exact(&mut chunk)
+                        .read_exact(&mut body[prev_len..])
                         .map_err(|_| InvalidResponseError)?;
-                    body.extend_from_slice(&chunk);
 
-                    // Read the trailing \r\n after each chunk
+                    // Read trailing CRLF after chunk data
                     let mut crlf = [0; 2];
                     reader
                         .read_exact(&mut crlf)

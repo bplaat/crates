@@ -219,7 +219,43 @@ impl Request {
 
         // Read body
         let mut body = None;
-        if let Some(content_length) = headers.get("Content-Length") {
+        let transfer_encoding = headers.get("Transfer-Encoding").map(|s| s.to_lowercase());
+        if transfer_encoding.as_deref() == Some("chunked") {
+            let mut chunks: Vec<u8> = Vec::new();
+            loop {
+                let mut size_line = String::new();
+                reader
+                    .by_ref()
+                    .take(crate::MAX_HEADER_LINE)
+                    .read_line(&mut size_line)
+                    .map_err(|_| InvalidRequestError("Can't read chunk size".to_string()))?;
+                // Strip optional chunk extensions (;...) and whitespace
+                let hex = size_line.split(';').next().unwrap_or("").trim();
+                let chunk_size = usize::from_str_radix(hex, 16)
+                    .map_err(|_| InvalidRequestError("Can't parse chunk size".to_string()))?;
+                if chunk_size == 0 {
+                    break;
+                }
+                if chunks.len().saturating_add(chunk_size) > crate::MAX_REQUEST_BODY {
+                    return Err(InvalidRequestError("Chunked body too large".to_string()));
+                }
+                let prev_len = chunks.len();
+                chunks.resize(prev_len + chunk_size, 0);
+                reader.read_exact(&mut chunks[prev_len..]).map_err(|_| {
+                    InvalidRequestError("Can't read chunk data".to_string())
+                })?;
+                // Consume trailing CRLF after chunk data
+                let mut crlf = [0u8; 2];
+                reader.read_exact(&mut crlf).map_err(|_| {
+                    InvalidRequestError("Can't read chunk trailing CRLF".to_string())
+                })?;
+            }
+            body = Some(chunks);
+        } else if transfer_encoding.is_some() {
+            return Err(InvalidRequestError(
+                "Unsupported Transfer-Encoding".to_string(),
+            ));
+        } else if let Some(content_length) = headers.get("Content-Length") {
             let content_length = content_length
                 .parse()
                 .map_err(|_| InvalidRequestError("Can't parse Content-Length".to_string()))?;
