@@ -65,7 +65,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
             #[cfg(not(target_arch = "x86"))]
             #[link(name = "bcryptprimitives", kind = "raw-dylib")]
             unsafe extern "system" {
-                fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
+                fn ProcessPrng(pbData: *mut u8, cbData: usize) -> i32;
             }
             #[cfg(target_arch = "x86")]
             #[link(
@@ -74,10 +74,10 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
                 import_name_type = "undecorated"
             )]
             unsafe extern "system" {
-                fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
+                fn ProcessPrng(pbData: *mut u8, cbData: usize) -> i32;
             }
             // SAFETY: buf is a valid mutable byte slice; ProcessPrng is a documented Windows API that fills it.
-            if !unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) } {
+            if unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) } == 0 {
                 return Err(Error::other("ProcessPrng failed"));
             }
         }

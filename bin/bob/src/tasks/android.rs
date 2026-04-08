@@ -109,7 +109,7 @@ impl AndroidVars {
         path.insert(1, build_tools_path.into());
         path.insert(2, platform_tools_path.into());
         let new_path_str = env::join_paths(&path).expect("Can't join paths");
-        // SAFETY: This runs before any threads are spawned in the build task, so no concurrent environment readers exist.
+        // SAFETY: This runs during single-threaded setup, so there are no concurrent environment reads or writes anywhere in the process.
         unsafe { env::set_var("PATH", new_path_str) };
 
         Self {

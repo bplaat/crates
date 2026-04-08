@@ -29,7 +29,7 @@ pub fn terminal_size() -> Option<(Width, Height)> {
                 ws_ypixel: u16,
             }
             const STDOUT_FILENO: i32 = 1;
-            const TIOCGWINSZ: i32 = if cfg!(any(
+            const TIOCGWINSZ: std::ffi::c_ulong = if cfg!(any(
                 target_os = "macos",
                 target_os = "freebsd",
                 target_os = "dragonfly",
@@ -41,7 +41,7 @@ pub fn terminal_size() -> Option<(Width, Height)> {
                 0x5413
             };
             unsafe extern "C" {
-                fn ioctl(fd: i32, op: i32, ...) -> i32;
+                fn ioctl(fd: i32, op: std::ffi::c_ulong, ...) -> i32;
             }
 
             let mut size = MaybeUninit::<winsize>::uninit();

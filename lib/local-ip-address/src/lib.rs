@@ -181,16 +181,15 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
                     let unicast_addr = unsafe { &*current_address };
                     let socket_addr = unicast_addr.address.lp_socket_addr;
                     if !socket_addr.is_null() {
-                        let sockaddr_in = socket_addr as *const SOCKADDR_IN;
-                        // SAFETY: sockaddr_in is cast from a non-null socket_addr pointer; sin_addr.s_addr is a plain u32.
-                        let ip_bytes = unsafe { (*sockaddr_in).sin_addr.s_addr.to_ne_bytes() };
                         // SAFETY: socket_addr is non-null (checked above); sa_family is the first field of SOCKADDR.
                         let family = unsafe { (*socket_addr).sa_family } as u32;
-                        if family == AF_INET
-                            && ip_bytes[0] != 127
-                            && !(ip_bytes[0] == 169 && ip_bytes[1] == 254)
-                        {
-                            best_ipv4_addr = Some(IpAddr::from(ip_bytes));
+                        if family == AF_INET {
+                            let sockaddr_in = socket_addr as *const SOCKADDR_IN;
+                            // SAFETY: family confirmed this points to a valid SOCKADDR_IN, so reading sin_addr is sound.
+                            let ip_bytes = unsafe { (*sockaddr_in).sin_addr.s_addr.to_ne_bytes() };
+                            if ip_bytes[0] != 127 && !(ip_bytes[0] == 169 && ip_bytes[1] == 254) {
+                                best_ipv4_addr = Some(IpAddr::from(ip_bytes));
+                            }
                         }
                     }
                     // SAFETY: current_address is non-null; next is a valid pointer to the next node or null.
