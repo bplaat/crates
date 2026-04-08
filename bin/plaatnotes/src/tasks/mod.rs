@@ -16,7 +16,9 @@ pub(crate) fn start_task_runner(ctx: Context) {
     thread::spawn(move || {
         loop {
             thread::sleep(Duration::from_secs(TASK_RUNNER_INTERVAL_SECONDS));
-            clear_trashed_notes::run(&ctx);
+            if let Err(e) = clear_trashed_notes::run(&ctx) {
+                log::error!("Failed to clear trashed notes: {e}");
+            }
         }
     });
 }

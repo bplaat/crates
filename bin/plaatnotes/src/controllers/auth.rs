@@ -56,7 +56,7 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     // Check login rate limit
     let ip_address = req.ip().to_string();
     if !ctx.is_e2e {
-        let mut attempts = ctx.login_attempts.lock().expect("Mutex poisoned");
+        let mut attempts = ctx.login_attempts.lock().unwrap_or_else(|p| p.into_inner());
         let now = std::time::Instant::now();
         let window = Duration::from_secs(crate::consts::LOGIN_RATE_LIMIT_WINDOW_SECONDS);
         if let Some((count, window_start)) = attempts.get_mut(&ip_address) {
@@ -156,7 +156,7 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     if !ctx.is_e2e {
         ctx.login_attempts
             .lock()
-            .expect("Mutex poisoned")
+            .unwrap_or_else(|p| p.into_inner())
             .remove(&ip_address);
     }
 
@@ -168,9 +168,17 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 pub(crate) fn auth_validate(_req: &Request, ctx: &Context) -> Result<Response> {
+    let user = ctx
+        .auth_user
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("auth context missing user"))?;
+    let session = ctx
+        .auth_session
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("auth context missing session"))?;
     Ok(Response::with_json(api::AuthValidateResponse {
-        user: ctx.auth_user.clone().expect("Should be authed").into(),
-        session: ctx.auth_session.clone().expect("Should be authed").into(),
+        user: user.into(),
+        session: session.into(),
     }))
 }
 
@@ -178,7 +186,7 @@ pub(crate) fn auth_logout(_req: &Request, ctx: &Context) -> Result<Response> {
     let token = ctx
         .auth_session
         .as_ref()
-        .expect("Should be authed")
+        .ok_or_else(|| anyhow::anyhow!("auth context missing session"))?
         .token
         .clone();
 

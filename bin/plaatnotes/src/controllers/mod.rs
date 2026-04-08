@@ -47,7 +47,10 @@ pub(crate) fn not_found(_: &Request, _: &Context) -> Result<Response> {
 /// Unwrap the authenticated user from context. All callers must be behind `auth_required_pre_layer`.
 macro_rules! require_auth {
     ($ctx:expr) => {
-        $ctx.auth_user.as_ref().expect("Should be some")
+        match $ctx.auth_user.as_ref() {
+            Some(u) => u,
+            None => return Ok(Response::with_status(Status::Unauthorized).body("401 Unauthorized")),
+        }
     };
 }
 

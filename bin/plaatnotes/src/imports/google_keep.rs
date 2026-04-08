@@ -109,10 +109,22 @@ pub(crate) fn run(path: &str, email: &str, ctx: &Context) {
         let entries = std::fs::read_dir(&keep_dir)
             .unwrap_or_else(|_| panic!("Can't read directory: {}", keep_dir.display()));
         for entry in entries {
-            let entry = entry.expect("Can't read directory entry");
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("Warning: can't read directory entry: {e}");
+                    continue;
+                }
+            };
             let entry_path = entry.path();
             if entry_path.extension().and_then(|e| e.to_str()) == Some("json") {
-                let json_bytes = std::fs::read(&entry_path).expect("Can't read file");
+                let json_bytes = match std::fs::read(&entry_path) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("Warning: can't read {}: {e}", entry_path.display());
+                        continue;
+                    }
+                };
                 import_note_from_json(&json_bytes, ctx, user_id, &mut count);
             }
         }

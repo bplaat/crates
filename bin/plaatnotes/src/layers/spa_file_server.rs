@@ -49,12 +49,11 @@ pub(crate) fn spa_file_server_pre_layer(
             .header("Content-Security-Policy", CSP_VALUE)
             .body(file.data)))
     } else {
-        Some(Ok(Response::with_header("Content-Type", "text/html")
-            .header("Content-Security-Policy", CSP_VALUE)
-            .body(
-                WebAssets::get("index.html")
-                    .expect("index.html should exists")
-                    .data,
-            )))
+        Some(match WebAssets::get("index.html") {
+            Some(file) => Ok(Response::with_header("Content-Type", "text/html")
+                .header("Content-Security-Policy", CSP_VALUE)
+                .body(file.data)),
+            None => Err(anyhow::anyhow!("index.html not found in embedded assets")),
+        })
     }
 }
