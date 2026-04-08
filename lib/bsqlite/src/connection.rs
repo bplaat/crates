@@ -48,7 +48,11 @@ impl InnerConnection {
             )
         };
         if result != SQLITE_OK {
-            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(db)) }.to_string_lossy();
+            let error = if db.is_null() {
+                "unknown error (db handle is null)".into()
+            } else {
+                unsafe { CStr::from_ptr(sqlite3_errmsg(db)) }.to_string_lossy()
+            };
             return Err(ConnectionError {
                 msg: format!("Failed to open database: {error}"),
             });
