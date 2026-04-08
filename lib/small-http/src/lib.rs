@@ -29,3 +29,7 @@ mod serve;
 
 // MARK: Constants
 pub(crate) const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(5);
+pub(crate) const MAX_REQUEST_BODY: usize = 64 * 1024 * 1024;
+pub(crate) const MAX_RESPONSE_BODY: usize = 64 * 1024 * 1024;
+pub(crate) const MAX_HEADERS: usize = 100;
+pub(crate) const MAX_HEADER_LINE: u64 = 8 * 1024;

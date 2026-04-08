@@ -198,10 +198,15 @@ impl Request {
         loop {
             let mut line = String::new();
             reader
+                .by_ref()
+                .take(crate::MAX_HEADER_LINE)
                 .read_line(&mut line)
                 .map_err(|_| InvalidRequestError("Can't read header line".to_string()))?;
             if line == "\r\n" {
                 break;
+            }
+            if headers.len() >= crate::MAX_HEADERS {
+                return Err(InvalidRequestError("Too many headers".to_string()));
             }
             let split = line
                 .find(':')
@@ -218,6 +223,9 @@ impl Request {
             let content_length = content_length
                 .parse()
                 .map_err(|_| InvalidRequestError("Can't parse Content-Length".to_string()))?;
+            if content_length > crate::MAX_REQUEST_BODY {
+                return Err(InvalidRequestError("Content-Length too large".to_string()));
+            }
             if content_length > 0 {
                 let mut buffer = vec![0; content_length];
                 reader.read_exact(&mut buffer).map_err(|_| {
@@ -292,6 +300,9 @@ impl Request {
         let mut body = None;
         if let Ok(content_length) = env::var("CONTENT_LENGTH") {
             if let Ok(content_length) = content_length.parse::<usize>() {
+                if content_length > crate::MAX_REQUEST_BODY {
+                    return Err(InvalidRequestError("Content-Length too large".to_string()));
+                }
                 if content_length > 0 {
                     let mut buffer = vec![0; content_length];
                     std::io::stdin().read_exact(&mut buffer).map_err(|_| {

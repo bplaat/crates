@@ -26,6 +26,3 @@ pub(crate) const LOGIN_RATE_LIMIT_MAX_ATTEMPTS: u32 = 10;
 
 // Login rate limiting: window duration in seconds (15 minutes)
 pub(crate) const LOGIN_RATE_LIMIT_WINDOW_SECONDS: u64 = 15 * 60;
-
-// Google Keep import: max base64-encoded file size (~100 MiB decoded)
-pub(crate) const IMPORT_MAX_FILE_SIZE_BASE64: usize = 140_000_000;

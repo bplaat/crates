@@ -11,7 +11,6 @@ use small_http::{Request, Response, Status};
 use validate::Validate;
 
 use crate::api;
-use crate::consts::IMPORT_MAX_FILE_SIZE_BASE64;
 use crate::context::Context;
 use crate::controllers::{parse_body, require_auth};
 use crate::imports::google_keep;
@@ -20,7 +19,7 @@ use crate::imports::google_keep;
 #[derive(Validate, FromStruct)]
 #[from_struct(api::ImportGoogleKeepBody)]
 struct ImportGoogleKeepBody {
-    #[validate(ascii, length(min = 1, max = IMPORT_MAX_FILE_SIZE_BASE64))]
+    #[validate(ascii, length(min = 1))]
     file: String,
 }
 

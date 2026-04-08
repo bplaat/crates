@@ -165,6 +165,9 @@ impl Response {
                     if size == 0 {
                         break;
                     }
+                    if body.len() + size > crate::MAX_RESPONSE_BODY {
+                        return Err(InvalidResponseError);
+                    }
 
                     // Read chunk
                     let mut chunk = vec![0; size];
@@ -185,6 +188,9 @@ impl Response {
         }
         if let Some(content_length) = res.headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidResponseError)?;
+            if content_length > crate::MAX_RESPONSE_BODY {
+                return Err(InvalidResponseError);
+            }
             if content_length > 0 {
                 res.body = vec![0; content_length];
                 reader
