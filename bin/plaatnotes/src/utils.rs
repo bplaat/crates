@@ -4,24 +4,51 @@
  * SPDX-License-Identifier: MIT
  */
 
-// Preprocess a user-supplied search string into an FTS5 query expression.
+// Preprocess a user-supplied search string into a safe FTS5 query expression.
+// FTS5 keyword operators (AND, OR, NOT) are preserved so callers can use them
+// intentionally. Structural characters that cause FTS5 parse errors (unmatched
+// quotes and parentheses) are stripped from individual tokens.
 pub(crate) fn preprocess_fts_query(q: &str) -> String {
-    // If the query already uses FTS5 syntax, pass it through unchanged
-    if q.contains(" AND ")
-        || q.contains(" OR ")
-        || q.contains(" NOT ")
-        || q.contains('"')
-        || q.contains('(')
-        || q.contains(')')
-        || q.contains('*')
-        || q.contains('-')
-    {
-        return q.to_string();
+    const FTS5_KEYWORDS: &[&str] = &["AND", "OR", "NOT"];
+
+    let tokens: Vec<_> = q.split_whitespace().collect();
+    let mut parts: Vec<String> = Vec::with_capacity(tokens.len());
+
+    for token in &tokens {
+        if FTS5_KEYWORDS.contains(token) {
+            // Keep recognized operators as-is
+            parts.push(token.to_string());
+        } else {
+            // Strip characters that cause FTS5 parse errors: unmatched quotes and parens
+            let clean: String = token
+                .chars()
+                .filter(|c| !matches!(c, '"' | '(' | ')'))
+                .collect();
+            if !clean.is_empty() {
+                // Preserve explicit trailing * (user-supplied prefix wildcard),
+                // otherwise add one for prefix matching
+                if clean.ends_with('*') {
+                    parts.push(clean);
+                } else {
+                    parts.push(format!("{clean}*"));
+                }
+            }
+        }
     }
 
-    // Otherwise wrap each whitespace-separated token with a trailing * for prefix matching
-    q.split_whitespace()
-        .map(|token| format!("{token}*"))
-        .collect::<Vec<_>>()
-        .join(" OR ")
+    // Remove dangling operators at the start or end which cause FTS5 syntax errors
+    while parts
+        .first()
+        .is_some_and(|p| FTS5_KEYWORDS.contains(&p.as_str()))
+    {
+        parts.remove(0);
+    }
+    while parts
+        .last()
+        .is_some_and(|p| FTS5_KEYWORDS.contains(&p.as_str()))
+    {
+        parts.pop();
+    }
+
+    parts.join(" ")
 }
