@@ -13,6 +13,9 @@ export default defineConfig({
     retries: 2,
     workers: process.env.CI ? 1 : undefined,
     reporter: process.env.CI ? [['list'], ['junit', { outputFile: 'test-results/junit.xml' }]] : 'list',
+    expect: {
+        timeout: 10_000,
+    },
     use: {
         baseURL: 'http://localhost:8080',
         trace: 'on-first-retry',

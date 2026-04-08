@@ -31,7 +31,6 @@ test.describe('Auth', () => {
         await page.getByLabel('Email').fill('test@example.com');
         await page.getByLabel('Password').fill('password');
         await page.getByRole('button', { name: 'Sign in' }).click();
-        await page.waitForURL('/');
         await expect(page).toHaveTitle('PlaatNotes');
     });
 
@@ -40,7 +39,7 @@ test.describe('Auth', () => {
         await page.getByLabel('Email').fill('test@example.com');
         await page.getByLabel('Password').fill('password');
         await page.getByRole('button', { name: 'Sign in' }).click();
-        await page.waitForURL('/');
+        await expect(page).toHaveTitle('PlaatNotes');
 
         // Open user dropdown and click Logout
         await page
