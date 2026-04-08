@@ -398,7 +398,9 @@ impl Request {
         };
         _ = write!(stream, "{} {} HTTP/1.1\r\n", self.method, path);
         for (name, value) in &self.headers {
-            _ = write!(stream, "{name}: {value}\r\n");
+            let safe_name = name.replace(['\r', '\n'], "");
+            let safe_value = value.replace(['\r', '\n'], "");
+            _ = write!(stream, "{safe_name}: {safe_value}\r\n");
         }
         _ = write!(stream, "\r\n");
         if let Some(body) = &self.body {

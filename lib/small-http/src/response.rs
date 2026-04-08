@@ -205,7 +205,9 @@ impl Response {
 
         _ = write!(stream, "{} {}\r\n", req.version, self.status);
         for (name, value) in &self.headers {
-            _ = write!(stream, "{name}: {value}\r\n");
+            let safe_name = name.replace(['\r', '\n'], "");
+            let safe_value = value.replace(['\r', '\n'], "");
+            _ = write!(stream, "{safe_name}: {safe_value}\r\n");
         }
         _ = write!(stream, "\r\n");
         _ = stream.write_all(&self.body);
@@ -215,7 +217,9 @@ impl Response {
     pub(crate) fn write_to_cgi_stdout(&self, stdout: &mut dyn Write) {
         _ = writeln!(stdout, "Status: {}", self.status);
         for (name, value) in &self.headers {
-            _ = writeln!(stdout, "{name}: {value}");
+            let safe_name = name.replace(['\r', '\n'], "");
+            let safe_value = value.replace(['\r', '\n'], "");
+            _ = writeln!(stdout, "{safe_name}: {safe_value}");
         }
         _ = writeln!(stdout);
         _ = stdout.write_all(&self.body);
