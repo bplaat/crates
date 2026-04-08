@@ -58,9 +58,9 @@ fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     }
     let mut diff = 0u8;
     for (x, y) in a.iter().zip(b.iter()) {
-        diff |= std::hint::black_box(x ^ y);
+        diff |= x ^ y;
     }
-    diff == 0
+    std::hint::black_box(diff) == 0
 }
 
 // MARK: PasswordHashDecodeError
