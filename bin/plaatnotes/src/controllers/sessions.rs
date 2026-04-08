@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::api;
 use crate::context::Context;
-use crate::controllers::users::get_user;
+use crate::controllers::users::{get_user, parse_user_id};
 use crate::controllers::{not_found, parse_index_query, require_auth};
 use crate::models::session::policies;
 use crate::models::{IndexQuery, Session, UserRole};
@@ -43,7 +43,11 @@ pub(crate) fn sessions_show(req: &Request, ctx: &Context) -> Result<Response> {
     let auth_user = require_auth!(ctx);
 
     // Get session
-    let session = match get_session(req, ctx)? {
+    let session_id = match parse_session_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let session = match get_session(session_id, ctx)? {
         Some(session) => session,
         None => return not_found(req, ctx),
     };
@@ -61,7 +65,11 @@ pub(crate) fn sessions_delete(req: &Request, ctx: &Context) -> Result<Response> 
     let auth_user = require_auth!(ctx);
 
     // Get session
-    let session = match get_session(req, ctx)? {
+    let session_id = match parse_session_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let session = match get_session(session_id, ctx)? {
         Some(session) => session,
         None => return not_found(req, ctx),
     };
@@ -202,7 +210,11 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Result<
     let query = parse_index_query!(req);
 
     // Get target user
-    let user = match get_user(req, ctx)? {
+    let user_id = match parse_user_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let user = match get_user(user_id, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
@@ -224,17 +236,18 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Result<
     }))
 }
 
-fn get_session(req: &Request, ctx: &Context) -> Result<Option<Session>> {
-    let session_id = match req
+fn parse_session_id(req: &Request) -> Result<Uuid> {
+    match req
         .params
         .get("session_id")
-        .expect("Should be some")
-        .parse::<Uuid>()
+        .and_then(|id| id.parse::<Uuid>().ok())
     {
-        Ok(id) => id,
-        Err(_) => return Ok(None),
-    };
+        Some(id) => Ok(id),
+        None => anyhow::bail!("Invalid UUID"),
+    }
+}
 
+fn get_session(session_id: Uuid, ctx: &Context) -> Result<Option<Session>> {
     Ok(ctx
         .database
         .query::<Session>(

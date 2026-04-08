@@ -82,7 +82,11 @@ pub(crate) fn notes_show(_req: &Request, ctx: &Context) -> Result<Response> {
     let user = require_auth!(ctx);
 
     // Get note (admins can access any note, normal users only their own)
-    let note = match fetch_note_for_user(_req, ctx, user)? {
+    let note_id = match parse_note_id(_req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let note = match fetch_note_for_user(note_id, ctx, user)? {
         Some(note) => note,
         None => return not_found(_req, ctx),
     };
@@ -112,7 +116,11 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Result<Response> {
     let user = require_auth!(ctx);
 
     // Get note (admins can access any note, normal users only their own)
-    let mut note = match fetch_note_for_user(req, ctx, user)? {
+    let note_id = match parse_note_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let mut note = match fetch_note_for_user(note_id, ctx, user)? {
         Some(note) => note,
         None => return not_found(req, ctx),
     };
@@ -209,7 +217,11 @@ pub(crate) fn notes_delete(_req: &Request, ctx: &Context) -> Result<Response> {
     let user = require_auth!(ctx);
 
     // Get note (admins can access any note, normal users only their own)
-    let note = match fetch_note_for_user(_req, ctx, user)? {
+    let note_id = match parse_note_id(_req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let note = match fetch_note_for_user(note_id, ctx, user)? {
         Some(note) => note,
         None => return not_found(_req, ctx),
     };
@@ -363,18 +375,18 @@ pub(crate) fn fetch_notes_page(
     }
 }
 
-fn fetch_note_for_user(req: &Request, ctx: &Context, user: &User) -> Result<Option<Note>> {
-    let note_id = match req
+fn parse_note_id(req: &Request) -> Result<Uuid> {
+    match req
         .params
         .get("note_id")
-        .expect("note_id param should be present")
-        .parse::<Uuid>()
-        .ok()
+        .and_then(|id| id.parse::<Uuid>().ok())
     {
-        Some(id) => id,
-        None => return Ok(None),
-    };
+        Some(id) => Ok(id),
+        None => anyhow::bail!("Invalid UUID"),
+    }
+}
 
+fn fetch_note_for_user(note_id: Uuid, ctx: &Context, user: &User) -> Result<Option<Note>> {
     match user.role {
         UserRole::Admin => Ok(query_args!(
             Note,

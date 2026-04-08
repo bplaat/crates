@@ -124,7 +124,11 @@ pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Result<Response> {
 // MARK: Persons Show
 pub(crate) fn persons_show(req: &Request, ctx: &Context) -> Result<Response> {
     // Get person
-    let person = match get_person(req, ctx)? {
+    let person_id = match parse_person_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let person = match get_person(person_id, ctx)? {
         Some(person) => person,
         None => return not_found(req, ctx),
     };
@@ -136,7 +140,11 @@ pub(crate) fn persons_show(req: &Request, ctx: &Context) -> Result<Response> {
 // MARK: Persons Update
 pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Result<Response> {
     // Get person
-    let mut person = match get_person(req, ctx)? {
+    let person_id = match parse_person_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let mut person = match get_person(person_id, ctx)? {
         Some(person) => person,
         None => return not_found(req, ctx),
     };
@@ -174,7 +182,11 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Result<Response> {
 // MARK: Persons Delete
 pub(crate) fn persons_delete(req: &Request, ctx: &Context) -> Result<Response> {
     // Get person
-    let person = match get_person(req, ctx)? {
+    let person_id = match parse_person_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let person = match get_person(person_id, ctx)? {
         Some(person) => person,
         None => return not_found(req, ctx),
     };
@@ -188,15 +200,18 @@ pub(crate) fn persons_delete(req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 // MARK: Helpers
-fn get_person(req: &Request, ctx: &Context) -> Result<Option<Person>> {
-    // Parse person id from url
-    let person_id = req
+fn parse_person_id(req: &Request) -> Result<Uuid> {
+    match req
         .params
         .get("person_id")
-        .expect("Should be some")
-        .parse::<Uuid>()?;
+        .and_then(|id| id.parse::<Uuid>().ok())
+    {
+        Some(id) => Ok(id),
+        None => anyhow::bail!("Invalid UUID"),
+    }
+}
 
-    // Get person
+fn get_person(person_id: Uuid, ctx: &Context) -> Result<Option<Person>> {
     Ok(ctx
         .database
         .query::<Person>(

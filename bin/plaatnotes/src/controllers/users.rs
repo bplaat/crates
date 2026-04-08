@@ -143,7 +143,11 @@ pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Result<Response> {
     let auth_user = require_auth!(ctx);
 
     // Get user
-    let user = match get_user(_req, ctx)? {
+    let user_id = match parse_user_id(_req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let user = match get_user(user_id, ctx)? {
         Some(user) => user,
         None => return not_found(_req, ctx),
     };
@@ -178,7 +182,11 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
     let auth_user = require_auth!(ctx);
 
     // Get user
-    let mut user = match get_user(req, ctx)? {
+    let user_id = match parse_user_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let mut user = match get_user(user_id, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
@@ -253,7 +261,11 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Resp
     let auth_user = require_auth!(ctx);
 
     // Get user
-    let mut user = match get_user(req, ctx)? {
+    let user_id = match parse_user_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let mut user = match get_user(user_id, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
@@ -291,7 +303,11 @@ pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Result<Response> {
     let auth_user = require_auth!(ctx);
 
     // Get user
-    let user = match get_user(_req, ctx)? {
+    let user_id = match parse_user_id(_req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let user = match get_user(user_id, ctx)? {
         Some(user) => user,
         None => return not_found(_req, ctx),
     };
@@ -326,19 +342,18 @@ pub(crate) fn users_notes_trashed(req: &Request, ctx: &Context) -> Result<Respon
 }
 
 // MARK: Utils
-pub(crate) fn get_user(req: &Request, ctx: &Context) -> Result<Option<User>> {
-    // Parse user id from url
-    let user_id = match req
+pub(crate) fn parse_user_id(req: &Request) -> Result<Uuid> {
+    match req
         .params
         .get("user_id")
-        .expect("Should be some")
-        .parse::<Uuid>()
+        .and_then(|id| id.parse::<Uuid>().ok())
     {
-        Ok(id) => id,
-        Err(_) => return Ok(None),
-    };
+        Some(id) => Ok(id),
+        None => anyhow::bail!("Invalid UUID"),
+    }
+}
 
-    // Get user
+pub(crate) fn get_user(user_id: Uuid, ctx: &Context) -> Result<Option<User>> {
     Ok(ctx
         .database
         .query::<User>(
@@ -352,7 +367,11 @@ pub(crate) fn get_user(req: &Request, ctx: &Context) -> Result<Option<User>> {
 fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response> {
     let auth_user = require_auth!(ctx);
 
-    let user = match get_user(req, ctx)? {
+    let user_id = match parse_user_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let user = match get_user(user_id, ctx)? {
         Some(user) => user,
         None => return not_found(req, ctx),
     };
