@@ -114,6 +114,7 @@ fn is_unchanged(b: u8) -> bool {
 impl<'a> Iterator for ByteSerialize<'a> {
     type Item = &'a str;
 
+    #[allow(unsafe_code)]
     fn next(&mut self) -> Option<&'a str> {
         let (&first, tail) = self.bytes.split_first()?;
         if !is_unchanged(first) {

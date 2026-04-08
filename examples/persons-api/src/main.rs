@@ -6,8 +6,6 @@
 
 //! A simple persons REST API example
 
-#![forbid(unsafe_code)]
-
 use std::env;
 use std::net::{Ipv4Addr, TcpListener};
 

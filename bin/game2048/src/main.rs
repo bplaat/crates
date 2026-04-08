@@ -6,7 +6,6 @@
 
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-#![forbid(unsafe_code)]
 
 use bwebview::{EventLoopBuilder, LogicalSize, WebviewBuilder, WindowBuilder};
 use rust_embed::Embed;

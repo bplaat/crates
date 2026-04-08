@@ -6,6 +6,8 @@
 
 //! A minimal replacement for the [base64](https://crates.io/crates/base64) crate
 
+#![allow(unsafe_code)]
+
 // MARK: Engine
 /// Trait for base64 encoding and decoding engines.
 pub trait Engine {
@@ -36,6 +38,7 @@ pub struct GeneralPurpose {
 }
 
 impl Engine for GeneralPurpose {
+    #[allow(unsafe_code)]
     fn encode<T: AsRef<[u8]>>(&self, input: T) -> String {
         let input = input.as_ref();
         let mut out = Vec::with_capacity(input.len().div_ceil(3) * 4);

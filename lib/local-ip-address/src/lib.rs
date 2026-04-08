@@ -12,6 +12,7 @@
 use std::net::IpAddr;
 
 /// Returns the local IPv4 address of the machine.
+#[allow(unsafe_code)]
 pub fn local_ip() -> Result<IpAddr, std::io::Error> {
     cfg_if::cfg_if! {
         if #[cfg(unix)] {

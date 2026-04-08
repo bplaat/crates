@@ -7,7 +7,6 @@
 //! A minimal replacement for the [mime](https://crates.io/crates/mime) crate
 
 #![allow(missing_docs)]
-#![forbid(unsafe_code)]
 
 use std::fmt::{self, Display, Formatter};
 

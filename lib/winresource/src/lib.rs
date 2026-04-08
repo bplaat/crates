@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
 
-#![forbid(unsafe_code)]
-
 use core::panic;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

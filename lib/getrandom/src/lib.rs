@@ -9,6 +9,7 @@
 use std::io::Error;
 
 /// Fill buffer with crypto random bytes
+#[allow(unsafe_code)]
 pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
     cfg_if::cfg_if! {
         if #[cfg(any(target_os = "macos", target_os = "openbsd"))] {

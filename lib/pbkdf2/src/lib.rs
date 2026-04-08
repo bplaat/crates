@@ -6,8 +6,6 @@
 
 //! A PBKDF2-HMAC-SHA256 password hashing library
 
-#![forbid(unsafe_code)]
-
 use sha2::Sha256;
 
 pub use crate::utils::{

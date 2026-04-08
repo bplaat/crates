@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [uuid](https://crates.io/crates/url) crate
 
-#![forbid(unsafe_code)]
-
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;

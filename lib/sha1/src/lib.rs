@@ -80,6 +80,7 @@ impl Sha1 {
         *self = Self::default();
     }
 
+    #[allow(unsafe_code)]
     fn process_block(&mut self) {
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
@@ -148,6 +149,7 @@ impl Sha1 {
     // MARK: x86_64 SHA-NI
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "sha,sse2,ssse3,sse4.1")]
+    #[allow(unsafe_code)]
     unsafe fn process_block_x86_sha(&mut self) {
         unsafe {
             use std::arch::x86_64::*;
@@ -332,6 +334,7 @@ impl Sha1 {
     // MARK: aarch64 SHA
     #[cfg(target_arch = "aarch64")]
     #[target_feature(enable = "sha2")]
+    #[allow(unsafe_code)]
     unsafe fn process_block_aarch64_sha(&mut self) {
         unsafe {
             use std::arch::aarch64::*;

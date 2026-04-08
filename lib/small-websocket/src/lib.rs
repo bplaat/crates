@@ -6,8 +6,6 @@
 
 //! A simple and small websocket library for the [small-http](lib/small-http) library
 
-#![forbid(unsafe_code)]
-
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io::{Read, Write};

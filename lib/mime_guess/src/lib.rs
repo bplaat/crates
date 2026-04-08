@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
 
-#![forbid(unsafe_code)]
-
 use std::path::Path;
 
 use mime::Mime;

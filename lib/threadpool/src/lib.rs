@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [threadpool](https://crates.io/crates/threadpool
 
-#![forbid(unsafe_code)]
-
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};

@@ -6,8 +6,6 @@
 
 //! A [FromEnum] and [FromStruct] derive macro library
 
-#![forbid(unsafe_code)]
-
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, Meta, parse_macro_input};

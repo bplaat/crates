@@ -6,7 +6,6 @@
 
 #![doc = include_str!("../README.md")]
 #![allow(clippy::unwrap_used)]
-#![forbid(unsafe_code)]
 
 use std::sync::RwLock;
 

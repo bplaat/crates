@@ -6,8 +6,6 @@
 
 //! A simple Cargo plugin the builds macOS app bundles
 
-#![forbid(unsafe_code)]
-
 use std::fs;
 use std::path::Path;
 use std::process::{Command, exit};

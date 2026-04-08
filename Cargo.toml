@@ -12,6 +12,7 @@ repository = "https://github.com/bplaat/crates"
 unreachable_pub = "deny"
 unused_qualifications = "deny"
 missing_docs = "deny"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [semver](https://crates.io/crates/semver) crate
 
-#![forbid(unsafe_code)]
-
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 

@@ -7,6 +7,7 @@
 //! A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
 
 #![cfg(target_vendor = "apple")]
+#![allow(unsafe_code)]
 
 pub use encode::{Encode, Encoding};
 

@@ -6,6 +6,7 @@
 
 #![doc = include_str!("../README.md")]
 #![allow(unused)]
+#![allow(unsafe_code)]
 
 pub use event::*;
 pub use event_loop::*;

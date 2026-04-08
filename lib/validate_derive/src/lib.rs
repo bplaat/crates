@@ -6,8 +6,6 @@
 
 //! Validation derive macro's library
 
-#![forbid(unsafe_code)]
-
 use proc_macro::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{DeriveInput, Expr, Meta, parse_macro_input};

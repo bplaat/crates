@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 
-#![forbid(unsafe_code)]
-
 use std::path::Path;
 use std::{env, fs};
 

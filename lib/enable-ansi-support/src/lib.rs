@@ -7,6 +7,7 @@
 //! A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
 
 /// Enables ANSI escape code support for terminal output on Windows.
+#[allow(unsafe_code)]
 pub fn enable_ansi_support() -> Result<(), std::io::Error> {
     cfg_if::cfg_if! {
         if #[cfg(unix)] {

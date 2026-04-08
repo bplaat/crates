@@ -6,8 +6,6 @@
 
 //! A simple note-taking app
 
-#![forbid(unsafe_code)]
-
 use std::env;
 use std::net::{Ipv4Addr, TcpListener};
 use std::process::exit;

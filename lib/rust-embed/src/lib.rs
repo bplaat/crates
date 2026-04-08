@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 
-#![forbid(unsafe_code)]
-
 use std::borrow::Cow;
 
 pub use rust_embed_impl::Embed;

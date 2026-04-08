@@ -5,6 +5,7 @@
  */
 
 #![doc = include_str!("../README.md")]
+#![allow(unsafe_code)]
 
 pub use crate::bind::Bind;
 pub use crate::connection::{Connection, ConnectionError, OpenMode};

@@ -20,6 +20,7 @@ pub fn from_path(path: impl AsRef<Path>) -> io::Result<()> {
 }
 
 /// Read env from string and set environment variables
+#[allow(unsafe_code)]
 pub fn from_str(contents: impl AsRef<str>) -> io::Result<()> {
     let contents = contents.as_ref();
     for line in contents.lines() {
@@ -62,6 +63,7 @@ pub fn from_str(contents: impl AsRef<str>) -> io::Result<()> {
 
 // MARK: Tests
 #[cfg(test)]
+#[allow(unsafe_code)]
 mod test {
     use super::*;
 

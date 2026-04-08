@@ -15,6 +15,7 @@ compile_error!("Unsupported platform");
 
 // MARK: Windows
 #[cfg(windows)]
+#[allow(unsafe_code)]
 pub(crate) mod windows {
     use super::*;
 

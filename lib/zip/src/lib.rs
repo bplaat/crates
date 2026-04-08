@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [zip](https://crates.io/crates/zip) crate
 
-#![forbid(unsafe_code)]
-
 use std::fmt;
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
 

@@ -30,10 +30,12 @@ pub const SQLITE_TEXT: i32 = 3;
 pub const SQLITE_BLOB: i32 = 4;
 pub const SQLITE_NULL: i32 = 5;
 
+#[allow(unsafe_code)]
 pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
     Some(unsafe { std::mem::transmute::<isize, unsafe extern "C" fn(*mut c_void)>(-1) })
 }
 
+#[allow(unsafe_code)]
 unsafe extern "C" {
     // sqlite3
     pub fn sqlite3_open_v2(

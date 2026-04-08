@@ -24,6 +24,7 @@ struct AndroidVars {
 }
 
 impl AndroidVars {
+    #[allow(unsafe_code)]
     fn new(bobje: &Bobje) -> Self {
         let id = bobje.manifest.package.id.as_ref().unwrap_or_else(|| {
             eprintln!("Manifest package id is required");

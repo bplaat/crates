@@ -17,6 +17,7 @@ pub struct Width(pub u16);
 pub struct Height(pub u16);
 
 /// Returns the terminal size as a tuple.
+#[allow(unsafe_code)]
 pub fn terminal_size() -> Option<(Width, Height)> {
     cfg_if::cfg_if! {
         if #[cfg(unix)] {

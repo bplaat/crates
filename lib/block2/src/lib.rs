@@ -7,6 +7,7 @@
 //! A minimal replacement for the [block2](https://crates.io/crates/block2) crate
 
 #![cfg(target_vendor = "apple")]
+#![allow(unsafe_code)]
 
 use std::ffi::c_void;
 use std::marker::PhantomData;

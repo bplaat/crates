@@ -77,6 +77,7 @@ const fn build_percent_table() -> [u8; 1024] {
 static PERCENT_TABLE: [u8; 1024] = build_percent_table();
 
 /// Return the percent-encoding of the given byte as a `&'static str` of the form `%XX`.
+#[allow(unsafe_code)]
 pub fn percent_encode_byte(byte: u8) -> &'static str {
     let idx = (byte as usize) * 4;
     unsafe { str::from_utf8_unchecked(&PERCENT_TABLE[idx..idx + 3]) }

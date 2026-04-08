@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 
-#![forbid(unsafe_code)]
-
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
