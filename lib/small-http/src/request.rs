@@ -162,6 +162,8 @@ impl Request {
         let (method, path, version) = {
             let mut line = String::new();
             reader
+                .by_ref()
+                .take(crate::MAX_HEADER_LINE)
                 .read_line(&mut line)
                 .map_err(|_| InvalidRequestError("Can't read first line".to_string()))?;
             let mut parts = line.split(' ');
@@ -241,9 +243,9 @@ impl Request {
                 }
                 let prev_len = chunks.len();
                 chunks.resize(prev_len + chunk_size, 0);
-                reader.read_exact(&mut chunks[prev_len..]).map_err(|_| {
-                    InvalidRequestError("Can't read chunk data".to_string())
-                })?;
+                reader
+                    .read_exact(&mut chunks[prev_len..])
+                    .map_err(|_| InvalidRequestError("Can't read chunk data".to_string()))?;
                 // Consume trailing CRLF after chunk data
                 let mut crlf = [0u8; 2];
                 reader.read_exact(&mut crlf).map_err(|_| {

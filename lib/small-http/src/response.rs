@@ -161,8 +161,7 @@ impl Response {
                         .read_line(&mut size_line)
                         .map_err(|_| InvalidResponseError)?;
                     let hex = size_line.split(';').next().unwrap_or("").trim();
-                    let size =
-                        usize::from_str_radix(hex, 16).map_err(|_| InvalidResponseError)?;
+                    let size = usize::from_str_radix(hex, 16).map_err(|_| InvalidResponseError)?;
                     if size == 0 {
                         // Consume the trailing CRLF that terminates the trailer section
                         let mut crlf = [0; 2];
@@ -222,7 +221,10 @@ impl Response {
             _ = write!(stream, "{safe_name}: {safe_value}\r\n");
         }
         _ = write!(stream, "\r\n");
-        _ = stream.write_all(&self.body);
+        // HEAD responses must not include a message body
+        if req.method != crate::enums::Method::Head {
+            _ = stream.write_all(&self.body);
+        }
     }
 
     #[cfg(feature = "cgi")]
