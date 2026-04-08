@@ -84,8 +84,11 @@ impl Sha1 {
     fn process_block(&mut self) {
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "x86_64")] {
-                if is_x86_feature_detected!("sha") {
-                    // SAFETY: is_x86_feature_detected! confirmed the sha hardware feature is available.
+                if is_x86_feature_detected!("sha")
+                    && is_x86_feature_detected!("ssse3")
+                    && is_x86_feature_detected!("sse4.1")
+                {
+                    // SAFETY: Runtime detection confirmed every non-baseline CPU feature used by this code path.
                     unsafe { self.process_block_x86_sha() }
                 } else {
                     self.process_block_software()
