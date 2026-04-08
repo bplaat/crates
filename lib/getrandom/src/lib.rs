@@ -43,9 +43,10 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
             static GETRANDOM: std::sync::LazyLock<Option<GetrandomFn>> = std::sync::LazyLock::new(resolve_getrandom);
             if let Some(getrandom) = *GETRANDOM {
                 let n = unsafe { getrandom(buf.as_mut_ptr(), buf.len(), 0) };
-                if n < 0 || n as usize != buf.len() {
-                    return Err(Error::other("getrandom failed"));
+                if n >= 0 && n as usize == buf.len() {
+                    return Ok(());
                 }
+                // Fall through to /dev/urandom if getrandom fails or returns ENOSYS
             }
 
             use std::io::Read;
@@ -70,7 +71,9 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
             unsafe extern "system" {
                 fn ProcessPrng(pbData: *mut u8, cbData: usize) -> bool;
             }
-            unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) };
+            if !unsafe { ProcessPrng(buf.as_mut_ptr(), buf.len()) } {
+                return Err(Error::other("ProcessPrng failed"));
+            }
         }
 
         else {
