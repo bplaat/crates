@@ -59,6 +59,8 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
         let mut attempts = ctx.login_attempts.lock().unwrap_or_else(|p| p.into_inner());
         let now = std::time::Instant::now();
         let window = Duration::from_secs(crate::consts::LOGIN_RATE_LIMIT_WINDOW_SECONDS);
+        attempts.retain(|_, (_, window_start)| now.duration_since(*window_start) < window);
+
         if let Some((count, window_start)) = attempts.get_mut(&ip_address) {
             if now.duration_since(*window_start) < window {
                 if *count >= crate::consts::LOGIN_RATE_LIMIT_MAX_ATTEMPTS {
