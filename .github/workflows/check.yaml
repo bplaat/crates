@@ -18,7 +18,7 @@ jobs:
   check-shared:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install packages and extra Rust tooling
         run: |
           sudo apt-get update
@@ -57,7 +57,7 @@ jobs:
             cache-key: windows-aarch64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install packages (Linux x86_64/aarch64)
         if: runner.os == 'Linux' && !contains(matrix.runner, 'riscv')
@@ -82,7 +82,7 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: cache-rust-toolchain
         with:
           path: |
@@ -108,7 +108,7 @@ jobs:
         shell: bash
 
       - name: Report test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Tests (${{ matrix.name }})
@@ -120,8 +120,8 @@ jobs:
   check-e2e:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v6
+      - uses: actions/cache@v5
         id: cache-rust-toolchain
         with:
           path: |
@@ -136,7 +136,7 @@ jobs:
           cargo binstall -y --locked cargo-nextest
       - run: ./meta.sh check-e2e
       - name: Report E2E test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: E2E Tests
