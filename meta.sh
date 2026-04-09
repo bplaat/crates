@@ -32,13 +32,32 @@ check_rust() {
     # Format
     echo "Checking Rust formatting..."
     cargo +nightly fmt -- --check
+
     # Lint
     echo "Linting Rust code..."
     cargo clippy --locked --all-targets --all-features -- -D warnings -W clippy::uninlined_format_args
+
     # Test
     echo "Running Rust tests..."
     cargo test --doc --all-features --locked
     cargo nextest run --all-features --locked --config-file nextest.toml ${CI:+--profile ci}
+
+    if [ "$(uname)" != "MINGW64_NT" ] && [ -z "$USERPROFILE" ]; then
+        echo "Running Rust tests with address sanitizer on unsafe libs..."
+        # FIXME: Enable also for bwebview and bsqlite in future
+        for crate_dir in $(find lib -mindepth 1 -maxdepth 1 -type d | grep -vE 'lib/(bwebview|bsqlite)' | sort); do
+            if ! find "$crate_dir" -type f -name "*.rs" -exec grep -Eq 'unsafe[[:space:]]*\{' {} +; then
+                continue
+            fi
+            package=$(sed -n '/^\[package\]/,/^\[/{s/^name = "\(.*\)"/\1/p;}' "$crate_dir/Cargo.toml" | head -n 1)
+            if [ -z "$package" ]; then
+                echo "Failed to determine package name for $crate_dir"
+                exit 1
+            fi
+            echo "Testing $package with address sanitizer..."
+            RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -p "$package" --lib --tests --locked --all-features -Zbuild-std
+        done
+    fi
 }
 
 check_rust_deps() {
@@ -113,7 +132,7 @@ install() {
         cp -r "target/bundle/sequelexplorer/Sequel Explorer.app" /Applications
         cp -r target/bundle/navidrome/Navidrome.app /Applications
         cp -r target/bundle/game2048/2048.app /Applications
-    elif [ -n "$USERPROFILE" ]; then
+    elif [ "$(uname)" = "MINGW64_NT" ] || [ -n "$USERPROFILE" ]; then
         build_install_windows bassielight BassieLight
         build_install_windows sequelexplorer SequelExplorer
         build_install_windows navidrome Navidrome
