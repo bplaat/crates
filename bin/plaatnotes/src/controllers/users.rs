@@ -24,7 +24,7 @@ use crate::models::user::validators::{
     is_unique_email_or_target_user_email,
 };
 use crate::models::user::{UserRole, UserTheme, policies};
-use crate::utils::preprocess_fts_query;
+use crate::utils::{password_hash, preprocess_fts_query};
 
 // MARK: Handlers
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
@@ -119,17 +119,15 @@ pub(crate) fn users_create(req: &Request, ctx: &Context) -> Result<Response> {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
+    // Parse and validate body
     let body = parse_body_ctx!(req, api::UserCreateBody, UserCreateBody, ctx);
-
-    // Hash password
-    let hashed_password = pbkdf2::password_hash(&body.password);
 
     // Create user
     let user = User {
         first_name: body.first_name,
         last_name: body.last_name,
         email: body.email,
-        password: hashed_password,
+        password: password_hash(&body.password),
         role: body.role,
         ..Default::default()
     };
@@ -218,7 +216,7 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
     if let Some(password) = body.password
         && auth_user.role == UserRole::Admin
     {
-        user.password = pbkdf2::password_hash(&password);
+        user.password = password_hash(&password);
         execute_args!(
             ctx.database,
             "UPDATE users SET password = :password WHERE id = :id",
@@ -283,7 +281,7 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Resp
     }
 
     // Update password
-    user.password = pbkdf2::password_hash(&body.new_password);
+    user.password = password_hash(&body.new_password);
     user.updated_at = Utc::now();
     execute_args!(
         ctx.database,

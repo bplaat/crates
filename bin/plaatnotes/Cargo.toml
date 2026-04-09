@@ -39,7 +39,5 @@ zip = "8.1"
 bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
 
 [build-dependencies]
-base64 = "0.22"
 copy_dir = "0.1.3"
 openapi-generator = { path = "../../lib/openapi-generator" }
-pbkdf2 = { path = "../../lib/pbkdf2" }

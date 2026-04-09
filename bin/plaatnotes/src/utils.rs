@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+pub(crate) fn password_hash(password: &str) -> String {
+    let mut salt = [0u8; 16];
+    getrandom::fill(&mut salt).expect("Can't get random bytes");
+    pbkdf2::password_hash_customized(password, &salt, crate::consts::PBKDF2_ITERATIONS)
+}
+
 // Preprocess a user-supplied search string into a safe FTS5 query expression.
 // FTS5 keyword operators (AND, OR, NOT) are preserved so callers can use them
 // intentionally. Structural characters that cause FTS5 parse errors (unmatched

@@ -19,11 +19,15 @@ pub const DEFAULT_SAFE_ITERATIONS: u32 = 600_000;
 pub fn password_hash(password: &str) -> String {
     let mut salt = [0u8; 16];
     getrandom::fill(&mut salt).expect("Can't get random bytes");
-    let hashed_password =
-        pbkdf2_hmac_sha256(password.as_bytes(), &salt, DEFAULT_SAFE_ITERATIONS, 32);
+    password_hash_customized(password, &salt, DEFAULT_SAFE_ITERATIONS)
+}
+
+/// Hash password with custom salt and iterations using PBKDF2-HMAC-SHA256 returns string in PHC standard (https://github.com/P-H-C/phc-string-format/blob/master/phc-sf-spec.md)
+pub fn password_hash_customized(password: &str, salt: &[u8], iterations: u32) -> String {
+    let hashed_password = pbkdf2_hmac_sha256(password.as_bytes(), salt, iterations, 32);
     format!(
         "$pbkdf2-sha256$t={}${}${}",
-        DEFAULT_SAFE_ITERATIONS,
+        iterations,
         BASE64_NO_PAD.encode(salt),
         BASE64_NO_PAD.encode(&hashed_password)
     )

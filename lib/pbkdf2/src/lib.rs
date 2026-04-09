@@ -9,7 +9,8 @@
 use sha2::Sha256;
 
 pub use crate::utils::{
-    DEFAULT_SAFE_ITERATIONS, PasswordHashDecodeError, password_hash, password_verify,
+    DEFAULT_SAFE_ITERATIONS, PasswordHashDecodeError, password_hash, password_hash_customized,
+    password_verify,
 };
 
 mod utils;

@@ -10,26 +10,11 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64_NO_PAD;
 use copy_dir::copy_dir;
 
 fn main() {
-    // Generate test password hash at compile time
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
-    let salt = b"test_salt_fixed!";
-    let hash =
-        pbkdf2::pbkdf2_hmac_sha256(b"password123", salt, pbkdf2::DEFAULT_SAFE_ITERATIONS, 32);
-    let test_password_hash = format!(
-        "$pbkdf2-sha256$t={}${}${}",
-        pbkdf2::DEFAULT_SAFE_ITERATIONS,
-        BASE64_NO_PAD.encode(salt),
-        BASE64_NO_PAD.encode(hash)
-    );
-    std::fs::write(out_dir.join("test_password_hash.txt"), test_password_hash)
-        .expect("Failed to write test_password_hash.txt");
-
     // Generate openapi file
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     openapi_generator::generate_schemas_build(
         "openapi.yaml",
         out_dir.join("api.rs"),

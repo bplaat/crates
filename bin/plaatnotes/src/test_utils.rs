@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use chrono::Utc;
@@ -11,9 +12,10 @@ use chrono::Utc;
 use crate::consts::SESSION_EXPIRY_SECONDS;
 use crate::context::{Context, DatabaseHelpers};
 use crate::models::{Note, Session, User, UserRole};
+use crate::utils::password_hash;
 
-pub(crate) const TEST_PASSWORD_HASH: &str =
-    include_str!(concat!(env!("OUT_DIR"), "/test_password_hash.txt"));
+pub(crate) static TEST_PASSWORD_HASH: LazyLock<String> =
+    LazyLock::new(|| password_hash("password123"));
 
 // Creates a test user and returns (user, token)
 pub(crate) fn create_test_user_with_session(ctx: &Context) -> (User, String) {
