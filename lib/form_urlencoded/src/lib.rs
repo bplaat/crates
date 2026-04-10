@@ -353,4 +353,82 @@ mod test {
         let s: String = byte_serialize(b"a b+c").collect();
         assert_eq!(s, "a+b%2Bc");
     }
+
+    #[test]
+    fn test_parse_empty_input() {
+        let pairs: Vec<_> = parse(b"").collect();
+        assert!(pairs.is_empty());
+    }
+
+    #[test]
+    fn test_parse_key_without_value() {
+        let pairs: Vec<_> = parse(b"key").collect();
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, "key");
+        assert_eq!(pairs[0].1, "");
+    }
+
+    #[test]
+    fn test_parse_consecutive_separators() {
+        // Double && should skip the empty sequence and yield only real pairs
+        let pairs: Vec<_> = parse(b"a=1&&b=2").collect();
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[0].0, "a");
+        assert_eq!(pairs[0].1, "1");
+        assert_eq!(pairs[1].0, "b");
+        assert_eq!(pairs[1].1, "2");
+    }
+
+    #[test]
+    fn test_parse_into_owned() {
+        let pairs: Vec<(String, String)> = parse(b"x=hello+world").into_owned().collect();
+        assert_eq!(pairs[0].0, "x");
+        assert_eq!(pairs[0].1, "hello world");
+    }
+
+    #[test]
+    fn test_serializer_clear() {
+        let mut s = Serializer::new(String::new());
+        s.append_pair("old", "value");
+        s.clear();
+        s.append_pair("new", "data");
+        let result = s.finish();
+        assert_eq!(result, "new=data");
+    }
+
+    #[test]
+    fn test_serializer_extend_pairs() {
+        let result = Serializer::new(String::new())
+            .extend_pairs([("a", "1"), ("b", "2"), ("c", "3")])
+            .finish();
+        assert_eq!(result, "a=1&b=2&c=3");
+    }
+
+    #[test]
+    fn test_serializer_extend_keys_only() {
+        let result = Serializer::new(String::new())
+            .extend_keys_only::<[&str; 2], &str>(["foo", "bar"])
+            .finish();
+        assert_eq!(result, "foo&bar");
+    }
+
+    #[test]
+    fn test_serializer_append_key_only() {
+        let result = Serializer::new(String::new())
+            .append_pair("x", "1")
+            .append_key_only("flag")
+            .finish();
+        assert_eq!(result, "x=1&flag");
+    }
+
+    #[test]
+    fn test_byte_serialize_special_chars() {
+        // slash → %2F, @ → %40, alphanumerics unchanged
+        let slash: String = byte_serialize(b"/").collect();
+        assert_eq!(slash, "%2F");
+        let at: String = byte_serialize(b"@").collect();
+        assert_eq!(at, "%40");
+        let alnum: String = byte_serialize(b"abc123").collect();
+        assert_eq!(alnum, "abc123");
+    }
 }
