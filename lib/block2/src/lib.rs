@@ -206,6 +206,49 @@ mod test {
         unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A)>) }
     }
 
+    fn as_dyn0<F: Fn() + 'static>(block: &RcBlock<F>) -> &Block<dyn Fn()> {
+        unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn()>) }
+    }
+
+    fn as_dyn2<A: 'static + Copy, B: 'static + Copy, F: Fn(A, B) + 'static>(
+        block: &RcBlock<F>,
+    ) -> &Block<dyn Fn(A, B)> {
+        unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A, B)>) }
+    }
+
+    fn as_dyn3<
+        A: 'static + Copy,
+        B: 'static + Copy,
+        C: 'static + Copy,
+        F: Fn(A, B, C) + 'static,
+    >(
+        block: &RcBlock<F>,
+    ) -> &Block<dyn Fn(A, B, C)> {
+        unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A, B, C)>) }
+    }
+
+    fn as_dyn4<
+        A: 'static + Copy,
+        B: 'static + Copy,
+        C: 'static + Copy,
+        D: 'static + Copy,
+        F: Fn(A, B, C, D) + 'static,
+    >(
+        block: &RcBlock<F>,
+    ) -> &Block<dyn Fn(A, B, C, D)> {
+        unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A, B, C, D)>) }
+    }
+
+    #[test]
+    fn test_block_call_0_args() {
+        static CALLED: AtomicBool = AtomicBool::new(false);
+        let block = RcBlock::new0(|| {
+            CALLED.store(true, Ordering::SeqCst);
+        });
+        as_dyn0(&block).call(());
+        assert!(CALLED.load(Ordering::SeqCst));
+    }
+
     #[test]
     fn test_block_call_1_arg() {
         static RESULT: AtomicI32 = AtomicI32::new(0);
@@ -236,6 +279,36 @@ mod test {
             RESULT.store(x * multiplier, Ordering::SeqCst);
         });
         as_dyn(&block).call((6,));
+        assert_eq!(RESULT.load(Ordering::SeqCst), 42);
+    }
+
+    #[test]
+    fn test_block_call_2_args() {
+        static RESULT: AtomicI32 = AtomicI32::new(0);
+        let block = RcBlock::new2::<i32, i32>(|a: i32, b: i32| {
+            RESULT.store((a * 10) + b, Ordering::SeqCst);
+        });
+        as_dyn2(&block).call((4, 2));
+        assert_eq!(RESULT.load(Ordering::SeqCst), 42);
+    }
+
+    #[test]
+    fn test_block_call_3_args() {
+        static RESULT: AtomicI32 = AtomicI32::new(0);
+        let block = RcBlock::new3::<i32, i32, i32>(|a: i32, b: i32, c: i32| {
+            RESULT.store((a * b) + c, Ordering::SeqCst);
+        });
+        as_dyn3(&block).call((8, 5, 2));
+        assert_eq!(RESULT.load(Ordering::SeqCst), 42);
+    }
+
+    #[test]
+    fn test_block_call_4_args() {
+        static RESULT: AtomicI32 = AtomicI32::new(0);
+        let block = RcBlock::new4::<i32, i32, i32, i32>(|a: i32, b: i32, c: i32, d: i32| {
+            RESULT.store(a + b + c + d, Ordering::SeqCst);
+        });
+        as_dyn4(&block).call((10, 11, 12, 9));
         assert_eq!(RESULT.load(Ordering::SeqCst), 42);
     }
 

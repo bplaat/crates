@@ -227,11 +227,63 @@ pub(crate) fn verify_send(obj: *mut AnyObject, sel: Sel, args: &[Encoding], ret:
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::runtime::AnyObject;
     use crate::{class, msg_send};
 
     #[link(name = "Foundation", kind = "framework")]
     unsafe extern "C" {}
+
+    #[test]
+    fn test_enc_type_len_handles_nested_types() {
+        assert_eq!(enc_type_len("@?"), Some(2));
+        assert_eq!(enc_type_len("^v"), Some(2));
+        assert_eq!(enc_type_len("[4{CGPoint=dd}]"), Some(15));
+        assert_eq!(enc_type_len("{Outer={Inner=ii}q}"), Some(19));
+    }
+
+    #[test]
+    fn test_next_enc_type_skips_offsets() {
+        let (ret, rest) = next_enc_type("v24@0:8q16").expect("return token");
+        assert_eq!(ret, "v");
+
+        let (receiver, rest) = next_enc_type(rest).expect("receiver token");
+        assert_eq!(receiver, "@");
+
+        let (selector, rest) = next_enc_type(rest).expect("selector token");
+        assert_eq!(selector, ":");
+
+        let (arg, rest) = next_enc_type(rest).expect("argument token");
+        assert_eq!(arg, "q");
+        assert_eq!(rest, "");
+    }
+
+    #[test]
+    fn test_matching_close_and_strip_modifiers() {
+        assert_eq!(matching_close("{foo={bar=ii}q}", '{', '}'), Some(15));
+        assert_eq!(matching_close("[2[3i]]", '[', ']'), Some(7));
+        assert_eq!(strip_modifiers("rn^v"), "^v");
+    }
+
+    #[test]
+    fn test_enc_match_relaxed_rules() {
+        assert!(enc_match("r^i", "^v"));
+        assert!(enc_match("@?", "@"));
+        assert!(enc_match("Q", "q"));
+        assert!(enc_match("{CGPoint=dd}", "{CGPoint=ff}"));
+        assert!(!enc_match("{CGPoint=dd}", "{CGSize=dd}"));
+        assert!(!enc_match("i", "d"));
+    }
+
+    #[test]
+    fn test_sel_name_null_selector() {
+        assert_eq!(sel_name(Sel(std::ptr::null())), "<unknown>");
+    }
+
+    #[test]
+    fn test_class_name_known_class() {
+        assert_eq!(class_name(class!(NSObject) as *mut _), "NSObject");
+    }
 
     #[test]
     #[should_panic(expected = "invalid message send")]

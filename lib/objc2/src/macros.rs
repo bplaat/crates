@@ -109,8 +109,9 @@ macro_rules! msg_send {
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use std::ffi::c_void;
+    use std::ffi::{CStr, c_void};
 
+    use crate::ffi::sel_getName;
     use crate::runtime::AnyObject;
 
     #[link(name = "Foundation", kind = "framework")]
@@ -155,5 +156,17 @@ mod test {
             assert_eq!(len, 5);
             let _: () = msg_send![ns, release];
         }
+    }
+
+    #[test]
+    fn test_sel_macro_single_name() {
+        let name = unsafe { CStr::from_ptr(sel_getName(sel!(length).0)) };
+        assert_eq!(name.to_bytes(), b"length");
+    }
+
+    #[test]
+    fn test_sel_macro_multi_name() {
+        let name = unsafe { CStr::from_ptr(sel_getName(sel!(setObject: forKey:).0)) };
+        assert_eq!(name.to_bytes(), b"setObject:forKey:");
     }
 }

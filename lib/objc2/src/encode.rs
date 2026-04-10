@@ -190,6 +190,18 @@ mod test {
     }
 
     #[test]
+    fn test_encoding_display_additional_variants() {
+        assert_eq!(Encoding::BitField(3, None).to_string(), "b3");
+        assert_eq!(Encoding::Atomic(&Encoding::Int).to_string(), "Ai");
+        assert_eq!(Encoding::Array(4, &Encoding::Short).to_string(), "[4s]");
+        assert_eq!(
+            Encoding::Union("Value", &[Encoding::Int, Encoding::Double]).to_string(),
+            "(Value=id)"
+        );
+        assert_eq!(Encoding::None.to_string(), "");
+    }
+
+    #[test]
     fn test_encode_impls() {
         assert_eq!(<()>::ENCODING.to_string(), "v");
         assert_eq!(i32::ENCODING.to_string(), "i");
@@ -203,6 +215,7 @@ mod test {
         assert_eq!(<*const c_void>::ENCODING.to_string(), "^v");
         assert_eq!(<*mut c_void>::ENCODING.to_string(), "^v");
         assert_eq!(<*const c_char>::ENCODING.to_string(), "*");
+        assert_eq!(<*mut c_char>::ENCODING.to_string(), "*");
         assert_eq!(Bool::ENCODING.to_string(), "B");
     }
 }

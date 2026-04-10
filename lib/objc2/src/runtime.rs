@@ -246,4 +246,26 @@ mod test {
             let _: () = msg_send![obj, release];
         }
     }
+
+    #[test]
+    fn test_method_impl_type_encoding_zero_args() {
+        type Method = extern "C" fn(*mut AnyObject, Sel) -> i32;
+        assert_eq!(
+            <Method as MethodImpl>::type_encoding()
+                .to_str()
+                .expect("valid encoding"),
+            "i@:"
+        );
+    }
+
+    #[test]
+    fn test_method_impl_type_encoding_with_args() {
+        type Method = extern "C" fn(*mut AnyObject, Sel, i32, Bool) -> ();
+        assert_eq!(
+            <Method as MethodImpl>::type_encoding()
+                .to_str()
+                .expect("valid encoding"),
+            "v@:iB"
+        );
+    }
 }
