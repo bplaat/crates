@@ -337,3 +337,106 @@ impl<T: FromRow> Iterator for Statement<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{ColumnType, Connection, StatementError, Value};
+
+    #[test]
+    fn test_statement_metadata_and_column_accessors() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        db.execute(
+            "CREATE TABLE items (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                score REAL NOT NULL,
+                payload BLOB NOT NULL,
+                note TEXT
+            ) STRICT",
+            (),
+        )?;
+        db.execute(
+            "INSERT INTO items (id, name, score, payload, note) VALUES (?, ?, ?, ?, ?)",
+            (
+                1_i64,
+                "widget".to_string(),
+                3.5_f64,
+                vec![1_u8, 2_u8, 3_u8],
+                Option::<String>::None,
+            ),
+        )?;
+
+        let mut statement =
+            db.prepare::<()>("SELECT id AS item_id, name, score, payload, note FROM items")?;
+
+        assert_eq!(statement.column_count(), 5);
+        assert_eq!(statement.column_name(0), "item_id");
+        assert_eq!(statement.column_name(1), "name");
+        assert_eq!(
+            statement.column_declared_type(0).as_deref(),
+            Some("INTEGER")
+        );
+        assert_eq!(statement.column_declared_type(1).as_deref(), Some("TEXT"));
+        assert_eq!(statement.column_declared_type(2).as_deref(), Some("REAL"));
+        assert_eq!(statement.column_declared_type(3).as_deref(), Some("BLOB"));
+        assert_eq!(statement.column_declared_type(4).as_deref(), Some("TEXT"));
+        assert_eq!(statement.column_table_name(0).as_deref(), Some("items"));
+        assert_eq!(statement.column_origin_name(0).as_deref(), Some("id"));
+
+        assert_eq!(statement.step()?, Some(()));
+
+        assert_eq!(statement.column_type(0), ColumnType::Integer);
+        assert_eq!(statement.column_type(1), ColumnType::Text);
+        assert_eq!(statement.column_type(2), ColumnType::Float);
+        assert_eq!(statement.column_type(3), ColumnType::Blob);
+        assert_eq!(statement.column_type(4), ColumnType::Null);
+
+        match statement.column_value(0) {
+            Value::Integer(value) => assert_eq!(value, 1),
+            _ => panic!("expected integer value"),
+        }
+        match statement.column_value(1) {
+            Value::Text(value) => assert_eq!(value, "widget"),
+            _ => panic!("expected text value"),
+        }
+        match statement.column_value(2) {
+            Value::Float(value) => assert_eq!(value, 3.5),
+            _ => panic!("expected float value"),
+        }
+        match statement.column_value(3) {
+            Value::Blob(value) => assert_eq!(value, vec![1, 2, 3]),
+            _ => panic!("expected blob value"),
+        }
+        assert!(matches!(statement.column_value(4), Value::Null));
+        assert_eq!(statement.step()?, None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_statement_reset_allows_rebinding() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        let mut statement = db.prepare::<i64>("SELECT ?")?;
+
+        statement.bind(10_i64)?;
+        assert_eq!(statement.next().transpose()?, Some(10));
+
+        statement.reset();
+        statement.bind(20_i64)?;
+        assert_eq!(statement.next().transpose()?, Some(20));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bind_named_value_reports_missing_parameter() {
+        let db = Connection::open_memory().unwrap();
+        let mut statement = db.prepare::<()>("SELECT 1").unwrap();
+
+        let error = statement.bind_named_value(":missing", 1_i64).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Statement error: Parameter ':missing' not found in statement"
+        );
+    }
+}

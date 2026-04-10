@@ -275,4 +275,146 @@ mod test {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_all_types_crud() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        db.execute(
+            "CREATE TABLE data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                int_val INTEGER NOT NULL,
+                float_val REAL NOT NULL,
+                text_val TEXT NOT NULL,
+                blob_val BLOB NOT NULL,
+                opt_int INTEGER
+            )",
+            (),
+        )?;
+
+        // INSERT all value types including NULL optional
+        db.execute(
+            "INSERT INTO data (int_val, float_val, text_val, blob_val, opt_int) VALUES (?, ?, ?, ?, ?)",
+            (42i64, 3.11f64, "hello".to_string(), vec![0xCAu8, 0xFE], Option::<i64>::None),
+        )?;
+        assert_eq!(db.last_insert_row_id(), 1);
+
+        // SELECT and verify all types round-trip
+        let row = db.query_some::<(i64, f64, String, Vec<u8>, Option<i64>)>(
+            "SELECT int_val, float_val, text_val, blob_val, opt_int FROM data WHERE id = 1",
+            (),
+        )?;
+        assert_eq!(row.0, 42);
+        assert_eq!(row.1, 3.11);
+        assert_eq!(row.2, "hello");
+        assert_eq!(row.3, vec![0xCAu8, 0xFE]);
+        assert_eq!(row.4, None);
+
+        // UPDATE and verify affected_rows
+        db.execute("UPDATE data SET int_val = 99 WHERE id = 1", ())?;
+        assert_eq!(db.affected_rows(), 1);
+        let updated = db.query_some::<i64>("SELECT int_val FROM data WHERE id = 1", ())?;
+        assert_eq!(updated, 99);
+
+        // INSERT second row with Some optional
+        db.execute(
+            "INSERT INTO data (int_val, float_val, text_val, blob_val, opt_int) VALUES (?, ?, ?, ?, ?)",
+            (0i64, 0.0f64, String::new(), vec![], Some(7i64)),
+        )?;
+        let opt = db.query_some::<Option<i64>>("SELECT opt_int FROM data WHERE id = 2", ())?;
+        assert_eq!(opt, Some(7));
+
+        // DELETE and verify count drops
+        db.execute("DELETE FROM data WHERE id = 1", ())?;
+        assert_eq!(db.affected_rows(), 1);
+        let count = db.query_some::<i64>("SELECT COUNT(*) FROM data", ())?;
+        assert_eq!(count, 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_some_empty_error() {
+        let db = Connection::open_memory().unwrap();
+        db.execute("CREATE TABLE empty (id INTEGER PRIMARY KEY)", ())
+            .unwrap();
+        let result = db.query_some::<i64>("SELECT id FROM empty", ());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multiple_rows_iteration() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        db.execute("CREATE TABLE nums (n INTEGER NOT NULL)", ())?;
+        for i in 1i64..=5 {
+            db.execute("INSERT INTO nums (n) VALUES (?)", i)?;
+        }
+        let rows: Vec<i64> = db
+            .query::<i64>("SELECT n FROM nums ORDER BY n", ())?
+            .collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(rows, vec![1, 2, 3, 4, 5]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_named_args_macro() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        db.execute(
+            "CREATE TABLE kv (key TEXT NOT NULL, val INTEGER NOT NULL)",
+            (),
+        )?;
+        execute_args!(
+            db,
+            "INSERT INTO kv (key, val) VALUES (:key, :val)",
+            Args {
+                key: "answer".to_string(),
+                val: 42i64,
+            },
+        )?;
+        let rows: Vec<i64> = query_args!(
+            i64,
+            db,
+            "SELECT val FROM kv WHERE key = :key",
+            Args {
+                key: "answer".to_string(),
+            },
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(rows, vec![42]);
+        Ok(())
+    }
+
+    #[cfg(feature = "uuid")]
+    #[test]
+    fn test_uuid_roundtrip() -> Result<(), StatementError> {
+        use uuid::Uuid;
+        let db = Connection::open_memory().unwrap();
+        db.execute("CREATE TABLE items (id BLOB NOT NULL)", ())?;
+        let uuid = Uuid::from_bytes([
+            0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4,
+            0x30, 0xc8,
+        ]);
+        db.execute("INSERT INTO items (id) VALUES (?)", uuid)?;
+        let fetched: Uuid = db.query_some("SELECT id FROM items", ())?;
+        assert_eq!(fetched, uuid);
+        Ok(())
+    }
+
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn test_chrono_roundtrip() -> Result<(), StatementError> {
+        use chrono::{DateTime, NaiveDate, Utc};
+        let db = Connection::open_memory().unwrap();
+        db.execute(
+            "CREATE TABLE events (day INTEGER NOT NULL, ts INTEGER NOT NULL)",
+            (),
+        )?;
+        let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
+        let ts = DateTime::<Utc>::from_timestamp_secs(1_700_000_000).unwrap();
+        db.execute("INSERT INTO events (day, ts) VALUES (?, ?)", (date, ts))?;
+        let (fetched_date, fetched_ts): (NaiveDate, DateTime<Utc>) =
+            db.query_some("SELECT day, ts FROM events", ())?;
+        assert_eq!(fetched_date, date);
+        assert_eq!(fetched_ts, ts);
+        Ok(())
+    }
 }
