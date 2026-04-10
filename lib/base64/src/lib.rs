@@ -6,8 +6,6 @@
 
 //! A minimal replacement for the [base64](https://crates.io/crates/base64) crate
 
-#![allow(unsafe_code)]
-
 // MARK: Engine
 /// Trait for base64 encoding and decoding engines.
 pub trait Engine {
