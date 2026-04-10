@@ -44,8 +44,9 @@ check_rust() {
 
     if [ "$(uname)" != "MINGW64_NT" ] && [ -z "$USERPROFILE" ]; then
         echo "Running Rust tests with address sanitizer on unsafe libs..."
-        # FIXME: Enable also for bwebview and bsqlite in future
-        for crate_dir in $(find lib -mindepth 1 -maxdepth 1 -type d | grep -vE 'lib/(bwebview|bsqlite)' | sort); do
+        target=$(rustc +nightly -vV | sed -n 's/^host: //p')
+        # FIXME: Enable also for bwebview in future
+        for crate_dir in $(find lib -mindepth 1 -maxdepth 1 -type d | grep -v 'lib/bwebview' | sort); do
             if ! find "$crate_dir" -type f -name "*.rs" -exec grep -Eq 'unsafe[[:space:]]*\{' {} +; then
                 continue
             fi
@@ -55,7 +56,7 @@ check_rust() {
                 exit 1
             fi
             echo "Testing $package with address sanitizer..."
-            RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -p "$package" --lib --tests --locked --all-features -Zbuild-std
+            RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -p "$package" --lib --tests --locked --all-features --target "$target" -Zbuild-std
         done
     fi
 }
