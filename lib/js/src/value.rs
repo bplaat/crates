@@ -148,6 +148,7 @@ impl Value {
             (Value::Null, Value::Null) => true,
             (Value::Undefined, Value::Null) => true,
             (Value::Null, Value::Undefined) => true,
+            (Value::Null | Value::Undefined, _) | (_, Value::Null | Value::Undefined) => false,
             (Value::Boolean(a), b) => {
                 let a_num = if *a { 1.0 } else { 0.0 };
                 a_num == b.to_number()
@@ -190,5 +191,111 @@ impl Value {
             Value::Object(_) => f64::NAN,
             Value::Function(..) | Value::NativeFunction(_) => f64::NAN,
         }
+    }
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod test {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use indexmap::IndexMap;
+
+    use super::*;
+
+    fn make_array(vals: Vec<Value>) -> Value {
+        Value::Array(ArrayValue {
+            elements: Rc::new(RefCell::new(vals)),
+        })
+    }
+
+    fn make_object() -> Value {
+        Value::Object(ObjectValue {
+            properties: Rc::new(RefCell::new(IndexMap::new())),
+        })
+    }
+
+    #[test]
+    fn test_is_truthy() {
+        assert!(!Value::Undefined.is_truthy());
+        assert!(!Value::Null.is_truthy());
+        assert!(!Value::Boolean(false).is_truthy());
+        assert!(Value::Boolean(true).is_truthy());
+        assert!(!Value::Number(0.0).is_truthy());
+        assert!(!Value::Number(f64::NAN).is_truthy());
+        assert!(Value::Number(1.0).is_truthy());
+        assert!(Value::Number(-1.0).is_truthy());
+        assert!(!Value::String(String::new()).is_truthy());
+        assert!(Value::String("x".to_string()).is_truthy());
+        assert!(make_array(vec![]).is_truthy()); // empty array is truthy in JS
+        assert!(make_object().is_truthy());
+    }
+
+    #[test]
+    fn test_to_number() {
+        assert!(Value::Undefined.to_number().is_nan());
+        assert_eq!(Value::Null.to_number(), 0.0);
+        assert_eq!(Value::Boolean(false).to_number(), 0.0);
+        assert_eq!(Value::Boolean(true).to_number(), 1.0);
+        assert_eq!(Value::Number(3.11).to_number(), 3.11);
+        assert_eq!(Value::String("42".to_string()).to_number(), 42.0);
+        assert!(Value::String("abc".to_string()).to_number().is_nan());
+        assert_eq!(make_array(vec![]).to_number(), 0.0);
+        assert_eq!(make_array(vec![Value::Number(7.0)]).to_number(), 7.0);
+        assert!(
+            make_array(vec![Value::Number(1.0), Value::Number(2.0)])
+                .to_number()
+                .is_nan()
+        );
+        assert!(make_object().to_number().is_nan());
+    }
+
+    #[test]
+    fn test_loose_equals() {
+        assert!(Value::Undefined.loose_equals(&Value::Undefined));
+        assert!(Value::Null.loose_equals(&Value::Null));
+        assert!(Value::Undefined.loose_equals(&Value::Null));
+        assert!(Value::Null.loose_equals(&Value::Undefined));
+        assert!(!Value::Null.loose_equals(&Value::Number(0.0)));
+        assert!(!Value::Undefined.loose_equals(&Value::Number(0.0)));
+        assert!(Value::Boolean(true).loose_equals(&Value::Number(1.0)));
+        assert!(Value::Number(1.0).loose_equals(&Value::Boolean(true)));
+        assert!(Value::Boolean(false).loose_equals(&Value::Number(0.0)));
+        assert!(Value::String("1".to_string()).loose_equals(&Value::Number(1.0)));
+        assert!(Value::Number(1.0).loose_equals(&Value::String("1".to_string())));
+        assert!(!Value::Number(1.0).loose_equals(&Value::Number(2.0)));
+    }
+
+    #[test]
+    fn test_typeof_string() {
+        assert_eq!(Value::Undefined.typeof_string(), "undefined");
+        assert_eq!(Value::Null.typeof_string(), "object"); // JS quirk: null is "object"
+        assert_eq!(Value::Boolean(true).typeof_string(), "boolean");
+        assert_eq!(Value::Number(0.0).typeof_string(), "number");
+        assert_eq!(Value::String(String::new()).typeof_string(), "string");
+        assert_eq!(make_array(vec![]).typeof_string(), "object");
+        assert_eq!(make_object().typeof_string(), "object");
+    }
+
+    #[test]
+    fn test_display() {
+        assert_eq!(Value::Undefined.to_string(), "undefined");
+        assert_eq!(Value::Null.to_string(), "null");
+        assert_eq!(Value::Boolean(true).to_string(), "true");
+        assert_eq!(Value::Boolean(false).to_string(), "false");
+        assert_eq!(Value::Number(42.0).to_string(), "42");
+        assert_eq!(Value::String("hello".to_string()).to_string(), "hello");
+        assert_eq!(make_array(vec![]).to_string(), "[]");
+        assert_eq!(
+            make_array(vec![
+                Value::Number(1.0),
+                Value::Number(2.0),
+                Value::Number(3.0),
+            ])
+            .to_string(),
+            "[1, 2, 3]"
+        );
+        assert_eq!(make_object().to_string(), "[object Object]");
     }
 }
