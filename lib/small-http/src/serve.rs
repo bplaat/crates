@@ -153,6 +153,7 @@ mod test {
 
     use super::*;
     use crate::enums::Status;
+    use crate::request::Request;
 
     #[test]
     fn test_serve_single_threaded() {
@@ -215,5 +216,57 @@ mod test {
             assert_eq!(req.url.query(), Some("x=1&y=2"));
             Response::with_status(Status::Ok)
         });
+    }
+
+    #[test]
+    fn test_various_methods() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            serve_single_threaded(listener, |req| {
+                Response::with_status(Status::Ok).header("X-Method", req.method.to_string())
+            });
+        });
+
+        for (req, expected_method) in [
+            (Request::get(format!("http://{addr}/")), "GET"),
+            (Request::post(format!("http://{addr}/")), "POST"),
+            (Request::put(format!("http://{addr}/")), "PUT"),
+            (Request::delete(format!("http://{addr}/")), "DELETE"),
+            (Request::patch(format!("http://{addr}/")), "PATCH"),
+        ] {
+            let res = req.fetch().unwrap();
+            assert_eq!(res.headers.get("X-Method").unwrap(), expected_method);
+        }
+    }
+
+    #[test]
+    fn test_various_status_codes() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            serve_single_threaded(listener, |req| match req.url.path() {
+                "/created" => Response::with_status(Status::Created),
+                "/no-content" => Response::with_status(Status::NoContent),
+                "/bad-request" => Response::with_status(Status::BadRequest),
+                "/not-found" => Response::with_status(Status::NotFound),
+                "/internal-server-error" => Response::with_status(Status::InternalServerError),
+                _ => Response::with_status(Status::Ok),
+            });
+        });
+
+        for (path, expected_status) in [
+            ("/", Status::Ok),
+            ("/created", Status::Created),
+            ("/no-content", Status::NoContent),
+            ("/bad-request", Status::BadRequest),
+            ("/not-found", Status::NotFound),
+            ("/internal-server-error", Status::InternalServerError),
+        ] {
+            let res = Request::get(format!("http://{addr}{path}"))
+                .fetch()
+                .unwrap();
+            assert_eq!(res.status, expected_status);
+        }
     }
 }

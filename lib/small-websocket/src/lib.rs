@@ -358,4 +358,138 @@ mod test {
             assert_eq!(text, "Hello")
         }
     }
+
+    // Build a minimal unmasked WebSocket frame: FIN + opcode, then length, then payload
+    fn make_frame(opcode: u8, payload: &[u8]) -> Vec<u8> {
+        let mut frame = vec![0x80 | opcode];
+        let len = payload.len();
+        if len <= 125 {
+            frame.push(len as u8);
+        } else {
+            frame.push(126);
+            frame.extend_from_slice(&(len as u16).to_be_bytes());
+        }
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    #[test]
+    fn test_parse_text_frame() {
+        let frame = make_frame(0x1, b"Hello");
+        let msg = WebSocket::parse_message(&frame).unwrap();
+        assert!(matches!(msg, Message::Text(t) if t == "Hello"));
+    }
+
+    #[test]
+    fn test_parse_binary_frame() {
+        let frame = make_frame(0x2, &[0xDE, 0xAD, 0xBE, 0xEF]);
+        let msg = WebSocket::parse_message(&frame).unwrap();
+        assert!(matches!(msg, Message::Binary(b) if b == [0xDE, 0xAD, 0xBE, 0xEF]));
+    }
+
+    #[test]
+    fn test_parse_ping_pong_frames() {
+        let ping = make_frame(0x9, b"ping-data");
+        assert!(
+            matches!(WebSocket::parse_message(&ping).unwrap(), Message::Ping(b) if b == b"ping-data")
+        );
+
+        let pong = make_frame(0xA, b"pong-data");
+        assert!(
+            matches!(WebSocket::parse_message(&pong).unwrap(), Message::Pong(b) if b == b"pong-data")
+        );
+    }
+
+    #[test]
+    fn test_parse_close_frame_with_code_and_reason() {
+        // Close frame: 2-byte code (1000 = 0x03E8) + reason
+        let mut payload = vec![0x03u8, 0xE8]; // 1000
+        payload.extend_from_slice(b"bye");
+        let frame = make_frame(0x8, &payload);
+        match WebSocket::parse_message(&frame).unwrap() {
+            Message::Close(code, reason) => {
+                assert_eq!(code, Some(1000));
+                assert_eq!(reason.as_deref(), Some("bye"));
+            }
+            _ => panic!("expected Close"),
+        }
+    }
+
+    #[test]
+    fn test_parse_close_frame_no_payload() {
+        let frame = make_frame(0x8, &[]);
+        match WebSocket::parse_message(&frame).unwrap() {
+            Message::Close(code, reason) => {
+                assert_eq!(code, None);
+                assert_eq!(reason, None);
+            }
+            _ => panic!("expected Close"),
+        }
+    }
+
+    #[test]
+    fn test_parse_masked_frame() {
+        // Client-masked text frame with key [0x37, 0xFA, 0x21, 0x3D] and payload "Hello"
+        let mask = [0x37u8, 0xFA, 0x21, 0x3D];
+        let plain = b"Hello";
+        let masked: Vec<u8> = plain
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| b ^ mask[i % 4])
+            .collect();
+
+        let mut frame = vec![0x81u8, 0x80 | 5u8]; // FIN+text, MASKED+5
+        frame.extend_from_slice(&mask);
+        frame.extend_from_slice(&masked);
+
+        let msg = WebSocket::parse_message(&frame).unwrap();
+        assert!(matches!(msg, Message::Text(t) if t == "Hello"));
+    }
+
+    #[test]
+    fn test_parse_medium_length_frame() {
+        // 200-byte binary payload uses 2-byte extended length (126 marker)
+        let payload = vec![0xABu8; 200];
+        let frame = make_frame(0x2, &payload);
+        assert_eq!(frame[1], 126); // extended length marker
+        assert_eq!(u16::from_be_bytes([frame[2], frame[3]]), 200);
+        let msg = WebSocket::parse_message(&frame).unwrap();
+        assert!(matches!(msg, Message::Binary(b) if b.len() == 200));
+    }
+
+    #[test]
+    fn test_parse_unknown_opcode_returns_none() {
+        let frame = make_frame(0x3, b"data"); // 0x3 is reserved/unknown
+        assert!(WebSocket::parse_message(&frame).is_none());
+    }
+
+    #[test]
+    fn test_parse_truncated_frame_returns_none() {
+        // Frame header says 10 bytes but buffer has only 3
+        let frame = vec![0x82u8, 10u8, 0x01]; // binary, 10 bytes, only 1 provided
+        assert!(WebSocket::parse_message(&frame).is_none());
+    }
+
+    #[test]
+    fn test_upgrade_accept_key() {
+        // RFC 6455 Section 1.3 example: known input/output pair
+        let req = Request::new()
+            .header("Upgrade", "websocket")
+            .header("Connection", "Upgrade")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==");
+        let res = upgrade(&req, |_ws| {});
+        assert_eq!(res.status, Status::SwitchingProtocols);
+        assert_eq!(
+            res.headers.get("Sec-WebSocket-Accept").unwrap(),
+            "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+        );
+    }
+
+    #[test]
+    fn test_upgrade_missing_headers_returns_bad_request() {
+        let req = Request::new(); // no WebSocket headers
+        let res = upgrade(&req, |_ws| {});
+        assert_eq!(res.status, Status::BadRequest);
+    }
 }
