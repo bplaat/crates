@@ -10,16 +10,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Manages temporary file creation with a consistent naming scheme.
-/// All temp files are placed in temp_dir/ccontinue for easy cleanup.
+/// Each compiler process gets its own temp_dir/ccontinue/ccc_<pid> workspace.
 pub(crate) struct TempFileManager {
     base_dir: PathBuf,
 }
 
 impl TempFileManager {
-    /// Create a new TempFileManager with temp_dir/ccontinue as base.
+    /// Create a new TempFileManager with a per-process workspace.
     pub(crate) fn new() -> Self {
         let mut base = std::env::temp_dir();
         base.push("ccontinue");
+        base.push(format!("ccc_{}", std::process::id()));
         std::fs::create_dir_all(&base).unwrap_or_else(|e| {
             eprintln!("[ERROR] Can't create temp dir: {e}");
             std::process::exit(1);
@@ -27,13 +28,13 @@ impl TempFileManager {
         TempFileManager { base_dir: base }
     }
 
-    /// Get the base temp directory path (temp_dir/ccontinue).
+    /// Get the base temp directory path for this compiler process.
     pub(crate) fn base_dir(&self) -> &PathBuf {
         &self.base_dir
     }
 
     /// Create a temporary file path with the given extension.
-    /// Returns a path like temp_dir/ccontinue/ccc_<pid>_<counter>.<ext>
+    /// Returns a path like temp_dir/ccontinue/ccc_<pid>/ccc_<pid>_<counter>.<ext>
     pub(crate) fn temp_file(&self, ext: &str) -> String {
         let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
         let name = format!("ccc_{}_{n}{ext}", std::process::id());
@@ -48,5 +49,11 @@ impl TempFileManager {
 impl Default for TempFileManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for TempFileManager {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.base_dir);
     }
 }
