@@ -536,6 +536,20 @@ impl Sha1 {
     }
 }
 
+// MARK: Digest impl
+impl digest::Digest for Sha1 {
+    const BLOCK_SIZE: usize = 64;
+    type Output = [u8; 20];
+
+    fn update(&mut self, data: &[u8]) {
+        self.update(data);
+    }
+
+    fn finalize_reset(&mut self) -> Self::Output {
+        self.finalize_reset()
+    }
+}
+
 // MARK: Tests
 #[cfg(test)]
 mod test {

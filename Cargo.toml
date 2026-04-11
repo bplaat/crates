@@ -54,6 +54,8 @@ percent-encoding = { path = "lib/percent-encoding" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 semver = { path = "lib/semver" }
+digest = { path = "lib/digest" }
+hmac = { path = "lib/hmac" }
 sha1 = { path = "lib/sha1" }
 sha2 = { path = "lib/sha2" }
 simple_logger = { path = "lib/simple_logger" }

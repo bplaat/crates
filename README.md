@@ -92,11 +92,13 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [cfg-if](lib/cfg-if) A minimal replacement for the [cfg-if](https://crates.io/crates/cfg-if) crate
 - [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 - [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
+- [digest](lib/digest) A minimal replacement for the [digest](https://crates.io/crates/digest) crate
 - [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
 - [dotenv](lib/dotenv) A minimal replacement for the [dotenv](https://crates.io/crates/dotenv) crate
 - [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
 - [form_urlencoded](lib/form_urlencoded) A minimal replacement for the [form_urlencoded](https://crates.io/crates/form_urlencoded) crate
 - [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
+- [hmac](lib/hmac) A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
 - [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 - [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
 - [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate

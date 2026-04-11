@@ -1,13 +1,15 @@
 [package]
-name = "sha1"
-version = "0.11.0+patch"
+name = "hmac"
+version = "0.13.0+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
-[dependencies]
-cfg-if = "1"
-digest = "0.11.0"
-
 [lints]
 workspace = true
+
+[dependencies]
+digest = "0.11.0"
+
+[dev-dependencies]
+sha2 = "0.11.0"

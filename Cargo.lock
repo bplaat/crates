@@ -186,6 +186,10 @@ name = "copy_dir"
 version = "0.1.3+patch"
 
 [[package]]
+name = "digest"
+version = "0.11.0+patch"
+
+[[package]]
 name = "directories"
 version = "6.0.0+patch"
 dependencies = [
@@ -304,6 +308,14 @@ name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+
+[[package]]
+name = "hmac"
+version = "0.13.0+patch"
+dependencies = [
+ "digest",
+ "sha2",
+]
 
 [[package]]
 name = "indexmap"
@@ -472,6 +484,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "getrandom",
+ "hmac",
  "sha2",
 ]
 
@@ -691,6 +704,7 @@ name = "sha1"
 version = "0.11.0+patch"
 dependencies = [
  "cfg-if",
+ "digest",
 ]
 
 [[package]]
@@ -698,6 +712,7 @@ name = "sha2"
 version = "0.11.0+patch"
 dependencies = [
  "cfg-if",
+ "digest",
 ]
 
 [[package]]

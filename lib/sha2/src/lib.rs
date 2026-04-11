@@ -534,6 +534,20 @@ impl Sha256 {
     }
 }
 
+// MARK: Digest impl
+impl digest::Digest for Sha256 {
+    const BLOCK_SIZE: usize = 64;
+    type Output = [u8; 32];
+
+    fn update(&mut self, data: &[u8]) {
+        self.update(data);
+    }
+
+    fn finalize_reset(&mut self) -> Self::Output {
+        self.finalize_reset()
+    }
+}
+
 // MARK: Tests
 #[cfg(test)]
 mod test {
