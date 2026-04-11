@@ -87,29 +87,26 @@ pub(crate) fn database_migrate(database: &Connection) -> Result<()> {
 
         #[cfg(not(test))]
         {
-            use base64::prelude::*;
             use pbkdf2::password_hash;
 
             use crate::models::{User, UserRole};
 
-            // Generate a random admin password and print it once to stdout
-            let mut bytes = [0u8; 16];
-            getrandom::fill(&mut bytes).expect("Failed to generate random bytes");
-            let admin_password = BASE64_URL_SAFE_NO_PAD.encode(bytes);
+            let admin_email =
+                std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@example.com".to_string());
+            let admin_password =
+                std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "Password123!".to_string());
 
             let user = User {
                 first_name: "Admin".to_string(),
                 last_name: "Admin".to_string(),
-                email: "admin@example.com".to_string(),
+                email: admin_email,
                 password: password_hash(&admin_password),
                 role: UserRole::Admin,
                 ..Default::default()
             };
             database.insert_user(user)?;
 
-            log::info!(
-                "Admin account created - email: admin@example.com  password: {admin_password}  (change this immediately after first login)"
-            );
+            log::info!("Admin account created");
         }
 
         database.execute(
