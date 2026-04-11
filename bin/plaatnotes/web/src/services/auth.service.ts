@@ -6,7 +6,6 @@
 
 import { signal } from '@preact/signals';
 import { type AuthValidateResponse, type LoginResponse, type User } from '../../src-gen/api.ts';
-import { API_URL } from '../consts.ts';
 
 const TOKEN_KEY = 'token';
 
@@ -19,7 +18,7 @@ export function getToken(): string | null {
 }
 
 async function applyValidate(token: string): Promise<boolean> {
-    const res = await fetch(`${API_URL}/auth/validate`, {
+    const res = await fetch(`/api/auth/validate`, {
         headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return false;
@@ -52,7 +51,7 @@ export function authFetch(url: string, init: RequestInit = {}): Promise<Response
 export type LoginResult = 'success' | 'error' | 'rate_limited';
 
 export async function login(email: string, password: string): Promise<LoginResult> {
-    const res = await fetch(`${API_URL}/auth/login`, {
+    const res = await fetch(`/api/auth/login`, {
         method: 'POST',
         body: new URLSearchParams({ email, password }),
     });
@@ -65,7 +64,7 @@ export async function login(email: string, password: string): Promise<LoginResul
 }
 
 export async function logout() {
-    await authFetch(`${API_URL}/auth/logout`, { method: 'POST' });
+    await authFetch(`/api/auth/logout`, { method: 'POST' });
     localStorage.removeItem(TOKEN_KEY);
     $authUser.value = null;
     $currentSessionId.value = null;

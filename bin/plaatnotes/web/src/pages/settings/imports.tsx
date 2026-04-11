@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Button, FormField, FormInput, FormMessage } from '../../components/form.tsx';
 import { Card } from '../../components/card.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
-import { API_URL } from '../../consts.ts';
 import { authFetch } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
 import { type ImportGoogleKeepResponse } from '../../../src-gen/api.ts';
@@ -40,7 +39,7 @@ export function SettingsImports() {
             const fileB64 = btoa(binary);
 
             const form = new URLSearchParams({ file: fileB64 });
-            const res = await authFetch(`${API_URL}/imports/google-keep`, {
+            const res = await authFetch(`/api/imports/google-keep`, {
                 method: 'POST',
                 body: form,
             });
