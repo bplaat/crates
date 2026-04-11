@@ -41,13 +41,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
         '400':
-          description: Invalid request
+          description: Invalid request. Validation errors return a Report; malformed form data returns an empty body.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Report'
         '401':
           description: Invalid credentials
+        '429':
+          description: Too many login attempts from the current IP address
+        '500':
+          description: Internal server error while verifying the stored password hash
 
   /auth/validate:
     get:
@@ -95,6 +99,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionIndexResponse'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
 
@@ -118,6 +128,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
         '403':
@@ -139,6 +151,8 @@ paths:
       responses:
         '200':
           description: Session deleted
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
         '403':
@@ -163,6 +177,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionIndexResponse'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
 
@@ -184,6 +204,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserIndexResponse'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
         '403':
@@ -207,7 +233,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
         '400':
-          description: Invalid request
+          description: Invalid request. Validation errors return a Report; malformed form data returns an empty body.
           content:
             application/json:
               schema:
@@ -232,6 +258,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
         '403':
@@ -259,7 +287,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
         '400':
-          description: Invalid request
+          description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
           content:
             application/json:
               schema:
@@ -280,6 +308,8 @@ paths:
       responses:
         '200':
           description: User deleted
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
         '403':
@@ -305,7 +335,7 @@ paths:
         '200':
           description: Password changed successfully
         '400':
-          description: Invalid request
+          description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
           content:
             application/json:
               schema:
@@ -316,6 +346,8 @@ paths:
           description: Forbidden
         '404':
           description: User not found
+        '500':
+          description: Internal server error while verifying the stored password hash
 
   /users/{id}/notes:
     get:
@@ -339,6 +371,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
+        '400':
+          description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
         '403':
@@ -367,6 +405,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
+        '400':
+          description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
         '403':
@@ -395,6 +439,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
+        '400':
+          description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
         '403':
@@ -423,6 +473,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
+        '400':
+          description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
         '403':
@@ -448,6 +504,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionIndexResponse'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
         '403':
@@ -473,6 +535,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionIndexResponse'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed form data returns an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
         '403':
@@ -502,6 +570,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
+        '400':
+          description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
     post:
@@ -523,7 +597,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Note'
         '400':
-          description: Invalid request
+          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
           content:
             application/json:
               schema:
@@ -546,6 +620,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Note'
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
         '404':
@@ -571,7 +647,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Note'
         '400':
-          description: Invalid request
+          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
           content:
             application/json:
               schema:
@@ -590,6 +666,8 @@ paths:
       responses:
         '200':
           description: Note deleted
+        '400':
+          description: Invalid request
         '401':
           description: Unauthorized
         '404':
@@ -615,6 +693,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
 
@@ -638,6 +722,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed form data returns an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
 
@@ -661,6 +751,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
+        '400':
+          description: Invalid request. Invalid base64 or malformed form data returns an empty body; validation errors return a Report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
 
@@ -764,6 +860,10 @@ paths:
                 $ref: '#/components/schemas/ImportGoogleKeepResponse'
         '400':
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
 
@@ -997,6 +1097,8 @@ components:
           type: string
           minLength: 8
           maxLength: 128
+          pattern: "^[\\x00-\\x7F]+$"
+          description: ASCII-only password
       required:
         - email
         - password
@@ -1020,6 +1122,8 @@ components:
           type: string
           minLength: 8
           maxLength: 128
+          pattern: "^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[^A-Za-z0-9])[\\x00-\\x7F]+$"
+          description: ASCII-only password that must contain uppercase, lowercase, digit, and special character
         role:
           $ref: '#/components/schemas/UserRole'
       required:
@@ -1048,9 +1152,11 @@ components:
           type: string
           minLength: 8
           maxLength: 128
+          pattern: "^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[^A-Za-z0-9])[\\x00-\\x7F]+$"
           description: >
-            Optional new password. Only processed when the authenticated user has the admin role;
-            silently ignored for normal users. Use `/change-password` to change your own password.
+            Optional new ASCII-only password. Only processed when the authenticated user has the admin role;
+            silently ignored for normal users. Must contain uppercase, lowercase, digit, and special character.
+            Use `/change-password` to change your own password.
         theme:
           $ref: '#/components/schemas/UserTheme'
         language:
@@ -1073,10 +1179,14 @@ components:
           type: string
           minLength: 8
           maxLength: 128
+          pattern: "^[\\x00-\\x7F]+$"
+          description: Current ASCII-only password
         newPassword:
           type: string
           minLength: 8
           maxLength: 128
+          pattern: "^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[^A-Za-z0-9])[\\x00-\\x7F]+$"
+          description: New ASCII-only password that must contain uppercase, lowercase, digit, and special character
       required:
         - oldPassword
         - newPassword
@@ -1130,6 +1240,8 @@ components:
       properties:
         file:
           type: string
+          minLength: 1
+          pattern: "^[\\x00-\\x7F]+$"
           description: Base64-encoded Google Keep Takeout zip archive
       required:
         - file
