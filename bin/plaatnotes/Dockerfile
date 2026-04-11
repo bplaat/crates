@@ -37,6 +37,10 @@ COPY --from=builder /plaatnotes /app/plaatnotes
 
 WORKDIR /app
 
+VOLUME ["/data"]
+
 EXPOSE 8080
+
+ENV DATABASE_PATH=/data/database.db
 
 ENTRYPOINT ["/app/plaatnotes"]
