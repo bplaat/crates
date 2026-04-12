@@ -12,6 +12,14 @@ import { IconButton } from '../../components/button.tsx';
 import { NoteEditorCard } from '../../components/note-editor-card.tsx';
 import { createNote, fetchNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
+import {
+    ArchiveArrowDownIcon,
+    ArchiveArrowUpIcon,
+    ArrowLeftIcon,
+    DeleteOutlineIcon,
+    PinIcon,
+    RestoreIcon,
+} from '../../components/icons.tsx';
 
 function hasMeaningfulBody(body: string): boolean {
     return body.replace(/<br\s*\/?>/gi, '').trim().length > 0;
@@ -159,9 +167,7 @@ export function NotesShow() {
                         class="text-gray-500 dark:text-gray-400"
                         title={t('notes_show.back')}
                     >
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-                        </svg>
+                        <ArrowLeftIcon class="w-5 h-5" />
                     </IconButton>
                     <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">
                         {isNew ? t('notes_create.heading') : t('notes_show.heading')}
@@ -172,9 +178,7 @@ export function NotesShow() {
                         class={isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'}
                         title={isPinned ? t('note.unpin') : t('note.pin')}
                     >
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
-                        </svg>
+                        <PinIcon class="w-5 h-5" />
                     </IconButton>
                     {!isNew && (
                         <>
@@ -188,13 +192,9 @@ export function NotesShow() {
                                 title={isArchived ? t('note.unarchive') : t('note.archive')}
                             >
                                 {isArchived ? (
-                                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M20.55 5.22l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.15.55L3.46 5.22C3.17 5.57 3 6.01 3 6.5V19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.49-.17-.93-.45-1.28zM12 9.5l5.5 5.5H14v2h-4v-2H6.5L12 9.5zM5.12 5l.82-1h12l.93 1H5.12z" />
-                                    </svg>
+                                    <ArchiveArrowUpIcon class="w-5 h-5" />
                                 ) : (
-                                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.42l.82-1zM5 19V8h14v11H5zm8.45-9h-2.9v3H8l4 4 4-4h-2.55v-3z" />
-                                    </svg>
+                                    <ArchiveArrowDownIcon class="w-5 h-5" />
                                 )}
                             </IconButton>
                             <IconButton
@@ -204,15 +204,7 @@ export function NotesShow() {
                                 }
                                 title={isTrashed ? t('note.restore') : t('note.trash')}
                             >
-                                {isTrashed ? (
-                                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18z" />
-                                    </svg>
-                                ) : (
-                                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
-                                    </svg>
-                                )}
+                                {isTrashed ? <RestoreIcon class="w-5 h-5" /> : <DeleteOutlineIcon class="w-5 h-5" />}
                             </IconButton>
                         </>
                     )}

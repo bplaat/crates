@@ -13,6 +13,7 @@ import { $currentSessionId } from '../../services/auth.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
 import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { listSessions, revokeSession } from '../../services/sessions.service.ts';
+import { HistoryIcon, LaptopIcon } from '../../components/icons.tsx';
 
 function clientLabel(session: Session): string {
     const { name, version, os } = session.client;
@@ -77,9 +78,7 @@ export function SettingsSessions() {
                                 return (
                                     <Card key={session.id} class="px-5 py-4 flex items-start gap-4">
                                         <div class="mt-0.5 text-gray-400 dark:text-gray-500 shrink-0">
-                                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z" />
-                                            </svg>
+                                            <LaptopIcon class="w-6 h-6" />
                                         </div>
 
                                         <div class="flex-1 min-w-0">
@@ -108,9 +107,7 @@ export function SettingsSessions() {
                                                 onClick={() => handleRevoke(session.id)}
                                                 class="shrink-0 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-zinc-600 text-gray-500 dark:text-gray-400 hover:border-red-300 dark:hover:border-red-700 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
                                             >
-                                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                                                    <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" />
-                                                </svg>
+                                                <HistoryIcon class="w-3.5 h-3.5" />
                                                 {t('settings.sessions.revoke')}
                                             </button>
                                         )}
