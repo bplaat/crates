@@ -486,6 +486,7 @@ dependencies = [
  "getrandom",
  "hmac",
  "sha2",
+ "subtle",
 ]
 
 [[package]]
@@ -773,6 +774,10 @@ dependencies = [
  "small-http",
  "url",
 ]
+
+[[package]]
+name = "subtle"
+version = "2.6.0+patch"
 
 [[package]]
 name = "syn"
