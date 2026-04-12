@@ -7,7 +7,7 @@ A self-hosted note taking web app with rich markdown support
 - Simple self-hosted in lightweight Docker container
 - Rich markdown editor support
 - Notes search, reordering and archiving
-- Multiple users with authentication
+- Multiple users support with user management
 - Google Keep Takeout import support
 
 ## Docker image
@@ -21,3 +21,9 @@ docker build --platform linux/amd64,linux/arm64 --tag ghcr.io/bplaat/plaatnotes:
 ## Screenshot
 
 ![PlaatNotes Screenshot](docs/images/screenshot.png)
+
+## License
+
+Copyright &copy; 2025-2026 [Bastiaan van der Plaat](https://bplaat.nl/)
+
+Licensed under the [MIT](../../LICENSE) license.
