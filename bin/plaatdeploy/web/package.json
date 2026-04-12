@@ -1,0 +1,22 @@
+{
+    "name": "plaatdeploy",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build-debug": "vite build --minify=false",
+        "build-release": "vite build"
+    },
+    "dependencies": {
+        "@preact/signals": "^2.3.1",
+        "preact": "^10.26.9",
+        "wouter-preact": "^3.9.0"
+    },
+    "devDependencies": {
+        "@preact/preset-vite": "^2.10.1",
+        "@tailwindcss/vite": "^4.2.2",
+        "tailwindcss": "^4.2.2",
+        "vite": "^7.0.0"
+    }
+}

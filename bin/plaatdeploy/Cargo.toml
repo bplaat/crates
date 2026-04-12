@@ -1,0 +1,46 @@
+[package]
+name = "plaatdeploy"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1"
+ctrlc = { version = "3", features = ["termination"] }
+base64 = "0.22"
+bsqlite = { version = "0.1.2", features = ["uuid", "chrono"] }
+chrono = { version = "0.4", default-features = false, features = [
+    "now",
+    "serde",
+] }
+const_format = "0.2"
+dotenv = "0.15.0"
+from_derive = { path = "../../lib/from_derive" }
+getrandom = "0.3"
+log = "0.4.28"
+mime_guess = { version = "2.0", default-features = false }
+pbkdf2 = { path = "../../lib/pbkdf2" }
+subtle = "2"
+rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_urlencoded = "0.7.1"
+hmac = "0.13.0"
+sha2 = "0.11.0"
+simple-useragent = { version = "0.1.2", features = ["serde"] }
+simple_logger = "5.0.0"
+small-http = { version = "0.2.1", features = ["json", "log"] }
+small-router = { version = "0.2.1", features = ["log"] }
+uuid = { version = "1.0", features = ["v7", "serde"] }
+validate = { path = "../../lib/validate" }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
+
+[build-dependencies]
+copy_dir = "0.1"
+openapi-generator = { path = "../../lib/openapi-generator" }

@@ -1,0 +1,1535 @@
+openapi: 3.0.0
+info:
+  title: PlaatDeploy API
+  description: A minimal self-hosted deployment service
+  version: 0.1.0
+
+servers:
+  - url: http://localhost:8080/api
+
+paths:
+  # MARK: Misc
+  /:
+    get:
+      tags: [Misc]
+      summary: Home route
+      responses:
+        '200':
+          description: Name and version of the API
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # MARK: Auth
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and create a new session
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginBody'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Invalid credentials
+
+  /auth/validate:
+    get:
+      tags: [Auth]
+      summary: Validate current session
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Session is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthValidateResponse'
+        '401':
+          description: Unauthorized
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout and expire current session
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+        '401':
+          description: Unauthorized
+
+  # MARK: Users
+  /users:
+    get:
+      tags: [Users]
+      summary: List all users (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserIndexResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Users]
+      summary: Create a user (admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserCreateBody'
+      responses:
+        '200':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get a user by ID (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+    put:
+      tags: [Users]
+      summary: Update a user by ID (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserUpdateBody'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+    delete:
+      tags: [Users]
+      summary: Delete a user by ID (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: User deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+
+  /users/{id}/change-password:
+    post:
+      tags: [Users]
+      summary: Change the authenticated user's password
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordBody'
+      responses:
+        '200':
+          description: Password changed
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+
+  # MARK: Teams
+  /teams:
+    get:
+      tags: [Teams]
+      summary: List teams
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of teams
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamIndexResponse'
+        '401':
+          description: Unauthorized
+    post:
+      tags: [Teams]
+      summary: Create a team
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeamCreateBody'
+      responses:
+        '200':
+          description: Team created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+
+  /teams/{id}:
+    get:
+      tags: [Teams]
+      summary: Get a team by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Team found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamShowResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+    put:
+      tags: [Teams]
+      summary: Update a team by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeamUpdateBody'
+      responses:
+        '200':
+          description: Team updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+    delete:
+      tags: [Teams]
+      summary: Delete a team by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Team deleted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+
+  /teams/{id}/members:
+    post:
+      tags: [Teams]
+      summary: Add a member to a team
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeamUserCreateBody'
+      responses:
+        '200':
+          description: Team member created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamUser'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+
+  /teams/{id}/github:
+    get:
+      tags: [Teams]
+      summary: Get team GitHub connection status
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Team GitHub status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamGithubStatusResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+
+  /teams/{id}/github/setup-start:
+    get:
+      tags: [Teams]
+      summary: Start team GitHub App manifest setup flow
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: State and manifest data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubSetupStartResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+    put:
+      tags: [Teams]
+      summary: Connect a team to a GitHub installation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeamGithubConnectBody'
+      responses:
+        '200':
+          description: Team GitHub connection updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamGithubStatusResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+    delete:
+      tags: [Teams]
+      summary: Disconnect a team from GitHub
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Team GitHub connection deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+
+  /teams/{id}/github/repositories:
+    get:
+      tags: [Teams]
+      summary: List repositories available to a team GitHub connection
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: List of repositories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubRepositoryIndexResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+
+  /teams/{id}/github/branches:
+    get:
+      tags: [Teams]
+      summary: List branches available for a team repository
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of branches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubBranchIndexResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team not found
+
+  /teams/{id}/members/{userId}:
+    put:
+      tags: [Teams]
+      summary: Update a team member
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeamUserUpdateBody'
+      responses:
+        '200':
+          description: Team member updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamUser'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team or member not found
+    delete:
+      tags: [Teams]
+      summary: Remove a team member
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Team member deleted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Team or member not found
+
+  # MARK: Sessions
+  /sessions:
+    get:
+      tags: [Sessions]
+      summary: List sessions (admin sees all, user sees own)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionIndexResponse'
+        '401':
+          description: Unauthorized
+
+  /sessions/{id}:
+    delete:
+      tags: [Sessions]
+      summary: Delete (revoke) a session
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Session deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Session not found
+
+  # MARK: Projects
+  /projects:
+    get:
+      tags: [Projects]
+      summary: List all projects
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectIndexResponse'
+        '401':
+          description: Unauthorized
+    post:
+      tags: [Projects]
+      summary: Create a project
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectCreateBody'
+      responses:
+        '200':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+
+  /projects/{id}:
+    get:
+      tags: [Projects]
+      summary: Get a project by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Project found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+    put:
+      tags: [Projects]
+      summary: Update a project by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdateBody'
+      responses:
+        '200':
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+    delete:
+      tags: [Projects]
+      summary: Delete a project by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Project deleted
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+
+  /projects/{id}/deploy:
+    post:
+      tags: [Projects]
+      summary: Manually trigger a deployment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Deployment queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+
+  /projects/{id}/deployments:
+    get:
+      tags: [Projects]
+      summary: List deployments for a project
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of deployments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentIndexResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Project not found
+
+  # MARK: Deployments
+  /deployments/{id}:
+    get:
+      tags: [Deployments]
+      summary: Get a deployment by ID (includes log)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Deployment found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deployment'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Deployment not found
+
+  # MARK: GitHub
+  /github/setup:
+    get:
+      tags: [GitHub]
+      summary: Team GitHub App manifest setup callback
+      description: Called by GitHub after App creation. Resolves the team through setup state, then stores that team's app credentials. No authentication required.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to admin home on success
+        '400':
+          description: Invalid state or missing parameters
+        '502':
+          description: GitHub API error during code exchange
+
+  # MARK: Webhook
+  /webhook/github:
+    post:
+      tags: [Webhook]
+      summary: GitHub App webhook endpoint
+      description: Receives push and workflow_run events from the GitHub App. Verified via HMAC-SHA256 signature. On push (no CI) or workflow_run (success), triggers a deploy for matching projects.
+      responses:
+        '200':
+          description: Webhook processed
+        '400':
+          description: Invalid payload
+        '401':
+          description: Invalid signature
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  # MARK: Parameters
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    Query:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+
+  # MARK: Schemas
+  schemas:
+    Report:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+      required:
+        - page
+        - limit
+        - total
+
+    # MARK: Auth
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        token:
+          type: string
+      required:
+        - userId
+        - token
+
+    AuthValidateResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          $ref: '#/components/schemas/Session'
+      required:
+        - user
+        - session
+
+    # MARK: User
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - firstName
+        - lastName
+        - email
+        - role
+        - createdAt
+        - updatedAt
+
+    UserRole:
+      type: string
+      enum: [normal, admin]
+
+    UserCreateBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+
+    UserUpdateBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+      required:
+        - firstName
+        - lastName
+        - email
+
+    UserIndexResponse:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+      required:
+        - pagination
+        - data
+
+    ChangePasswordBody:
+      type: object
+      properties:
+        oldPassword:
+          type: string
+        newPassword:
+          type: string
+      required:
+        - oldPassword
+        - newPassword
+
+    # MARK: Team
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+
+    TeamCreateBody:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    TeamUpdateBody:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    TeamUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        teamId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/TeamUserRole'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - teamId
+        - userId
+        - firstName
+        - lastName
+        - email
+        - role
+        - createdAt
+        - updatedAt
+
+    TeamUserRole:
+      type: string
+      enum: [member, owner]
+
+    TeamUserCreateBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/TeamUserRole'
+      required:
+        - email
+
+    TeamUserUpdateBody:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/TeamUserRole'
+      required:
+        - role
+
+    TeamIndexResponse:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'
+      required:
+        - pagination
+        - data
+
+    TeamShowResponse:
+      type: object
+      properties:
+        team:
+          $ref: '#/components/schemas/Team'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamUser'
+      required:
+        - team
+        - members
+
+    # MARK: Session
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        ip:
+          $ref: '#/components/schemas/SessionIp'
+        client:
+          $ref: '#/components/schemas/SessionClient'
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - ip
+        - client
+        - expiresAt
+        - createdAt
+        - updatedAt
+
+    SessionIp:
+      type: object
+      properties:
+        address:
+          type: string
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+      required:
+        - address
+
+    SessionClient:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        os:
+          type: string
+          nullable: true
+
+    SessionIndexResponse:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+      required:
+        - pagination
+        - data
+
+    # MARK: Project
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        teamId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        githubRepo:
+          type: string
+        githubBranch:
+          type: string
+        baseDir:
+          type: string
+        containerPort:
+          type: integer
+          nullable: true
+        hostPort:
+          type: integer
+          nullable: true
+        containerIp:
+          type: string
+          nullable: true
+        buildType:
+          $ref: '#/components/schemas/BuildType'
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        lastDeployedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - teamId
+        - name
+        - githubRepo
+        - githubBranch
+        - baseDir
+        - buildType
+        - status
+        - createdAt
+        - updatedAt
+
+    BuildType:
+      type: string
+      enum: [unknown, static, docker]
+
+    ProjectStatus:
+      type: string
+      enum: [idle, building, running, failed]
+
+    ProjectCreateBody:
+      type: object
+      properties:
+        name:
+          type: string
+        githubRepo:
+          type: string
+        githubBranch:
+          type: string
+        baseDir:
+          type: string
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+        - name
+        - githubRepo
+
+    ProjectUpdateBody:
+      type: object
+      properties:
+        name:
+          type: string
+        githubRepo:
+          type: string
+        githubBranch:
+          type: string
+        baseDir:
+          type: string
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        containerPort:
+          type: integer
+      required:
+        - name
+        - githubRepo
+
+    ProjectIndexResponse:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+      required:
+        - pagination
+        - data
+
+    # MARK: Deployment
+    Deployment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        commitSha:
+          type: string
+        commitMessage:
+          type: string
+        status:
+          $ref: '#/components/schemas/DeploymentStatus'
+        log:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - projectId
+        - commitSha
+        - commitMessage
+        - status
+        - createdAt
+        - updatedAt
+
+    DeploymentStatus:
+      type: string
+      enum: [pending, building, succeeded, failed]
+
+    DeploymentIndexResponse:
+      type: object
+      properties:
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deployment'
+      required:
+        - pagination
+        - data
+
+    # MARK: GitHub
+    GithubStatusResponse:
+      type: object
+      properties:
+        connected:
+          type: boolean
+      required:
+        - connected
+
+    GithubInstallation:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        accountLogin:
+          type: string
+        accountType:
+          type: string
+          nullable: true
+      required:
+        - id
+        - accountLogin
+
+    TeamGithubConnection:
+      type: object
+      properties:
+        installationId:
+          type: integer
+          format: int64
+        accountLogin:
+          type: string
+        accountType:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - installationId
+        - accountLogin
+        - createdAt
+        - updatedAt
+
+    TeamGithubStatusResponse:
+      type: object
+      properties:
+        appConfigured:
+          type: boolean
+        connected:
+          type: boolean
+        inheritedConnection:
+          type: boolean
+        installUrl:
+          type: string
+          nullable: true
+        connection:
+          $ref: '#/components/schemas/TeamGithubConnection'
+        installations:
+          type: array
+          items:
+            $ref: '#/components/schemas/GithubInstallation'
+      required:
+        - appConfigured
+        - connected
+        - inheritedConnection
+        - installations
+
+    TeamGithubConnectBody:
+      type: object
+      properties:
+        installationId:
+          type: integer
+          format: int64
+      required:
+        - installationId
+
+    GithubRepository:
+      type: object
+      properties:
+        fullName:
+          type: string
+      required:
+        - fullName
+
+    GithubRepositoryIndexResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GithubRepository'
+      required:
+        - data
+
+    GithubBranch:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    GithubBranchIndexResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GithubBranch'
+      required:
+        - data
+
+    GithubSetupStartResponse:
+      type: object
+      properties:
+        state:
+          type: string
+        manifest:
+          type: object
+      required:
+        - state
+        - manifest

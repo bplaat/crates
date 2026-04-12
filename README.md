@@ -81,6 +81,7 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 - [ccontinue](bin/ccontinue) A transpiler that translates an OOP-extension for the C programming language back to C
 - [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
 - [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
+- [plaatdeploy](bin/plaatdeploy) A minimal self-hosted deployment service (Dokploy/Coolify alternative)
 - [plaatnotes](bin/plaatnotes) A self-hosted note taking web app with rich markdown support
 
 ### Replacement libraries
