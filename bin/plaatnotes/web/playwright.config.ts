@@ -71,7 +71,7 @@ export default defineConfig({
     ],
     webServer: [
         {
-            command: 'cargo run -- serve-e2e',
+            command: 'cargo run --locked -- serve-e2e',
             cwd: '..',
             env: {
                 ...process.env,

@@ -68,6 +68,7 @@ check_rust_deps() {
 
 check_e2e() {
     echo "Running end-to-end tests..."
+    cargo build -p plaatnotes --locked
     (cd bin/plaatnotes/web && check_e2e_plaatnotes)
 }
 
