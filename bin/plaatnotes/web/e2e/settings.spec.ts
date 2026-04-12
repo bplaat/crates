@@ -4,7 +4,27 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
+
+const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
+const GOOGLE_KEEP_ZIP_B64 =
+    'UEsDBBQAAAAAAHNrjFwIITQ31QAAANUAAAAXAAAAVGFrZW91dC9LZWVwL25vdGUwLmpzb257InRpdGxlIjogIkltcG9ydGVkIG5vdGUgb25lIiwgInRleHRDb250ZW50IjogIkltcG9ydGVkIGJvZHkgb25lIiwgImlzUGlubmVkIjogZmFsc2UsICJpc0FyY2hpdmVkIjogZmFsc2UsICJpc1RyYXNoZWQiOiBmYWxzZSwgImNyZWF0ZWRUaW1lc3RhbXBVc2VjIjogMTcwMDAwMDAwMDAwMDAwMCwgInVzZXJFZGl0ZWRUaW1lc3RhbXBVc2VjIjogMTcwMDAwMDAwMDAwMDAwMH1QSwMEFAAAAAAAc2uMXEHt81vVAAAA1QAAABcAAABUYWtlb3V0L0tlZXAvbm90ZTEuanNvbnsidGl0bGUiOiAiSW1wb3J0ZWQgbm90ZSB0d28iLCAidGV4dENvbnRlbnQiOiAiSW1wb3J0ZWQgYm9keSB0d28iLCAiaXNQaW5uZWQiOiBmYWxzZSwgImlzQXJjaGl2ZWQiOiBmYWxzZSwgImlzVHJhc2hlZCI6IGZhbHNlLCAiY3JlYXRlZFRpbWVzdGFtcFVzZWMiOiAxNzAwMDAwMDAwMDAwMDAwLCAidXNlckVkaXRlZFRpbWVzdGFtcFVzZWMiOiAxNzAwMDAwMDAwMDAwMDAwfVBLAQIUAxQAAAAAAHNrjFwIITQ31QAAANUAAAAXAAAAAAAAAAAAAACAAQAAAABUYWtlb3V0L0tlZXAvbm90ZTAuanNvblBLAQIUAxQAAAAAAHNrjFxB7fNb1QAAANUAAAAXAAAAAAAAAAAAAACAAQoBAABUYWtlb3V0L0tlZXAvbm90ZTEuanNvblBLBQYAAAAAAgACAIoAAAAUAgAAAAA=';
+
+async function authHeaders(page: import('@playwright/test').Page): Promise<Record<string, string>> {
+    if (!page.url().startsWith('http')) await page.goto('/');
+    const token = await page.evaluate(() => localStorage.getItem('token') ?? '');
+    return { Authorization: `Bearer ${token}` };
+}
+
+async function deleteNotesByQuery(page: import('@playwright/test').Page, query: string): Promise<void> {
+    const headers = await authHeaders(page);
+    const res = await page.request.get(`${API_URL}/notes?page=1&q=${encodeURIComponent(query)}`, { headers });
+    const data: { data: Array<{ id: string }> } = await res.json();
+    for (const note of data.data) {
+        await page.request.delete(`${API_URL}/notes/${note.id}`, { headers });
+    }
+}
 
 test.describe('Settings', () => {
     test('account settings page loads with correct title', async ({ page }) => {
@@ -83,8 +103,6 @@ test.describe('Settings', () => {
     });
 
     test('revoke a non-current session with confirm dialog', async ({ page }) => {
-        const API_URL = 'http://localhost:8080/api';
-
         // Create a second session via API login
         await page.request.post(`${API_URL}/auth/login`, {
             data: new URLSearchParams({ email: 'test@example.com', password: 'password' }).toString(),
@@ -102,5 +120,23 @@ test.describe('Settings', () => {
         await page.getByRole('button', { name: 'Revoke' }).last().click();
 
         await expect(page.getByText('Revoke this session? That device will be signed out.')).not.toBeVisible();
+    });
+
+    test('imports notes from a Google Keep zip upload', async ({ page }) => {
+        await page.goto('/settings/imports');
+        await page.getByLabel('Takeout zip file').setInputFiles({
+            name: 'takeout.zip',
+            mimeType: 'application/zip',
+            buffer: Buffer.from(GOOGLE_KEEP_ZIP_B64, 'base64'),
+        });
+        await page.getByRole('button', { name: 'Import' }).click();
+
+        await expect(page.getByText('Imported 2 notes!')).toBeVisible();
+
+        await page.goto('/');
+        await expect(page.locator('a[href^="/notes/"]').filter({ hasText: 'Imported note one' }).first()).toBeVisible();
+        await expect(page.locator('a[href^="/notes/"]').filter({ hasText: 'Imported note two' }).first()).toBeVisible();
+
+        await deleteNotesByQuery(page, 'Imported note');
     });
 });

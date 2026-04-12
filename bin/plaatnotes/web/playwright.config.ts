@@ -6,6 +6,9 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
+const port = process.env.PLAYWRIGHT_PORT ?? '8080';
+const baseURL = `http://localhost:${port}`;
+
 export default defineConfig({
     testDir: './e2e',
     fullyParallel: true,
@@ -17,7 +20,7 @@ export default defineConfig({
         timeout: 10_000,
     },
     use: {
-        baseURL: 'http://localhost:8080',
+        baseURL,
         trace: 'on-first-retry',
     },
     projects: [
@@ -70,7 +73,11 @@ export default defineConfig({
         {
             command: 'cargo run -- serve-e2e',
             cwd: '..',
-            url: 'http://localhost:8080/',
+            env: {
+                ...process.env,
+                SERVER_PORT: port,
+            },
+            url: `${baseURL}/`,
             reuseExistingServer: !process.env.CI,
         },
     ],

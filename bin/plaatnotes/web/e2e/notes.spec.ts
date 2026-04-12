@@ -6,7 +6,7 @@
 
 import { type Page, expect, test } from '@playwright/test';
 
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
 
 async function authHeaders(page: Page): Promise<Record<string, string>> {
     if (!page.url().startsWith('http')) await page.goto('/');

@@ -88,6 +88,8 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
     useEffect(() => {
         if (!autoFocus) return;
         const id = requestAnimationFrame(() => {
+            const active = document.activeElement;
+            if (active && active !== document.body) return;
             if (plainMode) textareaRef.current?.focus();
             else editorRef.current?.focus();
         });

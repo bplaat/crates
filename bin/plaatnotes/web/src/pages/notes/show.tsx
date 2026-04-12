@@ -13,6 +13,10 @@ import { NoteEditorCard } from '../../components/note-editor-card.tsx';
 import { createNote, fetchNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
 
+function hasMeaningfulBody(body: string): boolean {
+    return body.replace(/<br\s*\/?>/gi, '').trim().length > 0;
+}
+
 export function NotesShow() {
     const { note_id } = useParams<{ note_id?: string }>();
     const [, navigate] = useLocation();
@@ -60,7 +64,7 @@ export function NotesShow() {
                 if (data) {
                     if (noteRef.current) {
                         updateNote(noteRef.current, {});
-                    } else if (data.body.trim()) {
+                    } else if (hasMeaningfulBody(data.body)) {
                         createNote({ body: data.body, title: data.title || undefined, isPinned: data.isPinned });
                     }
                 }
@@ -80,7 +84,7 @@ export function NotesShow() {
                 const saved = await updateNote(noteRef.current, {});
                 noteRef.current = { ...noteRef.current, updatedAt: saved.updatedAt };
                 setSaveStatus('saved');
-            } else if (newBody.trim()) {
+            } else if (hasMeaningfulBody(newBody)) {
                 const created = await createNote({
                     body: newBody,
                     title: newTitle || undefined,

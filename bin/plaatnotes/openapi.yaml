@@ -5,11 +5,11 @@ info:
   version: 0.1.3
 
 servers:
-  - url: http://localhost:8080/api
+  - url: http://localhost:8080
 
 paths:
   # MARK: Misc
-  /:
+  /api:
     get:
       tags: [Misc]
       summary: Home route
@@ -22,7 +22,7 @@ paths:
                 type: string
 
   # MARK: Auth
-  /auth/login:
+  /api/auth/login:
     post:
       tags: [Auth]
       summary: Login and create a new session
@@ -52,7 +52,7 @@ paths:
         '500':
           description: Internal server error while verifying the stored password hash
 
-  /auth/validate:
+  /api/auth/validate:
     get:
       tags: [Auth]
       summary: Validate current session
@@ -68,7 +68,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /auth/logout:
+  /api/auth/logout:
     post:
       tags: [Auth]
       summary: Logout and expire current session
@@ -81,7 +81,7 @@ paths:
           description: Unauthorized
 
   # MARK: Sessions
-  /sessions:
+  /api/sessions:
     get:
       tags: [Sessions]
       summary: Get sessions (admin sees all, normal user sees own)
@@ -107,7 +107,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /sessions/{sessionId}:
+  /api/sessions/{sessionId}:
     get:
       tags: [Sessions]
       summary: Get session details
@@ -159,7 +159,7 @@ paths:
         '404':
           description: Session not found
 
-  /sessions/active:
+  /api/sessions/active:
     get:
       tags: [Sessions]
       summary: Get all active (non-expired) sessions for the authenticated user
@@ -186,7 +186,7 @@ paths:
           description: Unauthorized
 
   # MARK: Users
-  /users:
+  /api/users:
     get:
       tags: [Users]
       summary: Get all users
@@ -242,7 +242,7 @@ paths:
         '403':
           description: Forbidden (admin only)
 
-  /users/{id}:
+  /api/users/{id}:
     get:
       tags: [Users]
       summary: Get a user by ID
@@ -316,7 +316,7 @@ paths:
         '404':
           description: User not found
 
-  /users/{id}/change-password:
+  /api/users/{id}/change-password:
     post:
       tags: [Users]
       summary: Change user password
@@ -348,7 +348,7 @@ paths:
         '500':
           description: Internal server error while verifying the stored password hash
 
-  /users/{id}/notes:
+  /api/users/{id}/notes:
     get:
       tags: [Users]
       summary: Get all notes for a user
@@ -383,7 +383,7 @@ paths:
         '404':
           description: User not found
 
-  /users/{id}/notes/pinned:
+  /api/users/{id}/notes/pinned:
     get:
       tags: [Users]
       summary: Get all pinned notes for a user
@@ -417,7 +417,7 @@ paths:
         '404':
           description: User not found
 
-  /users/{id}/notes/archived:
+  /api/users/{id}/notes/archived:
     get:
       tags: [Users]
       summary: Get all archived notes for a user
@@ -451,7 +451,7 @@ paths:
         '404':
           description: User not found
 
-  /users/{id}/notes/trashed:
+  /api/users/{id}/notes/trashed:
     get:
       tags: [Users]
       summary: Get all trashed notes for a user
@@ -485,7 +485,7 @@ paths:
         '404':
           description: User not found
 
-  /users/{id}/sessions:
+  /api/users/{id}/sessions:
     get:
       tags: [Users]
       summary: Get all sessions for a user
@@ -516,7 +516,7 @@ paths:
         '404':
           description: User not found
 
-  /users/{id}/sessions/active:
+  /api/users/{id}/sessions/active:
     get:
       tags: [Users]
       summary: Get all active (non-expired) sessions for a user
@@ -548,7 +548,7 @@ paths:
           description: User not found
 
   # MARK: Notes
-  /notes:
+  /api/notes:
     get:
       tags: [Notes]
       summary: Get all notes
@@ -604,7 +604,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /notes/{id}:
+  /api/notes/{id}:
     get:
       tags: [Notes]
       summary: Get a note by ID
@@ -672,7 +672,7 @@ paths:
         '404':
           description: Note not found
 
-  /notes/pinned:
+  /api/notes/pinned:
     get:
       tags: [Notes]
       summary: Get all pinned notes
@@ -701,7 +701,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /notes/archived:
+  /api/notes/archived:
     get:
       tags: [Notes]
       summary: Get all archived notes
@@ -730,7 +730,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /notes/trashed:
+  /api/notes/trashed:
     get:
       tags: [Notes]
       summary: Get all trashed notes
@@ -759,7 +759,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /notes/trashed/clear:
+  /api/notes/trashed/clear:
     delete:
       tags: [Notes]
       summary: Clear all trashed notes
@@ -774,7 +774,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /notes/reorder:
+  /api/notes/reorder:
     put:
       tags: [Notes]
       summary: Reorder normal (non-pinned, non-archived) notes
@@ -795,7 +795,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /notes/pinned/reorder:
+  /api/notes/pinned/reorder:
     put:
       tags: [Notes]
       summary: Reorder pinned notes
@@ -816,7 +816,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /notes/archived/reorder:
+  /api/notes/archived/reorder:
     put:
       tags: [Notes]
       summary: Reorder archived notes
@@ -838,7 +838,7 @@ paths:
           description: Unauthorized
 
   # MARK: Imports
-  /imports/google-keep:
+  /api/imports/google-keep:
     post:
       tags: [Imports]
       summary: Import notes from a Google Keep Takeout zip archive

@@ -6,7 +6,7 @@
 
 import { type Page, expect, test } from '@playwright/test';
 
-const API_URL = 'http://localhost:8080/api';
+const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
 
 async function authHeaders(page: Page): Promise<Record<string, string>> {
     if (!page.url().startsWith('http')) await page.goto('/');
@@ -30,6 +30,22 @@ async function createArchivedNote(page: Page, body: string): Promise<{ id: strin
         data: new URLSearchParams({ body, isPinned: 'false', isArchived: 'true', isTrashed: 'false' }).toString(),
     });
     return note;
+}
+
+async function noteOrder(page: Page, labels: string[]): Promise<string[]> {
+    return page.locator('a[href^="/notes/"]').evaluateAll((els, expectedLabels) => {
+        const order: string[] = [];
+        for (const el of els) {
+            const text = el.textContent ?? '';
+            for (const label of expectedLabels) {
+                if (text.includes(label)) {
+                    order.push(label);
+                    break;
+                }
+            }
+        }
+        return order;
+    }, labels);
 }
 
 test.describe('Archive', () => {
@@ -98,5 +114,33 @@ test.describe('Archive', () => {
 
         await searchInput.clear();
         await page.request.delete(`${API_URL}/notes/${note.id}`, { headers });
+    });
+
+    test('dragging archived notes reorders them and persists after reload', async ({ page }) => {
+        const labelA = `Archived reorder A ${Date.now()}`;
+        const labelB = `Archived reorder B ${Date.now()}`;
+        const noteA = await createArchivedNote(page, labelA);
+        const noteB = await createArchivedNote(page, labelB);
+
+        await page.goto('/archive');
+        await expect.poll(() => noteOrder(page, [labelA, labelB])).toEqual([labelB, labelA]);
+
+        const reorderPromise = page.waitForResponse(
+            (res) => res.url().includes('/api/notes/archived/reorder') && res.request().method() === 'PUT',
+        );
+        await page
+            .locator('div[draggable="true"]')
+            .filter({ hasText: labelA })
+            .dragTo(page.locator('div[draggable="true"]').filter({ hasText: labelB }));
+        await reorderPromise;
+
+        await expect.poll(() => noteOrder(page, [labelA, labelB])).toEqual([labelA, labelB]);
+
+        await page.reload();
+        await expect.poll(() => noteOrder(page, [labelA, labelB])).toEqual([labelA, labelB]);
+
+        const headers = await authHeaders(page);
+        await page.request.delete(`${API_URL}/notes/${noteA.id}`, { headers });
+        await page.request.delete(`${API_URL}/notes/${noteB.id}`, { headers });
     });
 });

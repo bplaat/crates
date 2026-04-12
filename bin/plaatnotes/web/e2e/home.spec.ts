@@ -6,6 +6,8 @@
 
 import { expect, test } from '@playwright/test';
 
+const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
+
 test.describe('Home', () => {
     test('loads home page with correct title', async ({ page }) => {
         await page.goto('/');
@@ -75,8 +77,6 @@ test.describe('Home', () => {
 });
 
 test.describe('Home - Note card actions', () => {
-    const API_URL = 'http://localhost:8080/api';
-
     async function authHeaders(page: import('@playwright/test').Page): Promise<Record<string, string>> {
         if (!page.url().startsWith('http')) await page.goto('/');
         const token = await page.evaluate(() => localStorage.getItem('token') ?? '');
@@ -93,6 +93,22 @@ test.describe('Home - Note card actions', () => {
             data: new URLSearchParams(fields).toString(),
         });
         return res.json();
+    }
+
+    async function noteOrder(page: import('@playwright/test').Page, labels: string[]): Promise<string[]> {
+        return page.locator('a[href^="/notes/"]').evaluateAll((els, expectedLabels) => {
+            const order: string[] = [];
+            for (const el of els) {
+                const text = el.textContent ?? '';
+                for (const label of expectedLabels) {
+                    if (text.includes(label)) {
+                        order.push(label);
+                        break;
+                    }
+                }
+            }
+            return order;
+        }, labels);
     }
 
     async function deleteNote(page: import('@playwright/test').Page, id: string): Promise<void> {
@@ -157,5 +173,38 @@ test.describe('Home - Note card actions', () => {
         await expect(page.getByRole('heading', { name: 'Pinned' })).toBeVisible();
 
         await deleteNote(page, note.id);
+    });
+
+    test('dragging notes reorders them and persists after reload', async ({ page }) => {
+        const labelA = `Home reorder A ${Date.now()}`;
+        const labelB = `Home reorder B ${Date.now()}`;
+        const noteA = await createNote(page, { title: labelA, body: `Body ${labelA}` });
+        const noteB = await createNote(page, { title: labelB, body: `Body ${labelB}` });
+
+        await page.goto('/');
+        await expect.poll(() => noteOrder(page, [labelA, labelB])).toEqual([labelB, labelA]);
+
+        const reorderPromise = page.waitForResponse(
+            (res) => res.url().includes('/api/notes/reorder') && res.request().method() === 'PUT',
+        );
+        await page
+            .locator('div[draggable="true"]')
+            .filter({ hasText: labelA })
+            .dragTo(page.locator('div[draggable="true"]').filter({ hasText: labelB }));
+        await reorderPromise;
+
+        await expect.poll(() => noteOrder(page, [labelA, labelB])).toEqual([labelA, labelB]);
+
+        await page.reload();
+        await expect.poll(() => noteOrder(page, [labelA, labelB])).toEqual([labelA, labelB]);
+
+        await deleteNote(page, noteA.id);
+        await deleteNote(page, noteB.id);
+    });
+
+    test('normal user is redirected away from admin users page', async ({ page }) => {
+        await page.goto('/admin/users');
+        await expect(page).toHaveURL('/');
+        await expect(page.getByRole('heading', { name: 'Users' })).not.toBeVisible();
     });
 });
