@@ -10,19 +10,8 @@ import { type ComponentChildren } from 'preact';
 import { $authUser, logout } from '../services/auth.service.ts';
 import { $searchQuery } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
-import { SearchInput } from './form.tsx';
+import { SearchInput } from './input.tsx';
 import { lastNameInitial } from '../utils.ts';
-
-function DropdownItem({ onClick, children }: { onClick: () => void; children: ComponentChildren }) {
-    return (
-        <button
-            onClick={onClick}
-            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
-        >
-            {children}
-        </button>
-    );
-}
 
 export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
     const user = $authUser.value;
@@ -84,7 +73,7 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
                             onClick={() => setDropdownOpen(!dropdownOpen)}
                             class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
                         >
-                            <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-sm flex items-center justify-center select-none">
+                            <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-xs flex items-center justify-center select-none">
                                 {user.firstName[0].toUpperCase()}
                                 {lastNameInitial(user.lastName)}
                             </div>
@@ -147,5 +136,16 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
                 )}
             </div>
         </header>
+    );
+}
+
+function DropdownItem({ onClick, children }: { onClick: () => void; children: ComponentChildren }) {
+    return (
+        <button
+            onClick={onClick}
+            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+        >
+            {children}
+        </button>
     );
 }

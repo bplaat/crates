@@ -5,8 +5,10 @@
  */
 
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Button, FormField, FormInput, FormMessage } from '../../components/form.tsx';
+import { Button } from '../../components/button.tsx';
 import { Card } from '../../components/card.tsx';
+import { FormActions, FormField, FormMessage } from '../../components/form.tsx';
+import { FormInput } from '../../components/input.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { authFetch } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
@@ -81,7 +83,7 @@ export function SettingsImports() {
                                 onChange={(e) => setFile((e.target as HTMLInputElement).files?.[0] ?? null)}
                             />
                         </FormField>
-                        <div class="flex items-center justify-between pt-1">
+                        <div class="flex flex-col gap-3 pt-1">
                             <div>
                                 <FormMessage
                                     type="success"
@@ -92,16 +94,18 @@ export function SettingsImports() {
                                 />
                                 <FormMessage type="error" message={error && t('settings.imports.google_keep.error')} />
                             </div>
-                            <Button type="submit" disabled={loading || !file}>
-                                <span class="flex items-center gap-1.5">
-                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" />
-                                    </svg>
-                                    {loading
-                                        ? t('settings.imports.google_keep.importing')
-                                        : t('settings.imports.google_keep.submit')}
-                                </span>
-                            </Button>
+                            <FormActions class="pt-0">
+                                <Button type="submit" disabled={loading || !file}>
+                                    <span class="flex items-center gap-1.5">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" />
+                                        </svg>
+                                        {loading
+                                            ? t('settings.imports.google_keep.importing')
+                                            : t('settings.imports.google_keep.submit')}
+                                    </span>
+                                </Button>
+                            </FormActions>
                         </div>
                     </form>
                 </Card>

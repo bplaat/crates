@@ -6,7 +6,9 @@
 
 import { useLocation } from 'wouter-preact';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, FormField, FormInput } from '../../components/form.tsx';
+import { Button } from '../../components/button.tsx';
+import { FormActions, FormField } from '../../components/form.tsx';
+import { FormInput } from '../../components/input.tsx';
 import { login } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
 
@@ -73,14 +75,16 @@ export function AuthLogin() {
                         />
                     </FormField>
 
-                    <Button type="submit" disabled={loading} class="w-full mt-2">
-                        <span class="flex items-center justify-center gap-1.5">
-                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M11 7L9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8v14z" />
-                            </svg>
-                            {loading ? t('login.submitting') : t('login.submit')}
-                        </span>
-                    </Button>
+                    <FormActions>
+                        <Button type="submit" disabled={loading}>
+                            <span class="flex items-center gap-1.5">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M11 7L9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8v14z" />
+                                </svg>
+                                {loading ? t('login.submitting') : t('login.submit')}
+                            </span>
+                        </Button>
+                    </FormActions>
                 </form>
             </div>
 

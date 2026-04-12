@@ -91,7 +91,7 @@ test.describe('Admin - Users', () => {
 
         // Change last name
         await dialog.getByLabel('Last name').fill('Updated');
-        await dialog.getByRole('button', { name: 'Save changes' }).click();
+        await dialog.getByRole('button', { name: 'Save' }).click();
 
         await expect(dialog).not.toBeVisible();
         await expect(page.getByText('Edit Updated')).toBeVisible();
@@ -117,17 +117,18 @@ test.describe('Admin - Users', () => {
         const created = await createRes.json();
 
         await page.goto('/admin/users');
-        await expect(page.getByText('Delete Me')).toBeVisible();
+        const row = page.getByRole('row').filter({ hasText: email });
+        await expect(row).toBeVisible();
 
-        const row = page.getByRole('row').filter({ hasText: 'Delete Me' });
         await row.getByTitle('Delete user').click();
 
         // Confirm dialog
-        await expect(page.getByText('Delete this user? This cannot be undone.')).toBeVisible();
-        await page.getByRole('button', { name: 'Delete user' }).last().click();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog.getByText('Delete this user? This cannot be undone.')).toBeVisible();
+        await dialog.getByRole('button', { name: 'Delete' }).click();
 
         // User should be gone from the table
-        await expect(page.getByText('Delete Me')).not.toBeVisible();
+        await expect(row).not.toBeVisible();
     });
 
     test('admin link visible in navbar dropdown for admin user', async ({ page }) => {

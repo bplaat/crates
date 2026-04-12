@@ -9,7 +9,7 @@ import { useEffect, useMemo } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
-import { Layout } from '../components/layout.tsx';
+import { AppLayout } from '../components/app-layout.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { listNotes, listPinnedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
@@ -96,7 +96,7 @@ export function Home() {
     );
 
     return (
-        <Layout showSearch>
+        <AppLayout showSearch>
             <div class="max-w-screen-xl mx-auto px-4 py-6">
                 {initialLoading && <p class="text-center text-gray-400 mt-16">{t('home.loading')}</p>}
 
@@ -164,6 +164,6 @@ export function Home() {
                     <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                 </svg>
             </button>
-        </Layout>
+        </AppLayout>
     );
 }

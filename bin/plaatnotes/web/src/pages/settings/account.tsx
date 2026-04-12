@@ -6,8 +6,10 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { type Report, type UserTheme } from '../../../src-gen/api.ts';
-import { Button, FormField, FormInput, FormMessage, FormSelect } from '../../components/form.tsx';
+import { Button } from '../../components/button.tsx';
 import { Card } from '../../components/card.tsx';
+import { FormActions, FormField, FormMessage } from '../../components/form.tsx';
+import { FormInput, FormSelect } from '../../components/input.tsx';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $authUser } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
@@ -153,19 +155,21 @@ export function SettingsAccount() {
                                 </FormField>
                             </div>
 
-                            <div class="flex items-center justify-between pt-1">
+                            <div class="flex flex-col gap-3 pt-1">
                                 <div>
                                     <FormMessage type="success" message={profileSaved && t('settings.saved')} />
                                     <FormMessage type="error" message={profileError && t('form.errors_occurred')} />
                                 </div>
-                                <Button type="submit" disabled={profileLoading}>
-                                    <span class="flex items-center gap-1.5">
-                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
-                                        </svg>
-                                        {t('settings.save')}
-                                    </span>
-                                </Button>
+                                <FormActions class="pt-0">
+                                    <Button type="submit" disabled={profileLoading}>
+                                        <span class="flex items-center gap-1.5">
+                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
+                                            </svg>
+                                            {t('settings.save')}
+                                        </span>
+                                    </Button>
+                                </FormActions>
                             </div>
                         </form>
                     </Card>
@@ -215,7 +219,7 @@ export function SettingsAccount() {
                                 />
                             </FormField>
 
-                            <div class="flex items-center justify-between pt-1">
+                            <div class="flex flex-col gap-3 pt-1">
                                 <div>
                                     <FormMessage
                                         type="success"
@@ -223,14 +227,16 @@ export function SettingsAccount() {
                                     />
                                     <FormMessage type="error" message={passwordReport && t('form.errors_occurred')} />
                                 </div>
-                                <Button type="submit" disabled={passwordLoading}>
-                                    <span class="flex items-center gap-1.5">
-                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
-                                        </svg>
-                                        {t('settings.change_password')}
-                                    </span>
-                                </Button>
+                                <FormActions class="pt-0">
+                                    <Button type="submit" disabled={passwordLoading}>
+                                        <span class="flex items-center gap-1.5">
+                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                                            </svg>
+                                            {t('settings.change_password')}
+                                        </span>
+                                    </Button>
+                                </FormActions>
                             </div>
                         </form>
                     </Card>

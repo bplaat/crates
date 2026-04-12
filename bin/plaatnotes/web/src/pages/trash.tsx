@@ -8,7 +8,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { ConfirmDialog } from '../components/dialog.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
-import { Layout } from '../components/layout.tsx';
+import { AppLayout } from '../components/app-layout.tsx';
 import { NoteCard } from '../components/note-card.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { deleteNote, listTrashedNotes, updateNote, clearTrashedNotes } from '../services/notes.service.ts';
@@ -58,10 +58,10 @@ export function TrashPage() {
 
     return (
         <>
-            <Layout showSearch>
+            <AppLayout showSearch>
                 <div class="max-w-screen-xl mx-auto px-4 py-6">
                     <div class="relative flex items-center justify-between mb-6">
-                        <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                        <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-6">
                             {t('trash.heading')}
                         </h1>
                         {notes.length > 0 && (
@@ -107,7 +107,7 @@ export function TrashPage() {
                     {hasMore && <div ref={sentinelRef} class="h-1" />}
                     {loading && notes.length > 0 && <p class="text-center text-gray-400 py-4">{t('trash.loading')}</p>}
                 </div>
-            </Layout>
+            </AppLayout>
 
             {confirmAction && (
                 <ConfirmDialog

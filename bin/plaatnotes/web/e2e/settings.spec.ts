@@ -79,7 +79,7 @@ test.describe('Settings', () => {
         await page.getByLabel('New password', { exact: true }).fill('newpassword123');
         await page.getByLabel('Confirm new password').fill('newpassword123');
         await page.getByRole('button', { name: 'Change password' }).click();
-        await expect(page.getByText('Errors occurred')).toBeVisible();
+        await expect(page.getByText('Errors occurred.')).toBeVisible();
     });
 
     test('revoke a non-current session with confirm dialog', async ({ page }) => {

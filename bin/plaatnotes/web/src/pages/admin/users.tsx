@@ -8,10 +8,12 @@ import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'wouter-preact';
 import { type Report, type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
+import { Button, SmallIconButton } from '../../components/button.tsx';
 import { $authUser } from '../../services/auth.service.ts';
 import { Card } from '../../components/card.tsx';
 import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
-import { Button, FormField, FormInput, FormMessage, FormSelect, SmallIconButton } from '../../components/form.tsx';
+import { FormActions, FormField, FormMessage } from '../../components/form.tsx';
+import { FormInput, FormSelect } from '../../components/input.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
 import { lastNameInitial } from '../../utils.ts';
 import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
@@ -295,22 +297,24 @@ export function AdminUsers() {
                             </FormSelect>
                         </FormField>
 
-                        <div class="flex items-center justify-between pt-1">
+                        <div class="flex flex-col gap-3 pt-1">
                             <FormMessage type="error" message={report && t('form.errors_occurred')} />
-                            <Button type="submit" disabled={submitting}>
-                                <span class="flex items-center gap-1.5">
-                                    {isCreate ? (
-                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-                                        </svg>
-                                    ) : (
-                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
-                                        </svg>
-                                    )}
-                                    {isCreate ? t('admin.users.create') : t('admin.users.save')}
-                                </span>
-                            </Button>
+                            <FormActions class="pt-0">
+                                <Button type="submit" disabled={submitting}>
+                                    <span class="flex items-center gap-1.5">
+                                        {isCreate ? (
+                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                                            </svg>
+                                        ) : (
+                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
+                                            </svg>
+                                        )}
+                                        {isCreate ? t('admin.users.create') : t('admin.users.save')}
+                                    </span>
+                                </Button>
+                            </FormActions>
                         </div>
                     </form>
                 </Dialog>
@@ -320,7 +324,7 @@ export function AdminUsers() {
                 <ConfirmDialog
                     title={t('admin.users.delete_user')}
                     message={t('admin.users.confirm_delete')}
-                    confirmLabel={t('admin.users.delete_user')}
+                    confirmLabel={t('admin.users.delete')}
                     onConfirm={doDelete}
                     onClose={() => setConfirmDelete(null)}
                 />

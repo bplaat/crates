@@ -6,7 +6,8 @@
 
 import { type ComponentChildren } from 'preact';
 import { useEffect } from 'preact/hooks';
-import { DangerButton, IconButton, SecondaryButton } from './form.tsx';
+import { DangerButton, IconButton, SecondaryButton } from './button.tsx';
+import { FormActions } from './form.tsx';
 import { t } from '../services/i18n.service.ts';
 
 interface DialogProps {
@@ -60,7 +61,7 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose
     return (
         <Dialog title={title} onClose={onClose}>
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">{message}</p>
-            <div class="flex justify-end gap-2">
+            <FormActions class="pt-0">
                 <SecondaryButton onClick={onClose}>{t('dialog.cancel')}</SecondaryButton>
                 <DangerButton onClick={onConfirm}>
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -68,7 +69,7 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose
                     </svg>
                     {confirmLabel}
                 </DangerButton>
-            </div>
+            </FormActions>
         </Dialog>
     );
 }

@@ -41,12 +41,12 @@ test.describe('Auth', () => {
         await page.getByRole('button', { name: 'Sign in' }).click();
         await expect(page).toHaveTitle('PlaatNotes');
 
-        // Open user dropdown and click Logout
+        // Open user dropdown and click Sign out
         await page
             .locator('header button')
             .filter({ has: page.locator('.rounded-full') })
             .click();
-        await page.getByRole('button', { name: 'Logout' }).click();
+        await page.getByRole('button', { name: 'Sign out' }).click();
 
         // Should return to login page
         await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();

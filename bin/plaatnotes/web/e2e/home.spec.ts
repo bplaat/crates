@@ -44,14 +44,14 @@ test.describe('Home', () => {
         await expect(page.locator('header').getByText('Test User')).toBeVisible();
     });
 
-    test('user dropdown menu contains Settings and Logout', async ({ page }) => {
+    test('user dropdown menu contains Settings and Sign out', async ({ page }) => {
         await page.goto('/');
         await page
             .locator('header button')
             .filter({ has: page.locator('.rounded-full') })
             .click();
         await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
     });
 
     test('sidebar links navigate correctly', async ({ page }) => {

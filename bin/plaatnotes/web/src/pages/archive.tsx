@@ -8,7 +8,7 @@ import { useEffect, useMemo } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
-import { Layout } from '../components/layout.tsx';
+import { AppLayout } from '../components/app-layout.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { listArchivedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
@@ -38,7 +38,7 @@ export function ArchivePage() {
     );
 
     return (
-        <Layout showSearch>
+        <AppLayout showSearch>
             <div class="max-w-screen-xl mx-auto px-4 py-6">
                 <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-6">
                     {t('archive.heading')}
@@ -70,6 +70,6 @@ export function ArchivePage() {
                 {hasMore && <div ref={sentinelRef} class="h-1" />}
                 {loading && items.length > 0 && <p class="text-center text-gray-400 py-4">{t('archive.loading')}</p>}
             </div>
-        </Layout>
+        </AppLayout>
     );
 }

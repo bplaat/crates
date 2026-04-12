@@ -38,9 +38,8 @@ test.describe('Notes', () => {
 
         await page.getByPlaceholder('Title').fill('My Test Note');
         await page.locator('[contenteditable]').fill('Hello world content');
-        await page.getByRole('button', { name: 'Save' }).click();
+        await page.waitForURL((url) => url.pathname.startsWith('/notes/') && url.pathname !== '/notes/create');
 
-        // Should redirect to the note page
         await expect(page).toHaveURL(/\/notes\//);
         await expect(page).toHaveTitle(/My Test Note/);
 
@@ -55,9 +54,12 @@ test.describe('Notes', () => {
         await expect(page).toHaveURL('/');
     });
 
-    test('cancel button from create page returns to home', async ({ page }) => {
+    test('leaving create page without a body returns to home without creating a note', async ({ page }) => {
         await page.goto('/notes/create');
-        await page.getByRole('button', { name: 'Cancel' }).click();
+        await page.getByPlaceholder('Title').fill('Draft without body');
+        await page.waitForTimeout(700);
+        await expect(page).toHaveURL('/notes/create');
+        await page.getByTitle('Back').click();
         await expect(page).toHaveURL('/');
     });
 
@@ -129,12 +131,17 @@ test.describe('Notes', () => {
         await expect(page.locator('[contenteditable]')).toBeFocused();
     });
 
-    test('save button is disabled when body is empty', async ({ page }) => {
+    test('note is not created until the body has content', async ({ page }) => {
         await page.goto('/notes/create');
-        await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
-
         await page.getByPlaceholder('Title').fill('Only title no body');
-        await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+        await page.waitForTimeout(700);
+        await expect(page).toHaveURL('/notes/create');
+
+        await page.locator('[contenteditable]').fill('Now the note can be created');
+        await page.waitForURL((url) => url.pathname.startsWith('/notes/') && url.pathname !== '/notes/create');
+
+        const noteId = page.url().split('/notes/')[1];
+        await deleteNote(page, noteId);
     });
 
     test('back button on archived note navigates to archive', async ({ page }) => {

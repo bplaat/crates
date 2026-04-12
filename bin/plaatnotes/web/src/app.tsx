@@ -10,7 +10,6 @@ import { AdminUsers } from './pages/admin/users.tsx';
 import { ArchivePage } from './pages/archive.tsx';
 import { AuthLogin } from './pages/auth/login.tsx';
 import { Home } from './pages/home.tsx';
-import { NotesCreate } from './pages/notes/create.tsx';
 import { NotesShow } from './pages/notes/show.tsx';
 import { NotFound } from './pages/notfound.tsx';
 import { SettingsAccount } from './pages/settings/account.tsx';
@@ -67,7 +66,7 @@ export function App() {
             <Route path="/" component={Home} />
             <Route path="/archive" component={ArchivePage} />
             <Route path="/trash" component={TrashPage} />
-            <Route path="/notes/create" component={NotesCreate} />
+            <Route path="/notes/create" component={NotesShow} />
             <Route path="/notes/:note_id" component={NotesShow} />
             <Route path="/settings" component={SettingsAccount} />
             <Route path="/settings/sessions" component={SettingsSessions} />
