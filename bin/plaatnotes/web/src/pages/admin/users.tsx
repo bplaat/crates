@@ -13,6 +13,7 @@ import { Card } from '../../components/card.tsx';
 import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
 import { Button, FormField, FormInput, FormMessage, FormSelect, SmallIconButton } from '../../components/form.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
+import { lastNameInitial } from '../../utils.ts';
 import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/users.service.ts';
 
@@ -161,7 +162,7 @@ export function AdminUsers() {
                                             <div class="flex items-center gap-3">
                                                 <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-xs flex items-center justify-center shrink-0 select-none">
                                                     {user.firstName[0].toUpperCase()}
-                                                    {user.lastName[0].toUpperCase()}
+                                                    {lastNameInitial(user.lastName)}
                                                 </div>
                                                 <span class="font-medium text-gray-800 dark:text-gray-100">
                                                     {user.firstName} {user.lastName}

@@ -11,6 +11,7 @@ import { $authUser, logout } from '../services/auth.service.ts';
 import { $searchQuery } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
 import { SearchInput } from './form.tsx';
+import { lastNameInitial } from '../utils.ts';
 
 function DropdownItem({ onClick, children }: { onClick: () => void; children: ComponentChildren }) {
     return (
@@ -85,7 +86,7 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
                         >
                             <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-sm flex items-center justify-center select-none">
                                 {user.firstName[0].toUpperCase()}
-                                {user.lastName[0].toUpperCase()}
+                                {lastNameInitial(user.lastName)}
                             </div>
                             <span class="text-sm text-gray-600 dark:text-gray-300 hidden sm:block">
                                 {user.firstName} {user.lastName}

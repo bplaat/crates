@@ -2,11 +2,10 @@ openapi: 3.0.0
 info:
   title: PlaatNotes API
   description: A simple note-taking app
-  version: 0.1.0
+  version: 0.1.3
 
 servers:
   - url: http://localhost:8080/api
-  - url: https://notes.bplaat.nl/api
 
 paths:
   # MARK: Misc
