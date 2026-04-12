@@ -10,7 +10,7 @@ import { type Note } from '../../../src-gen/api.ts';
 import { Navbar } from '../../components/navbar.tsx';
 import { IconButton } from '../../components/form.tsx';
 import { NoteEditorCard } from '../../components/note-editor-card.tsx';
-import { getNote, updateNote } from '../../services/notes.service.ts';
+import { fetchNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
 
 export function NotesShow() {
@@ -25,7 +25,7 @@ export function NotesShow() {
     useEffect(() => {
         void (async () => {
             document.title = `PlaatNotes - ${t('page.note_loading')}`;
-            const loaded = await getNote(note_id!);
+            const loaded = await fetchNote(note_id!);
             if (!loaded) return;
             document.title = `PlaatNotes - ${loaded.title || loaded.body.slice(0, 40)}`;
             setNote(loaded);

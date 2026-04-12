@@ -41,7 +41,7 @@ export function SettingsSessions() {
         document.title = `PlaatNotes - ${t('page.sessions')}`;
     }, []);
 
-    async function handleRevoke(id: string) {
+    function handleRevoke(id: string) {
         setConfirmRevokeId(id);
     }
 

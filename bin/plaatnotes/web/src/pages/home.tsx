@@ -5,7 +5,7 @@
  */
 
 import { useLocation } from 'wouter-preact';
-import { useEffect } from 'preact/hooks';
+import { useEffect, useMemo } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
@@ -38,35 +38,62 @@ export function Home() {
     }, []);
 
     async function handlePin(note: Note) {
-        const updated = await updateNote(note, { isPinned: !note.isPinned });
-        if (updated.isPinned) {
-            setOtherItems((ns) => ns.filter((n) => n.id !== note.id));
-            setPinnedItems((ns) => [...ns, updated]);
-        } else {
+        // Optimistic update
+        if (note.isPinned) {
             setPinnedItems((ns) => ns.filter((n) => n.id !== note.id));
-            setOtherItems((ns) => [...ns, updated]);
+            setOtherItems((ns) => [{ ...note, isPinned: false }, ...ns]);
+        } else {
+            setOtherItems((ns) => ns.filter((n) => n.id !== note.id));
+            setPinnedItems((ns) => [...ns, { ...note, isPinned: true }]);
+        }
+        const updated = await updateNote(note, { isPinned: !note.isPinned });
+        // Rollback if the server rejected the change (service returns original note on error)
+        if (updated.isPinned === note.isPinned) {
+            if (note.isPinned) {
+                setOtherItems((ns) => ns.filter((n) => n.id !== note.id));
+                setPinnedItems((ns) => [...ns, note]);
+            } else {
+                setPinnedItems((ns) => ns.filter((n) => n.id !== note.id));
+                setOtherItems((ns) => [...ns, note]);
+            }
         }
     }
 
     async function handleArchive(note: Note) {
-        await updateNote(note, { isArchived: true });
+        // Optimistic update
         setPinnedItems((ns) => ns.filter((n) => n.id !== note.id));
         setOtherItems((ns) => ns.filter((n) => n.id !== note.id));
+        const updated = await updateNote(note, { isArchived: true });
+        // Rollback on failure
+        if (!updated.isArchived) {
+            if (note.isPinned) setPinnedItems((ns) => [...ns, note]);
+            else setOtherItems((ns) => [...ns, note]);
+        }
     }
 
     async function handleTrash(note: Note) {
-        await updateNote(note, { isTrashed: true });
+        // Optimistic update
         setPinnedItems((ns) => ns.filter((n) => n.id !== note.id));
         setOtherItems((ns) => ns.filter((n) => n.id !== note.id));
+        const updated = await updateNote(note, { isTrashed: true });
+        // Rollback on failure
+        if (!updated.isTrashed) {
+            if (note.isPinned) setPinnedItems((ns) => [...ns, note]);
+            else setOtherItems((ns) => [...ns, note]);
+        }
     }
 
-    const initialLoading = (pinnedLoading && pinnedItems.length === 0) || (otherLoading && otherItems.length === 0);
+    const initialLoading = pinnedLoading && pinnedItems.length === 0 && otherLoading && otherItems.length === 0;
     const isEmpty = !pinnedLoading && !otherLoading && pinnedItems.length === 0 && otherItems.length === 0;
 
-    const pinned = pinnedItems
-        .slice()
-        .sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt));
-    const others = otherItems.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt));
+    const pinned = useMemo(
+        () => pinnedItems.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt)),
+        [pinnedItems],
+    );
+    const others = useMemo(
+        () => otherItems.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt)),
+        [otherItems],
+    );
 
     return (
         <Layout showSearch>

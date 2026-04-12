@@ -49,7 +49,7 @@ export function DraggableNoteGrid({
         dragOverId.current = note.id;
     }
 
-    function handleDrop(e: DragEvent) {
+    async function handleDrop(e: DragEvent) {
         e.preventDefault();
         const fromId = dragId.current;
         const toId = dragOverId.current;
@@ -65,13 +65,18 @@ export function DraggableNoteGrid({
         const [moved] = reordered.splice(fromIdx, 1);
         reordered.splice(toIdx, 0, moved);
 
-        // Assign new positions
+        // Assign new positions and optimistically update
         const updated = reordered.map((n, i) => ({ ...n, position: i }));
         onReorder(updated);
-        void reorderNotes(
-            updated.map((n) => n.id),
-            reorderEndpoint,
-        );
+        try {
+            await reorderNotes(
+                updated.map((n) => n.id),
+                reorderEndpoint,
+            );
+        } catch {
+            // Revert to original order on failure
+            onReorder(notes);
+        }
     }
 
     return (

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect } from 'preact/hooks';
+import { useEffect, useMemo } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { EmptyState } from '../components/empty-state.tsx';
@@ -32,7 +32,10 @@ export function ArchivePage() {
         setItems((ns) => ns.filter((n) => n.id !== note.id));
     }
 
-    const notes = items.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt));
+    const notes = useMemo(
+        () => items.slice().sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt)),
+        [items],
+    );
 
     return (
         <Layout showSearch>

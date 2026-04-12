@@ -5,8 +5,10 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
+import { useLocation } from 'wouter-preact';
 import { type Report, type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
+import { $authUser } from '../../services/auth.service.ts';
 import { Card } from '../../components/card.tsx';
 import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
 import { Button, FormField, FormInput, FormMessage, FormSelect, SmallIconButton } from '../../components/form.tsx';
@@ -33,6 +35,8 @@ function formFromUser(user: User): UserFormState {
 }
 
 export function AdminUsers() {
+    const [, navigate] = useLocation();
+    const authUser = $authUser.value;
     const { items: users, loading, hasMore, sentinelRef, setItems: setUsers } = useInfiniteScroll(listUsers);
     const [dialog, setDialog] = useState<DialogMode | null>(null);
     const [form, setForm] = useState<UserFormState>(emptyForm());
@@ -43,6 +47,12 @@ export function AdminUsers() {
     useEffect(() => {
         document.title = `PlaatNotes - ${t('admin.users.heading')}`;
     }, []);
+
+    useEffect(() => {
+        if (authUser && authUser.role !== 'admin') navigate('/');
+    }, [authUser]);
+
+    if (!authUser || authUser.role !== 'admin') return null;
 
     function openCreate() {
         setForm(emptyForm());
@@ -95,7 +105,7 @@ export function AdminUsers() {
         setSubmitting(false);
     }
 
-    async function handleDelete(user: User) {
+    function handleDelete(user: User) {
         setConfirmDelete(user);
     }
 

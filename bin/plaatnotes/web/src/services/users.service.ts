@@ -14,8 +14,13 @@ import {
 } from '../../src-gen/api.ts';
 import { authFetch } from './auth.service.ts';
 
-export async function listUsers(page = 1): Promise<{ data: User[]; pagination: Pagination }> {
-    const res = await authFetch(`/api/users?page=${page}`);
+export async function listUsers(
+    page = 1,
+    _query?: string,
+    signal?: AbortSignal,
+): Promise<{ data: User[]; pagination: Pagination }> {
+    const res = await authFetch(`/api/users?page=${page}`, { signal });
+    if (!res.ok) return { data: [], pagination: { page, limit: 20, total: 0 } };
     const result: UserIndexResponse = await res.json();
     return result;
 }

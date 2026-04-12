@@ -32,7 +32,7 @@ function SidebarLink({ href, label, children }: { href: string; label: string; c
     );
 }
 
-export function Layout({ children, showSearch }: { children: any; showSearch?: boolean }) {
+export function Layout({ children, showSearch }: { children: ComponentChildren; showSearch?: boolean }) {
     return (
         <div class="min-h-screen bg-gray-50 dark:bg-zinc-900 flex flex-col">
             <Navbar showSearch={showSearch} />

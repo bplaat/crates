@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Pagination } from '../../src-gen/api.ts';
 
 export function useInfiniteScroll<T>(
-    fetchFn: (page: number, query?: string) => Promise<{ data: T[]; pagination: Pagination }>,
+    fetchFn: (page: number, query?: string, signal?: AbortSignal) => Promise<{ data: T[]; pagination: Pagination }>,
     query = '',
 ) {
     const [items, setItems] = useState<T[]>([]);
@@ -16,23 +16,31 @@ export function useInfiniteScroll<T>(
     const [hasMore, setHasMore] = useState(false);
     const pageRef = useRef(1);
     const sentinelRef = useRef<HTMLDivElement>(null);
-    const fetchingRef = useRef(false);
+    const abortRef = useRef<AbortController | null>(null);
 
-    async function fetchPage(page: number) {
-        if (fetchingRef.current) return;
-        fetchingRef.current = true;
+    async function fetchPage(page: number, signal: AbortSignal) {
         setLoading(true);
-        const { data, pagination } = await fetchFn(page, query);
-        setItems((prev) => (page === 1 ? data : [...prev, ...data]));
-        setHasMore(page * pagination.limit < pagination.total);
-        pageRef.current = page;
-        setLoading(false);
-        fetchingRef.current = false;
+        try {
+            const { data, pagination } = await fetchFn(page, query, signal);
+            if (signal.aborted) return;
+            setItems((prev) => (page === 1 ? data : [...prev, ...data]));
+            setHasMore(page * pagination.limit < pagination.total);
+            pageRef.current = page;
+        } catch (err) {
+            if (err instanceof DOMException && err.name === 'AbortError') return;
+            throw err;
+        } finally {
+            if (!signal.aborted) setLoading(false);
+        }
     }
 
     useEffect(() => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
         setHasMore(false);
-        void fetchPage(1);
+        void fetchPage(1, controller.signal);
+        return () => controller.abort();
     }, [query]);
 
     useEffect(() => {
@@ -40,8 +48,11 @@ export function useInfiniteScroll<T>(
         if (!el || !hasMore) return;
         const observer = new IntersectionObserver(
             (entries) => {
-                if (entries[0].isIntersecting && !fetchingRef.current) {
-                    void fetchPage(pageRef.current + 1);
+                if (entries[0].isIntersecting) {
+                    abortRef.current?.abort();
+                    const controller = new AbortController();
+                    abortRef.current = controller;
+                    void fetchPage(pageRef.current + 1, controller.signal);
                 }
             },
             { rootMargin: '0px 0px 20% 0px' },

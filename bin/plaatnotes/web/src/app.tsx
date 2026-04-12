@@ -21,9 +21,8 @@ import { $authUser, initAuth } from './services/auth.service.ts';
 import { setLanguage, t } from './services/i18n.service.ts';
 
 export function App() {
-    // @ts-ignore
-    useEffect(async () => {
-        await initAuth();
+    useEffect(() => {
+        void initAuth();
     }, []);
 
     const authUser = $authUser.value;
