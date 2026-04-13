@@ -5,7 +5,7 @@
  */
 
 import { signal } from '@preact/signals';
-export const $searchQuery = signal(new URLSearchParams(window.location.search).get('q') ?? '');
+export const $searchQuery = signal('');
 
 import {
     type Note,
@@ -17,10 +17,18 @@ import {
 
 import { authFetch } from './auth.service.ts';
 
+const NOTE_CACHE_MAX_SIZE = 256;
 export const $notesCache = signal<Map<string, Note>>(new Map());
 
 function cacheNotes(notes: Note[]) {
-    $notesCache.value = new Map([...$notesCache.value, ...notes.map((n) => [n.id, n] as [string, Note])]);
+    const merged = new Map([...$notesCache.value, ...notes.map((n) => [n.id, n] as [string, Note])]);
+    // Evict oldest entries when cache exceeds max size
+    if (merged.size > NOTE_CACHE_MAX_SIZE) {
+        const excess = merged.size - NOTE_CACHE_MAX_SIZE;
+        const keys = [...merged.keys()];
+        for (let i = 0; i < excess; i++) merged.delete(keys[i]);
+    }
+    $notesCache.value = merged;
 }
 
 const emptyPage = (page: number): { data: Note[]; pagination: Pagination } => ({

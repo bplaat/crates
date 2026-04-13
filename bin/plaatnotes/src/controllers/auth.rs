@@ -63,10 +63,10 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
 
         if let Some((count, window_start)) = attempts.get_mut(&ip_address) {
             if now.duration_since(*window_start) < window {
-                if *count >= crate::consts::LOGIN_RATE_LIMIT_MAX_ATTEMPTS {
+                *count += 1;
+                if *count > crate::consts::LOGIN_RATE_LIMIT_MAX_ATTEMPTS {
                     return Ok(Response::with_status(Status::TooManyRequests));
                 }
-                *count += 1;
             } else {
                 *count = 1;
                 *window_start = now;

@@ -980,8 +980,6 @@ components:
         userId:
           type: string
           format: uuid
-        token:
-          type: string
         ip:
           $ref: '#/components/schemas/SessionIp'
         client:
@@ -998,7 +996,6 @@ components:
       required:
         - id
         - userId
-        - token
         - ip
         - client
         - expiresAt

@@ -14,6 +14,12 @@ const DEBOUNCE_MS = 250;
 // - The returned value only changes after DEBOUNCE_MS of no typing
 // - On first mount the debounced value equals the current query (no delay on F5)
 export function useSearchQuery(): string {
+    // On mount, initialize the signal from the current URL query parameter
+    useEffect(() => {
+        const urlQuery = new URLSearchParams(window.location.search).get('q') ?? '';
+        if (urlQuery && !$searchQuery.value) $searchQuery.value = urlQuery;
+    }, []);
+
     const query = $searchQuery.value;
     const [debouncedQuery, setDebouncedQuery] = useState(query);
 

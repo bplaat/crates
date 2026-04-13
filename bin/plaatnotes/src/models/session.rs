@@ -56,7 +56,6 @@ impl From<Session> for api::Session {
         Self {
             id: session.id,
             user_id: session.user_id,
-            token: session.token,
             ip: api::SessionIp {
                 address: Some(session.ip_address),
                 latitude: session.ip_latitude,

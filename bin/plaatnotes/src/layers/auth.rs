@@ -47,17 +47,13 @@ pub(crate) fn auth_required_pre_layer(
     {
         Some(authorization) => authorization,
         None => {
-            return Some(Ok(Response::new()
-                .status(Status::Unauthorized)
-                .body("401 Unauthorized")));
+            return Some(Ok(Response::new().status(Status::Unauthorized)));
         }
     };
     let token = match authorization.strip_prefix("Bearer ") {
         Some(t) => t.trim(),
         None => {
-            return Some(Ok(Response::new()
-                .status(Status::Unauthorized)
-                .body("401 Unauthorized")));
+            return Some(Ok(Response::new().status(Status::Unauthorized)));
         }
     };
 
@@ -67,9 +63,7 @@ pub(crate) fn auth_required_pre_layer(
             ctx.auth_user = Some(user);
             None
         }
-        None => Some(Ok(Response::new()
-            .status(Status::Unauthorized)
-            .body("401 Unauthorized"))),
+        None => Some(Ok(Response::new().status(Status::Unauthorized))),
     }
 }
 

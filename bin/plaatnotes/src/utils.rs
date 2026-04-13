@@ -42,19 +42,28 @@ pub(crate) fn preprocess_fts_query(q: &str) -> String {
         }
     }
 
-    // Remove dangling operators at the start or end which cause FTS5 syntax errors
-    while parts
-        .first()
-        .is_some_and(|p| FTS5_KEYWORDS.contains(&p.as_str()))
-    {
-        parts.remove(0);
+    // Remove dangling/consecutive operators which cause FTS5 syntax errors
+    let mut cleaned: Vec<String> = Vec::with_capacity(parts.len());
+    for part in parts {
+        if FTS5_KEYWORDS.contains(&part.as_str()) {
+            // Only keep an operator if the previous token was a non-operator
+            if cleaned
+                .last()
+                .is_some_and(|prev| !FTS5_KEYWORDS.contains(&prev.as_str()))
+            {
+                cleaned.push(part);
+            }
+        } else {
+            cleaned.push(part);
+        }
     }
-    while parts
+    // Remove trailing operator
+    if cleaned
         .last()
         .is_some_and(|p| FTS5_KEYWORDS.contains(&p.as_str()))
     {
-        parts.pop();
+        cleaned.pop();
     }
 
-    parts.join(" ")
+    cleaned.join(" ")
 }
