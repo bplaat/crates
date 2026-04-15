@@ -183,11 +183,7 @@ PetiteVue.createApp({
         }
 
         try {
-            const binaryStr = atob(val);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) {
-                bytes[i] = binaryStr.charCodeAt(i);
-            }
+            const bytes = Uint8Array.fromBase64(val);
             const hex = Array.from(bytes)
                 .map((b) => b.toString(16).padStart(2, '0'))
                 .join('');
@@ -292,12 +288,7 @@ PetiteVue.createApp({
         const column = this.columns[colIdx];
         if (column.is_blob) {
             try {
-                const binaryStr = atob(val);
-                const bytes = new Uint8Array(binaryStr.length);
-                for (let i = 0; i < binaryStr.length; i++) {
-                    bytes[i] = binaryStr.charCodeAt(i);
-                }
-
+                const bytes = Uint8Array.fromBase64(val);
                 if (bytes.length === 16) {
                     const hex = Array.from(bytes)
                         .map((b) => b.toString(16).padStart(2, '0'))
