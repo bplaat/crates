@@ -5,7 +5,8 @@
  */
 
 use anyhow::Result;
-use bsqlite::{execute_args, query_args};
+use bsqlite::{execute_args, preprocess_fts_query, query_args};
+use chrono::Utc;
 use const_format::formatcp;
 use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
@@ -32,7 +33,29 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Result<Response> {
     }
 
     // Get persons
-    let (total, persons) = if query.query.is_empty() {
+    let (total, persons) = if let Some(q) = query.query.as_deref().filter(|s| !s.is_empty()) {
+        let fts_query = preprocess_fts_query(q);
+        let total = ctx.database.query_some::<i64>(
+            "SELECT COUNT(id) FROM persons WHERE id IN (SELECT id FROM persons_fts WHERE persons_fts MATCH ?)",
+            fts_query.clone(),
+        )?;
+        let persons = query_args!(
+            Person,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM persons WHERE id IN (SELECT id FROM persons_fts WHERE persons_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                Person::columns()
+            ),
+            Args {
+                fts_query: fts_query,
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )?
+        .map(|r| r.map(Into::into).map_err(anyhow::Error::from))
+        .collect::<Result<Vec<api::Person>>>()?;
+        (total, persons)
+    } else {
         let total = ctx
             .database
             .query_some::<i64>("SELECT COUNT(id) FROM persons", ())?;
@@ -44,27 +67,6 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Result<Response> {
                 Person::columns()
             ),
             Args {
-                limit: query.limit,
-                offset: (query.page - 1) * query.limit
-            }
-        )?
-        .map(|r| r.map(Into::into).map_err(anyhow::Error::from))
-        .collect::<Result<Vec<api::Person>>>()?;
-        (total, persons)
-    } else {
-        let total = ctx.database.query_some::<i64>(
-            "SELECT COUNT(rowid) FROM persons_fts WHERE persons_fts MATCH ?",
-            query.query.clone(),
-        )?;
-        let persons = query_args!(
-            Person,
-            ctx.database,
-            "SELECT p.id, p.name, p.age, p.relation, p.created_at FROM persons p
-            JOIN persons_fts fts ON p.id = fts.id
-            WHERE persons_fts MATCH :fts_query
-            ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset",
-            Args {
-                fts_query: query.query,
                 limit: query.limit,
                 offset: (query.page - 1) * query.limit
             }
@@ -98,11 +100,9 @@ struct PersonCreateUpdateBody {
 
 pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Result<Response> {
     // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::PersonCreateUpdateBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
+    let body = match req.parse_body::<api::PersonCreateUpdateBody>() {
         Ok(body) => PersonCreateUpdateBody::from(body),
-        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+        Err(status) => return Ok(Response::with_status(status)),
     };
     if let Err(report) = body.validate() {
         return Ok(Response::with_status(Status::BadRequest).json(api::Report::from(report)));
@@ -118,7 +118,7 @@ pub(crate) fn persons_create(req: &Request, ctx: &Context) -> Result<Response> {
     ctx.database.insert_person(person.clone())?;
 
     // Return created person
-    Ok(Response::with_json(api::Person::from(person)))
+    Ok(Response::with_status(Status::Created).json(api::Person::from(person)))
 }
 
 // MARK: Persons Show
@@ -150,11 +150,9 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Result<Response> {
     };
 
     // Parse and validate body
-    let body = match serde_urlencoded::from_bytes::<api::PersonCreateUpdateBody>(
-        req.body.as_deref().unwrap_or(&[]),
-    ) {
+    let body = match req.parse_body::<api::PersonCreateUpdateBody>() {
         Ok(body) => PersonCreateUpdateBody::from(body),
-        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+        Err(status) => return Ok(Response::with_status(status)),
     };
     if let Err(report) = body.validate() {
         return Ok(Response::with_status(Status::BadRequest).json(api::Report::from(report)));
@@ -164,14 +162,16 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Result<Response> {
     person.name = body.name;
     person.age_in_years = body.age_in_years;
     person.relation = body.relation;
+    person.updated_at = Utc::now();
     execute_args!(
         ctx.database,
-        "UPDATE persons SET name = :name, age = :age, relation = :relation WHERE id = :id",
+        "UPDATE persons SET name = :name, age = :age, relation = :relation, updated_at = :updated_at WHERE id = :id",
         Args {
             id: person.id,
             name: person.name.clone(),
             age: person.age_in_years,
-            relation: person.relation
+            relation: person.relation,
+            updated_at: person.updated_at
         }
     )?;
 
@@ -229,12 +229,14 @@ fn get_person(person_id: Uuid, ctx: &Context) -> Result<Option<Person>> {
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use serde_json::json;
+
     use super::*;
     use crate::router;
 
     #[test]
     fn test_persons_index() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Fetch /persons check if empty
@@ -266,7 +268,7 @@ mod test {
 
     #[test]
     fn test_persons_index_search() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create multiple persons
@@ -283,7 +285,7 @@ mod test {
             })
             .unwrap();
 
-        // Search for "Alice"
+        // Search for "Alice" (preprocessed to "Alice*")
         let res = router.handle(&Request::get("http://localhost/persons?q=Alice"));
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
@@ -293,7 +295,7 @@ mod test {
 
     #[test]
     fn test_persons_index_fts5_search() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         ctx.database
@@ -321,7 +323,7 @@ mod test {
             })
             .unwrap();
 
-        // Prefix search
+        // Prefix search (Al* preserved as-is)
         let res = router.handle(&Request::get("http://localhost/persons?q=Al*"));
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
@@ -346,18 +348,26 @@ mod test {
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
         assert_eq!(response.data[0].name, "Alice Johnson");
+    }
 
-        // Phrase search
-        let res = router.handle(&Request::get("http://localhost/persons?q=\"Alice Smith\""));
-        assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 1);
-        assert_eq!(response.data[0].name, "Alice Smith");
+    #[test]
+    fn test_persons_index_invalid_query_params() {
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        let router = router(ctx.clone());
+
+        let res = router.handle(&Request::get("http://localhost/persons?page=0"));
+        assert_eq!(res.status, Status::BadRequest);
+
+        let res = router.handle(&Request::get("http://localhost/persons?limit=0"));
+        assert_eq!(res.status, Status::BadRequest);
+
+        let res = router.handle(&Request::get("http://localhost/persons?limit=51"));
+        assert_eq!(res.status, Status::BadRequest);
     }
 
     #[test]
     fn test_persons_index_pagination() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create multiple persons
@@ -394,21 +404,51 @@ mod test {
 
     #[test]
     fn test_persons_create() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create person
         let res = router.handle(
-            &Request::post("http://localhost/persons").body("name=Jan&ageInYears=40&relation=me"),
+            &Request::post("http://localhost/persons")
+                .json(json!({ "name": "Jan", "ageInYears": 40, "relation": "me" })),
         );
-        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.status, Status::Created);
         let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
         assert_eq!(person.name, "Jan");
+
+        // Create with invalid JSON
+        let res = router.handle(
+            &Request::post("http://localhost/persons")
+                .header("Content-Type", "application/json")
+                .body("not-json"),
+        );
+        assert_eq!(res.status, Status::BadRequest);
+
+        // Create with age too low
+        let res = router.handle(
+            &Request::post("http://localhost/persons")
+                .json(json!({ "name": "Jan", "ageInYears": 5, "relation": "me" })),
+        );
+        assert_eq!(res.status, Status::BadRequest);
+
+        // Create with name too short
+        let res = router.handle(
+            &Request::post("http://localhost/persons")
+                .json(json!({ "name": "Jo", "ageInYears": 40, "relation": "me" })),
+        );
+        assert_eq!(res.status, Status::BadRequest);
+
+        // Create with forbidden name
+        let res = router.handle(
+            &Request::post("http://localhost/persons")
+                .json(json!({ "name": "Bastiaan", "ageInYears": 40, "relation": "me" })),
+        );
+        assert_eq!(res.status, Status::BadRequest);
     }
 
     #[test]
     fn test_persons_show() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create person
@@ -420,7 +460,7 @@ mod test {
         };
         ctx.database.insert_person(person.clone()).unwrap();
 
-        // Fetch /persons/:person_id check if person is there
+        // Fetch /persons/:personId check if person is there
         let res = router.handle(&Request::get(format!(
             "http://localhost/persons/{}",
             person.id
@@ -439,7 +479,7 @@ mod test {
 
     #[test]
     fn test_persons_update() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create person
@@ -453,8 +493,11 @@ mod test {
 
         // Update person
         let res = router.handle(
-            &Request::put(format!("http://localhost/persons/{}", person.id))
-                .body("name=Jan&ageInYears=41&relation=me"),
+            &Request::put(format!("http://localhost/persons/{}", person.id)).urlencoded(&[
+                ("name", "Jan"),
+                ("ageInYears", "41"),
+                ("relation", "me"),
+            ]),
         );
         assert_eq!(res.status, Status::Ok);
         let person = serde_json::from_slice::<api::Person>(&res.body).unwrap();
@@ -462,15 +505,18 @@ mod test {
 
         // Update person with validation errors
         let res = router.handle(
-            &Request::put(format!("http://localhost/persons/{}", person.id))
-                .body("name=Bastiaan&ageInYears=41&relation=wrong"),
+            &Request::put(format!("http://localhost/persons/{}", person.id)).urlencoded(&[
+                ("name", "Bastiaan"),
+                ("ageInYears", "41"),
+                ("relation", "wrong"),
+            ]),
         );
         assert_eq!(res.status, Status::BadRequest);
     }
 
     #[test]
     fn test_persons_delete() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         // Create person

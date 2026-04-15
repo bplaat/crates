@@ -20,7 +20,7 @@ pub(crate) fn home(_: &Request, _: &Context) -> Result<Response> {
 }
 
 pub(crate) fn not_found(_: &Request, _: &Context) -> Result<Response> {
-    Ok(Response::with_status(Status::NotFound).body("404 Not found"))
+    Ok(Response::with_status(Status::NotFound))
 }
 
 // MARK: Tests
@@ -31,7 +31,7 @@ mod test {
 
     #[test]
     fn test_home() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         let res = router.handle(&Request::get("http://localhost/"));

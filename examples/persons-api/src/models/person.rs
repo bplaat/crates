@@ -21,16 +21,19 @@ pub(crate) struct Person {
     pub age_in_years: i64,
     pub relation: Relation,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl Default for Person {
     fn default() -> Self {
+        let now = Utc::now();
         Self {
             id: Uuid::now_v7(),
-            name: String::default(),
+            name: String::new(),
             age_in_years: 0,
             relation: Relation::Me,
-            created_at: Utc::now(),
+            created_at: now,
+            updated_at: now,
         }
     }
 }

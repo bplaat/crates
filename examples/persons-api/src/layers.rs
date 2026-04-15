@@ -25,6 +25,7 @@ pub(crate) fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Result<Re
                 "Access-Control-Allow-Methods",
                 "GET, POST, PUT, PATCH, DELETE, OPTIONS",
             )
+            .header("Access-Control-Allow-Headers", "Content-Type")
             .header("Access-Control-Max-Age", "86400")))
     } else {
         None
@@ -49,7 +50,7 @@ mod test {
 
     #[test]
     fn test_cors() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         let res = router.handle(&Request::get("http://localhost/"));
@@ -58,7 +59,7 @@ mod test {
 
     #[test]
     fn test_cors_preflight() {
-        let ctx = Context::with_test_database();
+        let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
 
         let res = router.handle(
@@ -68,6 +69,10 @@ mod test {
         assert_eq!(
             res.headers.get("Access-Control-Allow-Methods"),
             Some("GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        );
+        assert_eq!(
+            res.headers.get("Access-Control-Allow-Headers"),
+            Some("Content-Type")
         );
         assert_eq!(res.headers.get("Access-Control-Max-Age"), Some("86400"));
     }

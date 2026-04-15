@@ -5,6 +5,7 @@
  */
 
 // MARK: Name
+// Blocks a specific name as an example of a custom domain validation rule.
 pub(crate) fn name_validator(name: &str) -> validate::Result {
     if name.to_lowercase() == "bastiaan" {
         Err(validate::Error::new("Name can't be Bastiaan"))
