@@ -202,6 +202,53 @@ impl Connection {
         self.0.affected_rows()
     }
 
+    /// Create FTS5 virtual table and sync triggers for a table
+    pub fn create_fts_tables(&self, table: &str, columns: &[&str]) -> Result<(), StatementError> {
+        let cols = columns.join(", ");
+        let new_cols = columns
+            .iter()
+            .map(|c| format!("new.{c}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let set_cols = columns
+            .iter()
+            .map(|c| format!("{c} = new.{c}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        self.execute(
+            format!(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS {table}_fts USING fts5({cols}, id UNINDEXED)"
+            ),
+            (),
+        )?;
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_ai AFTER INSERT ON {table} BEGIN
+                    INSERT INTO {table}_fts({cols}, id) VALUES ({new_cols}, new.id);
+                END"
+            ),
+            (),
+        )?;
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_au AFTER UPDATE ON {table} BEGIN
+                    UPDATE {table}_fts SET {set_cols} WHERE id = old.id;
+                END"
+            ),
+            (),
+        )?;
+        self.execute(
+            format!(
+                "CREATE TRIGGER IF NOT EXISTS {table}_ad BEFORE DELETE ON {table} BEGIN
+                    DELETE FROM {table}_fts WHERE id = old.id;
+                END"
+            ),
+            (),
+        )?;
+        Ok(())
+    }
+
     /// Get the last inserted row id
     pub fn last_insert_row_id(&self) -> i64 {
         self.0.last_insert_row_id()
