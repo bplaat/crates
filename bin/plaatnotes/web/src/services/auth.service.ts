@@ -53,7 +53,8 @@ export type LoginResult = 'success' | 'error' | 'rate_limited';
 export async function login(email: string, password: string): Promise<LoginResult> {
     const res = await fetch(`/api/auth/login`, {
         method: 'POST',
-        body: new URLSearchParams({ email, password }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
     });
     if (res.status === 429) return 'rate_limited';
     if (!res.ok) return 'error';

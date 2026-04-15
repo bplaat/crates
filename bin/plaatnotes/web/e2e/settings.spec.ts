@@ -5,21 +5,26 @@
  */
 
 import { Buffer } from 'node:buffer';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
 const GOOGLE_KEEP_ZIP_B64 =
     'UEsDBBQAAAAAAHNrjFwIITQ31QAAANUAAAAXAAAAVGFrZW91dC9LZWVwL25vdGUwLmpzb257InRpdGxlIjogIkltcG9ydGVkIG5vdGUgb25lIiwgInRleHRDb250ZW50IjogIkltcG9ydGVkIGJvZHkgb25lIiwgImlzUGlubmVkIjogZmFsc2UsICJpc0FyY2hpdmVkIjogZmFsc2UsICJpc1RyYXNoZWQiOiBmYWxzZSwgImNyZWF0ZWRUaW1lc3RhbXBVc2VjIjogMTcwMDAwMDAwMDAwMDAwMCwgInVzZXJFZGl0ZWRUaW1lc3RhbXBVc2VjIjogMTcwMDAwMDAwMDAwMDAwMH1QSwMEFAAAAAAAc2uMXEHt81vVAAAA1QAAABcAAABUYWtlb3V0L0tlZXAvbm90ZTEuanNvbnsidGl0bGUiOiAiSW1wb3J0ZWQgbm90ZSB0d28iLCAidGV4dENvbnRlbnQiOiAiSW1wb3J0ZWQgYm9keSB0d28iLCAiaXNQaW5uZWQiOiBmYWxzZSwgImlzQXJjaGl2ZWQiOiBmYWxzZSwgImlzVHJhc2hlZCI6IGZhbHNlLCAiY3JlYXRlZFRpbWVzdGFtcFVzZWMiOiAxNzAwMDAwMDAwMDAwMDAwLCAidXNlckVkaXRlZFRpbWVzdGFtcFVzZWMiOiAxNzAwMDAwMDAwMDAwMDAwfVBLAQIUAxQAAAAAAHNrjFwIITQ31QAAANUAAAAXAAAAAAAAAAAAAACAAQAAAABUYWtlb3V0L0tlZXAvbm90ZTAuanNvblBLAQIUAxQAAAAAAHNrjFxB7fNb1QAAANUAAAAXAAAAAAAAAAAAAACAAQoBAABUYWtlb3V0L0tlZXAvbm90ZTEuanNvblBLBQYAAAAAAgACAIoAAAAUAgAAAAA=';
 
-async function authHeaders(page: import('@playwright/test').Page): Promise<Record<string, string>> {
+async function authState(page: Page): Promise<{ token: string; userId: string; headers: Record<string, string> }> {
     if (!page.url().startsWith('http')) await page.goto('/');
     const token = await page.evaluate(() => localStorage.getItem('token') ?? '');
-    return { Authorization: `Bearer ${token}` };
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const res = await page.request.get(`${API_URL}/auth/validate`, { headers });
+    const { user } = await res.json();
+    return { token, userId: user.id, headers };
 }
 
-async function deleteNotesByQuery(page: import('@playwright/test').Page, query: string): Promise<void> {
-    const headers = await authHeaders(page);
-    const res = await page.request.get(`${API_URL}/notes?page=1&q=${encodeURIComponent(query)}`, { headers });
+async function deleteNotesByQuery(page: Page, query: string): Promise<void> {
+    const { userId, headers } = await authState(page);
+    const res = await page.request.get(`${API_URL}/users/${userId}/notes?page=1&q=${encodeURIComponent(query)}`, {
+        headers,
+    });
     const data: { data: Array<{ id: string }> } = await res.json();
     for (const note of data.data) {
         await page.request.delete(`${API_URL}/notes/${note.id}`, { headers });
@@ -105,8 +110,8 @@ test.describe('Settings', () => {
     test('revoke a non-current session with confirm dialog', async ({ page }) => {
         // Create a second session via API login
         await page.request.post(`${API_URL}/auth/login`, {
-            data: new URLSearchParams({ email: 'test@example.com', password: 'password' }).toString(),
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            data: JSON.stringify({ email: 'test@example.com', password: 'password' }),
+            headers: { 'Content-Type': 'application/json' },
         });
 
         await page.goto('/settings/sessions');

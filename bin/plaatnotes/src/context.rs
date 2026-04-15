@@ -80,63 +80,12 @@ impl Context {
 
 // MARK: Database helpers
 pub(crate) trait DatabaseHelpers {
-    fn create_fts_tables(&self, table: &str, columns: &[&str]) -> Result<()>;
     fn insert_user(&self, user: User) -> Result<()>;
     fn insert_session(&self, session: Session) -> Result<()>;
     fn insert_note(&self, note: Note) -> Result<()>;
 }
 
 impl DatabaseHelpers for Connection {
-    fn create_fts_tables(&self, table: &str, columns: &[&str]) -> Result<()> {
-        let cols = columns.join(", ");
-        let new_cols = columns
-            .iter()
-            .map(|c| format!("new.{c}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let set_cols = columns
-            .iter()
-            .map(|c| format!("{c} = new.{c}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        self.execute(
-            format!(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS {table}_fts USING fts5({cols}, id UNINDEXED)"
-            ),
-            (),
-        )?;
-
-        self.execute(
-            format!(
-                "CREATE TRIGGER IF NOT EXISTS {table}_ai AFTER INSERT ON {table} BEGIN
-                    INSERT INTO {table}_fts({cols}, id) VALUES ({new_cols}, new.id);
-                END"
-            ),
-            (),
-        )?;
-
-        self.execute(
-            format!(
-                "CREATE TRIGGER IF NOT EXISTS {table}_au AFTER UPDATE ON {table} BEGIN
-                    UPDATE {table}_fts SET {set_cols} WHERE id = old.id;
-                END"
-            ),
-            (),
-        )?;
-
-        self.execute(
-            format!(
-                "CREATE TRIGGER IF NOT EXISTS {table}_ad BEFORE DELETE ON {table} BEGIN
-                    DELETE FROM {table}_fts WHERE id = old.id;
-                END"
-            ),
-            (),
-        )?;
-
-        Ok(())
-    }
-
     fn insert_user(&self, user: User) -> Result<()> {
         self.execute(
             formatcp!(

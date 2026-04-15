@@ -59,26 +59,31 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .delete("/api/users/:user_id", users_delete)
         .post("/api/users/:user_id/change-password", users_change_password)
         .get("/api/users/:user_id/notes", users_notes)
+        .post("/api/users/:user_id/notes", users_notes_create)
+        .put("/api/users/:user_id/notes/reorder", users_notes_reorder)
         .get("/api/users/:user_id/notes/pinned", users_notes_pinned)
+        .put(
+            "/api/users/:user_id/notes/pinned/reorder",
+            users_notes_pinned_reorder,
+        )
         .get("/api/users/:user_id/notes/archived", users_notes_archived)
+        .put(
+            "/api/users/:user_id/notes/archived/reorder",
+            users_notes_archived_reorder,
+        )
         .get("/api/users/:user_id/notes/trashed", users_notes_trashed)
+        .delete(
+            "/api/users/:user_id/notes/trashed/clear",
+            users_notes_trashed_clear,
+        )
         .get("/api/users/:user_id/sessions", users_sessions)
-        .get("/api/users/:user_id/sessions/active", users_sessions_active)
         // Sessions
         .get("/api/sessions", sessions_index)
-        .get("/api/sessions/active", sessions_active)
         .get("/api/sessions/:session_id", sessions_show)
         .delete("/api/sessions/:session_id", sessions_delete)
         // Notes
         .get("/api/notes", notes_index)
         .post("/api/notes", notes_create)
-        .put("/api/notes/reorder", notes_reorder)
-        .get("/api/notes/pinned", notes_pinned)
-        .put("/api/notes/pinned/reorder", notes_pinned_reorder)
-        .get("/api/notes/archived", notes_archived)
-        .put("/api/notes/archived/reorder", notes_archived_reorder)
-        .get("/api/notes/trashed", notes_trashed)
-        .delete("/api/notes/trashed/clear", notes_trashed_clear)
         .get("/api/notes/:note_id", notes_show)
         .put("/api/notes/:note_id", notes_update)
         .delete("/api/notes/:note_id", notes_delete)

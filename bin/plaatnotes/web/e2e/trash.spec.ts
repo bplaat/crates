@@ -8,25 +8,25 @@ import { type Page, expect, test } from '@playwright/test';
 
 const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
 
-async function authHeaders(page: Page): Promise<Record<string, string>> {
+async function authState(page: Page): Promise<{ token: string; userId: string; headers: Record<string, string> }> {
     if (!page.url().startsWith('http')) await page.goto('/');
     const token = await page.evaluate(() => localStorage.getItem('token') ?? '');
-    return {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-    };
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const res = await page.request.get(`${API_URL}/auth/validate`, { headers });
+    const { user } = await res.json();
+    return { token, userId: user.id, headers };
 }
 
 async function createTrashedNote(page: Page, body: string): Promise<{ id: string }> {
-    const headers = await authHeaders(page);
-    const createRes = await page.request.post(`${API_URL}/notes`, {
+    const { userId, headers } = await authState(page);
+    const createRes = await page.request.post(`${API_URL}/users/${userId}/notes`, {
         headers,
-        data: new URLSearchParams({ body }).toString(),
+        data: JSON.stringify({ body }),
     });
     const note = await createRes.json();
     await page.request.put(`${API_URL}/notes/${note.id}`, {
         headers,
-        data: new URLSearchParams({ body, isPinned: 'false', isArchived: 'false', isTrashed: 'true' }).toString(),
+        data: JSON.stringify({ body, isPinned: false, isArchived: false, isTrashed: true }),
     });
     return note;
 }
@@ -51,7 +51,7 @@ test.describe('Trash', () => {
         await expect(page.getByText('Trashed note content test')).toBeVisible();
 
         // Cleanup
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         await page.request.delete(`${API_URL}/notes/${note.id}`, { headers });
     });
 
@@ -67,7 +67,7 @@ test.describe('Trash', () => {
         await expect(page.getByText('Restore test note')).not.toBeVisible();
 
         // Cleanup
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         await page.request.delete(`${API_URL}/notes/${note.id}`, { headers });
     });
 
@@ -115,7 +115,7 @@ test.describe('Trash', () => {
         await expect(page.getByText('Notes in trash will be permanently deleted after some time.')).toBeVisible();
 
         // Cleanup
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         await page.request.delete(`${API_URL}/notes/${note.id}`, { headers });
     });
 
@@ -129,7 +129,7 @@ test.describe('Trash', () => {
 
         await searchInput.clear();
 
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         await page.request.delete(`${API_URL}/notes/${note.id}`, { headers });
     });
 });

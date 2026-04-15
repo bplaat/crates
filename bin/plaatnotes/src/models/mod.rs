@@ -21,7 +21,7 @@ pub(crate) mod user;
 #[serde(default)]
 pub(crate) struct IndexQuery {
     #[serde(rename = "q")]
-    pub query: String,
+    pub query: Option<String>,
     #[validate(range(min = 1))]
     pub page: i64,
     #[validate(range(min = 1, max = 50))]
@@ -31,7 +31,7 @@ pub(crate) struct IndexQuery {
 impl Default for IndexQuery {
     fn default() -> Self {
         Self {
-            query: "".to_string(),
+            query: None,
             page: 1,
             limit: 20,
         }

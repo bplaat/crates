@@ -55,14 +55,12 @@ impl Default for Note {
 pub(crate) mod policies {
     use super::*;
 
-    pub(crate) fn can_index(_auth_user: &User) -> bool {
-        // Both admin and normal users can index (admins see all, normal users see their own)
-        true
+    pub(crate) fn can_index(auth_user: &User) -> bool {
+        auth_user.role == UserRole::Admin
     }
 
-    pub(crate) fn can_create(_auth_user: &User) -> bool {
-        // Both admin and normal users can create notes
-        true
+    pub(crate) fn can_create(auth_user: &User) -> bool {
+        auth_user.role == UserRole::Admin
     }
 
     pub(crate) fn can_show(auth_user: &User, note: &Note) -> bool {

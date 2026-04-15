@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
 
@@ -77,25 +77,25 @@ test.describe('Home', () => {
 });
 
 test.describe('Home - Note card actions', () => {
-    async function authHeaders(page: import('@playwright/test').Page): Promise<Record<string, string>> {
+    async function authState(page: Page): Promise<{ token: string; userId: string; headers: Record<string, string> }> {
         if (!page.url().startsWith('http')) await page.goto('/');
         const token = await page.evaluate(() => localStorage.getItem('token') ?? '');
-        return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' };
+        const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+        const res = await page.request.get(`${API_URL}/auth/validate`, { headers });
+        const { user } = await res.json();
+        return { token, userId: user.id, headers };
     }
 
-    async function createNote(
-        page: import('@playwright/test').Page,
-        fields: Record<string, string>,
-    ): Promise<{ id: string }> {
-        const headers = await authHeaders(page);
-        const res = await page.request.post(`${API_URL}/notes`, {
+    async function createNote(page: Page, fields: Record<string, any>): Promise<{ id: string }> {
+        const { userId, headers } = await authState(page);
+        const res = await page.request.post(`${API_URL}/users/${userId}/notes`, {
             headers,
-            data: new URLSearchParams(fields).toString(),
+            data: JSON.stringify(fields),
         });
         return res.json();
     }
 
-    async function noteOrder(page: import('@playwright/test').Page, labels: string[]): Promise<string[]> {
+    async function noteOrder(page: Page, labels: string[]): Promise<string[]> {
         return page.locator('a[href^="/notes/"]').evaluateAll((els, expectedLabels) => {
             const order: string[] = [];
             for (const el of els) {
@@ -111,8 +111,8 @@ test.describe('Home - Note card actions', () => {
         }, labels);
     }
 
-    async function deleteNote(page: import('@playwright/test').Page, id: string): Promise<void> {
-        const headers = await authHeaders(page);
+    async function deleteNote(page: Page, id: string): Promise<void> {
+        const { headers } = await authState(page);
         await page.request.delete(`${API_URL}/notes/${id}`, { headers });
     }
 
@@ -157,16 +157,11 @@ test.describe('Home - Note card actions', () => {
     });
 
     test('"Pinned" section heading visible when pinned notes exist', async ({ page }) => {
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         const note = await createNote(page, { body: 'Pinned section test' });
         await page.request.put(`${API_URL}/notes/${note.id}`, {
             headers,
-            data: new URLSearchParams({
-                body: 'Pinned section test',
-                isPinned: 'true',
-                isArchived: 'false',
-                isTrashed: 'false',
-            }).toString(),
+            data: JSON.stringify({ body: 'Pinned section test', isPinned: true, isArchived: false, isTrashed: false }),
         });
 
         await page.goto('/');
@@ -185,7 +180,11 @@ test.describe('Home - Note card actions', () => {
         await expect.poll(() => noteOrder(page, [labelA, labelB])).toEqual([labelB, labelA]);
 
         const reorderPromise = page.waitForResponse(
-            (res) => res.url().includes('/api/notes/reorder') && res.request().method() === 'PUT',
+            (res) =>
+                res.url().includes('/notes/reorder') &&
+                !res.url().includes('/notes/archived/reorder') &&
+                !res.url().includes('/notes/pinned/reorder') &&
+                res.request().method() === 'PUT',
         );
         await page
             .locator('div[draggable="true"]')

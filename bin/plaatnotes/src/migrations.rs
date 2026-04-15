@@ -7,6 +7,7 @@
 use anyhow::Result;
 use bsqlite::Connection;
 
+#[cfg(not(test))]
 use crate::context::DatabaseHelpers;
 
 pub(crate) fn database_migrate(database: &Connection) -> Result<()> {

@@ -8,13 +8,13 @@ import { type Page, expect, test } from '@playwright/test';
 
 const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
 
-async function authHeaders(page: Page): Promise<Record<string, string>> {
+async function authState(page: Page): Promise<{ token: string; userId: string; headers: Record<string, string> }> {
     if (!page.url().startsWith('http')) await page.goto('/');
     const token = await page.evaluate(() => localStorage.getItem('token') ?? '');
-    return {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-    };
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const res = await page.request.get(`${API_URL}/auth/validate`, { headers });
+    const { user } = await res.json();
+    return { token, userId: user.id, headers };
 }
 
 test.describe('Admin - Users', () => {
@@ -53,7 +53,7 @@ test.describe('Admin - Users', () => {
         await expect(page.getByText('New Person')).toBeVisible();
 
         // Cleanup: find and delete the created user
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         const usersRes = await page.request.get(`${API_URL}/users`, { headers });
         const usersData = await usersRes.json();
         const created = usersData.data.find((u: { email: string }) => u.email === email);
@@ -64,17 +64,17 @@ test.describe('Admin - Users', () => {
 
     test('edit user via dialog', async ({ page }) => {
         // Create a user to edit
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         const email = `editme-${Date.now()}@example.com`;
         const createRes = await page.request.post(`${API_URL}/users`, {
             headers,
-            data: new URLSearchParams({
+            data: JSON.stringify({
                 firstName: 'Edit',
                 lastName: 'Me',
                 email,
                 password: 'Password123!',
                 role: 'normal',
-            }).toString(),
+            }),
         });
         const created = await createRes.json();
 
@@ -102,17 +102,17 @@ test.describe('Admin - Users', () => {
 
     test('delete user with confirm dialog', async ({ page }) => {
         // Create a user to delete
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         const email = `deleteme-${Date.now()}@example.com`;
         const createRes = await page.request.post(`${API_URL}/users`, {
             headers,
-            data: new URLSearchParams({
+            data: JSON.stringify({
                 firstName: 'Delete',
                 lastName: 'Me',
                 email,
                 password: 'Password123!',
                 role: 'normal',
-            }).toString(),
+            }),
         });
         const created = await createRes.json();
 

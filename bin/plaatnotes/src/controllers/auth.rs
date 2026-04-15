@@ -21,6 +21,7 @@ use validate::Validate;
 use crate::api;
 use crate::consts::{SESSION_EXPIRY_SECONDS, SESSION_TOKEN_LENGTH};
 use crate::context::{Context, DatabaseHelpers};
+use crate::controllers::parse_body;
 use crate::models::{Session, User};
 
 // MARK: Handlers
@@ -44,14 +45,7 @@ struct LoginBody {
 
 pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     // Parse and validate body
-    let body =
-        match serde_urlencoded::from_bytes::<api::LoginBody>(req.body.as_deref().unwrap_or(&[])) {
-            Ok(body) => LoginBody::from(body),
-            Err(_) => return Ok(Response::with_status(Status::BadRequest)),
-        };
-    if let Err(report) = body.validate() {
-        return Ok(Response::with_status(Status::BadRequest).json(api::Report::from(report)));
-    }
+    let body = parse_body!(req, api::LoginBody, LoginBody);
 
     // Check login rate limit
     let ip_address = req.ip().to_string();
@@ -202,8 +196,7 @@ pub(crate) fn auth_logout(_req: &Request, ctx: &Context) -> Result<Response> {
         }
     )?;
 
-    // Success response
-    Ok(Response::new())
+    Ok(Response::with_status(Status::NoContent))
 }
 
 // MARK: Utils
@@ -233,7 +226,8 @@ mod test {
 
         let res = router.handle(
             &Request::post("http://localhost/api/auth/login")
-                .body("email=john@example.com&password=password123"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"email":"john@example.com","password":"password123"}"#),
         );
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::LoginResponse>(&res.body).unwrap();
@@ -248,7 +242,8 @@ mod test {
 
         let res = router.handle(
             &Request::post("http://localhost/api/auth/login")
-                .body("email=john@example.com&password=wrongpassword"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"email":"john@example.com","password":"wrongpassword"}"#),
         );
         assert_eq!(res.status, Status::Unauthorized);
     }
@@ -260,7 +255,8 @@ mod test {
 
         let res = router.handle(
             &Request::post("http://localhost/api/auth/login")
-                .body("email=notfound@example.com&password=password123"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"email":"notfound@example.com","password":"password123"}"#),
         );
         assert_eq!(res.status, Status::Unauthorized);
     }
@@ -276,9 +272,7 @@ mod test {
             &Request::post("http://localhost/api/auth/logout")
                 .header("Authorization", "Bearer test-token-123"),
         );
-        assert_eq!(res.status, Status::Ok);
-
-        // Verify session is expired
+        assert_eq!(res.status, Status::NoContent);
         let expired_session = query_args!(
             Session,
             ctx.database,
@@ -356,7 +350,8 @@ mod test {
         for _ in 0..LOGIN_RATE_LIMIT_MAX_ATTEMPTS {
             let res = router.handle(
                 &Request::post("http://localhost/api/auth/login")
-                    .body("email=jane@example.com&password=wrongpassword"),
+                    .header("Content-Type", "application/json")
+                    .body(r#"{"email":"jane@example.com","password":"wrongpassword"}"#),
             );
             assert_eq!(res.status, Status::Unauthorized);
         }
@@ -364,7 +359,8 @@ mod test {
         // The next attempt must be rejected with 429 before even checking credentials
         let res = router.handle(
             &Request::post("http://localhost/api/auth/login")
-                .body("email=jane@example.com&password=password123"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"email":"jane@example.com","password":"password123"}"#),
         );
         assert_eq!(res.status, Status::TooManyRequests);
     }

@@ -29,6 +29,9 @@ paths:
       requestBody:
         required: true
         content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginBody'
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/LoginBody'
@@ -75,7 +78,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        '204':
           description: Logout successful
         '401':
           description: Unauthorized
@@ -84,7 +87,10 @@ paths:
   /api/sessions:
     get:
       tags: [Sessions]
-      summary: Get sessions (admin sees all, normal user sees own)
+      summary: Get all sessions (admin only)
+      description: >
+        Returns all sessions across all users. Admin only; normal users should use
+        `/users/{id}/sessions` to view their own sessions.
       security:
         - BearerAuth: []
       parameters:
@@ -106,6 +112,8 @@ paths:
                 $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden (admin only)
 
   /api/sessions/{sessionId}:
     get:
@@ -148,7 +156,7 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        '204':
           description: Session deleted
         '400':
           description: Invalid request
@@ -158,32 +166,6 @@ paths:
           description: Forbidden
         '404':
           description: Session not found
-
-  /api/sessions/active:
-    get:
-      tags: [Sessions]
-      summary: Get all active (non-expired) sessions for the authenticated user
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/Query'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        '200':
-          description: Active sessions retrieved
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SessionIndexResponse'
-        '400':
-          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Report'
-        '401':
-          description: Unauthorized
 
   # MARK: Users
   /api/users:
@@ -221,11 +203,14 @@ paths:
       requestBody:
         required: true
         content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateBody'
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/UserCreateBody'
       responses:
-        '200':
+        '201':
           description: User created
           content:
             application/json:
@@ -242,14 +227,14 @@ paths:
         '403':
           description: Forbidden (admin only)
 
-  /api/users/{id}:
+  /api/users/{userId}:
     get:
       tags: [Users]
       summary: Get a user by ID
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
       responses:
         '200':
           description: A single user
@@ -271,10 +256,13 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
       requestBody:
         required: true
         content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateBody'
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/UserUpdateBody'
@@ -303,9 +291,9 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
       responses:
-        '200':
+        '204':
           description: User deleted
         '400':
           description: Invalid request
@@ -316,22 +304,25 @@ paths:
         '404':
           description: User not found
 
-  /api/users/{id}/change-password:
+  /api/users/{userId}/change-password:
     post:
       tags: [Users]
       summary: Change user password
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
       requestBody:
         required: true
         content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserChangePasswordBody'
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/UserChangePasswordBody'
       responses:
-        '200':
+        '204':
           description: Password changed successfully
         '400':
           description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
@@ -348,18 +339,16 @@ paths:
         '500':
           description: Internal server error while verifying the stored password hash
 
-  /api/users/{id}/notes:
+  /api/users/{userId}/notes:
     get:
       tags: [Users]
       summary: Get all notes for a user
       description: >
         Returns active notes for the specified user: non-trashed, non-archived, and non-pinned.
-        Use `/users/{id}/notes/pinned` for pinned notes, `/users/{id}/notes/archived` for archived,
-        and `/users/{id}/notes/trashed` for trashed notes.
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
         - $ref: '#/components/parameters/Query'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -382,8 +371,43 @@ paths:
           description: Forbidden (user can only see their own notes)
         '404':
           description: User not found
+    post:
+      tags: [Users]
+      summary: Create a new note for a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteCreateBody'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteCreateBody'
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed form data returns an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (user can only create notes for themselves)
+        '404':
+          description: User not found
 
-  /api/users/{id}/notes/pinned:
+  /api/users/{userId}/notes/pinned:
     get:
       tags: [Users]
       summary: Get all pinned notes for a user
@@ -393,7 +417,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
         - $ref: '#/components/parameters/Query'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -417,7 +441,7 @@ paths:
         '404':
           description: User not found
 
-  /api/users/{id}/notes/archived:
+  /api/users/{userId}/notes/archived:
     get:
       tags: [Users]
       summary: Get all archived notes for a user
@@ -427,7 +451,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
         - $ref: '#/components/parameters/Query'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -451,7 +475,7 @@ paths:
         '404':
           description: User not found
 
-  /api/users/{id}/notes/trashed:
+  /api/users/{userId}/notes/trashed:
     get:
       tags: [Users]
       summary: Get all trashed notes for a user
@@ -461,7 +485,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
         - $ref: '#/components/parameters/Query'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -485,14 +509,132 @@ paths:
         '404':
           description: User not found
 
-  /api/users/{id}/sessions:
-    get:
+  /api/users/{userId}/notes/trashed/clear:
+    delete:
       tags: [Users]
-      summary: Get all sessions for a user
+      summary: Clear all trashed notes for a user
+      description: >
+        Permanently deletes all trashed notes for the specified user.
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204':
+          description: All trashed notes deleted successfully
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (user can only clear their own trashed notes)
+        '404':
+          description: User not found
+
+  /api/users/{userId}/notes/reorder:
+    put:
+      tags: [Users]
+      summary: Reorder normal notes for a user
+      description: >
+        Reorders the normal notes list for the specified user.
+        Only affects notes that are not pinned, archived, or trashed.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+      responses:
+        '204':
+          description: Notes reordered successfully
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (user can only reorder their own notes)
+        '404':
+          description: User not found
+
+  /api/users/{userId}/notes/pinned/reorder:
+    put:
+      tags: [Users]
+      summary: Reorder pinned notes for a user
+      description: >
+        Reorders the pinned notes list for the specified user.
+        Only affects notes where is_pinned=true and is_trashed=false.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+      responses:
+        '204':
+          description: Pinned notes reordered successfully
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (user can only reorder their own notes)
+        '404':
+          description: User not found
+
+  /api/users/{userId}/notes/archived/reorder:
+    put:
+      tags: [Users]
+      summary: Reorder archived notes for a user
+      description: >
+        Reorders the archived notes list for the specified user.
+        Only affects notes where is_archived=true and is_trashed=false.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteReorderBody'
+      responses:
+        '204':
+          description: Archived notes reordered successfully
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (user can only reorder their own notes)
+        '404':
+          description: User not found
+
+  /api/users/{userId}/sessions:
+    get:
+      tags: [Users]
+      summary: Get all active sessions for a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
         - $ref: '#/components/parameters/Query'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -516,46 +658,14 @@ paths:
         '404':
           description: User not found
 
-  /api/users/{id}/sessions/active:
-    get:
-      tags: [Users]
-      summary: Get all active (non-expired) sessions for a user
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/Id'
-        - $ref: '#/components/parameters/Query'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        '200':
-          description: A list of active sessions for the user
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SessionIndexResponse'
-        '400':
-          description: Invalid request. Validation errors return a Report; malformed form data returns an empty body.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Report'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: User not found
-
   # MARK: Notes
   /api/notes:
     get:
       tags: [Notes]
-      summary: Get all notes
+      summary: Get all notes across all users (admin only)
       description: >
-        Returns active notes for the authenticated user: non-trashed, non-archived, and non-pinned.
-        Use `/notes/pinned` for pinned notes, `/notes/archived` for archived notes,
-        and `/notes/trashed` for trashed notes.
+        Returns active notes across all users: non-trashed, non-archived, and non-pinned.
+        Admin only; normal users should use `/users/{id}/notes` to view their own notes.
       security:
         - BearerAuth: []
       parameters:
@@ -570,32 +680,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/NoteIndexResponse'
         '400':
-          description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Report'
-        '401':
-          description: Unauthorized
-    post:
-      tags: [Notes]
-      summary: Create a new note
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/NoteCreateBody'
-      responses:
-        '200':
-          description: Note created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Note'
-        '400':
           description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
           content:
             application/json:
@@ -603,15 +687,56 @@ paths:
                 $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden (admin only)
+    post:
+      tags: [Notes]
+      summary: Create a note for any user (admin only)
+      description: >
+        Creates a note for the specified user.
+        Admin only; normal users should use `POST /users/{userId}/notes`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteAdminCreateBody'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NoteAdminCreateBody'
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '400':
+          description: Invalid request. Validation errors return a Report; malformed form data returns an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (admin only)
+        '404':
+          description: Target user not found
 
-  /api/notes/{id}:
+  /api/notes/{noteId}:
     get:
       tags: [Notes]
       summary: Get a note by ID
+      description: >
+        Returns a note if the authenticated user has access.
+        Admins can access any note; normal users can only access their own.
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/NoteId'
       responses:
         '200':
           description: A single note
@@ -623,18 +748,26 @@ paths:
           description: Invalid request
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: Note not found
     put:
       tags: [Notes]
       summary: Update a note by ID
+      description: >
+        Updates a note if the authenticated user has access.
+        Admins can update any note; normal users can only update their own.
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/NoteId'
       requestBody:
         required: true
         content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteUpdateBody'
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/NoteUpdateBody'
@@ -646,82 +779,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Note'
         '400':
-          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Report'
-        '401':
-          description: Unauthorized
-        '404':
-          description: Note not found
-    delete:
-      tags: [Notes]
-      summary: Delete a note by ID
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/Id'
-      responses:
-        '200':
-          description: Note deleted
-        '400':
-          description: Invalid request
-        '401':
-          description: Unauthorized
-        '404':
-          description: Note not found
-
-  /api/notes/pinned:
-    get:
-      tags: [Notes]
-      summary: Get all pinned notes
-      description: >
-        Returns only pinned, non-trashed notes for the authenticated user.
-        Pinned notes are excluded from the main `/notes` index so they can always be shown at the top.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/Query'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        '200':
-          description: A list of pinned notes
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NoteIndexResponse'
-        '400':
-          description: Invalid request. Validation errors return a Report; malformed query parameters return an empty body.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Report'
-        '401':
-          description: Unauthorized
-
-  /api/notes/archived:
-    get:
-      tags: [Notes]
-      summary: Get all archived notes
-      description: >
-        Returns only archived, non-trashed notes for the authenticated user.
-        Archived notes are excluded from the main `/notes` index.
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/Query'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        '200':
-          description: A list of archived notes
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NoteIndexResponse'
-        '400':
           description: Invalid request. Validation errors return a Report; malformed form data returns an empty body.
           content:
             application/json:
@@ -729,113 +786,31 @@ paths:
                 $ref: '#/components/schemas/Report'
         '401':
           description: Unauthorized
-
-  /api/notes/trashed:
-    get:
+        '403':
+          description: Forbidden
+        '404':
+          description: Note not found
+    delete:
       tags: [Notes]
-      summary: Get all trashed notes
+      summary: Delete a note by ID
       description: >
-        Returns only trashed notes for the authenticated user.
-        Trashed notes are excluded from all other note index endpoints until permanently deleted.
+        Deletes a note if the authenticated user has access.
+        Admins can delete any note; normal users can only delete their own.
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/Query'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        '200':
-          description: A list of trashed notes
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NoteIndexResponse'
-        '400':
-          description: Invalid request. Invalid base64 or malformed form data returns an empty body; validation errors return a Report.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Report'
-        '401':
-          description: Unauthorized
-
-  /api/notes/trashed/clear:
-    delete:
-      tags: [Notes]
-      summary: Clear all trashed notes
-      description: >
-        Permanently deletes all trashed notes for the authenticated user.
-        Admins delete all trashed notes across all users.
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: All trashed notes deleted successfully
-        '401':
-          description: Unauthorized
-
-  /api/notes/reorder:
-    put:
-      tags: [Notes]
-      summary: Reorder normal (non-pinned, non-archived) notes
-      description: Reorders the normal notes list. Only affects notes that are not pinned, archived, or trashed. Provided IDs are placed first in the given order; any unloaded notes remain after in their existing relative order.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/NoteReorderBody'
+        - $ref: '#/components/parameters/NoteId'
       responses:
         '204':
-          description: Notes reordered successfully
+          description: Note deleted
         '400':
           description: Invalid request
         '401':
           description: Unauthorized
-
-  /api/notes/pinned/reorder:
-    put:
-      tags: [Notes]
-      summary: Reorder pinned notes
-      description: Reorders the pinned notes list. Only affects notes where is_pinned=true and is_trashed=false. Does not affect normal or archived note ordering.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/NoteReorderBody'
-      responses:
-        '204':
-          description: Pinned notes reordered successfully
-        '400':
-          description: Invalid request
-        '401':
-          description: Unauthorized
-
-  /api/notes/archived/reorder:
-    put:
-      tags: [Notes]
-      summary: Reorder archived notes
-      description: Reorders the archived notes list. Only affects notes where is_archived=true and is_trashed=false. Does not affect normal or pinned note ordering.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/NoteReorderBody'
-      responses:
-        '204':
-          description: Archived notes reordered successfully
-        '400':
-          description: Invalid request
-        '401':
-          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Note not found
 
   # MARK: Imports
   /api/imports/google-keep:
@@ -847,9 +822,14 @@ paths:
       requestBody:
         required: true
         content:
-          application/x-www-form-urlencoded:
+          application/zip:
             schema:
-              $ref: '#/components/schemas/ImportGoogleKeepBody'
+              type: string
+              format: binary
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
       responses:
         '200':
           description: Import successful
@@ -876,8 +856,16 @@ components:
 
   # MARK: Parameters
   parameters:
-    Id:
-      name: id
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    NoteId:
+      name: noteId
       in: path
       required: true
       schema:
@@ -1055,6 +1043,7 @@ components:
           format: uuid
         title:
           type: string
+          nullable: true
         body:
           type: string
         isPinned:
@@ -1201,9 +1190,32 @@ components:
       required:
         - body
 
+    NoteAdminCreateBody:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: ID of the user the note should be created for
+        title:
+          type: string
+          minLength: 1
+        body:
+          type: string
+          minLength: 1
+        isPinned:
+          type: boolean
+      required:
+        - userId
+        - body
+
     NoteUpdateBody:
       type: object
       properties:
+        userId:
+          type: string
+          format: uuid
+          description: Admin only; reassign note to a different user
         title:
           type: string
           minLength: 1
@@ -1226,21 +1238,13 @@ components:
       type: object
       properties:
         ids:
-          type: string
-          description: Comma-separated list of note UUIDs in desired order
+          type: array
+          description: Ordered list of note UUIDs
+          items:
+            type: string
+            format: uuid
       required:
         - ids
-
-    ImportGoogleKeepBody:
-      type: object
-      properties:
-        file:
-          type: string
-          minLength: 1
-          pattern: "^[\\x00-\\x7F]+$"
-          description: Base64-encoded Google Keep Takeout zip archive
-      required:
-        - file
 
     ImportGoogleKeepResponse:
       type: object

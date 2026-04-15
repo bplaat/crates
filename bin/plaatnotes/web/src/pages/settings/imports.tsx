@@ -35,16 +35,11 @@ export function SettingsImports() {
 
         try {
             const arrayBuffer = await file.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
-            // Encode binary to base64
-            let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-            const fileB64 = btoa(binary);
 
-            const form = new URLSearchParams({ file: fileB64 });
             const res = await authFetch(`/api/imports/google-keep`, {
                 method: 'POST',
-                body: form,
+                headers: { 'Content-Type': 'application/zip' },
+                body: arrayBuffer,
             });
             if (!res.ok) {
                 setError(true);

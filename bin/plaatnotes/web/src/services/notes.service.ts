@@ -15,7 +15,7 @@ import {
     type Pagination,
 } from '../../src-gen/api.ts';
 
-import { authFetch } from './auth.service.ts';
+import { $authUser, authFetch } from './auth.service.ts';
 
 const NOTE_CACHE_MAX_SIZE = 256;
 export const $notesCache = signal<Map<string, Note>>(new Map());
@@ -46,7 +46,8 @@ export async function listNotes(
     query?: string,
     signal?: AbortSignal,
 ): Promise<{ data: Note[]; pagination: Pagination }> {
-    const res = await authFetch(buildUrl(`/api/notes`, page, query), { signal });
+    const userId = $authUser.value!.id;
+    const res = await authFetch(buildUrl(`/api/users/${userId}/notes`, page, query), { signal });
     if (!res.ok) return emptyPage(page);
     const result: NoteIndexResponse = await res.json();
     cacheNotes(result.data);
@@ -58,7 +59,10 @@ export async function listPinnedNotes(
     query?: string,
     signal?: AbortSignal,
 ): Promise<{ data: Note[]; pagination: Pagination }> {
-    const res = await authFetch(buildUrl(`/api/notes/pinned`, page, query), { signal });
+    const userId = $authUser.value!.id;
+    const res = await authFetch(buildUrl(`/api/users/${userId}/notes/pinned`, page, query), {
+        signal,
+    });
     if (!res.ok) return emptyPage(page);
     const result: NoteIndexResponse = await res.json();
     cacheNotes(result.data);
@@ -70,7 +74,10 @@ export async function listArchivedNotes(
     query?: string,
     signal?: AbortSignal,
 ): Promise<{ data: Note[]; pagination: Pagination }> {
-    const res = await authFetch(buildUrl(`/api/notes/archived`, page, query), { signal });
+    const userId = $authUser.value!.id;
+    const res = await authFetch(buildUrl(`/api/users/${userId}/notes/archived`, page, query), {
+        signal,
+    });
     if (!res.ok) return emptyPage(page);
     const result: NoteIndexResponse = await res.json();
     cacheNotes(result.data);
@@ -82,7 +89,10 @@ export async function listTrashedNotes(
     query?: string,
     signal?: AbortSignal,
 ): Promise<{ data: Note[]; pagination: Pagination }> {
-    const res = await authFetch(buildUrl(`/api/notes/trashed`, page, query), { signal });
+    const userId = $authUser.value!.id;
+    const res = await authFetch(buildUrl(`/api/users/${userId}/notes/trashed`, page, query), {
+        signal,
+    });
     if (!res.ok) return emptyPage(page);
     const result: NoteIndexResponse = await res.json();
     cacheNotes(result.data);
@@ -90,10 +100,15 @@ export async function listTrashedNotes(
 }
 
 export async function createNote(params: NoteCreateBody): Promise<Note | null> {
-    const form = new URLSearchParams({ body: params.body });
-    if (params.title) form.set('title', params.title);
-    if (params.isPinned !== undefined) form.set('isPinned', String(params.isPinned));
-    const res = await authFetch(`/api/notes`, { method: 'POST', body: form });
+    const userId = $authUser.value!.id;
+    const body: Record<string, any> = { body: params.body };
+    if (params.title) body.title = params.title;
+    if (params.isPinned !== undefined) body.isPinned = params.isPinned;
+    const res = await authFetch(`/api/users/${userId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
     if (!res.ok) return null;
     const note: Note = await res.json();
     cacheNotes([note]);
@@ -118,15 +133,19 @@ export async function fetchNote(id: string): Promise<Note | null> {
 }
 
 export async function updateNote(note: Note, params: Partial<NoteUpdateBody>): Promise<Note> {
-    const form = new URLSearchParams({
-        body: params.body ?? note.body,
-        isPinned: String(params.isPinned ?? note.isPinned),
-        isArchived: String(params.isArchived ?? note.isArchived),
-        isTrashed: String(params.isTrashed ?? note.isTrashed),
-    });
     const title = params.title !== undefined ? params.title : note.title;
-    if (title) form.set('title', title);
-    const res = await authFetch(`/api/notes/${note.id}`, { method: 'PUT', body: form });
+    const body: Record<string, any> = {
+        body: params.body ?? note.body,
+        isPinned: params.isPinned ?? note.isPinned,
+        isArchived: params.isArchived ?? note.isArchived,
+        isTrashed: params.isTrashed ?? note.isTrashed,
+    };
+    if (title) body.title = title;
+    const res = await authFetch(`/api/notes/${note.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
     if (!res.ok) return note;
     const saved: Note = await res.json();
     cacheNotes([saved]);
@@ -141,14 +160,17 @@ export async function deleteNote(id: string): Promise<void> {
 }
 
 export async function clearTrashedNotes(): Promise<void> {
-    await authFetch(`/api/notes/trashed/clear`, { method: 'DELETE' });
+    const userId = $authUser.value!.id;
+    await authFetch(`/api/users/${userId}/notes/trashed/clear`, { method: 'DELETE' });
     $notesCache.value = new Map([...$notesCache.value].filter(([, note]) => !note.isTrashed));
 }
 
 export async function reorderNotes(ids: string[], endpoint: string): Promise<void> {
-    const res = await authFetch(`/api${endpoint}`, {
+    const userId = $authUser.value!.id;
+    const res = await authFetch(`/api/users/${userId}${endpoint}`, {
         method: 'PUT',
-        body: new URLSearchParams({ ids: ids.join(',') }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
     });
     if (!res.ok) throw new Error('reorder failed');
 }

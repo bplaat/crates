@@ -5,7 +5,7 @@
  */
 
 use anyhow::Result;
-use bsqlite::query_args;
+use bsqlite::{preprocess_fts_query, query_args};
 use const_format::formatcp;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
@@ -15,19 +15,18 @@ use crate::context::Context;
 use crate::controllers::users::{get_user, parse_user_id};
 use crate::controllers::{not_found, parse_index_query, require_auth};
 use crate::models::session::policies;
-use crate::models::{IndexQuery, Session, UserRole};
-use crate::utils::preprocess_fts_query;
+use crate::models::{IndexQuery, Session};
 
 // MARK: Handlers
 pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Result<Response> {
     let auth_user = require_auth!(ctx);
-    let query = parse_index_query!(req);
 
-    let (total, sessions) = if policies::can_index(auth_user) {
-        list_all_sessions(ctx, &query)?
-    } else {
-        list_sessions(ctx, auth_user.id, false, &query)?
-    };
+    if !policies::can_index(auth_user) {
+        return Ok(Response::with_status(Status::Forbidden));
+    }
+
+    let query = parse_index_query!(req);
+    let (total, sessions) = list_all_sessions(ctx, &query)?;
 
     Ok(Response::with_json(api::SessionIndexResponse {
         pagination: api::Pagination {
@@ -84,94 +83,62 @@ pub(crate) fn sessions_delete(req: &Request, ctx: &Context) -> Result<Response> 
         .execute("DELETE FROM sessions WHERE id = ?", session.id)?;
 
     // Success response
-    Ok(Response::new())
+    Ok(Response::with_status(Status::NoContent))
 }
 
 pub(crate) fn users_sessions(req: &Request, ctx: &Context) -> Result<Response> {
-    sessions_for_user(req, ctx, false)
-}
-
-pub(crate) fn users_sessions_active(req: &Request, ctx: &Context) -> Result<Response> {
-    sessions_for_user(req, ctx, true)
-}
-
-pub(crate) fn sessions_active(req: &Request, ctx: &Context) -> Result<Response> {
-    let auth_user = require_auth!(ctx);
-    let query = parse_index_query!(req);
-    let (total, sessions) = list_sessions(ctx, auth_user.id, true, &query)?;
-    Ok(Response::with_json(api::SessionIndexResponse {
-        pagination: api::Pagination {
-            page: query.page,
-            limit: query.limit,
-            total,
-        },
-        data: sessions,
-    }))
+    sessions_for_user(req, ctx)
 }
 
 // MARK: Utils
 fn list_sessions(
     ctx: &Context,
     user_id: Uuid,
-    active_only: bool,
     query: &IndexQuery,
 ) -> Result<(i64, Vec<api::Session>)> {
     let now = chrono::Utc::now();
     let offset = (query.page - 1) * query.limit;
-    if query.query.is_empty() {
-        if active_only {
-            let total = ctx.database.query_some::<i64>(
-                "SELECT COUNT(id) FROM sessions WHERE user_id = ? AND expires_at > ?",
-                (user_id, now),
-            )?;
-            let sessions = query_args!(
-                Session, ctx.database,
-                formatcp!("SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
-                Args { user_id: user_id, now: now, limit: query.limit, offset: offset }
-            )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
-            Ok((total, sessions))
-        } else {
-            let total = ctx
-                .database
-                .query_some::<i64>("SELECT COUNT(id) FROM sessions WHERE user_id = ?", user_id)?;
-            let sessions = query_args!(
-                Session, ctx.database,
-                formatcp!("SELECT {} FROM sessions WHERE user_id = :user_id ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
-                Args { user_id: user_id, limit: query.limit, offset: offset }
-            )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
-            Ok((total, sessions))
-        }
+    if let Some(q) = query.query.as_deref().filter(|s| !s.is_empty()) {
+        let fts_query = preprocess_fts_query(q);
+        let total = ctx.database.query_some::<i64>(
+            "SELECT COUNT(id) FROM sessions WHERE user_id = ? AND expires_at > ? AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH ?)",
+            (user_id, now, fts_query.clone()),
+        )?;
+        let sessions = query_args!(
+            Session, ctx.database,
+            formatcp!("SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
+            Args { user_id: user_id, now: now, fts_query: fts_query, limit: query.limit, offset: offset }
+        )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
+        Ok((total, sessions))
     } else {
-        let fts_query = preprocess_fts_query(&query.query);
-        if active_only {
-            let total = ctx.database.query_some::<i64>(
-                "SELECT COUNT(id) FROM sessions WHERE user_id = ? AND expires_at > ? AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH ?)",
-                (user_id, now, fts_query.clone()),
-            )?;
-            let sessions = query_args!(
-                Session, ctx.database,
-                formatcp!("SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
-                Args { user_id: user_id, now: now, fts_query: fts_query, limit: query.limit, offset: offset }
-            )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
-            Ok((total, sessions))
-        } else {
-            let total = ctx.database.query_some::<i64>(
-                "SELECT COUNT(id) FROM sessions WHERE user_id = ? AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH ?)",
-                (user_id, fts_query.clone()),
-            )?;
-            let sessions = query_args!(
-                Session, ctx.database,
-                formatcp!("SELECT {} FROM sessions WHERE user_id = :user_id AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
-                Args { user_id: user_id, fts_query: fts_query, limit: query.limit, offset: offset }
-            )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
-            Ok((total, sessions))
-        }
+        let total = ctx.database.query_some::<i64>(
+            "SELECT COUNT(id) FROM sessions WHERE user_id = ? AND expires_at > ?",
+            (user_id, now),
+        )?;
+        let sessions = query_args!(
+            Session, ctx.database,
+            formatcp!("SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
+            Args { user_id: user_id, now: now, limit: query.limit, offset: offset }
+        )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
+        Ok((total, sessions))
     }
 }
 
 fn list_all_sessions(ctx: &Context, query: &IndexQuery) -> Result<(i64, Vec<api::Session>)> {
     let offset = (query.page - 1) * query.limit;
-    if query.query.is_empty() {
+    if let Some(q) = query.query.as_deref().filter(|s| !s.is_empty()) {
+        let fts_query = preprocess_fts_query(q);
+        let total = ctx.database.query_some::<i64>(
+            "SELECT COUNT(id) FROM sessions WHERE id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH ?)",
+            fts_query.clone(),
+        )?;
+        let sessions = query_args!(
+            Session, ctx.database,
+            formatcp!("SELECT {} FROM sessions WHERE id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
+            Args { fts_query: fts_query, limit: query.limit, offset: offset }
+        )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
+        Ok((total, sessions))
+    } else {
         let total = ctx
             .database
             .query_some::<i64>("SELECT COUNT(id) FROM sessions", ())?;
@@ -190,22 +157,10 @@ fn list_all_sessions(ctx: &Context, query: &IndexQuery) -> Result<(i64, Vec<api:
         .map(|r| r.map(Into::into))
         .collect::<Result<Vec<_>, _>>()?;
         Ok((total, sessions))
-    } else {
-        let fts_query = preprocess_fts_query(&query.query);
-        let total = ctx.database.query_some::<i64>(
-            "SELECT COUNT(id) FROM sessions WHERE id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH ?)",
-            fts_query.clone(),
-        )?;
-        let sessions = query_args!(
-            Session, ctx.database,
-            formatcp!("SELECT {} FROM sessions WHERE id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
-            Args { fts_query: fts_query, limit: query.limit, offset: offset }
-        )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
-        Ok((total, sessions))
     }
 }
 
-fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Result<Response> {
+fn sessions_for_user(req: &Request, ctx: &Context) -> Result<Response> {
     let auth_user = require_auth!(ctx);
     let query = parse_index_query!(req);
 
@@ -219,12 +174,12 @@ fn sessions_for_user(req: &Request, ctx: &Context, active_only: bool) -> Result<
         None => return not_found(req, ctx),
     };
 
-    // Check authorization: admin can see any user's sessions; normal user only their own
-    if auth_user.role != UserRole::Admin && auth_user.id != user.id {
+    // Check authorization
+    if !crate::models::user::policies::can_show(auth_user, &user) {
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    let (total, sessions) = list_sessions(ctx, user.id, active_only, &query)?;
+    let (total, sessions) = list_sessions(ctx, user.id, &query)?;
 
     Ok(Response::with_json(api::SessionIndexResponse {
         pagination: api::Pagination {
@@ -346,22 +301,17 @@ mod test {
     }
 
     #[test]
-    fn test_sessions_index_normal_user() {
+    fn test_sessions_index_forbidden_for_normal_user() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
-        let (user1, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        let user2 = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
-        insert_test_session(&ctx, user2.id, "token-jane");
+        let (_, token1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
 
-        // Normal user only sees their own sessions
+        // Normal user gets Forbidden on /api/sessions
         let res = router.handle(
             &Request::get("http://localhost/api/sessions")
                 .header("Authorization", format!("Bearer {token1}")),
         );
-        assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::SessionIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 1);
-        assert_eq!(response.data[0].user_id, user1.id);
+        assert_eq!(res.status, Status::Forbidden);
     }
 
     #[test]
@@ -423,7 +373,7 @@ mod test {
             &Request::delete(format!("http://localhost/api/sessions/{}", session.id))
                 .header("Authorization", format!("Bearer {token}")),
         );
-        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.status, Status::NoContent);
 
         // Verify session is deleted
         let deleted = query_args!(
@@ -538,7 +488,7 @@ mod test {
     }
 
     #[test]
-    fn test_users_sessions_active_filters_expired() {
+    fn test_users_sessions_filters_expired() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
@@ -554,79 +504,12 @@ mod test {
             .unwrap();
 
         let res = router.handle(
-            &Request::get(format!(
-                "http://localhost/api/users/{}/sessions/active",
-                user.id
-            ))
-            .header("Authorization", format!("Bearer {token}")),
-        );
-        assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::SessionIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 1);
-        assert!(response.data.iter().all(|s| s.user_id == user.id));
-    }
-
-    #[test]
-    fn test_users_sessions_active_forbidden() {
-        let ctx = Context::with_test_database().expect("Can't create test database");
-        let router = router(ctx.clone());
-        let (_, token_user1) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        let (user2, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-
-        let res = router.handle(
-            &Request::get(format!(
-                "http://localhost/api/users/{}/sessions/active",
-                user2.id
-            ))
-            .header("Authorization", format!("Bearer {token_user1}")),
-        );
-        assert_eq!(res.status, Status::Forbidden);
-    }
-
-    #[test]
-    fn test_sessions_active_filters_expired() {
-        let ctx = Context::with_test_database().expect("Can't create test database");
-        let router = router(ctx.clone());
-        let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-
-        // Expired session - can't use insert_test_session since it sets a future expiry
-        ctx.database
-            .insert_session(Session {
-                user_id: user.id,
-                token: "token-expired".to_string(),
-                expires_at: Utc::now() - Duration::from_secs(3600),
-                ..Default::default()
-            })
-            .unwrap();
-
-        // Valid session for another user (must not appear)
-        let (other_user, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        insert_test_session(&ctx, other_user.id, "token-other");
-
-        let res = router.handle(
-            &Request::get("http://localhost/api/sessions/active")
+            &Request::get(format!("http://localhost/api/users/{}/sessions", user.id))
                 .header("Authorization", format!("Bearer {token}")),
         );
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::SessionIndexResponse>(&res.body).unwrap();
         assert_eq!(response.data.len(), 1);
-        assert_eq!(response.data[0].user_id, user.id);
-    }
-
-    #[test]
-    fn test_sessions_active_own_only() {
-        let ctx = Context::with_test_database().expect("Can't create test database");
-        let router = router(ctx.clone());
-        let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        let (other, _) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        insert_test_session(&ctx, other.id, "token-other-valid");
-
-        let res = router.handle(
-            &Request::get("http://localhost/api/sessions/active")
-                .header("Authorization", format!("Bearer {token}")),
-        );
-        assert_eq!(res.status, Status::Ok);
-        let response = serde_json::from_slice::<api::SessionIndexResponse>(&res.body).unwrap();
         assert!(response.data.iter().all(|s| s.user_id == user.id));
     }
 }

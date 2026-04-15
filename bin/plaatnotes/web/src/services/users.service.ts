@@ -26,14 +26,17 @@ export async function listUsers(
 }
 
 export async function createUser(params: UserCreateBody): Promise<{ data: User | null; report: Report | null }> {
-    const form = new URLSearchParams({
-        firstName: params.firstName,
-        lastName: params.lastName,
-        email: params.email,
-        password: params.password,
-        role: params.role,
+    const res = await authFetch(`/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            firstName: params.firstName,
+            lastName: params.lastName,
+            email: params.email,
+            password: params.password,
+            role: params.role,
+        }),
     });
-    const res = await authFetch(`/api/users`, { method: 'POST', body: form });
     if (!res.ok) return { data: null, report: await res.json().catch(() => null) };
     return { data: await res.json(), report: null };
 }
@@ -47,16 +50,20 @@ export async function updateUser(
     id: string,
     params: UserUpdateBody,
 ): Promise<{ data: User | null; report: Report | null }> {
-    const form = new URLSearchParams({
+    const body: Record<string, string> = {
         firstName: params.firstName,
         lastName: params.lastName,
         email: params.email,
         theme: params.theme,
         language: params.language,
         role: params.role,
+    };
+    if (params.password) body.password = params.password;
+    const res = await authFetch(`/api/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
     });
-    if (params.password) form.set('password', params.password);
-    const res = await authFetch(`/api/users/${id}`, { method: 'PUT', body: form });
     if (!res.ok) return { data: null, report: await res.json().catch(() => null) };
     return { data: await res.json(), report: null };
 }
@@ -66,8 +73,11 @@ export async function changePassword(
     oldPassword: string,
     newPassword: string,
 ): Promise<{ ok: boolean; report: Report | null }> {
-    const form = new URLSearchParams({ oldPassword, newPassword });
-    const res = await authFetch(`/api/users/${id}/change-password`, { method: 'POST', body: form });
+    const res = await authFetch(`/api/users/${id}/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPassword, newPassword }),
+    });
     if (!res.ok) return { ok: false, report: await res.json().catch(() => null) };
     return { ok: true, report: null };
 }

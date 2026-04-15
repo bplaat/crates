@@ -9,18 +9,13 @@ use small_http::{Request, Response, Status};
 
 pub(crate) use self::auth::{auth_login, auth_logout, auth_validate};
 pub(crate) use self::imports::imports_google_keep;
-pub(crate) use self::notes::{
-    notes_archived, notes_archived_reorder, notes_create, notes_delete, notes_index, notes_pinned,
-    notes_pinned_reorder, notes_reorder, notes_show, notes_trashed, notes_trashed_clear,
-    notes_update,
-};
-pub(crate) use self::sessions::{
-    sessions_active, sessions_delete, sessions_index, sessions_show, users_sessions,
-    users_sessions_active,
-};
+pub(crate) use self::notes::{notes_create, notes_delete, notes_index, notes_show, notes_update};
+pub(crate) use self::sessions::{sessions_delete, sessions_index, sessions_show, users_sessions};
 pub(crate) use self::users::{
     users_change_password, users_create, users_delete, users_index, users_notes,
-    users_notes_archived, users_notes_pinned, users_notes_trashed, users_show, users_update,
+    users_notes_archived, users_notes_archived_reorder, users_notes_create, users_notes_pinned,
+    users_notes_pinned_reorder, users_notes_reorder, users_notes_trashed,
+    users_notes_trashed_clear, users_show, users_update,
 };
 use crate::Context;
 
@@ -79,19 +74,18 @@ macro_rules! parse_index_query {
     }};
 }
 
-/// Parse and validate a URL-encoded form body. `$api_type` is the API struct, `$internal_type` the validated internal struct.
+/// Parse and validate a JSON body. `$api_type` is the API struct, `$internal_type` the validated internal struct.
 macro_rules! parse_body {
     ($req:expr, $api_type:ty, $internal_type:ty) => {{
         use validate::Validate as _;
-        let body =
-            match serde_urlencoded::from_bytes::<$api_type>($req.body.as_deref().unwrap_or(&[])) {
-                Ok(b) => Into::<$internal_type>::into(b),
-                Err(_) => {
-                    return Ok(small_http::Response::with_status(
-                        small_http::Status::BadRequest,
-                    ));
-                }
-            };
+        let body = match $req.parse_body::<$api_type>() {
+            Ok(b) => Into::<$internal_type>::into(b),
+            Err(e) => {
+                return Ok(small_http::Response::with_status(small_http::Status::from(
+                    e,
+                )));
+            }
+        };
         if let Err(report) = body.validate() {
             return Ok(
                 small_http::Response::with_status(small_http::Status::BadRequest)
@@ -102,19 +96,18 @@ macro_rules! parse_body {
     }};
 }
 
-/// Parse and validate a URL-encoded form body where the validator needs the request context.
+/// Parse and validate a JSON body where the validator needs the request context.
 macro_rules! parse_body_ctx {
     ($req:expr, $api_type:ty, $internal_type:ty, $ctx:expr) => {{
         use validate::Validate as _;
-        let body =
-            match serde_urlencoded::from_bytes::<$api_type>($req.body.as_deref().unwrap_or(&[])) {
-                Ok(b) => Into::<$internal_type>::into(b),
-                Err(_) => {
-                    return Ok(small_http::Response::with_status(
-                        small_http::Status::BadRequest,
-                    ));
-                }
-            };
+        let body = match $req.parse_body::<$api_type>() {
+            Ok(b) => Into::<$internal_type>::into(b),
+            Err(e) => {
+                return Ok(small_http::Response::with_status(small_http::Status::from(
+                    e,
+                )));
+            }
+        };
         if let Err(report) = body.validate_with($ctx) {
             return Ok(
                 small_http::Response::with_status(small_http::Status::BadRequest)

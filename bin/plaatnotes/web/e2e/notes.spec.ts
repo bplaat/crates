@@ -8,26 +8,26 @@ import { type Page, expect, test } from '@playwright/test';
 
 const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
 
-async function authHeaders(page: Page): Promise<Record<string, string>> {
+async function authState(page: Page): Promise<{ token: string; userId: string; headers: Record<string, string> }> {
     if (!page.url().startsWith('http')) await page.goto('/');
     const token = await page.evaluate(() => localStorage.getItem('token') ?? '');
-    return {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-    };
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const res = await page.request.get(`${API_URL}/auth/validate`, { headers });
+    const { user } = await res.json();
+    return { token, userId: user.id, headers };
 }
 
-async function createNote(page: Page, fields: Record<string, string>): Promise<{ id: string }> {
-    const headers = await authHeaders(page);
-    const res = await page.request.post(`${API_URL}/notes`, {
+async function createNote(page: Page, fields: Record<string, any>): Promise<{ id: string }> {
+    const { userId, headers } = await authState(page);
+    const res = await page.request.post(`${API_URL}/users/${userId}/notes`, {
         headers,
-        data: new URLSearchParams(fields).toString(),
+        data: JSON.stringify(fields),
     });
     return res.json();
 }
 
 async function deleteNote(page: Page, id: string): Promise<void> {
-    const headers = await authHeaders(page);
+    const { headers } = await authState(page);
     await page.request.delete(`${API_URL}/notes/${id}`, { headers });
 }
 
@@ -146,15 +146,15 @@ test.describe('Notes', () => {
 
     test('back button on archived note navigates to archive', async ({ page }) => {
         const note = await createNote(page, { body: 'Back from archive note' });
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         await page.request.put(`${API_URL}/notes/${note.id}`, {
             headers,
-            data: new URLSearchParams({
+            data: JSON.stringify({
                 body: 'Back from archive note',
-                isPinned: 'false',
-                isArchived: 'true',
-                isTrashed: 'false',
-            }).toString(),
+                isPinned: false,
+                isArchived: true,
+                isTrashed: false,
+            }),
         });
 
         await page.goto(`/notes/${note.id}`);
@@ -166,15 +166,10 @@ test.describe('Notes', () => {
 
     test('back button on trashed note navigates to trash', async ({ page }) => {
         const note = await createNote(page, { body: 'Back from trash note' });
-        const headers = await authHeaders(page);
+        const { headers } = await authState(page);
         await page.request.put(`${API_URL}/notes/${note.id}`, {
             headers,
-            data: new URLSearchParams({
-                body: 'Back from trash note',
-                isPinned: 'false',
-                isArchived: 'false',
-                isTrashed: 'true',
-            }).toString(),
+            data: JSON.stringify({ body: 'Back from trash note', isPinned: false, isArchived: false, isTrashed: true }),
         });
 
         await page.goto(`/notes/${note.id}`);

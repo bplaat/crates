@@ -5,7 +5,7 @@
  */
 
 use anyhow::Result;
-use bsqlite::{execute_args, query_args};
+use bsqlite::{execute_args, preprocess_fts_query, query_args};
 use chrono::Utc;
 use const_format::formatcp;
 use from_derive::FromStruct;
@@ -24,7 +24,7 @@ use crate::models::user::validators::{
     is_unique_email_or_target_user_email,
 };
 use crate::models::user::{UserRole, UserTheme, policies};
-use crate::utils::{password_hash, preprocess_fts_query};
+use crate::utils::password_hash;
 
 // MARK: Handlers
 pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
@@ -38,27 +38,8 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
     let query = parse_index_query!(req);
 
     // Get users
-    let (total, users) = if query.query.is_empty() {
-        let total = ctx
-            .database
-            .query_some::<i64>("SELECT COUNT(id) FROM users", ())?;
-        let users = query_args!(
-            User,
-            ctx.database,
-            formatcp!(
-                "SELECT {} FROM users ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
-                User::columns()
-            ),
-            Args {
-                limit: query.limit,
-                offset: (query.page - 1) * query.limit
-            }
-        )?
-        .map(|r| r.map(Into::into))
-        .collect::<Result<Vec<_>, _>>()?;
-        (total, users)
-    } else {
-        let fts_query = preprocess_fts_query(&query.query);
+    let (total, users) = if let Some(q) = query.query.as_deref().filter(|s| !s.is_empty()) {
+        let fts_query = preprocess_fts_query(q);
         let total = ctx
             .database
             .query_some::<i64>(
@@ -80,6 +61,25 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
             }
         )
         ?
+        .map(|r| r.map(Into::into))
+        .collect::<Result<Vec<_>, _>>()?;
+        (total, users)
+    } else {
+        let total = ctx
+            .database
+            .query_some::<i64>("SELECT COUNT(id) FROM users", ())?;
+        let users = query_args!(
+            User,
+            ctx.database,
+            formatcp!(
+                "SELECT {} FROM users ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                User::columns()
+            ),
+            Args {
+                limit: query.limit,
+                offset: (query.page - 1) * query.limit
+            }
+        )?
         .map(|r| r.map(Into::into))
         .collect::<Result<Vec<_>, _>>()?;
         (total, users)
@@ -134,20 +134,20 @@ pub(crate) fn users_create(req: &Request, ctx: &Context) -> Result<Response> {
     ctx.database.insert_user(user.clone())?;
 
     // Return created user
-    Ok(Response::with_json(api::User::from(user)))
+    Ok(Response::with_status(Status::Created).json(api::User::from(user)))
 }
 
-pub(crate) fn users_show(_req: &Request, ctx: &Context) -> Result<Response> {
+pub(crate) fn users_show(req: &Request, ctx: &Context) -> Result<Response> {
     let auth_user = require_auth!(ctx);
 
     // Get user
-    let user_id = match parse_user_id(_req) {
+    let user_id = match parse_user_id(req) {
         Ok(id) => id,
         Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     let user = match get_user(user_id, ctx)? {
         Some(user) => user,
-        None => return not_found(_req, ctx),
+        None => return not_found(req, ctx),
     };
 
     // Check authorization
@@ -294,20 +294,20 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Resp
     )?;
 
     // Success response
-    Ok(Response::new())
+    Ok(Response::with_status(Status::NoContent))
 }
 
-pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Result<Response> {
+pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Result<Response> {
     let auth_user = require_auth!(ctx);
 
     // Get user
-    let user_id = match parse_user_id(_req) {
+    let user_id = match parse_user_id(req) {
         Ok(id) => id,
         Err(_) => return Ok(Response::with_status(Status::BadRequest)),
     };
     let user = match get_user(user_id, ctx)? {
         Some(user) => user,
-        None => return not_found(_req, ctx),
+        None => return not_found(req, ctx),
     };
 
     // Check authorization
@@ -320,7 +320,7 @@ pub(crate) fn users_delete(_req: &Request, ctx: &Context) -> Result<Response> {
         .execute("DELETE FROM users WHERE id = ?", user.id)?;
 
     // Success response
-    Ok(Response::new())
+    Ok(Response::with_status(Status::NoContent))
 }
 
 pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Result<Response> {
@@ -337,6 +337,100 @@ pub(crate) fn users_notes_archived(req: &Request, ctx: &Context) -> Result<Respo
 
 pub(crate) fn users_notes_trashed(req: &Request, ctx: &Context) -> Result<Response> {
     users_notes_filtered(req, ctx, FILTER_TRASHED)
+}
+
+pub(crate) fn users_notes_create(req: &Request, ctx: &Context) -> Result<Response> {
+    let auth_user = require_auth!(ctx);
+
+    let user_id = match parse_user_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let user = match get_user(user_id, ctx)? {
+        Some(user) => user,
+        None => return not_found(req, ctx),
+    };
+
+    if !policies::can_update(auth_user, &user) {
+        return Ok(Response::with_status(Status::Forbidden));
+    }
+
+    let body = parse_body!(
+        req,
+        api::NoteCreateBody,
+        crate::controllers::notes::NoteCreateBody
+    );
+
+    let note = crate::controllers::notes::insert_note(
+        ctx,
+        user.id,
+        body.title,
+        body.body,
+        body.is_pinned.unwrap_or(false),
+    )?;
+
+    Ok(Response::with_status(Status::Created).json(api::Note::from(note)))
+}
+
+pub(crate) fn users_notes_reorder(req: &Request, ctx: &Context) -> Result<Response> {
+    users_notes_reorder_handler(req, ctx, FILTER_NORMAL)
+}
+
+pub(crate) fn users_notes_pinned_reorder(req: &Request, ctx: &Context) -> Result<Response> {
+    users_notes_reorder_handler(req, ctx, FILTER_PINNED)
+}
+
+pub(crate) fn users_notes_archived_reorder(req: &Request, ctx: &Context) -> Result<Response> {
+    users_notes_reorder_handler(req, ctx, FILTER_ARCHIVED)
+}
+
+pub(crate) fn users_notes_trashed_clear(req: &Request, ctx: &Context) -> Result<Response> {
+    let auth_user = require_auth!(ctx);
+
+    let user_id = match parse_user_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let user = match get_user(user_id, ctx)? {
+        Some(user) => user,
+        None => return not_found(req, ctx),
+    };
+
+    if !policies::can_update(auth_user, &user) {
+        return Ok(Response::with_status(Status::Forbidden));
+    }
+
+    execute_args!(
+        ctx.database,
+        "DELETE FROM notes WHERE is_trashed = 1 AND user_id = :user_id",
+        Args { user_id: user.id }
+    )?;
+
+    Ok(Response::with_status(Status::NoContent))
+}
+
+fn users_notes_reorder_handler(req: &Request, ctx: &Context, filter: &str) -> Result<Response> {
+    let auth_user = require_auth!(ctx);
+
+    let user_id = match parse_user_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let user = match get_user(user_id, ctx)? {
+        Some(user) => user,
+        None => return not_found(req, ctx),
+    };
+
+    if !policies::can_update(auth_user, &user) {
+        return Ok(Response::with_status(Status::Forbidden));
+    }
+
+    let body = match req.parse_body::<api::NoteReorderBody>() {
+        Ok(body) => body,
+        Err(e) => return Ok(Response::with_status(e)),
+    };
+    crate::controllers::notes::notes_reorder_for(ctx, &user, &body.ids, filter)?;
+    Ok(Response::with_status(Status::NoContent))
 }
 
 // MARK: Utils
@@ -575,11 +669,12 @@ mod test {
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
+                .header("Content-Type", "application/json")
                 .body(
-                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=Secur3P%40ss!&role=normal",
+                    r#"{"firstName":"Jane","lastName":"Smith","email":"jane@example.com","password":"Secur3P@ss!","role":"normal"}"#,
                 ),
         );
-        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.status, Status::Created);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();
         assert_eq!(user.first_name, "Jane");
         assert_eq!(user.last_name, "Smith");
@@ -595,18 +690,20 @@ mod test {
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
+                .header("Content-Type", "application/json")
                 .body(
-                    "firstName=Jane&lastName=Smith&email=jane@example.com&password=Secur3P%40ss!&role=normal",
+                    r#"{"firstName":"Jane","lastName":"Smith","email":"jane@example.com","password":"Secur3P@ss!","role":"normal"}"#,
                 ),
         );
-        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.status, Status::Created);
 
         // Same email again - should fail
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
+                .header("Content-Type", "application/json")
                 .body(
-                    "firstName=John&lastName=Doe&email=jane@example.com&password=Secur3P%40ss!&role=normal",
+                    r#"{"firstName":"John","lastName":"Doe","email":"jane@example.com","password":"Secur3P@ss!","role":"normal"}"#,
                 ),
         );
         assert_eq!(res.status, Status::BadRequest);
@@ -653,7 +750,8 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=John&lastName=Smith&email=john.smith@example.com&theme=system&language=en&role=normal"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"firstName":"John","lastName":"Smith","email":"john.smith@example.com","theme":"system","language":"en","role":"normal"}"#),
         );
         assert_eq!(res.status, Status::Ok);
         let updated_user = serde_json::from_slice::<api::User>(&res.body).unwrap();
@@ -672,7 +770,8 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user2.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=Jane&lastName=Smith&email=john@example.com&theme=system&language=en&role=normal"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"firstName":"Jane","lastName":"Smith","email":"john@example.com","theme":"system","language":"en","role":"normal"}"#),
         );
         assert_eq!(res.status, Status::BadRequest);
         let report = serde_json::from_slice::<api::Report>(&res.body).unwrap();
@@ -692,7 +791,8 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=John&lastName=Doe&email=john@example.com&theme=system&language=en&role=normal"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"firstName":"John","lastName":"Doe","email":"john@example.com","theme":"system","language":"en","role":"normal"}"#),
         );
         assert_eq!(res.status, Status::Ok);
         let updated_user = serde_json::from_slice::<api::User>(&res.body).unwrap();
@@ -709,7 +809,8 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=&lastName=Smith&email=invalid-email"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"firstName":"","lastName":"Smith","email":"invalid-email"}"#),
         );
         assert_eq!(res.status, Status::BadRequest);
     }
@@ -727,9 +828,10 @@ mod test {
                 user.id
             ))
             .header("Authorization", format!("Bearer {token}"))
-            .body("oldPassword=password123&newPassword=NewP%40ssw0rd!"),
+            .header("Content-Type", "application/json")
+            .body(r#"{"oldPassword":"password123","newPassword":"NewP@ssw0rd!"}"#),
         );
-        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.status, Status::NoContent);
 
         // Verify new password works
         let stored_user = ctx
@@ -758,7 +860,8 @@ mod test {
                 user.id
             ))
             .header("Authorization", format!("Bearer {token}"))
-            .body("oldPassword=wrongpassword&newPassword=Anoth3rP%40ss!"),
+            .header("Content-Type", "application/json")
+            .body(r#"{"oldPassword":"wrongpassword","newPassword":"Anoth3rP@ss!"}"#),
         );
         assert_eq!(res.status, Status::Unauthorized);
     }
@@ -776,7 +879,8 @@ mod test {
                 user.id
             ))
             .header("Authorization", format!("Bearer {token}"))
-            .body("oldPassword=password123&newPassword=short"),
+            .header("Content-Type", "application/json")
+            .body(r#"{"oldPassword":"password123","newPassword":"short"}"#),
         );
         assert_eq!(res.status, Status::BadRequest);
     }
@@ -792,7 +896,7 @@ mod test {
             &Request::delete(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}")),
         );
-        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.status, Status::NoContent);
 
         // Only the original test admin user should remain
         let res = router.handle(
@@ -815,9 +919,10 @@ mod test {
         let res = router.handle(
             &Request::post("http://localhost/api/users")
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=Test&lastName=User&email=test2@example.com&password=MyP%40ssw0rd1!&role=normal"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"firstName":"Test","lastName":"User","email":"test2@example.com","password":"MyP@ssw0rd1!","role":"normal"}"#),
         );
-        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.status, Status::Created);
         let user = serde_json::from_slice::<api::User>(&res.body).unwrap();
 
         let stored_user = ctx
@@ -1149,7 +1254,8 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=John&lastName=Doe&email=john.new@example.com&theme=system&language=en&role=normal&password=NewP%40ssw0rd9!"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"firstName":"John","lastName":"Doe","email":"john.new@example.com","theme":"system","language":"en","role":"normal","password":"NewP@ssw0rd9!"}"#),
         );
         assert_eq!(res.status, Status::Ok);
 
@@ -1175,7 +1281,8 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=Test&lastName=User&email=test@example.com&theme=system&language=en&role=normal&password=NewP%40ssw0rd9!"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"firstName":"Test","lastName":"User","email":"test@example.com","theme":"system","language":"en","role":"normal","password":"NewP@ssw0rd9!"}"#),
         );
         // Update is allowed but password change is silently ignored
         assert_eq!(res.status, Status::Ok);
@@ -1203,7 +1310,8 @@ mod test {
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
                 .header("Authorization", format!("Bearer {token}"))
-                .body("firstName=John&lastName=Doe&email=john@example.com&theme=system&language=en&role=normal&password=short"),
+                .header("Content-Type", "application/json")
+                .body(r#"{"firstName":"John","lastName":"Doe","email":"john@example.com","theme":"system","language":"en","role":"normal","password":"short"}"#),
         );
         assert_eq!(res.status, Status::BadRequest);
         let report = serde_json::from_slice::<api::Report>(&res.body).unwrap();
