@@ -152,6 +152,71 @@ impl Request {
         self
     }
 
+    /// Set JSON body
+    #[cfg(feature = "json")]
+    pub fn json(mut self, value: impl serde::Serialize) -> Self {
+        self.headers
+            .insert("Content-Type".to_string(), "application/json".to_string());
+        self.body = Some(
+            serde_json::to_string(&value)
+                .expect("Can't serialize json")
+                .into(),
+        );
+        self
+    }
+
+    /// Set URL-encoded form body from a slice of key-value pairs.
+    #[cfg(feature = "form")]
+    pub fn urlencoded(mut self, data: &[(&str, &str)]) -> Self {
+        self.headers.insert(
+            "Content-Type".to_string(),
+            "application/x-www-form-urlencoded".to_string(),
+        );
+        self.body = Some(
+            serde_urlencoded::to_string(data)
+                .expect("Can't serialize urlencoded")
+                .into_bytes(),
+        );
+        self
+    }
+
+    /// Parse the request body based on the Content-Type header.
+    ///
+    /// Supports:
+    /// - `application/json` (requires `json` feature)
+    /// - `application/x-www-form-urlencoded` (requires `form` feature)
+    ///
+    /// Returns `Status::UnsupportedMediaType` if the Content-Type is missing or unsupported.
+    /// Returns `Status::BadRequest` if the body cannot be deserialized.
+    #[cfg(any(feature = "json", feature = "form"))]
+    pub fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T, crate::Status> {
+        let content_type = self
+            .headers
+            .get("Content-Type")
+            .unwrap_or_default()
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_lowercase();
+
+        let body = self.body.as_deref().unwrap_or(&[]);
+
+        match content_type.as_str() {
+            #[cfg(feature = "json")]
+            "application/json" => {
+                serde_json::from_slice(body).map_err(|_| crate::Status::BadRequest)
+            }
+            #[cfg(feature = "form")]
+            "application/x-www-form-urlencoded" => {
+                serde_urlencoded::from_bytes(body).map_err(|_| crate::Status::BadRequest)
+            }
+            _ => Err(crate::Status::UnsupportedMediaType),
+        }
+    }
+}
+
+impl Request {
     pub(crate) fn read_from_stream(
         stream: &mut dyn Read,
         client_addr: SocketAddr,

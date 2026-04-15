@@ -26,18 +26,19 @@ chrono = { version = "0.4", default-features = false, features = [
 log = { version = "0.4.28", optional = true }
 serde = { version = "1.0", optional = true }
 serde_json = { version = "1.0", optional = true }
+serde_urlencoded = { version = "0.7", optional = true }
 threadpool = { version = "1.8", optional = true }
 url = "2.5"
 
 [dev-dependencies]
 base64 = "0.22"
 serde = { version = "1.0", features = ["derive"] }
-serde_urlencoded = "0.7.1"
 sha1 = "0.11.0"
 
 [features]
 default = ["date", "multi-threaded"]
 date = ["dep:chrono"]
+form = ["dep:serde", "dep:serde_urlencoded"]
 json = ["dep:serde", "dep:serde_json"]
 log = ["dep:log"]
 multi-threaded = ["dep:threadpool"]
