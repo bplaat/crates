@@ -10,8 +10,8 @@ void canvas_init(canvas_t* canvas, int32_t width, int32_t height, uint32_t* pixe
     canvas->width = width;
     canvas->height = height;
     canvas->scale = scale > 0.0f ? scale : 1.0f;
-    canvas->phys_width = (int32_t)((float)width * canvas->scale);
-    canvas->phys_height = (int32_t)((float)height * canvas->scale);
+    canvas->phys_width = (int32_t)((float)width * canvas->scale + 0.5f);
+    canvas->phys_height = (int32_t)((float)height * canvas->scale + 0.5f);
     canvas->pixels = pixels;
 }
 
@@ -23,10 +23,14 @@ void canvas_fill_rect(canvas_t* canvas, float x, float y, float w, float h, uint
     float py2 = py + h * canvas->scale;
 
     // Clip to physical canvas bounds
-    if (px < 0.0f) px = 0.0f;
-    if (py < 0.0f) py = 0.0f;
-    if (px2 > (float)canvas->phys_width) px2 = (float)canvas->phys_width;
-    if (py2 > (float)canvas->phys_height) py2 = (float)canvas->phys_height;
+    if (px < 0.0f)
+        px = 0.0f;
+    if (py < 0.0f)
+        py = 0.0f;
+    if (px2 > (float)canvas->phys_width)
+        px2 = (float)canvas->phys_width;
+    if (py2 > (float)canvas->phys_height)
+        py2 = (float)canvas->phys_height;
     if (px >= px2 || py >= py2)
         return;
 

@@ -11,10 +11,10 @@
 #define CANVAS_COLOR(r, g, b) ((uint32_t)(((uint32_t)(r) << 16) | ((uint32_t)(g) << 8) | (uint32_t)(b)))
 
 typedef struct canvas_t {
-    int32_t width;       // logical width in design units
-    int32_t height;      // logical height in design units
-    int32_t phys_width;  // physical pixel width (= stride of pixels buffer)
-    int32_t phys_height; // physical pixel height
+    int32_t width;        // logical width in design units
+    int32_t height;       // logical height in design units
+    int32_t phys_width;   // physical pixel width (= stride of pixels buffer)
+    int32_t phys_height;  // physical pixel height
     float scale;
     uint32_t* pixels;
 } canvas_t;

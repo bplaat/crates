@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#define _POSIX_C_SOURCE 200112L
+
 #include "x11.h"
 
 #include <arpa/inet.h>
@@ -12,6 +14,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -73,6 +76,44 @@ static bool x11_skip(int fd, size_t len) {
         if (!x11_read_all(fd, buf, chunk))
             return false;
         len -= chunk;
+    }
+    return true;
+}
+
+// Minimal round-trip (GetInputFocus) used to drain the server's request queue.
+static bool x11_sync(int fd) {
+    typedef struct X11_PACKED {
+        uint8_t op;
+        uint8_t pad;
+        uint16_t len;
+    } x11_get_input_focus_t;
+    x11_get_input_focus_t req = {43, 0, 1};
+    if (!x11_write_all(fd, &req, sizeof(req)))
+        return false;
+    uint8_t reply[32];
+    return x11_read_all(fd, reply, 32);
+}
+
+// Like x11_sync, but returns false if the server replied with an error to the
+// preceding request (e.g. BadAlloc from AllocBackBuffer on XQuartz).
+// Consumes one leading error event, then reads the GetInputFocus reply.
+static bool x11_sync_check_error(int fd) {
+    typedef struct X11_PACKED {
+        uint8_t op;
+        uint8_t pad;
+        uint16_t len;
+    } x11_get_input_focus_t;
+    x11_get_input_focus_t req = {43, 0, 1};
+    if (!x11_write_all(fd, &req, sizeof(req)))
+        return false;
+    uint8_t buf[32];
+    if (!x11_read_all(fd, buf, 32))
+        return false;
+    if (buf[0] == 0) {
+        // Error response: consume the GetInputFocus reply that follows and report failure.
+        if (!x11_read_all(fd, buf, 32))
+            return false;
+        return false;
     }
     return true;
 }
@@ -246,12 +287,15 @@ static void free_cookie(x11_cookie_t* cookie) {
 
 static float parse_xft_dpi(const char* resources, uint32_t len) {
     const char key[] = "Xft.dpi:";
-    uint32_t key_len = 8;
+    uint32_t key_len = sizeof(key) - 1;
     for (uint32_t i = 0; i + key_len <= len; i++) {
         if (memcmp(resources + i, key, key_len) != 0)
             continue;
+        if (i > 0 && resources[i - 1] != '\n')
+            continue;
         const char* p = resources + i + key_len;
-        while (*p == ' ' || *p == '\t') p++;
+        while (*p == ' ' || *p == '\t')
+            p++;
         double val = atof(p);
         if (val > 0.0)
             return (float)val;
@@ -263,6 +307,7 @@ static float parse_xft_dpi(const char* resources, uint32_t len) {
 
 bool x11_connect(x11_connection_t* conn) {
     memset(conn, 0, sizeof(*conn));
+    conn->fd = -1;
     conn->max_request_len = 65535;  // default before BigRequests
     // Parse DISPLAY (formats: ":0", "host:0", "/path/to/socket:0")
     char host[256] = "";
@@ -382,8 +427,10 @@ bool x11_connect(x11_connection_t* conn) {
                 snprintf(xdg_socket, sizeof(xdg_socket), "%s/.X11-unix/X%d", xdg_runtime, display_number);
                 memset(&saddr, 0, sizeof(saddr));
                 saddr.sun_family = AF_UNIX;
-                snprintf(saddr.sun_path, sizeof(saddr.sun_path), "%s", xdg_socket);
-                if (connect(conn->fd, (struct sockaddr*)&saddr, sizeof(saddr)) == 0) {
+                strncpy(saddr.sun_path, xdg_socket, sizeof(saddr.sun_path) - 1);
+                socklen_t xdg_addr_len =
+                    (socklen_t)(offsetof(struct sockaddr_un, sun_path) + strlen(saddr.sun_path) + 1);
+                if (connect(conn->fd, (struct sockaddr*)&saddr, xdg_addr_len) == 0) {
                     connected = true;
                 }
             }
@@ -393,8 +440,9 @@ bool x11_connect(x11_connection_t* conn) {
             // Try filesystem socket
             memset(&saddr, 0, sizeof(saddr));
             saddr.sun_family = AF_UNIX;
-            snprintf(saddr.sun_path, sizeof(saddr.sun_path), "%s", socket_path);
-            if (connect(conn->fd, (struct sockaddr*)&saddr, sizeof(saddr)) < 0) {
+            strncpy(saddr.sun_path, socket_path, sizeof(saddr.sun_path) - 1);
+            socklen_t fs_addr_len = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + strlen(saddr.sun_path) + 1);
+            if (connect(conn->fd, (struct sockaddr*)&saddr, fs_addr_len) < 0) {
                 close(conn->fd);
                 free_cookie(cookie);
                 return false;
@@ -511,7 +559,7 @@ bool x11_connect(x11_connection_t* conn) {
     if (!x11_read_intern_atom_reply(conn->fd, &conn->net_wm_sync_request_counter))
         goto fail;
 
-    // Query MIT-SHM, BIG-REQUESTS, RANDR, and SYNC extensions together (pipelined)
+    // Query MIT-SHM, BIG-REQUESTS, RANDR, SYNC, DOUBLE-BUFFER (pipelined)
     if (!x11_query_extension(conn->fd, "MIT-SHM"))
         goto fail;
     if (!x11_query_extension(conn->fd, "BIG-REQUESTS"))
@@ -520,33 +568,26 @@ bool x11_connect(x11_connection_t* conn) {
         goto fail;
     if (!x11_query_extension(conn->fd, "SYNC"))
         goto fail;
+    if (!x11_query_extension(conn->fd, "DOUBLE-BUFFER"))
+        goto fail;
+
+    // Read ALL 5 replies before sending any further requests — inserting a
+    // BIG-REQUESTS Enable request between reads would displace the RANDR/SYNC/XDBE
+    // replies and cause those extensions to be silently reported as absent.
     {
         bool shm_present = false;
         uint8_t shm_opcode = 0;
-        if (!x11_read_query_extension_reply(conn->fd, &shm_present, &shm_opcode, NULL))
+        uint8_t shm_first_event = 0;
+        if (!x11_read_query_extension_reply(conn->fd, &shm_present, &shm_opcode, &shm_first_event))
             goto fail;
         conn->has_shm = shm_present;
         conn->shm_opcode = shm_opcode;
+        conn->shm_first_event = shm_first_event;
     }
-    {
-        bool big_present = false;
-        uint8_t big_opcode = 0;
-        if (!x11_read_query_extension_reply(conn->fd, &big_present, &big_opcode, NULL))
-            goto fail;
-        if (big_present) {
-            x11_big_req_enable_request_t br_req = {
-                .major_opcode = big_opcode,
-                .minor_opcode = 0,
-                .length = sizeof(br_req) / 4,
-            };
-            if (!x11_write_all(conn->fd, &br_req, sizeof(br_req)))
-                goto fail;
-            x11_big_req_enable_reply_t br_reply;
-            if (!x11_read_all(conn->fd, &br_reply, sizeof(br_reply)) || br_reply.reply != 1)
-                goto fail;
-            conn->max_request_len = br_reply.maximum_request_length;
-        }
-    }
+    bool big_present = false;
+    uint8_t big_opcode = 0;
+    if (!x11_read_query_extension_reply(conn->fd, &big_present, &big_opcode, NULL))
+        goto fail;
     {
         bool randr_present = false;
         uint8_t randr_opcode = 0;
@@ -564,6 +605,29 @@ bool x11_connect(x11_connection_t* conn) {
             goto fail;
         conn->has_sync = sync_present;
         conn->sync_opcode = sync_opcode;
+    }
+    {
+        bool xdbe_present = false;
+        uint8_t xdbe_opcode = 0;
+        if (!x11_read_query_extension_reply(conn->fd, &xdbe_present, &xdbe_opcode, NULL))
+            goto fail;
+        conn->has_xdbe = xdbe_present;
+        conn->xdbe_opcode = xdbe_opcode;
+    }
+
+    // Now that all pipelined replies have been consumed, enable BIG-REQUESTS.
+    if (big_present) {
+        x11_big_req_enable_request_t br_req = {
+            .major_opcode = big_opcode,
+            .minor_opcode = 0,
+            .length = sizeof(br_req) / 4,
+        };
+        if (!x11_write_all(conn->fd, &br_req, sizeof(br_req)))
+            goto fail;
+        x11_big_req_enable_reply_t br_reply;
+        if (!x11_read_all(conn->fd, &br_reply, sizeof(br_reply)) || br_reply.reply != 1)
+            goto fail;
+        conn->max_request_len = br_reply.maximum_request_length;
     }
 
     // Verify SHM is actually functional via a round-trip QueryVersion
@@ -618,45 +682,83 @@ bool x11_connect(x11_connection_t* conn) {
         }
     }
 
-    // Query Xft.dpi from root RESOURCE_MANAGER property
-    {
-        x11_get_property_request_t prop_req = {
-            .major_opcode = X11_GET_PROPERTY,
-            ._delete = 0,
-            .length = sizeof(prop_req) / 4,
-            .window = conn->screen.root,
-            .property = X11_ATOM_RESOURCE_MANAGER,
-            .type = 0,
-            .long_offset = 0,
-            .long_length = 1024,
+    // Initialize XDBE extension (must be done before using any XDBE requests)
+    if (conn->has_xdbe) {
+        x11_xdbe_get_version_request_t xreq = {
+            .major_opcode = conn->xdbe_opcode,
+            .minor_opcode = X11_XDBE_GET_VERSION,
+            .length = sizeof(xreq) / 4,
+            .major_version = 1,
+            .minor_version = 0,
         };
-        if (!x11_write_all(conn->fd, &prop_req, sizeof(prop_req)))
+        if (!x11_write_all(conn->fd, &xreq, sizeof(xreq)))
             goto fail;
-        x11_get_property_reply_t prop_reply;
-        if (!x11_read_all(conn->fd, &prop_reply, sizeof(prop_reply)))
-            goto fail;
-        if (prop_reply.reply == 1 && prop_reply.reply_length > 0) {
-            size_t data_bytes = (size_t)prop_reply.reply_length * 4;
-            char* buf = malloc(data_bytes + 1);
-            if (!buf)
-                goto fail;
-            if (!x11_read_all(conn->fd, buf, data_bytes)) {
-                free(buf);
+        x11_xdbe_get_version_reply_t xreply;
+        if (!x11_read_all(conn->fd, &xreply, sizeof(xreply)) || xreply.reply != 1) {
+            conn->has_xdbe = false;
+        }
+    }
+
+    // Query Xft.dpi from root RESOURCE_MANAGER property (loop until bytes_after == 0)
+    {
+        char* rm_buf = NULL;
+        size_t rm_len = 0;
+        uint32_t rm_offset = 0;  // in 4-byte units
+        for (;;) {
+            x11_get_property_request_t prop_req = {
+                .major_opcode = X11_GET_PROPERTY,
+                ._delete = 0,
+                .length = sizeof(prop_req) / 4,
+                .window = conn->screen.root,
+                .property = X11_ATOM_RESOURCE_MANAGER,
+                .type = 0,
+                .long_offset = rm_offset,
+                .long_length = 1024,
+            };
+            if (!x11_write_all(conn->fd, &prop_req, sizeof(prop_req))) {
+                free(rm_buf);
                 goto fail;
             }
-            uint32_t value_len = prop_reply.value_len < (uint32_t)data_bytes
-                                     ? prop_reply.value_len
-                                     : (uint32_t)data_bytes;
-            buf[value_len] = '\0';
-            conn->xft_dpi = parse_xft_dpi(buf, value_len);
-            free(buf);
+            x11_get_property_reply_t prop_reply;
+            if (!x11_read_all(conn->fd, &prop_reply, sizeof(prop_reply))) {
+                free(rm_buf);
+                goto fail;
+            }
+            if (prop_reply.reply != 1 || prop_reply.reply_length == 0)
+                break;
+            uint32_t chunk_val = prop_reply.value_len;  // bytes (format=8)
+            size_t chunk_padded = (size_t)prop_reply.reply_length * 4;
+            char* new_buf = realloc(rm_buf, rm_len + chunk_val + 1);
+            if (!new_buf) {
+                free(rm_buf);
+                goto fail;
+            }
+            rm_buf = new_buf;
+            if (!x11_read_all(conn->fd, rm_buf + rm_len, chunk_val)) {
+                free(rm_buf);
+                goto fail;
+            }
+            if (chunk_padded > chunk_val && !x11_skip(conn->fd, chunk_padded - chunk_val)) {
+                free(rm_buf);
+                goto fail;
+            }
+            rm_len += chunk_val;
+            rm_offset += 1024;
+            if (prop_reply.bytes_after == 0)
+                break;
+        }
+        if (rm_buf) {
+            rm_buf[rm_len] = '\0';
+            conn->xft_dpi = parse_xft_dpi(rm_buf, (uint32_t)rm_len);
+            free(rm_buf);
         }
     }
 
     return true;
 
 fail:
-    close(conn->fd);
+    if (conn->fd >= 0)
+        close(conn->fd);
     free_cookie(cookie);
     return false;
 }
@@ -709,7 +811,7 @@ void x11_change_property(x11_connection_t* conn, uint8_t mode, uint32_t window, 
     x11_write_padded(conn->fd, data, data_size);
 }
 
-void x11_configure_window(x11_connection_t* conn, uint32_t window, uint32_t value_mask, uint32_t* value_list,
+void x11_configure_window(x11_connection_t* conn, uint32_t window, uint16_t value_mask, uint32_t* value_list,
                           size_t value_list_size) {
     x11_configure_window_request_t configure_window_request = {
         .major_opcode = X11_CONFIGURE_WINDOW,
@@ -785,8 +887,10 @@ bool x11_create_image(x11_connection_t* conn, x11_image_t* img, uint32_t window,
                 .read_only = 0,
             };
             x11_write_all(conn->fd, &attach, sizeof(attach));
-            // NOTE: do NOT call shmctl(IPC_RMID) here; the X server needs the shmid to attach.
-            // IPC_RMID is called in x11_destroy_image after ShmDetach + shmdt.
+            // Sync to confirm the server has attached, then mark for auto-cleanup on crash.
+            // The segment persists until all processes (client + server) detach.
+            x11_sync(conn->fd);
+            shmctl(img->shmid, IPC_RMID, NULL);
         } else {
             conn->has_shm = false;
         }
@@ -802,12 +906,16 @@ bool x11_create_image(x11_connection_t* conn, x11_image_t* img, uint32_t window,
 
     img->width = width;
     img->height = height;
-    img->capacity = width * height;
+    {
+        int64_t cap = (int64_t)width * height;
+        img->capacity = cap > INT32_MAX ? INT32_MAX : (int32_t)cap;
+    }
     return true;
 }
 
 bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, int32_t new_h) {
-    int32_t new_cap = new_w * new_h;
+    int64_t new_cap64 = (int64_t)new_w * new_h;
+    int32_t new_cap = new_cap64 > INT32_MAX ? INT32_MAX : (int32_t)new_cap64;
 
     if (new_cap <= img->capacity) {
         // Buffer is large enough — reuse it, just update the visible dimensions
@@ -827,7 +935,7 @@ bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, i
         x11_write_all(conn->fd, &detach, sizeof(detach));
         if (img->pixels && img->pixels != (uint32_t*)-1)
             shmdt(img->pixels);
-        shmctl(img->shmid, IPC_RMID, NULL);
+        // IPC_RMID was set at attach time; shmdt above completes the cleanup.
         img->shmseg = 0;
         img->shmid = -1;
         img->pixels = NULL;
@@ -837,7 +945,8 @@ bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, i
     }
 
     // Allocate with 25% headroom to avoid repeated reallocs during drag-resize
-    int32_t alloc_cap = new_cap + (new_cap >> 2);
+    int64_t alloc_cap64 = (int64_t)new_cap + (new_cap >> 2);
+    int32_t alloc_cap = alloc_cap64 > INT32_MAX ? INT32_MAX : (int32_t)alloc_cap64;
     size_t size = (size_t)alloc_cap * sizeof(uint32_t);
 
     if (conn->has_shm) {
@@ -861,6 +970,8 @@ bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, i
                 .read_only = 0,
             };
             x11_write_all(conn->fd, &attach, sizeof(attach));
+            x11_sync(conn->fd);
+            shmctl(img->shmid, IPC_RMID, NULL);
         } else {
             conn->has_shm = false;
         }
@@ -1025,7 +1136,7 @@ void x11_destroy_image(x11_connection_t* conn, x11_image_t* img) {
         x11_write_all(conn->fd, &detach, sizeof(detach));
         if (img->pixels && img->pixels != (uint32_t*)-1)
             shmdt(img->pixels);
-        shmctl(img->shmid, IPC_RMID, NULL);
+        // IPC_RMID was set at attach time; shmdt above triggers final cleanup.
         img->shmseg = 0;
         img->shmid = -1;
         img->pixels = NULL;
@@ -1040,7 +1151,7 @@ bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, in
         return false;
 
     // RANDR >= 1.5: use RRGetMonitors (logical monitor objects with names)
-    if (conn->randr_minor >= 5) {
+    if (conn->randr_major > 1 || (conn->randr_major == 1 && conn->randr_minor >= 5)) {
         x11_randr_get_monitors_request_t req = {
             .major_opcode = conn->randr_opcode,
             .minor_opcode = X11_RANDR_GET_MONITORS,
@@ -1124,8 +1235,11 @@ bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, in
                     free(result);
                     return false;
                 }
-                if (padded > read_len)
-                    x11_skip(conn->fd, padded - read_len);
+                if (padded > read_len && !x11_skip(conn->fd, padded - read_len)) {
+                    free(atoms);
+                    free(result);
+                    return false;
+                }
                 size_t copy_len = name_len < sizeof(result[i].name) - 1 ? name_len : sizeof(result[i].name) - 1;
                 memcpy(result[i].name, name_buf, copy_len);
                 result[i].name[copy_len] = '\0';
@@ -1138,11 +1252,16 @@ bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, in
         return true;
     }
 
-    // RANDR 1.2 fallback: enumerate active CRTCs via RRGetScreenResources
+    // RANDR 1.2 fallback: enumerate active CRTCs.
+    // RANDR >= 1.3: use GetScreenResourcesCurrent (returns cached data, no hardware rescan).
+    // RANDR 1.2:   use GetScreenResources (triggers hardware rescan, slow).
     {
+        uint8_t sreq_minor = (conn->randr_major > 1 || (conn->randr_major == 1 && conn->randr_minor >= 3))
+                                 ? X11_RANDR_GET_SCREEN_RESOURCES_CURRENT
+                                 : X11_RANDR_GET_SCREEN_RESOURCES;
         x11_randr_get_screen_resources_request_t sreq = {
             .major_opcode = conn->randr_opcode,
-            .minor_opcode = X11_RANDR_GET_SCREEN_RESOURCES,
+            .minor_opcode = sreq_minor,
             .length = sizeof(sreq) / 4,
             .window = conn->screen.root,
         };
@@ -1276,8 +1395,10 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
     uint8_t buf[32];
     if (!x11_read_all(conn->fd, buf, 32))
         return false;
-    event->type = buf[0] & ~0x80;
+    uint8_t raw_type = buf[0];
+    event->type = raw_type & ~0x80;
     event->expose_count = 0;
+    event->configure_is_synthetic = false;
     event->configure_x = 0;
     event->configure_y = 0;
     event->configure_width = 0;
@@ -1296,6 +1417,7 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
     }
 
     if (event->type == X11_CONFIGURE_NOTIFY) {
+        event->configure_is_synthetic = (raw_type & 0x80) != 0;
         memcpy(&event->configure_x, &buf[16], 2);
         memcpy(&event->configure_y, &buf[18], 2);
         memcpy(&event->configure_width, &buf[20], 2);
@@ -1324,6 +1446,11 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
     }
 
     return true;
+}
+
+bool x11_has_event_pending(x11_connection_t* conn) {
+    struct pollfd pfd = {.fd = conn->fd, .events = POLLIN};
+    return poll(&pfd, 1, 0) > 0;
 }
 
 uint32_t x11_sync_create_counter(x11_connection_t* conn) {
@@ -1360,6 +1487,47 @@ void x11_sync_destroy_counter(x11_connection_t* conn, uint32_t counter) {
     x11_write_all(conn->fd, &req, sizeof(req));
 }
 
+uint32_t x11_xdbe_alloc_back_buffer(x11_connection_t* conn, uint32_t window) {
+    uint32_t buffer = x11_generate_id(conn);
+    x11_xdbe_alloc_back_buffer_request_t req = {
+        .major_opcode = conn->xdbe_opcode,
+        .minor_opcode = X11_XDBE_ALLOCATE_BACK_BUFFER,
+        .length = sizeof(req) / 4,
+        .window = window,
+        .buffer = buffer,
+        .swap_action = X11_XDBE_SWAP_ACTION_UNDEFINED,
+    };
+    if (!x11_write_all(conn->fd, &req, sizeof(req)))
+        return 0;
+    // Verify the server accepted the alloc (XQuartz may return BadAlloc here).
+    // On failure return 0 so the caller falls back to direct window rendering.
+    if (!x11_sync_check_error(conn->fd))
+        return 0;
+    return buffer;
+}
+
+void x11_xdbe_swap_buffers(x11_connection_t* conn, uint32_t window) {
+    x11_xdbe_swap_buffers_request_t req = {
+        .major_opcode = conn->xdbe_opcode,
+        .minor_opcode = X11_XDBE_SWAP_BUFFERS,
+        .length = sizeof(req) / 4,
+        .n_windows = 1,
+        .info = {.window = window, .swap_action = X11_XDBE_SWAP_ACTION_UNDEFINED},
+    };
+    x11_write_all(conn->fd, &req, sizeof(req));
+}
+
+void x11_xdbe_free_back_buffer(x11_connection_t* conn, uint32_t buffer) {
+    x11_xdbe_free_back_buffer_request_t req = {
+        .major_opcode = conn->xdbe_opcode,
+        .minor_opcode = X11_XDBE_DEALLOCATE_BACK_BUFFER,
+        .length = sizeof(req) / 4,
+        .buffer = buffer,
+    };
+    x11_write_all(conn->fd, &req, sizeof(req));
+}
+
 void x11_disconnect(x11_connection_t* conn) {
     close(conn->fd);
+    conn->fd = -1;
 }

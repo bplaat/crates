@@ -5,6 +5,9 @@
  */
 
 // A simple pure C X11 client example that uses a canvas software renderer and blits to the window
+// FIXME: Fix issues on XQuartz and XWayland resizing
+
+#define _POSIX_C_SOURCE 200112L
 
 #include <signal.h>
 #include <stdbool.h>
@@ -63,14 +66,14 @@ static int32_t find_monitor_for_window(x11_monitor_t* monitors, int32_t monitor_
 // This avoids non-uniform strokes and blurry rendering at fractional scales like 1.77x.
 static float snap_scale(float scale) {
     int32_t quarters = (int32_t)(scale * 4.0f + 0.5f);
-    if (quarters < 4) quarters = 4;  // minimum 1.0
+    if (quarters < 4)
+        quarters = 4;  // minimum 1.0
     return (float)quarters / 4.0f;
 }
 
 // Compute the display scale factor for the given monitor index.
 // Xft.dpi (user-configured) takes priority over RANDR hardware DPI.
-static float compute_scale(const x11_connection_t* conn, x11_monitor_t* monitors, int32_t monitor_count,
-                            int32_t idx) {
+static float compute_scale(const x11_connection_t* conn, x11_monitor_t* monitors, int32_t monitor_count, int32_t idx) {
     float raw;
     if (conn->xft_dpi > 0.0f) {
         raw = conn->xft_dpi / 96.0f;
@@ -90,9 +93,9 @@ int main(void) {
         fprintf(stderr, "Can't connect to X11 display\n");
         return EXIT_FAILURE;
     }
-    printf("Screen: %dx%d, MIT-SHM: %s, RANDR: %s (v%d.%d), SYNC: %s\n", conn.screen.width_in_pixels,
+    printf("Screen: %dx%d, MIT-SHM: %s, RANDR: %s (v%d.%d), SYNC: %s, XDBE: %s\n", conn.screen.width_in_pixels,
            conn.screen.height_in_pixels, conn.has_shm ? "yes" : "no", conn.has_randr ? "yes" : "no", conn.randr_major,
-           conn.randr_minor, conn.has_sync ? "yes" : "no");
+           conn.randr_minor, conn.has_sync ? "yes" : "no", conn.has_xdbe ? "yes" : "no");
 
     // Validate root visual pixel format (expect standard RGB: R=0xFF0000 G=0xFF00 B=0xFF)
     if (conn.root_visual_red_mask != 0xFF0000 || conn.root_visual_green_mask != 0xFF00 ||
@@ -146,7 +149,11 @@ int main(void) {
 
     const char* window_title = "Hello Canvas!";
     uint32_t window = x11_generate_id(&conn);
-    uint32_t create_window_list[] = {conn.screen.white_pixel,
+    // BackPixel = white: X server fills newly-exposed areas with white on Expose
+    // and after unmap/remap (e.g., unminimize). When XDBE is active, the back
+    // buffer covers all rendering so this only matters for the brief moment before
+    // the first frame is painted. Without XDBE, it prevents black flashing on resize.
+    uint32_t create_window_list[] = {conn.screen.white_pixel /* BackPixel */,
                                      X11_EVENT_MASK_EXPOSURE | X11_EVENT_MASK_STRUCTURE_NOTIFY};
     x11_create_window(&conn, X11_COPY_FROM_PARENT, window, conn.screen.root, window_x, window_y, window_width,
                       window_height, 0, X11_WINDOW_CLASS_INPUT_OUTPUT, conn.screen.root_visual,
@@ -193,8 +200,8 @@ int main(void) {
     uint32_t sync_counter = 0;
     if (conn.has_sync) {
         sync_counter = x11_sync_create_counter(&conn);
-        x11_change_property(&conn, X11_PROP_MODE_REPLACE, window, conn.net_wm_sync_request_counter,
-                            X11_ATOM_CARDINAL, 32, &sync_counter, sizeof(sync_counter));
+        x11_change_property(&conn, X11_PROP_MODE_REPLACE, window, conn.net_wm_sync_request_counter, X11_ATOM_CARDINAL,
+                            32, &sync_counter, sizeof(sync_counter));
     }
 
     x11_map_window(&conn, window);
@@ -206,10 +213,16 @@ int main(void) {
     x11_image_t img;
     if (!x11_create_image(&conn, &img, window, window_width, window_height)) {
         fprintf(stderr, "Can't create image\n");
-        if (sync_counter) x11_sync_destroy_counter(&conn, sync_counter);
+        if (sync_counter)
+            x11_sync_destroy_counter(&conn, sync_counter);
         x11_disconnect(&conn);
         return EXIT_FAILURE;
     }
+
+    // Allocate XDBE back buffer; render into it and swap atomically to eliminate tearing.
+    // Falls back to direct window rendering if XDBE is unavailable.
+    uint32_t back_buffer = conn.has_xdbe ? x11_xdbe_alloc_back_buffer(&conn, window) : 0;
+    uint32_t render_target = back_buffer ? back_buffer : window;
 
     canvas_t canvas;
     canvas_init(&canvas, logical_w, logical_h, img.pixels, scale);
@@ -231,11 +244,21 @@ int main(void) {
             int32_t new_y = event.configure_y;
             int32_t new_w = (int32_t)event.configure_width;
             int32_t new_h = (int32_t)event.configure_height;
-            if (new_w <= 0 || new_h <= 0)
+            if (new_w <= 0 || new_h <= 0) {
+                // Zero-size configure (e.g. minimize): ack any pending sync so
+                // the compositor does not stall waiting for the client to reply.
+                if (has_pending_sync && sync_counter) {
+                    x11_sync_set_counter(&conn, sync_counter, pending_sync_lo, pending_sync_hi);
+                    has_pending_sync = false;
+                }
                 continue;
+            }
 
-            window_x = new_x;
-            window_y = new_y;
+            // Only synthetic ConfigureNotify (WM via SendEvent) carries root-relative coords.
+            if (event.configure_is_synthetic) {
+                window_x = new_x;
+                window_y = new_y;
+            }
 
             // Determine the scale for the monitor the window overlaps the most
             int32_t idx = (monitor_count > 0)
@@ -244,9 +267,9 @@ int main(void) {
             float new_scale = compute_scale(&conn, monitors, monitor_count, idx);
 
             if (new_scale != scale) {
-                // Monitor DPI changed: resize window to match new scale.
-                // The resulting ConfigureNotify will carry the new physical size
-                // and trigger the render path below.
+                // DPI changed: send ConfigureWindow to resize; the WM will send a
+                // fresh _NET_WM_SYNC_REQUEST before the follow-up ConfigureNotify.
+                // Do not ack the current sync here -- no frame has been rendered.
                 scale = new_scale;
                 int32_t phys_w = (int32_t)(logical_w * scale);
                 int32_t phys_h = (int32_t)(logical_h * scale);
@@ -263,13 +286,22 @@ int main(void) {
                     break;
                 }
                 canvas_init(&canvas, logical_w, logical_h, img.pixels, scale);
-                render(&canvas);
-                x11_put_image(&conn, window, &img);
-            }
-
-            // Acknowledge any pending WM sync request after processing this configure.
-            // This allows the compositor to complete the resize without tearing.
-            if (has_pending_sync && sync_counter) {
+                // Coalesce: if more events are already queued (common during a
+                // live resize drag), skip rendering this intermediate frame —
+                // the next ConfigureNotify will render at the final size.
+                // Always ack the sync so the compositor can send the next step.
+                if (!x11_has_event_pending(&conn)) {
+                    render(&canvas);
+                    x11_put_image(&conn, render_target, &img);
+                    if (back_buffer)
+                        x11_xdbe_swap_buffers(&conn, window);
+                }
+                if (has_pending_sync && sync_counter) {
+                    x11_sync_set_counter(&conn, sync_counter, pending_sync_lo, pending_sync_hi);
+                    has_pending_sync = false;
+                }
+            } else if (has_pending_sync && sync_counter) {
+                // Position-only change: no repaint needed, ack immediately.
                 x11_sync_set_counter(&conn, sync_counter, pending_sync_lo, pending_sync_hi);
                 has_pending_sync = false;
             }
@@ -278,7 +310,9 @@ int main(void) {
         // Expose (count == 0 means no more expose events pending): render and blit.
         if (event.type == X11_EXPOSE && event.expose_count == 0) {
             render(&canvas);
-            x11_put_image(&conn, window, &img);
+            x11_put_image(&conn, render_target, &img);
+            if (back_buffer)
+                x11_xdbe_swap_buffers(&conn, window);
         }
 
         if (event.type == X11_RANDR_SCREEN_CHANGE_NOTIFY) {
@@ -289,10 +323,9 @@ int main(void) {
             monitor_count = 0;
             x11_randr_get_monitors(&conn, &monitors, &monitor_count);
 
-            int32_t idx = (monitor_count > 0)
-                              ? find_monitor_for_window(monitors, monitor_count, window_x, window_y, img.width,
-                                                        img.height)
-                              : 0;
+            int32_t idx = (monitor_count > 0) ? find_monitor_for_window(monitors, monitor_count, window_x, window_y,
+                                                                        img.width, img.height)
+                                              : 0;
             float new_scale = compute_scale(&conn, monitors, monitor_count, idx);
             if (new_scale != scale) {
                 scale = new_scale;
@@ -308,7 +341,9 @@ int main(void) {
                                      sizeof(size_vals));
                 canvas_init(&canvas, logical_w, logical_h, img.pixels, scale);
                 render(&canvas);
-                x11_put_image(&conn, window, &img);
+                x11_put_image(&conn, render_target, &img);
+                if (back_buffer)
+                    x11_xdbe_swap_buffers(&conn, window);
             }
         }
 
@@ -317,7 +352,10 @@ int main(void) {
         }
     }
 
-    if (sync_counter) x11_sync_destroy_counter(&conn, sync_counter);
+    if (sync_counter)
+        x11_sync_destroy_counter(&conn, sync_counter);
+    if (back_buffer)
+        x11_xdbe_free_back_buffer(&conn, back_buffer);
     x11_destroy_image(&conn, &img);
     x11_randr_free_monitors(monitors);
     x11_disconnect(&conn);

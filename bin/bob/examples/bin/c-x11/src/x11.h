@@ -43,6 +43,7 @@
 #define X11_RANDR_QUERY_VERSION 0
 #define X11_RANDR_SELECT_INPUT 4
 #define X11_RANDR_GET_SCREEN_RESOURCES 8
+#define X11_RANDR_GET_SCREEN_RESOURCES_CURRENT 25
 #define X11_RANDR_GET_CRTC_INFO 20
 #define X11_RANDR_GET_MONITORS 42
 
@@ -51,6 +52,13 @@
 #define X11_SYNC_CREATE_COUNTER 2
 #define X11_SYNC_SET_COUNTER 3
 #define X11_SYNC_DESTROY_COUNTER 6
+
+// XDBE sub-opcodes
+#define X11_XDBE_GET_VERSION 0
+#define X11_XDBE_ALLOCATE_BACK_BUFFER 1
+#define X11_XDBE_DEALLOCATE_BACK_BUFFER 2
+#define X11_XDBE_SWAP_BUFFERS 3
+#define X11_XDBE_SWAP_ACTION_UNDEFINED 0
 
 // RANDR event-mask bits (used with RRSelectInput)
 #define X11_RANDR_SCREEN_CHANGE_NOTIFY_MASK 1
@@ -575,6 +583,56 @@ typedef struct X11_PACKED x11_sync_destroy_counter_request_t {
     uint32_t counter;
 } x11_sync_destroy_counter_request_t;
 
+typedef struct X11_PACKED x11_xdbe_get_version_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint8_t major_version;
+    uint8_t minor_version;
+    uint16_t pad;
+} x11_xdbe_get_version_request_t;
+
+typedef struct X11_PACKED x11_xdbe_get_version_reply_t {
+    uint8_t reply;
+    uint8_t pad0;
+    uint16_t sequence_number;
+    uint32_t reply_length;
+    uint8_t major_version;
+    uint8_t minor_version;
+    uint8_t pad1[22];
+} x11_xdbe_get_version_reply_t;
+
+typedef struct X11_PACKED x11_xdbe_alloc_back_buffer_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t window;
+    uint32_t buffer;
+    uint8_t swap_action;
+    uint8_t pad[3];
+} x11_xdbe_alloc_back_buffer_request_t;
+
+typedef struct X11_PACKED x11_xdbe_free_back_buffer_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t buffer;
+} x11_xdbe_free_back_buffer_request_t;
+
+typedef struct X11_PACKED x11_xdbe_swap_info_t {
+    uint32_t window;
+    uint8_t swap_action;
+    uint8_t pad[3];
+} x11_xdbe_swap_info_t;
+
+typedef struct X11_PACKED x11_xdbe_swap_buffers_request_t {
+    uint8_t major_opcode;
+    uint8_t minor_opcode;
+    uint16_t length;
+    uint32_t n_windows;
+    x11_xdbe_swap_info_t info;
+} x11_xdbe_swap_buffers_request_t;
+
 // X11 structs
 typedef struct x11_connection_t {
     int32_t fd;
@@ -597,6 +655,7 @@ typedef struct x11_connection_t {
     uint32_t utf8_string;
     bool has_shm;
     uint8_t shm_opcode;
+    uint8_t shm_first_event;
     bool has_randr;
     uint8_t randr_opcode;
     uint8_t randr_first_event;
@@ -604,10 +663,13 @@ typedef struct x11_connection_t {
     uint32_t randr_minor;
     bool has_sync;
     uint8_t sync_opcode;
+    bool has_xdbe;
+    uint8_t xdbe_opcode;
 } x11_connection_t;
 
 typedef struct x11_event_t {
     uint8_t type;
+    bool configure_is_synthetic;  // true if x/y are root-relative (WM sent via SendEvent)
     uint16_t expose_count;
     int16_t configure_x;
     int16_t configure_y;
@@ -652,7 +714,7 @@ void x11_create_window(x11_connection_t* conn, uint8_t depth, uint32_t wid, uint
 void x11_change_property(x11_connection_t* conn, uint8_t mode, uint32_t window, uint32_t property, uint32_t type,
                          uint8_t format, void* data, size_t data_size);
 
-void x11_configure_window(x11_connection_t* conn, uint32_t window, uint32_t value_mask, uint32_t* value_list,
+void x11_configure_window(x11_connection_t* conn, uint32_t window, uint16_t value_mask, uint32_t* value_list,
                           size_t value_list_size);
 
 void x11_set_wm_protocols(x11_connection_t* conn, uint32_t window);
@@ -676,6 +738,9 @@ void x11_destroy_image(x11_connection_t* conn, x11_image_t* img);
 
 bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event);
 
+// Returns true if at least one event is waiting in the socket buffer (non-blocking).
+bool x11_has_event_pending(x11_connection_t* conn);
+
 // Enumerate monitors via RANDR; returns heap-allocated array of count entries.
 // Returns false if RANDR is unavailable. Free with x11_randr_free_monitors().
 bool x11_randr_get_monitors(x11_connection_t* conn, x11_monitor_t** monitors, int32_t* count);
@@ -687,7 +752,6 @@ void x11_randr_free_monitors(x11_monitor_t* monitors);
 void x11_randr_select_input(x11_connection_t* conn, uint32_t window);
 
 // Create a SYNC counter for use with _NET_WM_SYNC_REQUEST; initial value = 0.
-// Only call when conn->has_sync is true. Returns the counter XID.
 uint32_t x11_sync_create_counter(x11_connection_t* conn);
 
 // Set a SYNC counter to the given 64-bit value (split into lo/hi INT32 parts).
@@ -695,5 +759,16 @@ void x11_sync_set_counter(x11_connection_t* conn, uint32_t counter, int32_t lo, 
 
 // Free a SYNC counter created with x11_sync_create_counter.
 void x11_sync_destroy_counter(x11_connection_t* conn, uint32_t counter);
+
+// Allocate an XDBE back buffer for the window. Returns the back buffer XID (0 on failure).
+// Render into it using x11_put_image, then call x11_xdbe_swap_buffers to present atomically.
+// Only call when conn->has_xdbe is true.
+uint32_t x11_xdbe_alloc_back_buffer(x11_connection_t* conn, uint32_t window);
+
+// Atomically swap the back buffer with the front buffer for the given window.
+void x11_xdbe_swap_buffers(x11_connection_t* conn, uint32_t window);
+
+// Free an XDBE back buffer allocated with x11_xdbe_alloc_back_buffer.
+void x11_xdbe_free_back_buffer(x11_connection_t* conn, uint32_t buffer);
 
 void x11_disconnect(x11_connection_t* conn);
