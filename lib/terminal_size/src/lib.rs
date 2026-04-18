@@ -19,8 +19,8 @@ pub struct Height(pub u16);
 /// Returns the terminal size as a tuple.
 #[allow(unsafe_code)]
 pub fn terminal_size() -> Option<(Width, Height)> {
-    cfg_if::cfg_if! {
-        if #[cfg(unix)] {
+    cfg_select! {
+        unix => {
             #[repr(C)]
             struct winsize {
                 ws_row: u16,
@@ -52,7 +52,8 @@ pub fn terminal_size() -> Option<(Width, Height)> {
             // SAFETY: ioctl returned success, so size was fully initialized by the kernel.
             let size = unsafe { size.assume_init() };
             Some((Width(size.ws_col), Height(size.ws_row)))
-        } else if #[cfg(windows)] {
+        }
+        windows => {
             #[repr(C)]
             struct COORD {
                 X: i16,
@@ -97,7 +98,8 @@ pub fn terminal_size() -> Option<(Width, Height)> {
             // SAFETY: GetConsoleScreenBufferInfo returned success, so csbi was fully initialized by the OS.
             let csbi = unsafe { csbi.assume_init() };
             Some((Width(csbi.dwSize.X as u16), Height(csbi.dwSize.Y as u16)))
-        } else {
+        }
+        _ => {
             compile_error!("Unsupported platform")
         }
     }

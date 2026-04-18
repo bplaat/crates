@@ -221,8 +221,8 @@ impl TaskAction {
                 command.clone()
             }
             TaskAction::SendMsg(socket_path, line) => {
-                cfg_if::cfg_if! {
-                    if #[cfg(unix)] {
+                cfg_select! {
+                    unix => {
                         use std::io::{Read, Write};
                         let mut stream = std::os::unix::net::UnixStream::connect(socket_path)
                             .expect("Failed to connect to socket");
@@ -240,7 +240,8 @@ impl TaskAction {
                         }
 
                         line.clone()
-                    } else {
+                    }
+                    _ => {
                         eprintln!("SendMsg is only supported on Unix systems");
                         exit(1);
                     }

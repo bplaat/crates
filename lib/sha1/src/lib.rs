@@ -82,8 +82,8 @@ impl Sha1 {
 
     #[allow(unsafe_code)]
     fn process_block(&mut self) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "x86_64")] {
+        cfg_select! {
+            target_arch = "x86_64" => {
                 if is_x86_feature_detected!("sha")
                     && is_x86_feature_detected!("ssse3")
                     && is_x86_feature_detected!("sse4.1")
@@ -93,14 +93,16 @@ impl Sha1 {
                 } else {
                     self.process_block_software()
                 }
-            } else if #[cfg(target_arch = "aarch64")] {
+            }
+            target_arch = "aarch64" => {
                 if std::arch::is_aarch64_feature_detected!("sha2") {
                     // SAFETY: is_aarch64_feature_detected! confirmed the sha2 hardware feature is available.
                     unsafe { self.process_block_aarch64_sha() }
                 } else {
                     self.process_block_software()
                 }
-            } else {
+            }
+            _ => {
                 self.process_block_software()
             }
         }

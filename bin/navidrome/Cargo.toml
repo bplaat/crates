@@ -15,7 +15,6 @@ icon = "meta/macos/icon.icon"
 workspace = true
 
 [dependencies]
-cfg-if = "1"
 bwebview = { path = "../../lib/bwebview" }
 
 [build-dependencies]

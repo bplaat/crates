@@ -11,8 +11,8 @@ use std::io::Error;
 /// Fill buffer with crypto random bytes
 #[allow(unsafe_code)]
 pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
-    cfg_if::cfg_if! {
-        if #[cfg(any(target_os = "macos", target_os = "openbsd"))] {
+    cfg_select! {
+        any(target_os = "macos", target_os = "openbsd") => {
             unsafe extern "C" {
                 fn getentropy(buf: *mut u8, buflen: usize) -> i32;
             }
@@ -23,8 +23,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
                 }
             }
         }
-
-        else if #[cfg(unix)] {
+        unix => {
             type GetrandomFn = unsafe extern "C" fn(*mut u8, usize, u32) -> isize;
             fn resolve_getrandom() -> Option<GetrandomFn> {
                 const RTLD_DEFAULT: *mut std::ffi::c_void = std::ptr::null_mut();
@@ -60,8 +59,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
             file.read_exact(buf)
                 .map_err(|_| Error::other("failed to read /dev/urandom"))?;
         }
-
-        else if #[cfg(windows)] {
+        windows => {
             #[cfg(not(target_arch = "x86"))]
             #[link(name = "bcryptprimitives", kind = "raw-dylib")]
             unsafe extern "system" {
@@ -81,8 +79,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
                 return Err(Error::other("ProcessPrng failed"));
             }
         }
-
-        else {
+        _ => {
             compile_error!("Unsupported platform");
         }
     }

@@ -1,9 +1,0 @@
-[package]
-name = "cfg-if"
-version = "1.0.4+patch"
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-
-[lints]
-workspace = true

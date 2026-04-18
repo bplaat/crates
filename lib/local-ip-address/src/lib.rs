@@ -14,8 +14,8 @@ use std::net::IpAddr;
 /// Returns the local IPv4 address of the machine.
 #[allow(unsafe_code)]
 pub fn local_ip() -> Result<IpAddr, std::io::Error> {
-    cfg_if::cfg_if! {
-        if #[cfg(unix)] {
+    cfg_select! {
+        unix => {
             let mut ifaddrs: *mut libc::ifaddrs = std::ptr::null_mut();
             // SAFETY: ifaddrs is a valid out-pointer; getifaddrs will initialize it on success.
             if unsafe { libc::getifaddrs(&mut ifaddrs) } != 0 {
@@ -62,7 +62,8 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
             // SAFETY: ifaddrs was obtained from a successful getifaddrs call and has not been freed yet.
             unsafe { libc::freeifaddrs(ifaddrs) };
             result
-        } else if #[cfg(windows)] {
+        }
+        windows => {
             use std::ffi::c_void;
 
             const AF_UNSPEC: u32 = 0;
@@ -205,7 +206,8 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
                 std::io::ErrorKind::NotFound,
                 "No local IP address found",
             ))
-        } else {
+        }
+        _ => {
             compile_error!("Unsupported platform")
         }
     }

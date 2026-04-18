@@ -36,13 +36,10 @@ fn main() {
         .load_url("https://music.bplaat.nl/")
         .build();
 
-    cfg_if::cfg_if! {
-        if #[cfg(target_os = "macos")] {
-            let titlebar_height = window.macos_titlebar_size().height;
-        } else {
-            let titlebar_height = 28.0;
-        }
-    }
+    let titlebar_height = cfg_select! {
+        target_os = "macos" => window.macos_titlebar_size().height,
+        _ => 28.0,
+    };
 
     // Inject some styles to make the player look better
     webview.evaluate_script(
@@ -87,10 +84,11 @@ fn main() {
             );
 
     // Inject some styles to make the player look better
-    cfg_if::cfg_if! {
-        if #[cfg(target_os = "macos")] {
+    cfg_select! {
+        target_os = "macos" => {
             let titlebar_height = window.macos_titlebar_size().height;
-        } else {
+        }
+        _ => {
             let titlebar_height = 28.0;
         }
     }

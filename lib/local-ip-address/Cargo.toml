@@ -8,8 +8,6 @@ authors.workspace = true
 [lints]
 workspace = true
 
-[dependencies]
-cfg-if = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

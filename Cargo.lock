@@ -68,7 +68,6 @@ name = "bob"
 version = "0.1.0"
 dependencies = [
  "basic-toml",
- "cfg-if",
  "directories",
  "dotenv",
  "enable-ansi-support",
@@ -111,7 +110,6 @@ name = "bwebview"
 version = "0.1.0"
 dependencies = [
  "block2",
- "cfg-if",
  "directories",
  "log",
  "mime_guess",
@@ -152,7 +150,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-if"
-version = "1.0.4+patch"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "chrono"
@@ -192,9 +192,6 @@ version = "0.11.0+patch"
 [[package]]
 name = "directories"
 version = "6.0.0+patch"
-dependencies = [
- "cfg-if",
-]
 
 [[package]]
 name = "dotenv"
@@ -203,9 +200,6 @@ version = "0.15.0+patch"
 [[package]]
 name = "enable-ansi-support"
 version = "0.2.1+patch"
-dependencies = [
- "cfg-if",
-]
 
 [[package]]
 name = "equivalent"
@@ -299,9 +293,6 @@ dependencies = [
 [[package]]
 name = "getrandom"
 version = "0.3.0+patch"
-dependencies = [
- "cfg-if",
-]
 
 [[package]]
 name = "hashbrown"
@@ -381,7 +372,6 @@ dependencies = [
 name = "local-ip-address"
 version = "0.6.5+patch"
 dependencies = [
- "cfg-if",
  "libc",
 ]
 
@@ -455,7 +445,6 @@ name = "navidrome"
 version = "0.1.0"
 dependencies = [
  "bwebview",
- "cfg-if",
  "winresource",
 ]
 
@@ -704,7 +693,6 @@ dependencies = [
 name = "sha1"
 version = "0.11.0+patch"
 dependencies = [
- "cfg-if",
  "digest",
 ]
 
@@ -712,7 +700,6 @@ dependencies = [
 name = "sha2"
 version = "0.11.0+patch"
 dependencies = [
- "cfg-if",
  "digest",
 ]
 
@@ -793,9 +780,6 @@ dependencies = [
 [[package]]
 name = "terminal_size"
 version = "0.4.2+patch"
-dependencies = [
- "cfg-if",
-]
 
 [[package]]
 name = "threadpool"

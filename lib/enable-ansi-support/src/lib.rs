@@ -9,10 +9,11 @@
 /// Enables ANSI escape code support for terminal output on Windows.
 #[allow(unsafe_code)]
 pub fn enable_ansi_support() -> Result<(), std::io::Error> {
-    cfg_if::cfg_if! {
-        if #[cfg(unix)] {
+    cfg_select! {
+        unix => {
             Ok(())
-        } else if #[cfg(windows)] {
+        }
+        windows => {
             const STD_OUTPUT_HANDLE: i32 = -11;
             const INVALID_HANDLE_VALUE: *mut std::ffi::c_void = (-1isize) as *mut std::ffi::c_void;
             const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
@@ -39,7 +40,8 @@ pub fn enable_ansi_support() -> Result<(), std::io::Error> {
                 return Err(std::io::Error::last_os_error());
             }
             Ok(())
-        } else {
+        }
+        _ => {
             compile_error!("Unsupported platform")
         }
     }
