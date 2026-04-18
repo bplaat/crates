@@ -1084,10 +1084,7 @@ impl Transpiler {
         };
         text = RE_PRAGMA_ONCE.replace_all(&text, "").into_owned();
         // Inline convert_include using replace loop (can't use closure with &mut self)
-        loop {
-            let Some(caps) = RE_INCLUDE.captures(&text) else {
-                break;
-            };
+        while let Some(caps) = RE_INCLUDE.captures(&text) {
             let start = caps.get(0).expect("group 0 always present").start();
             let end = caps.get(0).expect("group 0 always present").end();
             let include_name = caps[1].to_owned();
