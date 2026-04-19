@@ -14,6 +14,9 @@ pub fn autoreleasepool<F, R>(f: F) -> R
 where
     F: FnOnce(&AutoreleasePool) -> R,
 {
+    // SAFETY: `objc_autoreleasePoolPush` and `objc_autoreleasePoolPop` must be called in
+    // matched pairs on the same thread. The token from Push is immediately passed back to
+    // Pop after the closure returns, satisfying the ObjC runtime's stack discipline.
     unsafe {
         let pool = objc_autoreleasePoolPush();
         let result = f(&AutoreleasePool(()));

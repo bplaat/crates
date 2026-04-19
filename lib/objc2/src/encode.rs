@@ -91,71 +91,96 @@ impl std::fmt::Display for Encoding {
     }
 }
 
-/// Trait for types that can be encoded in Objective-C
-#[allow(clippy::missing_safety_doc)]
+/// Trait for types that can be encoded in Objective-C.
+///
+/// # Safety
+///
+/// The implementor must ensure that `ENCODING` accurately describes the memory layout of
+/// `Self` as seen by the Objective-C runtime. An incorrect encoding causes type confusion
+/// when values are passed through `msg_send!` or used as ivar types, leading to undefined
+/// behavior.
 pub unsafe trait Encode {
     /// The encoding of the type
     const ENCODING: Encoding;
 }
 
-// Implementations for primitive types
+// Implementations for primitive types.
+// SAFETY: each type below maps to the standard ObjC type encoding defined by the
+// Apple ObjC runtime ABI, matching the C type layout on all supported platforms.
 unsafe impl Encode for () {
     const ENCODING: Encoding = Encoding::Void;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for i8 {
     const ENCODING: Encoding = Encoding::Char;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for i16 {
     const ENCODING: Encoding = Encoding::Short;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for i32 {
     const ENCODING: Encoding = Encoding::Int;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for i64 {
     const ENCODING: Encoding = Encoding::LongLong;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for u8 {
     const ENCODING: Encoding = Encoding::UChar;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for u16 {
     const ENCODING: Encoding = Encoding::UShort;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for u32 {
     const ENCODING: Encoding = Encoding::UInt;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for u64 {
     const ENCODING: Encoding = Encoding::ULongLong;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for f32 {
     const ENCODING: Encoding = Encoding::Float;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for f64 {
     const ENCODING: Encoding = Encoding::Double;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for bool {
     const ENCODING: Encoding = Encoding::Bool;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for isize {
     #[cfg(target_pointer_width = "64")]
     const ENCODING: Encoding = Encoding::LongLong;
     #[cfg(target_pointer_width = "32")]
     const ENCODING: Encoding = Encoding::Long;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for usize {
     #[cfg(target_pointer_width = "64")]
     const ENCODING: Encoding = Encoding::ULongLong;
     #[cfg(target_pointer_width = "32")]
     const ENCODING: Encoding = Encoding::UInt;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for *const c_void {
     const ENCODING: Encoding = Encoding::Pointer(&Encoding::Void);
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for *mut c_void {
     const ENCODING: Encoding = Encoding::Pointer(&Encoding::Void);
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for *const c_char {
     const ENCODING: Encoding = Encoding::String;
 }
+// SAFETY: see group comment above.
 unsafe impl Encode for *mut c_char {
     const ENCODING: Encoding = Encoding::String;
 }
@@ -217,5 +242,10 @@ mod test {
         assert_eq!(<*const c_char>::ENCODING.to_string(), "*");
         assert_eq!(<*mut c_char>::ENCODING.to_string(), "*");
         assert_eq!(Bool::ENCODING.to_string(), "B");
+        assert_eq!(i8::ENCODING.to_string(), "c");
+        assert_eq!(i16::ENCODING.to_string(), "s");
+        assert_eq!(u8::ENCODING.to_string(), "C");
+        assert_eq!(u16::ENCODING.to_string(), "S");
+        assert_eq!(f32::ENCODING.to_string(), "f");
     }
 }

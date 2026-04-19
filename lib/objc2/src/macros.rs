@@ -14,6 +14,8 @@ use crate::runtime::{AnyObject, Sel};
 macro_rules! class {
     ($name:ident) => {{
         #[allow(unused_unsafe)]
+        // SAFETY: `name` is a compile-time null-terminated string literal. The returned
+        // pointer is either a valid class pointer or null (caller is responsible for checking).
         unsafe {
             let name = concat!(stringify!($name), '\0');
             $crate::ffi::objc_getClass(name.as_ptr() as *const std::ffi::c_char)
@@ -27,6 +29,8 @@ macro_rules! class {
 macro_rules! sel {
     ($name:ident) => {{
         #[allow(unused_unsafe)]
+        // SAFETY: `name` is a compile-time null-terminated string literal.
+        // `sel_registerName` always returns a valid, globally registered selector pointer.
         unsafe {
             let name = concat!(stringify!($name), '\0');
             $crate::runtime::Sel(
@@ -37,6 +41,8 @@ macro_rules! sel {
     }};
     ($($name:ident :)+) => ({
         #[allow(unused_unsafe)]
+        // SAFETY: `name` is a compile-time null-terminated string literal.
+        // `sel_registerName` always returns a valid, globally registered selector pointer.
         unsafe {
             let name = concat!($(stringify!($name), ':'),+, '\0');
             $crate::runtime::Sel(
@@ -62,6 +68,11 @@ macro_rules! message_send_impl {
                 #[cfg(debug_assertions)]
                 crate::verify::verify_send(obj, sel, &[$($t::ENCODING),*], &R::ENCODING);
                 #[cfg(target_arch = "x86_64")]
+                // SAFETY: `objc_msgSend`/`objc_msgSend_stret` are C variadics that accept any
+                // argument list. The transmute gives them the concrete Rust types we verified via
+                // `verify_send` (debug) or statically via `Encode` bounds (release). The call is
+                // sound because the caller (`msg_send!`) must ensure `obj` is a valid ObjC object
+                // and `sel` is a registered selector, as documented on `MessageSend::invoke`.
                 unsafe {
                     if const { size_of::<R>() > 16 } {
                         let mut ret = std::mem::zeroed();
@@ -76,6 +87,7 @@ macro_rules! message_send_impl {
                     }
                 }
                 #[cfg(not(target_arch = "x86_64"))]
+                // SAFETY: see the x86_64 branch above for the full justification.
                 unsafe {
                     let imp: unsafe extern "C" fn (*mut AnyObject, *const c_void, $($t,)*) -> R =
                         std::mem::transmute(objc_msgSend as *const c_void);
@@ -119,12 +131,16 @@ mod test {
 
     #[test]
     fn test_message_send_no_args() {
+        // SAFETY: NSString is a valid Foundation class; alloc returns a valid uninitialized object.
         let ns: *mut AnyObject = unsafe { msg_send![class!(NSString), alloc] };
         assert!(!ns.is_null());
+        // SAFETY: `ns` is a valid uninitialized NSString from alloc; init always succeeds.
         let ns: *mut AnyObject = unsafe { msg_send![ns, init] };
         assert!(!ns.is_null());
+        // SAFETY: `ns` is a fully initialized NSString; length is a valid method returning NSUInteger.
         let length: u64 = unsafe { msg_send![ns, length] };
         assert_eq!(length, 0);
+        // SAFETY: `ns` is a valid ObjC object; release decrements the retain count.
         unsafe {
             let _: () = msg_send![ns, release];
         }
@@ -132,6 +148,7 @@ mod test {
 
     #[test]
     fn test_message_send_alloc_init() {
+        // SAFETY: NSObject is a valid Foundation class; alloc/init/release are standard ObjC methods.
         unsafe {
             let obj: *mut AnyObject = msg_send![class!(NSObject), alloc];
             assert!(!obj.is_null());
@@ -142,7 +159,25 @@ mod test {
     }
 
     #[test]
+    fn test_message_send_two_args() {
+        // SAFETY: all classes are valid Foundation types; all selectors match their declared signatures.
+        unsafe {
+            let dict: *mut AnyObject = msg_send![class!(NSMutableDictionary), new];
+            assert!(!dict.is_null());
+            let key: *mut AnyObject = msg_send![class!(NSString), new];
+            let val: *mut AnyObject = msg_send![class!(NSObject), new];
+            let _: () = msg_send![dict, setObject: val, forKey: key];
+            let count: u64 = msg_send![dict, count];
+            assert_eq!(count, 1);
+            let _: () = msg_send![key, release];
+            let _: () = msg_send![val, release];
+            let _: () = msg_send![dict, release];
+        }
+    }
+
+    #[test]
     fn test_message_send_three_args() {
+        // SAFETY: all classes are valid Foundation types; all selectors match their declared signatures.
         unsafe {
             let hello = b"hello";
             let ns: *mut AnyObject = msg_send![class!(NSString), alloc];
@@ -158,14 +193,64 @@ mod test {
         }
     }
 
+    #[repr(C)]
+    struct NSRange {
+        location: u64,
+        length: u64,
+    }
+    // SAFETY: NSRange is typedef'd from `struct _NSRange { u64 location; u64 length; }`;
+    // the ObjC runtime uses the underlying struct name `_NSRange` in type encodings.
+    unsafe impl crate::Encode for NSRange {
+        const ENCODING: crate::Encoding = crate::Encoding::Struct(
+            "_NSRange",
+            &[crate::Encoding::ULongLong, crate::Encoding::ULongLong],
+        );
+    }
+
+    unsafe fn make_nsstring(bytes: &[u8]) -> *mut AnyObject {
+        // SAFETY: NSString is a valid Foundation class; initWithBytes:length:encoding: is a standard initializer.
+        unsafe {
+            let ns: *mut AnyObject = msg_send![class!(NSString), alloc];
+            msg_send![ns,
+                initWithBytes: bytes.as_ptr() as *const c_void,
+                length: bytes.len() as u64,
+                encoding: 4u64
+            ]
+        }
+    }
+
+    #[test]
+    fn test_message_send_four_args() {
+        // SAFETY: all classes are valid Foundation types; all selectors match their declared signatures.
+        unsafe {
+            let src = make_nsstring(b"hello world");
+            let from = make_nsstring(b"world");
+            let to = make_nsstring(b"rust");
+            let result: *mut AnyObject = msg_send![src,
+                stringByReplacingOccurrencesOfString: from,
+                withString: to,
+                options: 0u64,
+                range: NSRange { location: 0, length: 11 }
+            ];
+            assert!(!result.is_null());
+            let len: u64 = msg_send![result, length];
+            assert_eq!(len, 10); // "hello rust" = 10 chars
+            let _: () = msg_send![src, release];
+            let _: () = msg_send![from, release];
+            let _: () = msg_send![to, release];
+        }
+    }
+
     #[test]
     fn test_sel_macro_single_name() {
+        // SAFETY: `sel!(length)` is a registered selector; sel_getName returns a valid null-terminated C string.
         let name = unsafe { CStr::from_ptr(sel_getName(sel!(length).0)) };
         assert_eq!(name.to_bytes(), b"length");
     }
 
     #[test]
     fn test_sel_macro_multi_name() {
+        // SAFETY: `sel!(setObject: forKey:)` is a registered selector; sel_getName returns a valid null-terminated C string.
         let name = unsafe { CStr::from_ptr(sel_getName(sel!(setObject: forKey:).0)) };
         assert_eq!(name.to_bytes(), b"setObject:forKey:");
     }

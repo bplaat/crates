@@ -8,7 +8,6 @@
 
 #![cfg(target_vendor = "apple")]
 #![allow(unsafe_code)]
-#![allow(clippy::undocumented_unsafe_blocks)]
 
 use std::ffi::c_void;
 use std::marker::PhantomData;
@@ -47,10 +46,13 @@ pub struct Block<F: ?Sized> {
     _marker: PhantomData<*const F>,
 }
 
-unsafe impl<F: ?Sized> Send for Block<F> {}
-unsafe impl<F: ?Sized> Sync for Block<F> {}
+// SAFETY: Sending a `Block<F>` to another thread is safe iff the captured closure F is Send.
+unsafe impl<F: Send + ?Sized> Send for Block<F> {}
+// SAFETY: Sharing `&Block<F>` across threads is safe iff the captured closure F is Sync.
+unsafe impl<F: Sync + ?Sized> Sync for Block<F> {}
 
 // A block argument is encoded as `@?` (an object which is a block)
+// SAFETY: A block pointer always has encoding `@?` in the ObjC type system.
 unsafe impl<F: ?Sized> Encode for &Block<F> {
     const ENCODING: Encoding = Encoding::Block;
 }
@@ -60,9 +62,15 @@ macro_rules! impl_block_call {
         impl<$($t: 'static + Copy),*> Block<dyn Fn($($t,)*)> {
             /// Call this block with the given arguments.
             pub fn call(&self, ($($a,)*): ($($t,)*)) {
-                let invoke: unsafe extern "C" fn(*const c_void $(, $t)*) =
-                    unsafe { std::mem::transmute(self._invoke) };
-                unsafe { invoke(self as *const Self as *const c_void $(, $a)*) };
+                // SAFETY: `_invoke` was stored by `RcBlock::make` as an `extern "C"` fn with
+                // exactly this signature. The block ABI stores all invoke pointers as opaque
+                // `*const c_void`, so the transmute is required. `self` is a valid shared
+                // reference that remains valid for the duration of this call.
+                unsafe {
+                    let invoke: unsafe extern "C" fn(*const c_void $(, $t)*) =
+                        std::mem::transmute(self._invoke);
+                    invoke(self as *const Self as *const c_void $(, $a)*);
+                }
             }
         }
     };
@@ -85,13 +93,17 @@ pub struct RcBlock<F> {
     inner: NonNull<RcBlockInner<F>>,
 }
 
+// SAFETY: Sending an `RcBlock<F>` to another thread is safe iff F is Send.
 unsafe impl<F: Send> Send for RcBlock<F> {}
+// SAFETY: Sharing `&RcBlock<F>` across threads is safe iff F is Sync.
 unsafe impl<F: Sync> Sync for RcBlock<F> {}
 
 impl<F> RcBlock<F> {
     fn make(closure: F, invoke: *const c_void) -> Self {
         let inner = Box::new(RcBlockInner {
             block: Block {
+                // SAFETY: `_NSConcreteMallocBlock` is a valid extern static exported by
+                // libSystem; it is always initialised before any Rust code runs.
                 _isa: unsafe { _NSConcreteMallocBlock },
                 _flags: BLOCK_HAS_DESCRIPTOR,
                 _reserved: 0,
@@ -112,7 +124,10 @@ impl<F> RcBlock<F> {
         F: Fn() + 'static,
     {
         extern "C" fn invoke_impl<F: Fn()>(block: *const RcBlockInner<F>) {
-            unsafe { ((*block).closure)() };
+            // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
+            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            let closure = unsafe { &(*block).closure };
+            closure();
         }
         Self::make(closure, invoke_impl::<F> as *const c_void)
     }
@@ -123,9 +138,29 @@ impl<F> RcBlock<F> {
         F: Fn(A) + 'static,
     {
         extern "C" fn invoke_impl<F: Fn(A), A: Copy>(block: *const RcBlockInner<F>, a: A) {
-            unsafe { ((*block).closure)(a) };
+            // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
+            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            let closure = unsafe { &(*block).closure };
+            closure(a);
         }
         Self::make(closure, invoke_impl::<F, A> as *const c_void)
+    }
+
+    /// Create a new heap-allocated block from a single-argument closure returning `R`.
+    pub fn new_ret<A: 'static + Copy, R: 'static + Copy>(closure: F) -> Self
+    where
+        F: Fn(A) -> R + 'static,
+    {
+        extern "C" fn invoke_impl<F: Fn(A) -> R, A: Copy, R: Copy>(
+            block: *const RcBlockInner<F>,
+            a: A,
+        ) -> R {
+            // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
+            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            let closure = unsafe { &(*block).closure };
+            closure(a)
+        }
+        Self::make(closure, invoke_impl::<F, A, R> as *const c_void)
     }
 
     /// Create a new heap-allocated block from a two-argument closure.
@@ -138,7 +173,10 @@ impl<F> RcBlock<F> {
             a: A,
             b: B,
         ) {
-            unsafe { ((*block).closure)(a, b) };
+            // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
+            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            let closure = unsafe { &(*block).closure };
+            closure(a, b);
         }
         Self::make(closure, invoke_impl::<F, A, B> as *const c_void)
     }
@@ -154,7 +192,10 @@ impl<F> RcBlock<F> {
             b: B,
             c: C,
         ) {
-            unsafe { ((*block).closure)(a, b, c) };
+            // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
+            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            let closure = unsafe { &(*block).closure };
+            closure(a, b, c);
         }
         Self::make(closure, invoke_impl::<F, A, B, C> as *const c_void)
     }
@@ -173,21 +214,41 @@ impl<F> RcBlock<F> {
             c: C,
             d: D,
         ) {
-            unsafe { ((*block).closure)(a, b, c, d) };
+            // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
+            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            let closure = unsafe { &(*block).closure };
+            closure(a, b, c, d);
         }
         Self::make(closure, invoke_impl::<F, A, B, C, D> as *const c_void)
+    }
+}
+
+impl<F> RcBlock<F> {
+    /// Call this block directly from Rust and return its value.
+    pub fn call_ret<A: Copy, R>(&self, a: A) -> R
+    where
+        F: Fn(A) -> R,
+    {
+        // SAFETY: `self.inner` is a valid non-null pointer to a live `RcBlockInner<F>`;
+        // we hold `&self` so it cannot be dropped during this call.
+        let closure = unsafe { &self.inner.as_ref().closure };
+        closure(a)
     }
 }
 
 impl<F> Deref for RcBlock<F> {
     type Target = Block<F>;
     fn deref(&self) -> &Block<F> {
+        // SAFETY: `self.inner` was produced by `NonNull::new(Box::into_raw(...))` in `make`
+        // and is valid until `Drop::drop` runs; we hold `&self` so it cannot be dropped here.
         unsafe { &self.inner.as_ref().block }
     }
 }
 
 impl<F> Drop for RcBlock<F> {
     fn drop(&mut self) {
+        // SAFETY: `self.inner` was produced by `Box::into_raw` in `make`; reconstructing
+        // the `Box` here is the exactly paired deallocation and runs the closure destructor.
         unsafe { drop(Box::from_raw(self.inner.as_ptr())) };
     }
 }
@@ -200,19 +261,21 @@ mod test {
 
     use super::*;
 
-    // Cast a concrete RcBlock reference to a dyn-typed Block reference for calling from Rust.
-    // Safe because Block<F> and Block<dyn Fn(A)> have identical layouts (PhantomData is 0 bytes).
     fn as_dyn<A: 'static + Copy, F: Fn(A) + 'static>(block: &RcBlock<F>) -> &Block<dyn Fn(A)> {
+        // SAFETY: `Block<F>` and `Block<dyn Fn(A)>` have identical `repr(C)` layouts;
+        // `PhantomData<*const F>` is zero-sized so the bit-pattern is the same either way.
         unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A)>) }
     }
 
     fn as_dyn0<F: Fn() + 'static>(block: &RcBlock<F>) -> &Block<dyn Fn()> {
+        // SAFETY: identical repr(C) layouts; PhantomData<*const F> is zero-sized.
         unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn()>) }
     }
 
     fn as_dyn2<A: 'static + Copy, B: 'static + Copy, F: Fn(A, B) + 'static>(
         block: &RcBlock<F>,
     ) -> &Block<dyn Fn(A, B)> {
+        // SAFETY: identical repr(C) layouts; PhantomData<*const F> is zero-sized.
         unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A, B)>) }
     }
 
@@ -224,6 +287,7 @@ mod test {
     >(
         block: &RcBlock<F>,
     ) -> &Block<dyn Fn(A, B, C)> {
+        // SAFETY: identical repr(C) layouts; PhantomData<*const F> is zero-sized.
         unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A, B, C)>) }
     }
 
@@ -236,6 +300,7 @@ mod test {
     >(
         block: &RcBlock<F>,
     ) -> &Block<dyn Fn(A, B, C, D)> {
+        // SAFETY: identical repr(C) layouts; PhantomData<*const F> is zero-sized.
         unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A, B, C, D)>) }
     }
 
@@ -332,6 +397,12 @@ mod test {
             dropped.load(Ordering::SeqCst),
             "closure should be dropped with RcBlock"
         );
+    }
+
+    #[test]
+    fn test_block_call_1_arg_ret() {
+        let block = RcBlock::new_ret::<i32, i32>(|x: i32| x * 2);
+        assert_eq!(block.call_ret(21), 42);
     }
 
     #[test]

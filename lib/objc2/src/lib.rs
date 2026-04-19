@@ -8,7 +8,6 @@
 
 #![cfg(target_vendor = "apple")]
 #![allow(unsafe_code)]
-#![allow(clippy::undocumented_unsafe_blocks)]
 
 pub use encode::{Encode, Encoding};
 
