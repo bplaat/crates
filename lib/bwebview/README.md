@@ -47,6 +47,8 @@ sudo dnf install gtk3-devel webkit2gtk4.0-devel # for older systems
 - **log** Enables logging support by forwarding `console.*` calls to the `log` crate (default).
 - **remember_window_state** Adds remembers window position and size between launches options (default).
 - **rust-embed** Adds support for serving embedded assets using the `rust-embed` crate.
+- **custom_protocol** Adds support for custom protocols, allowing you to serve content from custom URL schemes.
+- **file_dialog** Adds support for file dialogs, allowing you to open file selection dialogs from your webview.
 
 ## Sources binary blobs
 
