@@ -12,7 +12,7 @@ use bwebview::{
 };
 use serde::{Deserialize, Serialize};
 
-const APP_HTML: &str = include_str!("../app.html");
+const APP_HTML: &str = include_str!("bwebview-ipc.html");
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]

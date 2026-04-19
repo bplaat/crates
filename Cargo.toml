@@ -1,5 +1,5 @@
 [workspace]
-members = ["bin/*", "examples/*", "lib/*", "lib/*/examples/*"]
+members = ["bin/*", "examples/*", "lib/*"]
 resolver = "2"
 
 [workspace.package]
