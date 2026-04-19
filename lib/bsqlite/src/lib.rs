@@ -6,7 +6,6 @@
 
 #![doc = include_str!("../README.md")]
 #![allow(unsafe_code)]
-#![allow(clippy::undocumented_unsafe_blocks)]
 
 pub use crate::bind::Bind;
 pub use crate::connection::{Connection, ConnectionError, OpenMode};

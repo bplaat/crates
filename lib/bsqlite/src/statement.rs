@@ -62,6 +62,7 @@ impl RawStatement {
 
     /// Reset the statement
     pub fn reset(&mut self) {
+        // SAFETY: self.0 is a valid prepared statement handle.
         unsafe { sqlite3_reset(self.0) };
     }
 
@@ -74,13 +75,28 @@ impl RawStatement {
     pub fn bind_value(&mut self, index: i32, value: Value) -> Result<(), StatementError> {
         let index = index + 1;
         let result = match value {
-            Value::Null => unsafe { sqlite3_bind_null(self.0, index) },
-            Value::Integer(i) => unsafe { sqlite3_bind_int64(self.0, index, i) },
-            Value::Float(f) => unsafe { sqlite3_bind_double(self.0, index, f) },
+            Value::Null => {
+                // SAFETY: self.0 is a valid prepared statement handle and index is a valid
+                // 1-based parameter index.
+                unsafe { sqlite3_bind_null(self.0, index) }
+            }
+            Value::Integer(i) => {
+                // SAFETY: self.0 is a valid prepared statement handle and index is a valid
+                // 1-based parameter index.
+                unsafe { sqlite3_bind_int64(self.0, index, i) }
+            }
+            Value::Float(f) => {
+                // SAFETY: self.0 is a valid prepared statement handle and index is a valid
+                // 1-based parameter index.
+                unsafe { sqlite3_bind_double(self.0, index, f) }
+            }
             Value::Text(s) => {
                 let len = i32::try_from(s.len()).map_err(|_| StatementError {
                     msg: "text value too large to bind".to_string(),
                 })?;
+                // SAFETY: self.0 is a valid prepared statement, index is valid, s.as_ptr() points
+                // to valid UTF-8 bytes for the given len, and SQLITE_TRANSIENT causes SQLite to
+                // copy the data before returning.
                 unsafe {
                     sqlite3_bind_text(
                         self.0,
@@ -95,6 +111,9 @@ impl RawStatement {
                 let len = i32::try_from(b.len()).map_err(|_| StatementError {
                     msg: "blob value too large to bind".to_string(),
                 })?;
+                // SAFETY: self.0 is a valid prepared statement, index is valid, b.as_ptr() points
+                // to valid bytes for the given len, and SQLITE_TRANSIENT causes SQLite to copy
+                // the data before returning.
                 unsafe {
                     sqlite3_bind_blob(
                         self.0,
@@ -107,7 +126,11 @@ impl RawStatement {
             }
         };
         if result != SQLITE_OK {
+            // SAFETY: sqlite3_sql returns a NUL-terminated string that lives as long as the
+            // statement; self.0 is a valid prepared statement handle.
             let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0)) }.to_string_lossy();
+            // SAFETY: sqlite3_db_handle always returns the db associated with self.0 (never null);
+            // sqlite3_errmsg returns a valid NUL-terminated string until the next API call.
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0))) }
                 .to_string_lossy();
             return Err(StatementError {
@@ -120,6 +143,8 @@ impl RawStatement {
     /// Bind named value to the statement
     pub fn bind_named_value(&mut self, name: &str, value: Value) -> Result<(), StatementError> {
         let c_name = CString::new(name).expect("Can't convert to CString");
+        // SAFETY: self.0 is a valid prepared statement handle and c_name is a valid
+        // NUL-terminated CString.
         let index = unsafe { sqlite3_bind_parameter_index(self.0, c_name.as_ptr()) };
         if index == 0 {
             return Err(StatementError {
@@ -131,13 +156,18 @@ impl RawStatement {
 
     /// Step the statement
     pub fn step(&mut self) -> Result<Option<()>, StatementError> {
+        // SAFETY: self.0 is a valid prepared statement handle.
         let result = unsafe { sqlite3_step(self.0) };
         if result == SQLITE_ROW {
             Ok(Some(()))
         } else if result == SQLITE_DONE {
             Ok(None)
         } else {
+            // SAFETY: sqlite3_sql returns a NUL-terminated string that lives as long as the
+            // statement; self.0 is a valid prepared statement handle.
             let query = unsafe { CStr::from_ptr(sqlite3_sql(self.0)) }.to_string_lossy();
+            // SAFETY: sqlite3_db_handle always returns the db associated with self.0 (never null);
+            // sqlite3_errmsg returns a valid NUL-terminated string until the next API call.
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(sqlite3_db_handle(self.0))) }
                 .to_string_lossy();
             Err(StatementError {
@@ -148,12 +178,16 @@ impl RawStatement {
 
     /// Get the number of columns in the statement
     pub fn column_count(&self) -> i32 {
+        // SAFETY: self.0 is a valid prepared statement handle.
         unsafe { sqlite3_column_count(self.0) }
     }
 
     /// Get the name of a column
     pub fn column_name(&self, index: i32) -> String {
+        // SAFETY: self.0 is a valid prepared statement handle and index is within the column range.
         let name = unsafe { sqlite3_column_name(self.0, index) };
+        // SAFETY: sqlite3_column_name returns a valid NUL-terminated string owned by SQLite that
+        // remains valid for the lifetime of the statement.
         unsafe { CStr::from_ptr(name) }
             .to_string_lossy()
             .to_string()
@@ -161,6 +195,7 @@ impl RawStatement {
 
     /// Get the type of a column
     pub fn column_type(&self, index: i32) -> ColumnType {
+        // SAFETY: self.0 is a valid prepared statement handle and index is within the column range.
         match unsafe { sqlite3_column_type(self.0, index) } {
             SQLITE_NULL => ColumnType::Null,
             SQLITE_INTEGER => ColumnType::Integer,
@@ -173,9 +208,12 @@ impl RawStatement {
 
     /// Get the declared type of a column
     pub fn column_declared_type(&self, index: i32) -> Option<String> {
+        // SAFETY: self.0 is a valid prepared statement handle and index is within the column range.
         let decl_type = unsafe { sqlite3_column_decltype(self.0, index) };
         if !decl_type.is_null() {
             Some(
+                // SAFETY: decl_type is non-null (checked above) and points to a valid
+                // NUL-terminated string owned by SQLite, valid for the statement lifetime.
                 unsafe { CStr::from_ptr(decl_type) }
                     .to_string_lossy()
                     .to_string(),
@@ -187,9 +225,12 @@ impl RawStatement {
 
     /// Get the table name of a column
     pub fn column_table_name(&self, index: i32) -> Option<String> {
+        // SAFETY: self.0 is a valid prepared statement handle and index is within the column range.
         let table_name = unsafe { sqlite3_column_table_name(self.0, index) };
         if !table_name.is_null() {
             Some(
+                // SAFETY: table_name is non-null (checked above) and points to a valid
+                // NUL-terminated string owned by SQLite, valid for the statement lifetime.
                 unsafe { CStr::from_ptr(table_name) }
                     .to_string_lossy()
                     .to_string(),
@@ -201,9 +242,12 @@ impl RawStatement {
 
     /// Get the origin name of a column
     pub fn column_origin_name(&self, index: i32) -> Option<String> {
+        // SAFETY: self.0 is a valid prepared statement handle and index is within the column range.
         let origin_name = unsafe { sqlite3_column_origin_name(self.0, index) };
         if !origin_name.is_null() {
             Some(
+                // SAFETY: origin_name is non-null (checked above) and points to a valid
+                // NUL-terminated string owned by SQLite, valid for the statement lifetime.
                 unsafe { CStr::from_ptr(origin_name) }
                     .to_string_lossy()
                     .to_string(),
@@ -215,23 +259,38 @@ impl RawStatement {
 
     /// Get the value of a column
     pub fn column_value(&self, index: i32) -> Value {
+        // SAFETY: self.0 is a valid prepared statement handle and index is within the column range.
         match unsafe { sqlite3_column_type(self.0, index) } {
             SQLITE_NULL => Value::Null,
-            SQLITE_INTEGER => Value::Integer(unsafe { sqlite3_column_int64(self.0, index) }),
-            SQLITE_FLOAT => Value::Float(unsafe { sqlite3_column_double(self.0, index) }),
+            SQLITE_INTEGER => {
+                // SAFETY: self.0 is valid, index is in bounds, and the column type is INTEGER.
+                Value::Integer(unsafe { sqlite3_column_int64(self.0, index) })
+            }
+            SQLITE_FLOAT => {
+                // SAFETY: self.0 is valid, index is in bounds, and the column type is FLOAT.
+                Value::Float(unsafe { sqlite3_column_double(self.0, index) })
+            }
             SQLITE_TEXT => {
+                // SAFETY: self.0 is valid, index is in bounds, and the column type is TEXT.
                 let text = unsafe { sqlite3_column_text(self.0, index) };
+                // SAFETY: sqlite3_column_text returns a valid NUL-terminated UTF-8 string (SQLite
+                // guarantees UTF-8 encoding) that is valid until the column value is reread.
                 let text = unsafe { CStr::from_ptr(text as *const c_char) }
                     .to_string_lossy()
                     .to_string();
                 Value::Text(text)
             }
             SQLITE_BLOB => {
+                // SAFETY: self.0 is valid, index is in bounds, and the column type is BLOB.
                 let blob = unsafe { sqlite3_column_blob(self.0, index) };
                 if blob.is_null() {
                     return Value::Blob(Vec::new());
                 }
+                // SAFETY: Called on the same column immediately after sqlite3_column_blob to
+                // retrieve the correct byte length for that blob.
                 let len = unsafe { sqlite3_column_bytes(self.0, index) };
+                // SAFETY: blob is non-null (checked above), len matches the blob size returned
+                // by sqlite3_column_bytes, and the memory is valid for the duration of this call.
                 let slice = unsafe { std::slice::from_raw_parts(blob as *const u8, len as usize) };
                 Value::Blob(slice.to_vec())
             }
@@ -242,6 +301,8 @@ impl RawStatement {
 
 impl Drop for RawStatement {
     fn drop(&mut self) {
+        // SAFETY: self.0 is the exclusively owned statement handle; Drop guarantees no other
+        // references exist, and sqlite3_finalize frees the handle exactly once.
         unsafe { sqlite3_finalize(self.0) };
     }
 }

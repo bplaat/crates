@@ -25,7 +25,11 @@ pub enum OpenMode {
 }
 
 struct InnerConnection(*mut sqlite3);
+// SAFETY: InnerConnection exclusively owns its *mut sqlite3 handle and never aliases it, so
+// transferring ownership to another thread is safe.
 unsafe impl Send for InnerConnection {}
+// SAFETY: SQLite opened with SQLITE_OPEN_FULLMUTEX serializes all API calls with an internal
+// mutex, so shared access from multiple threads via &InnerConnection is safe.
 unsafe impl Sync for InnerConnection {}
 
 impl InnerConnection {
@@ -34,6 +38,8 @@ impl InnerConnection {
         let mut db = ptr::null_mut();
         let path = CString::new(path.to_str().expect("Can't convert to CString").as_bytes())
             .expect("Can't convert to CString");
+        // SAFETY: path is a valid NUL-terminated CString, db is initialized to null_mut, the
+        // flags are valid SQLite open mode constants, and the vfs argument is null (use default).
         let result = unsafe {
             sqlite3_open_v2(
                 path.as_ptr(),
@@ -51,6 +57,8 @@ impl InnerConnection {
             let error = if db.is_null() {
                 "unknown error (db handle is null)".into()
             } else {
+                // SAFETY: db is non-null (checked above), and sqlite3_errmsg returns a valid
+                // NUL-terminated string that remains valid until the next SQLite API call on db.
                 unsafe { CStr::from_ptr(sqlite3_errmsg(db)) }.to_string_lossy()
             };
             return Err(ConnectionError {
@@ -62,6 +70,9 @@ impl InnerConnection {
 
     fn prepare<T: FromRow>(&self, query: &str) -> Result<Statement<T>, StatementError> {
         let mut statement = ptr::null_mut();
+        // SAFETY: self.0 is a valid open db handle, query bytes are valid UTF-8 from a &str with
+        // the correct byte length, statement is initialized to null_mut, and the tail pointer is
+        // null (not needed here).
         let result = unsafe {
             sqlite3_prepare_v2(
                 self.0,
@@ -72,6 +83,8 @@ impl InnerConnection {
             )
         };
         if result != SQLITE_OK {
+            // SAFETY: self.0 is a valid open db handle, and sqlite3_errmsg returns a valid
+            // NUL-terminated string that remains valid until the next SQLite API call.
             let error = unsafe { CStr::from_ptr(sqlite3_errmsg(self.0)) }.to_string_lossy();
             return Err(StatementError {
                 msg: format!("Failed to prepare statement '{query}': {error}"),
@@ -81,16 +94,20 @@ impl InnerConnection {
     }
 
     fn affected_rows(&self) -> i32 {
+        // SAFETY: self.0 is a valid open db handle.
         unsafe { sqlite3_changes(self.0) }
     }
 
     fn last_insert_row_id(&self) -> i64 {
+        // SAFETY: self.0 is a valid open db handle.
         unsafe { sqlite3_last_insert_rowid(self.0) }
     }
 }
 
 impl Drop for InnerConnection {
     fn drop(&mut self) {
+        // SAFETY: self.0 is the exclusively owned db handle; Drop guarantees no other references
+        // exist, and sqlite3_close frees the handle exactly once.
         unsafe { sqlite3_close(self.0) };
     }
 }
