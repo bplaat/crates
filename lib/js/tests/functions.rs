@@ -113,7 +113,7 @@ fn test_scoping() {
     );
     assert_js(Value::Number(10.0), "let x = 10; { let x = 20; } x");
     assert_js(Value::Number(20.0), "let x = 10; { x = 20; } x");
-    assert_js(Value::Number(5.0), "for (let i = 0; i < 5; i++) { } i");
+    assert_js(Value::Number(5.0), "for (var i = 0; i < 5; i++) { } i");
     assert_js(
         Value::Number(30.0),
         "let sum = 0; for (let i = 0; i < 5; i++) { let x = 6; sum += x; } sum",

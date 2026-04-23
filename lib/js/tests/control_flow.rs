@@ -174,8 +174,8 @@ fn test_loops() {
         "let i = 0; let sum = 0; do { i++; sum += i; } while (i < 5); sum",
     );
     assert_js(
-        Value::Number(1.0),
-        "let i = 0; do { i++; if (i == 2) break } while (i < 10)",
+        Value::Number(2.0),
+        "let i = 0; do { i++; if (i == 2) break; } while (i < 10); i",
     );
     assert_js(
         Value::Number(13.0),
