@@ -11,10 +11,7 @@ use indexmap::IndexMap;
 
 use crate::value::{ObjectValue, Value};
 
-pub(crate) fn env() -> Rc<RefCell<IndexMap<String, Value>>> {
-    let env = Rc::new(RefCell::new(IndexMap::new()));
-
-    // MARK: Globals
+pub(super) fn extend(env: &Rc<RefCell<IndexMap<String, Value>>>) {
     env.borrow_mut().insert(
         "globalThis".to_string(),
         Value::Object(ObjectValue {
@@ -45,6 +42,4 @@ pub(crate) fn env() -> Rc<RefCell<IndexMap<String, Value>>> {
             Value::Boolean(args[0].to_number().is_finite())
         }),
     );
-
-    env
 }

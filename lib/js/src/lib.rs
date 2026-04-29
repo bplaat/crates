@@ -9,9 +9,9 @@
 pub use context::Context;
 pub use value::Value;
 
+mod buildins;
 mod context;
 mod interpreter;
 mod lexer;
 mod parser;
-mod stdlib;
 mod value;
