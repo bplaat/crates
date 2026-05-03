@@ -202,3 +202,30 @@ fn test_typeof() {
     assert_js(Value::String(String::from("string")), r#"typeof "hello""#);
     assert_js(Value::String(String::from("string")), "typeof 'world'");
 }
+
+#[test]
+fn test_division_by_zero() {
+    // ES5 11.5.2 (IEEE 754) - test262 S11.5.2_A4 series
+    assert_js(Value::Number(f64::INFINITY), "5 / 0");
+    assert_js(Value::Number(f64::NEG_INFINITY), "-5 / 0");
+    assert_js(Value::Boolean(true), "isNaN(0 / 0)");
+    assert_js(Value::Number(0.0), "1 / Infinity");
+    assert_js(Value::Number(0.0), "-1 / -Infinity");
+    assert_js(Value::Number(f64::INFINITY), "1 / 0 + 1 / 0");
+    assert_js(Value::Number(f64::INFINITY), "let a = 5; a /= 0; a");
+}
+
+#[test]
+fn test_number_infinity_arithmetic() {
+    // ES5 11.5 arithmetic with Infinity
+    assert_js(Value::Number(f64::INFINITY), "Infinity + 1");
+    assert_js(Value::Number(f64::INFINITY), "Infinity + Infinity");
+    assert_js(Value::Boolean(true), "isNaN(Infinity - Infinity)");
+    assert_js(Value::Number(f64::INFINITY), "Infinity * 2");
+    assert_js(Value::Boolean(true), "isNaN(Infinity * 0)");
+    assert_js(Value::Number(f64::INFINITY), "Infinity / 2");
+    assert_js(Value::Number(0.0), "2 / Infinity");
+    assert_js(Value::Boolean(true), "isNaN(Infinity / Infinity)");
+    assert_js(Value::Number(f64::NEG_INFINITY), "-Infinity");
+    assert_js(Value::Number(f64::NEG_INFINITY), "Infinity * -1");
+}

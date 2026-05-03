@@ -137,6 +137,199 @@ fn test_switch() {
 }
 
 #[test]
+fn test_switch_fall_through() {
+    // ES5 12.11 fall-through semantics - test262 S12.11_A1_T1
+    assert_js(
+        Value::Number(6.0),
+        r#"
+        function f(v) {
+            var r = 0;
+            switch (v) {
+                case 0: r += 2;
+                case 1: r += 4; break;
+                case 2: r += 8;
+                case 3: r += 16;
+                default: r += 32; break;
+                case 4: r += 64;
+            }
+            return r;
+        }
+        f(0)
+        "#,
+    );
+    assert_js(
+        Value::Number(4.0),
+        r#"
+        function f(v) {
+            var r = 0;
+            switch (v) {
+                case 0: r += 2;
+                case 1: r += 4; break;
+                case 2: r += 8;
+                case 3: r += 16;
+                default: r += 32; break;
+                case 4: r += 64;
+            }
+            return r;
+        }
+        f(1)
+        "#,
+    );
+    assert_js(
+        Value::Number(56.0),
+        r#"
+        function f(v) {
+            var r = 0;
+            switch (v) {
+                case 0: r += 2;
+                case 1: r += 4; break;
+                case 2: r += 8;
+                case 3: r += 16;
+                default: r += 32; break;
+                case 4: r += 64;
+            }
+            return r;
+        }
+        f(2)
+        "#,
+    );
+    assert_js(
+        Value::Number(48.0),
+        r#"
+        function f(v) {
+            var r = 0;
+            switch (v) {
+                case 0: r += 2;
+                case 1: r += 4; break;
+                case 2: r += 8;
+                case 3: r += 16;
+                default: r += 32; break;
+                case 4: r += 64;
+            }
+            return r;
+        }
+        f(3)
+        "#,
+    );
+    assert_js(
+        Value::Number(64.0),
+        r#"
+        function f(v) {
+            var r = 0;
+            switch (v) {
+                case 0: r += 2;
+                case 1: r += 4; break;
+                case 2: r += 8;
+                case 3: r += 16;
+                default: r += 32; break;
+                case 4: r += 64;
+            }
+            return r;
+        }
+        f(4)
+        "#,
+    );
+    // Simple sequential fall-through without break
+    assert_js(
+        Value::Number(3.0),
+        r#"
+        var x = 0;
+        switch (1) {
+            case 1: x += 1;
+            case 2: x += 2;
+        }
+        x
+        "#,
+    );
+}
+
+#[test]
+fn test_switch_strict_equality() {
+    // ES5 12.11: switch uses strict equality (===), not loose (==)
+    // test262 S12.11_A1_T1: SwitchTest(true) === 32 (default), not case 1
+    assert_js(
+        Value::Number(32.0),
+        r#"
+        function f(v) {
+            var r = 0;
+            switch (v) {
+                case 0: r += 2;
+                case 1: r += 4; break;
+                default: r += 32; break;
+                case 4: r += 64;
+            }
+            return r;
+        }
+        f(true)
+        "#,
+    );
+    // '0' should NOT match case 0 (string vs number)
+    assert_js(
+        Value::String(String::from("default")),
+        r#"switch ('0') { case 0: 'zero'; break; default: 'default'; }"#,
+    );
+    // 1 should NOT match case '1' (number vs string)
+    assert_js(
+        Value::String(String::from("default")),
+        r#"switch (1) { case '1': 'string-one'; break; default: 'default'; }"#,
+    );
+    // null should NOT match case 0
+    assert_js(
+        Value::String(String::from("default")),
+        r#"switch (null) { case 0: 'zero'; break; default: 'default'; }"#,
+    );
+    // false should NOT match case 0
+    assert_js(
+        Value::String(String::from("default")),
+        r#"switch (false) { case 0: 'zero'; break; default: 'default'; }"#,
+    );
+}
+
+#[test]
+fn test_switch_default_in_middle() {
+    // Default clause in the middle of cases: if no case matches, start from default
+    // and fall through into subsequent cases.
+    assert_js(
+        Value::Number(99.0),
+        r#"
+        var x = 0;
+        switch (5) {
+            case 1: x = 1; break;
+            default: x = 99; break;
+            case 3: x = 3; break;
+        }
+        x
+        "#,
+    );
+    // Case after default matches - default should NOT run
+    assert_js(
+        Value::Number(3.0),
+        r#"
+        var x = 0;
+        switch (3) {
+            case 1: x = 1; break;
+            default: x = 99; break;
+            case 3: x = 3; break;
+        }
+        x
+        "#,
+    );
+    // Fall-through from default into subsequent case
+    assert_js(
+        Value::Number(3.0),
+        r#"
+        var x = 0;
+        switch (5) {
+            case 1: x = 1; break;
+            default: x = 99;
+            case 3: x = 3; break;
+        }
+        x
+        "#,
+    );
+}
+
+#[test]
 fn test_loops() {
     assert_js(Value::Number(4.0), "let i = 0; while (i < 5) { i++; }");
     assert_js(Value::Number(5.0), "let i = 0; while (i < 5) { i++; } i");
@@ -263,5 +456,26 @@ fn test_loop_labels() {
     assert_js(
         Value::Number(10.0),
         "let sum = 0; outer: for (let i = 0; \n i < 5; \n i++) { for (let j = 0; j < 5; j++) { if (j == 2) continue outer; sum++; } } sum",
+    );
+}
+
+#[test]
+fn test_exceptions() {
+    assert_js(Value::Number(42.0), "try { throw 42; } catch (e) { e }");
+    assert_js(
+        Value::String(String::from("boom")),
+        "try { throw 'boom'; } catch (e) { e }",
+    );
+    assert_js(
+        Value::Number(3.0),
+        "let x = 0; try { throw 1; } catch (e) { x = e + 1; } finally { x += 1; } x",
+    );
+    assert_js(
+        Value::Number(2.0),
+        "function test() { try { return 1; } finally { return 2; } } test()",
+    );
+    assert_js(
+        Value::Number(5.0),
+        "function test() { try { throw 1; } catch (e) { return e + 1; } finally { return 5; } } test()",
     );
 }

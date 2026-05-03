@@ -13,9 +13,13 @@ use indexmap::IndexMap;
 
 use crate::parser::AstNode;
 
+/// Captured lexical scope entries for a closure: (is_function_scope, env_map).
+pub(crate) type ClosureEnv = Vec<(bool, Rc<RefCell<IndexMap<String, Value>>>)>;
+
 /// MARK: Array value
 #[derive(Debug, Clone)]
-pub(crate) struct ArrayValue {
+pub struct ArrayValue {
+    /// The elements of the array.
     pub elements: Rc<RefCell<Vec<Value>>>,
 }
 impl Deref for ArrayValue {
@@ -27,13 +31,17 @@ impl Deref for ArrayValue {
 }
 impl PartialEq for ArrayValue {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.elements, &other.elements)
+        if Rc::ptr_eq(&self.elements, &other.elements) {
+            return true;
+        }
+        *self.elements.borrow() == *other.elements.borrow()
     }
 }
 
 /// MARK: Object value
 #[derive(Debug, Clone)]
-pub(crate) struct ObjectValue {
+pub struct ObjectValue {
+    /// The key-value properties of the object.
     pub properties: Rc<RefCell<IndexMap<String, Value>>>,
 }
 impl Deref for ObjectValue {
@@ -45,7 +53,10 @@ impl Deref for ObjectValue {
 }
 impl PartialEq for ObjectValue {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.properties, &other.properties)
+        if Rc::ptr_eq(&self.properties, &other.properties) {
+            return true;
+        }
+        *self.properties.borrow() == *other.properties.borrow()
     }
 }
 
@@ -67,8 +78,8 @@ pub enum Value {
     Array(ArrayValue),
     /// Object value
     Object(ObjectValue),
-    /// Function value
-    Function(Rc<(Vec<String>, AstNode)>),
+    /// Function value: (template Rc, captured lexical env)
+    Function(Rc<(Vec<String>, AstNode)>, Box<ClosureEnv>),
     /// Native function
     NativeFunction(fn(&[Value]) -> Value),
 }
@@ -83,7 +94,7 @@ impl PartialEq for Value {
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Array(a), Value::Array(b)) => a == b,
             (Value::Object(a), Value::Object(b)) => a == b,
-            (Value::Function(a), Value::Function(b)) => Rc::ptr_eq(a, b),
+            (Value::Function(a, _), Value::Function(b, _)) => Rc::ptr_eq(a, b),
             (Value::NativeFunction(a), Value::NativeFunction(b)) => {
                 let a_ptr: usize = (*a) as usize;
                 let b_ptr: usize = (*b) as usize;
@@ -100,21 +111,62 @@ impl Display for Value {
             Value::Undefined => write!(f, "undefined"),
             Value::Null => write!(f, "null"),
             Value::Boolean(b) => write!(f, "{b}"),
-            Value::Number(n) => write!(f, "{n}"),
+            Value::Number(n) => write!(f, "{}", number_to_js_string(*n)),
             Value::String(s) => write!(f, "{s}"),
             Value::Array(a) => {
-                let mut elements = vec![];
-                for v in a.borrow().iter() {
-                    elements.push(v.to_string());
-                }
-                write!(f, "[{}]", elements.join(", "))
+                let parts: Vec<String> = a
+                    .borrow()
+                    .iter()
+                    .map(|v| match v {
+                        Value::Null | Value::Undefined => String::new(),
+                        other => other.to_string(),
+                    })
+                    .collect();
+                write!(f, "{}", parts.join(","))
             }
             Value::Object(_) => write!(f, "[object Object]"),
-            Value::Function(_) | Value::NativeFunction(_) => {
+            Value::Function(..) | Value::NativeFunction(_) => {
                 write!(f, "function() {{ [native code] }}")
             }
         }
     }
+}
+
+pub(crate) fn number_to_js_string(n: f64) -> String {
+    if n.is_nan() {
+        return "NaN".to_string();
+    }
+    if n == f64::INFINITY {
+        return "Infinity".to_string();
+    }
+    if n == f64::NEG_INFINITY {
+        return "-Infinity".to_string();
+    }
+    // Handle -0
+    if n == 0.0 {
+        return "0".to_string();
+    }
+    let abs = n.abs();
+    // Use exponential notation for very large or very small numbers (matching JS)
+    if abs >= 1e21 || (abs < 1e-6 && abs > 0.0) {
+        // JS uses e+ for positive exponents
+        let s = format!("{n:e}");
+        // Rust produces e.g. "1e21" or "1.5e-7"; JS produces "1e+21" or "1.5e-7"
+        if let Some(pos) = s.find('e') {
+            let (mantissa, exp_part) = s.split_at(pos);
+            let exp_str = &exp_part[1..]; // strip 'e'
+            let trimmed = mantissa.trim_end_matches('0').trim_end_matches('.');
+            let exp_num: i32 = exp_str.parse().unwrap_or(0);
+            if exp_num >= 0 {
+                return format!("{trimmed}e+{exp_num}");
+            } else {
+                return format!("{trimmed}e{exp_num}");
+            }
+        }
+        return s;
+    }
+    // For normal range, Rust's default Display already gives the shortest round-trip form
+    format!("{n}")
 }
 
 impl Value {
@@ -161,7 +213,29 @@ impl Value {
             (a, Value::Number(b)) => a.to_number() == *b,
             (Value::String(a), b) => *a == b.to_string(),
             (a, Value::String(b)) => a.to_string() == *b,
-            _ => self == other,
+            _ => match (self, other) {
+                (Value::Array(a), Value::Array(b)) => Rc::ptr_eq(&a.elements, &b.elements),
+                (Value::Object(a), Value::Object(b)) => Rc::ptr_eq(&a.properties, &b.properties),
+                _ => false,
+            },
+        }
+    }
+
+    /// JS strict equality (`===`): uses reference identity for objects/arrays, NaN != NaN.
+    pub(crate) fn js_strict_equals(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Undefined, Value::Undefined) => true,
+            (Value::Null, Value::Null) => true,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Number(a), Value::Number(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => Rc::ptr_eq(&a.elements, &b.elements),
+            (Value::Object(a), Value::Object(b)) => Rc::ptr_eq(&a.properties, &b.properties),
+            (Value::Function(a, _), Value::Function(b, _)) => Rc::ptr_eq(a, b),
+            (Value::NativeFunction(a), Value::NativeFunction(b)) => {
+                (*a as usize) == (*b as usize)
+            }
+            _ => false,
         }
     }
 
@@ -177,7 +251,18 @@ impl Value {
                 }
             }
             Value::Number(n) => *n,
-            Value::String(s) => s.parse::<f64>().unwrap_or(f64::NAN),
+            Value::String(s) => {
+                let trimmed = s.trim();
+                if trimmed.is_empty() {
+                    0.0
+                } else if trimmed == "Infinity" || trimmed == "+Infinity" {
+                    f64::INFINITY
+                } else if trimmed == "-Infinity" {
+                    f64::NEG_INFINITY
+                } else {
+                    trimmed.parse::<f64>().unwrap_or(f64::NAN)
+                }
+            }
             Value::Array(a) => {
                 let arr = a.borrow();
                 if arr.len() == 1 {
@@ -286,7 +371,7 @@ mod test {
         assert_eq!(Value::Boolean(false).to_string(), "false");
         assert_eq!(Value::Number(42.0).to_string(), "42");
         assert_eq!(Value::String("hello".to_string()).to_string(), "hello");
-        assert_eq!(make_array(vec![]).to_string(), "[]");
+        assert_eq!(make_array(vec![]).to_string(), "");
         assert_eq!(
             make_array(vec![
                 Value::Number(1.0),
@@ -294,7 +379,7 @@ mod test {
                 Value::Number(3.0),
             ])
             .to_string(),
-            "[1, 2, 3]"
+            "1,2,3"
         );
         assert_eq!(make_object().to_string(), "[object Object]");
     }

@@ -23,6 +23,12 @@ pub(crate) enum ObjectProperty {
 }
 
 #[derive(Debug)]
+pub(crate) enum SwitchClause {
+    Case(Box<AstNode>, Box<AstNode>),
+    Default(Box<AstNode>),
+}
+
+#[derive(Debug)]
 pub(crate) enum AstNode {
     Block {
         label: Option<String>,
@@ -37,8 +43,7 @@ pub(crate) enum AstNode {
     Switch {
         label: Option<String>,
         expression: Box<AstNode>,
-        cases: Vec<(AstNode, AstNode)>,
-        default: Option<Box<AstNode>>,
+        clauses: Vec<SwitchClause>,
     },
     While {
         label: Option<String>,
@@ -74,6 +79,17 @@ pub(crate) enum AstNode {
     Continue(Option<String>),
     Break(Option<String>),
     Return(Option<Box<AstNode>>),
+    Throw(Box<AstNode>),
+    Try {
+        try_block: Box<AstNode>,
+        catch_param: Option<String>,
+        catch_block: Option<Box<AstNode>>,
+        finally_block: Option<Box<AstNode>>,
+    },
+    FunctionDeclaration {
+        name: String,
+        template: Rc<(Vec<String>, AstNode)>,
+    },
     Comma(Vec<AstNode>),
 
     Value(Value),
@@ -121,30 +137,34 @@ pub(crate) enum AstNode {
     StrictEquals(Box<AstNode>, Box<AstNode>),
     NotEquals(Box<AstNode>, Box<AstNode>),
     StrictNotEquals(Box<AstNode>, Box<AstNode>),
-    LessThen(Box<AstNode>, Box<AstNode>),
-    LessThenEquals(Box<AstNode>, Box<AstNode>),
-    GreaterThen(Box<AstNode>, Box<AstNode>),
-    GreaterThenEquals(Box<AstNode>, Box<AstNode>),
+    LessThan(Box<AstNode>, Box<AstNode>),
+    LessThanEquals(Box<AstNode>, Box<AstNode>),
+    GreaterThan(Box<AstNode>, Box<AstNode>),
+    GreaterThanEquals(Box<AstNode>, Box<AstNode>),
     LogicalAnd(Box<AstNode>, Box<AstNode>),
     LogicalOr(Box<AstNode>, Box<AstNode>),
     UnaryMinus(Box<AstNode>),
     UnaryLogicalNot(Box<AstNode>),
     UnaryTypeof(Box<AstNode>),
+    UnaryDelete(Box<AstNode>),
+    UnaryVoid(Box<AstNode>),
     UnaryPreIncrement(Box<AstNode>),
     UnaryPreDecrement(Box<AstNode>),
     UnaryPostIncrement(Box<AstNode>),
     UnaryPostDecrement(Box<AstNode>),
+    In(Box<AstNode>, Box<AstNode>),
+    Instanceof(Box<AstNode>, Box<AstNode>),
 
     GetProperty(Box<AstNode>, Box<AstNode>),
 }
 
 pub(crate) struct Parser<'a> {
-    tokens: &'a Vec<Token>,
+    tokens: &'a [Token],
     position: usize,
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn new(tokens: &'a Vec<Token>) -> Self {
+    pub(crate) fn new(tokens: &'a [Token]) -> Self {
         Parser {
             tokens,
             position: 0,
@@ -153,6 +173,42 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn parse(&mut self) -> Result<AstNode, String> {
         self.statements()
+    }
+
+    // Returns the current token as a property name string if it is a valid identifier or keyword.
+    fn peek_as_property_name(&mut self) -> Option<String> {
+        match self.peek() {
+            Token::Variable(name) => Some(name.clone()),
+            // Allow keywords as property names (e.g., Array.of, obj.class)
+            Token::Let => Some("let".into()),
+            Token::Const => Some("const".into()),
+            Token::Var => Some("var".into()),
+            Token::Function => Some("function".into()),
+            Token::Return => Some("return".into()),
+            Token::If => Some("if".into()),
+            Token::Else => Some("else".into()),
+            Token::While => Some("while".into()),
+            Token::Do => Some("do".into()),
+            Token::For => Some("for".into()),
+            Token::Of => Some("of".into()),
+            Token::In => Some("in".into()),
+            Token::Break => Some("break".into()),
+            Token::Continue => Some("continue".into()),
+            Token::Switch => Some("switch".into()),
+            Token::Case => Some("case".into()),
+            Token::Default => Some("default".into()),
+            Token::Try => Some("try".into()),
+            Token::Catch => Some("catch".into()),
+            Token::Finally => Some("finally".into()),
+            Token::Throw => Some("throw".into()),
+            Token::Typeof => Some("typeof".into()),
+            Token::Instanceof => Some("instanceof".into()),
+            Token::Delete => Some("delete".into()),
+            Token::Void => Some("void".into()),
+
+            Token::Null => Some("null".into()),
+            _ => None,
+        }
     }
 
     fn skip_whitespace(&mut self) {
@@ -186,7 +242,10 @@ impl<'a> Parser<'a> {
             // Automatic Semicolon Insertion (ASI) rules
             match self.peek_without_whitespace_skip() {
                 Token::Semicolon | Token::Newline => {
-                    self.next();
+                    // Consume only this one token without calling skip_whitespace() again,
+                    // as next() would skip_whitespace() first and then increment, causing it
+                    // to skip the following real token when the separator is a Newline.
+                    self.position += 1;
                 }
                 Token::RightBrace | Token::Eof => {
                     // ASI: semicolon inserted before }, EOF
@@ -285,8 +344,7 @@ impl<'a> Parser<'a> {
                         self.next();
                         if let Token::LeftBrace = self.peek() {
                             self.next();
-                            let mut cases = Vec::new();
-                            let mut default = None;
+                            let mut clauses = Vec::new();
                             loop {
                                 match self.peek() {
                                     Token::Case => {
@@ -299,7 +357,10 @@ impl<'a> Parser<'a> {
                                             } else {
                                                 self.statements()?
                                             };
-                                            cases.push((case_expr, case_body));
+                                            clauses.push(SwitchClause::Case(
+                                                Box::new(case_expr),
+                                                Box::new(case_body),
+                                            ));
                                         } else {
                                             return Err(String::from(
                                                 "Parser: expected ':' after case expression",
@@ -310,13 +371,15 @@ impl<'a> Parser<'a> {
                                         self.next();
                                         if let Token::Colon = self.peek() {
                                             self.next();
-                                            let default_body = if let Token::LeftBrace = self.peek()
-                                            {
-                                                self.block()?
-                                            } else {
-                                                self.statements()?
-                                            };
-                                            default = Some(Box::new(default_body));
+                                            let default_body =
+                                                if let Token::LeftBrace = self.peek() {
+                                                    self.block()?
+                                                } else {
+                                                    self.statements()?
+                                                };
+                                            clauses.push(SwitchClause::Default(Box::new(
+                                                default_body,
+                                            )));
                                         } else {
                                             return Err(String::from(
                                                 "Parser: expected ':' after default",
@@ -337,8 +400,7 @@ impl<'a> Parser<'a> {
                             Ok(AstNode::Switch {
                                 label,
                                 expression: Box::new(expression),
-                                cases,
-                                default,
+                                clauses,
                             })
                         } else {
                             Err(String::from("Parser: expected '{' after switch expression"))
@@ -584,11 +646,10 @@ impl<'a> Parser<'a> {
                         }
                     }
                     let body = self.block()?;
-                    Ok(AstNode::Assign(
-                        Some(DeclarationType::Var),
-                        Box::new(AstNode::Variable(name)),
-                        Box::new(AstNode::Value(Value::Function(Rc::new((arguments, body))))),
-                    ))
+                    Ok(AstNode::FunctionDeclaration {
+                        name,
+                        template: Rc::new((arguments, body)),
+                    })
                 } else {
                     Err(String::from("Parser: expected '(' after function name"))
                 }
@@ -604,6 +665,75 @@ impl<'a> Parser<'a> {
                         Some(Box::new(self.comma()?))
                     };
                 Ok(AstNode::Return(expr))
+            }
+            Token::Throw => {
+                self.next();
+                if matches!(
+                    self.peek_without_whitespace_skip(),
+                    Token::Semicolon | Token::Newline | Token::RightBrace | Token::Eof
+                ) {
+                    return Err(String::from("Parser: expected expression after 'throw'"));
+                }
+                Ok(AstNode::Throw(Box::new(self.comma()?)))
+            }
+            Token::Try => {
+                self.next();
+                if !matches!(self.peek(), Token::LeftBrace) {
+                    return Err(String::from("Parser: expected block after 'try'"));
+                }
+                let try_block = self.block()?;
+
+                let mut catch_param = None;
+                let mut catch_block = None;
+                let mut finally_block = None;
+
+                if let Token::Catch = self.peek() {
+                    self.next();
+                    if let Token::LeftParen = self.peek() {
+                        self.next();
+                    } else {
+                        return Err(String::from("Parser: expected '(' after 'catch'"));
+                    }
+
+                    if let Token::Variable(var_name) = self.peek() {
+                        catch_param = Some(var_name.clone());
+                        self.next();
+                    } else {
+                        return Err(String::from("Parser: expected catch binding identifier"));
+                    }
+
+                    if let Token::RightParen = self.peek() {
+                        self.next();
+                    } else {
+                        return Err(String::from("Parser: expected ')' after catch binding"));
+                    }
+
+                    if !matches!(self.peek(), Token::LeftBrace) {
+                        return Err(String::from("Parser: expected block after 'catch'"));
+                    }
+                    catch_block = Some(Box::new(self.block()?));
+                }
+
+                if let Token::Finally = self.peek() {
+                    self.next();
+                    if !matches!(self.peek(), Token::LeftBrace) {
+                        return Err(String::from("Parser: expected block after 'finally'"));
+                    }
+                    finally_block = Some(Box::new(self.block()?));
+                }
+
+                if catch_block.is_none() && finally_block.is_none() {
+                    return Err(String::from(
+                        "Parser: expected 'catch' or 'finally' after 'try' block",
+                    ));
+                }
+
+                Ok(AstNode::Try {
+                    try_block: Box::new(try_block),
+                    catch_param,
+                    catch_block,
+                    finally_block,
+                })
             }
             _ => self.comma(),
         }
@@ -746,9 +876,12 @@ impl<'a> Parser<'a> {
                 ))
             }
             _ => {
-                if declaration_type.is_some() {
-                    return Err(String::from(
-                        "Parser: expected '=' after variable declaration",
+                if let (Some(decl_type), AstNode::Variable(var_name)) = (&declaration_type, &lhs) {
+                    // var x; / let x; / const x; without initializer -> declared as undefined
+                    return Ok(AstNode::Assign(
+                        Some(*decl_type),
+                        Box::new(AstNode::Variable(var_name.clone())),
+                        Box::new(AstNode::Value(Value::Undefined)),
                     ));
                 }
                 Ok(lhs)
@@ -799,21 +932,29 @@ impl<'a> Parser<'a> {
         let mut node = self.equality()?;
         loop {
             match self.peek() {
-                Token::LessThen => {
+                Token::LessThan => {
                     self.next();
-                    node = AstNode::LessThen(Box::new(node), Box::new(self.equality()?));
+                    node = AstNode::LessThan(Box::new(node), Box::new(self.equality()?));
                 }
-                Token::LessThenEquals => {
+                Token::LessThanEquals => {
                     self.next();
-                    node = AstNode::LessThenEquals(Box::new(node), Box::new(self.equality()?));
+                    node = AstNode::LessThanEquals(Box::new(node), Box::new(self.equality()?));
                 }
-                Token::GreaterThen => {
+                Token::GreaterThan => {
                     self.next();
-                    node = AstNode::GreaterThen(Box::new(node), Box::new(self.equality()?));
+                    node = AstNode::GreaterThan(Box::new(node), Box::new(self.equality()?));
                 }
-                Token::GreaterThenEquals => {
+                Token::GreaterThanEquals => {
                     self.next();
-                    node = AstNode::GreaterThenEquals(Box::new(node), Box::new(self.equality()?));
+                    node = AstNode::GreaterThanEquals(Box::new(node), Box::new(self.equality()?));
+                }
+                Token::In => {
+                    self.next();
+                    node = AstNode::In(Box::new(node), Box::new(self.equality()?));
+                }
+                Token::Instanceof => {
+                    self.next();
+                    node = AstNode::Instanceof(Box::new(node), Box::new(self.equality()?));
                 }
                 _ => break,
             }
@@ -965,6 +1106,14 @@ impl<'a> Parser<'a> {
                 self.next();
                 Ok(AstNode::UnaryTypeof(Box::new(self.unary()?)))
             }
+            Token::Delete => {
+                self.next();
+                Ok(AstNode::UnaryDelete(Box::new(self.unary()?)))
+            }
+            Token::Void => {
+                self.next();
+                Ok(AstNode::UnaryVoid(Box::new(self.unary()?)))
+            }
             _ => {
                 let node = self.primary();
                 self.postfix(node)
@@ -978,8 +1127,8 @@ impl<'a> Parser<'a> {
             match self.peek() {
                 Token::Period => {
                     self.next();
-                    if let Token::Variable(prop_name) = self.peek() {
-                        let property = AstNode::Value(Value::String(prop_name.clone()));
+                    if let Some(prop_name) = self.peek_as_property_name() {
+                        let property = AstNode::Value(Value::String(prop_name));
                         self.next();
                         node = AstNode::GetProperty(Box::new(node), Box::new(property));
                     } else {
@@ -1073,10 +1222,10 @@ impl<'a> Parser<'a> {
                         }
                     }
                     let body = self.arrow_function_body()?;
-                    return Ok(AstNode::Value(Value::Function(Rc::new((
-                        function_args,
-                        body,
-                    )))));
+                    return Ok(AstNode::Value(Value::Function(
+                        Rc::new((function_args, body)),
+                        Box::new(vec![]),
+                    )));
                 }
 
                 Ok(node)
@@ -1194,7 +1343,7 @@ impl<'a> Parser<'a> {
                                 }
                                 let property_value = if let Token::LeftBrace = self.peek() {
                                     let body = self.block()?;
-                                    AstNode::Value(Value::Function(Rc::new((params, body))))
+                                    AstNode::Value(Value::Function(Rc::new((params, body)), Box::new(vec![])))
                                 } else {
                                     return Err(String::from(
                                         "Parser: expected '{' for method body",
@@ -1245,12 +1394,63 @@ impl<'a> Parser<'a> {
                 if let Token::Arrow = self.peek() {
                     self.next();
                     let body = self.arrow_function_body()?;
-                    Ok(AstNode::Value(Value::Function(Rc::new((
-                        vec![variable],
-                        body,
-                    )))))
+                    Ok(AstNode::Value(Value::Function(
+                        Rc::new((vec![variable], body)),
+                        Box::new(vec![]),
+                    )))
                 } else {
                     Ok(node)
+                }
+            }
+            Token::Function => {
+                self.next();
+                // Optional name for named function expression
+                let _name = if let Token::Variable(_) = self.peek() {
+                    if let Token::Variable(var_name) = self.peek() {
+                        let n = var_name.clone();
+                        self.next();
+                        Some(n)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                if let Token::LeftParen = self.peek() {
+                    self.next();
+                    let mut arguments = Vec::new();
+                    if let Token::RightParen = self.peek() {
+                        self.next();
+                    } else {
+                        loop {
+                            if let Token::Variable(arg_name) = self.peek() {
+                                arguments.push(arg_name.clone());
+                                self.next();
+                            } else {
+                                return Err(String::from(
+                                    "Parser: expected argument name in function expression",
+                                ));
+                            }
+                            match self.peek() {
+                                Token::Comma => {
+                                    self.next();
+                                }
+                                Token::RightParen => {
+                                    self.next();
+                                    break;
+                                }
+                                _ => {
+                                    return Err(String::from(
+                                        "Parser: expected ',' or ')' in function expression arguments",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    let body = self.block()?;
+                    Ok(AstNode::Value(Value::Function(Rc::new((arguments, body)), Box::new(vec![]))))
+                } else {
+                    Err(String::from("Parser: expected '(' in function expression"))
                 }
             }
             _ => Err(format!("Parser: unknown node type: {:?}", self.peek())),

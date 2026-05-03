@@ -112,3 +112,25 @@ fn test_increment_decrement() {
     assert_js(Value::Number(9.0), "let a = 10; let b = --a; b");
     assert_js(Value::Number(10.0), "let a = 10; let b = a--; b");
 }
+
+#[test]
+fn test_es3_operators() {
+    assert_js(Value::Undefined, "void 42");
+    assert_js(Value::Number(2.0), "let side = 1; void (side = 2); side");
+    assert_js(Value::Boolean(true), "let obj = { a: 1 }; delete obj.a");
+    assert_js(Value::Undefined, "let obj = { a: 1 }; delete obj.a; obj.a");
+    assert_js(Value::Boolean(true), "let arr = [10, 20]; delete arr[1]");
+    assert_js(
+        Value::Undefined,
+        "let arr = [10, 20]; delete arr[1]; arr[1]",
+    );
+    assert_js(Value::Boolean(true), "let obj = { a: 1 }; 'a' in obj");
+    assert_js(Value::Boolean(false), "let obj = { a: 1 }; 'b' in obj");
+    assert_js(Value::Boolean(true), "let arr = [10, 20]; 1 in arr");
+    assert_js(Value::Boolean(false), "let arr = [10, 20]; 2 in arr");
+    assert_js(Value::Boolean(true), "let arr = [10, 20]; 'length' in arr");
+    assert_js(
+        Value::String(String::from("undefined")),
+        "typeof missingValue",
+    );
+}

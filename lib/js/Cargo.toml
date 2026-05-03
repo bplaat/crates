@@ -10,3 +10,4 @@ workspace = true
 
 [dependencies]
 indexmap = "2.12"
+serde_json = { version = "1", default-features = false, features = ["std", "preserve_order"] }

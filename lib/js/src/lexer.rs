@@ -44,6 +44,13 @@ pub(crate) enum Token {
     Of,
     Function,
     Return,
+    Throw,
+    Try,
+    Catch,
+    Finally,
+    Delete,
+    Void,
+    Instanceof,
 
     Assign,
     AddAssign,
@@ -76,10 +83,10 @@ pub(crate) enum Token {
     LeftShift,
     SignedRightShift,
     UnsignedRightShift,
-    LessThen,
-    LessThenEquals,
-    GreaterThen,
-    GreaterThenEquals,
+    LessThan,
+    LessThanEquals,
+    GreaterThan,
+    GreaterThanEquals,
     Equals,
     NotEquals,
     StrictEquals,
@@ -100,11 +107,13 @@ impl Keyword {
     }
 }
 
-const KEYWORDS: [Keyword; 21] = [
+const KEYWORDS: [Keyword; 28] = [
     Keyword::new("null", Token::Null),
     Keyword::new("true", Token::Boolean(true)),
     Keyword::new("false", Token::Boolean(false)),
     Keyword::new("typeof", Token::Typeof),
+    Keyword::new("delete", Token::Delete),
+    Keyword::new("void", Token::Void),
     Keyword::new("var", Token::Var),
     Keyword::new("let", Token::Let),
     Keyword::new("const", Token::Const),
@@ -119,9 +128,14 @@ const KEYWORDS: [Keyword; 21] = [
     Keyword::new("continue", Token::Continue),
     Keyword::new("for", Token::For),
     Keyword::new("in", Token::In),
+    Keyword::new("instanceof", Token::Instanceof),
     Keyword::new("of", Token::Of),
     Keyword::new("function", Token::Function),
     Keyword::new("return", Token::Return),
+    Keyword::new("throw", Token::Throw),
+    Keyword::new("try", Token::Try),
+    Keyword::new("catch", Token::Catch),
+    Keyword::new("finally", Token::Finally),
 ];
 
 // NOTE: Sort by length descending to match longest first
@@ -146,8 +160,8 @@ const SYMBOLS: [Keyword; 53] = [
     Keyword::new("^=", Token::BitwiseXorAssign),
     Keyword::new("<<", Token::LeftShift),
     Keyword::new(">>", Token::SignedRightShift),
-    Keyword::new("<=", Token::LessThenEquals),
-    Keyword::new(">=", Token::GreaterThenEquals),
+    Keyword::new("<=", Token::LessThanEquals),
+    Keyword::new(">=", Token::GreaterThanEquals),
     Keyword::new("&&", Token::LogicalAnd),
     Keyword::new("||", Token::LogicalOr),
     Keyword::new("**", Token::Exponentiation),
@@ -176,8 +190,8 @@ const SYMBOLS: [Keyword; 53] = [
     Keyword::new("|", Token::BitwiseOr),
     Keyword::new("^", Token::BitwiseXor),
     Keyword::new("~", Token::BitwiseNot),
-    Keyword::new("<", Token::LessThen),
-    Keyword::new(">", Token::GreaterThen),
+    Keyword::new("<", Token::LessThan),
+    Keyword::new(">", Token::GreaterThan),
     Keyword::new("!", Token::LogicalNot),
 ];
 
@@ -379,10 +393,10 @@ impl Lexer {
                 continue;
             }
 
-            if char.is_alphabetic() {
+            if char.is_alphabetic() || char == '_' || char == '$' {
                 let mut variable = String::from(char);
                 while let Some(char) = self.peek() {
-                    if !char.is_alphanumeric() {
+                    if !char.is_alphanumeric() && *char != '_' && *char != '$' {
                         break;
                     }
                     variable.push(self.next().expect("Should be some"));

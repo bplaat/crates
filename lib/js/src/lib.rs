@@ -7,11 +7,11 @@
 #![doc = include_str!("../README.md")]
 
 pub use context::Context;
-pub use value::Value;
+pub use value::{ArrayValue, ObjectValue, Value};
 
+mod builtins;
 mod context;
 mod interpreter;
 mod lexer;
 mod parser;
-mod stdlib;
 mod value;
