@@ -42,10 +42,9 @@ jobs:
           - name: Linux aarch64
             runner: ubuntu-24.04-arm
             cache-key: linux-aarch64
-          # FIXME: Uncomment when https://github.com/cargo-bins/cargo-binstall/issues/2522 is fixed
-          # - name: Linux riscv64
-          #   runner: ubuntu-24.04-riscv
-          #   cache-key: linux-riscv64
+          - name: Linux riscv64
+            runner: ubuntu-24.04-riscv
+            cache-key: linux-riscv64
           - name: macOS aarch64
             runner: macos-15
             cache-key: macos-aarch64
