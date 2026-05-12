@@ -476,6 +476,17 @@ name = "percent-encoding"
 version = "2.3.3+patch"
 
 [[package]]
+name = "pixelfont"
+version = "0.1.0"
+dependencies = [
+ "bwebview",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "winresource",
+]
+
+[[package]]
 name = "pkg-config"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"

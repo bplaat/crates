@@ -1,0 +1,27 @@
+[package]
+name = "pixelfont"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[package.metadata.bundle]
+name = "Pixel Font Editor"
+identifier = "nl.bplaat.PixelFontEditor"
+copyright = "Copyright © 2026 Bastiaan van der Plaat"
+icon = "meta/macos/icon.icon"
+
+[lints]
+workspace = true
+
+[dependencies]
+bwebview = { path = "../../lib/bwebview", features = [
+    "rust-embed",
+    "file_dialog",
+] }
+rust-embed = "8.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[build-dependencies]
+winresource = "0.1.29"

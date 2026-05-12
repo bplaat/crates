@@ -101,6 +101,7 @@ build_bundle() {
     cargo install --path bin/cargo-bundle
     cargo bundle --path bin/bassielight
     cargo bundle --path bin/manexplorer
+    cargo bundle --path bin/pixelfont
     cargo bundle --path bin/sequelexplorer
     cargo bundle --path bin/navidrome
     cargo bundle --path bin/game2048
@@ -131,17 +132,20 @@ install() {
         build_bundle
         cp -r target/bundle/bassielight/BassieLight.app /Applications
         cp -r target/bundle/manexplorer/ManExplorer.app /Applications
+        cp -r "target/bundle/pixelfont/Pixel Font Editor.app" /Applications
         cp -r "target/bundle/sequelexplorer/Sequel Explorer.app" /Applications
         cp -r target/bundle/navidrome/Navidrome.app /Applications
         cp -r target/bundle/game2048/2048.app /Applications
     elif [ "$(uname)" = "MINGW64_NT" ] || [ -n "$USERPROFILE" ]; then
         build_install_windows bassielight BassieLight
+        build_install_windows pixelfont PixelFontEditor
         build_install_windows sequelexplorer SequelExplorer
         build_install_windows navidrome Navidrome
         build_install_windows game2048 2048
     else
         mkdir -p ~/.local/bin ~/.local/share/applications ~/.local/share/icons
         build_install_freedesktop bassielight BassieLight
+        build_install_freedesktop pixelfont PixelFontEditor
         build_install_freedesktop sequelexplorer SequelExplorer
         build_install_freedesktop manexplorer ManExplorer
         build_install_freedesktop navidrome Navidrome

@@ -1,0 +1,137 @@
+<!--
+    Copyright (c) 2026 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>8x8 Pixel Font Editor</title>
+        <link rel="stylesheet" href="/index.css" />
+    </head>
+    <body>
+        <div id="app" @vue:mounted="init">
+            <div class="app">
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <button class="btn" @click="newFile">New</button>
+                    <button class="btn" @click="openFile">Open</button>
+                    <button class="btn" @click="saveFile">Save</button>
+                    <button class="btn" @click="saveFileAs">Save As</button>
+                    <span class="toolbar-filename">{{ fontFileName || 'Untitled' }}</span>
+                    <div class="toolbar-spacer"></div>
+                    <button class="btn" @click="exportAsm">Export ASM</button>
+                    <button class="btn" @click="exportC">Export C</button>
+                </div>
+
+                <!-- Character grid -->
+                <div class="char-grid-wrap">
+                    <div class="char-grid-scroll">
+                        <table class="char-grid">
+                            <thead>
+                                <tr>
+                                    <th class="grid-corner"></th>
+                                    <th v-for="col in 16" :key="col - 1" class="grid-header">
+                                        {{ (col - 1).toString(16).toUpperCase() }}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="row in 16" :key="row - 1">
+                                    <td class="grid-header">{{ (row - 1).toString(16).toUpperCase() }}</td>
+                                    <td
+                                        v-for="col in 16"
+                                        :key="col - 1"
+                                        class="grid-cell"
+                                        :class="{ 'is-selected': selectedChar === (row - 1) * 16 + (col - 1) }"
+                                        @click="selectChar((row - 1) * 16 + (col - 1))"
+                                    >
+                                        <canvas
+                                            :data-char="(row - 1) * 16 + (col - 1)"
+                                            width="8"
+                                            height="8"
+                                            class="char-canvas"
+                                        ></canvas>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Editor area -->
+                <div class="editor-area">
+                    <!-- Left: operation buttons -->
+                    <div class="editor-ops">
+                        <button class="op-btn" @click="opClear">Clear</button>
+                        <button class="op-btn" @click="opInvert">Invert</button>
+                        <button class="op-btn" @click="opRotate">Rotate</button>
+                        <button class="op-btn" @click="opMirror">Mirror</button>
+                        <div class="op-divider"></div>
+                        <button class="op-btn op-btn-sm" @click="opClearAll">Clear All</button>
+                        <button class="op-btn op-btn-sm" @click="opInvertAll">Invert All</button>
+                        <button class="op-btn op-btn-sm" @click="opRotateAll">Rotate All</button>
+                        <button class="op-btn op-btn-sm" @click="opMirrorAll">Mirror All</button>
+                    </div>
+
+                    <!-- Center: pixel editor -->
+                    <div class="pixel-editor">
+                        <div class="pixel-editor-inner">
+                            <!-- Bit labels header -->
+                            <div class="pixel-header">
+                                <div class="row-label-spacer"></div>
+                                <div class="pixel-bit-labels">
+                                    <div v-for="bit in 8" :key="8 - bit" class="bit-label">{{ 8 - bit }}</div>
+                                </div>
+                            </div>
+                            <!-- Row labels + grid + hex values -->
+                            <div class="pixel-grid-wrap">
+                                <div class="pixel-row-labels">
+                                    <div v-for="row in 8" :key="row - 1" class="row-label">{{ row - 1 }}</div>
+                                </div>
+                                <div
+                                    class="pixel-grid"
+                                    ref="pixelGrid"
+                                    @pointerdown.prevent="gridDown($event)"
+                                    @pointermove="gridMove($event)"
+                                    @pointerup="gridUp($event)"
+                                    @pointerleave="gridUp($event)"
+                                >
+                                    <div v-for="row in 8" :key="row - 1" class="pixel-row-cells">
+                                        <div
+                                            v-for="col in 8"
+                                            :key="col - 1"
+                                            class="pixel-cell"
+                                            :class="{ 'is-on': getPixel(row - 1, col - 1) }"
+                                        ></div>
+                                    </div>
+                                </div>
+                                <div class="pixel-hex-values">
+                                    <div v-for="row in 8" :key="row - 1" class="row-hex">
+                                        <span class="row-dec">{{ getRowDec(row - 1) }}</span>
+                                        <span class="row-hexval">0x{{ getRowHex(row - 1) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Char info aligned with pixel cells -->
+                            <div class="char-info-row">
+                                <div class="char-info">{{ charInfoText }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: copy/paste -->
+                    <div class="editor-actions">
+                        <canvas ref="previewCanvas" width="8" height="8" class="preview-canvas"></canvas>
+                        <button class="op-btn" @click="copyChar">Copy</button>
+                        <button class="op-btn" @click="pasteChar">Paste</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="/petite-vue.min.js"></script>
+        <script src="/index.js"></script>
+    </body>
+</html>

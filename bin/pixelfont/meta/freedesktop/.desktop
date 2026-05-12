@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Pixel Font Editor
+Exec=PixelFontEditor
+Icon=PixelFontEditor
+Terminal=false
+Categories=Utility;
