@@ -8,10 +8,15 @@
     <head>
         <meta charset="UTF-8" />
         <title>8x8 Pixel Font Editor</title>
+        <style>
+            [v-cloak] {
+                display: none;
+            }
+        </style>
         <link rel="stylesheet" href="/index.css" />
     </head>
     <body>
-        <div id="app" @vue:mounted="init">
+        <div id="app" v-cloak @vue:mounted="init">
             <div class="app">
                 <!-- Toolbar -->
                 <div class="toolbar">

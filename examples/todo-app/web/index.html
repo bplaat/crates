@@ -8,10 +8,15 @@
     <head>
         <meta charset="UTF-8" />
         <title>Todo App</title>
+        <style>
+            [v-cloak] {
+                display: none;
+            }
+        </style>
         <link rel="stylesheet" href="/index.css" />
     </head>
     <body>
-        <div id="app" @vue:mounted="loadTodos">
+        <div id="app" v-cloak @vue:mounted="loadTodos">
             <h1>Todo App</h1>
             <form @submit="addTodo">
                 <input type="text" v-model="input" placeholder="Add a todo" />
