@@ -74,8 +74,8 @@ fn main() {
     #[allow(unused_mut)]
     let mut window = WindowBuilder::new()
         .title("8x8 Pixel Font Editor")
-        .size(LogicalSize::new(620.0, 860.0))
-        .min_size(LogicalSize::new(620.0, 440.0))
+        .size(LogicalSize::new(640.0, 860.0))
+        .min_size(LogicalSize::new(640.0, 520.0))
         .center()
         .remember_window_state()
         .build();
