@@ -72,12 +72,18 @@
                         <button class="op-btn" @click="opClear">Clear</button>
                         <button class="op-btn" @click="opInvert">Invert</button>
                         <button class="op-btn" @click="opRotate">Rotate</button>
-                        <button class="op-btn" @click="opMirror">Mirror</button>
+                        <div class="op-btn-row">
+                            <button class="op-btn" @click="opMirrorH">Mirror H</button>
+                            <button class="op-btn" @click="opMirrorV">Mirror V</button>
+                        </div>
                         <div class="op-divider"></div>
                         <button class="op-btn op-btn-sm" @click="opClearAll">Clear All</button>
                         <button class="op-btn op-btn-sm" @click="opInvertAll">Invert All</button>
                         <button class="op-btn op-btn-sm" @click="opRotateAll">Rotate All</button>
-                        <button class="op-btn op-btn-sm" @click="opMirrorAll">Mirror All</button>
+                        <div class="op-btn-row">
+                            <button class="op-btn op-btn-sm" @click="opMirrorHAll">Mirror H All</button>
+                            <button class="op-btn op-btn-sm" @click="opMirrorVAll">Mirror V All</button>
+                        </div>
                     </div>
 
                     <!-- Center: pixel editor -->

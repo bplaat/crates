@@ -75,7 +75,17 @@ function opRotateBytes(bytes) {
     return result;
 }
 
-function opMirrorBytes(bytes) {
+function opMirrorHBytes(bytes) {
+    return new Uint8Array(
+        bytes.map((b) => {
+            let r = 0;
+            for (let i = 0; i < 8; i++) r |= ((b >> i) & 1) << (7 - i);
+            return r;
+        }),
+    );
+}
+
+function opMirrorVBytes(bytes) {
     return new Uint8Array([...bytes].reverse());
 }
 
@@ -410,8 +420,11 @@ PetiteVue.createApp({
     opRotate() {
         this._opChar((b) => opRotateBytes(b));
     },
-    opMirror() {
-        this._opChar((b) => opMirrorBytes(b));
+    opMirrorH() {
+        this._opChar((b) => opMirrorHBytes(b));
+    },
+    opMirrorV() {
+        this._opChar((b) => opMirrorVBytes(b));
     },
 
     // Copy hex bytes to clipboard
@@ -465,7 +478,10 @@ PetiteVue.createApp({
     opRotateAll() {
         this._applyToAll((b) => opRotateBytes(b));
     },
-    opMirrorAll() {
-        this._applyToAll((b) => opMirrorBytes(b));
+    opMirrorHAll() {
+        this._applyToAll((b) => opMirrorHBytes(b));
+    },
+    opMirrorVAll() {
+        this._applyToAll((b) => opMirrorVBytes(b));
     },
 }).mount('#app');

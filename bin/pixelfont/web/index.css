@@ -222,7 +222,15 @@ body {
     gap: 0.35rem;
     flex-shrink: 0;
     justify-content: flex-start;
-    min-width: 6.5rem;
+    min-width: 12rem;
+}
+
+.op-btn-row {
+    display: flex;
+    gap: 0.35rem;
+}
+.op-btn-row .op-btn {
+    flex: 1;
 }
 
 .op-btn {
