@@ -14,9 +14,9 @@
     --color-sidebar-background: #f6f6f6;
     --color-scrollbar: rgba(0, 0, 0, 0.1);
     --color-tab-hover: #e8e8e8;
-    --color-pixel-on: #111;
-    --color-pixel-off: #fff;
-    --color-pixel-grid: #ddd;
+    --color-pixel-on: #000;
+    --color-pixel-off: #f0f0f0;
+    --color-pixel-grid: #ccc;
     --color-char-selected: #4caf50;
     --color-char-selected-bg: #e8f5e9;
 }
@@ -182,11 +182,11 @@ body {
     color: var(--color-text-secondary);
     text-align: center;
     padding: 0.1rem 0.15rem;
-    min-width: 24px; /* 18px canvas + 2*3px padding */
+    min-width: 26px; /* 24px canvas + 2*1px padding */
 }
 
 .grid-cell {
-    padding: 3px;
+    padding: 2px;
     cursor: pointer;
 }
 .grid-cell:hover {
@@ -194,14 +194,13 @@ body {
 }
 .grid-cell.is-selected {
     background: var(--color-char-selected-bg);
+}
+.grid-cell.is-selected .char-canvas {
     outline: 2px solid var(--color-char-selected);
-    outline-offset: -2px;
 }
 
 .char-canvas {
     display: block;
-    width: 18px;
-    height: 18px;
     image-rendering: pixelated;
 }
 
@@ -385,10 +384,7 @@ body {
 
 .preview-canvas {
     display: block;
-    width: 40px;
-    height: 40px;
     image-rendering: pixelated;
     border: 1px solid var(--color-border);
-    background: var(--color-pixel-off);
     margin-bottom: 0.2rem;
 }

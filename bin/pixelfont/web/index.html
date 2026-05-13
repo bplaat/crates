@@ -54,8 +54,8 @@
                                     >
                                         <canvas
                                             :data-char="(row - 1) * 16 + (col - 1)"
-                                            width="8"
-                                            height="8"
+                                            width="24"
+                                            height="24"
                                             class="char-canvas"
                                         ></canvas>
                                     </td>
@@ -128,7 +128,7 @@
 
                     <!-- Right: copy/paste -->
                     <div class="editor-actions">
-                        <canvas ref="previewCanvas" width="8" height="8" class="preview-canvas"></canvas>
+                        <canvas ref="previewCanvas" width="40" height="40" class="preview-canvas"></canvas>
                         <button class="op-btn" @click="copyChar">Copy</button>
                         <button class="op-btn" @click="pasteChar">Paste</button>
                     </div>

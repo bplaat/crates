@@ -79,14 +79,15 @@ function opMirrorBytes(bytes) {
     return new Uint8Array([...bytes].reverse());
 }
 
-// Draw a char onto a canvas (2-color: on/off from CSS vars)
+// Draw a char onto a canvas (2-color: on/off from CSS vars, scale derived from canvas.width)
 function renderCharCanvas(canvas, bytes) {
+    const scale = canvas.width / 8;
     const ctx = canvas.getContext('2d');
     const style = getComputedStyle(document.documentElement);
     const onColor = style.getPropertyValue('--color-pixel-on').trim();
     const offColor = style.getPropertyValue('--color-pixel-off').trim();
 
-    const img = ctx.createImageData(8, 8);
+    const img = ctx.createImageData(canvas.width, canvas.height);
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
             const on = !!(bytes[row] & (1 << (7 - col)));
@@ -102,11 +103,15 @@ function renderCharCanvas(canvas, bytes) {
                 g = parseInt(hex.slice(2, 4), 16);
                 b = parseInt(hex.slice(4, 6), 16);
             }
-            const idx = (row * 8 + col) * 4;
-            img.data[idx] = r;
-            img.data[idx + 1] = g;
-            img.data[idx + 2] = b;
-            img.data[idx + 3] = 255;
+            for (let sy = 0; sy < scale; sy++) {
+                for (let sx = 0; sx < scale; sx++) {
+                    const idx = ((row * scale + sy) * canvas.width + (col * scale + sx)) * 4;
+                    img.data[idx] = r;
+                    img.data[idx + 1] = g;
+                    img.data[idx + 2] = b;
+                    img.data[idx + 3] = 255;
+                }
+            }
         }
     }
     ctx.putImageData(img, 0, 0);
