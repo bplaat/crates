@@ -14,7 +14,7 @@ use std::time::Duration;
 use bwebview::{
     Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
 };
-use log::{error, info};
+use log::info;
 use rust_embed::Embed;
 use small_http::Response;
 use small_websocket::Message;
@@ -57,15 +57,7 @@ fn main() {
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
 
     // Start DMX thread
-    thread::spawn(move || {
-        if let Some(device) = usb::find_udmx_device() {
-            info!("uDMX device found: {device:?}");
-            dmx::dmx_thread(Some(device), cloned_config);
-        } else {
-            error!("No uDMX device found");
-            dmx::dmx_thread(None, cloned_config);
-        }
-    });
+    thread::spawn(move || dmx::dmx_thread(cloned_config));
 
     // Try to get local IP address, fallback to localhost if it fails
     let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, PORT))

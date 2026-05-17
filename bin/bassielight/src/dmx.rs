@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ * Copyright (c) 2023-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -9,11 +9,12 @@ use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
-use log::trace;
-use rusb::{Context, Device};
+use log::{info, trace, warn};
+use rusb::{Context, DeviceHandle};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{Config, DMX_SWITCHES_LENGTH, FixtureType};
+use crate::usb;
 
 // MARK: Color
 #[derive(Debug, Copy, Clone)]
@@ -120,9 +121,20 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
 });
 
 // MARK: DMX Thread
-/// Starts the DMX output thread for the given device using the given configuration.
-pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
-    let handle = device.map(|dev| dev.open().expect("Failed to open uDMX device"));
+pub(crate) fn dmx_thread(config: Config) {
+    let mut handle: Option<DeviceHandle<Context>> = usb::open_udmx_handle();
+    if handle.is_some() {
+        info!("uDMX device opened");
+    }
+
+    // Only send channels up to the last one used by a fixture to keep transfers short
+    let send_length = config
+        .fixtures
+        .iter()
+        .map(|f| f.addr - 1 + f.r#type.channel_count())
+        .max()
+        .unwrap_or(config.dmx_length)
+        .min(config.dmx_length);
 
     let mut dmx = vec![0u8; config.dmx_length];
     let mut previous_toggle_speed = None;
@@ -130,6 +142,7 @@ pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
     let mut is_toggle_color = false;
     let mut strobe_time = SystemTime::now();
     let mut is_strobe = false;
+    let mut consecutive_errors: u32 = 0;
 
     loop {
         let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
@@ -303,22 +316,38 @@ pub(crate) fn dmx_thread(device: Option<Device<Context>>, config: Config) {
             }
         }
 
-        // Send DMX data
-        if let Some(handle) = &handle {
-            handle
-                .write_control(
-                    rusb::request_type(
-                        rusb::Direction::Out,
-                        rusb::RequestType::Vendor,
-                        rusb::Recipient::Device,
-                    ),
-                    0x02,
-                    config.dmx_length as u16,
-                    0,
-                    &dmx,
-                    Duration::from_millis(0),
-                )
-                .expect("Can't write to uDMX device");
+        // Send DMX data, use RECIPIENT_INTERFACE as required by the uDMX firmware
+        let write_err = if let Some(h) = &handle {
+            h.write_control(
+                rusb::request_type(
+                    rusb::Direction::Out,
+                    rusb::RequestType::Vendor,
+                    rusb::Recipient::Interface,
+                ),
+                0x02,
+                send_length as u16,
+                0,
+                &dmx[..send_length],
+                Duration::from_millis(500),
+            )
+            .err()
+        } else {
+            None
+        };
+        if let Some(err) = write_err {
+            consecutive_errors += 1;
+            if consecutive_errors >= 10 {
+                warn!("Can't write to uDMX device: {err}, reconnecting...");
+                drop(handle.take());
+                sleep(Duration::from_millis(200));
+                handle = usb::open_udmx_handle();
+                if handle.is_some() {
+                    info!("Reconnected to uDMX device");
+                    consecutive_errors = 0;
+                }
+            }
+        } else {
+            consecutive_errors = 0;
         }
         sleep(Duration::from_millis(1000 / config.dmx_fps));
     }

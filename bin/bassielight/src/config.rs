@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2025 Leonard van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -26,6 +27,18 @@ pub(crate) enum FixtureType {
     AyraCompar20,
     #[serde(rename = "showtec_multidim_mkii")]
     ShowtecMultidimMKII,
+}
+
+impl FixtureType {
+    pub(crate) fn channel_count(&self) -> usize {
+        match self {
+            FixtureType::AmericanDJP56Led => 6,
+            FixtureType::AmericanDJMegaTripar => 7,
+            FixtureType::AyraCompar10 => 8,
+            FixtureType::AyraCompar20 => 6,
+            FixtureType::ShowtecMultidimMKII => DMX_SWITCHES_LENGTH,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
