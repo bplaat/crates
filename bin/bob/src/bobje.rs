@@ -63,8 +63,6 @@ pub(crate) struct Bobje {
     pub manifest_dir: String,
     pub manifest: Manifest,
     pub jar: Option<JarDependency>,
-    #[cfg(feature = "javac-server")]
-    pub use_javac_server: bool,
     pub source_files: Vec<String>,
     pub dependencies: HashMap<String, Bobje>,
 }
@@ -242,8 +240,6 @@ impl Bobje {
             manifest_dir: manifest_dir.to_string(),
             manifest,
             jar: None,
-            #[cfg(feature = "javac-server")]
-            use_javac_server: !args.disable_javac_server,
             source_files,
             dependencies,
         };
@@ -335,8 +331,6 @@ impl Bobje {
             manifest_dir: "".to_string(),
             manifest: Manifest::default(),
             jar: Some(jar.clone()),
-            #[cfg(feature = "javac-server")]
-            use_javac_server: !args.disable_javac_server,
             source_files: vec![],
             dependencies: HashMap::new(),
         };

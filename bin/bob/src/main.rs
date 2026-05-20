@@ -25,7 +25,6 @@ mod bobje;
 mod executor;
 mod log;
 mod manifest;
-mod services;
 mod tasks;
 mod utils;
 
@@ -141,11 +140,6 @@ fn main() {
     let mut executor = ExecutorBuilder::new();
     let bobje = Bobje::new(&args, ".", &mut executor, true);
     let mut executor = executor.build(&format!("{}/bob.log", &args.target_dir));
-
-    #[cfg(feature = "javac-server")]
-    if tasks::jvm::detect_java(&bobje.source_files) && !args.disable_javac_server {
-        services::javac::start_javac_server();
-    }
 
     executor.execute(args.verbose, args.thread_count);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -35,14 +35,11 @@ pub(crate) fn detect_kotlin(source_files: &[String]) -> bool {
 pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
     let classes_dir = format!("{}/classes", bobje.out_dir());
     fs::create_dir_all(&classes_dir).expect("Failed to create classes directory");
-    #[cfg(feature = "javac-server")]
-    let absolute_classes_dir = fs::canonicalize(&classes_dir)
-        .expect("Can't canonicalize classes dir")
-        .display()
-        .to_string();
 
     let modules = find_modules(bobje);
     let module_deps = find_dependencies(&modules);
+
+    let javac_bin = jdk_bin("javac");
 
     let mut javac_flags = "-Xlint -Werror".to_string();
     if bobje.profile == Profile::Debug {
@@ -60,13 +57,6 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
     }
 
     let mut classpath = String::new();
-    #[cfg(feature = "javac-server")]
-    classpath.push_str(if bobje.use_javac_server {
-        &absolute_classes_dir
-    } else {
-        &classes_dir
-    });
-    #[cfg(not(feature = "javac-server"))]
     classpath.push_str(&classes_dir);
 
     if !bobje.manifest.build.classpath.is_empty() {
@@ -76,16 +66,6 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
                 exit(1);
             }
             classpath.push_str(CLASSPATH_SEPARATOR);
-            #[cfg(feature = "javac-server")]
-            classpath.push_str(&if bobje.use_javac_server {
-                fs::canonicalize(path)
-                    .expect("Should be some")
-                    .display()
-                    .to_string()
-            } else {
-                path.to_string()
-            });
-            #[cfg(not(feature = "javac-server"))]
             classpath.push_str(path);
         }
     }
@@ -125,55 +105,11 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
             .source_files
             .iter()
             .filter(|f| f.ends_with(".java"))
-            .map(|f| {
-                #[cfg(feature = "javac-server")]
-                if bobje.use_javac_server {
-                    if !Path::new(f).exists() {
-                        fs::create_dir_all(
-                            Path::new(f).parent().expect("Failed to get parent dir"),
-                        )
-                        .expect("Failed to create parent dir");
-                        fs::write(f, "").expect("Failed to create missing file");
-                    }
-                    fs::canonicalize(f)
-                        .expect("Should be some")
-                        .display()
-                        .to_string()
-                } else {
-                    f.to_string()
-                }
-                #[cfg(not(feature = "javac-server"))]
-                f.to_string()
-            })
+            .map(|f| f.to_string())
             .collect::<Vec<_>>();
         if !java_files.is_empty() {
-            #[cfg(feature = "javac-server")]
-            if bobje.use_javac_server {
-                actions.push(TaskAction::SendMsg(
-                    crate::services::javac::javac_server_socket()
-                        .display()
-                        .to_string(),
-                    format!(
-                        "javac {} -cp {} -d {} {}",
-                        javac_flags,
-                        classpath,
-                        absolute_classes_dir,
-                        java_files.join(" ")
-                    ),
-                ));
-            } else {
-                actions.push(TaskAction::Command(format!(
-                    "javac {} -cp {} -d {} {}",
-                    javac_flags,
-                    classpath,
-                    classes_dir,
-                    java_files.join(" ")
-                )));
-            }
-
-            #[cfg(not(feature = "javac-server"))]
             actions.push(TaskAction::Command(format!(
-                "javac {} -cp {} -d {} {}",
+                "{javac_bin} {} -cp {} -d {} {}",
                 javac_flags,
                 classpath,
                 classes_dir,
@@ -230,7 +166,8 @@ pub(crate) fn generate_javac_kotlinc_tasks(bobje: &Bobje, executor: &mut Executo
 }
 
 pub(crate) fn run_java_class(bobje: &Bobje) -> ! {
-    let status = Command::new("java")
+    let java_bin = jdk_bin("java");
+    let status = Command::new(&java_bin)
         .arg("-cp")
         .arg(format!("{}/classes", bobje.out_dir()))
         .arg(find_main_class(bobje).unwrap_or_else(|| {
@@ -243,7 +180,8 @@ pub(crate) fn run_java_class(bobje: &Bobje) -> ! {
 }
 
 pub(crate) fn run_junit_tests(bobje: &Bobje) -> ! {
-    let mut cmd = Command::new("java");
+    let java_bin = jdk_bin("java");
+    let mut cmd = Command::new(&java_bin);
     cmd.arg("-cp")
         .arg(format!("{}/classes", bobje.out_dir()))
         .arg("org.junit.runner.JUnitCore");
@@ -361,10 +299,11 @@ pub(crate) fn generate_jar_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) 
     }
 
     // Build JAR file
+    let jar_bin = jdk_bin("jar");
     let jar_file = format!("{}/{}-{}.jar", bobje.out_dir(), bobje.name, bobje.version);
     executor.add_task_cmd(
         format!(
-            "jar cfe {} {} -C {} .",
+            "{jar_bin} cfe {} {} -C {} .",
             jar_file,
             main_class,
             if bobje.profile == Profile::Release {
@@ -400,6 +339,97 @@ pub(crate) fn run_jar(bobje: &Bobje) -> ! {
 }
 
 // MARK: Utils
+pub(crate) fn jdk_bin(bin: &str) -> String {
+    env::var("JAVA_HOME")
+        .map(|home| {
+            if cfg!(windows) {
+                format!("{home}/bin/{bin}.exe")
+            } else {
+                format!("{home}/bin/{bin}")
+            }
+        })
+        .unwrap_or_else(|_| bin.to_string())
+}
+
+pub(crate) fn get_java_major_version(java_bin: &str) -> Option<u32> {
+    // java -version writes to stderr: openjdk version "17.0.1" ...
+    let output = Command::new(java_bin).arg("-version").output().ok()?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let re = Regex::new(r#"version "(\d+)"#).ok()?;
+    let caps = re.captures(&stderr)?;
+    caps[1].parse().ok()
+}
+
+pub(crate) fn find_jdk_home(version: u32) -> Option<String> {
+    let v = version.to_string();
+    if cfg!(target_os = "macos") {
+        // macOS: the java_home utility resolves installed JDKs by version
+        if let Ok(output) = Command::new("/usr/libexec/java_home")
+            .args(["-v", &v])
+            .output()
+            && output.status.success()
+        {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Some(path);
+            }
+        }
+    } else if cfg!(target_os = "linux") {
+        // Common JDK paths on Debian/Ubuntu, RHEL/Fedora, and popular distros
+        let candidates = [
+            format!("/usr/lib/jvm/java-{v}-openjdk-amd64"),
+            format!("/usr/lib/jvm/java-{v}-openjdk-arm64"),
+            format!("/usr/lib/jvm/java-{v}-openjdk"),
+            format!("/usr/lib/jvm/temurin-{v}"),
+            format!("/usr/lib/jvm/java-{v}"),
+        ];
+        for path in &candidates {
+            if Path::new(path).join("bin/java").exists() {
+                return Some(path.clone());
+            }
+        }
+        // Fallback: parse update-java-alternatives (Debian/Ubuntu)
+        if let Ok(output) = Command::new("update-java-alternatives")
+            .arg("--list")
+            .output()
+        {
+            let java_tag = format!("java-{v}");
+            let temurin_tag = format!("temurin-{v}");
+            for line in String::from_utf8_lossy(&output.stdout).lines() {
+                if (line.contains(&java_tag) || line.contains(&temurin_tag))
+                    && let Some(path) = line.split_whitespace().last()
+                    && Path::new(path).join("bin/java").exists()
+                {
+                    return Some(path.to_string());
+                }
+            }
+        }
+    } else if cfg!(windows) {
+        // Common JDK installation directories on Windows
+        let program_files =
+            env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
+        for vendor in &["Eclipse Adoptium", "Microsoft", "Java", "Zulu"] {
+            let base = format!(r"{program_files}\{vendor}");
+            if let Ok(entries) = fs::read_dir(&base) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let name_lower = name.to_string_lossy().to_lowercase();
+                    if name_lower.starts_with(&format!("jdk-{v}"))
+                        || name_lower.starts_with(&format!("jdk{v}"))
+                        || name_lower.starts_with(&format!("zulu-{v}"))
+                    {
+                        let path = entry.path();
+                        if path.join(r"bin\java.exe").exists() {
+                            return Some(path.display().to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 pub(crate) fn get_class_name(source_file: &str) -> String {
     let relative_path = source_file
         .split("src/")

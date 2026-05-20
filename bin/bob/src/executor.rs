@@ -34,7 +34,6 @@ pub(crate) enum TaskAction {
     Phony(String),
     Copy(String, String),
     Command(String),
-    SendMsg(String, String),
     Multiple(Vec<TaskAction>),
 }
 
@@ -219,33 +218,6 @@ impl TaskAction {
                     exit(1);
                 }
                 command.clone()
-            }
-            TaskAction::SendMsg(socket_path, line) => {
-                cfg_select! {
-                    unix => {
-                        use std::io::{Read, Write};
-                        let mut stream = std::os::unix::net::UnixStream::connect(socket_path)
-                            .expect("Failed to connect to socket");
-                        _ = stream.write_all(line.as_bytes());
-                        _ = stream.flush();
-
-                        let mut response = Vec::new();
-                        _ = stream.read_to_end(&mut response);
-
-                        let read_line = String::from_utf8_lossy(&response);
-                        let (exit_code, stderr) = read_line.split_once('\n').expect("Invalid response");
-                        if exit_code.parse::<i32>().expect("Invalid exit code") != 0 {
-                            eprintln!("Command failed: {line}\n{stderr}");
-                            exit(1);
-                        }
-
-                        line.clone()
-                    }
-                    _ => {
-                        eprintln!("SendMsg is only supported on Unix systems");
-                        exit(1);
-                    }
-                }
             }
             TaskAction::Multiple(actions) => {
                 let mut lines = Vec::new();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -12,7 +12,9 @@ use semver::Version;
 
 use crate::executor::ExecutorBuilder;
 use crate::manifest::AndroidMetadata;
-use crate::tasks::jvm::{find_modules, get_class_name};
+use crate::tasks::jvm::{
+    find_jdk_home, find_modules, get_class_name, get_java_major_version, jdk_bin,
+};
 use crate::utils::{index_files, write_file_when_different};
 use crate::{Bobje, Profile};
 
@@ -102,6 +104,13 @@ impl AndroidVars {
         // Platform tools path
         let platform_tools_path = format!("{android_home}/platform-tools");
 
+        // For Android, ensure JAVA_HOME points to compatible JDK
+        let overridden_java_home = find_android_java_home();
+        if let Some(ref java_home) = overridden_java_home {
+            // SAFETY: This runs during single-threaded setup, so there are no concurrent environment reads or writes anywhere in the process.
+            unsafe { env::set_var("JAVA_HOME", java_home) };
+        }
+
         // Extend current path
         let mut path =
             env::split_paths(&env::var("PATH").expect("Can't read $PATH")).collect::<Vec<_>>();
@@ -118,6 +127,28 @@ impl AndroidVars {
             platform_jar,
         }
     }
+}
+
+// Android tooling works best with JDK 17. This function checks the current
+// JAVA_HOME and, if it is not JDK 17, searches for one. If JDK 17 is not
+// found it falls back to JDK 21. Returns `None` when no override is needed.
+fn find_android_java_home() -> Option<String> {
+    let version = get_java_major_version(&jdk_bin("java"))?;
+    if version == 17 {
+        return None;
+    }
+    eprintln!(
+        "JAVA_HOME points to Java {version} (!= 17), searching for JDK 17 or 21 for Android..."
+    );
+    if let Some(home) = find_jdk_home(17) {
+        return Some(home);
+    }
+    if let Some(home) = find_jdk_home(21) {
+        eprintln!("JDK 17 not found, falling back to JDK 21");
+        return Some(home);
+    }
+    eprintln!("Warning: could not find JDK 17 or 21, Android build may fail");
+    None
 }
 
 pub(crate) fn detect_android(bobje: &Bobje) -> bool {
