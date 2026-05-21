@@ -38,7 +38,12 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
         .bundle
         .as_ref()
         .expect("Should be some");
-    let contents_dir = format!("{}/{}.app/Contents", bobje.out_dir(), bobje.name);
+    let contents_dir = format!(
+        "{}/{}.{}/Contents",
+        bobje.out_dir(),
+        bobje.name,
+        bundle_metadata.bundle_ext
+    );
     let mut bundle_files = Vec::new();
 
     // Copy resources
@@ -141,7 +146,7 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
     let info_plist_file = "Info.plist";
     let extra_keys = if fs::metadata(info_plist_file).is_ok() {
         let contents = fs::read_to_string(info_plist_file).expect("Can't create Info.plist");
-        let re = Regex::new(r"<dict>([\s\S]*?)<\/dict>").expect("Can't compile regex");
+        let re = Regex::new(r"<dict>([\s\S]*)<\/dict>").expect("Can't compile regex");
         if let Some(captures) = re.captures(&contents) {
             Some(
                 captures
@@ -206,18 +211,39 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
     );
     bundle_files.push(dest);
 
-    // Create phony bundle task
-    executor.add_task_phony(
+    // Codesign and create phony bundle task
+    let bundle_path = format!(
+        "{}/{}.{}",
+        bobje.out_dir(),
+        bobje.name,
+        bundle_metadata.bundle_ext
+    );
+    let entitlements_arg = if fs::metadata("entitlements.plist").is_ok() {
+        "--entitlements entitlements.plist ".to_string()
+    } else {
+        String::new()
+    };
+    executor.add_task_cmd(
+        format!("codesign --force --sign - {entitlements_arg}{bundle_path}"),
         bundle_files,
-        vec![format!("{}/{}.app", bobje.out_dir(), bobje.name)],
+        vec![bundle_path],
     );
 }
 
 pub(crate) fn run_bundle(bobje: &Bobje) -> ! {
+    let bundle_ext = bobje
+        .manifest
+        .package
+        .metadata
+        .bundle
+        .as_ref()
+        .map(|b| b.bundle_ext.as_str())
+        .unwrap_or("app");
     let status = Command::new(format!(
-        "{}/{}.app/Contents/MacOS/{}",
+        "{}/{}.{}/Contents/MacOS/{}",
         bobje.out_dir(),
         bobje.name,
+        bundle_ext,
         bobje.name
     ))
     .status()
@@ -232,8 +258,13 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
         exit(1);
     });
 
+    let package_type = match bundle.bundle_ext.as_str() {
+        "app" => "APPL",
+        "appex" => "XPC!",
+        _ => "BNDL",
+    };
     let mut dict_entries = vec![
-        ("CFBundlePackageType".to_string(), "APPL".to_string()),
+        ("CFBundlePackageType".to_string(), package_type.to_string()),
         ("CFBundleName".to_string(), bobje.name.clone()),
         ("CFBundleDisplayName".to_string(), bobje.name.clone()),
         ("CFBundleIdentifier".to_string(), id.clone()),
@@ -243,8 +274,10 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
             bobje.version.clone(),
         ),
         ("CFBundleExecutable".to_string(), bobje.name.clone()),
-        ("LSMinimumSystemVersion".to_string(), "11.0".to_string()),
     ];
+    if bundle.bundle_ext != "appex" {
+        dict_entries.push(("LSMinimumSystemVersion".to_string(), bundle.minimal_os_version.clone()));
+    }
     if let Some(copyright) = &bundle.copyright {
         dict_entries.push(("NSHumanReadableCopyright".to_string(), copyright.clone()));
     }

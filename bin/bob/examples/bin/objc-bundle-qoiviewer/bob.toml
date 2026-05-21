@@ -1,0 +1,12 @@
+[package]
+name = "QoiViewer"
+id = "com.example.QoiViewer"
+version = "0.1.0"
+
+[dependencies]
+cocoa = { framework = "Cocoa" }
+
+[package.metadata.bundle]
+lipo = true
+iconset = "icons/app_icon.iconset"
+copyright = "Copyright (c) 2025 Bastiaan van der Plaat"

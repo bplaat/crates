@@ -1,0 +1,13 @@
+[package]
+name = "QoiViewerQL"
+id = "com.example.QoiViewer.QoiViewerQL"
+version = "0.1.0"
+
+[dependencies]
+cocoa = { framework = "Cocoa" }
+quicklookui = { framework = "QuickLookUI" }
+
+[package.metadata.bundle]
+lipo = true
+bundle_ext = "appex"
+copyright = "Copyright (c) 2025 Bastiaan van der Plaat"

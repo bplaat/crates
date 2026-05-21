@@ -40,6 +40,7 @@ pub(crate) struct PackageMetadata {
 #[serde(default)]
 pub(crate) struct BundleMetadata {
     pub lipo: bool,
+    pub bundle_ext: String,
     pub minimal_os_version: String,
     pub resources_dir: String,
     pub iconset: Option<String>,
@@ -52,6 +53,7 @@ impl Default for BundleMetadata {
     fn default() -> Self {
         Self {
             lipo: false,
+            bundle_ext: "app".to_string(),
             minimal_os_version: "11.0".to_string(),
             resources_dir: "res".to_string(),
             iconset: None,

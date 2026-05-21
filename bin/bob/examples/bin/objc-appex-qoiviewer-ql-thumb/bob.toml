@@ -1,0 +1,13 @@
+[package]
+name = "QoiViewerQLThumb"
+id = "com.example.QoiViewer.QoiViewerQLThumb"
+version = "0.1.0"
+
+[dependencies]
+cocoa = { framework = "Cocoa" }
+quicklookthumbnailing = { framework = "QuickLookThumbnailing" }
+
+[package.metadata.bundle]
+lipo = true
+bundle_ext = "appex"
+copyright = "Copyright (c) 2025 Bastiaan van der Plaat"
