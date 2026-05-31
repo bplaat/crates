@@ -6,7 +6,7 @@
 
 #![doc = include_str!("../README.md")]
 
-use std::process::Command;
+use std::process::{Command, exit};
 
 use anyhow::Result;
 use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder};
@@ -85,6 +85,11 @@ fn man_show(req: &Request, _ctx: &()) -> Result<Response> {
 }
 
 fn main() {
+    if !cfg!(any(target_os = "linux", target_os = "macos")) {
+        eprintln!("ManExplorer can only be run on Linux and macOS");
+        exit(1);
+    }
+
     let event_loop = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "ManExplorer")
         .build();
