@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 detect_os() {
     case "$OSTYPE" in
@@ -59,18 +59,15 @@ check_formatting() {
 }
 
 platform_excludes() {
-    cargo metadata --no-deps --format-version 1 2>/dev/null | python3 -c "
-import json, sys
-sys.stdout.reconfigure(newline='\n')
-data = json.load(sys.stdin)
-current = '$OS'
-for pkg in data['packages']:
-    meta = pkg.get('metadata') or {}
-    platforms = meta.get('platforms') or []
-    if platforms and current not in platforms:
-        print('--exclude')
-        print(pkg['name'])
-"
+    cargo metadata --no-deps --format-version 1 2>/dev/null \
+        | jq -r --arg os "$OS" '
+            .packages[] |
+            select(
+                .metadata.platforms != null and
+                (.metadata.platforms | index($os) | not)
+            ) |
+            "--exclude", .name
+        ' | tr -d '\r'
 }
 
 check_rust() {
@@ -158,23 +155,19 @@ build_pages_baksteen() {
 }
 
 installable_apps() {
-    cargo metadata --no-deps --format-version 1 2>/dev/null | python3 -c "
-import json, sys
-sys.stdout.reconfigure(newline='\n')
-data = json.load(sys.stdin)
-current = '$OS'
-for pkg in data['packages']:
-    meta = pkg.get('metadata') or {}
-    platforms = meta.get('platforms') or []
-    if platforms and current not in platforms:
-        continue
-    bundle = meta.get('bundle') or {}
-    bundle_name = bundle.get('name')
-    identifier = bundle.get('identifier')
-    if bundle_name and identifier:
-        install_name = identifier.rsplit('.', 1)[-1]
-        print(pkg['name'] + ':' + install_name)
-"
+    cargo metadata --no-deps --format-version 1 2>/dev/null \
+        | jq -r --arg os "$OS" '
+            .packages[] |
+            select(
+                .metadata.bundle.name != null and
+                .metadata.bundle.identifier != null and
+                (
+                    .metadata.platforms == null or
+                    (.metadata.platforms | index($os) != null)
+                )
+            ) |
+            .name + ":" + (.metadata.bundle.identifier | split(".") | last)
+        ' | tr -d '\r'
 }
 
 build_bundle() {
