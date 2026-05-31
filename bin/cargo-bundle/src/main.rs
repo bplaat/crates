@@ -289,6 +289,11 @@ fn main() {
     let manifest = read_manifest(&args.path);
     let bundle = &manifest.package.metadata.bundle;
 
+    println!(
+        "Bundling {} v{} ({})",
+        bundle.name, manifest.package.version, args.path
+    );
+
     // Generate resource
     let target_dir = format!("target/bundle/{}", manifest.package.name);
     generate_resources(&args.path, &target_dir, &manifest);
@@ -300,8 +305,12 @@ fn main() {
     create_bundle(&args.path, &target_dir, bundle);
 
     // Create zip
-    create_zip(&target_dir, bundle);
+    if args.zip {
+        create_zip(&target_dir, bundle);
+    }
 
     // Create dmg installer
-    create_dmg(&target_dir, bundle);
+    if args.dmg {
+        create_dmg(&target_dir, bundle);
+    }
 }

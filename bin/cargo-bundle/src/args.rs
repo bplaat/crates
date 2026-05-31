@@ -11,6 +11,8 @@ pub(crate) struct Args {
     pub help: bool,
     pub version: bool,
     pub path: String,
+    pub zip: bool,
+    pub dmg: bool,
 }
 
 impl Default for Args {
@@ -19,6 +21,8 @@ impl Default for Args {
             help: true,
             version: false,
             path: ".".to_string(),
+            zip: false,
+            dmg: false,
         }
     }
 }
@@ -45,6 +49,12 @@ pub(crate) fn parse_args() -> Args {
                     exit(1);
                 }
             }
+            "--zip" => {
+                args.zip = true;
+            }
+            "--dmg" => {
+                args.dmg = true;
+            }
             _ => {
                 eprintln!("Unknown argument: {arg}");
                 exit(1);
@@ -60,6 +70,8 @@ pub(crate) fn help() {
 
 Options:
   -p <dir>, --path <dir>    Build crate in <dir>
+  --zip                     Also create a zip archive
+  --dmg                     Also create a DMG installer
   -h, --help                Print this help message
   -v, --version             Print the version number
 "
