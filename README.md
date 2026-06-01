@@ -107,6 +107,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [hmac](lib/hmac) A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
 - [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 - [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
+- [native-tls](lib/native-tls) A minimal replacement for the [native-tls](https://crates.io/crates/native-tls) crate
 - [maxminddb](lib/maxminddb) A minimal replacement for the [maxminddb](https://crates.io/crates/maxminddb) crate
 - [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
 - [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate

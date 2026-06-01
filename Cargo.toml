@@ -46,6 +46,7 @@ form_urlencoded = { path = "lib/form_urlencoded" }
 getrandom = { path = "lib/getrandom" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 local-ip-address = { path = "lib/local-ip-address" }
+native-tls = { path = "lib/native-tls" }
 maxminddb = { path = "lib/maxminddb" }
 mime = { path = "lib/mime" }
 mime_guess = { path = "lib/mime_guess" }

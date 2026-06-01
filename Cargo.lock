@@ -441,6 +441,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-tls"
+version = "0.2.18+patch"
+
+[[package]]
 name = "navidrome"
 version = "0.1.0"
 dependencies = [
@@ -746,6 +750,7 @@ dependencies = [
  "base64",
  "chrono",
  "log",
+ "native-tls",
  "serde",
  "serde_json",
  "serde_urlencoded",
