@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -15,7 +15,7 @@ fn main() {
     let mut client = Client::new().header("User-Agent", USER_AGENT);
     for i in 0..10 {
         let res = client
-            .fetch(Request::get("http://ipinfo.io/json"))
+            .fetch(Request::get("http://example.com/"))
             .expect("Can't fetch");
         println!("{}: {}", i, String::from_utf8_lossy(&res.body));
     }

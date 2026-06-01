@@ -1,0 +1,13 @@
+[package]
+name = "maxminddb"
+version = "0.28.1+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "A minimal replacement for the maxminddb crate"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

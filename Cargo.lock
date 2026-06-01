@@ -388,6 +388,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "maxminddb"
+version = "0.28.1+patch"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -506,6 +513,7 @@ dependencies = [
  "from_derive",
  "getrandom",
  "log",
+ "maxminddb",
  "mime_guess",
  "openapi-generator",
  "pbkdf2",

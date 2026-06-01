@@ -10,3 +10,5 @@ src-gen/
 .env
 .DS_Store
 config.json
+*.mmdb
+!GeoLite2-City-Test.mmdb
