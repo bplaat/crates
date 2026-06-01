@@ -35,13 +35,14 @@ fn subcommand_download(args: &Args) {
     }
 
     // Find album ids
-    let metadata_service = MetadataService::new();
-    let album_ids = get_album_ids(&metadata_service, args).expect("Can't get album ids");
+    let mut metadata_service = MetadataService::new();
+    let album_ids = get_album_ids(&mut metadata_service, args).expect("Can't get album ids");
 
     // Start downloading albums
     let mut pool = ThreadPool::new(DOWNLOAD_THREAD_COUNT);
     for album_id in album_ids {
-        download_album(args, &mut pool, metadata_service, album_id).expect("Can't download album");
+        download_album(args, &mut pool, &mut metadata_service, album_id)
+            .expect("Can't download album");
     }
     pool.join();
 }
@@ -49,7 +50,7 @@ fn subcommand_download(args: &Args) {
 fn download_album(
     args: &Args,
     pool: &mut ThreadPool,
-    metadata_service: MetadataService,
+    metadata_service: &mut MetadataService,
     album_id: i64,
 ) -> Result<()> {
     // Download album metadata
@@ -214,8 +215,8 @@ fn subcommand_list(args: &Args) {
     }
 
     // Find album ids
-    let metadata_service = MetadataService::new();
-    let album_ids = get_album_ids(&metadata_service, args).expect("Can't get album ids");
+    let mut metadata_service = MetadataService::new();
+    let album_ids = get_album_ids(&mut metadata_service, args).expect("Can't get album ids");
 
     // List albums
     for album_id in album_ids {
@@ -304,7 +305,7 @@ fn subcommand_version() {
 }
 
 // MARK: Utils
-fn get_album_ids(metadata_service: &MetadataService, args: &Args) -> Result<Vec<i64>> {
+fn get_album_ids(metadata_service: &mut MetadataService, args: &Args) -> Result<Vec<i64>> {
     Ok(if args.is_artist {
         let artist_id = if args.is_id {
             args.query.parse()?

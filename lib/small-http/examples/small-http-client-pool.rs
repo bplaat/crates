@@ -15,7 +15,7 @@ fn main() {
     let mut client = Client::new().header("User-Agent", USER_AGENT);
     for i in 0..10 {
         let res = client
-            .fetch(Request::get("http://example.com/"))
+            .fetch(Request::get("https://example.com/"))
             .expect("Can't fetch");
         println!("{}: {}", i, String::from_utf8_lossy(&res.body));
     }

@@ -24,6 +24,7 @@ chrono = { version = "0.4", default-features = false, features = [
     "now",
 ], optional = true }
 log = { version = "0.4.28", optional = true }
+native-tls = { version = "0.2", optional = true }
 serde = { version = "1.0", optional = true }
 serde_json = { version = "1.0", optional = true }
 serde_urlencoded = { version = "0.7", optional = true }
@@ -42,4 +43,13 @@ form = ["dep:serde", "dep:serde_urlencoded"]
 json = ["dep:serde", "dep:serde_json"]
 log = ["dep:log"]
 multi-threaded = ["dep:threadpool"]
+tls = ["dep:native-tls"]
 cgi = []
+
+[[example]]
+name = "small-http-client"
+required-features = ["json", "tls"]
+
+[[example]]
+name = "small-http-client-pool"
+required-features = ["tls"]

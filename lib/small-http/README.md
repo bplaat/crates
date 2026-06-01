@@ -21,7 +21,7 @@ fn main() {
 }
 ```
 
-A simple example the of a http client that fetches a JSON response:
+A simple example the of a https client that fetches a JSON response, this needs the `tls` feature:
 
 ```rs
 #[derive(serde::Deserialize)]
@@ -30,7 +30,7 @@ struct IpInfo {
 }
 
 fn main() {
-    let res = small_http::Request::get("http://ipinfo.io/json")
+    let res = small_http::Request::get("https://ipinfo.io/json")
         .fetch()
         .expect("Can't fetch");
     println!("{}", String::from_utf8_lossy(&res.body));

@@ -524,12 +524,22 @@ impl Request {
 
     /// Fetch request with http client
     pub fn fetch(self) -> Result<Response, FetchError> {
-        let mut stream = TcpStream::connect(format!(
-            "{}:{}",
-            self.url.host().expect("No host in URL"),
-            self.url.port().unwrap_or(80)
-        ))
-        .map_err(|_| FetchError)?;
+        let host = self.url.host().ok_or(FetchError)?;
+        let is_https = self.url.scheme() == "https";
+        let port = self.url.port().unwrap_or(if is_https { 443 } else { 80 });
+
+        let tcp = TcpStream::connect(format!("{host}:{port}")).map_err(|_| FetchError)?;
+
+        #[cfg(feature = "tls")]
+        if is_https {
+            use native_tls::TlsConnector;
+            let connector = TlsConnector::new().map_err(|_| FetchError)?;
+            let mut tls = connector.connect(host, tcp).map_err(|_| FetchError)?;
+            self.write_to_stream(&mut tls, false);
+            return Response::read_from_stream(&mut tls).map_err(|_| FetchError);
+        }
+
+        let mut stream = tcp;
         self.write_to_stream(&mut stream, false);
         Response::read_from_stream(&mut stream).map_err(|_| FetchError)
     }
