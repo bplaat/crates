@@ -1,4 +1,4 @@
-<img align="right" src="docs/bob-the-builder.jpg" width="200" alt="Bob the Builder">
+<a href="https://youtu.be/XQE8vEB6AW0"><img align="right" src="docs/bob-the-builder.jpg" width="200" alt="Bob the Builder"></a>
 
 # Bassie's Obvious Builder (bob)
 
