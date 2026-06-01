@@ -7,10 +7,13 @@ WORKDIR /src
 
 RUN apt-get update && \
     apt-get install -y curl musl-tools && \
-    curl -fsSL https://deb.nodesource.com/setup_24.x -o nodesource_setup.sh && \
+    curl -fsSL https://deb.nodesource.com/setup_26.x -o nodesource_setup.sh && \
     bash nodesource_setup.sh && \
-    apt-get install -y nodejs && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
+    apt-get install -y nodejs
+
+COPY rust-toolchain.toml .
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
         rustup target add aarch64-unknown-linux-musl; \
     else \
         rustup target add x86_64-unknown-linux-musl; \
@@ -42,5 +45,6 @@ VOLUME ["/data"]
 EXPOSE 8080
 
 ENV DATABASE_PATH=/data/database.db
+ENV MAXMINDDB_PATH=/data/dbip-city-lite.mmdb
 
 ENTRYPOINT ["/app/plaatnotes"]

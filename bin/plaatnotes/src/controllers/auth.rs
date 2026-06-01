@@ -101,20 +101,41 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
 
     // Get IP information
     let (ip_latitude, ip_longitude, ip_country, ip_city) = {
-        match Request::get(format!("https://ipinfo.io/{ip_address}/json")).fetch() {
-            Ok(res) => {
-                if let Ok(ip_info) = serde_json::from_slice::<IpInfo>(&res.body) {
-                    let (lat, lon) = if let Some((lat_str, lon_str)) = ip_info.loc.split_once(',') {
-                        (lat_str.parse::<f64>().ok(), lon_str.parse::<f64>().ok())
-                    } else {
-                        (None, None)
-                    };
-                    (lat, lon, Some(ip_info.country), Some(ip_info.city))
-                } else {
-                    (None, None, None, None)
-                }
+        if let Some(reader) = &ctx.maxminddb_reader {
+            // Use local MaxMind DB
+            match ip_address.parse::<std::net::IpAddr>() {
+                Ok(ip) => match reader.lookup(ip) {
+                    Ok(result) => match result.decode::<maxminddb::geoip2::City>() {
+                        Ok(Some(city)) => (
+                            city.location.latitude,
+                            city.location.longitude,
+                            city.country.iso_code,
+                            city.city.names.english,
+                        ),
+                        _ => (None, None, None, None),
+                    },
+                    Err(_) => (None, None, None, None),
+                },
+                Err(_) => (None, None, None, None),
             }
-            Err(_) => (None, None, None, None),
+        } else {
+            // Fall back to ipinfo.io
+            match Request::get(format!("https://ipinfo.io/{ip_address}/json")).fetch() {
+                Ok(res) => {
+                    if let Ok(ip_info) = serde_json::from_slice::<IpInfo>(&res.body) {
+                        let (lat, lon) =
+                            if let Some((lat_str, lon_str)) = ip_info.loc.split_once(',') {
+                                (lat_str.parse::<f64>().ok(), lon_str.parse::<f64>().ok())
+                            } else {
+                                (None, None)
+                            };
+                        (lat, lon, Some(ip_info.country), Some(ip_info.city))
+                    } else {
+                        (None, None, None, None)
+                    }
+                }
+                Err(_) => (None, None, None, None),
+            }
         }
     };
 

@@ -111,7 +111,7 @@ fn main() {
     simple_logger::init().expect("Failed to init logger");
 
     // Init context
-    let context = if args.subcommand == Subcommand::ServeE2e {
+    let mut context = if args.subcommand == Subcommand::ServeE2e {
         use crate::context::DatabaseHelpers;
         use crate::models::{User, UserRole};
         let ctx = Context::with_e2e_database().expect("Can't create E2E test database");
@@ -147,6 +147,22 @@ fn main() {
         )
         .expect("Can't open/create database")
     };
+
+    // Optionally load MaxMind DB for IP geolocation (skip 0-byte Docker placeholder)
+    if let Ok(mmdb_path) = env::var("MAXMINDDB_PATH") {
+        let is_nonempty = std::fs::metadata(&mmdb_path)
+            .map(|m| m.len() > 0)
+            .unwrap_or(false);
+        if is_nonempty {
+            match maxminddb::Reader::open_readfile(&mmdb_path) {
+                Ok(reader) => {
+                    log::info!("Using MaxMind DB at {mmdb_path}");
+                    context.maxminddb_reader = Some(std::sync::Arc::new(reader));
+                }
+                Err(e) => log::warn!("Failed to open MaxMind DB at {mmdb_path}: {e}"),
+            }
+        }
+    }
 
     if args.subcommand == Subcommand::ImportGoogleKeep {
         let path = args.path.unwrap_or_else(|| {
