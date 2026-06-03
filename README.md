@@ -127,13 +127,29 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [winresource](lib/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
 - [zip](lib/zip) A minimal replacement for the [zip](https://crates.io/crates/zip) crate
 
-## Repo organization
+## Goals
 
-This repo is organized as a monorepo with `Cargo` as the main build system. My personal vision is that monorepo's work vary well when there's only one main build system, that acts a single organization point for the whole project with all it's submodules.
+This project is driven by three main goals:
 
-So this all Rust code is contained in a single `Cargo` workspace, that builds everything. Some crates have custom build steps that can run other build scripts / systems like `npm` and `vite`.
+**1. A self-written minimal crates collection for backend software**
 
-The [meta.sh](meta.sh) script is contains all the main tasks, these are used from commandline and also CI. The only modules that use a different build system are the ones in the [bob/examples](bin/bob/examples) directory, but that is also a show case of the [bob](bin/bob) build system.
+Rather than pulling in large, general-purpose dependencies, this repo grows a curated set of small, focused libraries that cover exactly what is needed - nothing more. This includes an HTTP/1.1 server, a router, a SQLite wrapper, validation, password hashing, UUID generation, and more. Many of these are intentional minimal replacements for well-known crates on [crates.io](https://crates.io), rewritten from scratch to be lean, auditable, and free of transitive dependencies.
+
+**2. A minimal Electron/Tauri-like desktop platform**
+
+[bwebview](lib/bwebview) is a cross-platform native webview library that lets you ship desktop applications using web technologies, without the weight of bundling a full browser engine. It uses the system-native webview on each platform (WebKit on macOS/iOS, WebKitGTK on Linux, WebView2 on Windows) and exposes a small, clean Rust API. The [desktop apps](bin/) in this repo: a 2048 game, a SQLite viewer, a pixel font editor, a man page browser, serve as real-world validation of this platform.
+
+**3. Tools and a custom build system for complex multi-language projects**
+
+Building projects that span multiple languages and artifact types (Rust, JavaScript, WASM, native bundles) requires coordination that general-purpose build systems handle poorly. [bob](bin/bob) is a minimal build system inspired by `Cargo`'s simplicity, designed to describe and orchestrate such projects cleanly. [cargo-bundle](bin/cargo-bundle) handles macOS `.app` bundle packaging from within the `Cargo` ecosystem. Together with [meta.sh](meta.sh) these tools keep the build pipeline simple, scriptable, and easy to follow.
+
+### Repo organization
+
+This repo is organized as a monorepo with `Cargo` as the single build system. Monorepos work best when one build system acts as the central organization point for all submodules, and `Cargo` fills that role here perfectly.
+
+All Rust code lives in a single `Cargo` workspace that builds everything together. Some crates extend this with custom build steps that invoke other tools like `npm` or `vite`, but those are orchestrated from within `Cargo` build scripts.
+
+The [meta.sh](meta.sh) script contains all top-level tasks and is used both from the command line and in CI. The only exception is the [bob/examples](bin/bob/examples) directory, which intentionally uses a different build system as a showcase for the [bob](bin/bob) build tool itself.
 
 ## Getting Started
 
