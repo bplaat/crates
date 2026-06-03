@@ -111,7 +111,12 @@ fn main() {
     simple_logger::init().expect("Failed to init logger");
 
     // Init context
-    let mut context = if args.subcommand == Subcommand::ServeE2e {
+    let data_path = env::var("DATA_PATH").unwrap_or_else(|_| ".".to_string());
+    if let Err(e) = std::fs::create_dir_all(&data_path) {
+        log::warn!("Could not create data directory {data_path}: {e}");
+    }
+
+    let context = if args.subcommand == Subcommand::ServeE2e {
         use crate::context::DatabaseHelpers;
         use crate::models::{User, UserRole};
         let ctx = Context::with_e2e_database().expect("Can't create E2E test database");
@@ -138,31 +143,15 @@ fn main() {
         ctx
     } else {
         Context::with_database(
-            if let Ok(path) = env::var("DATABASE_PATH") {
-                path
-            } else {
-                "database.db".to_string()
-            },
+            format!("{data_path}/database.db"),
             env::var("SERVER_ORIGIN").unwrap_or_else(|_| "*".to_string()),
         )
         .expect("Can't open/create database")
     };
 
-    // Optionally load MaxMind DB for IP geolocation (skip 0-byte Docker placeholder)
-    if let Ok(mmdb_path) = env::var("MAXMINDDB_PATH") {
-        let is_nonempty = std::fs::metadata(&mmdb_path)
-            .map(|m| m.len() > 0)
-            .unwrap_or(false);
-        if is_nonempty {
-            match maxminddb::Reader::open_readfile(&mmdb_path) {
-                Ok(reader) => {
-                    log::info!("Using MaxMind DB at {mmdb_path}");
-                    context.maxminddb_reader = Some(std::sync::Arc::new(reader));
-                }
-                Err(e) => log::warn!("Failed to open MaxMind DB at {mmdb_path}: {e}"),
-            }
-        }
-    }
+    // Start task runner (also handles DB-IP database download on startup)
+    let mmdb_path = format!("{data_path}/dbip-city-lite.mmdb");
+    tasks::start_task_runner(context.clone(), mmdb_path);
 
     if args.subcommand == Subcommand::ImportGoogleKeep {
         let path = args.path.unwrap_or_else(|| {
@@ -176,9 +165,6 @@ fn main() {
         imports::google_keep::run(&path, &email, &context);
         return;
     }
-
-    // Start task runner
-    tasks::start_task_runner(context.clone());
 
     // Start server
     let http_port = env::var("SERVER_PORT")

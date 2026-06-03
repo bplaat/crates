@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use anyhow::Result;
@@ -26,7 +26,7 @@ pub(crate) struct Context {
     pub auth_user: Option<User>,
     pub update_target_user_id: Option<Uuid>,
     pub login_attempts: Arc<Mutex<HashMap<String, (u32, Instant)>>>,
-    pub maxminddb_reader: Option<Arc<maxminddb::Reader<Vec<u8>>>>,
+    pub maxminddb_reader: Arc<OnceLock<maxminddb::Reader<Vec<u8>>>>,
     pub is_e2e: bool,
 }
 
@@ -45,7 +45,7 @@ impl Context {
             auth_user: None,
             update_target_user_id: None,
             login_attempts: Arc::new(Mutex::new(HashMap::new())),
-            maxminddb_reader: None,
+            maxminddb_reader: Arc::new(OnceLock::new()),
             is_e2e: false,
         })
     }
@@ -61,7 +61,7 @@ impl Context {
             auth_user: None,
             update_target_user_id: None,
             login_attempts: Arc::new(Mutex::new(HashMap::new())),
-            maxminddb_reader: None,
+            maxminddb_reader: Arc::new(OnceLock::new()),
             is_e2e: false,
         })
     }
@@ -76,7 +76,7 @@ impl Context {
             auth_user: None,
             update_target_user_id: None,
             login_attempts: Arc::new(Mutex::new(HashMap::new())),
-            maxminddb_reader: None,
+            maxminddb_reader: Arc::new(OnceLock::new()),
             is_e2e: true,
         })
     }

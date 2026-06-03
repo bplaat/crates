@@ -101,7 +101,7 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
 
     // Get IP information
     let (ip_latitude, ip_longitude, ip_country, ip_city) = {
-        if let Some(reader) = &ctx.maxminddb_reader {
+        if let Some(reader) = ctx.maxminddb_reader.get() {
             // Use local MaxMind DB
             match ip_address.parse::<std::net::IpAddr>() {
                 Ok(ip) => match reader.lookup(ip) {

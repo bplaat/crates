@@ -10,18 +10,11 @@ A self-hosted note taking web app with rich markdown support
 - Multiple users support with user management
 - Google Keep Takeout import support
 
-## IP Geolocation Database (optional)
+## IP Geolocation Database
 
-PlaatNotes resolves visitor IPs to city/country using either a local [DB-IP City Lite](https://db-ip.com/db/download/ip-to-city-lite) database or ipinfo.io as fallback.
+PlaatNotes resolves visitor IPs to city/country using a local [DB-IP City Lite](https://db-ip.com/db/download/ip-to-city-lite) database, with ipinfo.io as fallback when the database is unavailable.
 
-The image exposes a `/data` volume (also used for the SQLite database).
-Place the mmdb file there as `dbip-city-lite.mmdb` and the app picks it up automatically.
-
-To use the local database:
-
-1. Download the MMDB file (select **MMDB** format) from the link above.
-2. Decompress: `gzip -d dbip-city-lite-*.mmdb.gz`
-3. Copy into the data volume.
+On first startup the app automatically downloads the current month's DB-IP City Lite MMDB file from `download.db-ip.com` and stores it in the data directory (`DATA_PATH`). If the download fails, it transparently falls back to ipinfo.io for every login request.
 
 ## Docker image
 
@@ -37,6 +30,6 @@ docker build --platform linux/amd64,linux/arm64 --tag ghcr.io/bplaat/plaatnotes:
 
 ## License
 
-Copyright &copy; 2025-2026 [Bastiaan van der Plaat](https://bplaat.nl/)
+Copyright © 2025-2026 [Bastiaan van der Plaat](https://bplaat.nl/)
 
 Licensed under the [MIT](../../LICENSE) license.

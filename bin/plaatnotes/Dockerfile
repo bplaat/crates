@@ -6,7 +6,7 @@ ARG TARGETARCH
 WORKDIR /src
 
 RUN apt-get update && \
-    apt-get install -y curl musl-tools && \
+    apt-get install -y curl make perl musl-tools && \
     curl -fsSL https://deb.nodesource.com/setup_26.x -o nodesource_setup.sh && \
     bash nodesource_setup.sh && \
     apt-get install -y nodejs
@@ -36,6 +36,7 @@ LABEL org.opencontainers.image.source="https://github.com/bplaat/crates"
 LABEL org.opencontainers.image.description="A simple note-taking app"
 LABEL org.opencontainers.image.licenses=MIT
 
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /plaatnotes /app/plaatnotes
 
 WORKDIR /app
@@ -44,7 +45,7 @@ VOLUME ["/data"]
 
 EXPOSE 8080
 
-ENV DATABASE_PATH=/data/database.db
-ENV MAXMINDDB_PATH=/data/dbip-city-lite.mmdb
+ENV DATA_PATH=/data
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 ENTRYPOINT ["/app/plaatnotes"]
