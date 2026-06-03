@@ -450,7 +450,7 @@ bool x11_connect(x11_connection_t* conn) {
         }
     }
 
-    // No separate CLOEXEC needed — all socket paths now set it at creation time
+    // No separate CLOEXEC needed - all socket paths now set it at creation time
 
     // Send setup request message
     x11_setup_request_t setup_request = {
@@ -571,7 +571,7 @@ bool x11_connect(x11_connection_t* conn) {
     if (!x11_query_extension(conn->fd, "DOUBLE-BUFFER"))
         goto fail;
 
-    // Read ALL 5 replies before sending any further requests — inserting a
+    // Read ALL 5 replies before sending any further requests - inserting a
     // BIG-REQUESTS Enable request between reads would displace the RANDR/SYNC/XDBE
     // replies and cause those extensions to be silently reported as absent.
     {
@@ -918,7 +918,7 @@ bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, i
     int32_t new_cap = new_cap64 > INT32_MAX ? INT32_MAX : (int32_t)new_cap64;
 
     if (new_cap <= img->capacity) {
-        // Buffer is large enough — reuse it, just update the visible dimensions
+        // Buffer is large enough - reuse it, just update the visible dimensions
         img->width = new_w;
         img->height = new_h;
         return true;

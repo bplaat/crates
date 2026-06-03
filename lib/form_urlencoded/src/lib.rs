@@ -68,7 +68,7 @@ impl Iterator for ParseIntoOwned<'_> {
 }
 
 fn decode(input: &[u8]) -> Cow<'_, str> {
-    // Fast path: no encoding characters — return borrowed slice directly.
+    // Fast path: no encoding characters - return borrowed slice directly.
     if !input.contains(&b'+') && !input.contains(&b'%') {
         return String::from_utf8_lossy(input);
     }

@@ -727,7 +727,7 @@ void x11_map_window(x11_connection_t* conn, uint32_t window);
 bool x11_create_image(x11_connection_t* conn, x11_image_t* img, uint32_t window, int32_t width, int32_t height);
 
 // Resize image to new dimensions, reusing the pixel buffer when capacity allows.
-// Keeps the GC alive — much cheaper than destroy + create during window resize.
+// Keeps the GC alive - much cheaper than destroy + create during window resize.
 bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, int32_t new_h);
 
 // Blit the full image to the window at (0, 0) using ShmPutImage or PutImage

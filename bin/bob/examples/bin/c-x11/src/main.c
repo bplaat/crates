@@ -138,7 +138,7 @@ int main(void) {
 
     float scale = compute_scale(&conn, monitors, monitor_count, primary_idx);
 
-    // Logical dimensions (design units) — updated on user resize
+    // Logical dimensions (design units) - updated on user resize
     int32_t logical_w = 640;
     int32_t logical_h = 480;
 
@@ -287,7 +287,7 @@ int main(void) {
                 }
                 canvas_init(&canvas, logical_w, logical_h, img.pixels, scale);
                 // Coalesce: if more events are already queued (common during a
-                // live resize drag), skip rendering this intermediate frame —
+                // live resize drag), skip rendering this intermediate frame -
                 // the next ConfigureNotify will render at the final size.
                 // Always ack the sync so the compositor can send the next step.
                 if (!x11_has_event_pending(&conn)) {
