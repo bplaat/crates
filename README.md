@@ -154,7 +154,7 @@ The [meta.sh](meta.sh) script contains all top-level tasks and is used both from
 ## Getting Started
 
 - Open a posix shell environment when you are on Windows (e.g. Git Bash)
-- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
+- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [ShellCheck](https://www.shellcheck.net/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
 - Install Rust nightly toolchain, `cargo-binstall`, `cargo-deny` and `cargo-nextest`:
 
     ```sh
