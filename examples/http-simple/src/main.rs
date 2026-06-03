@@ -70,7 +70,7 @@ fn handler(req: &Request) -> Response {
                     .body("<h1>Can't fetch ipinfo.io</h1>");
             }
         };
-        return Response::with_json(data_res.body);
+        return Response::with_header("Content-Type", "application/json").body(data_res.body);
     }
 
     if path == "/useragent" {
