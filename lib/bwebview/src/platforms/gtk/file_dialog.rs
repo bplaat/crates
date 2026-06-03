@@ -15,15 +15,15 @@ pub(crate) struct PlatformFileDialog;
 
 #[cfg(feature = "file_dialog")]
 impl crate::FileDialogInterface for PlatformFileDialog {
-    fn pick_file(dialog: crate::FileDialog) -> Option<std::path::PathBuf> {
+    fn pick_file(dialog: crate::FileDialog) -> Option<PathBuf> {
         open_files_impl(dialog, false).map(|mut v| v.remove(0))
     }
 
-    fn pick_files(dialog: crate::FileDialog) -> Option<Vec<std::path::PathBuf>> {
+    fn pick_files(dialog: crate::FileDialog) -> Option<Vec<PathBuf>> {
         open_files_impl(dialog, true)
     }
 
-    fn save_file(dialog: crate::FileDialog) -> Option<std::path::PathBuf> {
+    fn save_file(dialog: crate::FileDialog) -> Option<PathBuf> {
         unsafe {
             let title = CString::new(dialog.title.as_deref().unwrap_or("Save File"))
                 .expect("Can't convert to CString");
@@ -89,7 +89,7 @@ impl crate::FileDialogInterface for PlatformFileDialog {
 }
 
 #[cfg(feature = "file_dialog")]
-fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<std::path::PathBuf>> {
+fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<PathBuf>> {
     unsafe {
         let title = CString::new(dialog.title.as_deref().unwrap_or("Open File"))
             .expect("Can't convert to CString");
@@ -142,7 +142,7 @@ fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<std:
                     while !node.is_null() {
                         let raw = (*node).data as *const c_char;
                         if !raw.is_null() {
-                            paths.push(std::path::PathBuf::from(
+                            paths.push(PathBuf::from(
                                 CStr::from_ptr(raw).to_string_lossy().into_owned(),
                             ));
                         }

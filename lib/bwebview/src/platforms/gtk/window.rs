@@ -86,7 +86,7 @@ impl PlatformWindow {
                 );
             }
 
-            let monitor_rect = if let Some(ref monitor) = builder.monitor {
+            let monitor_rect = if let Some(monitor) = builder.monitor {
                 monitor.rect()
             } else {
                 primary_monitor_rect()
