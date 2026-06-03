@@ -4,35 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A minimal replacement for the [native-tls](https://crates.io/crates/native-tls) crate.
-//!
-//! | Platform     | Backend                              | TLS 1.2 | TLS 1.3 |
-//! |--------------|--------------------------------------|---------|---------|
-//! | Windows      | SChannel (OS built-in)               | yes     | yes     |
-//! | macOS        | SecureTransport (Security.framework) | yes     | no      |
-//! | Linux/other  | OpenSSL 1.1.x / 3.x                  | yes     | yes     |
-//!
-//! macOS uses the legacy SecureTransport API (deprecated since macOS 10.15 but still functional).
-//! SecureTransport is limited to TLS 1.2. TLS 1.3 on macOS requires Network.framework, which
-//! exposes only an async, Grand Central Dispatch (GCD) based API — making it difficult to wrap
-//! in a synchronous `Read`/`Write` interface without a full async runtime or complex callback
-//! machinery. Certificate trust is evaluated manually via `SecTrustEvaluateWithError`.
-//!
-//! # Example
-//!
-//! ```no_run
-//! use std::io::{Read, Write};
-//! use std::net::TcpStream;
-//! use native_tls::TlsConnector;
-//!
-//! let stream = TcpStream::connect("example.com:443").unwrap();
-//! let connector = TlsConnector::new().unwrap();
-//! let mut tls = connector.connect("example.com", stream).unwrap();
-//! tls.write_all(b"GET / HTTP/1.1\r\nHost: example.com\r\nConnection: closed\r\n\r\n").unwrap();
-//! let mut buf = Vec::new();
-//! tls.read_to_end(&mut buf).unwrap();
-//! ```
-
+#![doc = include_str!("../README.md")]
 #![allow(unsafe_code)]
 #![allow(clippy::undocumented_unsafe_blocks)]
 

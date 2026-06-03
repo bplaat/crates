@@ -87,6 +87,6 @@ A simple build system for my projects, because I really like the simplicity of C
 
 ## License
 
-Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
+Copyright © 2025-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
 Licensed under the [MIT](../../LICENSE) license.

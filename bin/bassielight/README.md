@@ -40,6 +40,6 @@ Build the latest release from source and run it.
 
 ## License
 
-Copyright &copy; 2023-2025 [Bastiaan van der Plaat](https://bplaat.nl/)
+Copyright © 2023-2025 [Bastiaan van der Plaat](https://bplaat.nl/)
 
 Licensed under the [MIT](../../LICENSE) license.

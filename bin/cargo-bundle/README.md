@@ -24,6 +24,6 @@ This will build your crate for x86_64 and arm64 link it together as a Universal 
 
 ## License
 
-Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
+Copyright © 2025-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
 Licensed under the [MIT](../../LICENSE) license.
