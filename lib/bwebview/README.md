@@ -20,6 +20,24 @@ sudo dnf install gtk3-devel webkit2gtk4.1-devel
 sudo dnf install gtk3-devel webkit2gtk4.0-devel # for older systems
 ```
 
+## Platforms
+
+| Platform    | Backend                        | Notes                                     |
+| ----------- | ------------------------------ | ----------------------------------------- |
+| Windows     | WebView2 (Chromium/Edge)       | Requires WebView2 Runtime to be installed |
+| macOS       | WKWebView (WebKit)             | macOS 11.0+                               |
+| Linux/other | WebKitGTK (GTK 3 + WebKit2GTK) | See GTK tiers below                       |
+
+### Linux / GTK tiers
+
+The Linux backend automatically selects the best available WebKitGTK version at build time:
+
+| WebKitGTK package | Min version | GTK min | Distro (stock packages) | Notes                                    |
+| ----------------- | ----------- | ------- | ----------------------- | ---------------------------------------- |
+| `webkit2gtk-4.1`  | 2.40        | 3.22+   | Ubuntu 22.04+           | Modern API; full custom-protocol support |
+| `webkit2gtk-4.0`  | 2.22        | 3.18+   | Ubuntu 18.04+           | JSC GLib API; URI-only custom protocol   |
+| `webkit2gtk-4.0`  | 2.20        | 3.18+   | Ubuntu 16.04+           | Legacy JavaScriptCore C API              |
+
 ## Screenshots
 
 <table>

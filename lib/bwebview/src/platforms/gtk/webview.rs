@@ -69,15 +69,10 @@ impl PlatformWebview {
 
         // Create webview user content manager
         let user_content_manager = unsafe {
-            const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
-                window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);";
-            #[cfg(feature = "log")]
-            const CONSOLE_SCRIPT: &str = "for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log'])\
-                window.console[level] = (...args) => window.webkit.messageHandlers.console.postMessage(level.charAt(0) + args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));";
             #[cfg(not(feature = "log"))]
-            let script = IPC_SCRIPT;
+            let script = super::super::IPC_SCRIPT;
             #[cfg(feature = "log")]
-            let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
+            let script = format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT);
 
             let user_content_manager = webkit_user_content_manager_new();
             let script = CString::new(script).expect("Can't convert to CString");
@@ -321,7 +316,10 @@ extern "C" fn webview_on_navigation_policy_decision(
     if decision_type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION {
         let request = unsafe { webkit_navigation_policy_decision_get_request(decision) };
         let uri = unsafe { webkit_uri_request_get_uri(request) };
+        #[cfg(gtk3_22)]
         unsafe { gtk_show_uri_on_window(null_mut(), uri, 0, null_mut()) };
+        #[cfg(not(gtk3_22))]
+        unsafe { gtk_show_uri(gdk_screen_get_default(), uri, 0, null_mut()) };
         return true;
     }
     false
@@ -332,12 +330,8 @@ extern "C" fn webview_on_message_ipc(
     _message: *mut WebKitJavascriptResult,
     _self: &mut WebviewData,
 ) {
-    let message = unsafe { webkit_javascript_result_get_js_value(_message) };
-    let message = unsafe { jsc_value_to_string(message) };
-    let message = unsafe { CStr::from_ptr(message) }.to_string_lossy();
-    send_event(crate::Event::Webview(WebviewEvent::MessageReceive(
-        message.to_string(),
-    )));
+    let message = js_result_to_string(_message);
+    send_event(crate::Event::Webview(WebviewEvent::MessageReceive(message)));
 }
 
 #[cfg(feature = "log")]
@@ -346,12 +340,7 @@ extern "C" fn webview_on_message_console(
     _message: *mut WebKitJavascriptResult,
     _self: &mut WebviewData,
 ) {
-    let message = unsafe { webkit_javascript_result_get_js_value(_message) };
-    let message = unsafe { jsc_value_to_string(message) };
-    let message = unsafe { CStr::from_ptr(message) }
-        .to_string_lossy()
-        .to_string();
-
+    let message = js_result_to_string(_message);
     let (level, message) = message.split_at(1);
     match level {
         "e" => log::error!("{message}"),
@@ -361,6 +350,27 @@ extern "C" fn webview_on_message_console(
         "t" => log::trace!("{message}"),
         _ => unimplemented!(),
     }
+}
+
+#[cfg(any(webkit2gtk_4_1, webkit2gtk_4_0_jsc_glib))]
+fn js_result_to_string(result: *mut WebKitJavascriptResult) -> String {
+    let value = unsafe { webkit_javascript_result_get_js_value(result) };
+    let s = unsafe { jsc_value_to_string(value) };
+    unsafe { CStr::from_ptr(s) }.to_string_lossy().into_owned()
+}
+
+#[cfg(all(webkit2gtk_4_0, not(webkit2gtk_4_0_jsc_glib)))]
+fn js_result_to_string(result: *mut WebKitJavascriptResult) -> String {
+    let ctx = unsafe { webkit_javascript_result_get_global_context(result) };
+    let value = unsafe { webkit_javascript_result_get_value(result) };
+    let js_str = unsafe { JSValueToStringCopy(ctx, value, null_mut()) };
+    let max_size = unsafe { JSStringGetMaximumUTF8CStringSize(js_str) };
+    let mut buf = vec![0u8; max_size];
+    unsafe { JSStringGetUTF8CString(js_str, buf.as_mut_ptr() as *mut c_char, max_size) };
+    unsafe { JSStringRelease(js_str) };
+    unsafe { CStr::from_ptr(buf.as_ptr() as *const c_char) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 #[cfg(feature = "custom_protocol")]

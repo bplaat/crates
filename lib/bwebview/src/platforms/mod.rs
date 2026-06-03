@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+pub(crate) use scripts::*;
+mod scripts;
+
 cfg_select! {
     any(
         target_os = "linux",

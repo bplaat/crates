@@ -384,15 +384,10 @@ extern "system" fn controller_created(
         }
 
         // Setup ipc and console logging
-        const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
-            window.ipc.postMessage = message => window.chrome.webview.postMessage('i' + (typeof message !== 'string' ? JSON.stringify(message) : message));";
-        #[cfg(feature = "log")]
-        const CONSOLE_SCRIPT: &str = "for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log'])\
-            window.console[level] = (...args) => window.chrome.webview.postMessage('c' + level.charAt(0) + args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));";
         #[cfg(not(feature = "log"))]
-        let script = IPC_SCRIPT;
+        let script = super::super::IPC_SCRIPT;
         #[cfg(feature = "log")]
-        let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
+        let script = format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT);
         (*webview).AddScriptToExecuteOnDocumentCreated(
             script.to_wide_string().as_ptr() as *mut _,
             null_mut(),

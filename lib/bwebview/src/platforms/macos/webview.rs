@@ -168,15 +168,10 @@ impl PlatformWebview {
 
         // Create ipc handler
         unsafe {
-            const IPC_SCRIPT: &str = "window.ipc = new EventTarget();\
-                window.ipc.postMessage = message => window.webkit.messageHandlers.ipc.postMessage(typeof message !== 'string' ? JSON.stringify(message) : message);";
-            #[cfg(feature = "log")]
-            const CONSOLE_SCRIPT: &str = "for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log'])\
-                window.console[level] = (...args) => window.webkit.messageHandlers.console.postMessage(level.charAt(0) + args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' '));";
             #[cfg(not(feature = "log"))]
-            let script = IPC_SCRIPT;
+            let script = super::super::IPC_SCRIPT;
             #[cfg(feature = "log")]
-            let script = format!("{IPC_SCRIPT}\n{CONSOLE_SCRIPT}");
+            let script = format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT);
 
             let webview_configuration: *mut Object = msg_send![webview, configuration];
             let user_content_controller: *mut Object =

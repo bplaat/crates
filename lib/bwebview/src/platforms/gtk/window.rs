@@ -9,12 +9,11 @@ use std::env;
 use std::ffi::{CStr, CString, c_void};
 #[cfg(feature = "remember_window_state")]
 use std::fs;
-use std::mem::MaybeUninit;
 use std::ptr::{null, null_mut};
 
 #[cfg(feature = "remember_window_state")]
 use super::event_loop::APP_ID;
-use super::event_loop::send_event;
+use super::event_loop::{primary_monitor_rect, send_event};
 use super::headers::*;
 use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
@@ -87,19 +86,10 @@ impl PlatformWindow {
                 );
             }
 
-            let monitor_rect = if let Some(monitor) = builder.monitor {
-                let mut rect = MaybeUninit::<GdkRectangle>::uninit();
-                gdk_monitor_get_geometry(monitor.monitor, rect.as_mut_ptr());
-                rect.assume_init()
+            let monitor_rect = if let Some(ref monitor) = builder.monitor {
+                monitor.rect()
             } else {
-                let mut primary_monitor =
-                    gdk_display_get_primary_monitor(gdk_display_get_default());
-                if primary_monitor.is_null() {
-                    primary_monitor = gdk_display_get_monitor(gdk_display_get_default(), 0);
-                }
-                let mut rect = MaybeUninit::<GdkRectangle>::uninit();
-                gdk_monitor_get_geometry(primary_monitor, rect.as_mut_ptr());
-                rect.assume_init()
+                primary_monitor_rect()
             };
             if let Some(position) = builder.position {
                 gtk_window_move(
@@ -252,15 +242,7 @@ impl crate::WindowInterface for PlatformWindow {
     }
 
     fn set_position(&mut self, point: LogicalPoint) {
-        let primary_monitor_rect = unsafe {
-            let mut primary_monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
-            if primary_monitor.is_null() {
-                primary_monitor = gdk_display_get_monitor(gdk_display_get_default(), 0);
-            }
-            let mut primary_monitor_rect = MaybeUninit::<GdkRectangle>::uninit();
-            gdk_monitor_get_geometry(primary_monitor, primary_monitor_rect.as_mut_ptr());
-            primary_monitor_rect.assume_init()
-        };
+        let primary_monitor_rect = primary_monitor_rect();
         unsafe {
             gtk_window_move(
                 self.0.window,

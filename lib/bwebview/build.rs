@@ -16,6 +16,15 @@ fn main() {
     // GTK platform WebKit version detection.
     println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_1)");
     println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_0)");
+    // webkit2gtk_4_0_jsc_glib: webkit2gtk-4.0 >= 2.22 includes the JSC GLib API
+    // (webkit_javascript_result_get_js_value / jsc_value_to_string). Below 2.22 the
+    // old JavaScriptCore C API (JSValueToStringCopy etc.) is used instead.
+    println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_0_jsc_glib)");
+    // GTK version feature flags:
+    //   gtk3_20 -- GtkFileChooserNative / gtk_native_dialog_run (3.20+)
+    //   gtk3_22 -- GdkMonitor API / gtk_show_uri_on_window (3.22+)
+    println!("cargo::rustc-check-cfg=cfg(gtk3_20)");
+    println!("cargo::rustc-check-cfg=cfg(gtk3_22)");
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
     if target_os != "macos" && target_os != "windows" {
         if pkg_config::Config::new()
@@ -24,22 +33,50 @@ fn main() {
             .is_ok()
         {
             println!("cargo:rustc-cfg=webkit2gtk_4_1");
+            // webkit2gtk-4.1 >= 2.40 requires GTK >= 3.22
+            println!("cargo:rustc-cfg=gtk3_20");
+            println!("cargo:rustc-cfg=gtk3_22");
         } else if pkg_config::Config::new()
-            .atleast_version("2.22")
+            .atleast_version("2.20")
             .probe("webkit2gtk-4.0")
             .is_ok()
         {
             // webkit2gtk-4.0 does not enforce a GTK minimum that covers all APIs we use
             pkg_config::Config::new()
-                .atleast_version("3.22")
+                .atleast_version("3.18")
                 .cargo_metadata(false)
                 .probe("gtk+-3.0")
                 .unwrap_or_else(|_| {
-                    panic!("bwebview requires gtk+-3.0 >= 3.22 when building with webkit2gtk-4.0")
+                    panic!("bwebview requires gtk+-3.0 >= 3.18 when building with webkit2gtk-4.0")
                 });
+            if pkg_config::Config::new()
+                .atleast_version("3.20")
+                .cargo_metadata(false)
+                .probe("gtk+-3.0")
+                .is_ok()
+            {
+                println!("cargo:rustc-cfg=gtk3_20");
+            }
+            if pkg_config::Config::new()
+                .atleast_version("3.22")
+                .cargo_metadata(false)
+                .probe("gtk+-3.0")
+                .is_ok()
+            {
+                println!("cargo:rustc-cfg=gtk3_22");
+            }
+            // JSC GLib API is only available from 2.22 onward
+            if pkg_config::Config::new()
+                .atleast_version("2.22")
+                .cargo_metadata(false)
+                .probe("webkit2gtk-4.0")
+                .is_ok()
+            {
+                println!("cargo:rustc-cfg=webkit2gtk_4_0_jsc_glib");
+            }
             println!("cargo:rustc-cfg=webkit2gtk_4_0");
         } else {
-            panic!("bwebview requires webkit2gtk-4.1 >= 2.40 or webkit2gtk-4.0 >= 2.22");
+            panic!("bwebview requires webkit2gtk-4.1 >= 2.40 or webkit2gtk-4.0 >= 2.20");
         }
     }
 
