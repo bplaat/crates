@@ -13,6 +13,7 @@ name = "2048"
 identifier = "nl.bplaat.2048"
 copyright = "Copyright © 2014 Gabriele Cirulli\nCopyright © 2025 Bastiaan van der Plaat"
 icon = "meta/macos/icon.icon"
+entitlements = "meta/macos/entitlements.plist"
 
 [dependencies]
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
