@@ -106,6 +106,10 @@ message_send_impl!(a: A, b: B, c: C, d: D, e: E);
 message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F);
 message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G);
 message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H);
+message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H, i: I);
+message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H, i: I, j: J);
+message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H, i: I, j: J, k: K);
+message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H, i: I, j: J, k: K, l: L);
 
 /// Send message to object
 #[macro_export]
