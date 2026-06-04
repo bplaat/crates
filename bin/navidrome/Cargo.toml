@@ -10,6 +10,7 @@ name = "Navidrome"
 identifier = "nl.bplaat.Navidrome"
 copyright = "Copyright © 2025 Bastiaan van der Plaat"
 icon = "meta/macos/icon.icon"
+entitlements = "meta/macos/entitlements.plist"
 
 [lints]
 workspace = true
