@@ -13,6 +13,7 @@ name = "ManExplorer"
 identifier = "nl.bplaat.ManExplorer"
 copyright = "Copyright © 2025 Bastiaan van der Plaat"
 icon = "meta/macos/icon.icon"
+entitlements = "meta/macos/entitlements.plist"
 
 [lints]
 workspace = true
