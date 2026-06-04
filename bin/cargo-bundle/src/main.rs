@@ -206,6 +206,23 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
     .expect("Failed to copy Info.plist");
 }
 
+fn sign_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) {
+    let app_bundle = format!("{target_dir}/{}.app", bundle.name);
+    let entitlements_path = format!("{path}/entitlements.plist");
+
+    let mut cmd = Command::new("codesign");
+    cmd.args(["--force", "--deep", "--sign", "-"]);
+
+    if Path::new(&entitlements_path).exists() {
+        cmd.args(["--entitlements", &entitlements_path]);
+    }
+
+    cmd.arg(&app_bundle);
+
+    let status = cmd.status().expect("Failed to run codesign");
+    assert!(status.success(), "codesign failed");
+}
+
 fn create_zip(target_dir: &str, bundle: &manifest::BundleMetadata) {
     let zip_name = format!("{}/{}.zip", target_dir, bundle.name);
     if Path::new(&zip_name).exists() {
@@ -303,6 +320,9 @@ fn main() {
 
     // Create bundle folder structure
     create_bundle(&args.path, &target_dir, bundle);
+
+    // Ad-hoc code sign the bundle (with entitlements if present)
+    sign_bundle(&args.path, &target_dir, bundle);
 
     // Create zip
     if args.zip {
