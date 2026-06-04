@@ -204,6 +204,17 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
         format!("{bundle_dir}/Info.plist"),
     )
     .expect("Failed to copy Info.plist");
+
+    // Convert Info.plist to binary format
+    let info_plist_path = format!("{bundle_dir}/Info.plist");
+    let status = Command::new("plutil")
+        .args(["-convert", "binary1", &info_plist_path])
+        .status()
+        .expect("Failed to run plutil");
+    assert!(
+        status.success(),
+        "plutil failed to convert Info.plist to binary"
+    );
 }
 
 fn sign_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) {
