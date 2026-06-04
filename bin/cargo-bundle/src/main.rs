@@ -219,7 +219,13 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
 
 fn sign_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) {
     let app_bundle = format!("{target_dir}/{}.app", bundle.name);
-    let entitlements_path = format!("{path}/entitlements.plist");
+
+    // Resolve entitlements: use manifest field if set, else fall back to root entitlements.plist
+    let entitlements_path = bundle
+        .entitlements
+        .as_deref()
+        .map(|e| format!("{path}/{e}"))
+        .unwrap_or_else(|| format!("{path}/entitlements.plist"));
 
     let mut cmd = Command::new("codesign");
     cmd.args(["--force", "--deep", "--sign", "-"]);
