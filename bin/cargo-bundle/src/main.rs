@@ -226,14 +226,19 @@ fn sign_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) 
         .as_deref()
         .map(|e| format!("{path}/{e}"))
         .unwrap_or_else(|| format!("{path}/entitlements.plist"));
+    let has_entitlements = Path::new(&entitlements_path).exists();
+
+    // Hardened Runtime: explicit manifest field, or enabled by default when entitlements are present
+    let use_hardened_runtime = bundle.hardened_runtime.unwrap_or(has_entitlements);
 
     let mut cmd = Command::new("codesign");
     cmd.args(["--force", "--deep", "--sign", "-"]);
-
-    if Path::new(&entitlements_path).exists() {
+    if use_hardened_runtime {
+        cmd.args(["--options", "runtime"]);
+    }
+    if has_entitlements {
         cmd.args(["--entitlements", &entitlements_path]);
     }
-
     cmd.arg(&app_bundle);
 
     let status = cmd.status().expect("Failed to run codesign");
