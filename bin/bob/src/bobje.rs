@@ -15,6 +15,7 @@ use crate::tasks::android::{
     detect_android, generate_android_dex_tasks, generate_android_final_apk_tasks,
     generate_android_res_tasks, link_android_classpath,
 };
+#[cfg(target_os = "macos")]
 use crate::tasks::bundle::{bundle_is_lipo, detect_bundle, generate_bundle_tasks};
 use crate::tasks::cx::{
     copy_cx_headers, detect_asm, detect_c, detect_cpp, detect_cx, detect_objc, detect_objcpp,
@@ -296,20 +297,25 @@ impl Bobje {
             }
         };
 
-        if bobje.r#type.is_binary() && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
-            let mut bobje_x86_64 = bobje.clone();
-            bobje_x86_64.target = Some("x86_64-apple-darwin".to_string());
-            visit_bobje(&mut bobje_x86_64);
+        #[cfg(target_os = "macos")]
+        {
+            if bobje.r#type.is_binary() && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
+                let mut bobje_x86_64 = bobje.clone();
+                bobje_x86_64.target = Some("x86_64-apple-darwin".to_string());
+                visit_bobje(&mut bobje_x86_64);
 
-            let mut bobje_aarch64 = bobje.clone();
-            bobje_aarch64.target = Some("aarch64-apple-darwin".to_string());
-            visit_bobje(&mut bobje_aarch64);
-        } else {
-            visit_bobje(&mut bobje);
+                let mut bobje_aarch64 = bobje.clone();
+                bobje_aarch64.target = Some("aarch64-apple-darwin".to_string());
+                visit_bobje(&mut bobje_aarch64);
+            } else {
+                visit_bobje(&mut bobje);
+            }
+            if bobje.r#type.is_binary() && detect_bundle(&bobje) {
+                generate_bundle_tasks(&bobje, executor);
+            }
         }
-        if bobje.r#type.is_binary() && detect_bundle(&bobje) {
-            generate_bundle_tasks(&bobje, executor);
-        }
+        #[cfg(not(target_os = "macos"))]
+        visit_bobje(&mut bobje);
 
         bobje
     }

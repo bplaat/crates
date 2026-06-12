@@ -15,6 +15,7 @@ use crate::args::{Profile, Subcommand, parse_args, subcommand_help};
 use crate::bobje::Bobje;
 use crate::executor::ExecutorBuilder;
 use crate::tasks::android::{detect_android, run_android_apk};
+#[cfg(target_os = "macos")]
 use crate::tasks::bundle::{detect_bundle, run_bundle, sign_bundle};
 use crate::tasks::cx::{detect_cx, run_ld, run_ld_cunit_tests};
 use crate::tasks::jvm::{detect_jar, detect_java_kotlin, run_jar, run_java_class, run_junit_tests};
@@ -141,12 +142,11 @@ fn main() {
     let bobje = Bobje::new(&args, ".", &mut executor, true);
     let mut executor = executor.build(&format!("{}/bob.log", &args.target_dir));
 
-    let tasks_ran = executor.total_tasks() > 0;
     executor.execute(args.verbose, args.thread_count);
 
     // Ad-hoc codesign the macOS bundle after it is (re)built
     #[cfg(target_os = "macos")]
-    if tasks_ran && detect_bundle(&bobje) {
+    if executor.total_tasks() > 0 && detect_bundle(&bobje) {
         sign_bundle(&bobje);
     }
 
@@ -162,6 +162,7 @@ fn main() {
 
     // Run build artifact
     if args.subcommand == Subcommand::Run {
+        #[cfg(target_os = "macos")]
         if detect_bundle(&bobje) {
             run_bundle(&bobje);
         }

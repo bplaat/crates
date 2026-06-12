@@ -223,6 +223,7 @@ pub(crate) fn run_bundle(bobje: &Bobje) -> ! {
     exit(status.code().unwrap_or(1))
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) fn sign_bundle(bobje: &Bobje) {
     let bundle_metadata = bobje
         .manifest

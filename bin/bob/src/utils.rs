@@ -43,6 +43,7 @@ pub(crate) fn write_file_when_different(path: &str, contents: &str) -> io::Resul
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) fn write_bytes_when_different(path: &str, contents: &[u8]) -> io::Result<()> {
     if let Ok(existing) = fs::read(path)
         && existing == contents

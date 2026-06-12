@@ -5,6 +5,7 @@
  */
 
 pub(crate) mod android;
+#[cfg(target_os = "macos")]
 pub(crate) mod bundle;
 pub(crate) mod cx;
 pub(crate) mod jvm;
