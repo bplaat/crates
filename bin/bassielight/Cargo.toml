@@ -10,7 +10,7 @@ name = "BassieLight"
 identifier = "nl.bplaat.BassieLight"
 copyright = "Copyright © 2025 Bastiaan van der Plaat"
 icon = "meta/macos/icon.icon"
-entitlements = "meta/macos/entitlements.plist"
+entitlements = "meta/macos/Entitlements.plist"
 
 [lints]
 workspace = true
