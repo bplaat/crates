@@ -7,7 +7,7 @@
         "dev": "vite --mode debug",
         "build-debug": "vite build --mode debug --minify=false",
         "build-release": "vite build --mode release",
-        "test": "playwright test"
+        "test": "NODE_OPTIONS=--no-deprecation playwright test"
     },
     "dependencies": {
         "@preact/signals": "^2.3.1",
@@ -20,7 +20,7 @@
         "wouter-preact": "^3.9.0"
     },
     "devDependencies": {
-        "@playwright/test": "1.58.2",
+        "@playwright/test": "1.60.0",
         "@preact/preset-vite": "^2.10.1",
         "@tailwindcss/vite": "^4.2.1",
         "baseline-browser-mapping": "^2.10.0",
