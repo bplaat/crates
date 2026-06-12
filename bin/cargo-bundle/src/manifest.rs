@@ -29,10 +29,12 @@ pub(crate) struct BundleMetadata {
     pub identifier: String,
     pub copyright: Option<String>,
     pub minimal_os_version: Option<String>,
+    pub lipo: Option<bool>,
     pub resources_dir: Option<String>,
     pub iconset: Option<String>,
     pub icns: Option<String>,
     pub icon: Option<String>,
+    pub info_plist: Option<String>,
     pub entitlements: Option<String>,
     pub hardened_runtime: Option<bool>,
 }

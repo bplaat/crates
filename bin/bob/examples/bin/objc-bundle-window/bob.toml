@@ -1,0 +1,10 @@
+[package]
+name = "Window"
+id = "com.example.Window"
+version = "0.1.0"
+
+[dependencies]
+cocoa = { framework = "Cocoa" }
+
+[package.metadata.bundle]
+copyright = "Copyright © 2026 Bastiaan van der Plaat"

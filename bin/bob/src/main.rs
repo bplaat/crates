@@ -15,7 +15,7 @@ use crate::args::{Profile, Subcommand, parse_args, subcommand_help};
 use crate::bobje::Bobje;
 use crate::executor::ExecutorBuilder;
 use crate::tasks::android::{detect_android, run_android_apk};
-use crate::tasks::bundle::{detect_bundle, run_bundle};
+use crate::tasks::bundle::{detect_bundle, run_bundle, sign_bundle};
 use crate::tasks::cx::{detect_cx, run_ld, run_ld_cunit_tests};
 use crate::tasks::jvm::{detect_jar, detect_java_kotlin, run_jar, run_java_class, run_junit_tests};
 use crate::utils::{cache_dir, format_bytes, index_files};
@@ -141,7 +141,14 @@ fn main() {
     let bobje = Bobje::new(&args, ".", &mut executor, true);
     let mut executor = executor.build(&format!("{}/bob.log", &args.target_dir));
 
+    let tasks_ran = executor.total_tasks() > 0;
     executor.execute(args.verbose, args.thread_count);
+
+    // Ad-hoc codesign the macOS bundle after it is (re)built
+    #[cfg(target_os = "macos")]
+    if tasks_ran && detect_bundle(&bobje) {
+        sign_bundle(&bobje);
+    }
 
     // Show time taken
     if executor.total_tasks() > 0 && args.show_time {

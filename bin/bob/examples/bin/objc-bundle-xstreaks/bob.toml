@@ -7,6 +7,6 @@ version = "0.1.0"
 cocoa = { framework = "Cocoa" }
 
 [package.metadata.bundle]
-lipo = true
 icon = "icons/icon.icon"
-copyright = "Copyright © 2025 Bastiaan van der Plaat"
+resources_dir = "res"
+copyright = "Copyright © 2025-2026 Bastiaan van der Plaat"

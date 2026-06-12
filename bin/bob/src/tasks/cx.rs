@@ -297,7 +297,7 @@ pub(crate) fn generate_objc_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder)
         inputs.push(source_file.clone());
         executor.add_task_cmd(
             format!(
-                "{} -x objective-c -c {} --std=c11 {} -o {}",
+                "{} -x objective-c -fobjc-arc -c {} --std=c11 {} -o {}",
                 vars.cc, vars.cflags, source_file, object_file
             ),
             inputs,
@@ -323,7 +323,7 @@ pub(crate) fn generate_objcpp_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
         inputs.push(source_file.clone());
         executor.add_task_cmd(
             format!(
-                "{} -x objective-c++ -c {} --std=c++17 {} -o {}",
+                "{} -x objective-c++ -fobjc-arc -c {} --std=c++17 {} -o {}",
                 vars.cxx, vars.cflags, source_file, object_file
             ),
             inputs,
@@ -471,6 +471,9 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                 ));
             }
         }
+        if cfg!(target_os = "macos") && contains_cpp {
+            libs.push_str(" -lc++");
+        }
         let rpath = if cfg!(target_os = "macos") {
             "-rpath @executable_path"
         } else {
@@ -524,6 +527,10 @@ pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut ExecutorBuil
 
     // Link test executable
     let executable_file = format!("{}/test_{}", bobje.out_dir_with_target(), bobje.name);
+    let mut libs = vars.libs.clone();
+    if cfg!(target_os = "macos") && contains_cpp {
+        libs.push_str(" -lc++");
+    }
 
     let out_path = format!("{executable_file}{EXECUTABLE_EXT}");
     executor.add_task_cmd(
@@ -538,7 +545,7 @@ pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut ExecutorBuil
             },
             vars.ldflags,
             inputs.join(" "),
-            vars.libs,
+            libs,
             out_path,
         ),
         inputs,

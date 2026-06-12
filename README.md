@@ -113,6 +113,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 - [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
 - [objc2](lib/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
 - [percent-encoding](lib/percent-encoding) A minimal replacement for the [percent-encoding](https://crates.io/crates/percent-encoding) crate
+- [plist](lib/plist) A minimal replacement for the [plist](https://crates.io/crates/plist) crate
 - [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 - [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 - [semver](lib/semver) A minimal replacement for the [semver](https://crates.io/crates/semver) crate

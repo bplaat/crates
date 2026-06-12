@@ -43,6 +43,20 @@ pub(crate) fn write_file_when_different(path: &str, contents: &str) -> io::Resul
     Ok(())
 }
 
+pub(crate) fn write_bytes_when_different(path: &str, contents: &[u8]) -> io::Result<()> {
+    if let Ok(existing) = fs::read(path)
+        && existing == contents
+    {
+        return Ok(());
+    }
+
+    if let Some(parent) = Path::new(path).parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, contents)?;
+    Ok(())
+}
+
 pub(crate) fn index_files(dir: &str) -> Vec<String> {
     let mut files = Vec::new();
     let entries = fs::read_dir(dir).unwrap_or_else(|_| {

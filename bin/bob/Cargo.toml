@@ -12,6 +12,7 @@ workspace = true
 basic-toml = "0.1.9"
 directories = "6.0"
 dotenv = "0.15.0"
+plist = "1"
 regex = { version = "1.11", default-features = false, features = [
     "unicode-perl",
 ] }

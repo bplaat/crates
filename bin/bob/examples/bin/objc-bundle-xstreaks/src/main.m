@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -66,7 +66,7 @@
     if (self.userId != 0) {
         NSString* streakUpdateTime = [defaults stringForKey:@"streakUpdateTime"];
         if (streakUpdateTime) {
-            NSDateFormatter* isoDateFormatter = [[NSDateFormatter new] autorelease];
+            NSDateFormatter* isoDateFormatter = [NSDateFormatter new];
             [isoDateFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"];
             if ([[NSDate date] timeIntervalSinceDate:[isoDateFormatter dateFromString:streakUpdateTime]] < 60 * 60) {
                 NSInteger streakDays = [defaults integerForKey:@"streakDays"];
@@ -238,7 +238,7 @@
 
               NSArray* posts = json[@"data"];
               if (posts) {
-                  NSDateFormatter* isoDateFormatter = [[NSDateFormatter new] autorelease];
+                  NSDateFormatter* isoDateFormatter = [NSDateFormatter new];
                   [isoDateFormatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"];
 
                   // Count streak days
@@ -284,8 +284,12 @@
 
 @end
 
-int main(int argc, const char** argv) {
-    NSApplication* app = [NSApplication sharedApplication];
-    app.delegate = [AppDelegate new];
-    return NSApplicationMain(argc, argv);
+int main(void) {
+    @autoreleasepool {
+        NSApplication* app = [NSApplication sharedApplication];
+        AppDelegate* delegate = [AppDelegate new];
+        app.delegate = delegate;
+        [app run];
+    }
+    return EXIT_SUCCESS;
 }

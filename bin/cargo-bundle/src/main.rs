@@ -83,86 +83,124 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
             .expect("Failed to copy icon.icns");
     }
 
-    // Create Info.plist
-    let mut plist = vec![
-        ("CFBundlePackageType", "APPL".to_string()),
-        ("CFBundleName", bundle.name.clone()),
-        ("CFBundleDisplayName", bundle.name.clone()),
-        ("CFBundleIdentifier", bundle.identifier.clone()),
-        ("CFBundleVersion", manifest.package.version.clone()),
-        (
-            "CFBundleShortVersionString",
-            manifest.package.version.clone(),
-        ),
-        ("CFBundleExecutable", bundle.name.clone()),
-        (
-            "LSMinimumSystemVersion",
-            bundle
-                .minimal_os_version
-                .clone()
-                .unwrap_or("11.0".to_string()),
-        ),
-    ];
+    // Create Info.plist as binary plist
+    let mut dict = plist::Dictionary::new();
+    dict.insert("CFBundlePackageType".into(), "APPL".into());
+    dict.insert("CFBundleName".into(), bundle.name.clone().into());
+    dict.insert("CFBundleDisplayName".into(), bundle.name.clone().into());
+    dict.insert(
+        "CFBundleIdentifier".into(),
+        bundle.identifier.clone().into(),
+    );
+    dict.insert(
+        "CFBundleVersion".into(),
+        manifest.package.version.clone().into(),
+    );
+    dict.insert(
+        "CFBundleShortVersionString".into(),
+        manifest.package.version.clone().into(),
+    );
+    dict.insert("CFBundleExecutable".into(), bundle.name.clone().into());
+    dict.insert(
+        "LSMinimumSystemVersion".into(),
+        bundle
+            .minimal_os_version
+            .clone()
+            .unwrap_or_else(|| "11.0".to_string())
+            .into(),
+    );
     if let Some(copyright) = &bundle.copyright {
-        plist.push(("NSHumanReadableCopyright", copyright.clone()));
+        dict.insert("NSHumanReadableCopyright".into(), copyright.clone().into());
     }
     if bundle.iconset.is_some() || bundle.icns.is_some() || bundle.icon.is_some() {
-        plist.push(("CFBundleIconFile", "icon.icns".to_string()));
+        dict.insert("CFBundleIconFile".into(), "icon.icns".into());
         if bundle.icon.is_some() {
-            plist.push(("CFBundleIconName", "icon".to_string()));
+            dict.insert("CFBundleIconName".into(), "icon".into());
         }
     }
 
-    // Write Info.plist using the Vec
-    let mut info_plist = String::from(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-"#,
-    );
-    for (key, value) in &plist {
-        info_plist.push_str(&format!("\t<key>{key}</key>\n\t<string>{value}</string>\n"));
+    // Merge extra keys from project-local Info.plist
+    let info_plist_path = bundle
+        .info_plist
+        .as_deref()
+        .map(|p| format!("{path}/{p}"))
+        .unwrap_or_else(|| format!("{path}/Info.plist"));
+    if Path::new(&info_plist_path).exists() {
+        match plist::Value::from_file(&info_plist_path) {
+            Ok(plist::Value::Dictionary(extra)) => {
+                for (key, value) in extra {
+                    dict.insert(key, value);
+                }
+            }
+            _ => {
+                eprintln!("Invalid Info.plist file: root value must be a dictionary");
+                exit(1);
+            }
+        }
     }
-    info_plist.push_str("</dict>\n</plist>\n");
 
-    fs::write(format!("{target_dir}/Info.plist"), info_plist).expect("Failed to write Info.plist");
+    plist::Value::Dictionary(dict)
+        .to_file_binary(format!("{target_dir}/Info.plist"))
+        .expect("Failed to write binary Info.plist");
 }
 
-fn compile_lipo(
+// Compile the binary and return its path.
+fn compile_binary(
     path: &str,
     target_dir: &str,
     package: &manifest::Package,
     bundle: &manifest::BundleMetadata,
-) {
-    for target in ["x86_64-apple-darwin", "aarch64-apple-darwin"] {
+) -> String {
+    let lipo = bundle.lipo.unwrap_or(true);
+    if lipo {
+        for target in ["x86_64-apple-darwin", "aarch64-apple-darwin"] {
+            let status = Command::new("cargo")
+                .args([
+                    "build",
+                    "--release",
+                    "--manifest-path",
+                    &format!("{path}/Cargo.toml"),
+                    "--target",
+                    target,
+                ])
+                .status()
+                .expect("Failed to run cargo build");
+            assert!(status.success(), "cargo build failed for {target}");
+        }
+        let output = format!("{target_dir}/{}", bundle.name);
+        let lipo_status = Command::new("lipo")
+            .args([
+                "-create",
+                &format!("target/x86_64-apple-darwin/release/{}", package.name),
+                &format!("target/aarch64-apple-darwin/release/{}", package.name),
+                "-output",
+                &output,
+            ])
+            .status()
+            .expect("Failed to run lipo");
+        assert!(lipo_status.success(), "lipo failed");
+        output
+    } else {
         let status = Command::new("cargo")
             .args([
                 "build",
                 "--release",
                 "--manifest-path",
                 &format!("{path}/Cargo.toml"),
-                "--target",
-                target,
             ])
             .status()
             .expect("Failed to run cargo build");
-        assert!(status.success(), "cargo build failed for {target}");
+        assert!(status.success(), "cargo build failed");
+        format!("target/release/{}", package.name)
     }
-    let lipo_status = Command::new("lipo")
-        .args([
-            "-create",
-            &format!("target/x86_64-apple-darwin/release/{}", package.name),
-            &format!("target/aarch64-apple-darwin/release/{}", package.name),
-            "-output",
-            &format!("{target_dir}/{}", bundle.name),
-        ])
-        .status()
-        .expect("Failed to run lipo");
-    assert!(lipo_status.success(), "lipo failed");
 }
 
-fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) {
+fn create_bundle(
+    path: &str,
+    target_dir: &str,
+    bundle: &manifest::BundleMetadata,
+    binary_path: &str,
+) {
     // Create bundle folder structure
     let bundle_dir = format!("{target_dir}/{}.app/Contents", bundle.name);
     fs::create_dir_all(format!("{bundle_dir}/MacOS")).expect("Can't create directory");
@@ -193,39 +231,25 @@ fn create_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata
         .expect("Failed to copy Assets.car");
     }
 
-    fs::copy(
-        format!("{target_dir}/{}", bundle.name),
-        format!("{bundle_dir}/MacOS/{}", bundle.name),
-    )
-    .expect("Failed to copy executable");
+    fs::copy(binary_path, format!("{bundle_dir}/MacOS/{}", bundle.name))
+        .expect("Failed to copy executable");
 
     fs::copy(
         format!("{target_dir}/Info.plist"),
         format!("{bundle_dir}/Info.plist"),
     )
     .expect("Failed to copy Info.plist");
-
-    // Convert Info.plist to binary format
-    let info_plist_path = format!("{bundle_dir}/Info.plist");
-    let status = Command::new("plutil")
-        .args(["-convert", "binary1", &info_plist_path])
-        .status()
-        .expect("Failed to run plutil");
-    assert!(
-        status.success(),
-        "plutil failed to convert Info.plist to binary"
-    );
 }
 
 fn sign_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) {
     let app_bundle = format!("{target_dir}/{}.app", bundle.name);
 
-    // Resolve entitlements: use manifest field if set, else fall back to root entitlements.plist
+    // Resolve entitlements: use manifest field if set, else fall back to root Entitlements.plist
     let entitlements_path = bundle
         .entitlements
         .as_deref()
         .map(|e| format!("{path}/{e}"))
-        .unwrap_or_else(|| format!("{path}/entitlements.plist"));
+        .unwrap_or_else(|| format!("{path}/Entitlements.plist"));
     let has_entitlements = Path::new(&entitlements_path).exists();
 
     // Hardened Runtime: explicit manifest field, or enabled by default when entitlements are present
@@ -333,17 +357,17 @@ fn main() {
         bundle.name, manifest.package.version, args.path
     );
 
-    // Generate resource
+    // Generate resources
     let target_dir = format!("target/bundle/{}", manifest.package.name);
     generate_resources(&args.path, &target_dir, &manifest);
 
-    // Compile lipo executable
-    compile_lipo(&args.path, &target_dir, &manifest.package, bundle);
+    // Compile binary
+    let binary_path = compile_binary(&args.path, &target_dir, &manifest.package, bundle);
 
     // Create bundle folder structure
-    create_bundle(&args.path, &target_dir, bundle);
+    create_bundle(&args.path, &target_dir, bundle, &binary_path);
 
-    // Ad-hoc code sign the bundle (with entitlements if present)
+    // Ad-hoc code sign the bundle
     sign_bundle(&args.path, &target_dir, bundle);
 
     // Create zip

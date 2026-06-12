@@ -8,12 +8,11 @@ use std::fs::{self};
 use std::path::PathBuf;
 use std::process::{Command, exit};
 
-use regex::Regex;
-
 use crate::Bobje;
+use crate::args::Profile;
 use crate::executor::ExecutorBuilder;
 use crate::manifest::BundleMetadata;
-use crate::utils::{index_files, write_file_when_different};
+use crate::utils::{index_files, write_bytes_when_different};
 
 // MARK: Bundle tasks
 pub(crate) fn detect_bundle(bobje: &Bobje) -> bool {
@@ -27,7 +26,7 @@ pub(crate) fn bundle_is_lipo(bobje: &Bobje) -> bool {
         .metadata
         .bundle
         .as_ref()
-        .is_some_and(|b| b.lipo)
+        .is_some_and(|b| b.lipo.unwrap_or(bobje.profile == Profile::Release))
 }
 
 pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
@@ -42,14 +41,14 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
     let mut bundle_files = Vec::new();
 
     // Copy resources
-    if fs::metadata(&bundle_metadata.resources_dir).is_ok() {
-        let resource_files = index_files(&bundle_metadata.resources_dir);
+    if let Some(resources_dir) = &bundle_metadata.resources_dir {
+        let resource_files = index_files(resources_dir);
         for resource_file in &resource_files {
             let dest = format!(
                 "{}/Resources/{}",
                 contents_dir,
                 resource_file
-                    .trim_start_matches(&bundle_metadata.resources_dir)
+                    .trim_start_matches(resources_dir.as_str())
                     .trim_start_matches(['/', '\\'])
             );
             executor.add_task_cp(resource_file.to_string(), dest.clone());
@@ -138,26 +137,22 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
     }
 
     // Generate Info.plist
-    let info_plist_file = "Info.plist";
-    let extra_keys = if fs::metadata(info_plist_file).is_ok() {
-        let contents = fs::read_to_string(info_plist_file).expect("Can't create Info.plist");
-        let re = Regex::new(r"<dict>([\s\S]*?)<\/dict>").expect("Can't compile regex");
-        if let Some(captures) = re.captures(&contents) {
-            Some(
-                captures
-                    .get(1)
-                    .map_or("", |m| m.as_str())
-                    .trim()
-                    .to_string(),
-            )
-        } else {
-            eprintln!("Invalid Info.plist file place extra keys inside the <dict> tag");
-            exit(1);
+    let info_plist_file = bundle_metadata
+        .info_plist
+        .as_deref()
+        .unwrap_or("Info.plist");
+    let extra_dict = if fs::metadata(info_plist_file).is_ok() {
+        match plist::Value::from_file(info_plist_file) {
+            Ok(plist::Value::Dictionary(dict)) => Some(dict),
+            _ => {
+                eprintln!("Invalid Info.plist file: root value must be a dictionary");
+                exit(1);
+            }
         }
     } else {
         None
     };
-    generate_info_plist(bobje, bundle_metadata, extra_keys.as_deref());
+    generate_info_plist(bobje, bundle_metadata, extra_dict);
 
     // Copy Info.plist
     let dest = format!("{contents_dir}/Info.plist");
@@ -168,7 +163,10 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
     bundle_files.push(dest);
 
     // Generate lipo binary
-    if bundle_metadata.lipo {
+    let lipo = bundle_metadata
+        .lipo
+        .unwrap_or(bobje.profile == Profile::Release);
+    if lipo {
         let x86_64 = format!(
             "{}/x86_64-apple-darwin/{}/{}",
             bobje.target_dir, bobje.profile, bobje.name
@@ -195,7 +193,7 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
     executor.add_task_cp(
         format!(
             "{}/{}",
-            if bundle_metadata.lipo {
+            if lipo {
                 bobje.out_dir()
             } else {
                 bobje.out_dir_with_target()
@@ -225,46 +223,106 @@ pub(crate) fn run_bundle(bobje: &Bobje) -> ! {
     exit(status.code().unwrap_or(1))
 }
 
+pub(crate) fn sign_bundle(bobje: &Bobje) {
+    let bundle_metadata = bobje
+        .manifest
+        .package
+        .metadata
+        .bundle
+        .as_ref()
+        .expect("Should be some");
+    let bundle_path = format!("{}/{}.app", bobje.out_dir(), bobje.name);
+
+    // Resolve entitlements: use manifest field if set, else fall back to Entitlements.plist
+    let entitlements_path = bundle_metadata
+        .entitlements
+        .clone()
+        .unwrap_or_else(|| "Entitlements.plist".to_string());
+    let has_entitlements = fs::metadata(&entitlements_path).is_ok();
+
+    // Hardened Runtime: explicit manifest field, or enabled by default when entitlements are present
+    let use_hardened_runtime = bundle_metadata.hardened_runtime.unwrap_or(has_entitlements);
+
+    let mut args = vec![
+        "--force".to_string(),
+        "--deep".to_string(),
+        "--sign".to_string(),
+        "-".to_string(),
+    ];
+    if let Some(id) = &bobje.manifest.package.id {
+        args.push("--identifier".to_string());
+        args.push(id.clone());
+    }
+    if use_hardened_runtime {
+        args.push("--options".to_string());
+        args.push("runtime".to_string());
+    }
+    if has_entitlements {
+        args.push("--entitlements".to_string());
+        args.push(entitlements_path);
+    }
+    args.push(bundle_path);
+
+    let status = Command::new("codesign")
+        .args(&args)
+        .status()
+        .expect("Failed to run codesign");
+    if !status.success() {
+        eprintln!("codesign failed");
+        exit(1);
+    }
+}
+
 // MARK: Utils
-fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Option<&str>) {
+fn generate_info_plist(
+    bobje: &Bobje,
+    bundle: &BundleMetadata,
+    extra_dict: Option<plist::Dictionary>,
+) {
     let id = bobje.manifest.package.id.as_ref().unwrap_or_else(|| {
         eprintln!("Manifest package id is required");
         exit(1);
     });
 
-    let mut dict_entries = vec![
-        ("CFBundlePackageType".to_string(), "APPL".to_string()),
-        ("CFBundleName".to_string(), bobje.name.clone()),
-        ("CFBundleDisplayName".to_string(), bobje.name.clone()),
-        ("CFBundleIdentifier".to_string(), id.clone()),
-        ("CFBundleVersion".to_string(), bobje.version.clone()),
-        (
-            "CFBundleShortVersionString".to_string(),
-            bobje.version.clone(),
-        ),
-        ("CFBundleExecutable".to_string(), bobje.name.clone()),
-        ("LSMinimumSystemVersion".to_string(), "11.0".to_string()),
-    ];
+    let mut dict = plist::Dictionary::new();
+    dict.insert("CFBundlePackageType".into(), "APPL".into());
+    dict.insert("CFBundleName".into(), bobje.name.clone().into());
+    dict.insert("CFBundleDisplayName".into(), bobje.name.clone().into());
+    dict.insert("CFBundleIdentifier".into(), id.clone().into());
+    dict.insert("CFBundleVersion".into(), bobje.version.clone().into());
+    dict.insert(
+        "CFBundleShortVersionString".into(),
+        bobje.version.clone().into(),
+    );
+    dict.insert("CFBundleExecutable".into(), bobje.name.clone().into());
+    dict.insert(
+        "LSMinimumSystemVersion".into(),
+        bundle.minimal_os_version.clone().into(),
+    );
+
     if let Some(copyright) = &bundle.copyright {
-        dict_entries.push(("NSHumanReadableCopyright".to_string(), copyright.clone()));
+        dict.insert("NSHumanReadableCopyright".into(), copyright.clone().into());
     }
     if let Some(iconset) = &bundle.iconset {
-        let iconset_path = PathBuf::from(iconset);
-        let icon_name = iconset_path
+        let icon_name = PathBuf::from(iconset)
             .file_stem()
             .expect("Invalid iconset path")
             .to_str()
-            .expect("Invalid UTF-8 sequence");
-        dict_entries.push(("CFBundleIconFile".to_string(), format!("{icon_name}.icns")));
+            .expect("Invalid UTF-8 sequence")
+            .to_string();
+        dict.insert(
+            "CFBundleIconFile".into(),
+            format!("{icon_name}.icns").into(),
+        );
     }
     if let Some(icns) = &bundle.icns {
-        let icns_path = PathBuf::from(icns);
-        let icns_name = icns_path
+        let icns_name = PathBuf::from(icns)
             .file_name()
             .expect("Invalid icns path")
             .to_str()
-            .expect("Invalid UTF-8 sequence");
-        dict_entries.push(("CFBundleIconFile".to_string(), icns_name.to_string()));
+            .expect("Invalid UTF-8 sequence")
+            .to_string();
+        dict.insert("CFBundleIconFile".into(), icns_name.into());
     }
     if let Some(icon) = &bundle.icon {
         let icon_path = PathBuf::from(icon);
@@ -272,26 +330,23 @@ fn generate_info_plist(bobje: &Bobje, bundle: &BundleMetadata, extra_keys: Optio
             .file_stem()
             .expect("Invalid icon path")
             .to_str()
-            .expect("Invalid UTF-8 sequence");
-        dict_entries.push(("CFBundleIconFile".to_string(), format!("{icon_name}.icns")));
-        dict_entries.push(("CFBundleIconName".to_string(), icon_name.to_string()));
+            .expect("Invalid UTF-8 sequence")
+            .to_string();
+        dict.insert(
+            "CFBundleIconFile".into(),
+            format!("{icon_name}.icns").into(),
+        );
+        dict.insert("CFBundleIconName".into(), icon_name.into());
+    }
+    if let Some(extra) = extra_dict {
+        for (key, value) in extra {
+            dict.insert(key, value);
+        }
     }
 
-    let mut s = String::from(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-"#,
-    );
-    for (key, value) in &dict_entries {
-        s.push_str(&format!("\t<key>{key}</key>\n\t<string>{value}</string>\n"));
-    }
-    if let Some(extra) = extra_keys {
-        s.push_str(&format!("\t{extra}\n"));
-    }
-    s.push_str("</dict>\n</plist>\n");
-
-    write_file_when_different(&format!("{}/src-gen/Info.plist", bobje.out_dir()), &s)
+    let mut bytes = Vec::new();
+    plist::to_writer_binary(&mut bytes, &plist::Value::Dictionary(dict))
+        .expect("Can't serialize Info.plist");
+    write_bytes_when_different(&format!("{}/src-gen/Info.plist", bobje.out_dir()), &bytes)
         .expect("Can't write src-gen/Info.plist");
 }

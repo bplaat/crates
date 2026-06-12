@@ -39,25 +39,31 @@ pub(crate) struct PackageMetadata {
 #[derive(Clone, Deserialize)]
 #[serde(default)]
 pub(crate) struct BundleMetadata {
-    pub lipo: bool,
+    pub copyright: Option<String>,
     pub minimal_os_version: String,
-    pub resources_dir: String,
+    pub lipo: Option<bool>,
+    pub resources_dir: Option<String>,
     pub iconset: Option<String>,
     pub icns: Option<String>,
     pub icon: Option<String>,
-    pub copyright: Option<String>,
+    pub info_plist: Option<String>,
+    pub entitlements: Option<String>,
+    pub hardened_runtime: Option<bool>,
 }
 
 impl Default for BundleMetadata {
     fn default() -> Self {
         Self {
-            lipo: false,
+            lipo: None,
             minimal_os_version: "11.0".to_string(),
-            resources_dir: "res".to_string(),
+            resources_dir: None,
             iconset: None,
             icns: None,
             icon: None,
             copyright: None,
+            info_plist: None,
+            entitlements: None,
+            hardened_runtime: None,
         }
     }
 }

@@ -71,6 +71,7 @@ dependencies = [
  "directories",
  "dotenv",
  "enable-ansi-support",
+ "plist",
  "regex",
  "semver",
  "serde",
@@ -128,6 +129,7 @@ version = "0.1.0"
 dependencies = [
  "basic-toml",
  "copy_dir",
+ "plist",
  "serde",
 ]
 
@@ -547,6 +549,10 @@ dependencies = [
  "validate",
  "zip",
 ]
+
+[[package]]
+name = "plist"
+version = "1.9.0+patch"
 
 [[package]]
 name = "proc-macro2"
