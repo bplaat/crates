@@ -60,7 +60,7 @@ impl PlatformEventLoop {
 
         // Create menu
         unsafe {
-            let app_name: NSString = msg_send![application, valueForKey:NSString::from_str("name")];
+            let app_name: NSString = msg_send![application, valueForKey:ns_string!("name")];
 
             let menubar: *mut Object = msg_send![class!(NSMenu), new];
             let _: () = msg_send![application, setMainMenu:menubar];
@@ -74,14 +74,14 @@ impl PlatformEventLoop {
             let _: *mut Object = msg_send![app_menu,
                 addItemWithTitle:NSString::from_str(format!("About {app_name}")),
                 action:sel!(openAboutDialog:),
-                keyEquivalent:NSString::from_str("")
+                keyEquivalent:ns_string!("")
             ];
 
             let separator_item: *mut Object = msg_send![class!(NSMenuItem), separatorItem];
             let _: () = msg_send![app_menu, addItem:separator_item];
 
             let services_menu_item: *mut Object = msg_send![class!(NSMenuItem), new];
-            let _: () = msg_send![services_menu_item, setTitle:NSString::from_str("Services")];
+            let _: () = msg_send![services_menu_item, setTitle:ns_string!("Services")];
             let _: () = msg_send![app_menu, addItem:services_menu_item];
             let services_menu: *mut Object = msg_send![class!(NSMenu), new];
             let _: () = msg_send![services_menu_item, setSubmenu:services_menu];
@@ -93,18 +93,18 @@ impl PlatformEventLoop {
             let _: *mut Object = msg_send![app_menu,
                 addItemWithTitle:NSString::from_str(format!("Hide {app_name}")),
                 action:sel!(hide:),
-                keyEquivalent:NSString::from_str("h")
+                keyEquivalent:ns_string!("h")
             ];
             let hide_others_menu_item: *mut Object = msg_send![app_menu,
-                addItemWithTitle:NSString::from_str("Hide Others"),
+                addItemWithTitle:ns_string!("Hide Others"),
                 action:sel!(hideOtherApplications:),
-                keyEquivalent:NSString::from_str("h")
+                keyEquivalent:ns_string!("h")
             ];
             let _: () = msg_send![hide_others_menu_item, setKeyEquivalentModifierMask:NS_EVENT_MODIFIER_FLAG_OPTION | NS_EVENT_MODIFIER_FLAG_COMMAND];
             let _: *mut Object = msg_send![app_menu,
-                addItemWithTitle:NSString::from_str("Show All"),
+                addItemWithTitle:ns_string!("Show All"),
                 action:sel!(unhideAllApplications:),
-                keyEquivalent:NSString::from_str("")];
+                keyEquivalent:ns_string!("")];
 
             let separator_item: *mut Object = msg_send![class!(NSMenuItem), separatorItem];
             let _: () = msg_send![app_menu, addItem:separator_item];
@@ -112,80 +112,80 @@ impl PlatformEventLoop {
             let _: *mut Object = msg_send![app_menu,
                 addItemWithTitle:NSString::from_str(format!("Quit {app_name}")),
                 action:sel!(terminate:),
-                keyEquivalent:NSString::from_str("q")];
+                keyEquivalent:ns_string!("q")];
 
             // File menu
             let file_menu_item: *mut Object = msg_send![class!(NSMenuItem), new];
-            let _: () = msg_send![file_menu_item, setTitle:NSString::from_str("File")];
+            let _: () = msg_send![file_menu_item, setTitle:ns_string!("File")];
             let _: () = msg_send![menubar, addItem:file_menu_item];
             let file_menu: *mut Object = msg_send![class!(NSMenu), new];
             let _: () = msg_send![file_menu_item, setSubmenu:file_menu];
 
             let _: *mut Object = msg_send![file_menu,
-                addItemWithTitle:NSString::from_str("Close Window"),
+                addItemWithTitle:ns_string!("Close Window"),
                 action:sel!(performClose:),
-                keyEquivalent:NSString::from_str("w")];
+                keyEquivalent:ns_string!("w")];
 
             // Edit menu
             let edit_menu_item: *mut Object = msg_send![class!(NSMenuItem), new];
-            let _: () = msg_send![edit_menu_item, setTitle:NSString::from_str("Edit")];
+            let _: () = msg_send![edit_menu_item, setTitle:ns_string!("Edit")];
             let _: () = msg_send![menubar, addItem:edit_menu_item];
             let edit_menu: *mut Object = msg_send![class!(NSMenu), new];
             let _: () = msg_send![edit_menu_item, setSubmenu:edit_menu];
 
             let _: *mut Object = msg_send![edit_menu,
-                addItemWithTitle:NSString::from_str("Undo"),
+                addItemWithTitle:ns_string!("Undo"),
                 action:sel!(undo:),
-                keyEquivalent:NSString::from_str("z")];
+                keyEquivalent:ns_string!("z")];
             let _: *mut Object = msg_send![edit_menu,
-                addItemWithTitle:NSString::from_str("Redo"),
+                addItemWithTitle:ns_string!("Redo"),
                 action:sel!(redo:),
-                keyEquivalent:NSString::from_str("Z")];
+                keyEquivalent:ns_string!("Z")];
 
             let separator_item: *mut Object = msg_send![class!(NSMenuItem), separatorItem];
             let _: () = msg_send![edit_menu, addItem:separator_item];
 
             let _: *mut Object = msg_send![edit_menu,
-                addItemWithTitle:NSString::from_str("Cut"),
+                addItemWithTitle:ns_string!("Cut"),
                 action:sel!(cut:),
-                keyEquivalent:NSString::from_str("x")];
+                keyEquivalent:ns_string!("x")];
             let _: *mut Object = msg_send![edit_menu,
-                addItemWithTitle:NSString::from_str("Copy"),
+                addItemWithTitle:ns_string!("Copy"),
                 action:sel!(copy:),
-                keyEquivalent:NSString::from_str("c")];
+                keyEquivalent:ns_string!("c")];
             let _: *mut Object = msg_send![edit_menu,
-                addItemWithTitle:NSString::from_str("Paste"),
+                addItemWithTitle:ns_string!("Paste"),
                 action:sel!(paste:),
-                keyEquivalent:NSString::from_str("v")];
+                keyEquivalent:ns_string!("v")];
             let _: *mut Object = msg_send![edit_menu,
-                addItemWithTitle:NSString::from_str("Delete"),
+                addItemWithTitle:ns_string!("Delete"),
                 action:sel!(delete:),
-                keyEquivalent:NSString::from_str("")];
+                keyEquivalent:ns_string!("")];
             let _: *mut Object = msg_send![edit_menu,
-                addItemWithTitle:NSString::from_str("Select All"),
+                addItemWithTitle:ns_string!("Select All"),
                 action:sel!(selectAll:),
-                keyEquivalent:NSString::from_str("a")];
+                keyEquivalent:ns_string!("a")];
 
             // Window menu
             let window_menu_item: *mut Object = msg_send![class!(NSMenuItem), new];
-            let _: () = msg_send![window_menu_item, setTitle:NSString::from_str("Window")];
+            let _: () = msg_send![window_menu_item, setTitle:ns_string!("Window")];
             let _: () = msg_send![menubar, addItem:window_menu_item];
             let window_menu: *mut Object = msg_send![class!(NSMenu), new];
             let _: () = msg_send![window_menu_item, setSubmenu:window_menu];
             let _: () = msg_send![application, setWindowsMenu:window_menu];
 
             let _: *mut Object = msg_send![window_menu,
-                addItemWithTitle:NSString::from_str("Minimize"),
+                addItemWithTitle:ns_string!("Minimize"),
                 action:sel!(performMiniaturize:),
-                keyEquivalent:NSString::from_str("m")];
+                keyEquivalent:ns_string!("m")];
             let _: *mut Object = msg_send![window_menu,
-                addItemWithTitle:NSString::from_str("Zoom"),
+                addItemWithTitle:ns_string!("Zoom"),
                 action:sel!(performZoom:),
-                keyEquivalent:NSString::from_str("")];
+                keyEquivalent:ns_string!("")];
 
             // Help menu
             let help_menu_item: *mut Object = msg_send![class!(NSMenuItem), new];
-            let _: () = msg_send![help_menu_item, setTitle:NSString::from_str("Help")];
+            let _: () = msg_send![help_menu_item, setTitle:ns_string!("Help")];
             let _: () = msg_send![menubar, addItem:help_menu_item];
             let help_menu: *mut Object = msg_send![class!(NSMenu), new];
             let _: () = msg_send![help_menu_item, setSubmenu:help_menu];

@@ -132,7 +132,7 @@ impl PlatformWebview {
             let _: () = msg_send![webview, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
             if unsafe { self.0.background_color }.is_some() {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
-                let _: () = msg_send![webview, setValue:value, forKey:NSString::from_str("drawsBackground")];
+                let _: () = msg_send![webview, setValue:value, forKey:ns_string!("drawsBackground")];
             }
             let useragent = format!(
                 "Mozilla/5.0 (Macintosh; {}) bwebview/{}",
@@ -143,7 +143,7 @@ impl PlatformWebview {
             let _: () = msg_send![
                 webview,
                 addObserver:webview_delegate,
-                forKeyPath:NSString::from_str("title"),
+                forKeyPath:ns_string!("title"),
                 options:NS_KEY_VALUE_OBSERVING_OPTION_NEW,
                 context:null::<c_void>()
             ];
@@ -161,7 +161,7 @@ impl PlatformWebview {
                 let webview_preferences: *mut Object =
                     msg_send![webview_configuration, preferences];
                 let ns_bool_yes: *mut Object = msg_send![class!(NSNumber), numberWithBool:true];
-                let _: () = msg_send![webview_preferences, setValue:ns_bool_yes, forKey:NSString::from_str("developerExtrasEnabled")];
+                let _: () = msg_send![webview_preferences, setValue:ns_bool_yes, forKey:ns_string!("developerExtrasEnabled")];
             }
             webview
         };
@@ -182,9 +182,9 @@ impl PlatformWebview {
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
                     forMainFrameOnly:true];
             let _: () = msg_send![user_content_controller, addUserScript:user_script];
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate, name:NSString::from_str("ipc")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate, name:ns_string!("ipc")];
             #[cfg(feature = "log")]
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate, name:NSString::from_str("console")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate, name:ns_string!("console")];
         }
 
         self.0.webview = webview;
@@ -248,7 +248,7 @@ impl crate::WebviewInterface for PlatformWebview {
         if !self.0.webview.is_null() {
             unsafe {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
-                let _: () = msg_send![self.0.webview, setValue:value, forKey:NSString::from_str("drawsBackground")];
+                let _: () = msg_send![self.0.webview, setValue:value, forKey:ns_string!("drawsBackground")];
             }
         }
     }

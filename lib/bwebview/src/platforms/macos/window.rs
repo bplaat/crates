@@ -144,7 +144,7 @@ impl PlatformWindow {
             }
             #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
-                let _: Bool = msg_send![window, setFrameAutosaveName:NSString::from_str("window")];
+                let _: Bool = msg_send![window, setFrameAutosaveName:ns_string!("window")];
             }
             let _: () = msg_send![window, setDelegate:window_delegate];
             window
