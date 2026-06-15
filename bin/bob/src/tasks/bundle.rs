@@ -105,14 +105,17 @@ pub(crate) fn generate_bundle_tasks(bobje: &Bobje, executor: &mut ExecutorBuilde
             .expect("Invalid icon path")
             .to_str()
             .expect("Invalid UTF-8 sequence");
+        // actool resolves paths relative to the icon file, not the process CWD, so use absolute paths
+        let cwd = std::env::current_dir().expect("Failed to get CWD");
+        let icon_abs = cwd.join(icon).to_string_lossy().into_owned();
+        let out_abs = cwd.join(bobje.out_dir()).to_string_lossy().into_owned();
         executor.add_task_cmd(
             format!(
-                "actool {icon} --compile {} --platform macosx --minimum-deployment-target {} \
+                "actool {icon_abs} --compile {out_abs} --platform macosx \
+                --minimum-deployment-target {} \
                 --target-device mac --app-icon {icon_name} --include-all-app-icons \
-                --output-partial-info-plist {}/src-gen/partial.plist > /dev/null",
-                bobje.out_dir(),
-                bundle_metadata.minimal_os_version,
-                bobje.out_dir()
+                --output-partial-info-plist {out_abs}/src-gen/partial.plist > /dev/null",
+                bundle_metadata.minimal_os_version
             ),
             vec![icon.clone()],
             vec![

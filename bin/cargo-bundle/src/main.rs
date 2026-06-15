@@ -51,11 +51,21 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
 
     // Compile .icon dir to Assets.car and icon.icns if needed
     if let Some(icon) = &bundle.icon {
+        // actool resolves paths relative to the icon file, not the process CWD, so use absolute paths
+        let icon_abs = fs::canonicalize(format!("{path}/{icon}"))
+            .expect("Failed to resolve icon path")
+            .to_string_lossy()
+            .into_owned();
+        let target_abs = fs::canonicalize(target_dir)
+            .expect("Failed to resolve target dir")
+            .to_string_lossy()
+            .into_owned();
+        let partial_plist_abs = format!("{target_abs}/partial.plist");
         let actool_output = Command::new("actool")
             .args([
-                &format!("{path}/{icon}"),
+                &icon_abs,
                 "--compile",
-                target_dir,
+                &target_abs,
                 "--platform",
                 "macosx",
                 "--minimum-deployment-target",
@@ -66,13 +76,14 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
                 "icon",
                 "--include-all-app-icons",
                 "--output-partial-info-plist",
-                &format!("{target_dir}/partial.plist"),
+                &partial_plist_abs,
             ])
             .output()
             .expect("Failed to run actool");
-        let actool_stderr = String::from_utf8_lossy(&actool_output.stderr);
-        if actool_stderr.contains("A required plugin failed to load") {
-            eprintln!("actool failed: {}", actool_stderr.trim());
+        if !actool_output.status.success() {
+            let stdout = String::from_utf8_lossy(&actool_output.stdout);
+            let stderr = String::from_utf8_lossy(&actool_output.stderr);
+            eprintln!("actool failed:\n{stdout}{stderr}");
             exit(1);
         }
     }
