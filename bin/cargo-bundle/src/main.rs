@@ -96,6 +96,7 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
 
     // Create Info.plist as binary plist
     let mut dict = plist::Dictionary::new();
+    dict.insert("CFBundleInfoDictionaryVersion".into(), "6.0".into());
     dict.insert("CFBundlePackageType".into(), "APPL".into());
     dict.insert("CFBundleName".into(), bundle.name.clone().into());
     dict.insert("CFBundleDisplayName".into(), bundle.name.clone().into());
@@ -129,6 +130,7 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
             dict.insert("CFBundleIconName".into(), "icon".into());
         }
     }
+    dict.insert("NSHighResolutionCapable".into(), true.into());
 
     // Merge extra keys from project-local Info.plist
     let info_plist_path = bundle

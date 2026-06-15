@@ -289,6 +289,7 @@ fn generate_info_plist(
     });
 
     let mut dict = plist::Dictionary::new();
+    dict.insert("CFBundleInfoDictionaryVersion".into(), "6.0".into());
     dict.insert("CFBundlePackageType".into(), "APPL".into());
     dict.insert("CFBundleName".into(), bobje.name.clone().into());
     dict.insert("CFBundleDisplayName".into(), bobje.name.clone().into());
@@ -342,6 +343,8 @@ fn generate_info_plist(
         );
         dict.insert("CFBundleIconName".into(), icon_name.into());
     }
+    dict.insert("NSHighResolutionCapable".into(), true.into());
+
     if let Some(extra) = extra_dict {
         for (key, value) in extra {
             dict.insert(key, value);
