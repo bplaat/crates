@@ -20,15 +20,15 @@ fn main() {
     </dependency>
     <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
         <application>
-            <!-- Windows 10 and Windows 11 -->
+            <!-- Windows 10/11 -->
             <supportedOS Id="{{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}}"/>
         </application>
     </compatibility>
     <asmv3:application>
         <asmv3:windowsSettings>
-            <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
-            <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">permonitorv2</dpiAwareness>
             <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+            <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+            <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
         </asmv3:windowsSettings>
     </asmv3:application>
     <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
