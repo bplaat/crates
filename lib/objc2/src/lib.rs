@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 pub use encode::{Encode, Encoding};
+pub use objc2_proc_macros::{define_class, extern_class};
 
 /// Encode
 pub mod encode;

@@ -57,4 +57,21 @@ mod test {
             let _: &AutoreleasePool = pool;
         });
     }
+
+    #[test]
+    fn test_autoreleasepool_with_objc_objects() {
+        #[link(name = "Foundation", kind = "framework")]
+        unsafe extern "C" {}
+
+        autoreleasepool(|_| {
+            // SAFETY: NSObject is a valid Foundation class; new returns a fully initialized object;
+            // autorelease hands ownership to the pool, which releases it when drained.
+            unsafe {
+                let obj: *mut crate::runtime::AnyObject =
+                    crate::msg_send![crate::class!(NSObject), new];
+                assert!(!obj.is_null());
+                let _: *mut crate::runtime::AnyObject = crate::msg_send![obj, autorelease];
+            }
+        });
+    }
 }

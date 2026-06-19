@@ -258,4 +258,47 @@ mod test {
         let name = unsafe { CStr::from_ptr(sel_getName(sel!(setObject: forKey:).0)) };
         assert_eq!(name.to_bytes(), b"setObject:forKey:");
     }
+
+    #[test]
+    fn test_class_macro_returns_null_for_unknown() {
+        let cls = class!(NoSuchClassXyzAbc999);
+        assert!(cls.is_null(), "unknown class name must return null");
+    }
+
+    #[test]
+    fn test_class_macro_returns_non_null_for_known() {
+        let cls = class!(NSObject);
+        assert!(!cls.is_null(), "NSObject must always be resolvable");
+    }
+
+    #[test]
+    fn test_msg_send_retain_count() {
+        // SAFETY: NSObject is a valid Foundation class; alloc/init/retain/release/retainCount are standard.
+        unsafe {
+            let obj: *mut AnyObject = msg_send![class!(NSObject), alloc];
+            let obj: *mut AnyObject = msg_send![obj, init];
+            let rc1: u64 = msg_send![obj, retainCount];
+            let _: *mut AnyObject = msg_send![obj, retain];
+            let rc2: u64 = msg_send![obj, retainCount];
+            assert_eq!(rc2, rc1 + 1);
+            let _: () = msg_send![obj, release];
+            let _: () = msg_send![obj, release];
+        }
+    }
+
+    #[test]
+    fn test_msg_send_bool_return() {
+        // SAFETY: NSString is a valid Foundation class; isEqualToString: is a standard selector.
+        unsafe {
+            use crate::runtime::Bool;
+            let ns: *mut AnyObject = msg_send![class!(NSString), alloc];
+            let ns: *mut AnyObject = msg_send![ns, init];
+            // An empty NSString is equal to another empty NSString.
+            let other: *mut AnyObject = msg_send![class!(NSString), new];
+            let equal: Bool = msg_send![ns, isEqualToString: other];
+            assert_eq!(equal, Bool::YES);
+            let _: () = msg_send![ns, release];
+            let _: () = msg_send![other, release];
+        }
+    }
 }

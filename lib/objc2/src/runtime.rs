@@ -11,7 +11,7 @@ use crate::ffi::*;
 
 /// Class type (opaque).
 #[repr(C)]
-pub struct AnyClass(u8);
+pub struct AnyClass([u8; 0]);
 
 impl AnyClass {
     /// Get a class by name, returning `None` if not found.
@@ -48,7 +48,7 @@ unsafe impl Encode for Sel {
 
 /// AnyObject type (opaque).
 #[repr(C)]
-pub struct AnyObject(u8);
+pub struct AnyObject([u8; 0]);
 
 // SAFETY: an ObjC object pointer has encoding `@` as defined by the Apple ABI.
 unsafe impl Encode for *const AnyObject {
@@ -119,6 +119,7 @@ impl AnyObject {
 
 /// Objective-C boolean type.
 #[repr(transparent)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Bool {
     value: u8,
 }
@@ -197,6 +198,25 @@ impl ClassBuilder {
             None
         } else {
             Some(Self(class))
+        }
+    }
+
+    /// Add an instance variable of any type without requiring `T: Encode`.
+    ///
+    /// Stores `T` as a single opaque ivar with size/alignment derived from its layout.
+    /// Used internally by `define_class!`-generated code; prefer `add_ivar` for typed ivars.
+    #[doc(hidden)]
+    pub fn add_ivar_raw<T>(&mut self, name: &CStr) -> bool {
+        // SAFETY: `self.0` is a valid not-yet-registered class pair; `name` is null-terminated;
+        // `c"?"` is the ObjC "unknown" encoding, valid for any opaque Rust type.
+        unsafe {
+            class_addIvar(
+                self.0,
+                name.as_ptr(),
+                size_of::<T>(),
+                align_of::<T>().trailing_zeros() as u8,
+                c"?".as_ptr(),
+            )
         }
     }
 
@@ -318,6 +338,19 @@ mod test {
                 .to_str()
                 .expect("valid encoding"),
             "v@:iB"
+        );
+    }
+
+    #[test]
+    fn test_classbuilder_duplicate_name_returns_none() {
+        extern "C" fn noop(_this: *mut AnyObject, _cmd: Sel) {}
+        let mut builder =
+            ClassBuilder::new(c"DupTestClass", class!(NSObject)).expect("first registration ok");
+        assert!(builder.add_method(sel!(noop), noop as extern "C" fn(_, _)));
+        builder.register();
+        assert!(
+            ClassBuilder::new(c"DupTestClass", class!(NSObject)).is_none(),
+            "re-registering an existing class name must return None"
         );
     }
 }
