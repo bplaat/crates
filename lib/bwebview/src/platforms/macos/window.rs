@@ -4,15 +4,74 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::c_void;
 use std::ptr::null_mut;
 
-use objc2::runtime::{AnyClass, AnyObject as Object, Bool, ClassBuilder, Sel};
-use objc2::{class, msg_send, sel};
+use objc2::runtime::{AnyObject as Object, Bool};
+use objc2::{class, define_class, msg_send};
 
 use super::cocoa::*;
-use super::event_loop::{IVAR_PTR, IVAR_PTR_CSTR, send_event};
+use super::event_loop::send_event;
 use crate::{LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent};
+
+// MARK: WindowDelegate
+define_class!(
+    #[unsafe(super(NSObject))]
+    struct WindowDelegate;
+
+    impl WindowDelegate {
+        #[unsafe(method(windowDidMove:))]
+        fn _window_did_move(&self, notification: *mut Object) { self.window_did_move(notification); }
+
+        #[unsafe(method(windowDidResize:))]
+        fn _window_did_resize(&self, notification: *mut Object) { self.window_did_resize(notification); }
+
+        #[unsafe(method(windowWillClose:))]
+        fn _window_will_close(&self, _: *mut Object) { self.window_will_close(); }
+
+        #[unsafe(method(windowWillEnterFullScreen:))]
+        fn _window_will_enter_fullscreen(&self, _: *mut Object) { self.window_will_enter_fullscreen(); }
+
+        #[unsafe(method(windowWillExitFullScreen:))]
+        fn _window_will_exit_fullscreen(&self, _: *mut Object) { self.window_will_exit_fullscreen(); }
+    }
+);
+
+impl WindowDelegate {
+    fn window_did_move(&self, notification: *mut Object) {
+        let window: *mut Object = unsafe { msg_send![notification, object] };
+        let frame: NSRect = unsafe { msg_send![window, frame] };
+        send_event(crate::Event::Window(WindowEvent::Move(LogicalPoint::new(
+            frame.origin.x as f32,
+            frame.origin.y as f32,
+        ))));
+    }
+
+    fn window_did_resize(&self, notification: *mut Object) {
+        let window: *mut Object = unsafe { msg_send![notification, object] };
+        let content_view: *mut Object = unsafe { msg_send![window, contentView] };
+        let frame: NSRect = unsafe { msg_send![content_view, frame] };
+        send_event(crate::Event::Window(WindowEvent::Resize(LogicalSize::new(
+            frame.size.width as f32,
+            frame.size.height as f32,
+        ))));
+    }
+
+    fn window_will_close(&self) {
+        send_event(crate::Event::Window(WindowEvent::Close));
+    }
+
+    fn window_will_enter_fullscreen(&self) {
+        send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
+            true,
+        )));
+    }
+
+    fn window_will_exit_fullscreen(&self) {
+        send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
+            false,
+        )));
+    }
+}
 
 pub(super) struct PlatformWindowData {
     pub(super) window: *mut Object,
@@ -23,51 +82,18 @@ pub(crate) struct PlatformWindow(pub(super) Box<PlatformWindowData>);
 
 impl PlatformWindow {
     pub(crate) fn new(builder: &WindowBuilder) -> Self {
-        // Register WindowDelegate class
-        if AnyClass::get(c"WindowDelegate").is_none() {
-            let mut decl = ClassBuilder::new(c"WindowDelegate", class!(NSObject))
-                .expect("Can't create WindowDelegate class");
-            decl.add_ivar::<*const c_void>(IVAR_PTR_CSTR);
-            unsafe {
-                decl.add_method(
-                    sel!(windowDidMove:),
-                    window_did_move as extern "C" fn(_, _, _),
-                );
-                decl.add_method(
-                    sel!(windowDidResize:),
-                    window_did_resize as extern "C" fn(_, _, _),
-                );
-                decl.add_method(
-                    sel!(windowWillClose:),
-                    window_will_close as extern "C" fn(_, _, _),
-                );
-                decl.add_method(
-                    sel!(windowWillEnterFullScreen:),
-                    window_will_enter_fullscreen as extern "C" fn(_, _, _),
-                );
-                decl.add_method(
-                    sel!(windowWillExitFullScreen:),
-                    window_will_exit_fullscreen as extern "C" fn(_, _, _),
-                );
-            }
-            decl.register();
-            let _: () =
-                unsafe { msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing:Bool::NO] };
-        }
+        // Register WindowDelegate class and configure NSWindow (idempotent)
+        let _: () =
+            unsafe { msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing:Bool::NO] };
 
         // Allocate window data box first so we have a stable ptr
         let mut window_data = Box::new(PlatformWindowData {
-            window: std::ptr::null_mut(),
+            window: null_mut(),
             background_color: builder.background_color,
         });
 
-        // Create WindowDelegate with _ptr pointing to the box
-        let window_delegate: *mut Object = unsafe { msg_send![class!(WindowDelegate), new] };
-        unsafe {
-            #[allow(deprecated)]
-            let ptr_ivar = (*window_delegate).get_mut_ivar::<*const c_void>(IVAR_PTR);
-            *ptr_ivar = window_data.as_ref() as *const PlatformWindowData as *const c_void;
-        };
+        // Create WindowDelegate instance
+        let window_delegate: *mut Object = unsafe { msg_send![WindowDelegate::class(), new] };
 
         // Create window
         let screen_rect: NSRect = if let Some(monitor) = builder.monitor {
@@ -229,47 +255,4 @@ impl crate::WindowInterface for PlatformWindow {
             (window_frame.size.height - content_rect.size.height) as f32,
         )
     }
-}
-
-extern "C" fn window_did_move(_this: *mut Object, _sel: Sel, notification: *mut Object) {
-    let window: *mut Object = unsafe { msg_send![notification, object] };
-    let frame: NSRect = unsafe { msg_send![window, frame] };
-    send_event(crate::Event::Window(WindowEvent::Move(LogicalPoint::new(
-        frame.origin.x as f32,
-        frame.origin.y as f32,
-    ))));
-}
-
-extern "C" fn window_did_resize(_this: *mut Object, _sel: Sel, notification: *mut Object) {
-    let window: *mut Object = unsafe { msg_send![notification, object] };
-    let content_view: *mut Object = unsafe { msg_send![window, contentView] };
-    let frame: NSRect = unsafe { msg_send![content_view, frame] };
-    send_event(crate::Event::Window(WindowEvent::Resize(LogicalSize::new(
-        frame.size.width as f32,
-        frame.size.height as f32,
-    ))));
-}
-
-extern "C" fn window_will_close(_this: *mut Object, _sel: Sel, _notification: *mut Object) {
-    send_event(crate::Event::Window(WindowEvent::Close));
-}
-
-extern "C" fn window_will_enter_fullscreen(
-    _this: *mut Object,
-    _sel: Sel,
-    _notification: *mut Object,
-) {
-    send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
-        true,
-    )));
-}
-
-extern "C" fn window_will_exit_fullscreen(
-    _this: *mut Object,
-    _sel: Sel,
-    _notification: *mut Object,
-) {
-    send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
-        false,
-    )));
 }

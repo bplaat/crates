@@ -4,18 +4,106 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 
 use block2::Block;
-use objc2::runtime::{AnyClass, AnyObject as Object, Bool, ClassBuilder, Sel};
-use objc2::{class, msg_send, sel};
+use objc2::runtime::{AnyObject as Object, Bool};
+use objc2::{class, define_class, msg_send};
 
 use super::cocoa::*;
-use super::event_loop::{IVAR_PTR, IVAR_PTR_CSTR, send_event};
+use super::event_loop::send_event;
 use super::webkit::*;
 use super::window::PlatformWindow;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent};
+
+// MARK: WebviewDelegate
+define_class!(
+    #[unsafe(super(NSObject))]
+    struct WebviewDelegate;
+
+    impl WebviewDelegate {
+        #[unsafe(method(webView:didStartProvisionalNavigation:))]
+        fn _did_start_provisional_navigation(&self, _: *mut Object, _: *mut Object) { self.did_start_provisional_navigation(); }
+
+        #[unsafe(method(webView:didFinishNavigation:))]
+        fn _did_finish_navigation(&self, _: *mut Object, _: *mut Object) { self.did_finish_navigation(); }
+
+        #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
+        fn _observe_value(&self, key_path: NSString, _: *mut Object, change: *mut Object, _: *mut c_void) {
+            self.observe_value(key_path, change);
+        }
+
+        #[unsafe(method(webView:decidePolicyForNavigationAction:decisionHandler:))]
+        fn _decide_policy(&self, _: *mut Object, navigation_action: *mut Object, decision_handler: &Block<dyn Fn(i64)>) {
+            self.decide_policy(navigation_action, decision_handler);
+        }
+
+        #[unsafe(method(userContentController:didReceiveScriptMessage:))]
+        fn _did_receive_script_message(&self, _: *mut Object, message: *mut Object) {
+            self.did_receive_script_message(message);
+        }
+    }
+);
+
+impl WebviewDelegate {
+    fn did_start_provisional_navigation(&self) {
+        send_event(crate::Event::Webview(WebviewEvent::PageLoadStart));
+    }
+
+    fn did_finish_navigation(&self) {
+        send_event(crate::Event::Webview(WebviewEvent::PageLoadFinish));
+    }
+
+    fn observe_value(&self, key_path: NSString, change: *mut Object) {
+        if key_path.to_string() == "title" {
+            let change: NSString =
+                unsafe { msg_send![change, objectForKey:NSKeyValueChangeNewKey] };
+            send_event(crate::Event::Webview(WebviewEvent::PageTitleChange(
+                change.to_string(),
+            )));
+        }
+    }
+
+    fn decide_policy(&self, navigation_action: *mut Object, decision_handler: &Block<dyn Fn(i64)>) {
+        unsafe {
+            let target_frame: *mut Object = msg_send![navigation_action, targetFrame];
+            if target_frame.is_null() {
+                let request: *mut Object = msg_send![navigation_action, request];
+                let url: *mut Object = msg_send![request, URL];
+                let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
+                let _: Bool = msg_send![workspace, openURL:url];
+                decision_handler.call((WK_NAVIGATION_ACTION_POLICY_CANCEL,));
+            } else {
+                decision_handler.call((WK_NAVIGATION_ACTION_POLICY_ALLOW,));
+            }
+        }
+    }
+
+    fn did_receive_script_message(&self, message: *mut Object) {
+        let name: NSString = unsafe { msg_send![message, name] };
+        let name = name.to_string();
+        let body: NSString = unsafe { msg_send![message, body] };
+        let body = body.to_string();
+
+        #[cfg(feature = "log")]
+        if name == "console" {
+            let (level, message) = body.split_at(1);
+            match level {
+                "e" => log::error!("{message}"),
+                "w" => log::warn!("{message}"),
+                "i" | "l" => log::info!("{message}"),
+                "d" => log::debug!("{message}"),
+                "t" => log::trace!("{message}"),
+                _ => unimplemented!(),
+            }
+        }
+        if name == "ipc" {
+            send_event(crate::Event::Webview(WebviewEvent::MessageReceive(body)));
+        }
+    }
+}
 
 pub(super) struct WebviewData {
     pub(super) window: *mut Object,
@@ -30,50 +118,15 @@ impl PlatformWebview {
         PlatformWebview(Box::new(WebviewData {
             window: window.0.window,
             background_color: window.0.background_color,
-            webview: std::ptr::null_mut(),
+            webview: null_mut(),
         }))
     }
 }
 
 impl PlatformWebview {
     pub(crate) fn init_webview(&mut self, builder: WebviewBuilder<'_>) {
-        // Register WebviewDelegate class once
-        if AnyClass::get(c"WebviewDelegate").is_none() {
-            let mut decl = ClassBuilder::new(c"WebviewDelegate", class!(NSObject))
-                .expect("Can't create WebviewDelegate class");
-            decl.add_ivar::<*const c_void>(IVAR_PTR_CSTR);
-            unsafe {
-                decl.add_method(
-                    sel!(webView:didStartProvisionalNavigation:),
-                    webview_did_start_provisional_navigation as extern "C" fn(_, _, _, _),
-                );
-                decl.add_method(
-                    sel!(webView:didFinishNavigation:),
-                    webview_did_finish_navigation as extern "C" fn(_, _, _, _),
-                );
-                decl.add_method(
-                    sel!(observeValueForKeyPath:ofObject:change:context:),
-                    webview_observe_value_for_key_path as extern "C" fn(_, _, _, _, _, _),
-                );
-                decl.add_method(
-                    sel!(webView:decidePolicyForNavigationAction:decisionHandler:),
-                    webview_decide_policy_for_navigation_action as extern "C" fn(_, _, _, _, _),
-                );
-                decl.add_method(
-                    sel!(userContentController:didReceiveScriptMessage:),
-                    webview_did_receive_script_message as extern "C" fn(_, _, _, _),
-                );
-            }
-            decl.register();
-        }
-
-        // Create WebviewDelegate and set _ptr to PlatformWindowData
-        let webview_delegate: *mut Object = unsafe { msg_send![class!(WebviewDelegate), new] };
-        unsafe {
-            #[allow(deprecated)]
-            let ptr_ivar = (*webview_delegate).get_mut_ivar::<*const c_void>(IVAR_PTR);
-            *ptr_ivar = self.0.as_ref() as *const WebviewData as *const c_void;
-        };
+        // Create WebviewDelegate instance (registers class lazily on first call)
+        let webview_delegate: *mut Object = unsafe { msg_send![WebviewDelegate::class(), new] };
 
         // Create webview
         let webview = unsafe {
@@ -86,29 +139,12 @@ impl PlatformWebview {
 
             #[cfg(feature = "custom_protocol")]
             for custom_protocol in builder.custom_protocols {
-                use objc2::runtime::ClassBuilder;
-
                 let url_scheme = NSString::from_str(&custom_protocol.scheme);
-
-                let class_name = std::ffi::CString::new(format!(
-                    "{}_CustomProtocolDelegate",
-                    custom_protocol.scheme
-                ))
-                .expect("Can't create CString");
-                let mut decl = ClassBuilder::new(class_name.as_c_str(), class!(NSObject))
-                    .expect("Can't create custom protocol delegate class");
-                decl.add_ivar::<*const c_void>(IVAR_PTR_CSTR);
-                decl.add_method(
-                    objc2::sel!(webView:startURLSchemeTask:),
-                    custom_protocol_start_url_scheme_task as extern "C" fn(_, _, _, _),
-                );
-                let class = decl.register();
-
-                let delegate: *mut Object = msg_send![class, new];
-                #[allow(deprecated)]
-                let ptr_to_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_PTR);
-                *ptr_to_ptr = Box::leak(Box::new(custom_protocol)) as *mut _ as *const c_void;
-
+                let delegate: *mut Object = msg_send![CustomProtocolDelegate::class(), new];
+                (*(delegate as *const CustomProtocolDelegate))
+                    .ivars()
+                    .custom_protocol
+                    .set(Box::leak(Box::new(custom_protocol)));
                 let _: () = msg_send![webview_config, setURLSchemeHandler:delegate, forURLScheme:url_scheme];
             }
 
@@ -132,7 +168,8 @@ impl PlatformWebview {
             let _: () = msg_send![webview, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
             if unsafe { self.0.background_color }.is_some() {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
-                let _: () = msg_send![webview, setValue:value, forKey:ns_string!("drawsBackground")];
+                let _: () =
+                    msg_send![webview, setValue:value, forKey:ns_string!("drawsBackground")];
             }
             let useragent = format!(
                 "Mozilla/5.0 (Macintosh; {}) bwebview/{}",
@@ -171,7 +208,11 @@ impl PlatformWebview {
             #[cfg(not(feature = "log"))]
             let script = super::super::IPC_SCRIPT;
             #[cfg(feature = "log")]
-            let script = format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT);
+            let script = format!(
+                "{}\n{}",
+                super::super::IPC_SCRIPT,
+                super::super::CONSOLE_SCRIPT
+            );
 
             let webview_configuration: *mut Object = msg_send![webview, configuration];
             let user_content_controller: *mut Object =
@@ -248,119 +289,45 @@ impl crate::WebviewInterface for PlatformWebview {
         if !self.0.webview.is_null() {
             unsafe {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
-                let _: () = msg_send![self.0.webview, setValue:value, forKey:ns_string!("drawsBackground")];
+                let _: () =
+                    msg_send![self.0.webview, setValue:value, forKey:ns_string!("drawsBackground")];
             }
         }
     }
 }
 
-extern "C" fn webview_did_start_provisional_navigation(
-    _this: *mut Object,
-    _sel: Sel,
-    _webview: *mut Object,
-    _navigation: *mut Object,
-) {
-    send_event(crate::Event::Webview(WebviewEvent::PageLoadStart));
-}
-
-extern "C" fn webview_did_finish_navigation(
-    _this: *mut Object,
-    _sel: Sel,
-    _webview: *mut Object,
-    _navigation: *mut Object,
-) {
-    send_event(crate::Event::Webview(WebviewEvent::PageLoadFinish));
-}
-
-extern "C" fn webview_observe_value_for_key_path(
-    _this: *mut Object,
-    _sel: Sel,
-    key_path: NSString,
-    _of_object: *mut Object,
-    change: *mut Object,
-    _context: *mut c_void,
-) {
-    let key_path = key_path.to_string();
-    if key_path == "title" {
-        let change: NSString = unsafe { msg_send![change, objectForKey:NSKeyValueChangeNewKey] };
-        send_event(crate::Event::Webview(WebviewEvent::PageTitleChange(
-            change.to_string(),
-        )));
-    }
-}
-
-extern "C" fn webview_decide_policy_for_navigation_action(
-    _this: *mut Object,
-    _sel: Sel,
-    _webview: *mut Object,
-    navigation_action: *mut Object,
-    decision_handler: &Block<dyn Fn(i64)>,
-) {
-    unsafe {
-        let target_frame: *mut Object = msg_send![navigation_action, targetFrame];
-        if target_frame.is_null() {
-            let request: *mut Object = msg_send![navigation_action, request];
-            let url: *mut Object = msg_send![request, URL];
-            let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
-            let _: Bool = msg_send![workspace, openURL:url];
-            decision_handler.call((WK_NAVIGATION_ACTION_POLICY_CANCEL,));
-        } else {
-            decision_handler.call((WK_NAVIGATION_ACTION_POLICY_ALLOW,));
-        }
-    }
-}
-
-extern "C" fn webview_did_receive_script_message(
-    _this: *mut Object,
-    _sel: Sel,
-    _user_content_controller: *mut Object,
-    message: *mut Object,
-) {
-    let name: NSString = unsafe { msg_send![message, name] };
-    let name = name.to_string();
-    let body: NSString = unsafe { msg_send![message, body] };
-    let body = body.to_string();
-
-    #[cfg(feature = "log")]
-    if name == "console" {
-        let (level, message) = body.split_at(1);
-        match level {
-            "e" => log::error!("{message}"),
-            "w" => log::warn!("{message}"),
-            "i" | "l" => log::info!("{message}"),
-            "d" => log::debug!("{message}"),
-            "t" => log::trace!("{message}"),
-            _ => unimplemented!(),
-        }
-    }
-    if name == "ipc" {
-        send_event(crate::Event::Webview(WebviewEvent::MessageReceive(body)));
-    }
+#[cfg(feature = "custom_protocol")]
+struct CustomProtocolDelegateIvars {
+    custom_protocol: Cell<*mut crate::CustomProtocol>,
 }
 
 #[cfg(feature = "custom_protocol")]
-extern "C" fn custom_protocol_start_url_scheme_task(
-    this: *mut Object,
-    _sel: Sel,
-    _webview: *mut Object,
-    url_scheme_task: *mut Object,
-) {
-    let custom_protocol = unsafe {
-        #[allow(deprecated)]
-        let ptr = *(*this).get_ivar::<*mut c_void>(IVAR_PTR);
-        &mut *(ptr as *mut crate::CustomProtocol)
-    };
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[ivars = CustomProtocolDelegateIvars]
+    struct CustomProtocolDelegate;
 
-    let ns_request: *mut Object = unsafe { msg_send![url_scheme_task, request] };
-    let req = ns_request_to_http_request(ns_request);
+    impl CustomProtocolDelegate {
+        #[unsafe(method(webView:startURLSchemeTask:))]
+        fn _start_url_scheme_task(&self, _: *mut Object, url_scheme_task: *mut Object) {
+            self.start_url_scheme_task(url_scheme_task);
+        }
+    }
+);
 
-    let res = (custom_protocol.handler)(&req);
-
-    let (ns_response, ns_data) = http_response_to_ns_response(&res, &req);
-    unsafe {
-        let _: () = msg_send![url_scheme_task, didReceiveResponse:ns_response];
-        let _: () = msg_send![url_scheme_task, didReceiveData:ns_data];
-        let _: () = msg_send![url_scheme_task, didFinish];
+#[cfg(feature = "custom_protocol")]
+impl CustomProtocolDelegate {
+    fn start_url_scheme_task(&self, url_scheme_task: *mut Object) {
+        let custom_protocol = unsafe { &mut *self.ivars().custom_protocol.get() };
+        let ns_request: *mut Object = unsafe { msg_send![url_scheme_task, request] };
+        let req = ns_request_to_http_request(ns_request);
+        let res = (custom_protocol.handler)(&req);
+        let (ns_response, ns_data) = http_response_to_ns_response(&res, &req);
+        unsafe {
+            let _: () = msg_send![url_scheme_task, didReceiveResponse:ns_response];
+            let _: () = msg_send![url_scheme_task, didReceiveData:ns_data];
+            let _: () = msg_send![url_scheme_task, didFinish];
+        }
     }
 }
 

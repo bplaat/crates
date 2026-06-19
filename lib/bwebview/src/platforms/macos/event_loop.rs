@@ -4,20 +4,70 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CStr, c_void};
+use std::cell::Cell;
+use std::ffi::c_void;
 use std::ptr::null;
 
-use block2::Block;
 use objc2::rc::autoreleasepool;
-use objc2::runtime::{AnyClass, AnyObject as Object, Bool, ClassBuilder, Sel};
-use objc2::{class, msg_send, sel};
+use objc2::runtime::{AnyObject as Object, Bool};
+use objc2::{class, define_class, msg_send, sel};
 
 use super::cocoa::*;
 use super::webkit::*;
 use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, WindowEvent};
 
-pub(super) const IVAR_PTR: &str = "_ptr";
-pub(super) const IVAR_PTR_CSTR: &CStr = c"_ptr";
+// MARK: AppDelegate
+struct AppDelegateIvars {
+    event_loop: Cell<*mut PlatformEventLoop>,
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[ivars = AppDelegateIvars]
+    struct AppDelegate;
+
+    impl AppDelegate {
+        #[unsafe(method(applicationDidFinishLaunching:))]
+        fn _did_finish_launching(&self, notification: *mut Object) { self.did_finish_launching(notification); }
+
+        #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
+        fn _should_terminate(&self, _: *mut Object) -> Bool { Bool::YES }
+
+        #[unsafe(method(sendEvent:))]
+        fn _send_event(&self, value: *mut Object) { self.send_event(value); }
+
+        #[unsafe(method(openAboutDialog:))]
+        fn _open_about_dialog(&self, _: *mut Object) { self.open_about_dialog(); }
+    }
+);
+
+impl AppDelegate {
+    fn did_finish_launching(&self, notification: *mut Object) {
+        unsafe {
+            let application: *mut Object = msg_send![notification, object];
+            let _: Bool = msg_send![application, setActivationPolicy:NS_APPLICATION_ACTIVATION_POLICY_REGULAR];
+            let _: () = msg_send![application, activateIgnoringOtherApps:true];
+
+            let windows: *mut Object = msg_send![application, windows];
+            let windows_count: usize = msg_send![windows, count];
+            for i in 0..windows_count {
+                let window: *mut Object = msg_send![windows, objectAtIndex:i];
+                let _: () = msg_send![window, makeKeyAndOrderFront:null::<Object>()];
+                send_event(Event::Window(WindowEvent::Create));
+            }
+        }
+    }
+
+    fn send_event(&self, value: *mut Object) {
+        let ptr: *mut c_void = unsafe { msg_send![value, pointerValue] };
+        let event = unsafe { Box::from_raw(ptr as *mut Event) };
+        send_event(*event);
+    }
+
+    fn open_about_dialog(&self) {
+        let _: () = unsafe { msg_send![NSApp, orderFrontStandardAboutPanel:null::<Object>()] };
+    }
+}
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
@@ -27,29 +77,8 @@ pub(crate) struct PlatformEventLoop {
 
 impl PlatformEventLoop {
     pub(crate) fn new(_builder: EventLoopBuilder) -> Self {
-        // Register AppDelegate class
-        let mut decl = ClassBuilder::new(c"AppDelegate", class!(NSObject))
-            .expect("Can't create AppDelegate class");
-        decl.add_ivar::<*const c_void>(IVAR_PTR_CSTR);
-        unsafe {
-            decl.add_method(
-                sel!(applicationDidFinishLaunching:),
-                app_did_finish_launching as extern "C" fn(_, _, _),
-            );
-            decl.add_method(
-                sel!(applicationShouldTerminateAfterLastWindowClosed:),
-                app_should_terminate_after_last_window_closed as extern "C" fn(_, _, _) -> Bool,
-            );
-            decl.add_method(sel!(sendEvent:), app_send_event as extern "C" fn(_, _, _));
-            decl.add_method(
-                sel!(openAboutDialog:),
-                app_open_about_dialog as extern "C" fn(_, _, _),
-            );
-        }
-        decl.register();
-
-        // Create AppDelegate instance
-        let app_delegate: *mut Object = unsafe { msg_send![class!(AppDelegate), new] };
+        // Create AppDelegate instance (registers class lazily on first call)
+        let app_delegate: *mut Object = unsafe { msg_send![AppDelegate::class(), new] };
 
         // Get application
         let application = unsafe {
@@ -224,9 +253,11 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         self.event_handler = Some(Box::new(event_handler));
         autoreleasepool(|_| unsafe {
             let delegate: *mut Object = msg_send![self.application, delegate];
-            #[allow(deprecated)]
-            let prt_to_ptr = (*delegate).get_mut_ivar::<*const c_void>(IVAR_PTR);
-            *prt_to_ptr = &mut self as *mut Self as *const c_void;
+            let delegate_ref = &*(delegate as *const AppDelegate);
+            delegate_ref
+                .ivars()
+                .event_loop
+                .set(&mut self as *mut PlatformEventLoop);
             let _: () = msg_send![self.application, run];
         });
         unreachable!()
@@ -240,52 +271,13 @@ impl crate::EventLoopInterface for PlatformEventLoop {
 pub(crate) fn send_event(event: Event) {
     let _self = unsafe {
         let app_delegate: *mut Object = msg_send![NSApp, delegate];
-        #[allow(deprecated)]
-        let ptr = *(*app_delegate).get_ivar::<*const c_void>(IVAR_PTR);
-        &mut *(ptr as *mut PlatformEventLoop)
+        let delegate_ref = &*(app_delegate as *const AppDelegate);
+        &mut *delegate_ref.ivars().event_loop.get()
     };
 
     if let Some(handler) = _self.event_handler.as_mut() {
         handler(event);
     }
-}
-
-extern "C" fn app_did_finish_launching(_this: *mut Object, _sel: Sel, notification: *mut Object) {
-    // Focus windows
-    unsafe {
-        let application: *mut Object = msg_send![notification, object];
-        let _: Bool =
-            msg_send![application, setActivationPolicy:NS_APPLICATION_ACTIVATION_POLICY_REGULAR];
-        let _: () = msg_send![application, activateIgnoringOtherApps:true];
-
-        let windows: *mut Object = msg_send![application, windows];
-        let windows_count: usize = msg_send![windows, count];
-        for i in 0..windows_count {
-            let window: *mut Object = msg_send![windows, objectAtIndex:i];
-            let _: () = msg_send![window, makeKeyAndOrderFront:null::<Object>()];
-
-            // Send window created event
-            send_event(Event::Window(WindowEvent::Create));
-        }
-    }
-}
-
-extern "C" fn app_should_terminate_after_last_window_closed(
-    _this: *mut Object,
-    _sel: Sel,
-    _sender: *mut Object,
-) -> Bool {
-    Bool::YES
-}
-
-extern "C" fn app_send_event(_this: *mut Object, _sel: Sel, value: *mut Object) {
-    let ptr: *mut c_void = unsafe { msg_send![value, pointerValue] };
-    let event = unsafe { Box::from_raw(ptr as *mut Event) };
-    send_event(*event);
-}
-
-extern "C" fn app_open_about_dialog(_this: *mut Object, _sel: Sel, _sender: *mut Object) {
-    let _: () = unsafe { msg_send![NSApp, orderFrontStandardAboutPanel:null::<Object>()] };
 }
 
 // MARK: EventLoopProxy
