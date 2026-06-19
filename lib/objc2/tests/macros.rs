@@ -10,6 +10,7 @@
 //! generate `::objc2::` absolute paths in their output, which only resolve when the caller is an
 //! external crate -- as integration tests are.
 
+#![cfg(target_vendor = "apple")]
 #![allow(unsafe_code, clippy::undocumented_unsafe_blocks)]
 
 use std::cell::Cell;
