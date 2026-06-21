@@ -132,6 +132,20 @@ impl<F> RcBlock<F> {
         Self::make(closure, invoke_impl::<F> as *const c_void)
     }
 
+    /// Create a new heap-allocated block from a zero-argument closure returning `R`.
+    pub fn new0_ret<R: 'static + Copy>(closure: F) -> Self
+    where
+        F: Fn() -> R + 'static,
+    {
+        extern "C" fn invoke_impl<F: Fn() -> R, R: Copy>(block: *const RcBlockInner<F>) -> R {
+            // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
+            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            let closure = unsafe { &(*block).closure };
+            closure()
+        }
+        Self::make(closure, invoke_impl::<F, R> as *const c_void)
+    }
+
     /// Create a new heap-allocated block from a single-argument closure.
     pub fn new<A: 'static + Copy>(closure: F) -> Self
     where

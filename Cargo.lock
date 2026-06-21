@@ -57,6 +57,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bimg"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "objc2",
+ "qoi",
+]
+
+[[package]]
 name = "block2"
 version = "0.6.0+patch"
 dependencies = [
@@ -589,6 +598,10 @@ checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "qoi"
+version = "0.4.1"
 
 [[package]]
 name = "quote"

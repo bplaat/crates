@@ -54,6 +54,7 @@ objc2 = { path = "lib/objc2" }
 objc2-proc-macros = { path = "lib/objc2-proc-macros" }
 percent-encoding = { path = "lib/percent-encoding" }
 plist = { path = "lib/plist" }
+qoi = { path = "lib/qoi" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 semver = { path = "lib/semver" }

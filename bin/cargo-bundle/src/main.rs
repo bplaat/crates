@@ -12,7 +12,7 @@ use std::process::{Command, exit};
 
 use copy_dir::copy_dir;
 
-use crate::manifest::Manifest;
+use crate::manifest::{BundleMetadata, Manifest, Package, PluginMetadata};
 
 mod args;
 mod manifest;
@@ -161,8 +161,8 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
 fn compile_binary(
     path: &str,
     target_dir: &str,
-    package: &manifest::Package,
-    bundle: &manifest::BundleMetadata,
+    package: &Package,
+    bundle: &BundleMetadata,
 ) -> String {
     let lipo = bundle.lipo.unwrap_or(true);
     if lipo {
@@ -211,7 +211,7 @@ fn compile_binary(
 fn create_bundle(
     path: &str,
     target_dir: &str,
-    bundle: &manifest::BundleMetadata,
+    bundle: &BundleMetadata,
     binary_path: &str,
 ) {
     // Create bundle folder structure
@@ -254,7 +254,156 @@ fn create_bundle(
     .expect("Failed to copy Info.plist");
 }
 
-fn sign_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) {
+fn build_plugin(
+    path: &str,
+    target_dir: &str,
+    plugins_dir: &str,
+    plugin: &PluginMetadata,
+    bundle: &BundleMetadata,
+    package: &Package,
+) {
+    let lipo = bundle.lipo.unwrap_or(true);
+
+    // Compile the plugin binary for each target architecture.
+    let binary_path = if lipo {
+        for target in ["x86_64-apple-darwin", "aarch64-apple-darwin"] {
+            let status = Command::new("cargo")
+                .args([
+                    "build",
+                    "--release",
+                    "--manifest-path",
+                    &format!("{path}/Cargo.toml"),
+                    "--target",
+                    target,
+                    "--bin",
+                    &plugin.binary,
+                ])
+                .status()
+                .expect("Failed to run cargo build for plugin");
+            assert!(
+                status.success(),
+                "cargo build failed for plugin {} on {target}",
+                plugin.name
+            );
+        }
+        let lipo_out = format!("{target_dir}/{}", plugin.binary);
+        let lipo_status = Command::new("lipo")
+            .args([
+                "-create",
+                &format!("target/x86_64-apple-darwin/release/{}", plugin.binary),
+                &format!("target/aarch64-apple-darwin/release/{}", plugin.binary),
+                "-output",
+                &lipo_out,
+            ])
+            .status()
+            .expect("Failed to run lipo for plugin");
+        assert!(lipo_status.success(), "lipo failed for plugin {}", plugin.name);
+        lipo_out
+    } else {
+        let status = Command::new("cargo")
+            .args([
+                "build",
+                "--release",
+                "--manifest-path",
+                &format!("{path}/Cargo.toml"),
+                "--bin",
+                &plugin.binary,
+            ])
+            .status()
+            .expect("Failed to run cargo build for plugin");
+        assert!(status.success(), "cargo build failed for plugin {}", plugin.name);
+        format!("target/release/{}", plugin.binary)
+    };
+
+    // Create the .appex bundle directory layout.
+    let appex_contents = format!("{plugins_dir}/{}.appex/Contents", plugin.name);
+    fs::create_dir_all(format!("{appex_contents}/MacOS"))
+        .expect("Failed to create appex MacOS directory");
+
+    fs::copy(&binary_path, format!("{appex_contents}/MacOS/{}", plugin.name))
+        .expect("Failed to copy plugin binary");
+
+    if lipo {
+        fs::remove_file(&binary_path).expect("Failed to remove temporary lipo plugin binary");
+    }
+
+    // Assemble the plugin's Info.plist.
+    let mut dict = plist::Dictionary::new();
+    dict.insert("CFBundleInfoDictionaryVersion".into(), "6.0".into());
+    dict.insert("CFBundlePackageType".into(), "XPC!".into());
+    dict.insert("CFBundleName".into(), plugin.name.clone().into());
+    dict.insert("CFBundleDisplayName".into(), plugin.name.clone().into());
+    dict.insert("CFBundleIdentifier".into(), plugin.identifier.clone().into());
+    dict.insert("CFBundleVersion".into(), package.version.clone().into());
+    dict.insert(
+        "CFBundleShortVersionString".into(),
+        package.version.clone().into(),
+    );
+    dict.insert("CFBundleExecutable".into(), plugin.name.clone().into());
+    dict.insert(
+        "LSMinimumSystemVersion".into(),
+        bundle
+            .minimal_os_version
+            .clone()
+            .unwrap_or_else(|| "11.0".to_string())
+            .into(),
+    );
+
+    // Merge extension-specific Info.plist keys (NSExtension dict, QLSupportedContentTypes, etc.).
+    let info_plist_path = format!("{path}/{}", plugin.info_plist);
+    if Path::new(&info_plist_path).exists() {
+        match plist::Value::from_file(&info_plist_path) {
+            Ok(plist::Value::Dictionary(extra)) => {
+                for (key, value) in extra {
+                    dict.insert(key, value);
+                }
+            }
+            _ => {
+                eprintln!("Invalid plugin Info.plist: {}", plugin.info_plist);
+                exit(1);
+            }
+        }
+    }
+
+    plist::Value::Dictionary(dict)
+        .to_file_binary(format!("{appex_contents}/Info.plist"))
+        .expect("Failed to write plugin Info.plist");
+
+    // Sign the plugin with its own entitlements before the parent app is signed.
+    let appex_bundle = format!("{plugins_dir}/{}.appex", plugin.name);
+    let entitlements_path = plugin
+        .entitlements
+        .as_deref()
+        .map(|e| format!("{path}/{e}"));
+    let mut cmd = Command::new("codesign");
+    cmd.args(["--force", "--sign", "-"]);
+    if let Some(ref ent) = entitlements_path
+        && Path::new(ent).exists()
+    {
+        cmd.args(["--entitlements", ent]);
+    }
+    cmd.arg(&appex_bundle);
+    let status = cmd.status().expect("Failed to run codesign for plugin");
+    assert!(status.success(), "codesign failed for plugin {}", plugin.name);
+}
+
+fn embed_plugins(path: &str, target_dir: &str, manifest: &Manifest) {
+    let bundle = &manifest.package.metadata.bundle;
+    let Some(plugins) = &bundle.plugins else {
+        return;
+    };
+
+    let bundle_dir = format!("{target_dir}/{}.app/Contents", bundle.name);
+    let plugins_dir = format!("{bundle_dir}/PlugIns");
+    fs::create_dir_all(&plugins_dir).expect("Failed to create PlugIns directory");
+
+    for plugin in plugins {
+        println!("  Embedding plugin {} ({})", plugin.name, plugin.binary);
+        build_plugin(path, target_dir, &plugins_dir, plugin, bundle, &manifest.package);
+    }
+}
+
+fn sign_bundle(path: &str, target_dir: &str, bundle: &BundleMetadata) {
     let app_bundle = format!("{target_dir}/{}.app", bundle.name);
 
     // Resolve entitlements: use manifest field if set, else fall back to root Entitlements.plist
@@ -282,7 +431,7 @@ fn sign_bundle(path: &str, target_dir: &str, bundle: &manifest::BundleMetadata) 
     assert!(status.success(), "codesign failed");
 }
 
-fn create_zip(target_dir: &str, bundle: &manifest::BundleMetadata) {
+fn create_zip(target_dir: &str, bundle: &BundleMetadata) {
     let zip_name = format!("{}/{}.zip", target_dir, bundle.name);
     if Path::new(&zip_name).exists() {
         fs::remove_file(&zip_name).expect("Failed to remove existing zip");
@@ -299,7 +448,7 @@ fn create_zip(target_dir: &str, bundle: &manifest::BundleMetadata) {
     assert!(status.success(), "zip command failed");
 }
 
-fn create_dmg(target_dir: &str, bundle: &manifest::BundleMetadata) {
+fn create_dmg(target_dir: &str, bundle: &BundleMetadata) {
     let disk_dir = format!("{target_dir}/disk");
     let app_name = format!("{}.app", bundle.name);
 
@@ -379,6 +528,9 @@ fn main() {
 
     // Create bundle folder structure
     create_bundle(&args.path, &target_dir, bundle, &binary_path);
+
+    // Build and embed app extension plugins into Contents/PlugIns/
+    embed_plugins(&args.path, &target_dir, &manifest);
 
     // Ad-hoc code sign the bundle
     sign_bundle(&args.path, &target_dir, bundle);

@@ -1,0 +1,10 @@
+[package]
+name = "qoi"
+version = "0.4.1"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "A minimal replacement for the qoi crate"
+
+[lints]
+workspace = true

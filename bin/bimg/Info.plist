@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>QOI Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>NSDocumentClass</key>
+            <string>QoiDocument</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.qoiformat.qoi</string>
+            </array>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>qoi</string>
+            </array>
+        </dict>
+    </array>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>org.qoiformat.qoi</string>
+            <key>UTTypeDescription</key>
+            <string>QOI Image</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.image</string>
+                <string>public.data</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>qoi</string>
+                </array>
+                <key>public.mime-type</key>
+                <string>image/x-qoi</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>
