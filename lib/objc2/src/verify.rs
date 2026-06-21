@@ -105,6 +105,10 @@ fn enc_match(actual: &str, expected: &str) -> bool {
     {
         return true;
     }
+    // Relax ObjC BOOL: arm64 encodes it as 'B' (bool), x86_64 as 'c' (signed char)
+    if (actual == "B" || actual == "c") && (expected == "B" || expected == "c") {
+        return true;
+    }
     // Relax sign for integer types
     fn sign_relax(s: &str) -> &str {
         match s {
@@ -279,6 +283,10 @@ mod test {
         assert!(enc_match("{CGPoint=dd}", "{CGPoint=ff}"));
         assert!(!enc_match("{CGPoint=dd}", "{CGSize=dd}"));
         assert!(!enc_match("i", "d"));
+        // BOOL: 'B' (arm64) and 'c' (x86_64) are both used for ObjC BOOL
+        assert!(enc_match("B", "c"));
+        assert!(enc_match("c", "B"));
+        assert!(enc_match("B", "B"));
     }
 
     #[test]
