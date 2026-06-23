@@ -23,7 +23,7 @@
 //!   `TLS_client_method`, a custom BIO method and `SSL_set1_host` (1.1.x/3.x)
 //!   or `SSL_set1_dnsname` (4.x, where `SSL_set1_host` is deprecated).
 
-use std::ffi::{CString, c_char, c_int, c_long, c_void};
+use std::ffi::{CString, c_char, c_int, c_long, c_ulong, c_void};
 use std::io::{self, Read, Write};
 
 use crate::{Error, HandshakeError};
@@ -44,6 +44,9 @@ unsafe extern "C" {
     fn SSL_shutdown(ssl: *mut c_void) -> c_int;
     fn SSL_get_error(ssl: *const c_void, ret: c_int) -> c_int;
     fn SSL_ctrl(ssl: *mut c_void, cmd: c_int, larg: c_long, parg: *mut c_void) -> c_long;
+    // OpenSSL error queue - available in all versions
+    fn ERR_get_error() -> c_ulong;
+    fn ERR_error_string(err: c_ulong, buf: *mut c_char) -> *mut c_char;
 }
 
 // Common constants
@@ -55,6 +58,33 @@ const SSL_ERROR_WANT_WRITE: c_int = 3;
 // SSL_set_tlsext_host_name macro equivalent (SSL_ctrl cmd)
 const SSL_CTRL_SET_TLSEXT_HOSTNAME: c_int = 55;
 const TLSEXT_NAMETYPE_HOST_NAME: c_long = 0;
+
+// Drain the OpenSSL per-thread error queue into a human-readable string.
+fn openssl_error_string() -> String {
+    let mut parts = Vec::new();
+    loop {
+        // SAFETY: ERR_get_error is thread-safe; it pops one entry from the per-thread error queue.
+        let code = unsafe { ERR_get_error() };
+        if code == 0 {
+            break;
+        }
+        let mut buf = [0u8; 256];
+        // SAFETY: code is a valid OpenSSL error code; buf is a valid writable buffer of 256 bytes.
+        unsafe { ERR_error_string(code, buf.as_mut_ptr() as *mut c_char) };
+        let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+        parts.push(String::from_utf8_lossy(&buf[..end]).into_owned());
+    }
+    parts.join(": ")
+}
+
+fn ssl_error(context: &str, code: c_int) -> Error {
+    let detail = openssl_error_string();
+    if detail.is_empty() {
+        Error(format!("{context} (SSL_get_error={code})"))
+    } else {
+        Error(format!("{context}: {detail}"))
+    }
+}
 
 // ---------------------------------------------------------------------------
 // MARK: OpenSSL 1.0.x path
@@ -107,6 +137,7 @@ const SSL_OP_NO_TLSV1_1: c_long = 0x10000000;
 fn flush_network_bio(bio: *mut c_void, stream: &mut impl Write) -> io::Result<()> {
     let mut buf = [0u8; 4096];
     loop {
+        // SAFETY: bio is a non-null BIO pair handle; buf is a valid writable buffer.
         let n = unsafe { BIO_read(bio, buf.as_mut_ptr() as *mut c_void, buf.len() as c_int) };
         if n <= 0 {
             break;
@@ -122,6 +153,7 @@ fn feed_network_bio(bio: *mut c_void, stream: &mut impl Read) -> io::Result<usiz
     let mut buf = [0u8; 4096];
     let n = stream.read(&mut buf)?;
     if n > 0 {
+        // SAFETY: bio is a non-null BIO pair handle; buf[..n] is valid readable data.
         let written = unsafe { BIO_write(bio, buf.as_ptr() as *const c_void, n as c_int) };
         if written < 0 {
             return Err(io::Error::other("BIO_write to BIO pair failed"));
@@ -138,8 +170,10 @@ pub struct TlsConnector {
 }
 
 #[cfg(openssl_v10x)]
+// SAFETY: SSL_CTX is reference-counted by OpenSSL and is safe to share across threads.
 unsafe impl Send for TlsConnector {}
 #[cfg(openssl_v10x)]
+// SAFETY: SSL_CTX is reference-counted by OpenSSL and is safe to use from multiple threads.
 unsafe impl Sync for TlsConnector {}
 
 #[cfg(openssl_v10x)]
@@ -148,16 +182,24 @@ impl TlsConnector {
     pub fn new() -> Result<Self, Error> {
         // OpenSSL 1.0.x requires explicit one-time initialization; 1.1+ does this automatically.
         static INIT: std::sync::Once = std::sync::Once::new();
-        INIT.call_once(|| unsafe {
-            SSL_library_init();
-            SSL_load_error_strings();
-            OPENSSL_add_all_algorithms_noconf();
+        INIT.call_once(|| {
+            // SAFETY: these init functions are idempotent; Once ensures single execution.
+            unsafe {
+                SSL_library_init();
+                SSL_load_error_strings();
+                OPENSSL_add_all_algorithms_noconf();
+            }
         });
 
+        // SAFETY: SSLv23_client_method returns a valid method pointer valid for the process lifetime.
         let ctx = unsafe { SSL_CTX_new(SSLv23_client_method()) };
         if ctx.is_null() {
-            return Err(Error("Failed to create SSL_CTX".to_string()));
+            return Err(Error(format!(
+                "Failed to create SSL_CTX: {}",
+                openssl_error_string()
+            )));
         }
+        // SAFETY: ctx is non-null; constants and null callback are valid for SSL_CTX_ctrl/set_verify.
         unsafe {
             // Disable SSLv2, SSLv3, TLS 1.0 and TLS 1.1 to require TLS 1.2+
             let opts = SSL_OP_NO_SSLV2 | SSL_OP_NO_SSLV3 | SSL_OP_NO_TLSV1 | SSL_OP_NO_TLSV1_1;
@@ -186,15 +228,20 @@ impl TlsConnector {
         domain: &str,
         stream: S,
     ) -> Result<TlsStream<S>, Error> {
+        // SAFETY: self.ctx is a non-null SSL_CTX valid for the connector's lifetime.
         let ssl = unsafe { SSL_new(self.ctx) };
         if ssl.is_null() {
-            return Err(Error("Failed to create SSL".to_string()));
+            return Err(Error(format!(
+                "Failed to create SSL: {}",
+                openssl_error_string()
+            )));
         }
 
         let domain_c =
             CString::new(domain).map_err(|_| Error("Invalid domain name".to_string()))?;
 
         // Set SNI hostname
+        // SAFETY: ssl is non-null; domain_c is a valid C string valid for the call duration.
         unsafe {
             SSL_ctrl(
                 ssl,
@@ -207,11 +254,18 @@ impl TlsConnector {
         // Create a BIO pair: SSL holds internal_bio; we pump via network_bio
         let mut internal_bio: *mut c_void = std::ptr::null_mut();
         let mut network_bio: *mut c_void = std::ptr::null_mut();
+        // SAFETY: &mut internal_bio and &mut network_bio are valid output pointers; buf sizes of 0
+        // request the default OpenSSL buffer size.
         if unsafe { BIO_new_bio_pair(&mut internal_bio, 0, &mut network_bio, 0) } != 1 {
+            // SAFETY: ssl is non-null; not freed elsewhere.
             unsafe { SSL_free(ssl) };
-            return Err(Error("Failed to create BIO pair".to_string()));
+            return Err(Error(format!(
+                "Failed to create BIO pair: {}",
+                openssl_error_string()
+            )));
         }
         // SSL_set_bio takes ownership of internal_bio; SSL_free will release it
+        // SAFETY: ssl, internal_bio are non-null; ownership of internal_bio transfers to ssl.
         unsafe { SSL_set_bio(ssl, internal_bio, internal_bio) };
 
         let mut stream = Box::new(stream);
@@ -219,10 +273,12 @@ impl TlsConnector {
         // Handshake + hostname verification inside a closure for clean cleanup
         let result: Result<(), Error> = (|| {
             loop {
+                // SAFETY: ssl is non-null and configured with a BIO pair.
                 let ret = unsafe { SSL_connect(ssl) };
                 if ret == 1 {
                     break;
                 }
+                // SAFETY: ssl is non-null.
                 let err = unsafe { SSL_get_error(ssl, ret) };
                 match err {
                     SSL_ERROR_WANT_READ => {
@@ -239,7 +295,7 @@ impl TlsConnector {
                             .map_err(|e| Error(e.to_string()))?;
                     }
                     _ => {
-                        return Err(Error(format!("TLS handshake failed (SSL_get_error={err})")));
+                        return Err(ssl_error("TLS handshake failed", err));
                     }
                 }
             }
@@ -247,10 +303,12 @@ impl TlsConnector {
             flush_network_bio(network_bio, &mut *stream).map_err(|e| Error(e.to_string()))?;
 
             // Verify hostname via X509_check_host (OpenSSL 1.0.2+)
+            // SAFETY: ssl is non-null; the returned cert pointer must be freed with X509_free.
             let cert = unsafe { SSL_get_peer_certificate(ssl) };
             if cert.is_null() {
                 return Err(Error("No peer certificate".to_string()));
             }
+            // SAFETY: cert is non-null; domain_c and domain.len() describe a valid hostname.
             let ok = unsafe {
                 X509_check_host(
                     cert,
@@ -260,6 +318,7 @@ impl TlsConnector {
                     std::ptr::null_mut(),
                 )
             };
+            // SAFETY: cert is a non-null X509 object returned by SSL_get_peer_certificate.
             unsafe { X509_free(cert) };
             if ok != 1 {
                 return Err(Error(format!(
@@ -270,10 +329,11 @@ impl TlsConnector {
         })();
 
         if let Err(e) = result {
+            // SAFETY: ssl and network_bio are non-null; not freed elsewhere.
             unsafe {
                 SSL_free(ssl);
-                BIO_free(network_bio)
-            };
+                BIO_free(network_bio);
+            }
             return Err(e);
         }
 
@@ -286,8 +346,16 @@ impl TlsConnector {
 }
 
 #[cfg(openssl_v10x)]
+impl Default for TlsConnector {
+    fn default() -> Self {
+        Self::new().expect("TlsConnector::new() failed")
+    }
+}
+
+#[cfg(openssl_v10x)]
 impl Drop for TlsConnector {
     fn drop(&mut self) {
+        // SAFETY: self.ctx is non-null; Drop is called at most once.
         unsafe { SSL_CTX_free(self.ctx) };
     }
 }
@@ -302,6 +370,8 @@ pub struct TlsStream<S> {
 }
 
 #[cfg(openssl_v10x)]
+// SAFETY: SSL* objects are not thread-safe for concurrent use, but transferring ownership
+// to another thread is safe since we only access ssl/network_bio under &mut self.
 unsafe impl<S: Send> Send for TlsStream<S> {}
 
 #[cfg(openssl_v10x)]
@@ -324,6 +394,7 @@ impl<S: Read + Write> Read for TlsStream<S> {
             return Ok(0);
         }
         loop {
+            // SAFETY: self.ssl is non-null; buf is valid for buf.len() bytes.
             let ret = unsafe {
                 SSL_read(
                     self.ssl,
@@ -332,9 +403,10 @@ impl<S: Read + Write> Read for TlsStream<S> {
                 )
             };
             if ret > 0 {
-                let _ = flush_network_bio(self.network_bio, &mut *self.stream);
+                flush_network_bio(self.network_bio, &mut *self.stream)?;
                 return Ok(ret as usize);
             }
+            // SAFETY: self.ssl is non-null.
             let err = unsafe { SSL_get_error(self.ssl, ret) };
             match err {
                 SSL_ERROR_ZERO_RETURN | SSL_ERROR_NONE => return Ok(0),
@@ -348,7 +420,7 @@ impl<S: Read + Write> Read for TlsStream<S> {
                 SSL_ERROR_WANT_WRITE => {
                     flush_network_bio(self.network_bio, &mut *self.stream)?;
                 }
-                _ => return Err(io::Error::other(format!("SSL_read error: {err}"))),
+                _ => return Err(io::Error::other(ssl_error("SSL_read error", err).0)),
             }
         }
     }
@@ -361,6 +433,7 @@ impl<S: Read + Write> Write for TlsStream<S> {
             return Ok(0);
         }
         loop {
+            // SAFETY: self.ssl is non-null; buf is valid for buf.len() bytes.
             let ret = unsafe {
                 SSL_write(
                     self.ssl,
@@ -372,6 +445,7 @@ impl<S: Read + Write> Write for TlsStream<S> {
                 flush_network_bio(self.network_bio, &mut *self.stream)?;
                 return Ok(ret as usize);
             }
+            // SAFETY: self.ssl is non-null.
             let err = unsafe { SSL_get_error(self.ssl, ret) };
             match err {
                 SSL_ERROR_WANT_WRITE => {
@@ -382,7 +456,7 @@ impl<S: Read + Write> Write for TlsStream<S> {
                     flush_network_bio(self.network_bio, &mut *self.stream)?;
                     feed_network_bio(self.network_bio, &mut *self.stream)?;
                 }
-                _ => return Err(io::Error::other(format!("SSL_write error: {err}"))),
+                _ => return Err(io::Error::other(ssl_error("SSL_write error", err).0)),
             }
         }
     }
@@ -396,8 +470,12 @@ impl<S: Read + Write> Write for TlsStream<S> {
 #[cfg(openssl_v10x)]
 impl<S> Drop for TlsStream<S> {
     fn drop(&mut self) {
+        // Two-phase shutdown: first call sends our close_notify; second waits for the peer's.
+        // SAFETY: self.ssl is non-null; Drop is called at most once.
         unsafe {
-            SSL_shutdown(self.ssl);
+            if SSL_shutdown(self.ssl) == 0 {
+                SSL_shutdown(self.ssl);
+            }
             SSL_free(self.ssl); // releases internal_bio (the SSL side of the pair)
             BIO_free(self.network_bio);
         }
@@ -446,6 +524,8 @@ unsafe extern "C" {
     fn BIO_set_data(bio: *mut c_void, data: *mut c_void);
     fn BIO_get_data(bio: *const c_void) -> *mut c_void;
     fn BIO_set_init(bio: *mut c_void, init: c_int);
+    fn BIO_set_flags(bio: *mut c_void, flags: c_int);
+    fn BIO_clear_flags(bio: *mut c_void, flags: c_int);
 }
 
 #[cfg(not(openssl_v10x))]
@@ -462,6 +542,39 @@ const CUSTOM_BIO_TYPE: c_int = 0x0400 | 100;
 #[cfg(not(openssl_v10x))]
 const BIO_CTRL_FLUSH: c_int = 11;
 
+// BIO retry flag constants (bio.h)
+#[cfg(not(openssl_v10x))]
+const BIO_FLAGS_READ: c_int = 0x01;
+#[cfg(not(openssl_v10x))]
+const BIO_FLAGS_WRITE: c_int = 0x02;
+#[cfg(not(openssl_v10x))]
+const BIO_FLAGS_IO_SPECIAL: c_int = 0x04;
+#[cfg(not(openssl_v10x))]
+const BIO_FLAGS_SHOULD_RETRY: c_int = 0x08;
+
+#[cfg(not(openssl_v10x))]
+unsafe fn bio_clear_retry_flags(bio: *mut c_void) {
+    // SAFETY: bio is non-null; flags are the standard retry-flag bitmask.
+    unsafe {
+        BIO_clear_flags(
+            bio,
+            BIO_FLAGS_READ | BIO_FLAGS_WRITE | BIO_FLAGS_IO_SPECIAL | BIO_FLAGS_SHOULD_RETRY,
+        )
+    };
+}
+
+#[cfg(not(openssl_v10x))]
+unsafe fn bio_set_retry_read(bio: *mut c_void) {
+    // SAFETY: bio is non-null.
+    unsafe { BIO_set_flags(bio, BIO_FLAGS_READ | BIO_FLAGS_SHOULD_RETRY) };
+}
+
+#[cfg(not(openssl_v10x))]
+unsafe fn bio_set_retry_write(bio: *mut c_void) {
+    // SAFETY: bio is non-null.
+    unsafe { BIO_set_flags(bio, BIO_FLAGS_WRITE | BIO_FLAGS_SHOULD_RETRY) };
+}
+
 // MARK: BIO callbacks (1.1.x / 3.x)
 // Type-erased stream wrapper stored in the BIO's data pointer
 #[cfg(not(openssl_v10x))]
@@ -476,11 +589,19 @@ unsafe extern "C" fn bio_read(bio: *mut c_void, buf: *mut c_char, len: c_int) ->
     if len <= 0 {
         return 0;
     }
+    // SAFETY: bio is non-null; clearing retry flags before each operation is required by OpenSSL.
+    unsafe { bio_clear_retry_flags(bio) };
+    // SAFETY: bio is non-null; BIO_get_data returns the IoFuncs pointer set via BIO_set_data.
     let io = unsafe { &mut *(BIO_get_data(bio) as *mut IoFuncs) };
+    // SAFETY: io.read_fn and io.stream_ptr are set in connect_inner; buf/len come from OpenSSL.
     match unsafe { (io.read_fn)(io.stream_ptr, buf.cast::<u8>(), len as usize) } {
         Ok(0) => 0,
         Ok(n) => n as c_int,
-        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => -1,
+        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+            // SAFETY: bio is non-null.
+            unsafe { bio_set_retry_read(bio) };
+            -1
+        }
         Err(_) => -1,
     }
 }
@@ -490,10 +611,18 @@ unsafe extern "C" fn bio_write(bio: *mut c_void, buf: *const c_char, len: c_int)
     if len <= 0 {
         return 0;
     }
+    // SAFETY: bio is non-null; clearing retry flags before each operation is required by OpenSSL.
+    unsafe { bio_clear_retry_flags(bio) };
+    // SAFETY: bio is non-null; BIO_get_data returns the IoFuncs pointer set via BIO_set_data.
     let io = unsafe { &mut *(BIO_get_data(bio) as *mut IoFuncs) };
+    // SAFETY: io.write_fn and io.stream_ptr are set in connect_inner; buf/len come from OpenSSL.
     match unsafe { (io.write_fn)(io.stream_ptr, buf.cast::<u8>(), len as usize) } {
         Ok(n) => n as c_int,
-        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => -1,
+        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+            // SAFETY: bio is non-null.
+            unsafe { bio_set_retry_write(bio) };
+            -1
+        }
         Err(_) => -1,
     }
 }
@@ -510,6 +639,7 @@ unsafe extern "C" fn bio_ctrl(
 
 #[cfg(not(openssl_v10x))]
 unsafe extern "C" fn bio_create(bio: *mut c_void) -> c_int {
+    // SAFETY: bio is non-null; setting init=1 marks the BIO as ready.
     unsafe { BIO_set_init(bio, 1) };
     1
 }
@@ -523,18 +653,21 @@ unsafe extern "C" fn bio_destroy(_bio: *mut c_void) -> c_int {
 #[cfg(not(openssl_v10x))]
 unsafe fn do_read<S: Read>(ptr: *mut c_void, buf: *mut u8, len: usize) -> io::Result<usize> {
     use std::slice;
+    // SAFETY: ptr derives from Box<S>.as_ref() in connect_inner; buf/len come from OpenSSL.
     unsafe { (*(ptr as *mut S)).read(slice::from_raw_parts_mut(buf, len)) }
 }
 
 #[cfg(not(openssl_v10x))]
 unsafe fn do_write<S: Write>(ptr: *mut c_void, buf: *const u8, len: usize) -> io::Result<usize> {
     use std::slice;
+    // SAFETY: ptr derives from Box<S>.as_ref() in connect_inner; buf/len come from OpenSSL.
     unsafe { (*(ptr as *mut S)).write(slice::from_raw_parts(buf, len)) }
 }
 
 #[cfg(not(openssl_v10x))]
 fn make_bio_method() -> *mut c_void {
     let name = c"rust-stream";
+    // SAFETY: name is a valid C string; all callback functions have the correct signatures.
     unsafe {
         let m = BIO_meth_new(CUSTOM_BIO_TYPE, name.as_ptr());
         BIO_meth_set_read(m, bio_read);
@@ -548,7 +681,7 @@ fn make_bio_method() -> *mut c_void {
 
 #[cfg(not(openssl_v10x))]
 struct BioMethodPtr(*mut c_void);
-// SAFETY: BIO_METHOD is immutable after creation; OpenSSL guarantees thread safety
+// SAFETY: BIO_METHOD is immutable after creation; OpenSSL guarantees thread safety for reads.
 #[cfg(not(openssl_v10x))]
 unsafe impl Send for BioMethodPtr {}
 #[cfg(not(openssl_v10x))]
@@ -557,6 +690,7 @@ unsafe impl Sync for BioMethodPtr {}
 #[cfg(not(openssl_v10x))]
 impl Drop for BioMethodPtr {
     fn drop(&mut self) {
+        // SAFETY: self.0 is a non-null BIO_METHOD allocated by BIO_meth_new; Drop once.
         unsafe { BIO_meth_free(self.0) };
     }
 }
@@ -573,18 +707,25 @@ pub struct TlsConnector {
 }
 
 #[cfg(not(openssl_v10x))]
+// SAFETY: SSL_CTX is reference-counted and thread-safe for concurrent use.
 unsafe impl Send for TlsConnector {}
 #[cfg(not(openssl_v10x))]
+// SAFETY: SSL_CTX is reference-counted and thread-safe for concurrent use.
 unsafe impl Sync for TlsConnector {}
 
 #[cfg(not(openssl_v10x))]
 impl TlsConnector {
     /// Create a new TLS connector
     pub fn new() -> Result<Self, Error> {
+        // SAFETY: TLS_client_method returns a valid method pointer for the process lifetime.
         let ctx = unsafe { SSL_CTX_new(TLS_client_method()) };
         if ctx.is_null() {
-            return Err(Error("Failed to create SSL_CTX".to_string()));
+            return Err(Error(format!(
+                "Failed to create SSL_CTX: {}",
+                openssl_error_string()
+            )));
         }
+        // SAFETY: ctx is non-null; version constants and null callback are valid arguments.
         unsafe {
             // Require TLS 1.2 minimum, allow up to TLS 1.3
             SSL_CTX_ctrl(
@@ -623,13 +764,18 @@ impl TlsConnector {
         domain: &str,
         stream: S,
     ) -> Result<TlsStream<S>, Error> {
+        // SAFETY: self.ctx is a non-null SSL_CTX valid for the connector's lifetime.
         let ssl = unsafe { SSL_new(self.ctx) };
         if ssl.is_null() {
-            return Err(Error("Failed to create SSL".to_string()));
+            return Err(Error(format!(
+                "Failed to create SSL: {}",
+                openssl_error_string()
+            )));
         }
 
         let domain_c =
             CString::new(domain).map_err(|_| Error("Invalid domain name".to_string()))?;
+        // SAFETY: ssl is non-null; domain_c is a valid C string for the call duration.
         unsafe {
             // Set SNI hostname
             SSL_ctrl(
@@ -657,27 +803,36 @@ impl TlsConnector {
             write_fn: do_write::<S>,
         });
 
+        // SAFETY: BIO_METHOD.0 is non-null (initialized by LazyLock).
         let bio = unsafe { BIO_new(BIO_METHOD.0) };
         if bio.is_null() {
+            // SAFETY: ssl is non-null; not freed elsewhere.
             unsafe { SSL_free(ssl) };
-            return Err(Error("Failed to create BIO".to_string()));
+            return Err(Error(format!(
+                "Failed to create BIO: {}",
+                openssl_error_string()
+            )));
         }
+        // SAFETY: bio and ssl are non-null; ownership of bio (rbio=wbio) transfers to ssl.
         unsafe {
             BIO_set_data(bio, io.as_ref() as *const IoFuncs as *mut c_void);
             SSL_set_bio(ssl, bio, bio);
         }
 
         loop {
+            // SAFETY: ssl is non-null and configured with a BIO.
             let ret = unsafe { SSL_connect(ssl) };
             if ret == 1 {
                 break;
             }
+            // SAFETY: ssl is non-null.
             let err = unsafe { SSL_get_error(ssl, ret) };
             match err {
                 SSL_ERROR_WANT_READ | SSL_ERROR_WANT_WRITE => continue,
                 _ => {
+                    // SAFETY: ssl is non-null; BIO is owned by ssl and freed via SSL_free.
                     unsafe { SSL_free(ssl) };
-                    return Err(Error(format!("TLS handshake failed (SSL_get_error={err})")));
+                    return Err(ssl_error("TLS handshake failed", err));
                 }
             }
         }
@@ -691,8 +846,16 @@ impl TlsConnector {
 }
 
 #[cfg(not(openssl_v10x))]
+impl Default for TlsConnector {
+    fn default() -> Self {
+        Self::new().expect("TlsConnector::new() failed")
+    }
+}
+
+#[cfg(not(openssl_v10x))]
 impl Drop for TlsConnector {
     fn drop(&mut self) {
+        // SAFETY: self.ctx is non-null; Drop is called at most once.
         unsafe { SSL_CTX_free(self.ctx) };
     }
 }
@@ -707,6 +870,8 @@ pub struct TlsStream<S> {
 }
 
 #[cfg(not(openssl_v10x))]
+// SAFETY: SSL* objects are not thread-safe for concurrent use, but transferring ownership
+// to another thread is safe since we only access ssl under &mut self.
 unsafe impl<S: Send> Send for TlsStream<S> {}
 
 #[cfg(not(openssl_v10x))]
@@ -728,6 +893,7 @@ impl<S: Read + Write> Read for TlsStream<S> {
         if buf.is_empty() {
             return Ok(0);
         }
+        // SAFETY: self.ssl is non-null; buf is valid for buf.len() bytes.
         let ret = unsafe {
             SSL_read(
                 self.ssl,
@@ -738,13 +904,14 @@ impl<S: Read + Write> Read for TlsStream<S> {
         if ret > 0 {
             return Ok(ret as usize);
         }
+        // SAFETY: self.ssl is non-null.
         let err = unsafe { SSL_get_error(self.ssl, ret) };
         match err {
             SSL_ERROR_ZERO_RETURN | SSL_ERROR_NONE => Ok(0),
             SSL_ERROR_WANT_READ | SSL_ERROR_WANT_WRITE => {
                 Err(io::Error::new(io::ErrorKind::WouldBlock, "TLS would block"))
             }
-            _ => Err(io::Error::other(format!("SSL_read error: {err}"))),
+            _ => Err(io::Error::other(ssl_error("SSL_read error", err).0)),
         }
     }
 }
@@ -755,6 +922,7 @@ impl<S: Read + Write> Write for TlsStream<S> {
         if buf.is_empty() {
             return Ok(0);
         }
+        // SAFETY: self.ssl is non-null; buf is valid for buf.len() bytes.
         let ret = unsafe {
             SSL_write(
                 self.ssl,
@@ -765,12 +933,13 @@ impl<S: Read + Write> Write for TlsStream<S> {
         if ret > 0 {
             return Ok(ret as usize);
         }
+        // SAFETY: self.ssl is non-null.
         let err = unsafe { SSL_get_error(self.ssl, ret) };
         match err {
             SSL_ERROR_WANT_READ | SSL_ERROR_WANT_WRITE => {
                 Err(io::Error::new(io::ErrorKind::WouldBlock, "TLS would block"))
             }
-            _ => Err(io::Error::other(format!("SSL_write error: {err}"))),
+            _ => Err(io::Error::other(ssl_error("SSL_write error", err).0)),
         }
     }
 
@@ -782,8 +951,12 @@ impl<S: Read + Write> Write for TlsStream<S> {
 #[cfg(not(openssl_v10x))]
 impl<S> Drop for TlsStream<S> {
     fn drop(&mut self) {
+        // Two-phase shutdown: first call sends our close_notify; second waits for the peer's.
+        // SAFETY: self.ssl is non-null; Drop is called at most once.
         unsafe {
-            SSL_shutdown(self.ssl);
+            if SSL_shutdown(self.ssl) == 0 {
+                SSL_shutdown(self.ssl);
+            }
             SSL_free(self.ssl); // also frees the BIO
         }
     }

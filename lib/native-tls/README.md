@@ -20,7 +20,7 @@ sudo dnf install openssl-devel
 
 ### Code example
 
-A simple example that opens a TLS connection and sends an HTTP request:
+A simple example that opens a TLS connection and sends an HTTPS request:
 
 ```rs
 use std::io::{Read, Write};
@@ -37,25 +37,34 @@ tls.read_to_end(&mut buf).unwrap();
 
 ## Platforms
 
+Without the `vendored` feature, the platform's native TLS library is used:
+
 | Platform    | Backend                              | TLS 1.2 | TLS 1.3 |
 | ----------- | ------------------------------------ | ------- | ------- |
-| Windows     | SChannel (OS built-in)               | yes     | yes     |
-| macOS       | SecureTransport (Security.framework) | yes     | no      |
-| Linux/other | OpenSSL 1.0.2+ / 1.1.x / 3.x / 4.x   | yes     | yes\*   |
+| Windows     | SChannel (OS built-in)               | Yes     | Yes     |
+| macOS       | SecureTransport (Security.framework) | Yes     | No¹     |
+| Linux/other | OpenSSL 1.0.2+ / 1.1.x / 3.x / 4.x   | Yes     | Yes²    |
 
-\* TLS 1.3 requires OpenSSL 1.1.1+. OpenSSL 1.0.2 supports TLS 1.2 only.
+With the `vendored` feature, rustls is used on all platforms instead:
 
-macOS uses the legacy SecureTransport API (deprecated since macOS 10.15 but still functional).
-SecureTransport is limited to TLS 1.2. TLS 1.3 on macOS requires Network.framework, which
-exposes only an async, Grand Central Dispatch (GCD) based API - making it difficult to wrap
-in a synchronous `Read`/`Write` interface without a full async runtime or complex callback
-machinery. Certificate trust is evaluated manually via `SecTrustEvaluateWithError`.
+| Platform | Backend               | TLS 1.2 | TLS 1.3 |
+| -------- | --------------------- | ------- | ------- |
+| All      | rustls + webpki-roots | Yes     | Yes     |
+
+¹ macOS (without `vendored`) uses the legacy SecureTransport API (deprecated since macOS 10.15 but
+still functional). SecureTransport is limited to TLS 1.2. TLS 1.3 on macOS requires
+Network.framework, which exposes only an async, Grand Central Dispatch (GCD) based API - making it
+difficult to wrap in a synchronous `Read`/`Write` interface without a full async runtime or complex
+callback machinery. Certificate trust is evaluated manually via `SecTrustEvaluateWithError`.
+
+² TLS 1.3 requires OpenSSL 1.1.1+. OpenSSL 1.0.2 supports TLS 1.2 only.
 
 ## Features
 
-- `vendored` - Compile and statically link a bundled copy of OpenSSL (via
-  [openssl-src](https://crates.io/crates/openssl-src), which provides OpenSSL 3.x). Useful for
-  fully static musl builds. Has no effect on Windows and macOS.
+- `vendored` - Use [rustls](https://crates.io/crates/rustls) with embedded CA roots
+  ([webpki-roots](https://crates.io/crates/webpki-roots)) on all platforms instead of the native
+  TLS library. Provides a fully self-contained TLS stack with no system library dependencies and
+  supports TLS 1.2 and 1.3 everywhere.
 
 ## License
 

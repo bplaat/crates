@@ -19,6 +19,7 @@ use crate::response::Response;
 use crate::KEEP_ALIVE_TIMEOUT;
 
 // MARK: MaybeHttpsStream
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum MaybeHttpsStream {
     Plain(TcpStream),
     #[cfg(feature = "tls")]

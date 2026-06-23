@@ -36,7 +36,7 @@ type CtxtHandle = SecHandle;
 #[repr(C)]
 struct TimeStamp {
     low: u32,
-    high: i32,
+    high: u32, // FILETIME uses DWORD (u32) for both halves
 }
 
 #[repr(C)]
@@ -194,6 +194,7 @@ fn acquire_cred() -> Result<CredHandle, Error> {
         dw_credentials_format: 0,
     };
     let mut expiry = TimeStamp { low: 0, high: 0 };
+    // SAFETY: all pointer arguments are either null (meaning "default") or point to valid local variables.
     let status = unsafe {
         AcquireCredentialsHandleW(
             std::ptr::null(),
@@ -241,6 +242,8 @@ fn do_handshake<S: Read + Write>(
         let mut expiry = TimeStamp { low: 0, high: 0 };
 
         let status = if first_call {
+            // SAFETY: cred is a valid credential handle; null context on first call is per-spec.
+            // out_desc, ctx_attrs, expiry are valid output locations. ISC_FLAGS are valid flags.
             unsafe {
                 InitializeSecurityContextW(
                     cred,
@@ -275,6 +278,7 @@ fn do_handshake<S: Read + Write>(
                 c_buffers: 2,
                 p_buffers: in_bufs.as_mut_ptr(),
             };
+            // SAFETY: cred and ctx are valid handles; in_desc/out_desc/ctx_attrs/expiry are valid output locations.
             let status = unsafe {
                 InitializeSecurityContextW(
                     cred,
@@ -310,10 +314,13 @@ fn do_handshake<S: Read + Write>(
 
         // Send output token if any
         if !out_buf.pv_buffer.is_null() && out_buf.cb_buffer > 0 {
+            // SAFETY: SChannel allocated out_buf.pv_buffer (ISC_REQ_ALLOCATE_MEMORY) and
+            // cb_buffer bytes are valid; FreeContextBuffer releases SChannel-allocated memory.
             let data = unsafe {
                 slice::from_raw_parts(out_buf.pv_buffer as *const u8, out_buf.cb_buffer as usize)
             };
             stream.write_all(data).map_err(|e| Error(e.to_string()))?;
+            // SAFETY: out_buf.pv_buffer is non-null and was allocated by SChannel.
             unsafe { FreeContextBuffer(out_buf.pv_buffer) };
         }
 
@@ -342,6 +349,7 @@ fn do_handshake<S: Read + Write>(
             }
             _ => {
                 if !ctx.is_invalid() {
+                    // SAFETY: ctx is a valid (non-invalid) context handle.
                     unsafe { DeleteSecurityContext(&mut ctx) };
                 }
                 return Err(Error(format!(
@@ -355,6 +363,7 @@ fn do_handshake<S: Read + Write>(
 
 fn query_stream_sizes(ctx: &mut CtxtHandle) -> Result<SecPkgContextStreamSizes, Error> {
     let mut sizes = SecPkgContextStreamSizes::default();
+    // SAFETY: ctx is a valid context handle; &mut sizes is a valid output location for the attribute.
     let status = unsafe {
         QueryContextAttributesW(
             ctx,
@@ -410,6 +419,12 @@ impl TlsConnector {
             enc_buf: Vec::new(),
             dec_buf: Vec::new(),
         })
+    }
+}
+
+impl Default for TlsConnector {
+    fn default() -> Self {
+        Self::new().expect("TlsConnector::new() failed")
     }
 }
 
@@ -476,16 +491,21 @@ impl<S: Read + Write> Read for TlsStream<S> {
                     c_buffers: 4,
                     p_buffers: bufs.as_mut_ptr(),
                 };
+                // SAFETY: self.ctx is a valid context handle; bufs[0].pv_buffer points into
+                // self.enc_buf which is alive for this call; the other buffers are empty outputs.
                 let status =
                     unsafe { DecryptMessage(&mut self.ctx, &mut desc, 0, std::ptr::null_mut()) };
 
                 match status {
                     SEC_E_OK => {
-                        // Extract decrypted data and leftover extra data
+                        // Extract decrypted data and leftover extra data.
+                        // SECBUFFER_DATA and SECBUFFER_EXTRA pv_buffers point into self.enc_buf
+                        // (DecryptMessage operates in-place), so we copy before replacing enc_buf.
                         let mut dec_data = Vec::new();
                         let mut extra_data = Vec::new();
                         for b in &bufs {
                             if b.buffer_type == SECBUFFER_DATA && !b.pv_buffer.is_null() {
+                                // SAFETY: pv_buffer points into enc_buf (in-place decryption); cb_buffer bytes are valid.
                                 dec_data.extend_from_slice(unsafe {
                                     slice::from_raw_parts(
                                         b.pv_buffer as *const u8,
@@ -494,6 +514,7 @@ impl<S: Read + Write> Read for TlsStream<S> {
                                 });
                             }
                             if b.buffer_type == SECBUFFER_EXTRA && !b.pv_buffer.is_null() {
+                                // SAFETY: pv_buffer points into enc_buf; cb_buffer bytes are unconsumed ciphertext.
                                 extra_data.extend_from_slice(unsafe {
                                     slice::from_raw_parts(
                                         b.pv_buffer as *const u8,
@@ -576,6 +597,8 @@ impl<S: Read + Write> Write for TlsStream<S> {
             p_buffers: bufs.as_mut_ptr(),
         };
 
+        // SAFETY: self.ctx is a valid context handle; all buffer pointers are into enc_buf which
+        // is alive for the duration of the call; EncryptMessage operates in-place.
         let status = unsafe { EncryptMessage(&mut self.ctx, 0, &mut desc, 0) };
         if status != SEC_E_OK {
             return Err(io::Error::other(format!(
@@ -598,6 +621,7 @@ impl<S: Read + Write> Write for TlsStream<S> {
 
 impl<S> Drop for TlsStream<S> {
     fn drop(&mut self) {
+        // SAFETY: ctx and cred are valid handles; Drop is called at most once.
         unsafe {
             DeleteSecurityContext(&mut self.ctx);
             FreeCredentialsHandle(&mut self.cred);

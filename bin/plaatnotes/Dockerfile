@@ -36,7 +36,6 @@ LABEL org.opencontainers.image.source="https://github.com/bplaat/crates"
 LABEL org.opencontainers.image.description="A simple note-taking app"
 LABEL org.opencontainers.image.licenses=MIT
 
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /plaatnotes /app/plaatnotes
 
 WORKDIR /app
@@ -46,6 +45,5 @@ VOLUME ["/data"]
 EXPOSE 8080
 
 ENV DATA_PATH=/data
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 ENTRYPOINT ["/app/plaatnotes"]

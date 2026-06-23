@@ -4,41 +4,29 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! native-tls build script: handles OpenSSL linking (dynamic or vendored static).
-
-#![allow(dead_code)]
+//! native-tls build script: handles OpenSSL linking for the system (non-vendored) path.
+//! When the `vendored` feature is set, rustls is used instead and no linking is needed.
 
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(openssl_v10x)");
     println!("cargo::rustc-check-cfg=cfg(openssl_v4xx)");
 
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os != "macos" && target_os != "windows" {
-        cfg_select! {
-            feature = "vendored" => {
-                let artifacts = openssl_src::Build::new().build();
-                println!(
-                    "cargo:rustc-link-search=native={}",
-                    artifacts.lib_dir().display()
-                );
-                println!("cargo:rustc-link-lib=static=ssl");
-                println!("cargo:rustc-link-lib=static=crypto");
-                // vendored always builds OpenSSL 3.x via openssl-src
-            }
-            _ => {
-                println!("cargo:rustc-link-lib=ssl");
-                println!("cargo:rustc-link-lib=crypto");
-                detect_openssl_version();
-            }
-        }
+    let vendored = std::env::var("CARGO_FEATURE_VENDORED").is_ok();
+
+    // On Linux/other without vendored: dynamically link the system OpenSSL.
+    // With vendored: rustls handles everything in pure Rust; no linker flags needed.
+    if target_os != "macos" && target_os != "windows" && !vendored {
+        println!("cargo::rustc-link-lib=ssl");
+        println!("cargo::rustc-link-lib=crypto");
+        detect_openssl_version();
     }
 }
 
 // Emit cfg flags based on the system OpenSSL version:
 //   openssl_v10x    -- 1.0.x (uses BIO_new_bio_pair + SSLv23_client_method)
 //   openssl_v4xx -- 4.x+  (uses SSL_set1_dnsname instead of SSL_set1_host)
-// Vendored builds always use OpenSSL 3.x (via openssl-src), so detection is
-// only needed for dynamic system linking.
+// Only called for dynamic system linking; vendored builds use rustls.
 fn detect_openssl_version() {
     // Try pkg-config first (most reliable on Linux/BSD).
     // pkg-config output is just the version string, e.g. "3.0.2\n".
@@ -65,9 +53,9 @@ fn detect_openssl_version() {
 
 fn emit_version_cfg(version: &[u8]) {
     if version.starts_with(b"1.0.") {
-        println!("cargo:rustc-cfg=openssl_v10x");
+        println!("cargo::rustc-cfg=openssl_v10x");
     } else if version.first().is_some_and(|&b| b >= b'4') {
-        println!("cargo:rustc-cfg=openssl_v4xx");
+        println!("cargo::rustc-cfg=openssl_v4xx");
     }
     // 1.1.x / 3.x: no extra cfg needed; they use the default code path.
 }

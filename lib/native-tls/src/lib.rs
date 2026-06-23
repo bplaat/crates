@@ -6,24 +6,35 @@
 
 #![doc = include_str!("../README.md")]
 #![allow(unsafe_code)]
-#![allow(clippy::undocumented_unsafe_blocks)]
 
 use std::fmt::{self, Display, Formatter};
 use std::marker::PhantomData;
 
-#[cfg(target_os = "macos")]
+// vendored feature: use rustls on all platforms (no native backend)
+#[cfg(feature = "vendored")]
+mod imp_rustls;
+#[cfg(feature = "vendored")]
+use imp_rustls as imp;
+
+#[cfg(all(target_os = "macos", not(feature = "vendored")))]
 mod imp_macos;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "vendored")))]
 use imp_macos as imp;
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "vendored")))]
 mod imp_windows;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(feature = "vendored")))]
 use imp_windows as imp;
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(all(
+    not(any(target_os = "macos", target_os = "windows")),
+    not(feature = "vendored")
+))]
 mod imp_openssl;
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(all(
+    not(any(target_os = "macos", target_os = "windows")),
+    not(feature = "vendored")
+))]
 use imp_openssl as imp;
 
 // MARK: Error
@@ -40,7 +51,10 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 // MARK: HandshakeError
-/// Error that can occur during the TLS handshake
+/// Error that can occur during the TLS handshake.
+///
+/// Unlike the upstream `native-tls` crate, the underlying stream is **not** recoverable
+/// from a failed handshake. The stream is consumed and dropped when the error is returned.
 #[derive(Debug)]
 pub struct HandshakeError<S> {
     error: Error,
@@ -142,10 +156,7 @@ mod tests {
         // wrong.host.badssl.com serves a cert for *.badssl.com, not for
         // wrong.host.badssl.com (second-level wildcard doesn't match).
         // The TLS connector must reject this.
-        let tcp = match TcpStream::connect("wrong.host.badssl.com:443") {
-            Ok(s) => s,
-            Err(_) => return, // skip if no network
-        };
+        let tcp = TcpStream::connect("wrong.host.badssl.com:443").expect("TCP connect failed");
         let connector = TlsConnector::new().expect("TlsConnector::new failed");
         let result = connector.connect("wrong.host.badssl.com", tcp);
         assert!(
@@ -156,10 +167,7 @@ mod tests {
 
     #[test]
     fn test_expired_cert_rejected() {
-        let tcp = match TcpStream::connect("expired.badssl.com:443") {
-            Ok(s) => s,
-            Err(_) => return, // skip if no network
-        };
+        let tcp = TcpStream::connect("expired.badssl.com:443").expect("TCP connect failed");
         let connector = TlsConnector::new().expect("TlsConnector::new failed");
         let result = connector.connect("expired.badssl.com", tcp);
         assert!(
@@ -170,10 +178,7 @@ mod tests {
 
     #[test]
     fn test_self_signed_cert_rejected() {
-        let tcp = match TcpStream::connect("self-signed.badssl.com:443") {
-            Ok(s) => s,
-            Err(_) => return, // skip if no network
-        };
+        let tcp = TcpStream::connect("self-signed.badssl.com:443").expect("TCP connect failed");
         let connector = TlsConnector::new().expect("TlsConnector::new failed");
         let result = connector.connect("self-signed.badssl.com", tcp);
         assert!(
