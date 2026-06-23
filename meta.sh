@@ -28,6 +28,53 @@ detect_os() {
 
 OS=$(detect_os)
 
+# Packages with features that completely swap the backend or linkage.
+# ASAN tests run without these features; global tests add an extra pass without them.
+BACKEND_SWAP_PAIRS=(
+    "native-tls:vendored"
+    "bsqlite:bundled"
+)
+
+backend_swap_feature() {
+    local package=$1
+    for pair in "${BACKEND_SWAP_PAIRS[@]}"; do
+        if [ "${pair%%:*}" = "$package" ]; then
+            echo "${pair##*:}"
+            return
+        fi
+    done
+}
+
+# Returns "--features a,b,c" with all features except the backend-swap one,
+# or "--all-features" if the package has no backend-swap feature,
+# or "" if no features remain after excluding the swap feature.
+features_without_swap() {
+    local package=$1
+    local swap_feat
+    swap_feat=$(backend_swap_feature "$package")
+    if [ -z "$swap_feat" ]; then
+        echo "--all-features"
+        return
+    fi
+    local remaining
+    remaining=$(cargo metadata --no-deps --format-version 1 2>/dev/null \
+        | jq -r --arg pkg "$package" --arg swap "$swap_feat" \
+            '.packages[] | select(.name == $pkg) | .features | keys[] | select(. != "default" and . != $swap)' \
+        | sort | tr '\n' ',' | sed 's/,$//')
+    [ -n "$remaining" ] && echo "--features $remaining" || echo ""
+}
+
+is_platform_excluded() {
+    local pkg=$1
+    local i
+    for ((i = 0; i < ${#excludes[@]} - 1; i++)); do
+        if [ "${excludes[$i]}" = "--exclude" ] && [ "${excludes[$((i + 1))]}" = "$pkg" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 clean() {
     cargo clean
     find . \( -name "*.db*" -o -type d -name "target" -o -type d -name "node_modules" -o -type d -name "playwright" -o -type d -name "playwright-report" -o -type d -name "test-results" \) -exec rm -rf {} +
@@ -89,6 +136,17 @@ check_rust() {
     cargo test --doc --all-features --locked --workspace "${excludes[@]}"
     cargo nextest run --all-features --locked --config-file nextest.toml ${CI:+--profile ci} --workspace "${excludes[@]}"
 
+    # Also test backend-swapping packages without their swap feature to exercise the native backends
+    for pair in "${BACKEND_SWAP_PAIRS[@]}"; do
+        pkg="${pair%%:*}"
+        feat="${pair##*:}"
+        is_platform_excluded "$pkg" && continue
+        echo "Running Rust tests for $pkg without $feat feature..."
+        IFS=' ' read -ra feat_args <<< "$(features_without_swap "$pkg")"
+        cargo test --doc --locked -p "$pkg" "${feat_args[@]}"
+        cargo nextest run --locked --config-file nextest.toml ${CI:+--profile ci} -p "$pkg" "${feat_args[@]}"
+    done
+
     if [ "$OS" != "windows" ]; then
         echo "Running Rust tests with address sanitizer on unsafe libs..."
         target=$(rustc +nightly -vV | sed -n 's/^host: //p')
@@ -104,7 +162,8 @@ check_rust() {
                 exit 1
             fi
             echo "Testing $package with address sanitizer..."
-            RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -p "$package" --lib --tests --locked --all-features --target "$target" -Zbuild-std
+            IFS=' ' read -ra feat_args <<< "$(features_without_swap "$package")"
+            RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -p "$package" --lib --tests --locked "${feat_args[@]}" --target "$target" -Zbuild-std
         done
     fi
 }
