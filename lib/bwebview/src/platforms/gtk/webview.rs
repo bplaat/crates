@@ -69,10 +69,10 @@ impl PlatformWebview {
 
         // Create webview user content manager
         let user_content_manager = unsafe {
-            #[cfg(not(feature = "log"))]
-            let script = super::super::IPC_SCRIPT;
-            #[cfg(feature = "log")]
-            let script = format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT);
+            let script = cfg_select! {
+                feature = "log" => { format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT) }
+                _ => { super::super::IPC_SCRIPT }
+            };
 
             let user_content_manager = webkit_user_content_manager_new();
             let script = CString::new(script).expect("Can't convert to CString");
@@ -316,10 +316,10 @@ extern "C" fn webview_on_navigation_policy_decision(
     if decision_type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION {
         let request = unsafe { webkit_navigation_policy_decision_get_request(decision) };
         let uri = unsafe { webkit_uri_request_get_uri(request) };
-        #[cfg(gtk3_22)]
-        unsafe { gtk_show_uri_on_window(null_mut(), uri, 0, null_mut()) };
-        #[cfg(not(gtk3_22))]
-        unsafe { gtk_show_uri(gdk_screen_get_default(), uri, 0, null_mut()) };
+        cfg_select! {
+            gtk3_22 => { unsafe { gtk_show_uri_on_window(null_mut(), uri, 0, null_mut()) }; }
+            _ => { unsafe { gtk_show_uri(gdk_screen_get_default(), uri, 0, null_mut()) }; }
+        }
         return true;
     }
     false

@@ -19,7 +19,7 @@ fn main() {
     let dest = Path::new(&out_dir).join("generated_tests.rs");
 
     // On Windows there is no C compiler or leak checker available; skip all integration tests
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
     if target_os == "windows" {
         fs::write(&dest, "").expect("write generated tests file");
         return;

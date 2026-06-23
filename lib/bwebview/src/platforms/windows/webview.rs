@@ -119,13 +119,10 @@ impl crate::WebviewInterface for PlatformWebview {
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
             if let Some(webview) = self.webview_data.webview {
-                #[cfg(feature = "custom_protocol")]
-                let url = replace_custom_protocol_in_url(
-                    url.as_ref(),
-                    &self.webview_data.custom_protocols,
-                );
-                #[cfg(not(feature = "custom_protocol"))]
-                let url: &str = url.as_ref();
+                let url = cfg_select! {
+                    feature = "custom_protocol" => { replace_custom_protocol_in_url(url.as_ref(), &self.webview_data.custom_protocols) }
+                    _ => { url.as_ref() }
+                };
                 (*webview).Navigate(url.to_wide_string().as_ptr() as *mut _);
             }
         }
@@ -384,10 +381,10 @@ extern "system" fn controller_created(
         }
 
         // Setup ipc and console logging
-        #[cfg(not(feature = "log"))]
-        let script = super::super::IPC_SCRIPT;
-        #[cfg(feature = "log")]
-        let script = format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT);
+        let script = cfg_select! {
+            feature = "log" => { format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT) }
+            _ => { super::super::IPC_SCRIPT }
+        };
         (*webview).AddScriptToExecuteOnDocumentCreated(
             script.to_wide_string().as_ptr() as *mut _,
             null_mut(),
@@ -409,10 +406,10 @@ extern "system" fn controller_created(
 
         // Load initial contents
         if let Some(url) = &_self.should_load_url {
-            #[cfg(feature = "custom_protocol")]
-            let url = replace_custom_protocol_in_url(url, &_self.custom_protocols);
-            #[cfg(not(feature = "custom_protocol"))]
-            let url: &str = url.as_ref();
+            let url = cfg_select! {
+                feature = "custom_protocol" => { replace_custom_protocol_in_url(url, &_self.custom_protocols) }
+                _ => { url.as_ref() }
+            };
             (*webview).Navigate(url.to_wide_string().as_ptr() as *mut _);
         }
         if let Some(html) = &_self.should_load_html {

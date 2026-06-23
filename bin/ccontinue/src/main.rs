@@ -178,7 +178,7 @@ fn link_and_run(
 ) {
     let exe_path = output.clone().unwrap_or_else(|| {
         let base = &files[0];
-        if cfg!(target_os = "windows") {
+        if cfg!(windows) {
             base.replace(".cc", ".exe")
         } else {
             base.replace(".cc", "")

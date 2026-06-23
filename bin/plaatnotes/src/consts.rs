@@ -22,10 +22,10 @@ pub(crate) const TASK_RUNNER_INTERVAL_SECONDS: u64 = 60 * 60;
 pub(crate) const TRASHED_NOTE_EXPIRY_DAYS: i64 = 30;
 
 // PBKDF2 iterations: full strength in production, minimal in tests for speed
-#[cfg(not(test))]
-pub(crate) const PBKDF2_ITERATIONS: u32 = pbkdf2::DEFAULT_SAFE_ITERATIONS;
-#[cfg(test)]
-pub(crate) const PBKDF2_ITERATIONS: u32 = 1;
+pub(crate) const PBKDF2_ITERATIONS: u32 = cfg_select! {
+    not(test) => { pbkdf2::DEFAULT_SAFE_ITERATIONS }
+    _ => { 1 }
+};
 
 // Login rate limiting: max attempts per window
 pub(crate) const LOGIN_RATE_LIMIT_MAX_ATTEMPTS: u32 = 10;

@@ -330,13 +330,10 @@ impl<T: Clone> RouterBuilder<T> {
             }),
             error_handler: self.error_handler.unwrap_or({
                 |req, _, err| {
-                    #[cfg(feature = "log")]
-                    log::error!("Handling request {} {}: {}", req.method, req.url, err);
-                    #[cfg(not(feature = "log"))]
-                    eprintln!(
-                        "[small-router] Error handling request {} {}: {}",
-                        req.method, req.url, err
-                    );
+                    cfg_select! {
+                        feature = "log" => { log::error!("Handling request {} {}: {}", req.method, req.url, err); }
+                        _ => { eprintln!("[small-router] Error handling request {} {}: {}", req.method, req.url, err); }
+                    }
                     Response::with_status(Status::InternalServerError)
                         .body("500 Internal Server Error")
                 }

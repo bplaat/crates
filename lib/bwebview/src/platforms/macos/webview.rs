@@ -205,14 +205,10 @@ impl PlatformWebview {
 
         // Create ipc handler
         unsafe {
-            #[cfg(not(feature = "log"))]
-            let script = super::super::IPC_SCRIPT;
-            #[cfg(feature = "log")]
-            let script = format!(
-                "{}\n{}",
-                super::super::IPC_SCRIPT,
-                super::super::CONSOLE_SCRIPT
-            );
+            let script = cfg_select! {
+                feature = "log" => { format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT) }
+                _ => { super::super::IPC_SCRIPT }
+            };
 
             let webview_configuration: *mut Object = msg_send![webview, configuration];
             let user_content_controller: *mut Object =

@@ -32,7 +32,7 @@ small-http = { version = "0.2.1", default-features = false, features = [
 small-router = { version = "0.2.1" }
 url = { version = "2.0" }
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
+[target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
 bsqlite = { version = "0.1.2", features = ["bundled"] }
 
 [build-dependencies]

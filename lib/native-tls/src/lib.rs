@@ -21,20 +21,14 @@ mod imp_macos;
 #[cfg(all(target_os = "macos", not(feature = "vendored")))]
 use imp_macos as imp;
 
-#[cfg(all(target_os = "windows", not(feature = "vendored")))]
+#[cfg(all(windows, not(feature = "vendored")))]
 mod imp_windows;
-#[cfg(all(target_os = "windows", not(feature = "vendored")))]
+#[cfg(all(windows, not(feature = "vendored")))]
 use imp_windows as imp;
 
-#[cfg(all(
-    not(any(target_os = "macos", target_os = "windows")),
-    not(feature = "vendored")
-))]
+#[cfg(all(not(any(target_os = "macos", windows)), not(feature = "vendored")))]
 mod imp_openssl;
-#[cfg(all(
-    not(any(target_os = "macos", target_os = "windows")),
-    not(feature = "vendored")
-))]
+#[cfg(all(not(any(target_os = "macos", windows)), not(feature = "vendored")))]
 use imp_openssl as imp;
 
 // MARK: Error
