@@ -4,11 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::collections::HashMap;
+
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub(crate) struct Manifest {
     pub package: Package,
+    #[serde(default)]
+    pub features: HashMap<String, Vec<String>>,
 }
 
 #[derive(Deserialize)]

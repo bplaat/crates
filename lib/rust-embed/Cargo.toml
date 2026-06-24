@@ -13,3 +13,4 @@ rust-embed-impl = { path = "../rust-embed-impl" }
 
 [features]
 interpolate-folder-path = ["rust-embed-impl/interpolate-folder-path"]
+macos-bundle = ["rust-embed-impl/macos-bundle"]

@@ -8,6 +8,9 @@ authors.workspace = true
 [package.metadata]
 platforms = ["macos", "linux"]
 
+[features]
+macos-bundle = ["rust-embed/macos-bundle"]
+
 [package.metadata.bundle]
 name = "ManExplorer"
 identifier = "nl.bplaat.ManExplorer"

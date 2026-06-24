@@ -89,31 +89,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         (file_path.to_string(), const_ident)
     };
 
-    // Create consts for all files
-    let embed_files: Vec<_> = files
-        .iter()
-        .map(|path| {
-            let (_, const_ident) = to_const_name(path);
-            quote! {
-                const #const_ident: &[u8] = include_bytes!(#path);
-            }
-        })
-        .collect();
-
-    // Create a mapping of file paths to consts
-    let embed_mapping: Vec<_> = files
-        .iter()
-        .map(|path| {
-            let (file_path, const_ident) = to_const_name(path);
-            quote! {
-                #file_path => Some(rust_embed::EmbeddedFile {
-                    data: std::borrow::Cow::Borrowed(#const_ident),
-                }),
-            }
-        })
-        .collect();
-
-    // Collect relative file paths for iter()
+    // Collect relative file paths (used by both modes for iter())
     let file_paths: Vec<_> = files
         .iter()
         .map(|path| {
@@ -122,30 +98,89 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    TokenStream::from(quote! {
-        #(#embed_files)*
+    cfg_select! {
+        feature = "macos-bundle" => {
+            // Bundle mode: read files from the .app/Contents/Resources/{folder_name}/ at runtime
+            let folder_name = Path::new(&folder_path)
+                .file_name()
+                .expect("folder has no name")
+                .to_string_lossy()
+                .to_string();
+            TokenStream::from(quote! {
+                impl #name {
+                    fn get(file_path: &str) -> Option<rust_embed::EmbeddedFile> {
+                        <Self as rust_embed::RustEmbed>::get(file_path)
+                    }
 
-        impl #name {
-            fn get(file_path: &str) -> Option<rust_embed::EmbeddedFile> {
-                <Self as rust_embed::RustEmbed>::get(file_path)
-            }
-
-            fn iter() -> impl Iterator<Item = std::borrow::Cow<'static, str>> {
-                <Self as rust_embed::RustEmbed>::iter()
-            }
-        }
-
-        impl rust_embed::RustEmbed for #name {
-            fn get(file_path: &str) -> Option<rust_embed::EmbeddedFile> {
-                match file_path {
-                    #(#embed_mapping)*
-                    _ => None,
+                    fn iter() -> impl Iterator<Item = std::borrow::Cow<'static, str>> {
+                        <Self as rust_embed::RustEmbed>::iter()
+                    }
                 }
-            }
 
-            fn iter() -> impl Iterator<Item = std::borrow::Cow<'static, str>> {
-                [#(std::borrow::Cow::Borrowed(#file_paths),)*].into_iter()
-            }
+                impl rust_embed::RustEmbed for #name {
+                    fn get(file_path: &str) -> Option<rust_embed::EmbeddedFile> {
+                        let path = rust_embed::bundle_resources_dir().join(#folder_name).join(file_path);
+                        std::fs::read(&path).ok().map(|data| rust_embed::EmbeddedFile {
+                            data: std::borrow::Cow::Owned(data),
+                        })
+                    }
+
+                    fn iter() -> impl Iterator<Item = std::borrow::Cow<'static, str>> {
+                        [#(std::borrow::Cow::Borrowed(#file_paths),)*].into_iter()
+                    }
+                }
+            })
         }
-    })
+        _ => {
+            // Embed mode: bake all file bytes into the binary via include_bytes!()
+            let embed_files: Vec<_> = files
+                .iter()
+                .map(|path| {
+                    let (_, const_ident) = to_const_name(path);
+                    quote! {
+                        const #const_ident: &[u8] = include_bytes!(#path);
+                    }
+                })
+                .collect();
+
+            let embed_mapping: Vec<_> = files
+                .iter()
+                .map(|path| {
+                    let (file_path, const_ident) = to_const_name(path);
+                    quote! {
+                        #file_path => Some(rust_embed::EmbeddedFile {
+                            data: std::borrow::Cow::Borrowed(#const_ident),
+                        }),
+                    }
+                })
+                .collect();
+
+            TokenStream::from(quote! {
+                #(#embed_files)*
+
+                impl #name {
+                    fn get(file_path: &str) -> Option<rust_embed::EmbeddedFile> {
+                        <Self as rust_embed::RustEmbed>::get(file_path)
+                    }
+
+                    fn iter() -> impl Iterator<Item = std::borrow::Cow<'static, str>> {
+                        <Self as rust_embed::RustEmbed>::iter()
+                    }
+                }
+
+                impl rust_embed::RustEmbed for #name {
+                    fn get(file_path: &str) -> Option<rust_embed::EmbeddedFile> {
+                        match file_path {
+                            #(#embed_mapping)*
+                            _ => None,
+                        }
+                    }
+
+                    fn iter() -> impl Iterator<Item = std::borrow::Cow<'static, str>> {
+                        [#(std::borrow::Cow::Borrowed(#file_paths),)*].into_iter()
+                    }
+                }
+            })
+        }
+    }
 }

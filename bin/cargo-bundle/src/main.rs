@@ -157,54 +157,167 @@ fn generate_resources(path: &str, target_dir: &str, manifest: &Manifest) {
         .expect("Failed to write binary Info.plist");
 }
 
-// Compile the binary and return its path.
+// Run cargo build with --message-format json and return the OUT_DIR for the given package.
+// Falls back to globbing target/ when build-script-executed is absent (cached incremental builds).
+fn cargo_build_get_out_dir(cargo_args: &[&str], package_name: &str) -> Option<String> {
+    let output = Command::new("cargo")
+        .args(cargo_args)
+        .args(["--message-format", "json-render-diagnostics"])
+        .output()
+        .expect("Failed to run cargo build");
+    assert!(output.status.success(), "cargo build failed");
+    // Parse each JSON line looking for build-script-executed for our package.
+    // package_id format is "name version (source)", so match on "package_id":"name
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        if line.contains("\"reason\":\"build-script-executed\"")
+            && line.contains(&format!("\"package_id\":\"{}", package_name))
+        {
+            if let Some(start) = line.find("\"out_dir\":\"") {
+                let rest = &line[start + 11..];
+                if let Some(end) = rest.find('"') {
+                    return Some(rest[..end].replace("\\\\", "\\").replace("\\/", "/"));
+                }
+            }
+        }
+    }
+    // Fallback: find the most recently modified build output dir in target/.
+    // Cargo uses target/{target}/release/build/{name}-{hash}/out for each target.
+    find_out_dir_in_target(cargo_args, package_name)
+}
+
+// Scan target/ for the most recently modified build output dir matching {name}-*.
+fn find_out_dir_in_target(cargo_args: &[&str], package_name: &str) -> Option<String> {
+    // Determine the target triple from the cargo args (--target <triple>)
+    let target_triple = cargo_args
+        .windows(2)
+        .find(|w| w[0] == "--target")
+        .map(|w| w[1]);
+    let build_dir = if let Some(triple) = target_triple {
+        format!("target/{triple}/release/build")
+    } else {
+        "target/release/build".to_string()
+    };
+    let prefix = format!("{package_name}-");
+    let mut best: Option<(std::time::SystemTime, String)> = None;
+    let Ok(entries) = fs::read_dir(&build_dir) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !name.starts_with(&prefix) {
+            continue;
+        }
+        let out = entry.path().join("out");
+        if !out.is_dir() {
+            continue;
+        }
+        if let Ok(meta) = out.metadata() {
+            if let Ok(modified) = meta.modified() {
+                if best.as_ref().is_none_or(|(t, _)| modified > *t) {
+                    // canonicalize to absolute path so resolve_folder_path doesn't
+                    // mistake it for a manifest-relative path
+                    let abs = fs::canonicalize(&out)
+                        .unwrap_or(out)
+                        .to_string_lossy()
+                        .into_owned();
+                    best = Some((modified, abs));
+                }
+            }
+        }
+    }
+    best.map(|(_, path)| path)
+}
+
+// Compile the binary and return (binary_path, Option<out_dir>).
 fn compile_binary(
     path: &str,
     target_dir: &str,
     package: &manifest::Package,
     bundle: &manifest::BundleMetadata,
-) -> String {
+    has_macos_bundle: bool,
+) -> (String, Option<String>) {
     let lipo = bundle.lipo.unwrap_or(true);
+    let manifest_path = format!("{path}/Cargo.toml");
     if lipo {
+        let mut out_dir = None;
         for target in ["x86_64-apple-darwin", "aarch64-apple-darwin"] {
-            let status = Command::new("cargo")
-                .args([
-                    "build",
-                    "--release",
-                    "--manifest-path",
-                    &format!("{path}/Cargo.toml"),
-                    "--target",
-                    target,
-                ])
-                .status()
-                .expect("Failed to run cargo build");
-            assert!(status.success(), "cargo build failed for {target}");
+            let mut args = vec!["build", "--release", "--manifest-path", &manifest_path, "--target", target];
+            if has_macos_bundle {
+                args.extend(["--features", "macos-bundle"]);
+            }
+            let detected = cargo_build_get_out_dir(&args, &package.name);
+            if out_dir.is_none() {
+                out_dir = detected;
+            }
         }
-        let output = format!("{target_dir}/{}", bundle.name);
+        let binary = format!("{target_dir}/{}", bundle.name);
         let lipo_status = Command::new("lipo")
             .args([
                 "-create",
                 &format!("target/x86_64-apple-darwin/release/{}", package.name),
                 &format!("target/aarch64-apple-darwin/release/{}", package.name),
                 "-output",
-                &output,
+                &binary,
             ])
             .status()
             .expect("Failed to run lipo");
         assert!(lipo_status.success(), "lipo failed");
-        output
+        (binary, out_dir)
     } else {
-        let status = Command::new("cargo")
-            .args([
-                "build",
-                "--release",
-                "--manifest-path",
-                &format!("{path}/Cargo.toml"),
-            ])
-            .status()
-            .expect("Failed to run cargo build");
-        assert!(status.success(), "cargo build failed");
-        format!("target/release/{}", package.name)
+        let mut args = vec!["build", "--release", "--manifest-path", &manifest_path];
+        if has_macos_bundle {
+            args.extend(["--features", "macos-bundle"]);
+        }
+        let out_dir = cargo_build_get_out_dir(&args, &package.name);
+        (format!("target/release/{}", package.name), out_dir)
+    }
+}
+
+fn scan_rs_for_folders(dir: &str, folders: &mut Vec<String>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            scan_rs_for_folders(&path.to_string_lossy(), folders);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
+            for line in content.lines() {
+                let line = line.trim();
+                if let Some(rest) = line.strip_prefix("#[folder = \"") {
+                    if let Some(folder) = rest.strip_suffix("\"]") {
+                        folders.push(folder.to_string());
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn find_embed_folders(manifest_dir: &str) -> Vec<String> {
+    let mut folders = Vec::new();
+    scan_rs_for_folders(&format!("{manifest_dir}/src"), &mut folders);
+    folders.sort();
+    folders.dedup();
+    folders
+}
+
+fn resolve_folder_path(folder: &str, manifest_dir: &str, out_dir: Option<&str>) -> String {
+    let mut resolved = folder.to_string();
+    if let Some(dir) = out_dir {
+        resolved = resolved.replace("$OUT_DIR", dir);
+    }
+    for (key, value) in std::env::vars() {
+        resolved = resolved.replace(&format!("${key}"), &value);
+    }
+    if Path::new(&resolved).is_relative() {
+        format!("{manifest_dir}/{resolved}")
+    } else {
+        resolved
     }
 }
 
@@ -213,6 +326,7 @@ fn create_bundle(
     target_dir: &str,
     bundle: &manifest::BundleMetadata,
     binary_path: &str,
+    out_dir: Option<&str>,
 ) {
     // Create bundle folder structure
     let bundle_dir = format!("{target_dir}/{}.app/Contents", bundle.name);
@@ -226,6 +340,21 @@ fn create_bundle(
             format!("{bundle_dir}/Resources"),
         )
         .expect("Failed to copy resources directory");
+    }
+
+    // Discover and copy embed asset dirs from source #[folder = "..."] attributes
+    for folder in find_embed_folders(path) {
+        let src = resolve_folder_path(&folder, path, out_dir);
+        let src_path = Path::new(&src);
+        if src_path.exists() {
+            let folder_name = src_path
+                .file_name()
+                .expect("folder has no name")
+                .to_string_lossy();
+            let dest = format!("{bundle_dir}/Resources/{folder_name}");
+            fs::create_dir_all(&dest).expect("Can't create directory");
+            copy_dir(&src, &dest).expect("Failed to copy embed resources dir");
+        }
     }
 
     if bundle.iconset.is_some() || bundle.icns.is_some() || bundle.icon.is_some() {
@@ -375,10 +504,18 @@ fn main() {
     generate_resources(&args.path, &target_dir, &manifest);
 
     // Compile binary
-    let binary_path = compile_binary(&args.path, &target_dir, &manifest.package, bundle);
+    let has_macos_bundle = manifest.features.contains_key("macos-bundle");
+    let (binary_path, out_dir) =
+        compile_binary(&args.path, &target_dir, &manifest.package, bundle, has_macos_bundle);
 
     // Create bundle folder structure
-    create_bundle(&args.path, &target_dir, bundle, &binary_path);
+    create_bundle(
+        &args.path,
+        &target_dir,
+        bundle,
+        &binary_path,
+        out_dir.as_deref(),
+    );
 
     // Ad-hoc code sign the bundle
     sign_bundle(&args.path, &target_dir, bundle);

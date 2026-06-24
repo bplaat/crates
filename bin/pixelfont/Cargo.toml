@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[features]
+macos-bundle = ["rust-embed/macos-bundle"]
+
 [package.metadata.bundle]
 name = "Pixel Font Editor"
 identifier = "nl.bplaat.PixelFontEditor"
