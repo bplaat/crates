@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Music Downloader
+Exec=MusicDownloader
+Icon=MusicDownloader
+Terminal=false
+Categories=AudioVideo;Audio;Network;

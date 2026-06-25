@@ -469,6 +469,7 @@ dependencies = [
  "serde_json",
  "small-http",
  "threadpool",
+ "winresource",
 ]
 
 [[package]]

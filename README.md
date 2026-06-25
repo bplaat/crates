@@ -58,6 +58,12 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
     </a>
 </td>
 <td width="100" align="center">
+    <a href="bin/music-dl">
+        <img src="bin/music-dl/docs/images/icon.svg" alt="Music Downloader icon" width="48" height="48"/><br/>
+        Music Downloader
+    </a>
+</td>
+<td width="100" align="center">
     <a href="bin/pixelfont">
         <img src="bin/pixelfont/docs/images/icon.svg" alt="Pixel Font Editor icon" width="48" height="48"/><br/>
         Pixel Font Editor
@@ -76,6 +82,7 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 - [BassieLight](bin/bassielight) A simple lights controller with GUI
 - [ManExplorer](bin/manexplorer) A simple man page explorer tool
 - [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
+- [Music Downloader](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](bin/pixelfont) An 8x8 pixel font editor
 - [Sequel Explorer](bin/sequelexplorer) A simple SQLite database GUI viewer
 
@@ -87,7 +94,6 @@ Various tools and websites, for the live deployed sites go to [crates.bplaat.nl]
 - [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
 - [ccontinue](bin/ccontinue) A transpiler that translates an OOP-extension for the C programming language back to C
 - [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
-- [music-dl](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [plaatnotes](bin/plaatnotes) A self-hosted note taking web app with rich markdown support
 
 ### Replacement libraries

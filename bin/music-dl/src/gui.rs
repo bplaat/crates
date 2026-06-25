@@ -224,7 +224,7 @@ fn background_worker(cmd_rx: mpsc::Receiver<GuiCommand>, proxy: Arc<EventLoopPro
 
 pub(crate) fn run() {
     let event_loop = EventLoopBuilder::new()
-        .app_id("nl", "bplaat", "MusicDL")
+        .app_id("nl", "bplaat", "MusicDownloader")
         .build();
 
     let proxy = Arc::new(event_loop.create_proxy());
