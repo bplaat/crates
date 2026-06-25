@@ -179,6 +179,9 @@ fn run_renderer(rx: mpsc::Receiver<ProgressEvent>, is_tty: bool) {
     loop {
         match rx.recv_timeout(Duration::from_secs(1)) {
             Ok(event) => {
+                if let ProgressEvent::AlbumQueued { .. } = &event {
+                    continue;
+                }
                 let updated_index = match &event {
                     ProgressEvent::Added { index, .. }
                     | ProgressEvent::Searching { index }
@@ -186,6 +189,7 @@ fn run_renderer(rx: mpsc::Receiver<ProgressEvent>, is_tty: bool) {
                     | ProgressEvent::WritingMetadata { index }
                     | ProgressEvent::Done { index }
                     | ProgressEvent::Failed { index } => *index,
+                    ProgressEvent::AlbumQueued { .. } => unreachable!(),
                 };
 
                 if tracks.len() <= updated_index {
@@ -222,6 +226,7 @@ fn run_renderer(rx: mpsc::Receiver<ProgressEvent>, is_tty: bool) {
                         tracks[index].status = TrackStatus::Failed;
                         failed += 1;
                     }
+                    ProgressEvent::AlbumQueued { .. } => unreachable!(),
                 }
 
                 if !is_tty {

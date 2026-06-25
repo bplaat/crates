@@ -1,0 +1,153 @@
+<!--
+    Copyright (c) 2026 Bastiaan van der Plaat
+
+    SPDX-License-Identifier: MIT
+-->
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Music Downloader</title>
+        <link rel="stylesheet" href="index.css" />
+    </head>
+    <body>
+        <div id="app" @vue:mounted="init()">
+            <!-- Search panel -->
+            <div class="panel" id="search-panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Search</h2>
+                    <form class="search-form" @submit.prevent="search()">
+                        <input
+                            class="search-input"
+                            type="text"
+                            v-model="searchQuery"
+                            placeholder="Search artists & albums..."
+                            autocomplete="off"
+                        />
+                        <button class="search-btn" type="submit">Search</button>
+                    </form>
+                </div>
+                <div class="panel-content">
+                    <!-- Breadcrumb when drilled into artist -->
+                    <div v-if="drilledArtist" class="breadcrumb" @click="clearArtist()">
+                        <span class="breadcrumb-arrow">&#8592;</span>
+                        <span class="breadcrumb-label">{{ drilledArtist.name }}</span>
+                    </div>
+
+                    <div v-if="isSearching" class="placeholder">Searching...</div>
+
+                    <div v-if="!isSearching && !hasSearched && !drilledArtist" class="placeholder">
+                        Search for artists and albums above
+                    </div>
+                    <div
+                        v-if="!isSearching && hasSearched && visibleResults().length === 0 && !drilledArtist"
+                        class="placeholder"
+                    >
+                        No results found
+                    </div>
+                    <div v-if="!isSearching && drilledArtist && visibleResults().length === 0" class="placeholder">
+                        No albums found
+                    </div>
+
+                    <!-- Mixed results: artists and albums interleaved by search rank -->
+                    <div v-for="result in visibleResults()">
+                        <!-- Artist row -->
+                        <div v-if="result.type === 'artist'" class="result-artist-row">
+                            <img
+                                v-if="result.picture_small"
+                                class="result-artist-thumb"
+                                :src="result.picture_small"
+                                loading="lazy"
+                            />
+                            <div
+                                v-if="!result.picture_small"
+                                class="result-artist-thumb result-artist-thumb-placeholder"
+                            ></div>
+                            <div class="result-artist-info" @click="selectArtist(result)">
+                                <div class="result-artist-name">{{ result.name }}</div>
+                            </div>
+                            <button class="queue-all-btn" @click="queueArtistAlbums(result)">Queue all</button>
+                            <button class="browse-btn" @click="selectArtist(result)">Browse</button>
+                        </div>
+
+                        <!-- Album card -->
+                        <div v-if="result.type === 'album'" class="album-card">
+                            <img class="album-thumb" :src="result.cover_small || result.cover" loading="lazy" />
+                            <div class="album-card-info">
+                                <div class="album-card-title">{{ result.title }}</div>
+                                <div class="album-card-meta">
+                                    {{ result.artist_name || (drilledArtist ? drilledArtist.name : '') }}
+                                    <span v-if="result.nb_tracks">&middot; {{ result.nb_tracks }} tracks</span>
+                                </div>
+                                <div v-if="result.record_type" class="album-card-type">{{ result.record_type }}</div>
+                            </div>
+                            <button class="queue-btn" @click="queueAlbum(result)" :disabled="isQueued(result.id)">
+                                {{ isQueued(result.id) ? 'Queued' : 'Queue' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Queue panel -->
+            <div class="panel" id="queue-panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Download Queue</h2>
+                </div>
+                <div class="panel-content">
+                    <div v-if="activeAlbums().length === 0" class="placeholder">No downloads in progress</div>
+                    <div v-for="album in activeAlbums()" class="queue-album">
+                        <div class="queue-album-header">
+                            <img class="queue-album-thumb" :src="album.coverSmall" loading="lazy" />
+                            <div class="queue-album-info">
+                                <div class="queue-album-title">{{ album.title }}</div>
+                                <div class="queue-album-meta">{{ album.artistName }}</div>
+                            </div>
+                            <div class="queue-album-count">{{ albumDoneCount(album) }}/{{ album.trackCount }}</div>
+                        </div>
+                        <div v-for="track in albumTracks(album)" class="track-row">
+                            <div class="track-label">{{ track ? trackTitle(track.label) : '' }}</div>
+                            <div class="track-status" :class="'status-' + (track ? track.status : 'queued')">
+                                <span v-if="!track || track.status === 'queued'">Queued</span>
+                                <span v-if="track && track.status === 'searching'"
+                                    >Searching ({{ Math.floor((now - track.searchStart) / 1000) }}s)</span
+                                >
+                                <div v-if="track && track.status === 'downloading'" class="progress-wrap">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" :style="{ width: track.percent + '%' }"></div>
+                                    </div>
+                                    <span class="progress-pct">{{ track.percent.toFixed(0) }}%</span>
+                                </div>
+                                <span v-if="track && track.status === 'writingMetadata'">Writing...</span>
+                                <span v-if="track && track.status === 'done'">Done</span>
+                                <span v-if="track && track.status === 'failed'">Failed</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Done panel -->
+            <div class="panel" id="done-panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Done</h2>
+                </div>
+                <div class="panel-content">
+                    <div v-if="doneAlbums().length === 0" class="placeholder">No completed downloads</div>
+                    <div v-for="album in doneAlbums()" class="done-album">
+                        <img class="done-album-thumb" :src="album.coverSmall" loading="lazy" />
+                        <div class="done-album-info">
+                            <div class="done-album-title">{{ album.title }}</div>
+                            <div class="done-album-meta">
+                                {{ album.artistName }} &middot; {{ albumSuccessCount(album) }}/{{ album.trackCount }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="petite-vue.min.js"></script>
+        <script src="index.js"></script>
+    </body>
+</html>

@@ -6,7 +6,34 @@
 
 #![allow(dead_code)]
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+// Search
+#[derive(Deserialize)]
+pub(crate) struct SearchTrackList {
+    pub data: Vec<SearchTrack>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct SearchTrack {
+    pub artist: SearchArtist,
+    pub album: SearchAlbumRef,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct SearchArtist {
+    pub id: i64,
+    pub name: String,
+    pub picture_small: String,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct SearchAlbumRef {
+    pub id: i64,
+    pub title: String,
+    pub cover: String,
+    pub cover_small: String,
+}
 
 // Album
 #[derive(Deserialize)]
@@ -16,7 +43,7 @@ pub(crate) struct AlbumList {
     pub total: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub(crate) struct AlbumSmall {
     pub id: i64,
     pub title: String,
@@ -25,6 +52,8 @@ pub(crate) struct AlbumSmall {
     pub cover_medium: Option<String>,
     pub cover_big: Option<String>,
     pub cover_xl: Option<String>,
+    pub nb_tracks: Option<i64>,
+    pub artist: Option<ArtistSmall>,
     pub record_type: String,
     pub explicit_lyrics: bool,
     pub r#type: String,
@@ -57,7 +86,7 @@ pub(crate) struct ArtistList {
     pub total: i64,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub(crate) struct ArtistSmall {
     pub id: i64,
     pub name: String,

@@ -8,7 +8,9 @@ use anyhow::Result;
 use percent_encoding::utf8_percent_encode;
 use small_http::{Client, Request};
 
-use crate::structs::deezer::{Album, AlbumList, AlbumSmall, ArtistList, ArtistSmall, Track};
+use crate::structs::deezer::{
+    Album, AlbumList, AlbumSmall, ArtistList, ArtistSmall, SearchTrackList, Track,
+};
 
 const USER_AGENT: &str =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:135.0) Gecko/20100101 Firefox/135.0";
@@ -23,6 +25,16 @@ impl MetadataService {
         Self {
             client: Client::new().header("User-Agent", USER_AGENT),
         }
+    }
+
+    pub(crate) fn search(&mut self, query: &str) -> Result<SearchTrackList> {
+        Ok(self
+            .client
+            .fetch(Request::get(format!(
+                "https://api.deezer.com/search?q={}",
+                utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC)
+            )))?
+            .into_json::<SearchTrackList>()?)
     }
 
     pub(crate) fn search_album(&mut self, query: &str) -> Result<Vec<AlbumSmall>> {

@@ -460,9 +460,11 @@ name = "music-dl"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bwebview",
  "directories",
  "mp4ameta",
  "percent-encoding",
+ "rust-embed",
  "serde",
  "serde_json",
  "small-http",

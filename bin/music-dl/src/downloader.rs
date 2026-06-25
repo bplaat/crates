@@ -23,12 +23,34 @@ pub(crate) const DOWNLOAD_THREAD_COUNT: usize = 16;
 const TRACK_DURATION_SLACK: i64 = 5;
 
 pub(crate) enum ProgressEvent {
-    Added { index: usize, label: String },
-    Searching { index: usize },
-    Downloading { index: usize, percent: f32 },
-    WritingMetadata { index: usize },
-    Done { index: usize },
-    Failed { index: usize },
+    AlbumQueued {
+        album_id: i64,
+        title: String,
+        cover_small: String,
+        artist_name: String,
+        start_index: usize,
+        track_count: usize,
+    },
+    Added {
+        index: usize,
+        label: String,
+    },
+    Searching {
+        index: usize,
+    },
+    Downloading {
+        index: usize,
+        percent: f32,
+    },
+    WritingMetadata {
+        index: usize,
+    },
+    Done {
+        index: usize,
+    },
+    Failed {
+        index: usize,
+    },
 }
 
 struct TrackJob {
@@ -115,6 +137,19 @@ fn download_album(
         }
         tracks.push(track);
     }
+
+    tx.send(ProgressEvent::AlbumQueued {
+        album_id,
+        title: album.title.clone(),
+        cover_small: album
+            .cover_small
+            .clone()
+            .unwrap_or_else(|| album.cover.clone()),
+        artist_name: album.contributors[0].name.clone(),
+        start_index: track_start,
+        track_count: tracks.len(),
+    })
+    .ok();
 
     for (local_index, track) in tracks.iter().enumerate() {
         let label = format!("{} - {}", album.contributors[0].name, track.title);
