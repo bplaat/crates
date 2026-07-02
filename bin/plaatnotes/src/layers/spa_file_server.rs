@@ -38,6 +38,9 @@ pub(crate) fn spa_file_server_pre_layer(
     if path.starts_with("/api") {
         return None;
     }
+    if path == "/swagger-ui" {
+        return Some(Ok(Response::with_redirect("/swagger-ui/index.html")));
+    }
 
     let mut path = path.to_string();
     if path.ends_with('/') {

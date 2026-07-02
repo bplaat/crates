@@ -23,7 +23,9 @@
         "@playwright/test": "1.60.0",
         "@preact/preset-vite": "^2.10.1",
         "@tailwindcss/vite": "^4.2.1",
+        "@types/node": "^26.1.0",
         "baseline-browser-mapping": "^2.10.0",
+        "swagger-ui-dist": "^5.32.8",
         "tailwindcss": "^4.2.1",
         "vite": "^8.0.0"
     }
