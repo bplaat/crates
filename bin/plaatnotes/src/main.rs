@@ -26,7 +26,6 @@ mod context;
 mod controllers;
 mod imports;
 mod layers;
-mod migrations;
 mod models;
 mod tasks;
 #[cfg(test)]

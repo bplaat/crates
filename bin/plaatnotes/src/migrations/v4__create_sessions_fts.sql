@@ -1,0 +1,1 @@
+-- bsqlite:create_fts5_table sessions, ip_address, ip_country, ip_city, client_name, client_os

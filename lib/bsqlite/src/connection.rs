@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Bastiaan van der Plaat
+ * Copyright (c) 2024-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -66,6 +66,34 @@ impl InnerConnection {
             });
         }
         Ok(InnerConnection(db))
+    }
+
+    fn execute_script(&self, sql: &str) -> Result<(), StatementError> {
+        let c_sql = CString::new(sql).map_err(|_| StatementError {
+            msg: "SQL script contains null byte".to_string(),
+        })?;
+        let mut errmsg: *mut c_char = ptr::null_mut();
+        // SAFETY: self.0 is a valid open db handle; c_sql is a valid NUL-terminated string;
+        // errmsg receives a sqlite3-allocated string that must be freed with sqlite3_free.
+        let rc =
+            unsafe { sqlite3_exec(self.0, c_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
+        if rc != SQLITE_OK {
+            let msg = if errmsg.is_null() {
+                "unknown error".to_string()
+            } else {
+                // SAFETY: errmsg is non-null and points to a valid NUL-terminated string.
+                let s = unsafe { CStr::from_ptr(errmsg) }
+                    .to_string_lossy()
+                    .into_owned();
+                // SAFETY: errmsg was allocated by sqlite3 and must be freed with sqlite3_free.
+                unsafe { sqlite3_free(errmsg as *mut _) };
+                s
+            };
+            return Err(StatementError {
+                msg: format!("Failed to execute script: {msg}"),
+            });
+        }
+        Ok(())
     }
 
     fn prepare<T: FromRow>(&self, query: &str) -> Result<Statement<T>, StatementError> {
@@ -206,6 +234,11 @@ impl Connection {
             })
     }
 
+    /// Execute a SQL script (multiple statements separated by semicolons)
+    pub fn execute_script(&self, sql: &str) -> Result<(), StatementError> {
+        self.0.execute_script(sql)
+    }
+
     /// Execute a query
     pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) -> Result<(), StatementError> {
         self.query::<()>(query.as_ref(), params)?
@@ -217,53 +250,6 @@ impl Connection {
     /// Get the number of affected rows
     pub fn affected_rows(&self) -> i32 {
         self.0.affected_rows()
-    }
-
-    /// Create FTS5 virtual table and sync triggers for a table
-    pub fn create_fts_tables(&self, table: &str, columns: &[&str]) -> Result<(), StatementError> {
-        let cols = columns.join(", ");
-        let new_cols = columns
-            .iter()
-            .map(|c| format!("new.{c}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let set_cols = columns
-            .iter()
-            .map(|c| format!("{c} = new.{c}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        self.execute(
-            format!(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS {table}_fts USING fts5({cols}, id UNINDEXED)"
-            ),
-            (),
-        )?;
-        self.execute(
-            format!(
-                "CREATE TRIGGER IF NOT EXISTS {table}_ai AFTER INSERT ON {table} BEGIN
-                    INSERT INTO {table}_fts({cols}, id) VALUES ({new_cols}, new.id);
-                END"
-            ),
-            (),
-        )?;
-        self.execute(
-            format!(
-                "CREATE TRIGGER IF NOT EXISTS {table}_au AFTER UPDATE ON {table} BEGIN
-                    UPDATE {table}_fts SET {set_cols} WHERE id = old.id;
-                END"
-            ),
-            (),
-        )?;
-        self.execute(
-            format!(
-                "CREATE TRIGGER IF NOT EXISTS {table}_ad BEFORE DELETE ON {table} BEGIN
-                    DELETE FROM {table}_fts WHERE id = old.id;
-                END"
-            ),
-            (),
-        )?;
-        Ok(())
     }
 
     /// Get the last inserted row id

@@ -1,0 +1,431 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+use std::error::Error;
+use std::fmt::{self, Display, Formatter, Write};
+
+use crate::{Connection, StatementError};
+
+// MARK: MigrationError
+/// A migration error
+#[derive(Debug)]
+pub struct MigrationError {
+    msg: String,
+}
+
+impl MigrationError {
+    fn new(msg: impl Into<String>) -> Self {
+        Self { msg: msg.into() }
+    }
+}
+
+impl Display for MigrationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Migration error: {}", self.msg)
+    }
+}
+
+impl Error for MigrationError {}
+
+impl From<StatementError> for MigrationError {
+    fn from(e: StatementError) -> Self {
+        Self { msg: e.to_string() }
+    }
+}
+
+// MARK: Migration
+/// A versioned SQL migration in Flyway style: `V<version>__<description>`
+pub struct Migration {
+    /// Migration name, e.g. `v1__create_base_tables`
+    pub name: &'static str,
+    /// SQL to execute; may contain multiple statements separated by semicolons
+    pub sql: &'static str,
+}
+
+// MARK: Connection::migration
+impl Connection {
+    /// Apply all pending migrations in version order, tracking applied versions in
+    /// the `schema_migrations` table
+    pub fn migration(&self, migrations: &[Migration]) -> Result<(), MigrationError> {
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (
+                version    INTEGER PRIMARY KEY,
+                name       TEXT NOT NULL,
+                applied_at INTEGER NOT NULL
+            ) STRICT",
+            (),
+        )?;
+
+        // Upgrade from old two-column schema that lacked the name column
+        let _ = self.execute(
+            "ALTER TABLE schema_migrations ADD COLUMN name TEXT NOT NULL DEFAULT ''",
+            (),
+        );
+
+        let applied = self
+            .query::<i64>(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+                (),
+            )?
+            .next()
+            .transpose()?
+            .unwrap_or(0);
+
+        let mut sorted: Vec<_> = migrations.iter().collect();
+        sorted.sort_by_key(|m| parse_version(m.name));
+
+        for migration in sorted {
+            let version = parse_version(migration.name);
+            if version == 0 {
+                return Err(MigrationError {
+                    msg: format!(
+                        "migration '{}' has no valid version prefix (expected V<n>__...)",
+                        migration.name
+                    ),
+                });
+            }
+            if version as i64 <= applied {
+                continue;
+            }
+            self.execute("BEGIN IMMEDIATE", ())?;
+            let result = (|| -> Result<(), MigrationError> {
+                let sql = preprocess_migration_sql(migration.sql)?;
+                self.execute_script(&sql)?;
+                self.execute(
+                    "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, unixepoch())",
+                    (version as i64, migration.name.to_string()),
+                )?;
+                Ok(())
+            })();
+            if let Err(e) = result {
+                if let Err(rollback_error) = self.execute("ROLLBACK", ()) {
+                    return Err(MigrationError {
+                        msg: format!(
+                            "{e}; additionally failed to roll back migration '{}': {rollback_error}",
+                            migration.name
+                        ),
+                    });
+                }
+                return Err(e);
+            }
+            if let Err(e) = self.execute("COMMIT", ()) {
+                if let Err(rollback_error) = self.execute("ROLLBACK", ()) {
+                    return Err(MigrationError {
+                        msg: format!(
+                            "{e}; additionally failed to roll back migration '{}': {rollback_error}",
+                            migration.name
+                        ),
+                    });
+                }
+                return Err(e.into());
+            }
+        }
+        Ok(())
+    }
+}
+
+fn parse_version(name: &str) -> u32 {
+    let s = name.trim_start_matches(['V', 'v']);
+    let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
+    s[..end].parse().unwrap_or(0)
+}
+
+fn preprocess_migration_sql(sql: &str) -> Result<String, MigrationError> {
+    let mut output = String::new();
+    for line in sql.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("-- bsqlite:create_fts5_table") {
+            output.push_str(&expand_fts5_directive(rest.trim())?);
+        } else {
+            output.push_str(line);
+            output.push('\n');
+        }
+    }
+    Ok(output)
+}
+
+fn expand_fts5_directive(rest: &str) -> Result<String, MigrationError> {
+    let parts = rest
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.len() < 2 {
+        return Err(MigrationError::new(
+            "bsqlite:create_fts5_table expects a table name and at least one indexed column",
+        ));
+    }
+
+    let table = parts[0];
+    validate_identifier(table)?;
+    let columns = &parts[1..];
+    for column in columns {
+        validate_identifier(column)?;
+        if *column == "id" {
+            return Err(MigrationError::new(
+                "bsqlite:create_fts5_table adds id automatically; do not list it as an indexed column",
+            ));
+        }
+    }
+
+    let fts_table = format!("{table}_fts");
+    let indexed_columns = columns.join(", ");
+    let all_columns = format!("{indexed_columns}, id");
+    let insert_values = columns
+        .iter()
+        .map(|column| format!("new.{column}"))
+        .chain(["new.id".to_string()])
+        .collect::<Vec<_>>()
+        .join(", ");
+    let update_assignments = columns
+        .iter()
+        .map(|column| format!("{column} = new.{column}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut sql = String::new();
+    _=  writeln!(
+        sql,
+        "CREATE VIRTUAL TABLE IF NOT EXISTS {fts_table} USING fts5({indexed_columns}, id UNINDEXED);"
+    )
+    ;
+    _ = writeln!(
+        sql,
+        "CREATE TRIGGER IF NOT EXISTS {table}_ai AFTER INSERT ON {table} BEGIN"
+    );
+    _ = writeln!(
+        sql,
+        "    INSERT INTO {fts_table}({all_columns}) VALUES ({insert_values});"
+    );
+    _ = writeln!(sql, "END;");
+    _ = writeln!(
+        sql,
+        "CREATE TRIGGER IF NOT EXISTS {table}_au AFTER UPDATE ON {table} BEGIN"
+    );
+    _ = writeln!(
+        sql,
+        "    UPDATE {fts_table} SET {update_assignments} WHERE id = old.id;"
+    );
+    _ = writeln!(sql, "END;");
+    _ = writeln!(
+        sql,
+        "CREATE TRIGGER IF NOT EXISTS {table}_ad BEFORE DELETE ON {table} BEGIN"
+    );
+    _ = writeln!(sql, "    DELETE FROM {fts_table} WHERE id = old.id;");
+    _ = writeln!(sql, "END;");
+    _ = writeln!(
+        sql,
+        "INSERT INTO {fts_table}({all_columns}) SELECT {all_columns} FROM {table};"
+    );
+    Ok(sql)
+}
+
+fn validate_identifier(identifier: &str) -> Result<(), MigrationError> {
+    let mut chars = identifier.chars();
+    let Some(first) = chars.next() else {
+        return Err(MigrationError::new(
+            "bsqlite:create_fts5_table identifier can't be empty",
+        ));
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return Err(MigrationError::new(format!(
+            "bsqlite:create_fts5_table invalid identifier '{identifier}'"
+        )));
+    }
+    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(MigrationError::new(format!(
+            "bsqlite:create_fts5_table invalid identifier '{identifier}'"
+        )));
+    }
+    Ok(())
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Connection;
+
+    #[test]
+    fn test_migration_applies_in_order() {
+        let db = Connection::open_memory().unwrap();
+        db.migration(&[
+            Migration {
+                name: "v2__add_column",
+                sql: "ALTER TABLE t ADD COLUMN b INTEGER NOT NULL DEFAULT 0",
+            },
+            Migration {
+                name: "v1__create_table",
+                sql: "CREATE TABLE t (a INTEGER PRIMARY KEY) STRICT",
+            },
+        ])
+        .unwrap();
+        let count = db
+            .query_some::<i64>("SELECT COUNT(*) FROM schema_migrations", ())
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_migration_skips_applied() {
+        let db = Connection::open_memory().unwrap();
+        let migrations = &[Migration {
+            name: "v1__create_table",
+            sql: "CREATE TABLE t (a INTEGER PRIMARY KEY) STRICT",
+        }];
+        db.migration(migrations).unwrap();
+        db.migration(migrations).unwrap();
+        let count = db
+            .query_some::<i64>("SELECT COUNT(*) FROM schema_migrations", ())
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_migration_multi_statement_sql() {
+        let db = Connection::open_memory().unwrap();
+        db.migration(&[Migration {
+            name: "v1__create_tables",
+            sql: "CREATE TABLE a (id INTEGER PRIMARY KEY) STRICT;
+                  CREATE TABLE b (id INTEGER PRIMARY KEY) STRICT",
+        }])
+        .unwrap();
+        db.execute("INSERT INTO a VALUES (1)", ()).unwrap();
+        db.execute("INSERT INTO b VALUES (1)", ()).unwrap();
+    }
+
+    #[test]
+    fn test_migration_rolls_back_failed_migration() {
+        let db = Connection::open_memory().unwrap();
+        let result = db.migration(&[Migration {
+            name: "v1__partial_failure",
+            sql: "CREATE TABLE a (id INTEGER PRIMARY KEY) STRICT;
+                  CREATE TABLE a (id INTEGER PRIMARY KEY) STRICT",
+        }]);
+        assert!(result.is_err());
+        let table_count = db
+            .query_some::<i64>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'a'",
+                (),
+            )
+            .unwrap();
+        assert_eq!(table_count, 0);
+        let migration_count = db
+            .query_some::<i64>("SELECT COUNT(*) FROM schema_migrations", ())
+            .unwrap();
+        assert_eq!(migration_count, 0);
+    }
+
+    #[test]
+    fn test_migration_can_retry_after_failed_migration() {
+        let db = Connection::open_memory().unwrap();
+        let result = db.migration(&[Migration {
+            name: "v1__create_table",
+            sql: "CREATE TABLE t (id INTEGER PRIMARY KEY) STRICT;
+                  CREATE TABLE t (id INTEGER PRIMARY KEY) STRICT",
+        }]);
+        assert!(result.is_err());
+
+        db.migration(&[Migration {
+            name: "v1__create_table",
+            sql: "CREATE TABLE t (id INTEGER PRIMARY KEY) STRICT",
+        }])
+        .unwrap();
+
+        db.execute("INSERT INTO t VALUES (1)", ()).unwrap();
+        let migration_count = db
+            .query_some::<i64>("SELECT COUNT(*) FROM schema_migrations", ())
+            .unwrap();
+        assert_eq!(migration_count, 1);
+    }
+
+    #[test]
+    fn test_migration_invalid_version_errors() {
+        let db = Connection::open_memory().unwrap();
+        let result = db.migration(&[Migration {
+            name: "no_version_prefix",
+            sql: "SELECT 1",
+        }]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_migration_fts5_directive_creates_synced_search_table() {
+        let db = Connection::open_memory().unwrap();
+        db.migration(&[Migration {
+            name: "v1__create_sessions",
+            sql: "CREATE TABLE sessions (
+                      id INTEGER PRIMARY KEY,
+                      ip_address TEXT NOT NULL,
+                      client_name TEXT NOT NULL
+                  ) STRICT;
+                  INSERT INTO sessions (id, ip_address, client_name) VALUES (1, '127.0.0.1', 'Firefox');
+                  -- bsqlite:create_fts5_table sessions, ip_address, client_name",
+        }])
+        .unwrap();
+
+        let count = db
+            .query_some::<i64>(
+                "SELECT COUNT(*) FROM sessions_fts WHERE sessions_fts MATCH 'Firefox'",
+                (),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+
+        db.execute(
+            "INSERT INTO sessions (id, ip_address, client_name) VALUES (2, '127.0.0.2', 'Safari')",
+            (),
+        )
+        .unwrap();
+        let count = db
+            .query_some::<i64>(
+                "SELECT COUNT(*) FROM sessions_fts WHERE sessions_fts MATCH 'Safari'",
+                (),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+
+        db.execute(
+            "UPDATE sessions SET client_name = 'Chrome' WHERE id = 2",
+            (),
+        )
+        .unwrap();
+        let count = db
+            .query_some::<i64>(
+                "SELECT COUNT(*) FROM sessions_fts WHERE sessions_fts MATCH 'Chrome'",
+                (),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+        let count = db
+            .query_some::<i64>(
+                "SELECT COUNT(*) FROM sessions_fts WHERE sessions_fts MATCH 'Safari'",
+                (),
+            )
+            .unwrap();
+        assert_eq!(count, 0);
+
+        db.execute("DELETE FROM sessions WHERE id = 2", ()).unwrap();
+        let count = db
+            .query_some::<i64>(
+                "SELECT COUNT(*) FROM sessions_fts WHERE sessions_fts MATCH 'Chrome'",
+                (),
+            )
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_migration_fts5_directive_rejects_invalid_columns() {
+        let db = Connection::open_memory().unwrap();
+        let result = db.migration(&[Migration {
+            name: "v1__create_sessions",
+            sql: "CREATE TABLE sessions (id INTEGER PRIMARY KEY) STRICT;
+                  -- bsqlite:create_fts5_table sessions, id",
+        }]);
+        assert!(result.is_err());
+    }
+}

@@ -38,12 +38,23 @@ pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
 
 #[allow(unsafe_code)]
 unsafe extern "C" {
+    pub fn sqlite3_free(ptr: *mut c_void);
+
     // sqlite3
     pub fn sqlite3_open_v2(
         filename: *const c_char,
         ppDb: *mut *mut sqlite3,
         flags: c_int,
         zVfs: *const c_char,
+    ) -> c_int;
+    pub fn sqlite3_exec(
+        db: *mut sqlite3,
+        sql: *const c_char,
+        callback: Option<
+            unsafe extern "C" fn(*mut c_void, c_int, *mut *mut c_char, *mut *mut c_char) -> c_int,
+        >,
+        data: *mut c_void,
+        errmsg: *mut *mut c_char,
     ) -> c_int;
     pub fn sqlite3_prepare_v2(
         db: *mut sqlite3,

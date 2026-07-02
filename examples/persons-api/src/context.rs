@@ -5,7 +5,7 @@
  */
 
 use anyhow::Result;
-use bsqlite::{Connection, OpenMode};
+use bsqlite::{Connection, OpenMode, run_migrations};
 use const_format::formatcp;
 
 use crate::models::{Person, Relation};
@@ -21,7 +21,8 @@ impl Context {
         let database = Connection::open(path, OpenMode::ReadWrite)?;
         database.enable_wal_logging()?;
         database.apply_various_performance_settings()?;
-        database_create_tables(&database)?;
+        log::info!("Running database migrations...");
+        run_migrations!(database, "src/migrations")?;
         database_seed(&database)?;
         Ok(Self { database })
     }
@@ -29,7 +30,8 @@ impl Context {
     #[cfg(test)]
     pub(crate) fn with_test_database() -> Result<Self> {
         let database = Connection::open_memory()?;
-        database_create_tables(&database)?;
+        log::info!("Running database migrations...");
+        run_migrations!(database, "src/migrations")?;
         Ok(Self { database })
     }
 }
@@ -51,22 +53,6 @@ impl DatabaseHelpers for Connection {
         )?;
         Ok(())
     }
-}
-
-fn database_create_tables(database: &Connection) -> Result<()> {
-    database.execute(
-        "CREATE TABLE IF NOT EXISTS persons(
-            id BLOB PRIMARY KEY,
-            name TEXT NOT NULL,
-            age INTEGER NOT NULL,
-            relation INTEGER NOT NULL,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-        ) STRICT",
-        (),
-    )?;
-    database.create_fts_tables("persons", &["name"])?;
-    Ok(())
 }
 
 fn database_seed(database: &Connection) -> Result<()> {

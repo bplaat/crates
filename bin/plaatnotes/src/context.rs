@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -10,12 +10,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use anyhow::Result;
-use bsqlite::{Connection, OpenMode};
+use bsqlite::{Connection, OpenMode, run_migrations};
 use const_format::formatcp;
 use uuid::Uuid;
 
-use crate::migrations::database_migrate;
-use crate::models::{Note, Session, User};
+use crate::models::{Note, Session, User, UserRole};
 
 // MARK: Context
 #[derive(Clone)]
@@ -37,7 +36,9 @@ impl Context {
         let database = Connection::open(path.as_ref(), OpenMode::ReadWrite)?;
         database.enable_wal_logging()?;
         database.apply_various_performance_settings()?;
-        database_migrate(&database)?;
+        log::info!("Running database migrations...");
+        run_migrations!(database, "src/migrations")?;
+        database_seed(&database)?;
         Ok(Self {
             server_origin,
             database,
@@ -53,7 +54,8 @@ impl Context {
     #[cfg(test)]
     pub(crate) fn with_test_database() -> Result<Self> {
         let database = Connection::open_memory()?;
-        database_migrate(&database)?;
+        log::info!("Running database migrations...");
+        run_migrations!(database, "src/migrations")?;
         Ok(Self {
             server_origin: "*".to_string(),
             database,
@@ -68,7 +70,9 @@ impl Context {
 
     pub(crate) fn with_e2e_database() -> Result<Self> {
         let database = Connection::open_memory()?;
-        database_migrate(&database)?;
+        log::info!("Running database migrations...");
+        run_migrations!(database, "src/migrations")?;
+        database_seed(&database)?;
         Ok(Self {
             server_origin: "*".to_string(),
             database,
@@ -125,4 +129,24 @@ impl DatabaseHelpers for Connection {
         )?;
         Ok(())
     }
+}
+
+fn database_seed(database: &Connection) -> Result<()> {
+    if database.query_some::<i64>("SELECT COUNT(id) FROM users", ())? == 0 {
+        let admin_email =
+            std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@example.com".to_string());
+        let admin_password =
+            std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "Password123!".to_string());
+        let user = User {
+            first_name: "Admin".to_string(),
+            last_name: "Admin".to_string(),
+            email: admin_email,
+            password: pbkdf2::password_hash(&admin_password),
+            role: UserRole::Admin,
+            ..Default::default()
+        };
+        database.insert_user(user)?;
+        log::info!("Admin account created");
+    }
+    Ok(())
 }

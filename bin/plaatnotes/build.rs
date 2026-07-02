@@ -26,6 +26,9 @@ fn main() {
         openapi_generator::Generator::TypeScript,
     );
 
+    // Database migrations
+    println!("cargo:rerun-if-changed=src/migrations");
+
     // Build web frontend
     const NPM: &str = if cfg!(windows) { "npm.cmd" } else { "npm" };
 
