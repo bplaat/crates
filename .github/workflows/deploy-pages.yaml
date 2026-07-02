@@ -40,9 +40,9 @@ jobs:
       - name: Build pages
         run: ./meta.sh build-pages
       - name: Upload pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: './target/pages'
       - id: deployment
         name: Deploy pages
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
