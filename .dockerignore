@@ -1,4 +1,4 @@
 .git
-target
-node_modules
-dist
+**/target
+**/node_modules
+**/dist
