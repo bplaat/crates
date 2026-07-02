@@ -10,6 +10,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
 
+// MARK: FromRow
 /// [FromRow] derive for structs
 #[proc_macro_derive(FromRow, attributes(sqlite))]
 pub fn from_row_derive(input: TokenStream) -> TokenStream {
@@ -124,6 +125,7 @@ pub fn from_row_derive(input: TokenStream) -> TokenStream {
     })
 }
 
+// MARK: FromValue
 /// [FromValue] derive for enums
 #[proc_macro_derive(FromValue)]
 pub fn from_value_derive(input: TokenStream) -> TokenStream {

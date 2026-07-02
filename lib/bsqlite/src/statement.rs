@@ -399,6 +399,7 @@ impl<T: FromRow> Iterator for Statement<T> {
     }
 }
 
+// MARK: Tests
 #[cfg(test)]
 mod tests {
     use crate::{ColumnType, Connection, StatementError, Value};
