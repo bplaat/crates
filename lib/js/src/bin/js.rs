@@ -6,10 +6,20 @@
 
 #![doc = include_str!("../../README.md")]
 
+use std::io;
 use std::io::Write;
-use std::{env, io};
 
+use argparse::Parser;
 use js::Context;
+
+#[derive(Default, Parser)]
+#[arg(name = "js")]
+struct Args {
+    #[arg(long = "verbose", help = "Print verbose output")]
+    verbose: bool,
+    #[arg(positional, value = "script")]
+    text: Option<String>,
+}
 
 fn repl(verbose: bool) {
     println!("BassieJS");
@@ -44,29 +54,20 @@ fn repl(verbose: bool) {
 
 fn main() {
     // Parse args
-    let args: Vec<String> = env::args().skip(1).collect();
-    let mut verbose = false;
-    let mut text = "";
-    for arg in &args {
-        if arg == "-v" {
-            verbose = true;
-        } else {
-            text = arg.as_str();
-        }
-    }
+    let args = Args::parse();
 
     // Start repl
-    if text.is_empty() {
-        repl(verbose);
+    let Some(text) = args.text else {
+        repl(args.verbose);
         return;
-    }
+    };
 
     // Or execute
     let mut context = Context::new();
-    context.set_verbose(verbose);
-    match context.eval(text) {
+    context.set_verbose(args.verbose);
+    match context.eval(&text) {
         Ok(result) => {
-            if verbose {
+            if args.verbose {
                 println!("Result: {result:?}");
             } else {
                 println!("{result:?}");

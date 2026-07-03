@@ -4,22 +4,27 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::env;
-use std::process::exit;
+use argparse::Parser;
 
+#[derive(Debug, Parser)]
+#[arg(name = "cargo bundle")]
 pub(crate) struct Args {
-    pub help: bool,
-    pub version: bool,
+    #[arg(
+        short = 'p',
+        long = "path",
+        value = "dir",
+        help = "Build crate in <dir>"
+    )]
     pub path: String,
+    #[arg(long = "zip", help = "Also create a zip archive")]
     pub zip: bool,
+    #[arg(long = "dmg", help = "Also create a DMG installer")]
     pub dmg: bool,
 }
 
 impl Default for Args {
     fn default() -> Self {
         Args {
-            help: true,
-            version: false,
             path: ".".to_string(),
             zip: false,
             dmg: false,
@@ -27,53 +32,43 @@ impl Default for Args {
     }
 }
 
-pub(crate) fn parse_args() -> Args {
-    let mut args = Args::default();
-    let mut args_iter = env::args().skip(1);
-    while let Some(arg) = args_iter.next() {
-        match arg.as_str() {
-            "bundle" => continue,
-            "-h" | "--help" => {
-                args.help = true;
-            }
-            "-v" | "--version" => {
-                args.help = false;
-                args.version = true;
-            }
-            "-p" | "--path" => {
-                args.help = false;
-                if let Some(dir) = args_iter.next() {
-                    args.path = dir;
-                } else {
-                    eprintln!("Expected directory after {arg}");
-                    exit(1);
-                }
-            }
-            "--zip" => {
-                args.zip = true;
-            }
-            "--dmg" => {
-                args.dmg = true;
-            }
-            _ => {
-                eprintln!("Unknown argument: {arg}");
-                exit(1);
-            }
-        }
+pub(crate) fn parse_args() -> Option<Args> {
+    let raw_args: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|arg| arg != "bundle")
+        .collect();
+    parse_args_from(raw_args)
+}
+
+fn parse_args_from(raw_args: Vec<String>) -> Option<Args> {
+    if raw_args.is_empty() {
+        return None;
     }
-    args
+    Some(Args::parse_from(raw_args).unwrap_or_else(|err| err.exit()))
 }
 
 pub(crate) fn help() {
-    println!(
-        r"Usage: cargo bundle [OPTIONS]
+    println!("{}", Args::help());
+}
 
-Options:
-  -p <dir>, --path <dir>    Build crate in <dir>
-  --zip                     Also create a zip archive
-  --dmg                     Also create a DMG installer
-  -h, --help                Print this help message
-  -v, --version             Print the version number
-"
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_help_is_handled_by_argparse() {
+        let err = Args::parse_from(["--help", "--zip"]).expect_err("Expected help action");
+        assert_eq!(err.kind(), &argparse::ErrorKind::Help);
+    }
+
+    #[test]
+    fn run_options_return_args() {
+        let args = parse_args_from(vec!["--zip".to_string()]).expect("Expected args");
+        assert!(args.zip);
+    }
+
+    #[test]
+    fn no_args_returns_help_action() {
+        assert!(parse_args_from(Vec::new()).is_none());
+    }
 }

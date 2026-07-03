@@ -11,21 +11,27 @@
 use std::net::IpAddr;
 use std::process;
 
+use argparse::Parser;
 use maxminddb::{Reader, geoip2};
 
-fn main() {
-    let mut args = std::env::args().skip(1);
-    let db_path = args.next().unwrap_or_else(|| {
-        eprintln!("Usage: lookup <path-to.mmdb> <ip-address>");
-        process::exit(1);
-    });
-    let ip_str = args.next().unwrap_or_else(|| {
-        eprintln!("Usage: lookup <path-to.mmdb> <ip-address>");
-        process::exit(1);
-    });
+#[derive(Default, Parser)]
+#[arg(name = "maxminddb-lookup")]
+struct Args {
+    #[arg(positional, value = "path-to.mmdb")]
+    db_path: Option<String>,
+    #[arg(positional, value = "ip-address")]
+    ip_address: Option<IpAddr>,
+}
 
-    let ip: IpAddr = ip_str.parse().unwrap_or_else(|_| {
-        eprintln!("Error: '{ip_str}' is not a valid IP address");
+fn main() {
+    let args = Args::parse();
+
+    let db_path = args.db_path.unwrap_or_else(|| {
+        eprintln!("Usage: lookup <path-to.mmdb> <ip-address>");
+        process::exit(1);
+    });
+    let ip = args.ip_address.unwrap_or_else(|| {
+        eprintln!("Usage: lookup <path-to.mmdb> <ip-address>");
         process::exit(1);
     });
 

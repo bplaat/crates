@@ -12,6 +12,7 @@ platforms = ["macos"]
 workspace = true
 
 [dependencies]
+argparse = { path = "../../lib/argparse" }
 basic-toml = "0.1.9"
 copy_dir = "0.1.3"
 plist = "1"

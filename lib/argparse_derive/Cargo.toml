@@ -1,5 +1,5 @@
 [package]
-name = "js"
+name = "argparse_derive"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,9 @@ authors.workspace = true
 [lints]
 workspace = true
 
+[lib]
+proc-macro = true
+
 [dependencies]
-argparse = { path = "../argparse" }
-indexmap = "2.12"
+quote = "1.0"
+syn = "2.0"

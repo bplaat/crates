@@ -11,7 +11,7 @@ use std::process::exit;
 use std::time::Instant;
 use std::{env, fs};
 
-use crate::args::{Profile, Subcommand, parse_args, subcommand_help};
+use crate::args::{Args, Profile, Subcommand, parse_args};
 use crate::bobje::Bobje;
 use crate::executor::ExecutorBuilder;
 use crate::tasks::android::{detect_android, run_android_apk};
@@ -87,7 +87,7 @@ fn main() {
         return;
     }
     if args.subcommand == Subcommand::Help {
-        subcommand_help();
+        println!("{}", Args::help());
         return;
     }
     if args.subcommand == Subcommand::Version {

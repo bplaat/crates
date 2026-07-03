@@ -7,7 +7,7 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use crate::args::parse_args;
+use crate::args::Args;
 
 mod args;
 mod cli;
@@ -21,7 +21,7 @@ fn main() {
     if std::env::args().len() == 1 {
         gui::run();
     } else {
-        let args = parse_args();
+        let args = Args::parse();
         cli::run(&args);
     }
 }

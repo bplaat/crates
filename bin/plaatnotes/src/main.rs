@@ -13,7 +13,7 @@ use std::process::exit;
 use log::info;
 use small_router::{Router, RouterBuilder};
 
-use crate::args::{Subcommand, parse_args, subcommand_help};
+use crate::args::{Args, Subcommand};
 use crate::context::Context;
 use crate::controllers::*;
 
@@ -96,9 +96,9 @@ fn main() {
     _ = dotenv::dotenv();
 
     // Parse args
-    let args = parse_args();
+    let args = Args::parse();
     if args.subcommand == Subcommand::Help {
-        subcommand_help();
+        println!("{}", Args::help());
         return;
     }
     if args.subcommand == Subcommand::Version {

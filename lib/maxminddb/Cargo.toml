@@ -10,3 +10,6 @@ workspace = true
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+argparse = { path = "../argparse" }

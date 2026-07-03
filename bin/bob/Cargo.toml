@@ -9,6 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+argparse = { path = "../../lib/argparse" }
 basic-toml = "0.1.9"
 directories = "6.0"
 dotenv = "0.15.0"
@@ -24,4 +25,3 @@ threadpool = "1.8"
 
 [target.'cfg(windows)'.dependencies]
 enable-ansi-support = "0.2.1"
-

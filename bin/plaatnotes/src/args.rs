@@ -4,21 +4,40 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::env;
-use std::process::exit;
+use argparse::{Parser, Subcommand as SubcommandParser};
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, SubcommandParser)]
 pub(crate) enum Subcommand {
+    #[arg(default, help = "Start the HTTP server")]
     Serve,
+    #[arg(
+        name = "serve-e2e",
+        help = "Start the HTTP server with in-memory test database"
+    )]
     ServeE2e,
+    #[arg(
+        name = "import-google-keep",
+        help = "Import notes from a Google Keep Takeout folder or zip"
+    )]
     ImportGoogleKeep,
+    #[arg(help = "Print this help message")]
     Help,
+    #[arg(help = "Print the version number")]
     Version,
 }
 
+#[derive(Parser)]
+#[arg(name = "plaatnotes")]
 pub(crate) struct Args {
+    #[arg(subcommand)]
     pub subcommand: Subcommand,
+    #[arg(positional, command = "import-google-keep", value = "path")]
     pub path: Option<String>,
+    #[arg(
+        long = "email",
+        value = "email",
+        help = "Email of the user to import notes for"
+    )]
     pub email: Option<String>,
 }
 
@@ -30,43 +49,4 @@ impl Default for Args {
             email: None,
         }
     }
-}
-
-pub(crate) fn parse_args() -> Args {
-    let mut args = Args::default();
-    let mut args_iter = env::args().skip(1);
-    while let Some(arg) = args_iter.next() {
-        match arg.as_str() {
-            "serve" => args.subcommand = Subcommand::Serve,
-            "serve-e2e" => args.subcommand = Subcommand::ServeE2e,
-            "import-google-keep" => {
-                args.subcommand = Subcommand::ImportGoogleKeep;
-                args.path = args_iter.next();
-            }
-            "--email" => {
-                args.email = args_iter.next();
-            }
-            "help" | "-h" | "--help" => args.subcommand = Subcommand::Help,
-            "version" | "--version" => args.subcommand = Subcommand::Version,
-            _ => {
-                eprintln!("Unknown argument: {arg}");
-                exit(1);
-            }
-        }
-    }
-    args
-}
-
-pub(crate) fn subcommand_help() {
-    println!(
-        "Usage: plaatnotes [SUBCOMMAND]
-
-Subcommands:
-  serve                   Start the HTTP server (default)
-  serve-e2e               Start the HTTP server with in-memory test database (for E2E testing)
-  import-google-keep      Import notes from a Google Keep Takeout folder or zip
-    --email <email>         Email of the user to import notes for
-  help                    Print this help message
-  version                 Print the version number"
-    );
 }

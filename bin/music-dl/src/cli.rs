@@ -36,8 +36,8 @@ pub(crate) fn run(args: &Args) {
     match args.subcommand {
         Subcommand::Download => subcommand_download(args),
         Subcommand::List => subcommand_list(args),
-        Subcommand::Help => subcommand_help(),
-        Subcommand::Version => subcommand_version(),
+        Subcommand::Help => println!("{}", Args::help()),
+        Subcommand::Version => println!("music-dl v{}", env!("CARGO_PKG_VERSION")),
     }
 }
 
@@ -135,29 +135,6 @@ fn subcommand_list(args: &Args) {
 
         thread::sleep(Duration::from_millis(500));
     }
-}
-
-fn subcommand_help() {
-    println!(
-        r"Usage: music-dl [SUBCOMMAND] [OPTIONS]
-
-Options:
-  -o <dir>            Change output directory
-  -i, --id            Query is a Deezer ID
-  -a, --artist        Query is an artist name
-  -s, --with-singles  Include singles of artist
-  -c, --with-cover    Also download cover image
-
-Subcommands:
-  download            Download album or artist
-  list                List all albums of artist
-  help                Print this help message
-  version             Print the version number"
-    );
-}
-
-fn subcommand_version() {
-    println!("music-dl v{}", env!("CARGO_PKG_VERSION"));
 }
 
 // MARK: Renderer
