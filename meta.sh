@@ -178,6 +178,14 @@ check_shell() {
     shellcheck meta.sh
 }
 
+check_docker() {
+    echo "Checking Dockerfiles..."
+    find . -type f \( -name "Dockerfile" -o -name "*.Dockerfile" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" -print0 \
+        | while IFS= read -r -d '' file; do
+            hadolint "$file"
+        done
+}
+
 check_e2e() {
     echo "Running end-to-end tests..."
     cargo build -p plaatnotes --locked
@@ -298,6 +306,7 @@ case "${1:-check}" in
         check_copyright
         check_formatting
         check_shell
+        check_docker
         check_rust
         check_rust_deps
         check_e2e
@@ -306,6 +315,7 @@ case "${1:-check}" in
         check_copyright
         check_formatting
         check_shell
+        check_docker
         check_rust_deps
         ;;
     check-rust)
@@ -314,6 +324,9 @@ case "${1:-check}" in
     check-e2e)
         check_e2e
         ;;
+    check-docker)
+        check_docker
+        ;;
     coverage)
         coverage
         ;;
@@ -321,7 +334,7 @@ case "${1:-check}" in
         install
         ;;
     *)
-        echo "Usage: $0 {build-pages|build-bundle|clean|check|check-shared|check-rust|check-e2e|coverage|install}"
+        echo "Usage: $0 {build-pages|build-bundle|clean|check|check-shared|check-rust|check-e2e|check-docker|coverage|install}"
         exit 1
         ;;
 esac

@@ -26,6 +26,9 @@ jobs:
           sudo rm -f /usr/bin/clang-format
           sudo ln -s /usr/bin/clang-format-20 /usr/bin/clang-format
           clang-format --version
+          wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/download/v2.14.0/hadolint-Linux-x86_64
+          chmod a+x /usr/local/bin/hadolint
+          hadolint --version
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y --locked cargo-deny
       - run: ./meta.sh check-shared

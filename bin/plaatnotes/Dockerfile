@@ -5,11 +5,13 @@ ARG TARGETARCH
 
 WORKDIR /src
 
+# hadolint ignore=DL3008
 RUN apt-get update && \
-    apt-get install -y curl make perl musl-tools && \
+    apt-get install -y --no-install-recommends curl make perl musl-tools && \
     curl -fsSL https://deb.nodesource.com/setup_26.x -o nodesource_setup.sh && \
     bash nodesource_setup.sh && \
-    apt-get install -y nodejs
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY rust-toolchain.toml .
 

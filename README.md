@@ -138,7 +138,7 @@ These libraries are created as minimal / smaller replacements for common used cr
 ## Getting Started
 
 - Open a posix shell environment when you are on Windows (e.g. Git Bash)
-- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [ShellCheck](https://www.shellcheck.net/) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
+- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [ShellCheck](https://www.shellcheck.net/), [Hadolint](https://github.com/hadolint/hadolint) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
 - Install Rust nightly toolchain, `cargo-binstall`, `cargo-deny` and `cargo-nextest`:
 
     ```sh
