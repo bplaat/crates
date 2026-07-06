@@ -572,12 +572,32 @@ impl Error for FetchError {}
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use std::io::Write;
-    use std::net::{Ipv4Addr, TcpListener};
+    use std::io::{Read, Write};
+    use std::net::{Ipv4Addr, Shutdown, TcpListener};
     use std::thread;
 
     use super::*;
     use crate::enums::Status;
+
+    fn fetch_from_local_server(response: &'static [u8]) -> Response {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let server_addr = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 1024];
+            let bytes_read = stream.read(&mut request).unwrap();
+            assert!(bytes_read > 0);
+            stream.write_all(response).unwrap();
+            stream.flush().unwrap();
+            stream.shutdown(Shutdown::Write).unwrap();
+        });
+
+        let res = Request::get(format!("http://{server_addr}/"))
+            .fetch()
+            .unwrap();
+        server.join().unwrap();
+        res
+    }
 
     #[test]
     fn test_read_from_stream() {
@@ -649,40 +669,16 @@ mod test {
 
     #[test]
     fn test_fetch_http1_0() {
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-        let server_addr = listener.local_addr().unwrap();
-        thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            stream
-                .write_all(b"HTTP/1.0 200 OK\r\nContent-Length: 4\r\n\r\ntest")
-                .unwrap();
-            stream.flush().unwrap();
-        });
-
-        let res = Request::get(format!("http://{server_addr}/"))
-            .fetch()
-            .unwrap();
+        let res = fetch_from_local_server(b"HTTP/1.0 200 OK\r\nContent-Length: 4\r\n\r\ntest");
         assert_eq!(res.status, Status::Ok);
         assert_eq!(res.body, "test".as_bytes());
     }
 
     #[test]
     fn test_fetch_http1_1() {
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-        let server_addr = listener.local_addr().unwrap();
-        thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            stream
-                .write_all(
-                    b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: closed\r\n\r\ntest",
-                )
-                .unwrap();
-            stream.flush().unwrap();
-        });
-
-        let res = Request::get(format!("http://{server_addr}/"))
-            .fetch()
-            .unwrap();
+        let res = fetch_from_local_server(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\ntest",
+        );
         assert_eq!(res.status, Status::Ok);
         assert_eq!(res.body, "test".as_bytes());
     }

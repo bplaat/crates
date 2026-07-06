@@ -183,12 +183,23 @@ unsafe fn do_write<S: Write>(ptr: *mut c_void, buf: *const u8, len: usize) -> io
 
 // MARK: TlsConnector
 /// A TLS connector using SecureTransport
-pub struct TlsConnector;
+pub struct TlsConnector {
+    accept_invalid_certs: bool,
+}
 
 impl TlsConnector {
     /// Create a new TLS connector
     pub fn new() -> Result<Self, Error> {
-        Ok(Self)
+        Ok(Self {
+            accept_invalid_certs: false,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_danger_accept_invalid_certs() -> Result<Self, Error> {
+        Ok(Self {
+            accept_invalid_certs: true,
+        })
     }
 
     /// Perform a TLS handshake over the given stream
@@ -313,7 +324,7 @@ impl TlsConnector {
                         // SAFETY: cf_error is non-null.
                         unsafe { CFRelease(cf_error) };
                     }
-                    if trusted == 0 {
+                    if trusted == 0 && !self.accept_invalid_certs {
                         // SAFETY: ctx is non-null with an active SSL connection.
                         unsafe {
                             SSLClose(ctx);

@@ -477,6 +477,7 @@ name = "native-tls"
 version = "0.2.18+patch"
 dependencies = [
  "rustls",
+ "rustls-pki-types",
  "webpki-roots",
 ]
 

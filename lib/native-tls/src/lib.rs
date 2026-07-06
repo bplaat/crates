@@ -88,105 +88,236 @@ pub use imp::TlsStream;
 #[cfg(test)]
 mod tests {
     use std::io::{Read, Write};
-    use std::net::TcpStream;
+    use std::net::{Ipv4Addr, TcpListener, TcpStream};
+    use std::sync::{Arc, Once};
+    use std::thread;
+    use std::time::Duration;
+
+    use rustls_pki_types::pem::PemObject;
 
     use super::*;
 
-    // Helper: open a TLS connection and issue a simple HTTP/1.0 GET request.
-    // HTTP/1.0 causes the server to close the connection after the response,
-    // so read_to_string terminates cleanly.
-    fn https_get(host: &str, path: &str) -> String {
-        let tcp = TcpStream::connect(format!("{host}:443")).expect("TCP connect failed");
+    const LOCALHOST_CERT_PEM: &[u8] = include_bytes!("../tests/certs/localhost.crt");
+    const LOCALHOST_KEY_PEM: &[u8] = include_bytes!("../tests/certs/localhost.key");
+    const WRONG_HOST_CERT_PEM: &[u8] = include_bytes!("../tests/certs/wrong-host.crt");
+    const WRONG_HOST_KEY_PEM: &[u8] = include_bytes!("../tests/certs/wrong-host.key");
+    const EXPIRED_LOCALHOST_CERT_PEM: &[u8] =
+        include_bytes!("../tests/certs/expired-localhost.crt");
+    const EXPIRED_LOCALHOST_KEY_PEM: &[u8] = include_bytes!("../tests/certs/expired-localhost.key");
+
+    fn local_https_get(server_addr: std::net::SocketAddr, path: &str) -> String {
+        let tcp = TcpStream::connect(server_addr).expect("TCP connect failed");
+        let connector =
+            TlsConnector::new_danger_accept_invalid_certs().expect("TlsConnector::new failed");
+        let mut tls = connector
+            .connect("localhost", tcp)
+            .expect("TLS handshake failed");
+        write!(tls, "GET {path} HTTP/1.0\r\nHost: localhost\r\n\r\n").expect("write failed");
+        read_http_response(&mut tls)
+    }
+
+    fn read_http_response<S: Read>(stream: &mut S) -> String {
+        let mut response = Vec::new();
+        let mut buffer = [0; 1024];
+        let header_end = loop {
+            let bytes_read = stream.read(&mut buffer).expect("read response failed");
+            assert!(bytes_read > 0, "connection closed before HTTP headers");
+            response.extend_from_slice(&buffer[..bytes_read]);
+            if let Some(index) = response.windows(4).position(|window| window == b"\r\n\r\n") {
+                break index + 4;
+            }
+        };
+
+        let headers =
+            std::str::from_utf8(&response[..header_end]).expect("response headers should be UTF-8");
+        let content_length = headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().expect("valid Content-Length"))
+            })
+            .expect("response should include Content-Length");
+
+        while response.len() < header_end + content_length {
+            let bytes_read = stream.read(&mut buffer).expect("read response body failed");
+            assert!(bytes_read > 0, "connection closed before HTTP body");
+            response.extend_from_slice(&buffer[..bytes_read]);
+        }
+
+        response.truncate(header_end + content_length);
+        String::from_utf8(response).expect("response should be UTF-8")
+    }
+
+    fn local_tls_server_config(cert_pem: &[u8], key_pem: &[u8]) -> rustls::ServerConfig {
+        static INSTALL_CRYPTO_PROVIDER: Once = Once::new();
+        INSTALL_CRYPTO_PROVIDER.call_once(|| {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        });
+
+        let certs = vec![
+            rustls_pki_types::CertificateDer::from_pem_slice(cert_pem)
+                .expect("test certificate should parse"),
+        ];
+        let key = rustls_pki_types::PrivateKeyDer::from_pem_slice(key_pem)
+            .expect("test private key should parse");
+
+        rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .expect("test TLS server config should build")
+    }
+
+    fn spawn_local_https_server(
+        response_body: &'static [u8],
+        connection_count: usize,
+    ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind failed");
+        let server_addr = listener.local_addr().expect("local_addr failed");
+        let server = thread::spawn(move || {
+            let config = Arc::new(local_tls_server_config(
+                LOCALHOST_CERT_PEM,
+                LOCALHOST_KEY_PEM,
+            ));
+            for _ in 0..connection_count {
+                let (mut tcp, _) = listener.accept().expect("accept failed");
+                tcp.set_read_timeout(Some(Duration::from_secs(5)))
+                    .expect("set_read_timeout failed");
+                tcp.set_write_timeout(Some(Duration::from_secs(5)))
+                    .expect("set_write_timeout failed");
+
+                let mut conn = rustls::ServerConnection::new(config.clone()).unwrap();
+                while conn.is_handshaking() {
+                    conn.complete_io(&mut tcp).expect("TLS handshake failed");
+                }
+
+                {
+                    let mut tls = rustls::Stream::new(&mut conn, &mut tcp);
+                    let mut request = Vec::new();
+                    let mut buffer = [0; 1024];
+                    loop {
+                        let bytes_read = tls.read(&mut buffer).expect("read request failed");
+                        assert!(bytes_read > 0, "connection closed before HTTP request");
+                        request.extend_from_slice(&buffer[..bytes_read]);
+                        if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                            break;
+                        }
+                    }
+
+                    let mut response = format!(
+                        "HTTP/1.0 200 OK\r\nContent-Length: {}\r\n\r\n",
+                        response_body.len()
+                    )
+                    .into_bytes();
+                    response.extend_from_slice(response_body);
+                    tls.write_all(&response).expect("write response failed");
+                    tls.flush().expect("flush response failed");
+                }
+                conn.send_close_notify();
+                let _ = conn.complete_io(&mut tcp);
+            }
+        });
+        (server_addr, server)
+    }
+
+    fn assert_local_tls_server_rejected(
+        domain: &str,
+        cert_pem: &'static [u8],
+        key_pem: &'static [u8],
+    ) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind failed");
+        let server_addr = listener.local_addr().expect("local_addr failed");
+        let server = thread::spawn(move || {
+            let (mut tcp, _) = listener.accept().expect("accept failed");
+            tcp.set_read_timeout(Some(Duration::from_secs(5)))
+                .expect("set_read_timeout failed");
+            tcp.set_write_timeout(Some(Duration::from_secs(5)))
+                .expect("set_write_timeout failed");
+
+            let mut conn =
+                rustls::ServerConnection::new(Arc::new(local_tls_server_config(cert_pem, key_pem)))
+                    .unwrap();
+            let _ = conn.complete_io(&mut tcp);
+        });
+
+        let tcp = TcpStream::connect(server_addr).expect("TCP connect failed");
         let connector = TlsConnector::new().expect("TlsConnector::new failed");
-        let mut tls = connector.connect(host, tcp).expect("TLS handshake failed");
-        write!(tls, "GET {path} HTTP/1.0\r\nHost: {host}\r\n\r\n").expect("write failed");
-        let mut response = String::new();
-        tls.read_to_string(&mut response).unwrap_or_default();
-        response
+        let result = connector.connect(domain, tcp);
+        assert!(result.is_err(), "Expected TLS certificate to be rejected");
+        server.join().expect("test TLS server thread panicked");
     }
 
     #[test]
     fn test_handshake_succeeds() {
-        let tcp = TcpStream::connect("example.com:443").expect("TCP connect failed");
-        let connector = TlsConnector::new().expect("TlsConnector::new failed");
-        // If this does not panic, the handshake succeeded
-        connector
-            .connect("example.com", tcp)
-            .expect("TLS handshake failed");
+        let (server_addr, server) = spawn_local_https_server(b"ok", 1);
+        let response = local_https_get(server_addr, "/");
+        assert!(response.starts_with("HTTP/"), "TLS request failed");
+        server.join().expect("test TLS server thread panicked");
     }
 
     #[test]
     fn test_https_get_returns_http_response() {
-        let response = https_get("example.com", "/");
+        let (server_addr, server) = spawn_local_https_server(b"test", 1);
+        let response = local_https_get(server_addr, "/");
         assert!(
             response.starts_with("HTTP/"),
             "Expected HTTP response, got: {response}"
         );
+        server.join().expect("test TLS server thread panicked");
     }
 
     #[test]
     fn test_https_get_response_contains_html() {
-        let response = https_get("example.com", "/");
+        let (server_addr, server) =
+            spawn_local_https_server(b"<!doctype html><html><body>test</body></html>", 1);
+        let response = local_https_get(server_addr, "/");
         let lower = response.to_lowercase();
         assert!(
             lower.contains("<html"),
             "Expected HTML in body, got: {response}"
         );
+        server.join().expect("test TLS server thread panicked");
     }
 
     #[test]
     fn test_multiple_sequential_connections() {
+        let (server_addr, server) = spawn_local_https_server(b"test", 3);
         for i in 0..3 {
-            let response = https_get("example.com", "/");
+            let response = local_https_get(server_addr, "/");
             assert!(
                 response.starts_with("HTTP/"),
                 "Connection {i}: expected HTTP response"
             );
         }
+        server.join().expect("test TLS server thread panicked");
     }
 
     #[test]
-    fn test_sni_hostname_validated() {
-        // wrong.host.badssl.com serves a cert for *.badssl.com, not for
-        // wrong.host.badssl.com (second-level wildcard doesn't match).
-        // The TLS connector must reject this.
-        let tcp = TcpStream::connect("wrong.host.badssl.com:443").expect("TCP connect failed");
-        let connector = TlsConnector::new().expect("TlsConnector::new failed");
-        let result = connector.connect("wrong.host.badssl.com", tcp);
-        assert!(
-            result.is_err(),
-            "Expected hostname validation failure for wrong.host.badssl.com"
-        );
+    fn test_self_signed_wrong_hostname_cert_rejected() {
+        assert_local_tls_server_rejected("localhost", WRONG_HOST_CERT_PEM, WRONG_HOST_KEY_PEM);
     }
 
     #[test]
-    fn test_expired_cert_rejected() {
-        let tcp = TcpStream::connect("expired.badssl.com:443").expect("TCP connect failed");
-        let connector = TlsConnector::new().expect("TlsConnector::new failed");
-        let result = connector.connect("expired.badssl.com", tcp);
-        assert!(
-            result.is_err(),
-            "Expected expired certificate to be rejected"
+    fn test_expired_self_signed_cert_rejected() {
+        assert_local_tls_server_rejected(
+            "localhost",
+            EXPIRED_LOCALHOST_CERT_PEM,
+            EXPIRED_LOCALHOST_KEY_PEM,
         );
     }
 
     #[test]
     fn test_self_signed_cert_rejected() {
-        let tcp = TcpStream::connect("self-signed.badssl.com:443").expect("TCP connect failed");
-        let connector = TlsConnector::new().expect("TlsConnector::new failed");
-        let result = connector.connect("self-signed.badssl.com", tcp);
-        assert!(
-            result.is_err(),
-            "Expected self-signed certificate to be rejected"
-        );
+        assert_local_tls_server_rejected("localhost", LOCALHOST_CERT_PEM, LOCALHOST_KEY_PEM);
     }
 
     #[test]
-    fn test_different_hosts() {
-        // Verify connections to two different hosts both work
-        let r1 = https_get("example.com", "/");
-        let r2 = https_get("www.google.com", "/");
-        assert!(r1.starts_with("HTTP/"), "example.com failed");
-        assert!(r2.starts_with("HTTP/"), "google.com failed");
+    fn test_different_connectors() {
+        let (server_addr, server) = spawn_local_https_server(b"test", 2);
+        let r1 = local_https_get(server_addr, "/first");
+        let r2 = local_https_get(server_addr, "/second");
+        assert!(r1.starts_with("HTTP/"), "first connector failed");
+        assert!(r2.starts_with("HTTP/"), "second connector failed");
+        server.join().expect("test TLS server thread panicked");
     }
 }

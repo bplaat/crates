@@ -50,6 +50,7 @@ unsafe extern "C" {
 }
 
 // Common constants
+const SSL_VERIFY_NONE: c_int = 0x00;
 const SSL_VERIFY_PEER: c_int = 0x01;
 const SSL_ERROR_NONE: c_int = 0;
 const SSL_ERROR_ZERO_RETURN: c_int = 6;
@@ -167,6 +168,7 @@ fn feed_network_bio(bio: *mut c_void, stream: &mut impl Read) -> io::Result<usiz
 /// A TLS connector using OpenSSL 1.0.x
 pub struct TlsConnector {
     ctx: *mut c_void,
+    accept_invalid_certs: bool,
 }
 
 #[cfg(openssl_v10x)]
@@ -180,6 +182,15 @@ unsafe impl Sync for TlsConnector {}
 impl TlsConnector {
     /// Create a new TLS connector
     pub fn new() -> Result<Self, Error> {
+        Self::new_with_accept_invalid_certs(false)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_danger_accept_invalid_certs() -> Result<Self, Error> {
+        Self::new_with_accept_invalid_certs(true)
+    }
+
+    fn new_with_accept_invalid_certs(accept_invalid_certs: bool) -> Result<Self, Error> {
         // OpenSSL 1.0.x requires explicit one-time initialization; 1.1+ does this automatically.
         static INIT: std::sync::Once = std::sync::Once::new();
         INIT.call_once(|| {
@@ -204,13 +215,24 @@ impl TlsConnector {
             // Disable SSLv2, SSLv3, TLS 1.0 and TLS 1.1 to require TLS 1.2+
             let opts = SSL_OP_NO_SSLV2 | SSL_OP_NO_SSLV3 | SSL_OP_NO_TLSV1 | SSL_OP_NO_TLSV1_1;
             SSL_CTX_ctrl(ctx, SSL_CTRL_OPTIONS, opts, std::ptr::null_mut());
-            SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, std::ptr::null());
-            if SSL_CTX_set_default_verify_paths(ctx) != 1 {
+            SSL_CTX_set_verify(
+                ctx,
+                if accept_invalid_certs {
+                    SSL_VERIFY_NONE
+                } else {
+                    SSL_VERIFY_PEER
+                },
+                std::ptr::null(),
+            );
+            if !accept_invalid_certs && SSL_CTX_set_default_verify_paths(ctx) != 1 {
                 SSL_CTX_free(ctx);
                 return Err(Error("Failed to load CA certificates".to_string()));
             }
         }
-        Ok(Self { ctx })
+        Ok(Self {
+            ctx,
+            accept_invalid_certs,
+        })
     }
 
     /// Perform a TLS handshake over the given stream
@@ -320,7 +342,7 @@ impl TlsConnector {
             };
             // SAFETY: cert is a non-null X509 object returned by SSL_get_peer_certificate.
             unsafe { X509_free(cert) };
-            if ok != 1 {
+            if ok != 1 && !self.accept_invalid_certs {
                 return Err(Error(format!(
                     "Hostname verification failed for '{domain}'"
                 )));
@@ -704,6 +726,7 @@ static BIO_METHOD: std::sync::LazyLock<BioMethodPtr> =
 /// A TLS connector using OpenSSL 1.1.x, 3.x or 4.x
 pub struct TlsConnector {
     ctx: *mut c_void,
+    accept_invalid_certs: bool,
 }
 
 #[cfg(not(openssl_v10x))]
@@ -717,6 +740,15 @@ unsafe impl Sync for TlsConnector {}
 impl TlsConnector {
     /// Create a new TLS connector
     pub fn new() -> Result<Self, Error> {
+        Self::new_with_accept_invalid_certs(false)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_danger_accept_invalid_certs() -> Result<Self, Error> {
+        Self::new_with_accept_invalid_certs(true)
+    }
+
+    fn new_with_accept_invalid_certs(accept_invalid_certs: bool) -> Result<Self, Error> {
         // SAFETY: TLS_client_method returns a valid method pointer for the process lifetime.
         let ctx = unsafe { SSL_CTX_new(TLS_client_method()) };
         if ctx.is_null() {
@@ -740,13 +772,24 @@ impl TlsConnector {
                 TLS1_3_VERSION,
                 std::ptr::null_mut(),
             );
-            SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, std::ptr::null());
-            if SSL_CTX_set_default_verify_paths(ctx) != 1 {
+            SSL_CTX_set_verify(
+                ctx,
+                if accept_invalid_certs {
+                    SSL_VERIFY_NONE
+                } else {
+                    SSL_VERIFY_PEER
+                },
+                std::ptr::null(),
+            );
+            if !accept_invalid_certs && SSL_CTX_set_default_verify_paths(ctx) != 1 {
                 SSL_CTX_free(ctx);
                 return Err(Error("Failed to load CA certificates".to_string()));
             }
         }
-        Ok(Self { ctx })
+        Ok(Self {
+            ctx,
+            accept_invalid_certs,
+        })
     }
 
     /// Perform a TLS handshake over the given stream
@@ -784,15 +827,17 @@ impl TlsConnector {
                 TLSEXT_NAMETYPE_HOST_NAME,
                 domain_c.as_ptr() as *mut c_void,
             );
-            // Enable built-in hostname verification against the certificate.
-            // SSL_set1_dnsname is the new name in OpenSSL 4.x; older versions use SSL_set1_host.
-            #[cfg(openssl_v4xx)]
-            let ok = SSL_set1_dnsname(ssl, domain_c.as_ptr());
-            #[cfg(not(openssl_v4xx))]
-            let ok = SSL_set1_host(ssl, domain_c.as_ptr());
-            if ok != 1 {
-                SSL_free(ssl);
-                return Err(Error("Failed to set hostname for verification".to_string()));
+            if !self.accept_invalid_certs {
+                // Enable built-in hostname verification against the certificate.
+                // SSL_set1_dnsname is the new name in OpenSSL 4.x; older versions use SSL_set1_host.
+                #[cfg(openssl_v4xx)]
+                let ok = SSL_set1_dnsname(ssl, domain_c.as_ptr());
+                #[cfg(not(openssl_v4xx))]
+                let ok = SSL_set1_host(ssl, domain_c.as_ptr());
+                if ok != 1 {
+                    SSL_free(ssl);
+                    return Err(Error("Failed to set hostname for verification".to_string()));
+                }
             }
         }
 

@@ -94,6 +94,7 @@ const SECBUFFER_STREAM_HEADER: u32 = 7;
 const SECBUFFER_VERSION: u32 = 0;
 const SECPKG_ATTR_STREAM_SIZES: u32 = 4;
 const SCH_CRED_AUTO_CRED_VALIDATION: u32 = 0x00000020;
+const SCH_CRED_MANUAL_CRED_VALIDATION: u32 = 0x00000008;
 const SCH_CRED_NO_DEFAULT_CREDS: u32 = 0x00000010;
 const SP_PROT_TLS1_2_CLIENT: u32 = 0x00000800;
 const SP_PROT_TLS1_3_CLIENT: u32 = 0x00002000;
@@ -175,7 +176,7 @@ fn to_utf16(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-fn acquire_cred() -> Result<CredHandle, Error> {
+fn acquire_cred(accept_invalid_certs: bool) -> Result<CredHandle, Error> {
     let mut cred = CredHandle::INVALID;
     let mut cred_data = SchannelCred {
         dw_version: SCHANNEL_CRED_VERSION,
@@ -190,7 +191,11 @@ fn acquire_cred() -> Result<CredHandle, Error> {
         dw_minimum_cipher_strength: 0,
         dw_maximum_cipher_strength: 0,
         dw_session_lifespan: 0,
-        dw_flags: SCH_CRED_AUTO_CRED_VALIDATION | SCH_CRED_NO_DEFAULT_CREDS,
+        dw_flags: if accept_invalid_certs {
+            SCH_CRED_MANUAL_CRED_VALIDATION | SCH_CRED_NO_DEFAULT_CREDS
+        } else {
+            SCH_CRED_AUTO_CRED_VALIDATION | SCH_CRED_NO_DEFAULT_CREDS
+        },
         dw_credentials_format: 0,
     };
     let mut expiry = TimeStamp { low: 0, high: 0 };
@@ -382,12 +387,23 @@ fn query_stream_sizes(ctx: &mut CtxtHandle) -> Result<SecPkgContextStreamSizes, 
 
 // MARK: TlsConnector
 /// A TLS connector using SChannel
-pub struct TlsConnector;
+pub struct TlsConnector {
+    accept_invalid_certs: bool,
+}
 
 impl TlsConnector {
     /// Create a new TLS connector
     pub fn new() -> Result<Self, Error> {
-        Ok(Self)
+        Ok(Self {
+            accept_invalid_certs: false,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_danger_accept_invalid_certs() -> Result<Self, Error> {
+        Ok(Self {
+            accept_invalid_certs: true,
+        })
     }
 
     /// Perform a TLS handshake over the given stream
@@ -405,7 +421,7 @@ impl TlsConnector {
         domain: &str,
         stream: S,
     ) -> Result<TlsStream<S>, Error> {
-        let mut cred = acquire_cred()?;
+        let mut cred = acquire_cred(self.accept_invalid_certs)?;
         let domain_w = to_utf16(domain);
         let mut stream = stream;
         let ctx = do_handshake(&mut cred, &domain_w, &mut stream)?;
