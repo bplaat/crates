@@ -33,32 +33,24 @@ export function NoteEditorCard({
 }: NoteEditorCardProps) {
     const content = (
         <>
-            <div class="px-5 pt-5 pb-2">
+            <div class="note-editor-header">
                 <input
-                    class="text-xl font-medium text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 bg-transparent outline-none w-full"
+                    class="note-title-input"
                     type="text"
                     placeholder={titlePlaceholder}
                     value={title}
                     onInput={(e) => onTitleInput((e.target as HTMLInputElement).value)}
                 />
             </div>
-            <RichEditor
-                class="flex-1 min-h-0"
-                value={body}
-                onInput={onBodyInput}
-                placeholder={bodyPlaceholder}
-                autoFocus={autoFocus}
-            />
-            <div class="border-t border-gray-100 dark:border-zinc-700 px-5 py-3 bg-gray-50 dark:bg-zinc-700/50">
-                {footer}
-            </div>
+            <RichEditor value={body} onInput={onBodyInput} placeholder={bodyPlaceholder} autoFocus={autoFocus} />
+            <div class="note-editor-footer">{footer}</div>
         </>
     );
 
     return (
-        <Card class="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <Card class="note-editor">
             {onSubmit ? (
-                <form onSubmit={onSubmit} class="flex-1 flex flex-col min-h-0">
+                <form onSubmit={onSubmit} class="editor">
                     {content}
                 </form>
             ) : (

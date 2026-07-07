@@ -80,7 +80,7 @@ export function DraggableNoteGrid({
     }
 
     return (
-        <div class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
+        <div class="note-grid">
             {notes.map((note) => (
                 <div
                     key={note.id}

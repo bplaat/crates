@@ -150,61 +150,53 @@ export function NotesShow() {
 
     if (isLoading) {
         return (
-            <div class="min-h-screen bg-gray-50 dark:bg-zinc-900">
+            <div class="layout">
                 <Navbar />
-                <p class="text-center text-gray-400 dark:text-gray-500 mt-24">{t('app.loading')}</p>
+                <p class="loading-text is-initial">{t('app.loading')}</p>
             </div>
         );
     }
 
     return (
-        <div class="h-screen flex flex-col bg-gray-50 dark:bg-zinc-900">
+        <div class="note-show">
             <Navbar />
-            <main class="flex-1 flex flex-col min-h-0 max-w-2xl w-full mx-auto px-4 py-8">
-                <div class="flex items-center gap-3 mb-6">
+            <main class="note-show-main">
+                <div class="note-show-header">
                     <IconButton
                         onClick={() => navigate(isArchived ? '/archive' : isTrashed ? '/trash' : '/')}
-                        class="text-gray-500 dark:text-gray-400"
+                        class="has-text-muted"
                         title={t('notes_show.back')}
                     >
-                        <ArrowLeftIcon class="w-5 h-5" />
+                        <ArrowLeftIcon class="is-md" />
                     </IconButton>
-                    <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">
-                        {isNew ? t('notes_create.heading') : t('notes_show.heading')}
-                    </h1>
-                    <div class="flex-1" />
+                    <h1 class="note-show-title">{isNew ? t('notes_create.heading') : t('notes_show.heading')}</h1>
+                    <div class="spacer" />
                     <IconButton
                         onClick={handlePin}
-                        class={isPinned ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'}
+                        class={isPinned ? 'is-active' : 'has-text-muted'}
                         title={isPinned ? t('note.unpin') : t('note.pin')}
                     >
-                        <PinIcon class="w-5 h-5" />
+                        <PinIcon class="is-md" />
                     </IconButton>
                     {!isNew && (
                         <>
                             <IconButton
                                 onClick={handleArchive}
-                                class={
-                                    isArchived
-                                        ? 'text-yellow-500 dark:text-yellow-400'
-                                        : 'text-gray-400 dark:text-gray-500'
-                                }
+                                class={isArchived ? 'is-active' : 'has-text-muted'}
                                 title={isArchived ? t('note.unarchive') : t('note.archive')}
                             >
                                 {isArchived ? (
-                                    <ArchiveArrowUpIcon class="w-5 h-5" />
+                                    <ArchiveArrowUpIcon class="is-md" />
                                 ) : (
-                                    <ArchiveArrowDownIcon class="w-5 h-5" />
+                                    <ArchiveArrowDownIcon class="is-md" />
                                 )}
                             </IconButton>
                             <IconButton
                                 onClick={handleTrash}
-                                class={
-                                    isTrashed ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'
-                                }
+                                class={isTrashed ? 'is-active-danger' : 'has-text-muted'}
                                 title={isTrashed ? t('note.restore') : t('note.trash')}
                             >
-                                {isTrashed ? <RestoreIcon class="w-5 h-5" /> : <DeleteOutlineIcon class="w-5 h-5" />}
+                                {isTrashed ? <RestoreIcon class="is-md" /> : <DeleteOutlineIcon class="is-md" />}
                             </IconButton>
                         </>
                     )}
@@ -219,13 +211,9 @@ export function NotesShow() {
                     bodyPlaceholder={isNew ? t('notes_create.body_placeholder') : t('notes_show.body_placeholder')}
                     autoFocus={isNew}
                     footer={
-                        <p class="text-xs text-gray-400 dark:text-gray-500">
-                            {saveStatus === 'saving' && (
-                                <span class="text-yellow-500 dark:text-yellow-400">{t('notes_show.saving')}</span>
-                            )}
-                            {saveStatus === 'saved' && (
-                                <span class="text-green-500 dark:text-green-400">{t('notes_show.saved')}</span>
-                            )}
+                        <p class="save-status">
+                            {saveStatus === 'saving' && <span class="is-saving">{t('notes_show.saving')}</span>}
+                            {saveStatus === 'saved' && <span class="is-saved">{t('notes_show.saved')}</span>}
                             {saveStatus === 'idle' &&
                                 noteRef.current &&
                                 t('notes_show.last_updated', formatDate(noteRef.current.updatedAt))}

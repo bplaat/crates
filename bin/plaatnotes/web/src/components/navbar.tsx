@@ -43,19 +43,16 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
     }
 
     return (
-        <header class="bg-white dark:bg-zinc-800 shadow-sm sticky top-0 z-10">
-            <div class="px-4 h-16 relative flex items-center">
-                <Link
-                    href="/"
-                    class="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white no-underline shrink-0"
-                >
-                    <img src="/assets/icon.svg" class="w-8 h-8" alt="" />
-                    <span class="text-xl font-medium hidden sm:block">PlaatNotes</span>
+        <header class="navbar">
+            <div class="navbar-container">
+                <Link href="/" class="navbar-brand">
+                    <img src="/assets/icon.svg" alt="" />
+                    <span class="navbar-brand-name">PlaatNotes</span>
                 </Link>
 
                 {showSearch && (
-                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none px-4">
-                        <div class="w-full max-w-md pointer-events-auto">
+                    <div class="navbar-search">
+                        <div class="navbar-search-inner">
                             <SearchInput
                                 value={$searchQuery.value}
                                 onInput={(v) => ($searchQuery.value = v)}
@@ -66,25 +63,22 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
                     </div>
                 )}
 
-                <div class="flex-1" />
+                <div class="spacer" />
 
                 {user && (
-                    <div class="relative" ref={dropdownRef}>
-                        <button
-                            onClick={() => setDropdownOpen(!dropdownOpen)}
-                            class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
-                        >
-                            <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-xs flex items-center justify-center select-none">
+                    <div class="navbar-menu-wrapper" ref={dropdownRef}>
+                        <button onClick={() => setDropdownOpen(!dropdownOpen)} class="navbar-user">
+                            <div class="avatar">
                                 {user.firstName[0].toUpperCase()}
                                 {lastNameInitial(user.lastName)}
                             </div>
-                            <span class="text-sm text-gray-600 dark:text-gray-300 hidden sm:block">
+                            <span class="navbar-user-name">
                                 {user.firstName} {user.lastName}
                             </span>
                         </button>
 
                         {dropdownOpen && (
-                            <div class="absolute right-0 mt-1 w-44 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-lg overflow-hidden z-20">
+                            <div class="dropdown-menu">
                                 {user.role === 'admin' && (
                                     <>
                                         <DropdownItem
@@ -93,10 +87,10 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
                                                 navigate('/admin/users');
                                             }}
                                         >
-                                            <ShieldIcon class="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                                            <ShieldIcon class="is-sm" />
                                             {t('nav.admin')}
                                         </DropdownItem>
-                                        <div class="border-t border-gray-100 dark:border-zinc-700" />
+                                        <div class="dropdown-divider" />
                                     </>
                                 )}
                                 <DropdownItem
@@ -105,12 +99,12 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
                                         navigate('/settings');
                                     }}
                                 >
-                                    <CogIcon class="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                                    <CogIcon class="is-sm" />
                                     {t('nav.settings')}
                                 </DropdownItem>
-                                <div class="border-t border-gray-100 dark:border-zinc-700" />
+                                <div class="dropdown-divider" />
                                 <DropdownItem onClick={handleLogout}>
-                                    <LogoutIcon class="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                                    <LogoutIcon class="is-sm" />
                                     {t('nav.logout')}
                                 </DropdownItem>
                             </div>
@@ -124,10 +118,7 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
 
 function DropdownItem({ onClick, children }: { onClick: () => void; children: ComponentChildren }) {
     return (
-        <button
-            onClick={onClick}
-            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
-        >
+        <button onClick={onClick} class="dropdown-item">
             {children}
         </button>
     );

@@ -13,9 +13,9 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, message }: EmptyStateProps) {
     return (
-        <div class="flex flex-col items-center justify-center mt-24 gap-3 text-gray-400">
+        <div class="empty-state">
             {icon}
-            <p class="text-lg">{message}</p>
+            <p class="empty-state-text">{message}</p>
         </div>
     );
 }

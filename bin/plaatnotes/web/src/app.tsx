@@ -49,8 +49,8 @@ export function App() {
     // Show loading screen while auth resolves
     if (authUser === undefined) {
         return (
-            <div class="min-h-screen bg-gray-50 dark:bg-zinc-900 flex items-center justify-center">
-                <div class="text-gray-400 dark:text-gray-500 text-sm">{t('app.loading')}</div>
+            <div class="centered-screen">
+                <div class="loading-text">{t('app.loading')}</div>
             </div>
         );
     }

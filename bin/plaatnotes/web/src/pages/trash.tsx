@@ -60,36 +60,29 @@ export function TrashPage() {
     return (
         <>
             <AppLayout showSearch>
-                <div class="max-w-screen-xl mx-auto px-4 py-6">
-                    <div class="relative flex items-center justify-between mb-6">
-                        <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-6">
-                            {t('trash.heading')}
-                        </h1>
+                <div class="page">
+                    <div class="toolbar is-relative">
+                        <h1 class="section-label is-spaced">{t('trash.heading')}</h1>
                         {notes.length > 0 && (
-                            <button
-                                onClick={handleEmptyTrash}
-                                class="absolute right-0 text-sm text-red-400 hover:text-red-600 transition-colors cursor-pointer"
-                            >
+                            <button onClick={handleEmptyTrash} class="text-link-danger">
                                 {t('trash.empty_btn')}
                             </button>
                         )}
                     </div>
 
-                    {!loading && notes.length > 0 && <p class="text-xs text-gray-400 mb-4">{t('trash.hint')}</p>}
+                    {!loading && notes.length > 0 && <p class="hint-text">{t('trash.hint')}</p>}
 
-                    {loading && notes.length === 0 && (
-                        <p class="text-center text-gray-400 mt-16">{t('trash.loading')}</p>
-                    )}
+                    {loading && notes.length === 0 && <p class="loading-text is-initial">{t('trash.loading')}</p>}
 
                     {!loading && notes.length === 0 && (
                         <EmptyState
-                            icon={<DeleteOutlineIcon class="w-16 h-16" />}
+                            icon={<DeleteOutlineIcon class="is-huge" />}
                             message={query ? t('trash.empty_search') : t('trash.empty')}
                         />
                     )}
 
                     {notes.length > 0 && (
-                        <div class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
+                        <div class="note-grid">
                             {notes.map((note) => (
                                 <NoteCard
                                     key={note.id}
@@ -101,8 +94,8 @@ export function TrashPage() {
                         </div>
                     )}
 
-                    {hasMore && <div ref={sentinelRef} class="h-1" />}
-                    {loading && notes.length > 0 && <p class="text-center text-gray-400 py-4">{t('trash.loading')}</p>}
+                    {hasMore && <div ref={sentinelRef} class="sentinel" />}
+                    {loading && notes.length > 0 && <p class="loading-text">{t('trash.loading')}</p>}
                 </div>
             </AppLayout>
 

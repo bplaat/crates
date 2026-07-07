@@ -57,19 +57,13 @@ export function SettingsImports() {
 
     return (
         <SettingsLayout>
-            <div class="max-w-2xl mx-auto px-4 py-8">
-                <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200 mb-6">
-                    {t('settings.imports.heading')}
-                </h1>
+            <div class="page is-narrow">
+                <h1 class="page-title">{t('settings.imports.heading')}</h1>
 
                 <Card>
-                    <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-1">
-                        {t('settings.imports.google_keep.heading')}
-                    </h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">
-                        {t('settings.imports.google_keep.desc')}
-                    </p>
-                    <form ref={formRef} onSubmit={handleSubmit} class="flex flex-col gap-4">
+                    <h2 class="card-title is-tight">{t('settings.imports.google_keep.heading')}</h2>
+                    <p class="card-desc">{t('settings.imports.google_keep.desc')}</p>
+                    <form ref={formRef} onSubmit={handleSubmit} class="form">
                         <FormField id="keepFile" label={t('settings.imports.google_keep.label')}>
                             <FormInput
                                 id="keepFile"
@@ -79,7 +73,7 @@ export function SettingsImports() {
                                 onChange={(e) => setFile((e.target as HTMLInputElement).files?.[0] ?? null)}
                             />
                         </FormField>
-                        <div class="flex flex-col gap-3 pt-1">
+                        <div class="form-footer">
                             <div>
                                 <FormMessage
                                     type="success"
@@ -90,10 +84,10 @@ export function SettingsImports() {
                                 />
                                 <FormMessage type="error" message={error && t('settings.imports.google_keep.error')} />
                             </div>
-                            <FormActions class="pt-0">
+                            <FormActions class="is-flush">
                                 <Button type="submit" disabled={loading || !file}>
-                                    <span class="flex items-center gap-1.5">
-                                        <CloudUploadIcon class="w-4 h-4" />
+                                    <span class="icon-text">
+                                        <CloudUploadIcon class="is-sm" />
                                         {loading
                                             ? t('settings.imports.google_keep.importing')
                                             : t('settings.imports.google_keep.submit')}

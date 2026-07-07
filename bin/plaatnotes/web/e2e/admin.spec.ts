@@ -135,7 +135,7 @@ test.describe('Admin - Users', () => {
         await page.goto('/');
         await page
             .locator('header button')
-            .filter({ has: page.locator('.rounded-full') })
+            .filter({ has: page.locator('.avatar') })
             .click();
         await expect(page.getByRole('button', { name: 'Admin', exact: true })).toBeVisible();
     });
@@ -144,7 +144,7 @@ test.describe('Admin - Users', () => {
         await page.goto('/');
         await page
             .locator('header button')
-            .filter({ has: page.locator('.rounded-full') })
+            .filter({ has: page.locator('.avatar') })
             .click();
         await page.getByRole('button', { name: 'Admin', exact: true }).click();
         await expect(page).toHaveURL('/admin/users');

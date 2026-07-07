@@ -32,6 +32,10 @@ async function createTrashedNote(page: Page, body: string): Promise<{ id: string
 }
 
 test.describe('Trash', () => {
+    // Run serially: the "empty trash" test clears all trashed notes for the shared
+    // user, which would race against other tests that expect their own note present.
+    test.describe.configure({ mode: 'serial' });
+
     test('trash page loads with correct title', async ({ page }) => {
         await page.goto('/trash');
         await expect(page).toHaveTitle(/PlaatNotes.*Trash/);

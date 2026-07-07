@@ -50,7 +50,7 @@ test.describe('Home', () => {
         await page.goto('/');
         await page
             .locator('header button')
-            .filter({ has: page.locator('.rounded-full') })
+            .filter({ has: page.locator('.avatar') })
             .click();
         await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();

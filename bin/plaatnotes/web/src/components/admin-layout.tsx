@@ -14,7 +14,7 @@ export function AdminLayout({ children }: { children: ComponentChildren }) {
         <SidebarLayout
             sidebar={
                 <SidebarLink href="/admin/users" label={t('admin.users.sidebar')}>
-                    <AccountMultipleIcon class="w-5 h-5 shrink-0" />
+                    <AccountMultipleIcon class="is-md" />
                 </SidebarLink>
             }
         >

@@ -44,7 +44,7 @@ test.describe('Auth', () => {
         // Open user dropdown and click Sign out
         await page
             .locator('header button')
-            .filter({ has: page.locator('.rounded-full') })
+            .filter({ has: page.locator('.avatar') })
             .click();
         await page.getByRole('button', { name: 'Sign out' }).click();
 

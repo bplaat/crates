@@ -124,85 +124,68 @@ export function AdminUsers() {
 
     return (
         <AdminLayout>
-            <div class="px-4 py-8">
-                <div class="flex items-center justify-between mb-6">
-                    <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200">{t('admin.users.heading')}</h1>
+            <div class="page is-wide">
+                <div class="toolbar">
+                    <h1 class="page-title">{t('admin.users.heading')}</h1>
                     <Button onClick={openCreate}>
-                        <span class="flex items-center gap-1.5">
-                            <PlusIcon class="w-4 h-4" />
+                        <span class="icon-text">
+                            <PlusIcon class="is-sm" />
                             {t('admin.users.create_user')}
                         </span>
                     </Button>
                 </div>
 
-                <Card class="overflow-hidden">
-                    {loading && users.length === 0 && (
-                        <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.users.loading')}</p>
-                    )}
-                    {!loading && users.length === 0 && (
-                        <p class="text-center text-gray-400 dark:text-gray-500 py-16">{t('admin.users.empty')}</p>
-                    )}
+                <Card class="is-clipped">
+                    {loading && users.length === 0 && <p class="loading-text is-padded">{t('admin.users.loading')}</p>}
+                    {!loading && users.length === 0 && <p class="loading-text is-padded">{t('admin.users.empty')}</p>}
                     {users.length > 0 && (
-                        <table class="w-full text-sm">
+                        <table class="table">
                             <thead>
-                                <tr class="border-b border-gray-100 dark:border-zinc-700 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                    <th class="px-5 py-3">{t('admin.users.col_name')}</th>
-                                    <th class="px-5 py-3 hidden md:table-cell">{t('admin.users.col_email')}</th>
-                                    <th class="px-5 py-3 hidden sm:table-cell">{t('admin.users.col_role')}</th>
-                                    <th class="px-5 py-3 hidden lg:table-cell">{t('admin.users.col_created')}</th>
-                                    <th class="px-5 py-3 text-right">{t('admin.users.col_actions')}</th>
+                                <tr>
+                                    <th>{t('admin.users.col_name')}</th>
+                                    <th class="col-hide-md">{t('admin.users.col_email')}</th>
+                                    <th class="col-hide-sm">{t('admin.users.col_role')}</th>
+                                    <th class="col-hide-lg">{t('admin.users.col_created')}</th>
+                                    <th class="cell-actions">{t('admin.users.col_actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {users.map((user) => (
-                                    <tr
-                                        key={user.id}
-                                        class="border-b border-gray-50 dark:border-zinc-700/50 last:border-0 hover:bg-gray-50 dark:hover:bg-zinc-700/30 transition-colors"
-                                    >
-                                        <td class="px-5 py-3">
-                                            <div class="flex items-center gap-3">
-                                                <div class="w-8 h-8 rounded-full bg-yellow-400 dark:bg-yellow-900/40 text-white dark:text-yellow-400 font-semibold text-xs flex items-center justify-center shrink-0 select-none">
+                                    <tr key={user.id}>
+                                        <td>
+                                            <div class="cell-name">
+                                                <div class="avatar">
                                                     {user.firstName[0].toUpperCase()}
                                                     {lastNameInitial(user.lastName)}
                                                 </div>
-                                                <span class="font-medium text-gray-800 dark:text-gray-100">
+                                                <span class="cell-name-text">
                                                     {user.firstName} {user.lastName}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td class="px-5 py-3 hidden md:table-cell text-gray-500 dark:text-gray-400">
-                                            {user.email}
-                                        </td>
-                                        <td class="px-5 py-3 hidden sm:table-cell">
-                                            <span
-                                                class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                                    user.role === 'admin'
-                                                        ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400'
-                                                        : 'bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-gray-400'
-                                                }`}
-                                            >
+                                        <td class="col-hide-md has-text-muted">{user.email}</td>
+                                        <td class="col-hide-sm">
+                                            <span class={`badge ${user.role === 'admin' ? 'is-accent' : ''}`}>
                                                 {user.role === 'admin'
                                                     ? t('admin.users.role_admin')
                                                     : t('admin.users.role_normal')}
                                             </span>
                                         </td>
-                                        <td class="px-5 py-3 hidden lg:table-cell text-gray-400 dark:text-gray-500">
-                                            {formatDate(user.createdAt)}
-                                        </td>
-                                        <td class="px-5 py-3">
-                                            <div class="flex items-center justify-end gap-1">
+                                        <td class="col-hide-lg has-text-subtle">{formatDate(user.createdAt)}</td>
+                                        <td>
+                                            <div class="table-actions">
                                                 <SmallIconButton
                                                     onClick={() => openEdit(user)}
                                                     title={t('admin.users.edit_user')}
                                                 >
-                                                    <PencilIcon class="w-4 h-4" />
+                                                    <PencilIcon class="is-sm" />
                                                 </SmallIconButton>
                                                 <SmallIconButton
                                                     onClick={() => handleDelete(user)}
                                                     title={t('admin.users.delete_user')}
-                                                    class="hover:text-red-500 dark:hover:text-red-400"
+                                                    class="hover-danger"
                                                 >
-                                                    <DeleteOutlineIcon class="w-4 h-4" />
+                                                    <DeleteOutlineIcon class="is-sm" />
                                                 </SmallIconButton>
                                             </div>
                                         </td>
@@ -212,10 +195,8 @@ export function AdminUsers() {
                         </table>
                     )}
 
-                    {hasMore && <div ref={sentinelRef} class="h-1" />}
-                    {loading && users.length > 0 && (
-                        <p class="text-center text-gray-400 dark:text-gray-500 py-4">{t('admin.users.loading')}</p>
-                    )}
+                    {hasMore && <div ref={sentinelRef} class="sentinel" />}
+                    {loading && users.length > 0 && <p class="loading-text">{t('admin.users.loading')}</p>}
                 </Card>
             </div>
 
@@ -224,8 +205,8 @@ export function AdminUsers() {
                     title={isCreate ? t('admin.users.create_user') : t('admin.users.edit_user')}
                     onClose={closeDialog}
                 >
-                    <form onSubmit={handleSubmit} class="flex flex-col gap-4">
-                        <div class="grid grid-cols-2 gap-4">
+                    <form onSubmit={handleSubmit} class="form">
+                        <div class="field-row">
                             <FormField
                                 id="firstName"
                                 label={t('admin.users.first_name')}
@@ -292,12 +273,12 @@ export function AdminUsers() {
                             </FormSelect>
                         </FormField>
 
-                        <div class="flex flex-col gap-3 pt-1">
+                        <div class="form-footer">
                             <FormMessage type="error" message={report && t('form.errors_occurred')} />
-                            <FormActions class="pt-0">
+                            <FormActions class="is-flush">
                                 <Button type="submit" disabled={submitting}>
-                                    <span class="flex items-center gap-1.5">
-                                        {isCreate ? <PlusIcon class="w-4 h-4" /> : <ContentSaveIcon class="w-4 h-4" />}
+                                    <span class="icon-text">
+                                        {isCreate ? <PlusIcon class="is-sm" /> : <ContentSaveIcon class="is-sm" />}
                                         {isCreate ? t('admin.users.create') : t('admin.users.save')}
                                     </span>
                                 </Button>

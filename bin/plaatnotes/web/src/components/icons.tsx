@@ -6,7 +6,7 @@
 
 function Icon({ path, class: className }: { path: string; class?: string }) {
     return (
-        <svg class={className} viewBox="0 0 24 24" fill="currentColor">
+        <svg class={className ? `icon ${className}` : 'icon'} viewBox="0 0 24 24" fill="currentColor">
             <path d={path} />
         </svg>
     );

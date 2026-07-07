@@ -7,16 +7,13 @@
 import { type JSX } from 'preact/jsx-runtime';
 import { CloseIcon, MagnifyIcon } from './icons.tsx';
 
-const INPUT_CLASS =
-    'w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg text-sm bg-white dark:bg-zinc-700 text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 dark:focus:ring-yellow-500/50 focus:border-transparent';
-
 export function FormInput(props: JSX.IntrinsicElements['input']) {
-    return <input {...props} class={INPUT_CLASS} />;
+    return <input {...props} class="input" />;
 }
 
 export function FormSelect({ children, ...props }: JSX.IntrinsicElements['select']) {
     return (
-        <select {...props} class={INPUT_CLASS}>
+        <select {...props} class="select">
             {children}
         </select>
     );
@@ -31,22 +28,18 @@ interface SearchInputProps {
 
 export function SearchInput({ value, onInput, onClear, placeholder }: SearchInputProps) {
     return (
-        <div class="relative flex items-center">
-            <MagnifyIcon class="absolute left-2.5 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none shrink-0" />
+        <div class="search">
+            <MagnifyIcon class="search-icon" />
             <input
                 type="search"
                 value={value}
                 onInput={(e) => onInput((e.target as HTMLInputElement).value)}
                 placeholder={placeholder}
-                class={`${INPUT_CLASS} pl-8 ${value ? 'pr-8' : ''}`}
+                class={`input ${value ? 'has-value' : ''}`}
             />
             {value && (
-                <button
-                    type="button"
-                    onClick={onClear}
-                    class="absolute right-2 p-0.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
-                >
-                    <CloseIcon class="w-4 h-4" />
+                <button type="button" onClick={onClear} class="search-clear">
+                    <CloseIcon class="is-sm" />
                 </button>
             )}
         </div>

@@ -98,21 +98,19 @@ export function Home() {
 
     return (
         <AppLayout showSearch>
-            <div class="max-w-screen-xl mx-auto px-4 py-6">
-                {initialLoading && <p class="text-center text-gray-400 mt-16">{t('home.loading')}</p>}
+            <div class="page">
+                {initialLoading && <p class="loading-text is-initial">{t('home.loading')}</p>}
 
                 {isEmpty && (
                     <EmptyState
-                        icon={<NoteTextIcon class="w-16 h-16" />}
+                        icon={<NoteTextIcon class="is-huge" />}
                         message={query ? t('home.empty_search') : t('home.empty')}
                     />
                 )}
 
                 {pinned.length > 0 && (
-                    <section class="mb-6">
-                        <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
-                            {t('home.pinned')}
-                        </h2>
+                    <section class="note-section">
+                        <h2 class="section-label">{t('home.pinned')}</h2>
                         <DraggableNoteGrid
                             notes={pinned}
                             reorderEndpoint="/notes/pinned/reorder"
@@ -121,20 +119,14 @@ export function Home() {
                             onArchive={handleArchive}
                             onTrash={handleTrash}
                         />
-                        {pinnedHasMore && <div ref={pinnedSentinelRef} class="h-1" />}
-                        {pinnedLoading && pinnedItems.length > 0 && (
-                            <p class="text-center text-gray-400 py-4">{t('home.loading')}</p>
-                        )}
+                        {pinnedHasMore && <div ref={pinnedSentinelRef} class="sentinel" />}
+                        {pinnedLoading && pinnedItems.length > 0 && <p class="loading-text">{t('home.loading')}</p>}
                     </section>
                 )}
 
                 {others.length > 0 && (
                     <section>
-                        {pinned.length > 0 && (
-                            <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
-                                {t('home.other')}
-                            </h2>
-                        )}
+                        {pinned.length > 0 && <h2 class="section-label">{t('home.other')}</h2>}
                         <DraggableNoteGrid
                             notes={others}
                             reorderEndpoint="/notes/reorder"
@@ -146,18 +138,12 @@ export function Home() {
                     </section>
                 )}
 
-                {otherHasMore && <div ref={otherSentinelRef} class="h-1" />}
-                {otherLoading && otherItems.length > 0 && (
-                    <p class="text-center text-gray-400 py-4">{t('home.loading')}</p>
-                )}
+                {otherHasMore && <div ref={otherSentinelRef} class="sentinel" />}
+                {otherLoading && otherItems.length > 0 && <p class="loading-text">{t('home.loading')}</p>}
             </div>
 
-            <button
-                onClick={() => navigate('/notes/create')}
-                class="fixed bottom-6 right-6 w-14 h-14 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 dark:text-yellow-400 text-white rounded-full shadow-lg flex items-center justify-center transition-colors cursor-pointer"
-                title={t('home.create')}
-            >
-                <PlusIcon class="w-7 h-7" />
+            <button onClick={() => navigate('/notes/create')} class="fab" title={t('home.create')}>
+                <PlusIcon class="is-xl" />
             </button>
         </AppLayout>
     );

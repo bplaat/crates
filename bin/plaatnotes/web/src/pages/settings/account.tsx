@@ -83,17 +83,15 @@ export function SettingsAccount() {
 
     return (
         <SettingsLayout>
-            <div class="max-w-2xl mx-auto px-4 py-8">
-                <h1 class="text-xl font-medium text-gray-700 dark:text-gray-200 mb-6">{t('settings.account')}</h1>
+            <div class="page is-narrow">
+                <h1 class="page-title">{t('settings.account')}</h1>
 
-                <div class="flex flex-col gap-6">
+                <div class="list is-large-gap">
                     {/* Profile form */}
                     <Card>
-                        <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-5">
-                            {t('settings.profile_heading')}
-                        </h2>
-                        <form onSubmit={handleProfileSubmit} class="flex flex-col gap-4">
-                            <div class="grid grid-cols-2 gap-4">
+                        <h2 class="card-title">{t('settings.profile_heading')}</h2>
+                        <form onSubmit={handleProfileSubmit} class="form">
+                            <div class="field-row">
                                 <FormField
                                     id="firstName"
                                     label={t('settings.first_name')}
@@ -132,7 +130,7 @@ export function SettingsAccount() {
                                 />
                             </FormField>
 
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="field-row">
                                 <FormField id="theme" label={t('settings.theme')}>
                                     <FormSelect
                                         id="theme"
@@ -156,15 +154,15 @@ export function SettingsAccount() {
                                 </FormField>
                             </div>
 
-                            <div class="flex flex-col gap-3 pt-1">
+                            <div class="form-footer">
                                 <div>
                                     <FormMessage type="success" message={profileSaved && t('settings.saved')} />
                                     <FormMessage type="error" message={profileError && t('form.errors_occurred')} />
                                 </div>
-                                <FormActions class="pt-0">
+                                <FormActions class="is-flush">
                                     <Button type="submit" disabled={profileLoading}>
-                                        <span class="flex items-center gap-1.5">
-                                            <ContentSaveIcon class="w-4 h-4" />
+                                        <span class="icon-text">
+                                            <ContentSaveIcon class="is-sm" />
                                             {t('settings.save')}
                                         </span>
                                     </Button>
@@ -175,10 +173,8 @@ export function SettingsAccount() {
 
                     {/* Change password form */}
                     <Card>
-                        <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-5">
-                            {t('settings.password_heading')}
-                        </h2>
-                        <form onSubmit={handlePasswordSubmit} class="flex flex-col gap-4">
+                        <h2 class="card-title">{t('settings.password_heading')}</h2>
+                        <form onSubmit={handlePasswordSubmit} class="form">
                             <FormField
                                 id="oldPassword"
                                 label={t('settings.current_password')}
@@ -218,7 +214,7 @@ export function SettingsAccount() {
                                 />
                             </FormField>
 
-                            <div class="flex flex-col gap-3 pt-1">
+                            <div class="form-footer">
                                 <div>
                                     <FormMessage
                                         type="success"
@@ -226,10 +222,10 @@ export function SettingsAccount() {
                                     />
                                     <FormMessage type="error" message={passwordReport && t('form.errors_occurred')} />
                                 </div>
-                                <FormActions class="pt-0">
+                                <FormActions class="is-flush">
                                     <Button type="submit" disabled={passwordLoading}>
-                                        <span class="flex items-center gap-1.5">
-                                            <LockIcon class="w-4 h-4" />
+                                        <span class="icon-text">
+                                            <LockIcon class="is-sm" />
                                             {t('settings.change_password')}
                                         </span>
                                     </Button>

@@ -40,16 +40,14 @@ export function ArchivePage() {
 
     return (
         <AppLayout showSearch>
-            <div class="max-w-screen-xl mx-auto px-4 py-6">
-                <h1 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-6">
-                    {t('archive.heading')}
-                </h1>
+            <div class="page">
+                <h1 class="section-label is-spaced">{t('archive.heading')}</h1>
 
-                {loading && items.length === 0 && <p class="text-center text-gray-400 mt-16">{t('archive.loading')}</p>}
+                {loading && items.length === 0 && <p class="loading-text is-initial">{t('archive.loading')}</p>}
 
                 {!loading && notes.length === 0 && (
                     <EmptyState
-                        icon={<ArchiveArrowDownIcon class="w-16 h-16" />}
+                        icon={<ArchiveArrowDownIcon class="is-huge" />}
                         message={query ? t('archive.empty_search') : t('archive.empty')}
                     />
                 )}
@@ -64,8 +62,8 @@ export function ArchivePage() {
                     />
                 )}
 
-                {hasMore && <div ref={sentinelRef} class="h-1" />}
-                {loading && items.length > 0 && <p class="text-center text-gray-400 py-4">{t('archive.loading')}</p>}
+                {hasMore && <div ref={sentinelRef} class="sentinel" />}
+                {loading && items.length > 0 && <p class="loading-text">{t('archive.loading')}</p>}
             </div>
         </AppLayout>
     );

@@ -8,7 +8,6 @@ import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, type Plugin } from 'vite';
 import preact from '@preact/preset-vite';
 
@@ -67,7 +66,7 @@ function swaggerUi(): Plugin {
 const { version } = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 export default defineConfig({
-    plugins: [preact(), tailwindcss(), swaggerUi()],
+    plugins: [preact(), swaggerUi()],
     define: {
         __APP_VERSION__: JSON.stringify(version),
     },

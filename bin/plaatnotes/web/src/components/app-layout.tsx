@@ -16,13 +16,13 @@ export function AppLayout({ children, showSearch }: { children: ComponentChildre
             sidebar={
                 <>
                     <SidebarLink href="/" label={t('sidebar.notes')}>
-                        <NoteTextIcon class="w-5 h-5 shrink-0" />
+                        <NoteTextIcon class="is-md" />
                     </SidebarLink>
                     <SidebarLink href="/archive" label={t('sidebar.archive')}>
-                        <ArchiveArrowDownIcon class="w-5 h-5 shrink-0" />
+                        <ArchiveArrowDownIcon class="is-md" />
                     </SidebarLink>
                     <SidebarLink href="/trash" label={t('sidebar.trash')}>
-                        <DeleteOutlineIcon class="w-5 h-5 shrink-0" />
+                        <DeleteOutlineIcon class="is-md" />
                     </SidebarLink>
                 </>
             }

@@ -64,7 +64,7 @@ function ToolbarButton({ onClick, title, children }: ToolbarButtonProps) {
                 onClick();
             }}
             title={title}
-            class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-zinc-600 text-gray-600 dark:text-gray-300 transition-colors cursor-pointer"
+            class="editor-tool"
         >
             {children}
         </button>
@@ -72,7 +72,7 @@ function ToolbarButton({ onClick, title, children }: ToolbarButtonProps) {
 }
 
 function ToolbarSep() {
-    return <div class="w-px h-5 bg-gray-200 dark:bg-zinc-600 mx-1 self-center" />;
+    return <div class="editor-sep" />;
 }
 
 interface RichEditorProps {
@@ -172,66 +172,66 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
     }
 
     return (
-        <div class={`flex flex-col ${className || ''}`}>
-            <div class="flex items-center flex-wrap gap-0.5 px-2 h-10 shrink-0 border-b border-gray-100 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800/50">
+        <div class={`editor ${className || ''}`}>
+            <div class="editor-toolbar">
                 {!plainMode && (
                     <>
                         <ToolbarButton onClick={() => execCmd('bold')} title={t('editor.bold')}>
-                            <FormatBoldIcon class="w-4 h-4" />
+                            <FormatBoldIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('italic')} title={t('editor.italic')}>
-                            <FormatItalicIcon class="w-4 h-4" />
+                            <FormatItalicIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('underline')} title={t('editor.underline')}>
-                            <FormatUnderlineIcon class="w-4 h-4" />
+                            <FormatUnderlineIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('strikeThrough')} title={t('editor.strikethrough')}>
-                            <FormatStrikethroughIcon class="w-4 h-4" />
+                            <FormatStrikethroughIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={() => execCmd('formatBlock', 'h1')} title={t('editor.h1')}>
-                            <span class="text-xs font-bold px-0.5 leading-none">H1</span>
+                            <span class="editor-tool-text">H1</span>
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('formatBlock', 'h2')} title={t('editor.h2')}>
-                            <span class="text-xs font-bold px-0.5 leading-none">H2</span>
+                            <span class="editor-tool-text">H2</span>
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('formatBlock', 'h3')} title={t('editor.h3')}>
-                            <span class="text-xs font-bold px-0.5 leading-none">H3</span>
+                            <span class="editor-tool-text">H3</span>
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('formatBlock', 'p')} title={t('editor.p')}>
-                            <span class="text-xs px-0.5 leading-none">¶</span>
+                            <span class="editor-tool-text is-normal">¶</span>
                         </ToolbarButton>
                         <ToolbarButton
                             onClick={() => execCmd('formatBlock', 'blockquote')}
                             title={t('editor.blockquote')}
                         >
-                            <FormatQuoteOpenIcon class="w-4 h-4" />
+                            <FormatQuoteOpenIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={() => execCmd('insertUnorderedList')} title={t('editor.ul')}>
-                            <FormatListBulletedIcon class="w-4 h-4" />
+                            <FormatListBulletedIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('insertOrderedList')} title={t('editor.ol')}>
-                            <FormatListNumberedIcon class="w-4 h-4" />
+                            <FormatListNumberedIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={handleInlineCode} title={t('editor.code')}>
-                            <CodeTagsIcon class="w-4 h-4" />
+                            <CodeTagsIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={handleCodeBlock} title={t('editor.code_block')}>
-                            <CodeBracesIcon class="w-4 h-4" />
+                            <CodeBracesIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={handleLink} title={t('editor.link')}>
-                            <LinkIcon class="w-4 h-4" />
+                            <LinkIcon class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={() => execCmd('insertHorizontalRule')} title={t('editor.hr')}>
-                            <MinusIcon class="w-4 h-4" />
+                            <MinusIcon class="is-sm" />
                         </ToolbarButton>
                     </>
                 )}
-                <div class="flex-1" />
+                <div class="spacer" />
                 <button
                     type="button"
                     onMouseDown={(e) => {
@@ -239,16 +239,16 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
                         togglePlainMode();
                     }}
                     title={plainMode ? t('editor.rich_mode') : t('editor.plain_mode')}
-                    class="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-600 transition-colors cursor-pointer"
+                    class="editor-mode-toggle"
                 >
-                    <CodeTagsIcon class="w-3.5 h-3.5" />
+                    <CodeTagsIcon class="is-xs" />
                     {plainMode ? t('editor.rich_mode') : t('editor.plain_mode')}
                 </button>
             </div>
             {plainMode ? (
                 <textarea
                     ref={textareaRef}
-                    class="flex-1 p-5 outline-none min-h-[12rem] font-mono text-sm text-gray-700 dark:text-gray-300 bg-transparent resize-none placeholder-gray-400 dark:placeholder-gray-600"
+                    class="editor-textarea"
                     placeholder={placeholder}
                     value={value}
                     onKeyDown={(e) => {
@@ -271,16 +271,12 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
                     }}
                 />
             ) : (
-                <div class="relative overflow-y-auto overflow-x-hidden flex-1">
-                    {isEmpty && (
-                        <p class="absolute top-5 left-5 text-gray-400 dark:text-gray-600 text-sm pointer-events-none select-none">
-                            {placeholder}
-                        </p>
-                    )}
+                <div class="editor-body">
+                    {isEmpty && <p class="editor-placeholder">{placeholder}</p>}
                     <div
                         ref={editorRef}
                         contentEditable={true}
-                        class="rich-editor-content p-5 outline-none min-h-[12rem] text-gray-700 dark:text-gray-300 text-sm break-all"
+                        class="rich-editor-content"
                         onKeyDown={(e) => {
                             if (e.key === 'Tab') {
                                 e.preventDefault();

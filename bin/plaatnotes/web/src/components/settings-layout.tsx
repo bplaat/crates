@@ -15,13 +15,13 @@ export function SettingsLayout({ children }: { children: ComponentChildren }) {
             sidebar={
                 <>
                     <SidebarLink href="/settings" label={t('settings.account')}>
-                        <AccountIcon class="w-5 h-5 shrink-0" />
+                        <AccountIcon class="is-md" />
                     </SidebarLink>
                     <SidebarLink href="/settings/sessions" label={t('settings.sessions')}>
-                        <LaptopIcon class="w-5 h-5 shrink-0" />
+                        <LaptopIcon class="is-md" />
                     </SidebarLink>
                     <SidebarLink href="/settings/imports" label={t('settings.imports')}>
-                        <DownloadIcon class="w-5 h-5 shrink-0" />
+                        <DownloadIcon class="is-md" />
                     </SidebarLink>
                 </>
             }
