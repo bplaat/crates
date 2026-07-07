@@ -218,7 +218,7 @@ body.is-bwebview-macos:not(.is-fullscreen) .sidebar-title {
     padding: 1rem;
     overflow-y: auto;
 
-    font-family: monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
     white-space: pre;
     cursor: initial;
     -webkit-user-select: text;

@@ -997,13 +997,16 @@ html.dark .editor-toolbar {
 .editor-mode-toggle:hover {
     background-color: var(--hover);
 }
+.editor-textarea,
+.rich-editor-content code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
 .editor-textarea {
     flex: 1;
     padding: 1.25rem;
     outline: none;
     border: none;
     min-height: 12rem;
-    font-family: ui-monospace, monospace;
     font-size: 0.875rem;
     color: var(--text-heading);
     background: transparent;
@@ -1373,7 +1376,6 @@ html.dark .rich-editor-content blockquote {
     border-color: var(--surface-2);
 }
 .rich-editor-content code {
-    font-family: ui-monospace, monospace;
     font-size: 0.75rem;
     background-color: var(--surface-2);
     border-radius: 0.25rem;

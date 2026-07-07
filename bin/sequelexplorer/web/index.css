@@ -354,11 +354,15 @@ body {
 }
 
 /* Schema tab */
+.schema-code,
+.query-input {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+}
+
 .schema-code {
     flex: 1;
     padding: 1rem;
     overflow: auto;
-    font-family: monospace;
     font-size: 0.875rem;
     white-space: pre;
     -webkit-user-select: text;
@@ -385,7 +389,6 @@ body {
     background: var(--color-background);
     color: var(--color-text-primary);
     outline: none;
-    font-family: monospace;
     font-size: 0.875rem;
     min-width: 0;
 }
