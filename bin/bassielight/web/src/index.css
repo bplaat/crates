@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+@import 'minireset.css';
+
 :root {
     --bg: #18181b;
     --surface: #27272a;
@@ -18,22 +20,18 @@
     --danger: #ef4444;
 }
 
-/* Reset */
-*,
-*::before,
-*::after {
-    box-sizing: border-box;
-}
-html,
-body,
-h1,
-h2,
-p {
-    margin: 0;
-}
-button {
+/* Form controls inherit typography (minireset leaves these to the framework) */
+button,
+input,
+select,
+textarea {
     font: inherit;
     color: inherit;
+}
+button {
+    background: none;
+    border: none;
+    cursor: pointer;
 }
 
 /* Base */
