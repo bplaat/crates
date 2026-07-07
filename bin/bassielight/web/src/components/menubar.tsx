@@ -13,13 +13,10 @@ import { IpcContext } from '../app.tsx';
 
 export const $dmxLive = signal(false);
 
-const NAV_BASE =
-    'flex items-center gap-2 w-full px-2 h-12 rounded-lg font-medium text-zinc-200 cursor-pointer transition-all border-2 border-transparent hover:bg-zinc-700 hover:border-blue-500 mb-2 no-underline! outline-none';
-
 function NavLink({ href, children }: { href: string; children: any }) {
     const [isActive] = useRoute(href);
     return (
-        <Link href={href} class={`${NAV_BASE} ${isActive ? 'border-blue-500!' : ''}`}>
+        <Link href={href} class={`menubar-item ${isActive ? 'is-active' : ''}`}>
             {children}
         </Link>
     );
@@ -39,8 +36,8 @@ export function Menubar() {
 
     return (
         <>
-            <div id="menubar" class="bg-zinc-800 flex flex-col p-4">
-                <h1 class="text-xl font-bold mb-3">BassieLight</h1>
+            <div id="menubar" class="menubar">
+                <h1 class="menubar-title">BassieLight</h1>
 
                 <NavLink href="/">
                     <MotionPlayOutlineIcon />
@@ -55,14 +52,14 @@ export function Menubar() {
                     Settings
                 </NavLink>
 
-                <div class="flex-1" />
+                <div class="spacer" />
 
-                <div class="flex items-center gap-2 mb-2">
-                    <span class={`w-2 h-2 rounded-full ${$dmxLive.value ? 'bg-green-500' : 'bg-red-500'}`} />
+                <div class="menubar-status">
+                    <span class={`menubar-dot ${$dmxLive.value ? 'is-success' : 'is-danger'}`} />
                     {$dmxLive.value ? 'DMX is live' : 'DMX is off'}
                 </div>
 
-                <button class={`${NAV_BASE} mb-0`} onClick={() => setShowQrCode(true)}>
+                <button class="menubar-item" onClick={() => setShowQrCode(true)}>
                     <QrcodeIcon />
                     QR-code
                 </button>
