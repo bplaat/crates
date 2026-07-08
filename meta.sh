@@ -98,7 +98,7 @@ check_copyright() {
 check_formatting() {
     echo "Checking prettier formatting..."
     find . -type f \( -name "*.md" -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*/.vscode/*" ! -path "*.min.js" ! -path "*playwright/*" ! -path "*playwright-report/*" ! -path "*test-results/*" -print0 \
-        | xargs -0 npx --prefer-offline --yes prettier --check
+        | xargs -0 npx --prefer-offline --yes prettier@3.8.4 --check
 
     echo "Checking clang-format formatting..."
     find bin/bob/examples -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.m" -o -name "*.mm" -o -name "*.java" \) ! -path "*/target/*" -print0 \
