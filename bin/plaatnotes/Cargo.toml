@@ -39,7 +39,12 @@ zip = "8.1"
 
 [target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
 bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
-native-tls = { version = "0.2", features = ["vendored"] }
+small-http = { version = "0.2.1", features = [
+    "json",
+    "form",
+    "log",
+    "tls-vendored",
+] }
 
 [build-dependencies]
 copy_dir = "0.1.3"

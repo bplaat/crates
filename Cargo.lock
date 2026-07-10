@@ -568,7 +568,6 @@ dependencies = [
  "maxminddb",
  "mime_guess",
  "miniz_oxide",
- "native-tls",
  "openapi-generator",
  "pbkdf2",
  "rust-embed",

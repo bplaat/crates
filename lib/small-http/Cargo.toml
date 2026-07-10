@@ -44,7 +44,7 @@ json = ["dep:serde", "dep:serde_json"]
 log = ["dep:log"]
 multi-threaded = ["dep:threadpool"]
 tls = ["dep:native-tls"]
-tls-vendored = ["native-tls/vendored"]
+tls-vendored = ["tls", "native-tls/vendored"]
 cgi = []
 
 [[example]]
