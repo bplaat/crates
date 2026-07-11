@@ -171,4 +171,8 @@ pub(crate) mod policies {
             UserRole::Normal => auth_user.id == user.id,
         }
     }
+
+    pub(crate) fn can_login_as(auth_user: &User) -> bool {
+        auth_user.role == UserRole::Admin
+    }
 }

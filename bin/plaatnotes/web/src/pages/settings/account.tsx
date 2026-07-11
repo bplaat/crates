@@ -163,7 +163,7 @@ export function SettingsAccount() {
                                     <Button type="submit" disabled={profileLoading}>
                                         <span class="icon-text">
                                             <ContentSaveIcon class="is-sm" />
-                                            {t('settings.save')}
+                                            {profileLoading ? t('settings.saving') : t('settings.save')}
                                         </span>
                                     </Button>
                                 </FormActions>
@@ -226,7 +226,9 @@ export function SettingsAccount() {
                                     <Button type="submit" disabled={passwordLoading}>
                                         <span class="icon-text">
                                             <LockIcon class="is-sm" />
-                                            {t('settings.change_password')}
+                                            {passwordLoading
+                                                ? t('settings.changing_password')
+                                                : t('settings.change_password')}
                                         </span>
                                     </Button>
                                 </FormActions>

@@ -5,9 +5,10 @@
  */
 
 import { type ComponentChildren } from 'preact';
-import { useEffect } from 'preact/hooks';
-import { DangerButton, IconButton, SecondaryButton } from './button.tsx';
-import { FormActions } from './form.tsx';
+import { useEffect, useState } from 'preact/hooks';
+import { Button, DangerButton, IconButton, SecondaryButton } from './button.tsx';
+import { FormActions, FormField } from './form.tsx';
+import { FormInput } from './input.tsx';
 import { CloseIcon, DeleteOutlineIcon } from './icons.tsx';
 import { t } from '../services/i18n.service.ts';
 
@@ -45,21 +46,55 @@ interface ConfirmDialogProps {
     title: string;
     message: string;
     confirmLabel: string;
+    // When set, the user must type this exact value before the confirm button is enabled.
+    confirmText?: string;
+    // Confirm button styling; defaults to a destructive (danger) action.
+    danger?: boolean;
+    // Icon shown on the confirm button; defaults to a delete icon.
+    icon?: ComponentChildren;
     onConfirm: () => void;
     onClose: () => void;
 }
 
-export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose }: ConfirmDialogProps) {
+export function ConfirmDialog({
+    title,
+    message,
+    confirmLabel,
+    confirmText,
+    danger = true,
+    icon,
+    onConfirm,
+    onClose,
+}: ConfirmDialogProps) {
+    const [typed, setTyped] = useState('');
+    const gated = confirmText !== undefined && confirmText !== '';
+    const disabled = gated && typed.trim() !== confirmText;
+    const ConfirmButton = danger ? DangerButton : Button;
+
     return (
         <Dialog title={title} onClose={onClose}>
-            <p class="modal-text">{message}</p>
-            <FormActions class="is-flush">
-                <SecondaryButton onClick={onClose}>{t('dialog.cancel')}</SecondaryButton>
-                <DangerButton onClick={onConfirm}>
-                    <DeleteOutlineIcon class="is-sm" />
-                    {confirmLabel}
-                </DangerButton>
-            </FormActions>
+            <div class="form">
+                <p class="modal-text">{message}</p>
+                {gated && (
+                    <FormField id="confirm-text" label={t('dialog.type_to_confirm', confirmText!)}>
+                        <FormInput
+                            id="confirm-text"
+                            type="text"
+                            value={typed}
+                            placeholder={confirmText}
+                            autoComplete="off"
+                            onInput={(e) => setTyped((e.target as HTMLInputElement).value)}
+                        />
+                    </FormField>
+                )}
+                <FormActions class="is-flush">
+                    <SecondaryButton onClick={onClose}>{t('dialog.cancel')}</SecondaryButton>
+                    <ConfirmButton onClick={onConfirm} disabled={disabled}>
+                        {icon ?? <DeleteOutlineIcon class="is-sm" />}
+                        {confirmLabel}
+                    </ConfirmButton>
+                </FormActions>
+            </div>
         </Dialog>
     );
 }

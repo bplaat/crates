@@ -16,6 +16,7 @@ use from_derive::FromStruct;
 use serde::Deserialize;
 use simple_useragent::UserAgentParser;
 use small_http::{Request, Response, Status};
+use uuid::Uuid;
 use validate::Validate;
 
 use crate::api;
@@ -92,6 +93,64 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
         return Ok(err);
     }
 
+    // Create a new session for the user
+    let token = create_session(req, ctx, user.id)?;
+
+    // Clear rate limit counter on successful login
+    if !ctx.is_e2e {
+        ctx.login_attempts
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&ip_address);
+    }
+
+    // Return session token
+    Ok(Response::with_json(api::LoginResponse {
+        user_id: user.id,
+        token,
+    }))
+}
+
+pub(crate) fn auth_validate(_req: &Request, ctx: &Context) -> Result<Response> {
+    let user = ctx
+        .auth_user
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("auth context missing user"))?;
+    let session = ctx
+        .auth_session
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("auth context missing session"))?;
+    Ok(Response::with_json(api::AuthValidateResponse {
+        user: user.into(),
+        session: session.into(),
+    }))
+}
+
+pub(crate) fn auth_logout(_req: &Request, ctx: &Context) -> Result<Response> {
+    let token = ctx
+        .auth_session
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("auth context missing session"))?
+        .token
+        .clone();
+
+    // Expire the session by setting expires_at to now
+    execute_args!(
+        ctx.database,
+        "UPDATE sessions SET expires_at = :now, updated_at = :now WHERE token = :token",
+        Args {
+            now: Utc::now(),
+            token: token
+        }
+    )?;
+
+    Ok(Response::with_status(Status::NoContent))
+}
+
+// MARK: Utils
+/// Create a new session for the given user and return its token. The session is enriched with
+/// IP geolocation and User-Agent information derived from the request.
+pub(crate) fn create_session(req: &Request, ctx: &Context, user_id: Uuid) -> Result<String> {
     // Generate secure random token
     let token = {
         let mut bytes = [0u8; SESSION_TOKEN_LENGTH];
@@ -100,6 +159,7 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     };
 
     // Get IP information
+    let ip_address = req.ip().to_string();
     let (ip_latitude, ip_longitude, ip_country, ip_city) = {
         if let Some(reader) = ctx.maxminddb_reader.get() {
             // Use local MaxMind DB
@@ -154,9 +214,9 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
 
     // Create session
     let session = Session {
-        user_id: user.id,
+        user_id,
         token: token.clone(),
-        ip_address: ip_address.clone(),
+        ip_address,
         ip_latitude,
         ip_longitude,
         ip_country,
@@ -169,58 +229,9 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     };
     ctx.database.insert_session(session)?;
 
-    // Clear rate limit counter on successful login
-    if !ctx.is_e2e {
-        ctx.login_attempts
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .remove(&ip_address);
-    }
-
-    // Return session token
-    Ok(Response::with_json(api::LoginResponse {
-        user_id: user.id,
-        token,
-    }))
+    Ok(token)
 }
 
-pub(crate) fn auth_validate(_req: &Request, ctx: &Context) -> Result<Response> {
-    let user = ctx
-        .auth_user
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("auth context missing user"))?;
-    let session = ctx
-        .auth_session
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("auth context missing session"))?;
-    Ok(Response::with_json(api::AuthValidateResponse {
-        user: user.into(),
-        session: session.into(),
-    }))
-}
-
-pub(crate) fn auth_logout(_req: &Request, ctx: &Context) -> Result<Response> {
-    let token = ctx
-        .auth_session
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("auth context missing session"))?
-        .token
-        .clone();
-
-    // Expire the session by setting expires_at to now
-    execute_args!(
-        ctx.database,
-        "UPDATE sessions SET expires_at = :now, updated_at = :now WHERE token = :token",
-        Args {
-            now: Utc::now(),
-            token: token
-        }
-    )?;
-
-    Ok(Response::with_status(Status::NoContent))
-}
-
-// MARK: Utils
 pub(crate) fn verify_password(plain: &str, hash: &str) -> Result<Option<Response>> {
     match pbkdf2::password_verify(plain, hash) {
         Ok(true) => Ok(None),

@@ -15,7 +15,7 @@ use validate::Validate;
 
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
-use crate::controllers::auth::verify_password;
+use crate::controllers::auth::{create_session, verify_password};
 use crate::controllers::{not_found, parse_body, parse_body_ctx, parse_index_query, require_auth};
 use crate::models::User;
 use crate::models::note::{FILTER_ARCHIVED, FILTER_NORMAL, FILTER_PINNED, FILTER_TRASHED};
@@ -321,6 +321,32 @@ pub(crate) fn users_delete(req: &Request, ctx: &Context) -> Result<Response> {
 
     // Success response
     Ok(Response::with_status(Status::NoContent))
+}
+
+pub(crate) fn users_login(req: &Request, ctx: &Context) -> Result<Response> {
+    let auth_user = require_auth!(ctx);
+
+    // Get user
+    let user_id = match parse_user_id(req) {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::with_status(Status::BadRequest)),
+    };
+    let user = match get_user(user_id, ctx)? {
+        Some(user) => user,
+        None => return not_found(req, ctx),
+    };
+
+    // Check authorization - only admins may log in as another user
+    if !policies::can_login_as(auth_user) {
+        return Ok(Response::with_status(Status::Forbidden));
+    }
+
+    // Create a new session for the target user and return its token
+    let token = create_session(req, ctx, user.id)?;
+    Ok(Response::with_json(api::LoginResponse {
+        user_id: user.id,
+        token,
+    }))
 }
 
 pub(crate) fn users_notes(req: &Request, ctx: &Context) -> Result<Response> {
@@ -940,6 +966,63 @@ mod test {
         assert!(stored_user.password.starts_with("$pbkdf2-sha256$"));
         assert!(pbkdf2::password_verify("MyP@ssw0rd1!", &stored_user.password).unwrap());
         assert!(!pbkdf2::password_verify("wrongpassword", &stored_user.password).unwrap());
+    }
+
+    #[test]
+    fn test_users_login_as_admin() {
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+
+        let res = router.handle(
+            &Request::post(format!("http://localhost/api/users/{}/login", user.id))
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let response = serde_json::from_slice::<api::LoginResponse>(&res.body).unwrap();
+        assert_eq!(response.user_id, user.id);
+        assert!(!response.token.is_empty());
+
+        // The returned token must authenticate as the target user
+        let res = router.handle(
+            &Request::get("http://localhost/api/auth/validate")
+                .header("Authorization", format!("Bearer {}", response.token)),
+        );
+        assert_eq!(res.status, Status::Ok);
+        let validated = serde_json::from_slice::<api::AuthValidateResponse>(&res.body).unwrap();
+        assert_eq!(validated.user.id, user.id);
+        assert_eq!(validated.user.email, "john@example.com");
+    }
+
+    #[test]
+    fn test_users_login_as_non_admin_forbidden() {
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
+        let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+
+        let res = router.handle(
+            &Request::post(format!("http://localhost/api/users/{}/login", user.id))
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::Forbidden);
+    }
+
+    #[test]
+    fn test_users_login_as_not_found() {
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+
+        let res = router.handle(
+            &Request::post(format!(
+                "http://localhost/api/users/{}/login",
+                Uuid::now_v7()
+            ))
+            .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::NotFound);
     }
 
     #[test]

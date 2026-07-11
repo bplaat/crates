@@ -12,7 +12,7 @@ pub(crate) use self::imports::imports_google_keep;
 pub(crate) use self::notes::{notes_create, notes_delete, notes_index, notes_show, notes_update};
 pub(crate) use self::sessions::{sessions_delete, sessions_index, sessions_show, users_sessions};
 pub(crate) use self::users::{
-    users_change_password, users_create, users_delete, users_index, users_notes,
+    users_change_password, users_create, users_delete, users_index, users_login, users_notes,
     users_notes_archived, users_notes_archived_reorder, users_notes_create, users_notes_pinned,
     users_notes_pinned_reorder, users_notes_reorder, users_notes_trashed,
     users_notes_trashed_clear, users_show, users_update,

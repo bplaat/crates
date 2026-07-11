@@ -42,9 +42,9 @@ COPY --from=builder /plaatnotes /app/plaatnotes
 
 WORKDIR /app
 
-VOLUME ["/data"]
-
 EXPOSE 8080
+
+VOLUME ["/data"]
 
 ENV DATA_PATH=/data
 

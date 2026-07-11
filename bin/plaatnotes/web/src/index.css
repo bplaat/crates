@@ -696,7 +696,6 @@ html.dark .modal {
 .modal-text {
     font-size: 0.875rem;
     color: var(--text-muted);
-    margin-bottom: 1.25rem;
 }
 
 /* Empty state */

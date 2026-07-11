@@ -57,6 +57,7 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
         .put("/api/users/:user_id", users_update)
         .delete("/api/users/:user_id", users_delete)
         .post("/api/users/:user_id/change-password", users_change_password)
+        .post("/api/users/:user_id/login", users_login)
         .get("/api/users/:user_id/notes", users_notes)
         .post("/api/users/:user_id/notes", users_notes_create)
         .put("/api/users/:user_id/notes/reorder", users_notes_reorder)

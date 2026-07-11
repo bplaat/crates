@@ -8,14 +8,14 @@ import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'wouter-preact';
 import { type Report, type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
-import { Button, SmallIconButton } from '../../components/button.tsx';
-import { $authUser } from '../../services/auth.service.ts';
+import { Button, SecondaryButton, SmallIconButton } from '../../components/button.tsx';
+import { $authUser, loginAsUser } from '../../services/auth.service.ts';
 import { Card } from '../../components/card.tsx';
 import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
 import { FormActions, FormField, FormMessage } from '../../components/form.tsx';
 import { FormInput, FormSelect } from '../../components/input.tsx';
 import { formatDate, t } from '../../services/i18n.service.ts';
-import { ContentSaveIcon, DeleteOutlineIcon, PencilIcon, PlusIcon } from '../../components/icons.tsx';
+import { ContentSaveIcon, DeleteOutlineIcon, LoginIcon, PencilIcon, PlusIcon } from '../../components/icons.tsx';
 import { lastNameInitial } from '../../utils.ts';
 import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/users.service.ts';
@@ -46,6 +46,7 @@ export function AdminUsers() {
     const [form, setForm] = useState<UserFormState>(emptyForm());
     const [submitting, setSubmitting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
+    const [confirmLoginAs, setConfirmLoginAs] = useState<User | null>(null);
     const [report, setReport] = useState<Report | null>(null);
 
     useEffect(() => {
@@ -120,6 +121,13 @@ export function AdminUsers() {
         setConfirmDelete(null);
     }
 
+    async function doLoginAs() {
+        if (!confirmLoginAs) return;
+        const ok = await loginAsUser(confirmLoginAs.id);
+        setConfirmLoginAs(null);
+        if (ok) navigate('/');
+    }
+
     const isCreate = dialog?.kind === 'create';
 
     return (
@@ -174,6 +182,14 @@ export function AdminUsers() {
                                         <td class="col-hide-lg has-text-subtle">{formatDate(user.createdAt)}</td>
                                         <td>
                                             <div class="table-actions">
+                                                {user.id !== authUser.id && (
+                                                    <SmallIconButton
+                                                        onClick={() => setConfirmLoginAs(user)}
+                                                        title={t('admin.users.login_as')}
+                                                    >
+                                                        <LoginIcon class="is-sm" />
+                                                    </SmallIconButton>
+                                                )}
                                                 <SmallIconButton
                                                     onClick={() => openEdit(user)}
                                                     title={t('admin.users.edit_user')}
@@ -273,17 +289,24 @@ export function AdminUsers() {
                             </FormSelect>
                         </FormField>
 
-                        <div class="form-footer">
-                            <FormMessage type="error" message={report && t('form.errors_occurred')} />
-                            <FormActions class="is-flush">
-                                <Button type="submit" disabled={submitting}>
-                                    <span class="icon-text">
-                                        {isCreate ? <PlusIcon class="is-sm" /> : <ContentSaveIcon class="is-sm" />}
-                                        {isCreate ? t('admin.users.create') : t('admin.users.save')}
-                                    </span>
-                                </Button>
-                            </FormActions>
-                        </div>
+                        <FormMessage type="error" message={report && t('form.errors_occurred')} />
+                        <FormActions class="is-flush">
+                            <SecondaryButton type="button" onClick={closeDialog}>
+                                {t('dialog.cancel')}
+                            </SecondaryButton>
+                            <Button type="submit" disabled={submitting}>
+                                <span class="icon-text">
+                                    {isCreate ? <PlusIcon class="is-sm" /> : <ContentSaveIcon class="is-sm" />}
+                                    {submitting
+                                        ? isCreate
+                                            ? t('admin.users.creating')
+                                            : t('admin.users.saving')
+                                        : isCreate
+                                          ? t('admin.users.create')
+                                          : t('admin.users.save')}
+                                </span>
+                            </Button>
+                        </FormActions>
                     </form>
                 </Dialog>
             )}
@@ -293,8 +316,24 @@ export function AdminUsers() {
                     title={t('admin.users.delete_user')}
                     message={t('admin.users.confirm_delete')}
                     confirmLabel={t('admin.users.delete')}
+                    confirmText={confirmDelete.email}
                     onConfirm={doDelete}
                     onClose={() => setConfirmDelete(null)}
+                />
+            )}
+
+            {confirmLoginAs && (
+                <ConfirmDialog
+                    title={t('admin.users.login_as')}
+                    message={t(
+                        'admin.users.confirm_login_as',
+                        `${confirmLoginAs.firstName} ${confirmLoginAs.lastName}`,
+                    )}
+                    confirmLabel={t('admin.users.login_as')}
+                    danger={false}
+                    icon={<LoginIcon class="is-sm" />}
+                    onConfirm={doLoginAs}
+                    onClose={() => setConfirmLoginAs(null)}
                 />
             )}
         </AdminLayout>

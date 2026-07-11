@@ -339,6 +339,33 @@ paths:
         '500':
           description: Internal server error while verifying the stored password hash
 
+  /api/users/{userId}/login:
+    post:
+      tags: [Users]
+      summary: Log in as another user (admin only)
+      description: >
+        Creates a new session for the specified user and returns its token, without requiring
+        that user's password. Intended for admins to impersonate a user for support purposes.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Session created for the target user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Invalid path UUID
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+
   /api/users/{userId}/notes:
     get:
       tags: [Users]

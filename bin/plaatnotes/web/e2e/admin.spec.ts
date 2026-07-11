@@ -125,10 +125,56 @@ test.describe('Admin - Users', () => {
         // Confirm dialog
         const dialog = page.getByRole('dialog');
         await expect(dialog.getByText('Delete this user? This cannot be undone.')).toBeVisible();
-        await dialog.getByRole('button', { name: 'Delete' }).click();
+
+        // Delete button is gated until the user's email is typed to confirm
+        const deleteButton = dialog.getByRole('button', { name: 'Delete' });
+        await expect(deleteButton).toBeDisabled();
+        await dialog.locator('#confirm-text').fill(email);
+        await expect(deleteButton).toBeEnabled();
+        await deleteButton.click();
 
         // User should be gone from the table
         await expect(row).not.toBeVisible();
+    });
+
+    test('admin can log in as another user', async ({ page }) => {
+        // Create a user to impersonate (keep admin headers for cleanup afterwards)
+        const { headers } = await authState(page);
+        const email = `hijackme-${Date.now()}@example.com`;
+        const createRes = await page.request.post(`${API_URL}/users`, {
+            headers,
+            data: JSON.stringify({
+                firstName: 'Hijack',
+                lastName: 'Me',
+                email,
+                password: 'Password123!',
+                role: 'normal',
+            }),
+        });
+        const created = await createRes.json();
+
+        await page.goto('/admin/users');
+        const row = page.getByRole('row').filter({ hasText: email });
+        await expect(row).toBeVisible();
+
+        await row.getByTitle('Log in as user').click();
+
+        // Confirm dialog and proceed
+        const dialog = page.getByRole('dialog');
+        await expect(dialog.getByText('Hijack Me')).toBeVisible();
+        await dialog.getByRole('button', { name: 'Log in as user' }).click();
+
+        // Should be redirected to the app, now authenticated as the target user
+        await expect(page).toHaveURL('/');
+        const token = await page.evaluate(() => localStorage.getItem('token') ?? '');
+        const validateRes = await page.request.get(`${API_URL}/auth/validate`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const { user } = await validateRes.json();
+        expect(user.email).toBe(email);
+
+        // Cleanup with the original admin credentials
+        await page.request.delete(`${API_URL}/users/${created.id}`, { headers });
     });
 
     test('admin link visible in navbar dropdown for admin user', async ({ page }) => {

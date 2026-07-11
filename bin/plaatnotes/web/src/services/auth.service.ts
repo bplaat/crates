@@ -64,6 +64,16 @@ export async function login(email: string, password: string): Promise<LoginResul
     return 'success';
 }
 
+// Admin only: start a session as another user (impersonation). Replaces the current session token.
+export async function loginAsUser(userId: string): Promise<boolean> {
+    const res = await authFetch(`/api/users/${userId}/login`, { method: 'POST' });
+    if (!res.ok) return false;
+    const { token }: LoginResponse = await res.json();
+    localStorage.setItem(TOKEN_KEY, token);
+    await applyValidate(token);
+    return true;
+}
+
 export async function logout() {
     await authFetch(`/api/auth/logout`, { method: 'POST' });
     localStorage.removeItem(TOKEN_KEY);
