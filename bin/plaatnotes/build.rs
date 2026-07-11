@@ -7,6 +7,7 @@
 //! A simple note-taking app
 
 use std::env;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -32,14 +33,29 @@ fn main() {
     // Build web frontend
     const NPM: &str = if cfg!(windows) { "npm.cmd" } else { "npm" };
 
-    // Install npm packages if needed
-    if !Path::new("web/node_modules").exists() {
-        Command::new(NPM)
-            .arg("ci")
-            .arg("--prefer-offline")
-            .current_dir("web")
-            .output()
-            .expect("Failed to run npm install");
+    // Install npm packages at the npm workspace root if needed
+    println!("cargo:rerun-if-changed=../../package.json");
+    println!("cargo:rerun-if-changed=../../package-lock.json");
+    {
+        let npm_lock = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(env::temp_dir().join("bplaat-crates-npm-install.lock"))
+            .expect("Failed to open npm install lock file");
+        npm_lock
+            .lock()
+            .expect("Failed to lock npm install lock file");
+        if !Path::new("../../node_modules/.package-lock.json").exists() {
+            let status = Command::new(NPM)
+                .arg("ci")
+                .arg("--prefer-offline")
+                .current_dir("../..")
+                .status()
+                .expect("Failed to run npm install");
+            assert!(status.success(), "npm install failed with {status}");
+        }
     }
 
     // Invalidate build when web assets change
@@ -60,7 +76,7 @@ fn main() {
     print_rerun(Path::new("web"));
 
     // Build frontend
-    Command::new(NPM)
+    let status = Command::new(NPM)
         .arg("run")
         .arg(if cfg!(debug_assertions) {
             "build-debug"
@@ -68,8 +84,9 @@ fn main() {
             "build-release"
         })
         .current_dir("web")
-        .output()
+        .status()
         .expect("Failed to run npm run build");
+    assert!(status.success(), "npm run build failed with {status}");
 
     // Copy built assets to OUT_DIR/web);
     copy_dir("web/dist", out_dir.join("web")).expect("Failed to copy web/dist files to $OUT_DIR");
