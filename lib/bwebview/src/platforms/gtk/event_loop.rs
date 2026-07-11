@@ -7,7 +7,6 @@
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::fs::File;
 use std::mem::MaybeUninit;
-use std::os::unix::io::AsRawFd;
 use std::process::exit;
 use std::ptr::{null, null_mut};
 use std::{env, fs, iter};
@@ -36,7 +35,7 @@ impl PlatformEventLoop {
                 fs::create_dir_all(parent).expect("Failed to create lock file directory");
             }
             let file = File::create(&lock_file).expect("Failed to open lock file");
-            if unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) } != 0 {
+            if file.try_lock().is_err() {
                 exit(0);
             }
             std::mem::forget(file);
