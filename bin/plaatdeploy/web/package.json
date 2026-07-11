@@ -1,0 +1,23 @@
+{
+    "name": "plaatdeploy",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build-debug": "vite build --minify=false",
+        "build-release": "vite build"
+    },
+    "dependencies": {
+        "@preact/signals": "^2.3.1",
+        "minireset.css": "^0.0.7",
+        "preact": "^10.26.9",
+        "wouter-preact": "^3.9.0"
+    },
+    "devDependencies": {
+        "@preact/preset-vite": "^2.10.1",
+        "@types/node": "^26.1.0",
+        "swagger-ui-dist": "^5.32.8",
+        "vite": "^7.0.0"
+    }
+}

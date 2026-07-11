@@ -77,6 +77,7 @@ is_platform_excluded() {
 
 clean() {
     cargo clean
+    rm -rf projects
     find . \( -name "*.db*" -o -type d -name "target" -o -type d -name "node_modules" -o -type d -name "playwright" -o -type d -name "playwright-report" -o -type d -name "test-results" \) -exec rm -rf {} +
 }
 
@@ -84,7 +85,7 @@ check_copyright() {
     echo "Checking copyright headers..."
     exit=0
     # shellcheck disable=SC2044
-    for file in $(find . -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.cc" -o -name "*.hh" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*.min.js" ! -path "*bob/examples/*" ! -path "*ccontinue/tests/*.cc" ! -path "*playwright-report/*"); do
+    for file in $(find . -type f \( -name "*.rs" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.cc" -o -name "*.hh" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "./projects/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*.min.js" ! -path "*bob/examples/*" ! -path "*ccontinue/tests/*.cc" ! -path "*playwright-report/*"); do
         if ! grep -E -q "Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+" "$file"; then
             echo "Bad copyright header in: $file"
             exit=1
@@ -97,7 +98,7 @@ check_copyright() {
 
 check_formatting() {
     echo "Checking prettier formatting..."
-    find . -type f \( -name "*.md" -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*/.vscode/*" ! -path "*.min.js" ! -path "*playwright/*" ! -path "*playwright-report/*" ! -path "*test-results/*" -print0 \
+    find . -type f \( -name "*.md" -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "./projects/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*/.vscode/*" ! -path "*.min.js" ! -path "*playwright/*" ! -path "*playwright-report/*" ! -path "*test-results/*" -print0 \
         | xargs -0 npx --prefer-offline --yes prettier@3.8.4 --check
 
     echo "Checking clang-format formatting..."
@@ -180,7 +181,7 @@ check_shell() {
 
 check_docker() {
     echo "Checking Dockerfiles..."
-    find . -type f \( -name "Dockerfile" -o -name "*.Dockerfile" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" -print0 \
+    find . -type f \( -name "Dockerfile" -o -name "*.Dockerfile" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "./projects/*" ! -path "*/src-gen/*" ! -path "*/target/*" -print0 \
         | while IFS= read -r -d '' file; do
             hadolint "$file"
         done
