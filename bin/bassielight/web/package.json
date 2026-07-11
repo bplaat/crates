@@ -8,6 +8,7 @@
         "build-release": "vite build --mode release"
     },
     "dependencies": {
+        "@mdi/js": "^7.4.47",
         "@preact/signals": "^2.3.1",
         "minireset.css": "^0.0.7",
         "preact": "^10.26.9",

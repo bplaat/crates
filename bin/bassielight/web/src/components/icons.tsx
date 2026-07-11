@@ -5,6 +5,19 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+    mdiAccount,
+    mdiClose,
+    mdiCog,
+    mdiLightbulb,
+    mdiLightbulbOff,
+    mdiMotionPlayOutline,
+    mdiMusic,
+    mdiQrcode,
+    mdiRectangleOutline,
+    mdiSquareEditOutline,
+} from '@mdi/js';
+
 function Icon({ path }: { path: string }) {
     return (
         <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -13,34 +26,16 @@ function Icon({ path }: { path: string }) {
     );
 }
 
-export const AccountIcon = () => (
-    <Icon path="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
-);
-export const CloseIcon = () => (
-    <Icon path="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
-);
-export const CogIcon = () => (
-    <Icon path="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" />
-);
-export const LightbulbIcon = () => (
-    <Icon path="M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21V20H9V21Z" />
-);
-export const LightbulbOffIcon = () => (
-    <Icon path="M12,2C9.76,2 7.78,3.05 6.5,4.68L16.31,14.5C17.94,13.21 19,11.24 19,9A7,7 0 0,0 12,2M3.28,4L2,5.27L5.04,8.3C5,8.53 5,8.76 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H14.73L18.73,22L20,20.72L3.28,4M9,20V21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21V20H9Z" />
-);
-export const MusicIcon = () => (
-    <Icon path="M21,3V15.5A3.5,3.5 0 0,1 17.5,19A3.5,3.5 0 0,1 14,15.5A3.5,3.5 0 0,1 17.5,12C18.04,12 18.55,12.12 19,12.34V6.47L9,8.6V17.5A3.5,3.5 0 0,1 5.5,21A3.5,3.5 0 0,1 2,17.5A3.5,3.5 0 0,1 5.5,14C6.04,14 6.55,14.12 7,14.34V6L21,3Z" />
-);
-export const MotionPlayOutlineIcon = () => (
-    <Icon path="M10 16.5L16 12L10 7.5M22 12C22 6.46 17.54 2 12 2C10.83 2 9.7 2.19 8.62 2.56L9.32 4.5C10.17 4.16 11.06 3.97 12 3.97C16.41 3.97 20.03 7.59 20.03 12C20.03 16.41 16.41 20.03 12 20.03C7.59 20.03 3.97 16.41 3.97 12C3.97 11.06 4.16 10.12 4.5 9.28L2.56 8.62C2.19 9.7 2 10.83 2 12C2 17.54 6.46 22 12 22C17.54 22 22 17.54 22 12M5.47 3.97C6.32 3.97 7 4.68 7 5.47C7 6.32 6.32 7 5.47 7C4.68 7 3.97 6.32 3.97 5.47C3.97 4.68 4.68 3.97 5.47 3.97Z" />
-);
-export const QrcodeIcon = () => (
-    <Icon path="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z" />
-);
-export const RectangleOutlineIcon = () => <Icon path="M4,6V19H20V6H4M18,17H6V8H18V17Z" />;
-export const SquareEditOutlineIcon = () => (
-    <Icon path="M5,3C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19H5V5H12V3H5M17.78,4C17.61,4 17.43,4.07 17.3,4.2L16.08,5.41L18.58,7.91L19.8,6.7C20.06,6.44 20.06,6 19.8,5.75L18.25,4.2C18.12,4.07 17.95,4 17.78,4M15.37,6.12L8,13.5V16H10.5L17.87,8.62L15.37,6.12Z" />
-);
+export const AccountIcon = () => <Icon path={mdiAccount} />;
+export const CloseIcon = () => <Icon path={mdiClose} />;
+export const CogIcon = () => <Icon path={mdiCog} />;
+export const LightbulbIcon = () => <Icon path={mdiLightbulb} />;
+export const LightbulbOffIcon = () => <Icon path={mdiLightbulbOff} />;
+export const MusicIcon = () => <Icon path={mdiMusic} />;
+export const MotionPlayOutlineIcon = () => <Icon path={mdiMotionPlayOutline} />;
+export const QrcodeIcon = () => <Icon path={mdiQrcode} />;
+export const RectangleOutlineIcon = () => <Icon path={mdiRectangleOutline} />;
+export const SquareEditOutlineIcon = () => <Icon path={mdiSquareEditOutline} />;
 export const TweenDirect = () => <Icon path="M4,19V20H22V22H2V2H4V17H12V4H22V6H14V19L4,19Z" />;
 export const TweenLinear = () => <Icon path="M4,19V20H22V22H2V2H4V17L21.5,4V6L4,19Z" />;
 export const TweenEase = () => (

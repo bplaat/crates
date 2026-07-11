@@ -1,0 +1,70 @@
+/*
+ * Copyright (c) 2025 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.menubar {
+    background-color: var(--color-surface);
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+}
+
+.menubar-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+}
+
+.menubar-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0 0.5rem;
+    height: 3rem;
+    border: 2px solid transparent;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    color: var(--color-text);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    outline: none;
+    text-decoration: none;
+}
+.menubar-item:not(:last-child) {
+    margin-bottom: 0.5rem;
+}
+.menubar-item:hover,
+.menubar-item:focus {
+    text-decoration: none;
+}
+.menubar-item:hover,
+.menubar-item:focus-visible {
+    background-color: var(--color-surface-btn);
+    border-color: var(--color-accent);
+}
+.menubar-item.is-active {
+    border-color: var(--color-accent);
+}
+
+.menubar-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.menubar-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+}
+.menubar-dot.is-success {
+    background-color: var(--color-success);
+}
+.menubar-dot.is-danger {
+    background-color: var(--color-danger);
+}

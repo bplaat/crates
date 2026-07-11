@@ -5,6 +5,7 @@
  */
 
 import { useContext, useEffect, useState } from 'preact/hooks';
+import './menubar.css';
 import { signal } from '@preact/signals';
 import { Link, useRoute } from 'wouter-preact';
 import { QrModal } from './qrmodal.tsx';

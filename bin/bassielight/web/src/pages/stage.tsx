@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useContext, useRef } from 'preact/hooks';
+import './stage.css';
 import { AccountIcon, LightbulbOffIcon, MusicIcon, TweenDirect, TweenEase, TweenLinear } from '../components/icons.tsx';
 import { capitalize } from '../utils.ts';
 import { IpcContext } from '../app.tsx';

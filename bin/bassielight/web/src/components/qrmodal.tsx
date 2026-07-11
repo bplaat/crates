@@ -5,6 +5,7 @@
  */
 
 import encodeQR from 'qr';
+import './qrmodal.css';
 import { CloseIcon } from './icons.tsx';
 
 export function QrModal({ contents, onClose }: { contents: string; onClose: () => void }) {
