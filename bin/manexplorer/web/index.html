@@ -34,7 +34,7 @@
                             type="text"
                             v-model="searchQuery"
                             @input="handleSearch"
-                            placeholder="Search man page..."
+                            placeholder="Search man page…"
                             autocorrect="off"
                         />
                         <button class="icon-button" :disabled="!searchQuery.trim()" @click="clearSearch">
@@ -113,8 +113,8 @@
                 </div>
 
                 <div class="content" v-show="contentState === 'loaded'" v-text="contentText" ref="content"></div>
-                <div class="placeholder" v-show="contentState === 'loading'">Loading...</div>
-                <div class="placeholder" v-show="contentState === 'empty'">Select page and item...</div>
+                <div class="placeholder" v-show="contentState === 'loading'">Loading…</div>
+                <div class="placeholder" v-show="contentState === 'empty'">Select page and item…</div>
             </div>
         </div>
 

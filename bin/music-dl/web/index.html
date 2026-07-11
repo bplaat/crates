@@ -21,7 +21,7 @@
                             class="search-input"
                             type="text"
                             v-model="searchQuery"
-                            placeholder="Search artists & albums..."
+                            placeholder="Search artists & albums…"
                             autocomplete="off"
                         />
                         <button class="search-btn" type="submit">Search</button>
@@ -34,7 +34,7 @@
                         <span class="breadcrumb-label">{{ drilledArtist.name }}</span>
                     </div>
 
-                    <div v-if="isSearching" class="placeholder">Searching...</div>
+                    <div v-if="isSearching" class="placeholder">Searching…</div>
 
                     <div v-if="!isSearching && !hasSearched && !drilledArtist" class="placeholder">
                         Search for artists and albums above
@@ -118,7 +118,7 @@
                                     </div>
                                     <span class="progress-pct">{{ track.percent.toFixed(0) }}%</span>
                                 </div>
-                                <span v-if="track && track.status === 'writingMetadata'">Writing...</span>
+                                <span v-if="track && track.status === 'writingMetadata'">Writing…</span>
                                 <span v-if="track && track.status === 'done'">Done</span>
                                 <span v-if="track && track.status === 'failed'">Failed</span>
                             </div>

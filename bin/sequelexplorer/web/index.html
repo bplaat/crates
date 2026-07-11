@@ -25,7 +25,7 @@
                     </div>
 
                     <div class="sidebar-content">
-                        <div class="placeholder" v-show="!dbOpened">Open a database...</div>
+                        <div class="placeholder" v-show="!dbOpened">Open a database…</div>
                         <div class="placeholder" v-show="dbOpened && tables.length === 0">No tables found</div>
                         <div class="sidebar-section-title" v-show="tables.length > 0">Tables</div>
                         <ul class="tables-list" v-show="tables.length > 0">
@@ -43,7 +43,7 @@
                 </div>
 
                 <div class="content-area">
-                    <div class="placeholder" v-show="currentTable === null">Select a table...</div>
+                    <div class="placeholder" v-show="currentTable === null">Select a table…</div>
 
                     <div class="table-view" v-show="currentTable !== null">
                         <div class="tabs">
@@ -95,7 +95,7 @@
                                     </tbody>
                                 </table>
                                 <div ref="loadSentinel" class="load-sentinel"></div>
-                                <div class="placeholder" v-show="showDataLoading">Loading...</div>
+                                <div class="placeholder" v-show="showDataLoading">Loading…</div>
                                 <div class="placeholder" v-show="showDataEmpty">{{ dataEmptyText }}</div>
                             </div>
                         </div>
@@ -108,7 +108,7 @@
                             <input
                                 class="query-input"
                                 type="text"
-                                placeholder="Custom SELECT query..."
+                                placeholder="Custom SELECT query…"
                                 autocorrect="off"
                                 spellcheck="false"
                                 v-model="queryText"
