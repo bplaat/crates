@@ -8,16 +8,19 @@
 @import 'minireset.css';
 
 :root {
-    --bg: #18181b;
-    --surface: #27272a;
-    --surface-btn: #3f3f46;
-    --surface-hover: #52525b;
-    --surface-active: #71717a;
-    --text: #e4e4e7;
-    --border: #52525b;
-    --accent: #3b82f6;
-    --success: #22c55e;
-    --danger: #ef4444;
+    --font-sans-serif:
+        system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
+        'Helvetica Neue', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --color-background: #18181b;
+    --color-surface: #27272a;
+    --color-surface-btn: #3f3f46;
+    --color-surface-hover: #52525b;
+    --color-surface-active: #71717a;
+    --color-text: #e4e4e7;
+    --color-border: #52525b;
+    --color-accent: #3b82f6;
+    --color-success: #22c55e;
+    --color-danger: #ef4444;
 }
 
 /* Form controls inherit typography (minireset leaves these to the framework) */
@@ -59,24 +62,9 @@ html {
 }
 
 body {
-    background-color: var(--bg);
-    color: var(--text);
-    font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        'Segoe UI',
-        Roboto,
-        Oxygen,
-        Ubuntu,
-        Cantarell,
-        'Open Sans',
-        'Helvetica Neue',
-        sans-serif,
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-        'Segoe UI Symbol',
-        'Noto Color Emoji';
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-sans-serif);
 }
 
 #app {
@@ -125,7 +113,7 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
 
 .sidebar {
     width: 20rem;
-    background-color: var(--surface);
+    background-color: var(--color-surface);
     padding: 1rem;
     overflow-y: auto;
 }
@@ -138,7 +126,7 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
 .title {
     font-weight: 700;
     font-size: 1.35rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 0.5rem;
     margin: 1rem 0;
 }
@@ -156,23 +144,23 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
     border: 2px solid transparent;
     border-radius: 0.5rem;
     font-weight: 500;
-    background-color: var(--surface-btn);
-    color: var(--text);
+    background-color: var(--color-surface-btn);
+    color: var(--color-text);
     cursor: pointer;
     transition: all 0.15s;
     outline: none;
 }
 .button:hover,
 .button:focus-visible {
-    background-color: var(--surface-hover);
-    border-color: var(--accent);
+    background-color: var(--color-surface-hover);
+    border-color: var(--color-accent);
 }
 .button:active {
-    background-color: var(--surface-active);
+    background-color: var(--color-surface-active);
     transform: scale(0.95);
 }
 .button.is-selected {
-    border-color: var(--accent);
+    border-color: var(--color-accent);
 }
 
 .button.is-pill,
@@ -228,12 +216,12 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
     width: 100%;
     height: 0.5rem;
     border-radius: 0.125rem;
-    background-color: var(--surface-btn);
+    background-color: var(--color-surface-btn);
     outline: none;
     cursor: pointer;
 }
 .slider:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
 }
 .slider::-webkit-slider-thumb {
@@ -242,21 +230,21 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
     width: 1rem;
     height: 1rem;
     border-radius: 9999px;
-    background-color: var(--accent);
+    background-color: var(--color-accent);
     cursor: pointer;
 }
 .slider::-moz-range-thumb {
     width: 1rem;
     height: 1rem;
     border-radius: 9999px;
-    background-color: var(--accent);
+    background-color: var(--color-accent);
     cursor: pointer;
     border: 0;
 }
 
 /* Menubar */
 .menubar {
-    background-color: var(--surface);
+    background-color: var(--color-surface);
     display: flex;
     flex-direction: column;
     padding: 1rem;
@@ -278,7 +266,7 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
     border: 2px solid transparent;
     border-radius: 0.5rem;
     font-weight: 500;
-    color: var(--text);
+    color: var(--color-text);
     background: transparent;
     cursor: pointer;
     transition: all 0.15s;
@@ -294,11 +282,11 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
 }
 .menubar-item:hover,
 .menubar-item:focus-visible {
-    background-color: var(--surface-btn);
-    border-color: var(--accent);
+    background-color: var(--color-surface-btn);
+    border-color: var(--color-accent);
 }
 .menubar-item.is-active {
-    border-color: var(--accent);
+    border-color: var(--color-accent);
 }
 
 .menubar-status {
@@ -314,10 +302,10 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
     border-radius: 9999px;
 }
 .menubar-dot.is-success {
-    background-color: var(--success);
+    background-color: var(--color-success);
 }
 .menubar-dot.is-danger {
-    background-color: var(--danger);
+    background-color: var(--color-danger);
 }
 
 /* Modal */

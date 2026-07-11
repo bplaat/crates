@@ -16,15 +16,15 @@
             <div class="panel" id="search-panel">
                 <div class="panel-header">
                     <h2 class="panel-title">Search</h2>
-                    <form class="search-form" @submit.prevent="search()">
+                    <form class="field has-addons search-form" @submit.prevent="search()">
                         <input
-                            class="search-input"
+                            class="input"
                             type="text"
                             v-model="searchQuery"
                             placeholder="Search artists & albums…"
                             autocomplete="off"
                         />
-                        <button class="search-btn" type="submit">Search</button>
+                        <button class="button is-primary" type="submit">Search</button>
                     </form>
                 </div>
                 <div class="panel-content">
@@ -59,15 +59,14 @@
                                 :src="result.picture_small"
                                 loading="lazy"
                             />
-                            <div
-                                v-if="!result.picture_small"
-                                class="result-artist-thumb result-artist-thumb-placeholder"
-                            ></div>
+                            <div v-if="!result.picture_small" class="result-artist-thumb"></div>
                             <div class="result-artist-info" @click="selectArtist(result)">
                                 <div class="result-artist-name">{{ result.name }}</div>
                             </div>
-                            <button class="queue-all-btn" @click="queueArtistAlbums(result)">Queue all</button>
-                            <button class="browse-btn" @click="selectArtist(result)">Browse</button>
+                            <button class="button is-success is-small" @click="queueArtistAlbums(result)">
+                                Queue all
+                            </button>
+                            <button class="button is-small" @click="selectArtist(result)">Browse</button>
                         </div>
 
                         <!-- Album card -->
@@ -81,7 +80,11 @@
                                 </div>
                                 <div v-if="result.record_type" class="album-card-type">{{ result.record_type }}</div>
                             </div>
-                            <button class="queue-btn" @click="queueAlbum(result)" :disabled="isQueued(result.id)">
+                            <button
+                                class="button is-primary is-small"
+                                @click="queueAlbum(result)"
+                                :disabled="isQueued(result.id)"
+                            >
                                 {{ isQueued(result.id) ? 'Queued' : 'Queue' }}
                             </button>
                         </div>

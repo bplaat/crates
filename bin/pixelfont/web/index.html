@@ -20,14 +20,14 @@
             <div class="app">
                 <!-- Toolbar -->
                 <div class="toolbar">
-                    <button class="btn" @click="newFile">New</button>
-                    <button class="btn" @click="openFile">Open</button>
-                    <button class="btn" @click="saveFile">Save</button>
-                    <button class="btn" @click="saveFileAs">Save As</button>
+                    <button class="button" @click="newFile">New</button>
+                    <button class="button" @click="openFile">Open</button>
+                    <button class="button" @click="saveFile">Save</button>
+                    <button class="button" @click="saveFileAs">Save As</button>
                     <span class="toolbar-filename">{{ fontFileName || 'Untitled' }}</span>
                     <div class="toolbar-spacer"></div>
-                    <button class="btn" @click="exportAsm">Export ASM</button>
-                    <button class="btn" @click="exportC">Export C</button>
+                    <button class="button" @click="exportAsm">Export ASM</button>
+                    <button class="button" @click="exportC">Export C</button>
                 </div>
 
                 <!-- Character grid -->
@@ -69,20 +69,20 @@
                 <div class="editor-area">
                     <!-- Left: operation buttons -->
                     <div class="editor-ops">
-                        <button class="op-btn" @click="opClear">Clear</button>
-                        <button class="op-btn" @click="opInvert">Invert</button>
-                        <button class="op-btn" @click="opRotate">Rotate</button>
-                        <div class="op-btn-row">
-                            <button class="op-btn" @click="opMirrorH">Mirror H</button>
-                            <button class="op-btn" @click="opMirrorV">Mirror V</button>
+                        <button class="button" @click="opClear">Clear</button>
+                        <button class="button" @click="opInvert">Invert</button>
+                        <button class="button" @click="opRotate">Rotate</button>
+                        <div class="buttons has-addons">
+                            <button class="button" @click="opMirrorH">Mirror H</button>
+                            <button class="button" @click="opMirrorV">Mirror V</button>
                         </div>
                         <div class="op-divider"></div>
-                        <button class="op-btn op-btn-sm" @click="opClearAll">Clear All</button>
-                        <button class="op-btn op-btn-sm" @click="opInvertAll">Invert All</button>
-                        <button class="op-btn op-btn-sm" @click="opRotateAll">Rotate All</button>
-                        <div class="op-btn-row">
-                            <button class="op-btn op-btn-sm" @click="opMirrorHAll">Mirror H All</button>
-                            <button class="op-btn op-btn-sm" @click="opMirrorVAll">Mirror V All</button>
+                        <button class="button is-small" @click="opClearAll">Clear All</button>
+                        <button class="button is-small" @click="opInvertAll">Invert All</button>
+                        <button class="button is-small" @click="opRotateAll">Rotate All</button>
+                        <div class="buttons has-addons">
+                            <button class="button is-small" @click="opMirrorHAll">Mirror H All</button>
+                            <button class="button is-small" @click="opMirrorVAll">Mirror V All</button>
                         </div>
                     </div>
 
@@ -135,8 +135,8 @@
                     <!-- Right: copy/paste -->
                     <div class="editor-actions">
                         <canvas ref="previewCanvas" width="40" height="40" class="preview-canvas"></canvas>
-                        <button class="op-btn" @click="copyChar">Copy</button>
-                        <button class="op-btn" @click="pasteChar">Paste</button>
+                        <button class="button" @click="copyChar">Copy</button>
+                        <button class="button" @click="pasteChar">Paste</button>
                     </div>
                 </div>
             </div>

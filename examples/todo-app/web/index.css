@@ -4,98 +4,181 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* Colors */
+/*
+MARK: Base
+*/
 :root {
+    color-scheme: light dark;
+    --font-sans-serif:
+        system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
+        'Helvetica Neue', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
     --color-background: #fff;
+    --color-hover: #e8e8e8;
     --color-text-primary: #111;
     --color-text-secondary: #555;
     --color-border: #ccc;
+    --color-disabled: #888;
+    --color-primary: #4c7ef3;
+    --color-primary-hover: #3a6de0;
+    --color-scrollbar: rgba(0, 0, 0, 0.1);
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
         --color-background: #222;
+        --color-hover: #333;
         --color-text-primary: #fff;
         --color-text-secondary: #aaa;
         --color-border: #444;
+        --color-disabled: #666;
+        --color-primary: #5b8cf5;
+        --color-primary-hover: #6d9bf8;
+        --color-scrollbar: rgba(255, 255, 255, 0.1);
     }
 }
 
-/* Reset */
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
-html {
-    font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        'Segoe UI',
-        Roboto,
-        Oxygen,
-        Ubuntu,
-        Cantarell,
-        'Open Sans',
-        'Helvetica Neue',
-        sans-serif,
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-        'Segoe UI Symbol',
-        'Noto Color Emoji';
+html,
+button,
+input {
+    font-family: var(--font-sans-serif);
     font-size: 16px;
     line-height: 1.5;
+}
 
+html {
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-
+    overscroll-behavior: none;
     cursor: default;
     -webkit-user-select: none;
     user-select: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--color-scrollbar);
+    border-radius: 3px;
 }
 
 body {
-    padding: 1rem;
-    background-color: var(--color-background);
+    background: var(--color-background);
     color: var(--color-text-primary);
 }
 
-/* Title */
-h1 {
-    font-size: 1.5rem;
-    font-weight: bold;
+.app {
+    height: 100vh;
+}
+
+.section {
+    padding: 1rem;
+}
+
+.title {
     margin-bottom: 1rem;
+    color: var(--color-text-primary);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.button,
+.input {
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    outline: none;
+}
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.button:hover:not(:disabled) {
+    background: var(--color-hover);
+}
+
+.button:focus-visible,
+.input:focus {
+    border-color: var(--color-primary);
+}
+
+.button:disabled {
+    color: var(--color-disabled);
+    cursor: default;
+    opacity: 0.6;
+}
+
+.button.is-primary {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: #fff;
+}
+.button.is-primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+}
+
+.input {
+    min-width: 0;
+    padding: 0.35rem 0.6rem;
+}
+.input::placeholder {
+    color: var(--color-text-secondary);
+}
+
+.field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.field.has-addons {
+    gap: 0.35rem;
+}
+
+.field.has-addons .input {
+    flex: 1;
+}
+.placeholder {
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+/*
+MARK: Application
+*/
+.app {
+    overflow: auto;
 }
 
 /* Add todo form */
-form {
+.field {
     margin-bottom: 1rem;
-}
-
-input,
-button {
-    font-family: inherit;
-    font-size: inherit;
-    padding: 0.5rem;
-    margin-right: 0.5rem;
-}
-
-button {
-    cursor: pointer;
-}
-
-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Empty state */
-.empty-state {
-    color: var(--color-text-secondary);
 }
 
 /* Todo list */

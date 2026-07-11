@@ -16,15 +16,17 @@
         <link rel="stylesheet" href="/index.css" />
     </head>
     <body>
-        <div id="app" v-cloak @vue:mounted="loadTodos">
-            <h1>Todo App</h1>
-            <form @submit="addTodo">
-                <input type="text" v-model="input" placeholder="Add a todo" />
-                <button type="submit">Add</button>
-                <button type="button" @click="removeCompleted" :disabled="todos.length === 0">Clear done</button>
+        <div id="app" class="app section" v-cloak @vue:mounted="loadTodos">
+            <h1 class="title">Todo App</h1>
+            <form class="field has-addons" @submit="addTodo">
+                <input class="input" type="text" v-model="input" placeholder="Add a todo" />
+                <button class="button is-primary" type="submit">Add</button>
+                <button class="button" type="button" @click="removeCompleted" :disabled="todos.length === 0">
+                    Clear done
+                </button>
             </form>
 
-            <p v-if="todos.length === 0" class="empty-state">
+            <p v-if="todos.length === 0" class="placeholder">
                 <i>No todos yet!</i>
             </p>
             <ul v-else>

@@ -4,57 +4,51 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* Colors */
+/*
+MARK: Base
+*/
 :root {
+    color-scheme: light dark;
+    --font-sans-serif:
+        system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
+        'Helvetica Neue', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-monospace:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
     --color-background: #fff;
+    --color-surface: #f6f6f6;
+    --color-hover: #e8e8e8;
     --color-text-primary: #111;
     --color-text-secondary: #555;
-    --color-text-link: #333;
     --color-border: #ccc;
-    --color-icon-disabled: #888;
-    --color-sidebar-background: #f6f6f6;
+    --color-disabled: #888;
+    --color-primary: #4c7ef3;
     --color-scrollbar: rgba(0, 0, 0, 0.1);
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
         --color-background: #222;
+        --color-surface: #2a2a2a;
+        --color-hover: #333;
         --color-text-primary: #fff;
         --color-text-secondary: #aaa;
-        --color-text-link: #ccc;
         --color-border: #444;
-        --color-icon-disabled: #666;
-        --color-sidebar-background: #222;
+        --color-disabled: #666;
+        --color-primary: #5b8cf5;
         --color-scrollbar: rgba(255, 255, 255, 0.1);
     }
 }
 
-/* General */
 * {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
 }
 
 html,
-input,
-.empty {
-    font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        'Segoe UI',
-        Roboto,
-        Oxygen,
-        Ubuntu,
-        Cantarell,
-        'Open Sans',
-        'Helvetica Neue',
-        sans-serif,
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-        'Segoe UI Symbol',
-        'Noto Color Emoji';
+button,
+input {
+    font-family: var(--font-sans-serif);
     font-size: 16px;
     line-height: 1.5;
 }
@@ -64,7 +58,6 @@ html {
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-
     overscroll-behavior: none;
     cursor: default;
     -webkit-user-select: none;
@@ -82,20 +75,93 @@ html {
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background-color: var(--color-scrollbar);
+    background: var(--color-scrollbar);
     border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background-color: var(--color-scrollbar);
 }
 
 body {
-    background-color: var(--color-background);
+    background: var(--color-background);
     color: var(--color-text-primary);
 }
 
+.app {
+    height: 100vh;
+}
+
+.button,
+.input {
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    outline: none;
+}
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.button:hover:not(:disabled) {
+    background: var(--color-hover);
+}
+
+.button:focus-visible,
+.input:focus {
+    border-color: var(--color-primary);
+}
+
+.button:disabled {
+    color: var(--color-disabled);
+    cursor: default;
+    opacity: 0.6;
+}
+
+.button.is-icon {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+}
+
+.input {
+    min-width: 0;
+    padding: 0.35rem 0.6rem;
+}
+.input::placeholder {
+    color: var(--color-text-secondary);
+}
+
+.field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.placeholder {
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.icon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+/*
+MARK: Application
+*/
 a {
-    color: var(--color-text-link);
+    color: var(--color-text-secondary);
     font-weight: 500;
     text-decoration: none;
     -webkit-user-drag: none;
@@ -119,7 +185,7 @@ li {
 /* App */
 .app {
     display: flex;
-    height: 100vh;
+    overflow: hidden;
 }
 
 /* Sidebar */
@@ -127,7 +193,7 @@ li {
     display: flex;
     flex-direction: column;
     width: 28rem;
-    background-color: var(--color-sidebar-background);
+    background-color: var(--color-surface);
     border-right: 1px solid var(--color-border);
 }
 .sidebar-content {
@@ -157,34 +223,15 @@ li {
 }
 
 .search-field {
-    display: flex;
-    align-items: center;
     padding: 0 0.5rem 0 1rem;
-    border: none;
     border-bottom: 1px solid var(--color-border);
 }
-.search-input,
-.icon-button {
-    padding: 0;
+.search-field .input {
+    flex: 1;
     border: none;
     background-color: transparent;
     color: inherit;
-    outline: none;
-}
-.search-input {
-    flex: 1;
     padding: 0.5rem 1rem;
-}
-
-.icon-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-}
-.icon-button:disabled {
-    color: var(--color-icon-disabled);
-    cursor: default;
 }
 
 .placeholder {
@@ -192,8 +239,6 @@ li {
     flex: 1;
     align-items: center;
     justify-content: center;
-    color: var(--color-text-secondary);
-    font-style: italic;
 }
 
 .sidebar-title {
@@ -218,20 +263,9 @@ body.is-bwebview-macos:not(.is-fullscreen) .sidebar-title {
     padding: 1rem;
     overflow-y: auto;
 
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-family: var(--font-monospace);
     white-space: pre;
     cursor: initial;
     -webkit-user-select: text;
     user-select: text;
-}
-
-/* Utils */
-.icon {
-    width: 24px;
-    height: 24px;
-    fill: currentColor;
-}
-
-.hidden {
-    display: none;
 }

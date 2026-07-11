@@ -7,80 +7,85 @@
 @import 'minireset.css';
 
 :root {
-    --bg: #f9fafb;
-    --surface: #ffffff;
-    --surface-2: #f3f4f6;
-    --hover: #f3f4f6;
-    --hover-soft: #f9fafb;
-    --border: #e5e7eb;
-    --border-soft: #f3f4f6;
-    --text: #1f2937;
-    --text-heading: #374151;
-    --text-muted: #4b5563;
-    --text-soft: #6b7280;
-    --text-subtle: #9ca3af;
-    --input-bg: #ffffff;
-    --input-border: #d1d5db;
+    --font-sans-serif:
+        system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
+        'Helvetica Neue', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-monospace:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    --color-background: #f9fafb;
+    --color-surface: #ffffff;
+    --color-surface-2: #f3f4f6;
+    --color-hover: #f3f4f6;
+    --color-hover-soft: #f9fafb;
+    --color-border: #e5e7eb;
+    --color-border-soft: #f3f4f6;
+    --color-text: #1f2937;
+    --color-text-heading: #374151;
+    --color-text-muted: #4b5563;
+    --color-text-soft: #6b7280;
+    --color-text-subtle: #9ca3af;
+    --color-input-background: #ffffff;
+    --color-input-border: #d1d5db;
 
-    --accent-bg: #facc15;
-    --accent-bg-hover: #eab308;
-    --accent-fg: #ffffff;
-    --accent-text: #a16207;
-    --accent-soft-bg: #fefce8;
-    --badge-bg: #fef9c3;
-    --focus-ring: rgba(250, 204, 21, 0.55);
+    --color-accent-background: #facc15;
+    --color-accent-background-hover: #eab308;
+    --color-accent-fg: #ffffff;
+    --color-accent-text: #a16207;
+    --color-accent-soft-background: #fefce8;
+    --color-badge-background: #fef9c3;
+    --color-focus-ring: rgba(250, 204, 21, 0.55);
 
-    --danger: #ef4444;
-    --danger-hover: #dc2626;
-    --success: #16a34a;
-    --link: #3b82f6;
+    --color-danger: #ef4444;
+    --color-danger-hover: #dc2626;
+    --color-success: #16a34a;
+    --color-link: #3b82f6;
 
     /* Note card backgrounds */
-    --note-default: #ffffff;
-    --note-yellow: #fef9c3;
-    --note-green: #dcfce7;
-    --note-blue: #dbeafe;
-    --note-pink: #fce7f3;
-    --note-purple: #f3e8ff;
-    --note-orange: #ffedd5;
+    --color-note-default: #ffffff;
+    --color-note-yellow: #fef9c3;
+    --color-note-green: #dcfce7;
+    --color-note-blue: #dbeafe;
+    --color-note-pink: #fce7f3;
+    --color-note-purple: #f3e8ff;
+    --color-note-orange: #ffedd5;
 }
 
 html.dark {
-    --bg: #18181b;
-    --surface: #27272a;
-    --surface-2: #3f3f46;
-    --hover: #3f3f46;
-    --hover-soft: #3f3f46;
-    --border: #3f3f46;
-    --border-soft: #3f3f46;
-    --text: #f3f4f6;
-    --text-heading: #e5e7eb;
-    --text-muted: #d1d5db;
-    --text-soft: #9ca3af;
-    --text-subtle: #6b7280;
-    --input-bg: #3f3f46;
-    --input-border: #52525b;
+    --color-background: #18181b;
+    --color-surface: #27272a;
+    --color-surface-2: #3f3f46;
+    --color-hover: #3f3f46;
+    --color-hover-soft: #3f3f46;
+    --color-border: #3f3f46;
+    --color-border-soft: #3f3f46;
+    --color-text: #f3f4f6;
+    --color-text-heading: #e5e7eb;
+    --color-text-muted: #d1d5db;
+    --color-text-soft: #9ca3af;
+    --color-text-subtle: #6b7280;
+    --color-input-background: #3f3f46;
+    --color-input-border: #52525b;
 
-    --accent-bg: rgba(113, 63, 18, 0.4);
-    --accent-bg-hover: rgba(113, 63, 18, 0.6);
-    --accent-fg: #facc15;
-    --accent-text: #facc15;
-    --accent-soft-bg: rgba(113, 63, 18, 0.3);
-    --badge-bg: rgba(113, 63, 18, 0.4);
-    --focus-ring: rgba(234, 179, 8, 0.5);
+    --color-accent-background: rgba(113, 63, 18, 0.4);
+    --color-accent-background-hover: rgba(113, 63, 18, 0.6);
+    --color-accent-fg: #facc15;
+    --color-accent-text: #facc15;
+    --color-accent-soft-background: rgba(113, 63, 18, 0.3);
+    --color-badge-background: rgba(113, 63, 18, 0.4);
+    --color-focus-ring: rgba(234, 179, 8, 0.5);
 
-    --danger: #f87171;
-    --danger-hover: #f87171;
-    --success: #4ade80;
-    --link: #60a5fa;
+    --color-danger: #f87171;
+    --color-danger-hover: #f87171;
+    --color-success: #4ade80;
+    --color-link: #60a5fa;
 
-    --note-default: #27272a;
-    --note-yellow: rgba(113, 63, 18, 0.4);
-    --note-green: rgba(20, 83, 45, 0.4);
-    --note-blue: rgba(30, 58, 138, 0.4);
-    --note-pink: rgba(131, 24, 67, 0.4);
-    --note-purple: rgba(88, 28, 135, 0.4);
-    --note-orange: rgba(124, 45, 18, 0.4);
+    --color-note-default: #27272a;
+    --color-note-yellow: rgba(113, 63, 18, 0.4);
+    --color-note-green: rgba(20, 83, 45, 0.4);
+    --color-note-blue: rgba(30, 58, 138, 0.4);
+    --color-note-pink: rgba(131, 24, 67, 0.4);
+    --color-note-purple: rgba(88, 28, 135, 0.4);
+    --color-note-orange: rgba(124, 45, 18, 0.4);
 }
 
 /* Form controls inherit typography (minireset leaves these to the framework) */
@@ -98,26 +103,11 @@ button {
 }
 
 body {
-    background-color: var(--bg);
-    color: var(--text);
+    background-color: var(--color-background);
+    color: var(--color-text);
     overflow-y: scroll;
     line-height: 1.5;
-    font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        'Segoe UI',
-        Roboto,
-        Oxygen,
-        Ubuntu,
-        Cantarell,
-        'Open Sans',
-        'Helvetica Neue',
-        sans-serif,
-        'Apple Color Emoji',
-        'Segoe UI Emoji',
-        'Segoe UI Symbol',
-        'Noto Color Emoji';
+    font-family: var(--font-sans-serif);
 }
 
 a {
@@ -171,7 +161,7 @@ a {
 /* Layout */
 .layout {
     min-height: 100vh;
-    background-color: var(--bg);
+    background-color: var(--color-background);
     display: flex;
     flex-direction: column;
 }
@@ -185,7 +175,7 @@ a {
 }
 .centered-screen {
     min-height: 100vh;
-    background-color: var(--bg);
+    background-color: var(--color-background);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -208,7 +198,7 @@ a {
 .page-title {
     font-size: 1.25rem;
     font-weight: 500;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
     margin-bottom: 1.5rem;
 }
 .section-label {
@@ -216,7 +206,7 @@ a {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     margin-bottom: 0.75rem;
 }
 .section-label.is-spaced {
@@ -235,8 +225,8 @@ a {
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    background-color: var(--surface);
-    border-right: 1px solid var(--border-soft);
+    background-color: var(--color-surface);
+    border-right: 1px solid var(--color-border-soft);
     padding-top: 0.5rem;
     position: sticky;
     top: 4rem;
@@ -254,7 +244,7 @@ a {
     display: none;
     padding: 0 1rem 1rem;
     font-size: 0.75rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .sidebar-item {
     display: flex;
@@ -262,16 +252,16 @@ a {
     gap: 0.75rem;
     padding: 0.625rem 0.75rem;
     border-radius: 9999px;
-    color: var(--text-muted);
+    color: var(--color-text-muted);
     transition: background-color 0.15s;
     cursor: pointer;
 }
 .sidebar-item:hover {
-    background-color: var(--hover);
+    background-color: var(--color-hover);
 }
 .sidebar-item.is-active {
-    background-color: var(--accent-soft-bg);
-    color: var(--accent-text);
+    background-color: var(--color-accent-soft-background);
+    color: var(--color-accent-text);
 }
 .sidebar-label {
     display: none;
@@ -290,7 +280,7 @@ a {
 
 /* Navbar */
 .navbar {
-    background-color: var(--surface);
+    background-color: var(--color-surface);
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     position: sticky;
     top: 0;
@@ -307,12 +297,12 @@ a {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
     flex-shrink: 0;
     transition: color 0.15s;
 }
 .navbar-brand:hover {
-    color: var(--text);
+    color: var(--color-text);
 }
 .navbar-brand img {
     width: 2rem;
@@ -350,19 +340,19 @@ a {
     cursor: pointer;
 }
 .navbar-user:hover {
-    background-color: var(--hover);
+    background-color: var(--color-hover);
 }
 .navbar-user-name {
     font-size: 0.875rem;
-    color: var(--text-muted);
+    color: var(--color-text-muted);
     display: none;
 }
 .avatar {
     width: 2rem;
     height: 2rem;
     border-radius: 9999px;
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--color-accent-background);
+    color: var(--color-accent-fg);
     font-weight: 600;
     font-size: 0.75rem;
     display: flex;
@@ -384,8 +374,8 @@ a {
     right: 0;
     margin-top: 0.25rem;
     width: 11rem;
-    background-color: var(--surface);
-    border: 1px solid var(--border);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: 0.75rem;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     overflow: hidden;
@@ -398,18 +388,18 @@ a {
     gap: 0.625rem;
     padding: 0.625rem 1rem;
     font-size: 0.875rem;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
     transition: background-color 0.15s;
     cursor: pointer;
 }
 .dropdown-item:hover {
-    background-color: var(--hover-soft);
+    background-color: var(--color-hover-soft);
 }
 .dropdown-item .icon {
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .dropdown-divider {
-    border-top: 1px solid var(--border-soft);
+    border-top: 1px solid var(--color-border-soft);
 }
 
 /* Button */
@@ -431,25 +421,25 @@ a {
     cursor: default;
 }
 .button.is-primary {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--color-accent-background);
+    color: var(--color-accent-fg);
 }
 .button.is-primary:hover:not(:disabled) {
-    background-color: var(--accent-bg-hover);
+    background-color: var(--color-accent-background-hover);
 }
 .button.is-secondary {
-    color: var(--text-muted);
+    color: var(--color-text-muted);
     font-weight: 400;
 }
 .button.is-secondary:hover:not(:disabled) {
-    background-color: var(--hover);
+    background-color: var(--color-hover);
 }
 .button.is-danger {
-    background-color: var(--danger);
+    background-color: var(--color-danger);
     color: #ffffff;
 }
 .button.is-danger:hover:not(:disabled) {
-    background-color: var(--danger-hover);
+    background-color: var(--color-danger-hover);
 }
 html.dark .button.is-danger {
     background-color: rgba(127, 29, 29, 0.5);
@@ -464,17 +454,17 @@ html.dark .button.is-danger:hover:not(:disabled) {
     font-weight: 400;
 }
 .button.is-icon:hover:not(:disabled) {
-    background-color: var(--hover);
+    background-color: var(--color-hover);
 }
 .button.is-icon.is-small {
     padding: 0.375rem;
     border-radius: 0.5rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 
 /* Icon-button colour states */
 .has-text-muted {
-    color: var(--text-soft);
+    color: var(--color-text-soft);
 }
 .is-active {
     color: #eab308;
@@ -483,17 +473,17 @@ html.dark .is-active {
     color: #facc15;
 }
 .is-active-danger {
-    color: var(--danger);
+    color: var(--color-danger);
 }
 .hover-danger:hover {
-    color: var(--danger);
+    color: var(--color-danger);
 }
 
 /* Card */
 .card {
-    background-color: var(--surface);
+    background-color: var(--color-surface);
     border-radius: 1rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--color-border);
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 .card.is-padded {
@@ -505,7 +495,7 @@ html.dark .is-active {
 .card-title {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
     margin-bottom: 1.25rem;
 }
 .card-title.is-tight {
@@ -513,11 +503,11 @@ html.dark .is-active {
 }
 .card-desc {
     font-size: 0.875rem;
-    color: var(--text-soft);
+    color: var(--color-text-soft);
     margin-bottom: 1.25rem;
 }
 .has-text-subtle {
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 
 /* Form */
@@ -539,20 +529,20 @@ html.dark .is-active {
 .label {
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
 }
 .help.is-danger {
     font-size: 0.75rem;
-    color: var(--danger);
+    color: var(--color-danger);
 }
 .form-message {
     font-size: 0.875rem;
 }
 .form-message.is-success {
-    color: var(--success);
+    color: var(--color-success);
 }
 .form-message.is-danger {
-    color: var(--danger);
+    color: var(--color-danger);
 }
 .form-actions {
     display: flex;
@@ -576,12 +566,12 @@ html.dark .is-active {
 .select {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 1px solid var(--input-border);
+    border: 1px solid var(--color-input-border);
     border-radius: 0.5rem;
     font-size: 0.875rem;
     line-height: 1.25rem;
-    background-color: var(--input-bg);
-    color: var(--text);
+    background-color: var(--color-input-background);
+    color: var(--color-text);
 }
 .select {
     appearance: none;
@@ -593,12 +583,12 @@ html.dark .is-active {
     background-size: 1.1rem;
 }
 .input::placeholder {
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .input[type='file'] {
     padding: 0.375rem;
     padding-right: 0.75rem;
-    color: var(--text-soft);
+    color: var(--color-text-soft);
     cursor: pointer;
 }
 .input[type='file']::file-selector-button {
@@ -606,8 +596,8 @@ html.dark .is-active {
     padding: 0.375rem 0.875rem;
     border: none;
     border-radius: 0.375rem;
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--color-accent-background);
+    color: var(--color-accent-fg);
     font: inherit;
     font-weight: 500;
     line-height: 1.25rem;
@@ -615,13 +605,13 @@ html.dark .is-active {
     transition: background-color 0.15s;
 }
 .input[type='file']::file-selector-button:hover {
-    background-color: var(--accent-bg-hover);
+    background-color: var(--color-accent-background-hover);
 }
 .input:focus,
 .select:focus {
     outline: none;
     border-color: transparent;
-    box-shadow: 0 0 0 2px var(--focus-ring);
+    box-shadow: 0 0 0 2px var(--color-focus-ring);
 }
 
 /* Search input */
@@ -635,7 +625,7 @@ html.dark .is-active {
     left: 0.625rem;
     width: 1rem;
     height: 1rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     pointer-events: none;
 }
 .search .input {
@@ -649,12 +639,12 @@ html.dark .is-active {
     right: 0.5rem;
     padding: 0.125rem;
     border-radius: 9999px;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     transition: color 0.15s;
     cursor: pointer;
 }
 .search-clear:hover {
-    color: var(--text-muted);
+    color: var(--color-text-muted);
 }
 
 /* Modal / dialog */
@@ -671,7 +661,7 @@ html.dark .modal {
     background-color: rgba(0, 0, 0, 0.6);
 }
 .modal-card {
-    background-color: var(--surface);
+    background-color: var(--color-surface);
     border-radius: 1rem;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
     width: 100%;
@@ -683,19 +673,19 @@ html.dark .modal {
     align-items: center;
     justify-content: space-between;
     padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-soft);
+    border-bottom: 1px solid var(--color-border-soft);
 }
 .modal-card-title {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text);
+    color: var(--color-text);
 }
 .modal-card-body {
     padding: 1.25rem 1.5rem;
 }
 .modal-text {
     font-size: 0.875rem;
-    color: var(--text-muted);
+    color: var(--color-text-muted);
 }
 
 /* Empty state */
@@ -706,7 +696,7 @@ html.dark .modal {
     justify-content: center;
     margin-top: 6rem;
     gap: 0.75rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .empty-state-text {
     font-size: 1.125rem;
@@ -715,7 +705,7 @@ html.dark .modal {
 /* Loading / hint text */
 .loading-text {
     text-align: center;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     padding: 1rem 0;
 }
 .loading-text.is-initial {
@@ -727,7 +717,7 @@ html.dark .modal {
 }
 .hint-text {
     font-size: 0.75rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     margin-bottom: 1rem;
 }
 
@@ -754,19 +744,19 @@ html.dark .modal {
 .note {
     display: block;
     border-radius: 0.75rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--color-border);
     padding: 1rem;
     margin-bottom: 1rem;
     break-inside: avoid;
     transition: all 0.15s;
     cursor: pointer;
-    background-color: var(--note-default);
+    background-color: var(--color-note-default);
 }
 html.dark .note {
     border-color: #52525b;
 }
 .note:hover {
-    border-color: var(--text-subtle);
+    border-color: var(--color-text-subtle);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 .note.is-draggable {
@@ -776,29 +766,29 @@ html.dark .note {
     cursor: grabbing;
 }
 .note.is-default {
-    background-color: var(--note-default);
+    background-color: var(--color-note-default);
 }
 .note.is-yellow {
-    background-color: var(--note-yellow);
+    background-color: var(--color-note-yellow);
 }
 .note.is-green {
-    background-color: var(--note-green);
+    background-color: var(--color-note-green);
 }
 .note.is-blue {
-    background-color: var(--note-blue);
+    background-color: var(--color-note-blue);
 }
 .note.is-pink {
-    background-color: var(--note-pink);
+    background-color: var(--color-note-pink);
 }
 .note.is-purple {
-    background-color: var(--note-purple);
+    background-color: var(--color-note-purple);
 }
 .note.is-orange {
-    background-color: var(--note-orange);
+    background-color: var(--color-note-orange);
 }
 .note-title {
     font-weight: 500;
-    color: var(--text);
+    color: var(--color-text);
     margin-bottom: 0.25rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -806,7 +796,7 @@ html.dark .note {
 }
 .note-snippet {
     font-size: 0.875rem;
-    color: var(--text-muted);
+    color: var(--color-text-muted);
     white-space: pre-wrap;
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -827,7 +817,7 @@ html.dark .note {
 .note-action {
     padding: 0.5rem;
     border-radius: 9999px;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     transition: all 0.15s;
     cursor: pointer;
 }
@@ -844,13 +834,13 @@ html.dark .note-action.is-pinned {
     color: #facc15;
 }
 .note-action.is-hover-neutral:hover {
-    color: var(--text-heading);
+    color: var(--color-text-heading);
 }
 .note-action.is-hover-success:hover {
-    color: var(--success);
+    color: var(--color-success);
 }
 .note-action.is-hover-danger:hover {
-    color: var(--danger);
+    color: var(--color-danger);
 }
 
 /* Floating action button */
@@ -860,8 +850,8 @@ html.dark .note-action.is-pinned {
     right: 1.5rem;
     width: 3.5rem;
     height: 3.5rem;
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
+    background-color: var(--color-accent-background);
+    color: var(--color-accent-fg);
     border-radius: 9999px;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     display: flex;
@@ -871,7 +861,7 @@ html.dark .note-action.is-pinned {
     cursor: pointer;
 }
 .fab:hover {
-    background-color: var(--accent-bg-hover);
+    background-color: var(--color-accent-background-hover);
 }
 
 /* Badge */
@@ -882,12 +872,12 @@ html.dark .note-action.is-pinned {
     border-radius: 9999px;
     font-size: 0.75rem;
     font-weight: 500;
-    background-color: var(--surface-2);
-    color: var(--text-soft);
+    background-color: var(--color-surface-2);
+    color: var(--color-text-soft);
 }
 .badge.is-accent {
-    background-color: var(--badge-bg);
-    color: var(--accent-text);
+    background-color: var(--color-badge-background);
+    color: var(--color-accent-text);
 }
 
 /* Note editor card */
@@ -905,25 +895,25 @@ html.dark .note-action.is-pinned {
     width: 100%;
     font-size: 1.25rem;
     font-weight: 500;
-    color: var(--text);
+    color: var(--color-text);
     background: transparent;
     border: none;
     outline: none;
 }
 .note-title-input::placeholder {
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .note-editor-footer {
-    border-top: 1px solid var(--border-soft);
+    border-top: 1px solid var(--color-border-soft);
     padding: 0.75rem 1.25rem;
-    background-color: var(--hover-soft);
+    background-color: var(--color-hover-soft);
 }
 html.dark .note-editor-footer {
     background-color: rgba(63, 63, 70, 0.5);
 }
 .save-status {
     font-size: 0.75rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .save-status .is-saving {
     color: #eab308;
@@ -932,7 +922,7 @@ html.dark .save-status .is-saving {
     color: #facc15;
 }
 .save-status .is-saved {
-    color: var(--success);
+    color: var(--color-success);
 }
 
 /* Rich editor */
@@ -950,8 +940,8 @@ html.dark .save-status .is-saving {
     padding: 0 0.5rem;
     height: 2.5rem;
     flex-shrink: 0;
-    border-bottom: 1px solid var(--border-soft);
-    background-color: var(--hover-soft);
+    border-bottom: 1px solid var(--color-border-soft);
+    background-color: var(--color-hover-soft);
 }
 html.dark .editor-toolbar {
     background-color: rgba(39, 39, 42, 0.5);
@@ -959,12 +949,12 @@ html.dark .editor-toolbar {
 .editor-tool {
     padding: 0.375rem;
     border-radius: 0.25rem;
-    color: var(--text-muted);
+    color: var(--color-text-muted);
     transition: background-color 0.15s;
     cursor: pointer;
 }
 .editor-tool:hover {
-    background-color: var(--hover);
+    background-color: var(--color-hover);
 }
 .editor-tool-text {
     font-size: 0.75rem;
@@ -978,7 +968,7 @@ html.dark .editor-toolbar {
 .editor-sep {
     width: 1px;
     height: 1.25rem;
-    background-color: var(--border);
+    background-color: var(--color-border);
     margin: 0 0.25rem;
     align-self: center;
 }
@@ -989,16 +979,16 @@ html.dark .editor-toolbar {
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
     font-size: 0.75rem;
-    color: var(--text-soft);
+    color: var(--color-text-soft);
     transition: background-color 0.15s;
     cursor: pointer;
 }
 .editor-mode-toggle:hover {
-    background-color: var(--hover);
+    background-color: var(--color-hover);
 }
 .editor-textarea,
 .rich-editor-content code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-family: var(--font-monospace);
 }
 .editor-textarea {
     flex: 1;
@@ -1007,12 +997,12 @@ html.dark .editor-toolbar {
     border: none;
     min-height: 12rem;
     font-size: 0.875rem;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
     background: transparent;
     resize: none;
 }
 .editor-textarea::placeholder {
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .editor-body {
     position: relative;
@@ -1024,7 +1014,7 @@ html.dark .editor-toolbar {
     position: absolute;
     top: 1.25rem;
     left: 1.25rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     font-size: 0.875rem;
     pointer-events: none;
     user-select: none;
@@ -1039,7 +1029,7 @@ html.dark .editor-toolbar {
 }
 .session-icon {
     margin-top: 0.125rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     flex-shrink: 0;
 }
 .session-body {
@@ -1055,19 +1045,19 @@ html.dark .editor-toolbar {
 .session-name {
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--text);
+    color: var(--color-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 .session-location {
     font-size: 0.75rem;
-    color: var(--text-soft);
+    color: var(--color-text-soft);
     margin-top: 0.125rem;
 }
 .session-meta {
     font-size: 0.75rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
     margin-top: 0.25rem;
 }
 .session-revoke {
@@ -1078,14 +1068,14 @@ html.dark .editor-toolbar {
     font-size: 0.75rem;
     padding: 0.375rem 0.75rem;
     border-radius: 0.5rem;
-    border: 1px solid var(--border);
-    color: var(--text-soft);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-soft);
     transition: all 0.15s;
     cursor: pointer;
 }
 .session-revoke:hover {
     border-color: #fca5a5;
-    color: var(--danger);
+    color: var(--color-danger);
 }
 html.dark .session-revoke:hover {
     border-color: #b91c1c;
@@ -1103,7 +1093,7 @@ html.dark .session-revoke:hover {
 /* Login */
 .login {
     min-height: 100vh;
-    background-color: var(--bg);
+    background-color: var(--color-background);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1124,17 +1114,17 @@ html.dark .session-revoke:hover {
 .login-title {
     font-size: 1.875rem;
     font-weight: 500;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
 }
 .login-tagline {
-    color: var(--text-soft);
+    color: var(--color-text-soft);
     font-size: 0.875rem;
 }
 .login-card {
-    background-color: var(--surface);
+    background-color: var(--color-surface);
     border-radius: 1rem;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    border: 1px solid var(--border);
+    border: 1px solid var(--color-border);
     width: 100%;
     max-width: 24rem;
     padding: 2rem;
@@ -1145,7 +1135,7 @@ html.dark .session-revoke:hover {
     background-color: #fef2f2;
     border: 1px solid #fecaca;
     border-radius: 0.5rem;
-    color: var(--danger-hover);
+    color: var(--color-danger-hover);
     font-size: 0.875rem;
 }
 html.dark .login-error {
@@ -1156,13 +1146,13 @@ html.dark .login-error {
 .login-footer {
     margin-top: 2rem;
     font-size: 0.75rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .login-footer a {
     text-decoration: underline;
 }
 .login-footer a:hover {
-    color: var(--text-muted);
+    color: var(--color-text-muted);
 }
 
 /* Table */
@@ -1171,11 +1161,11 @@ html.dark .login-error {
     font-size: 0.875rem;
 }
 .table thead tr {
-    border-bottom: 1px solid var(--border-soft);
+    border-bottom: 1px solid var(--color-border-soft);
     text-align: left;
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--text-soft);
+    color: var(--color-text-soft);
     text-transform: uppercase;
     letter-spacing: 0.025em;
 }
@@ -1187,14 +1177,14 @@ html.dark .login-error {
     padding: 0.75rem 1.25rem;
 }
 .table tbody tr {
-    border-bottom: 1px solid var(--border-soft);
+    border-bottom: 1px solid var(--color-border-soft);
     transition: background-color 0.15s;
 }
 .table tbody tr:last-child {
     border-bottom: 0;
 }
 .table tbody tr:hover {
-    background-color: var(--hover-soft);
+    background-color: var(--color-hover-soft);
 }
 .table .cell-actions {
     text-align: right;
@@ -1206,7 +1196,7 @@ html.dark .login-error {
 }
 .table .cell-name-text {
     font-weight: 500;
-    color: var(--text);
+    color: var(--color-text);
 }
 .table-actions {
     display: flex;
@@ -1260,7 +1250,7 @@ html.dark .login-error {
     cursor: pointer;
 }
 .text-link-danger:hover {
-    color: var(--danger-hover);
+    color: var(--color-danger-hover);
 }
 
 /* Notes show page */
@@ -1268,7 +1258,7 @@ html.dark .login-error {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background-color: var(--bg);
+    background-color: var(--color-background);
 }
 .note-show-main {
     flex: 1;
@@ -1289,24 +1279,24 @@ html.dark .login-error {
 .note-show-title {
     font-size: 1.25rem;
     font-weight: 500;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
 }
 
 /* Not found */
 .notfound {
     min-height: 100vh;
-    background-color: var(--bg);
+    background-color: var(--color-background);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 1rem;
-    color: var(--text-subtle);
+    color: var(--color-text-subtle);
 }
 .notfound-code {
     font-size: 2.25rem;
     font-weight: 300;
-    color: var(--text-soft);
+    color: var(--color-text-soft);
 }
 
 /* Rich editor rendered content */
@@ -1314,14 +1304,14 @@ html.dark .login-error {
     padding: 1.25rem;
     outline: none;
     min-height: 12rem;
-    color: var(--text-heading);
+    color: var(--color-text-heading);
     font-size: 0.875rem;
     word-break: break-all;
 }
 .rich-editor-content h1 {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--text);
+    color: var(--color-text);
     margin: 1rem 0 0.5rem;
 }
 .rich-editor-content h1:first-child,
@@ -1332,13 +1322,13 @@ html.dark .login-error {
 .rich-editor-content h2 {
     font-size: 1.25rem;
     font-weight: 700;
-    color: var(--text);
+    color: var(--color-text);
     margin: 0.75rem 0 0.5rem;
 }
 .rich-editor-content h3 {
     font-size: 1.125rem;
     font-weight: 600;
-    color: var(--text);
+    color: var(--color-text);
     margin: 0.5rem 0 0.25rem;
 }
 .rich-editor-content p {
@@ -1361,27 +1351,27 @@ html.dark .login-error {
     margin-bottom: 0.125rem;
 }
 .rich-editor-content a {
-    color: var(--link);
+    color: var(--color-link);
     text-decoration: underline;
 }
 .rich-editor-content blockquote {
-    border-left: 4px solid var(--border);
+    border-left: 4px solid var(--color-border);
     padding-left: 1rem;
     margin: 0.5rem 0;
-    color: var(--text-soft);
+    color: var(--color-text-soft);
     font-style: italic;
 }
 html.dark .rich-editor-content blockquote {
-    border-color: var(--surface-2);
+    border-color: var(--color-surface-2);
 }
 .rich-editor-content code {
     font-size: 0.75rem;
-    background-color: var(--surface-2);
+    background-color: var(--color-surface-2);
     border-radius: 0.25rem;
     padding: 0.125rem 0.25rem;
 }
 .rich-editor-content pre {
-    background-color: var(--surface-2);
+    background-color: var(--color-surface-2);
     border-radius: 0.25rem;
     padding: 0.75rem;
     margin: 0.5rem 0;
@@ -1395,5 +1385,5 @@ html.dark .rich-editor-content blockquote {
 .rich-editor-content hr {
     margin: 2rem 0;
     border: 0;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--color-border);
 }

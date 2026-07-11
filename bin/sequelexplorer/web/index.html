@@ -20,7 +20,7 @@
             <div class="app">
                 <div class="sidebar">
                     <div class="open-db">
-                        <button class="open-btn" @click="openDatabase">Open</button>
+                        <button class="button" @click="openDatabase">Open</button>
                         <span class="db-path-label">{{ dbPath || 'No database open' }}</span>
                     </div>
 
@@ -84,7 +84,7 @@
                                                 </span>
                                                 <button
                                                     v-if="columns[colIdx] && columns[colIdx].foreign_key"
-                                                    class="fk-btn"
+                                                    class="button is-icon is-small is-subtle"
                                                     :title="`Go to ${columns[colIdx].foreign_key.table} row`"
                                                     @click="navigateToForeignKey(columns[colIdx].foreign_key.table, columns[colIdx].foreign_key.column, val)"
                                                 >
@@ -104,9 +104,9 @@
                             <pre class="schema-code" v-text="schemaText"></pre>
                         </div>
 
-                        <div class="query-bar">
+                        <div class="field query-bar">
                             <input
-                                class="query-input"
+                                class="input query-input"
                                 type="text"
                                 placeholder="Custom SELECT query…"
                                 autocorrect="off"
@@ -114,8 +114,8 @@
                                 v-model="queryText"
                                 @keydown.enter="runQuery"
                             />
-                            <button class="open-btn" @click="runQuery">Run</button>
-                            <button class="open-btn" :disabled="!isCustomQuery" @click="clearQuery">Clear</button>
+                            <button class="button is-primary" @click="runQuery">Run</button>
+                            <button class="button" :disabled="!isCustomQuery" @click="clearQuery">Clear</button>
                         </div>
                     </div>
                 </div>
