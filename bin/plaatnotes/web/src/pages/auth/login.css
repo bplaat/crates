@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.login {
+    min-height: 100vh;
+    background-color: var(--color-background);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.login-header {
+    margin-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+.login-header img {
+    width: 4rem;
+    height: 4rem;
+}
+.login-title {
+    font-size: 1.875rem;
+    font-weight: 500;
+    color: var(--color-text-heading);
+}
+.login-tagline {
+    color: var(--color-text-soft);
+    font-size: 0.875rem;
+}
+.login-card {
+    background-color: var(--color-surface);
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--color-border);
+    width: 100%;
+    max-width: 24rem;
+    padding: 2rem;
+}
+.login-error {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 0.5rem;
+    color: var(--color-danger-hover);
+    font-size: 0.875rem;
+}
+html.dark .login-error {
+    background-color: rgba(127, 29, 29, 0.3);
+    border-color: #b91c1c;
+    color: #f87171;
+}
+.login-footer {
+    margin-top: 2rem;
+    font-size: 0.75rem;
+    color: var(--color-text-subtle);
+}
+.login-footer a {
+    text-decoration: underline;
+}
+.login-footer a:hover {
+    color: var(--color-text-muted);
+}

@@ -6,15 +6,10 @@
 
 import { Link } from 'wouter-preact';
 import { type Note } from '../../src-gen/api.ts';
-import {
-    ArchiveArrowDownIcon,
-    ArchiveArrowUpIcon,
-    DeleteIcon,
-    DeleteOutlineIcon,
-    PinIcon,
-    RestoreIcon,
-} from './icons.tsx';
+import { Icon } from 'plaatui';
 import { t } from '../services/i18n.service.ts';
+import './note-card.css';
+import './note-theme.css';
 
 // Icon button for use on colored card backgrounds - uses semi-transparent hover overlay
 function NoteIconButton({ class: extraClass, ...props }: preact.JSX.IntrinsicElements['button']) {
@@ -90,7 +85,7 @@ export function NoteCard({
                         title={note.isPinned ? t('note.unpin') : t('note.pin')}
                         onClick={(e) => act(e, () => onPin(note))}
                     >
-                        <PinIcon class="is-sm" />
+                        <Icon type="pin" class="is-sm" />
                     </NoteIconButton>
                 )}
                 {onArchive && (
@@ -99,7 +94,7 @@ export function NoteCard({
                         title={t('note.archive')}
                         onClick={(e) => act(e, () => onArchive(note))}
                     >
-                        <ArchiveArrowDownIcon class="is-sm" />
+                        <Icon type="package-down" class="is-sm" />
                     </NoteIconButton>
                 )}
                 {onUnarchive && (
@@ -108,7 +103,7 @@ export function NoteCard({
                         title={t('note.unarchive')}
                         onClick={(e) => act(e, () => onUnarchive(note))}
                     >
-                        <ArchiveArrowUpIcon class="is-sm" />
+                        <Icon type="package-up" class="is-sm" />
                     </NoteIconButton>
                 )}
                 {onRestore && (
@@ -117,7 +112,7 @@ export function NoteCard({
                         title={t('note.restore')}
                         onClick={(e) => act(e, () => onRestore(note))}
                     >
-                        <RestoreIcon class="is-sm" />
+                        <Icon type="restore" class="is-sm" />
                     </NoteIconButton>
                 )}
                 {onTrash && (
@@ -126,7 +121,7 @@ export function NoteCard({
                         title={t('note.trash')}
                         onClick={(e) => act(e, () => onTrash(note))}
                     >
-                        <DeleteIcon class="is-sm" />
+                        <Icon type="delete" class="is-sm" />
                     </NoteIconButton>
                 )}
                 {onDeleteForever && (
@@ -135,7 +130,7 @@ export function NoteCard({
                         title={t('note.delete_forever')}
                         onClick={(e) => act(e, () => onDeleteForever(note))}
                     >
-                        <DeleteOutlineIcon class="is-sm" />
+                        <Icon type="delete-outline" class="is-sm" />
                     </NoteIconButton>
                 )}
             </div>

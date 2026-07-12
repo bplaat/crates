@@ -1,0 +1,215 @@
+/*
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+@import 'minireset.css';
+
+:root {
+    --font-sans-serif:
+        system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
+        'Helvetica Neue', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-monospace:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    --color-background: #f9fafb;
+    --color-surface: #ffffff;
+    --color-surface-2: #f3f4f6;
+    --color-hover: #f3f4f6;
+    --color-hover-soft: #f9fafb;
+    --color-border: #e5e7eb;
+    --color-border-soft: #f3f4f6;
+    --color-text: #1f2937;
+    --color-text-heading: #374151;
+    --color-text-muted: #4b5563;
+    --color-text-soft: #6b7280;
+    --color-text-subtle: #9ca3af;
+    --color-input-background: #ffffff;
+    --color-input-border: #d1d5db;
+
+    --color-accent-background: #facc15;
+    --color-accent-background-hover: #eab308;
+    --color-accent-fg: #ffffff;
+    --color-accent-text: #a16207;
+    --color-accent-soft-background: #fefce8;
+    --color-badge-background: #fef9c3;
+    --color-focus-ring: rgba(250, 204, 21, 0.55);
+
+    --color-danger: #ef4444;
+    --color-danger-hover: #dc2626;
+    --color-success: #16a34a;
+    --color-link: #3b82f6;
+
+    --color-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+    --color-scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
+}
+
+html.dark {
+    --color-background: #18181b;
+    --color-surface: #27272a;
+    --color-surface-2: #3f3f46;
+    --color-hover: #3f3f46;
+    --color-hover-soft: #3f3f46;
+    --color-border: #3f3f46;
+    --color-border-soft: #3f3f46;
+    --color-text: #f3f4f6;
+    --color-text-heading: #e5e7eb;
+    --color-text-muted: #d1d5db;
+    --color-text-soft: #9ca3af;
+    --color-text-subtle: #6b7280;
+    --color-input-background: #3f3f46;
+    --color-input-border: #52525b;
+
+    --color-accent-background: rgba(113, 63, 18, 0.4);
+    --color-accent-background-hover: rgba(113, 63, 18, 0.6);
+    --color-accent-fg: #facc15;
+    --color-accent-text: #facc15;
+    --color-accent-soft-background: rgba(113, 63, 18, 0.3);
+    --color-badge-background: rgba(113, 63, 18, 0.4);
+    --color-focus-ring: rgba(234, 179, 8, 0.5);
+
+    --color-danger: #f87171;
+    --color-danger-hover: #f87171;
+    --color-success: #4ade80;
+    --color-link: #60a5fa;
+
+    --color-scrollbar-thumb: rgba(255, 255, 255, 0.16);
+    --color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+}
+
+/* Form controls inherit typography (minireset leaves these to the framework) */
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+button {
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    overflow-y: scroll;
+    line-height: 1.5;
+    font-family: var(--font-sans-serif);
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* Scrollbars. Webkit/Blink (Chrome, Safari, WKWebView) use the always-visible
+   custom scrollbar below. Setting the standard scrollbar-width/color would make
+   modern Chrome ignore ::-webkit-scrollbar, so those are only applied as a
+   fallback to browsers that lack it (Firefox). */
+::-webkit-scrollbar {
+    width: 0.75rem;
+    height: 0.75rem;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar-thumb);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar-thumb-hover);
+}
+@supports not selector(::-webkit-scrollbar) {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-scrollbar-thumb) transparent;
+    }
+}
+
+/* Helpers */
+.icon-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+.spacer {
+    flex: 1;
+}
+.has-text-muted {
+    color: var(--color-text-soft);
+}
+.has-text-subtle {
+    color: var(--color-text-subtle);
+}
+.is-active {
+    color: #eab308;
+}
+html.dark .is-active {
+    color: #facc15;
+}
+.is-active-danger {
+    color: var(--color-danger);
+}
+.hover-danger:hover {
+    color: var(--color-danger);
+}
+/* Layout */
+.layout {
+    min-height: 100vh;
+    background-color: var(--color-background);
+    display: flex;
+    flex-direction: column;
+}
+.layout-body {
+    display: flex;
+    flex: 1;
+}
+.layout-main {
+    flex: 1;
+    min-width: 0;
+}
+.centered-screen {
+    min-height: 100vh;
+    background-color: var(--color-background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Page containers */
+.page {
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem;
+}
+.page.is-narrow {
+    max-width: 42rem;
+    padding: 2rem 1rem;
+}
+.page.is-wide {
+    max-width: none;
+    padding: 2rem 1rem;
+}
+.page-title {
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--color-text-heading);
+    margin-bottom: 1.5rem;
+}
+.section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-subtle);
+    margin-bottom: 0.75rem;
+}
+.section-label.is-spaced {
+    margin-bottom: 1.5rem;
+}

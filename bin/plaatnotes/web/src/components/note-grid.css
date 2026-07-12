@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.note-grid {
+    columns: 1;
+    gap: 1rem;
+}
+@media (min-width: 640px) {
+    .note-grid {
+        columns: 2;
+    }
+}
+@media (min-width: 1024px) {
+    .note-grid {
+        columns: 3;
+    }
+}
+@media (min-width: 1280px) {
+    .note-grid {
+        columns: 4;
+    }
+}

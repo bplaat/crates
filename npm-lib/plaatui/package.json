@@ -1,0 +1,17 @@
+{
+    "name": "plaatui",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts",
+        "./base.css": "./src/base.css"
+    },
+    "dependencies": {
+        "@mdi/js": "^7.4.47",
+        "minireset.css": "^0.0.7"
+    },
+    "peerDependencies": {
+        "preact": "^10.26.9"
+    }
+}

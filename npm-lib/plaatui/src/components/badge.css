@@ -1,0 +1,21 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* Badge */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background-color: var(--color-surface-2);
+    color: var(--color-text-soft);
+}
+.badge.is-accent {
+    background-color: var(--color-badge-background);
+    color: var(--color-accent-text);
+}

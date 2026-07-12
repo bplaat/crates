@@ -5,7 +5,8 @@
  */
 
 import { type ComponentChildren } from 'preact';
-import { Card } from './card.tsx';
+import './note-editor-card.css';
+import { Card } from 'plaatui';
 import { RichEditor } from './rich-editor.tsx';
 
 interface NoteEditorCardProps {
@@ -48,7 +49,7 @@ export function NoteEditorCard({
     );
 
     return (
-        <Card class="note-editor">
+        <Card class="note-editor" padded={false}>
             {onSubmit ? (
                 <form onSubmit={onSubmit} class="editor">
                     {content}

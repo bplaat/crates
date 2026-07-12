@@ -4,8 +4,8 @@
     "version": "0.1.0",
     "type": "module",
     "scripts": {
-        "build-debug": "vite build --mode debug --minify=false",
-        "build-release": "vite build --mode release"
+        "build-debug": "tsc -p tsconfig.app.json --noEmit && vite build --mode debug --minify=false",
+        "build-release": "tsc -p tsconfig.app.json --noEmit && vite build --mode release"
     },
     "dependencies": {
         "@mdi/js": "^7.4.47",
@@ -17,6 +17,7 @@
     },
     "devDependencies": {
         "@preact/preset-vite": "^2.10.1",
+        "typescript": "^5.9.3",
         "vite": "^8.0.0"
     }
 }

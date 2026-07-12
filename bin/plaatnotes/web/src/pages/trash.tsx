@@ -5,16 +5,19 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
+import '../components/note-grid.css';
+import '../components/toolbar.css';
 import { type Note } from '../../src-gen/api.ts';
-import { ConfirmDialog } from '../components/dialog.tsx';
-import { EmptyState } from '../components/empty-state.tsx';
+import { ConfirmDialog } from 'plaatui';
+import { EmptyState } from 'plaatui';
 import { AppLayout } from '../components/app-layout.tsx';
 import { NoteCard } from '../components/note-card.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { deleteNote, listTrashedNotes, updateNote, clearTrashedNotes } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
-import { DeleteOutlineIcon } from '../components/icons.tsx';
+import { DangerTextButton, Icon, LoadingText } from 'plaatui';
 import { useSearchQuery } from '../hooks/use-search-query.ts';
+import './trash.css';
 
 type ConfirmAction = { kind: 'delete'; note: Note } | { kind: 'empty' } | null;
 
@@ -64,19 +67,20 @@ export function TrashPage() {
                     <div class="toolbar is-relative">
                         <h1 class="section-label is-spaced">{t('trash.heading')}</h1>
                         {notes.length > 0 && (
-                            <button onClick={handleEmptyTrash} class="text-link-danger">
+                            <DangerTextButton onClick={handleEmptyTrash} class="empty-trash-btn">
+                                <Icon type="delete-outline" class="is-sm" />
                                 {t('trash.empty_btn')}
-                            </button>
+                            </DangerTextButton>
                         )}
                     </div>
 
                     {!loading && notes.length > 0 && <p class="hint-text">{t('trash.hint')}</p>}
 
-                    {loading && notes.length === 0 && <p class="loading-text is-initial">{t('trash.loading')}</p>}
+                    {loading && notes.length === 0 && <LoadingText initial>{t('trash.loading')}</LoadingText>}
 
                     {!loading && notes.length === 0 && (
                         <EmptyState
-                            icon={<DeleteOutlineIcon class="is-huge" />}
+                            icon={<Icon type="delete-outline" class="is-huge" />}
                             message={query ? t('trash.empty_search') : t('trash.empty')}
                         />
                     )}
@@ -95,7 +99,7 @@ export function TrashPage() {
                     )}
 
                     {hasMore && <div ref={sentinelRef} class="sentinel" />}
-                    {loading && notes.length > 0 && <p class="loading-text">{t('trash.loading')}</p>}
+                    {loading && notes.length > 0 && <LoadingText>{t('trash.loading')}</LoadingText>}
                 </div>
             </AppLayout>
 
@@ -104,6 +108,7 @@ export function TrashPage() {
                     title={confirmAction.kind === 'delete' ? t('note.delete_forever') : t('trash.empty_btn')}
                     message={confirmAction.kind === 'delete' ? t('trash.confirm_delete') : t('trash.confirm_empty')}
                     confirmLabel={confirmAction.kind === 'delete' ? t('note.delete_forever') : t('trash.empty_btn')}
+                    cancelLabel={t('dialog.cancel')}
                     onConfirm={doConfirm}
                     onClose={() => setConfirmAction(null)}
                 />

@@ -6,8 +6,10 @@
 
 import { type ComponentChildren } from 'preact';
 import { type JSX } from 'preact/jsx-runtime';
+import './form.css';
+import { cx } from '../utils.ts';
 
-interface FormFieldProps {
+export interface FormFieldProps {
     id: string;
     label: string;
     error?: string | null | false;
@@ -26,7 +28,7 @@ export function FormField({ id, label, error, children }: FormFieldProps) {
     );
 }
 
-interface FormMessageProps {
+export interface FormMessageProps {
     type: 'success' | 'error';
     message: string | null | undefined | false;
 }
@@ -37,5 +39,5 @@ export function FormMessage({ type, message }: FormMessageProps) {
 }
 
 export function FormActions({ class: extraClass, ...props }: JSX.IntrinsicElements['div']) {
-    return <div {...props} class={extraClass ? `form-actions ${extraClass}` : 'form-actions'} />;
+    return <div {...props} class={cx('form-actions', extraClass)} />;
 }

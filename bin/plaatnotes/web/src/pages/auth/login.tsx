@@ -6,12 +6,13 @@
 
 import { useLocation } from 'wouter-preact';
 import { useEffect, useState } from 'preact/hooks';
-import { Button } from '../../components/button.tsx';
-import { FormActions, FormField } from '../../components/form.tsx';
-import { FormInput } from '../../components/input.tsx';
+import { Button } from 'plaatui';
+import { FormActions, FormField } from 'plaatui';
+import { FormInput } from 'plaatui';
 import { login } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
-import { LoginIcon } from '../../components/icons.tsx';
+import { Icon } from 'plaatui';
+import './login.css';
 
 export function AuthLogin() {
     const [email, setEmail] = useState('');
@@ -79,7 +80,7 @@ export function AuthLogin() {
                     <FormActions>
                         <Button type="submit" disabled={loading}>
                             <span class="icon-text">
-                                <LoginIcon class="is-sm" />
+                                <Icon type="login" class="is-sm" />
                                 {loading ? t('login.submitting') : t('login.submit')}
                             </span>
                         </Button>

@@ -6,24 +6,20 @@
 
 import { type ComponentChildren } from 'preact';
 import { t } from '../services/i18n.service.ts';
-import { ArchiveArrowDownIcon, DeleteOutlineIcon, NoteTextIcon } from './icons.tsx';
-import { SidebarLayout, SidebarLink } from './sidebar.tsx';
+import { SidebarLayout } from 'plaatui';
+import { PlaatNotesNavbar } from './navbar.tsx';
+import { SidebarLink } from './sidebar-link.tsx';
 
 export function AppLayout({ children, showSearch }: { children: ComponentChildren; showSearch?: boolean }) {
     return (
         <SidebarLayout
-            showSearch={showSearch}
+            navbar={<PlaatNotesNavbar showSearch={showSearch} />}
+            version={__APP_VERSION__}
             sidebar={
                 <>
-                    <SidebarLink href="/" label={t('sidebar.notes')}>
-                        <NoteTextIcon class="is-md" />
-                    </SidebarLink>
-                    <SidebarLink href="/archive" label={t('sidebar.archive')}>
-                        <ArchiveArrowDownIcon class="is-md" />
-                    </SidebarLink>
-                    <SidebarLink href="/trash" label={t('sidebar.trash')}>
-                        <DeleteOutlineIcon class="is-md" />
-                    </SidebarLink>
+                    <SidebarLink href="/" label={t('sidebar.notes')} icon="text-box" />
+                    <SidebarLink href="/archive" label={t('sidebar.archive')} icon="package-down" />
+                    <SidebarLink href="/trash" label={t('sidebar.trash')} icon="delete" />
                 </>
             }
         >

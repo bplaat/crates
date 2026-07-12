@@ -5,6 +5,7 @@
  */
 
 import { Route, Switch } from 'wouter-preact';
+import { LoadingText } from 'plaatui';
 import { useEffect } from 'preact/hooks';
 import { AdminUsers } from './pages/admin/users.tsx';
 import { ArchivePage } from './pages/archive.tsx';
@@ -50,7 +51,7 @@ export function App() {
     if (authUser === undefined) {
         return (
             <div class="centered-screen">
-                <div class="loading-text">{t('app.loading')}</div>
+                <LoadingText>{t('app.loading')}</LoadingText>
             </div>
         );
     }

@@ -5,47 +5,72 @@
  */
 
 import { type ComponentChildren } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
+import './dialog.css';
 import { Button, DangerButton, IconButton, SecondaryButton } from './button.tsx';
 import { FormActions, FormField } from './form.tsx';
 import { FormInput } from './input.tsx';
-import { CloseIcon, DeleteOutlineIcon } from './icons.tsx';
-import { t } from '../services/i18n.service.ts';
+import { Icon } from './icons.tsx';
 
-interface DialogProps {
+export interface DialogProps {
     title: string;
+    closeLabel?: string;
     onClose: () => void;
     children: ComponentChildren;
 }
 
-export function Dialog({ title, onClose, children }: DialogProps) {
-    useEffect(() => {
-        function onKey(e: KeyboardEvent) {
-            if (e.key === 'Escape') onClose();
+export function Dialog({ title, closeLabel = 'Close', onClose, children }: DialogProps) {
+    const dialogRef = useRef<HTMLDialogElement>(null);
+
+    // Lock background scroll while open. Reserve the scrollbar's width as padding so
+    // hiding it shifts neither the page content nor the fixed, centered overlay.
+    useLayoutEffect(() => {
+        const dialog = dialogRef.current;
+        dialog?.showModal();
+
+        const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+        const { overflow, paddingRight } = document.body.style;
+        document.body.style.overflow = 'hidden';
+        if (scrollbarWidth > 0) {
+            document.body.style.paddingRight = `${scrollbarWidth}px`;
+            dialog?.style.setProperty('padding-right', `${scrollbarWidth}px`);
         }
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
+        return () => {
+            dialog?.close();
+            document.body.style.overflow = overflow;
+            document.body.style.paddingRight = paddingRight;
+        };
+    }, []);
 
     return (
-        <div class="modal" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-            <div role="dialog" aria-modal="true" class="modal-card">
+        <dialog
+            ref={dialogRef}
+            class="modal"
+            onCancel={(e) => {
+                e.preventDefault();
+                onClose();
+            }}
+            onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+        >
+            <div class="modal-card">
                 <div class="modal-card-head">
                     <h2 class="modal-card-title">{title}</h2>
-                    <IconButton onClick={onClose} class="has-text-muted">
-                        <CloseIcon class="is-md" />
+                    <IconButton type="button" onClick={onClose} class="has-text-muted" title={closeLabel}>
+                        <Icon type="close" class="is-md" />
                     </IconButton>
                 </div>
                 <div class="modal-card-body">{children}</div>
             </div>
-        </div>
+        </dialog>
     );
 }
 
-interface ConfirmDialogProps {
+export interface ConfirmDialogProps {
     title: string;
     message: string;
     confirmLabel: string;
+    cancelLabel: string;
+    typeToConfirmLabel?: (confirmText: string) => string;
     // When set, the user must type this exact value before the confirm button is enabled.
     confirmText?: string;
     // Confirm button styling; defaults to a destructive (danger) action.
@@ -60,6 +85,8 @@ export function ConfirmDialog({
     title,
     message,
     confirmLabel,
+    cancelLabel,
+    typeToConfirmLabel,
     confirmText,
     danger = true,
     icon,
@@ -76,7 +103,10 @@ export function ConfirmDialog({
             <div class="form">
                 <p class="modal-text">{message}</p>
                 {gated && (
-                    <FormField id="confirm-text" label={t('dialog.type_to_confirm', confirmText!)}>
+                    <FormField
+                        id="confirm-text"
+                        label={typeToConfirmLabel ? typeToConfirmLabel(confirmText!) : confirmText!}
+                    >
                         <FormInput
                             id="confirm-text"
                             type="text"
@@ -88,9 +118,9 @@ export function ConfirmDialog({
                     </FormField>
                 )}
                 <FormActions class="is-flush">
-                    <SecondaryButton onClick={onClose}>{t('dialog.cancel')}</SecondaryButton>
+                    <SecondaryButton onClick={onClose}>{cancelLabel}</SecondaryButton>
                     <ConfirmButton onClick={onConfirm} disabled={disabled}>
-                        {icon ?? <DeleteOutlineIcon class="is-sm" />}
+                        {icon ?? <Icon type="delete-outline" class="is-sm" />}
                         {confirmLabel}
                     </ConfirmButton>
                 </FormActions>

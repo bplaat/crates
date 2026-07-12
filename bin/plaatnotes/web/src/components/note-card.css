@@ -1,0 +1,110 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.note {
+    display: block;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-border);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    break-inside: avoid;
+    transition: all 0.15s;
+    cursor: pointer;
+    background-color: var(--color-note-default);
+}
+html.dark .note {
+    border-color: #52525b;
+}
+.note:hover {
+    border-color: var(--color-text-subtle);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+.note.is-draggable {
+    cursor: grab;
+}
+.note.is-draggable:active {
+    cursor: grabbing;
+}
+.note.is-default {
+    background-color: var(--color-note-default);
+}
+.note.is-yellow {
+    background-color: var(--color-note-yellow);
+}
+.note.is-green {
+    background-color: var(--color-note-green);
+}
+.note.is-blue {
+    background-color: var(--color-note-blue);
+}
+.note.is-pink {
+    background-color: var(--color-note-pink);
+}
+.note.is-purple {
+    background-color: var(--color-note-purple);
+}
+.note.is-orange {
+    background-color: var(--color-note-orange);
+}
+.note-title {
+    font-weight: 500;
+    color: var(--color-text);
+    margin-bottom: 0.25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.note-snippet {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    white-space: pre-wrap;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.note-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.125rem;
+    margin-top: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.note:hover .note-actions {
+    opacity: 1;
+}
+.note-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    border-radius: 9999px;
+    color: var(--color-text-subtle);
+    transition: all 0.15s;
+    cursor: pointer;
+}
+.note-action:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+html.dark .note-action:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+.note-action.is-pinned {
+    color: #eab308;
+}
+html.dark .note-action.is-pinned {
+    color: #facc15;
+}
+.note-action.is-hover-neutral:hover {
+    color: var(--color-text-heading);
+}
+.note-action.is-hover-success:hover {
+    color: var(--color-success);
+}
+.note-action.is-hover-danger:hover {
+    color: var(--color-danger);
+}

@@ -212,6 +212,7 @@ build_pages() {
     mkdir -p target/pages
     cp index.html target/pages/
     build_pages_baksteen
+    build_pages_plaatui
 }
 
 build_pages_baksteen() {
@@ -219,6 +220,15 @@ build_pages_baksteen() {
     cp -r bin/baksteen/public/* target/pages/baksteen
     cargo build --release -p baksteen --target wasm32-unknown-unknown
     wasm-bindgen --target web --no-typescript --out-dir target/pages/baksteen --out-name baksteen target/wasm32-unknown-unknown/release/baksteen.wasm
+}
+
+build_pages_plaatui() {
+    if [ ! -d node_modules ]; then
+        npm ci --prefer-offline
+    fi
+    npm run build-release --workspace plaatui-showcase
+    mkdir -p target/pages/plaatui
+    cp -r npm-lib/plaatui/showcase/dist/* target/pages/plaatui
 }
 
 installable_apps() {

@@ -5,7 +5,8 @@
  */
 
 import { render } from 'preact';
-import './index.css';
+import 'plaatui/base.css';
+import './app.css';
 import { App } from './app.tsx';
 
 render(<App />, document.getElementById('app')!);

@@ -5,21 +5,23 @@
  */
 
 import { type JSX } from 'preact/jsx-runtime';
-import { CloseIcon, MagnifyIcon } from './icons.tsx';
+import './input.css';
+import { Icon } from './icons.tsx';
+import { cx } from '../utils.ts';
 
-export function FormInput(props: JSX.IntrinsicElements['input']) {
-    return <input {...props} class="input" />;
+export function FormInput({ class: extraClass, ...props }: JSX.IntrinsicElements['input']) {
+    return <input {...props} class={cx('input', extraClass)} />;
 }
 
-export function FormSelect({ children, ...props }: JSX.IntrinsicElements['select']) {
+export function FormSelect({ class: extraClass, children, ...props }: JSX.IntrinsicElements['select']) {
     return (
-        <select {...props} class="select">
+        <select {...props} class={cx('select', extraClass)}>
             {children}
         </select>
     );
 }
 
-interface SearchInputProps {
+export interface SearchInputProps {
     value: string;
     onInput: (value: string) => void;
     onClear: () => void;
@@ -29,17 +31,17 @@ interface SearchInputProps {
 export function SearchInput({ value, onInput, onClear, placeholder }: SearchInputProps) {
     return (
         <div class="search">
-            <MagnifyIcon class="search-icon" />
+            <Icon type="magnify" class="search-icon" />
             <input
                 type="search"
                 value={value}
                 onInput={(e) => onInput((e.target as HTMLInputElement).value)}
                 placeholder={placeholder}
-                class={`input ${value ? 'has-value' : ''}`}
+                class={cx('input', value && 'has-value')}
             />
             {value && (
                 <button type="button" onClick={onClear} class="search-clear">
-                    <CloseIcon class="is-sm" />
+                    <Icon type="close" class="is-sm" />
                 </button>
             )}
         </div>

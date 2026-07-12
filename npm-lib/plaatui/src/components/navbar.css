@@ -1,0 +1,129 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* Navbar */
+.navbar {
+    background-color: var(--color-surface);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.navbar-container {
+    padding: 0 1rem;
+    height: 4rem;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-heading);
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+.navbar-brand:hover {
+    color: var(--color-text);
+}
+.navbar-brand img {
+    width: 2rem;
+    height: 2rem;
+}
+.navbar-brand-name {
+    font-size: 1.25rem;
+    font-weight: 500;
+    display: none;
+}
+.navbar-search {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    padding: 0 1rem;
+}
+.navbar-search-inner {
+    width: 100%;
+    max-width: 28rem;
+    pointer-events: auto;
+}
+.navbar-menu-wrapper {
+    position: relative;
+}
+.navbar-user {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    transition: background-color 0.15s;
+    cursor: pointer;
+}
+.navbar-user:hover {
+    background-color: var(--color-hover);
+}
+.navbar-user-name {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    display: none;
+}
+.avatar {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    background-color: var(--color-accent-background);
+    color: var(--color-accent-fg);
+    font-weight: 600;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    user-select: none;
+}
+@media (min-width: 640px) {
+    .navbar-brand-name,
+    .navbar-user-name {
+        display: block;
+    }
+}
+
+/* Dropdown */
+.dropdown-menu {
+    position: absolute;
+    right: 0;
+    margin-top: 0.25rem;
+    width: 11rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    z-index: 20;
+}
+.dropdown-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    color: var(--color-text-heading);
+    transition: background-color 0.15s;
+    cursor: pointer;
+}
+.dropdown-item:hover {
+    background-color: var(--color-hover-soft);
+}
+.dropdown-item .icon {
+    color: var(--color-text-subtle);
+}
+.dropdown-divider {
+    border-top: 1px solid var(--color-border-soft);
+}

@@ -1,0 +1,179 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* Showcase-only helpers layered on top of plaatui/base.css */
+
+.showcase-section {
+    margin-bottom: 2.5rem;
+    scroll-margin-top: 5rem;
+}
+.showcase-section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-text-heading);
+    margin-bottom: 0.25rem;
+}
+.showcase-section-desc {
+    color: var(--color-text-soft);
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+.showcase-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+.showcase-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 32rem;
+}
+.showcase-icons {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+    gap: 0.5rem;
+}
+.showcase-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.75rem 0.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface);
+}
+.showcase-icon span {
+    font-size: 0.6875rem;
+    color: var(--color-text-subtle);
+    text-align: center;
+    word-break: break-all;
+}
+/* Typography samples */
+.showcase-type-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-subtle);
+    margin-bottom: 0.5rem;
+}
+.showcase-type-sans {
+    font-family: var(--font-sans-serif);
+    font-size: 1.125rem;
+    color: var(--color-text);
+}
+.showcase-type-sans.is-bold {
+    font-weight: 600;
+}
+.showcase-type-mono {
+    font-family: var(--font-monospace);
+    font-size: 1rem;
+    color: var(--color-text);
+}
+
+/* Color swatches */
+.showcase-swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: 0.75rem;
+}
+.showcase-swatch {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+}
+.showcase-swatch-box {
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+}
+.showcase-swatch span {
+    font-family: var(--font-monospace);
+    font-size: 0.75rem;
+    color: var(--color-text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* FAB demo: contain the normally-fixed button inside the card */
+.showcase-fab-demo {
+    position: relative;
+    min-height: 8rem;
+}
+.showcase-fab-demo .fab {
+    position: absolute;
+}
+
+/* Empty-state demo: keep the placeholder centered within the card */
+.showcase-empty-demo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 16rem;
+}
+.showcase-empty-demo .empty-state {
+    margin-top: 0;
+}
+
+/* Navbar demo: a real navbar clipped into a rounded box with room for the dropdown */
+.showcase-navbar-demo {
+    min-height: 14rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background-color: var(--color-background);
+}
+.showcase-navbar-demo .navbar {
+    position: static;
+}
+
+/* Sidebar demo: an interactive standalone sidebar next to a content panel */
+.showcase-sidebar-demo {
+    display: flex;
+    min-height: 13rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    overflow: hidden;
+}
+.showcase-sidebar-demo-content {
+    flex: 1;
+    padding: 1.5rem;
+    background-color: var(--color-background);
+}
+
+/* Table showcase composition; applications can choose their own cell layouts. */
+.showcase-section .table .cell-actions {
+    text-align: right;
+}
+.showcase-section .table .cell-name {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.showcase-section .table .cell-name-text {
+    font-weight: 500;
+}
+.showcase-section .table-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.25rem;
+}
+.showcase-section .col-hide-sm {
+    display: none;
+}
+@media (min-width: 640px) {
+    .showcase-section .col-hide-sm {
+        display: table-cell;
+    }
+}

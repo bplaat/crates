@@ -5,17 +5,18 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
+import '../../components/toolbar.css';
 import { useLocation } from 'wouter-preact';
 import { type Report, type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
-import { Button, SecondaryButton, SmallIconButton } from '../../components/button.tsx';
+import { Button, SecondaryButton, SmallIconButton } from 'plaatui';
 import { $authUser, loginAsUser } from '../../services/auth.service.ts';
-import { Card } from '../../components/card.tsx';
-import { ConfirmDialog, Dialog } from '../../components/dialog.tsx';
-import { FormActions, FormField, FormMessage } from '../../components/form.tsx';
-import { FormInput, FormSelect } from '../../components/input.tsx';
+import { Card } from 'plaatui';
+import { ConfirmDialog, Dialog } from 'plaatui';
+import { FormActions, FormField, FormMessage } from 'plaatui';
+import { FormInput, FormSelect } from 'plaatui';
 import { formatDate, t } from '../../services/i18n.service.ts';
-import { ContentSaveIcon, DeleteOutlineIcon, LoginIcon, PencilIcon, PlusIcon } from '../../components/icons.tsx';
+import { Avatar, Badge, Icon, LoadingText, Table } from 'plaatui';
 import { lastNameInitial } from '../../utils.ts';
 import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/users.service.ts';
@@ -137,17 +138,17 @@ export function AdminUsers() {
                     <h1 class="page-title">{t('admin.users.heading')}</h1>
                     <Button onClick={openCreate}>
                         <span class="icon-text">
-                            <PlusIcon class="is-sm" />
+                            <Icon type="plus" class="is-sm" />
                             {t('admin.users.create_user')}
                         </span>
                     </Button>
                 </div>
 
-                <Card class="is-clipped">
-                    {loading && users.length === 0 && <p class="loading-text is-padded">{t('admin.users.loading')}</p>}
-                    {!loading && users.length === 0 && <p class="loading-text is-padded">{t('admin.users.empty')}</p>}
+                <Card class="is-clipped" padded={false}>
+                    {loading && users.length === 0 && <LoadingText padded>{t('admin.users.loading')}</LoadingText>}
+                    {!loading && users.length === 0 && <LoadingText padded>{t('admin.users.empty')}</LoadingText>}
                     {users.length > 0 && (
-                        <table class="table">
+                        <Table>
                             <thead>
                                 <tr>
                                     <th>{t('admin.users.col_name')}</th>
@@ -162,10 +163,10 @@ export function AdminUsers() {
                                     <tr key={user.id}>
                                         <td>
                                             <div class="cell-name">
-                                                <div class="avatar">
+                                                <Avatar>
                                                     {user.firstName[0].toUpperCase()}
                                                     {lastNameInitial(user.lastName)}
-                                                </div>
+                                                </Avatar>
                                                 <span class="cell-name-text">
                                                     {user.firstName} {user.lastName}
                                                 </span>
@@ -173,11 +174,11 @@ export function AdminUsers() {
                                         </td>
                                         <td class="col-hide-md has-text-muted">{user.email}</td>
                                         <td class="col-hide-sm">
-                                            <span class={`badge ${user.role === 'admin' ? 'is-accent' : ''}`}>
+                                            <Badge accent={user.role === 'admin'}>
                                                 {user.role === 'admin'
                                                     ? t('admin.users.role_admin')
                                                     : t('admin.users.role_normal')}
-                                            </span>
+                                            </Badge>
                                         </td>
                                         <td class="col-hide-lg has-text-subtle">{formatDate(user.createdAt)}</td>
                                         <td>
@@ -187,32 +188,32 @@ export function AdminUsers() {
                                                         onClick={() => setConfirmLoginAs(user)}
                                                         title={t('admin.users.login_as')}
                                                     >
-                                                        <LoginIcon class="is-sm" />
+                                                        <Icon type="login" class="is-sm" />
                                                     </SmallIconButton>
                                                 )}
                                                 <SmallIconButton
                                                     onClick={() => openEdit(user)}
                                                     title={t('admin.users.edit_user')}
                                                 >
-                                                    <PencilIcon class="is-sm" />
+                                                    <Icon type="pencil" class="is-sm" />
                                                 </SmallIconButton>
                                                 <SmallIconButton
                                                     onClick={() => handleDelete(user)}
                                                     title={t('admin.users.delete_user')}
                                                     class="hover-danger"
                                                 >
-                                                    <DeleteOutlineIcon class="is-sm" />
+                                                    <Icon type="delete-outline" class="is-sm" />
                                                 </SmallIconButton>
                                             </div>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </Table>
                     )}
 
                     {hasMore && <div ref={sentinelRef} class="sentinel" />}
-                    {loading && users.length > 0 && <p class="loading-text">{t('admin.users.loading')}</p>}
+                    {loading && users.length > 0 && <LoadingText>{t('admin.users.loading')}</LoadingText>}
                 </Card>
             </div>
 
@@ -296,7 +297,11 @@ export function AdminUsers() {
                             </SecondaryButton>
                             <Button type="submit" disabled={submitting}>
                                 <span class="icon-text">
-                                    {isCreate ? <PlusIcon class="is-sm" /> : <ContentSaveIcon class="is-sm" />}
+                                    {isCreate ? (
+                                        <Icon type="plus" class="is-sm" />
+                                    ) : (
+                                        <Icon type="content-save" class="is-sm" />
+                                    )}
                                     {submitting
                                         ? isCreate
                                             ? t('admin.users.creating')
@@ -316,7 +321,9 @@ export function AdminUsers() {
                     title={t('admin.users.delete_user')}
                     message={t('admin.users.confirm_delete')}
                     confirmLabel={t('admin.users.delete')}
+                    cancelLabel={t('dialog.cancel')}
                     confirmText={confirmDelete.email}
+                    typeToConfirmLabel={(value) => t('dialog.type_to_confirm', value)}
                     onConfirm={doDelete}
                     onClose={() => setConfirmDelete(null)}
                 />
@@ -325,13 +332,14 @@ export function AdminUsers() {
             {confirmLoginAs && (
                 <ConfirmDialog
                     title={t('admin.users.login_as')}
+                    cancelLabel={t('dialog.cancel')}
                     message={t(
                         'admin.users.confirm_login_as',
                         `${confirmLoginAs.firstName} ${confirmLoginAs.lastName}`,
                     )}
                     confirmLabel={t('admin.users.login_as')}
                     danger={false}
-                    icon={<LoginIcon class="is-sm" />}
+                    icon={<Icon type="login" class="is-sm" />}
                     onConfirm={doLoginAs}
                     onClose={() => setConfirmLoginAs(null)}
                 />

@@ -5,16 +5,17 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
+import '../../components/list.css';
 import { type Report, type UserTheme } from '../../../src-gen/api.ts';
-import { Button } from '../../components/button.tsx';
-import { Card } from '../../components/card.tsx';
-import { FormActions, FormField, FormMessage } from '../../components/form.tsx';
-import { FormInput, FormSelect } from '../../components/input.tsx';
+import { Button } from 'plaatui';
+import { Card } from 'plaatui';
+import { FormActions, FormField, FormMessage } from 'plaatui';
+import { FormInput, FormSelect } from 'plaatui';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $authUser } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
 import { changePassword, updateUser } from '../../services/users.service.ts';
-import { ContentSaveIcon, LockIcon } from '../../components/icons.tsx';
+import { Icon } from 'plaatui';
 
 export function SettingsAccount() {
     const user = $authUser.value!;
@@ -162,7 +163,7 @@ export function SettingsAccount() {
                                 <FormActions class="is-flush">
                                     <Button type="submit" disabled={profileLoading}>
                                         <span class="icon-text">
-                                            <ContentSaveIcon class="is-sm" />
+                                            <Icon type="content-save" class="is-sm" />
                                             {profileLoading ? t('settings.saving') : t('settings.save')}
                                         </span>
                                     </Button>
@@ -225,7 +226,7 @@ export function SettingsAccount() {
                                 <FormActions class="is-flush">
                                     <Button type="submit" disabled={passwordLoading}>
                                         <span class="icon-text">
-                                            <LockIcon class="is-sm" />
+                                            <Icon type="lock" class="is-sm" />
                                             {passwordLoading
                                                 ? t('settings.changing_password')
                                                 : t('settings.change_password')}

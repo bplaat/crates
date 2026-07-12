@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* Icon */
+.icon {
+    display: inline-block;
+    fill: currentColor;
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+}
+.icon.is-xs {
+    width: 0.875rem;
+    height: 0.875rem;
+}
+.icon.is-sm {
+    width: 1rem;
+    height: 1rem;
+}
+.icon.is-md {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+.icon.is-lg {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+.icon.is-xl {
+    width: 1.75rem;
+    height: 1.75rem;
+}
+.icon.is-huge {
+    width: 4rem;
+    height: 4rem;
+}

@@ -1,0 +1,37 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* Table */
+.table {
+    width: 100%;
+    font-size: 0.875rem;
+}
+.table thead tr {
+    border-bottom: 1px solid var(--color-border-soft);
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+.table th {
+    padding: 0.75rem 1.25rem;
+    font-weight: 600;
+}
+.table td {
+    padding: 0.75rem 1.25rem;
+}
+.table tbody tr {
+    border-bottom: 1px solid var(--color-border-soft);
+    transition: background-color 0.15s;
+}
+.table tbody tr:last-child {
+    border-bottom: 0;
+}
+.table tbody tr:hover {
+    background-color: var(--color-hover-soft);
+}

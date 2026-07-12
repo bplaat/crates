@@ -4,37 +4,38 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Link, useLocation } from 'wouter-preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { type ComponentChildren } from 'preact';
+import { useLocation } from 'wouter-preact';
+import { useEffect, useState } from 'preact/hooks';
 import { $authUser, logout } from '../services/auth.service.ts';
 import { $searchQuery } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
-import { SearchInput } from './input.tsx';
-import { CogIcon, LogoutIcon, ShieldIcon } from './icons.tsx';
+import {
+    Avatar,
+    DropdownItem,
+    DropdownDivider,
+    DropdownMenu,
+    Icon,
+    Navbar,
+    NavbarBrand,
+    NavbarMenu,
+    NavbarSearch,
+    NavbarSpacer,
+    NavbarUserButton,
+    NavbarUserName,
+    SearchInput,
+    useClickOutside,
+} from 'plaatui';
 import { lastNameInitial } from '../utils.ts';
 
-export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
+export function PlaatNotesNavbar({ showSearch = false }: { showSearch?: boolean }) {
     const user = $authUser.value;
     const [dropdownOpen, setDropdownOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useClickOutside<HTMLDivElement>(dropdownOpen, () => setDropdownOpen(false));
     const [, navigate] = useLocation();
 
     useEffect(() => {
         if (!showSearch) $searchQuery.value = '';
     }, [showSearch]);
-
-    useEffect(() => {
-        function handleClickOutside(e: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-                setDropdownOpen(false);
-            }
-        }
-        if (dropdownOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-            return () => document.removeEventListener('mousedown', handleClickOutside);
-        }
-    }, [dropdownOpen]);
 
     async function handleLogout() {
         setDropdownOpen(false);
@@ -43,83 +44,73 @@ export function Navbar({ showSearch = false }: { showSearch?: boolean }) {
     }
 
     return (
-        <header class="navbar">
-            <div class="navbar-container">
-                <Link href="/" class="navbar-brand">
-                    <img src="/assets/icon.svg" alt="" />
-                    <span class="navbar-brand-name">PlaatNotes</span>
-                </Link>
+        <Navbar>
+            <NavbarBrand
+                href="/"
+                image="/assets/icon.svg"
+                name="PlaatNotes"
+                onClick={(event) => {
+                    event.preventDefault();
+                    navigate('/');
+                }}
+            />
 
-                {showSearch && (
-                    <div class="navbar-search">
-                        <div class="navbar-search-inner">
-                            <SearchInput
-                                value={$searchQuery.value}
-                                onInput={(v) => ($searchQuery.value = v)}
-                                onClear={() => ($searchQuery.value = '')}
-                                placeholder={t('nav.search')}
-                            />
-                        </div>
-                    </div>
-                )}
+            {showSearch && (
+                <NavbarSearch>
+                    <SearchInput
+                        value={$searchQuery.value}
+                        onInput={(v) => ($searchQuery.value = v)}
+                        onClear={() => ($searchQuery.value = '')}
+                        placeholder={t('nav.search')}
+                    />
+                </NavbarSearch>
+            )}
 
-                <div class="spacer" />
+            <NavbarSpacer />
 
-                {user && (
-                    <div class="navbar-menu-wrapper" ref={dropdownRef}>
-                        <button onClick={() => setDropdownOpen(!dropdownOpen)} class="navbar-user">
-                            <div class="avatar">
-                                {user.firstName[0].toUpperCase()}
-                                {lastNameInitial(user.lastName)}
-                            </div>
-                            <span class="navbar-user-name">
-                                {user.firstName} {user.lastName}
-                            </span>
-                        </button>
+            {user && (
+                <NavbarMenu ref={dropdownRef}>
+                    <NavbarUserButton onClick={() => setDropdownOpen(!dropdownOpen)}>
+                        <Avatar>
+                            {user.firstName[0].toUpperCase()}
+                            {lastNameInitial(user.lastName)}
+                        </Avatar>
+                        <NavbarUserName>
+                            {user.firstName} {user.lastName}
+                        </NavbarUserName>
+                    </NavbarUserButton>
 
-                        {dropdownOpen && (
-                            <div class="dropdown-menu">
-                                {user.role === 'admin' && (
-                                    <>
-                                        <DropdownItem
-                                            onClick={() => {
-                                                setDropdownOpen(false);
-                                                navigate('/admin/users');
-                                            }}
-                                        >
-                                            <ShieldIcon class="is-sm" />
-                                            {t('nav.admin')}
-                                        </DropdownItem>
-                                        <div class="dropdown-divider" />
-                                    </>
-                                )}
+                    {dropdownOpen && (
+                        <DropdownMenu>
+                            {user.role === 'admin' && (
                                 <DropdownItem
                                     onClick={() => {
                                         setDropdownOpen(false);
-                                        navigate('/settings');
+                                        navigate('/admin/users');
                                     }}
                                 >
-                                    <CogIcon class="is-sm" />
-                                    {t('nav.settings')}
+                                    <Icon type="security" class="is-sm" />
+                                    {t('nav.admin')}
                                 </DropdownItem>
-                                <div class="dropdown-divider" />
-                                <DropdownItem onClick={handleLogout}>
-                                    <LogoutIcon class="is-sm" />
-                                    {t('nav.logout')}
-                                </DropdownItem>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-        </header>
-    );
-}
-
-function DropdownItem({ onClick, children }: { onClick: () => void; children: ComponentChildren }) {
-    return (
-        <button onClick={onClick} class="dropdown-item">
-            {children}
-        </button>
+                            )}
+                            <DropdownItem
+                                onClick={() => {
+                                    setDropdownOpen(false);
+                                    navigate('/settings');
+                                }}
+                            >
+                                <Icon type="cog" class="is-sm" />
+                                {t('nav.settings')}
+                            </DropdownItem>
+                            <DropdownDivider />
+                            <DropdownItem onClick={handleLogout}>
+                                <Icon type="logout" class="is-sm" />
+                                {t('nav.logout')}
+                            </DropdownItem>
+                        </DropdownMenu>
+                    )}
+                </NavbarMenu>
+            )}
+        </Navbar>
     );
 }

@@ -8,12 +8,12 @@ import { useLocation } from 'wouter-preact';
 import { useEffect, useMemo } from 'preact/hooks';
 import { type Note } from '../../src-gen/api.ts';
 import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
-import { EmptyState } from '../components/empty-state.tsx';
+import { EmptyState } from 'plaatui';
 import { AppLayout } from '../components/app-layout.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
 import { listNotes, listPinnedNotes, updateNote } from '../services/notes.service.ts';
 import { t } from '../services/i18n.service.ts';
-import { NoteTextIcon, PlusIcon } from '../components/icons.tsx';
+import { Fab, Icon, LoadingText } from 'plaatui';
 import { useSearchQuery } from '../hooks/use-search-query.ts';
 
 export function Home() {
@@ -99,11 +99,11 @@ export function Home() {
     return (
         <AppLayout showSearch>
             <div class="page">
-                {initialLoading && <p class="loading-text is-initial">{t('home.loading')}</p>}
+                {initialLoading && <LoadingText initial>{t('home.loading')}</LoadingText>}
 
                 {isEmpty && (
                     <EmptyState
-                        icon={<NoteTextIcon class="is-huge" />}
+                        icon={<Icon type="text-box" class="is-huge" />}
                         message={query ? t('home.empty_search') : t('home.empty')}
                     />
                 )}
@@ -120,7 +120,7 @@ export function Home() {
                             onTrash={handleTrash}
                         />
                         {pinnedHasMore && <div ref={pinnedSentinelRef} class="sentinel" />}
-                        {pinnedLoading && pinnedItems.length > 0 && <p class="loading-text">{t('home.loading')}</p>}
+                        {pinnedLoading && pinnedItems.length > 0 && <LoadingText>{t('home.loading')}</LoadingText>}
                     </section>
                 )}
 
@@ -139,12 +139,12 @@ export function Home() {
                 )}
 
                 {otherHasMore && <div ref={otherSentinelRef} class="sentinel" />}
-                {otherLoading && otherItems.length > 0 && <p class="loading-text">{t('home.loading')}</p>}
+                {otherLoading && otherItems.length > 0 && <LoadingText>{t('home.loading')}</LoadingText>}
             </div>
 
-            <button onClick={() => navigate('/notes/create')} class="fab" title={t('home.create')}>
-                <PlusIcon class="is-xl" />
-            </button>
+            <Fab onClick={() => navigate('/notes/create')} title={t('home.create')}>
+                <Icon type="plus" class="is-xl" />
+            </Fab>
         </AppLayout>
     );
 }

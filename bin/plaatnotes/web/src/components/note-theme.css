@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+:root {
+    --color-note-default: #ffffff;
+    --color-note-yellow: #fef9c3;
+    --color-note-green: #dcfce7;
+    --color-note-blue: #dbeafe;
+    --color-note-pink: #fce7f3;
+    --color-note-purple: #f3e8ff;
+    --color-note-orange: #ffedd5;
+}
+
+html.dark {
+    --color-note-default: #27272a;
+    --color-note-yellow: rgba(113, 63, 18, 0.4);
+    --color-note-green: rgba(20, 83, 45, 0.4);
+    --color-note-blue: rgba(30, 58, 138, 0.4);
+    --color-note-pink: rgba(131, 24, 67, 0.4);
+    --color-note-purple: rgba(88, 28, 135, 0.4);
+    --color-note-orange: rgba(124, 45, 18, 0.4);
+}

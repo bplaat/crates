@@ -1,0 +1,90 @@
+/*
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* Button */
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+.button.is-primary {
+    background-color: var(--color-accent-background);
+    color: var(--color-accent-fg);
+}
+.button.is-primary:hover:not(:disabled) {
+    background-color: var(--color-accent-background-hover);
+}
+.button.is-secondary {
+    color: var(--color-text-muted);
+    font-weight: 400;
+}
+.button.is-secondary:hover:not(:disabled) {
+    background-color: var(--color-hover);
+}
+.button.is-danger {
+    background-color: var(--color-danger);
+    color: #ffffff;
+}
+.button.is-danger:hover:not(:disabled) {
+    background-color: var(--color-danger-hover);
+}
+html.dark .button.is-danger {
+    background-color: rgba(127, 29, 29, 0.5);
+    color: #fca5a5;
+}
+html.dark .button.is-danger:hover:not(:disabled) {
+    background-color: rgba(127, 29, 29, 0.7);
+}
+.button.is-icon {
+    padding: 0.5rem;
+    border-radius: 9999px;
+    font-weight: 400;
+}
+.button.is-icon:hover:not(:disabled),
+.button.is-icon:focus-visible:not(:disabled) {
+    background-color: var(--color-hover);
+}
+.button.is-icon.is-small {
+    padding: 0.375rem;
+    color: var(--color-text-subtle);
+}
+
+/* Text button (link-like inline action) */
+.text-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    transition:
+        color 0.15s,
+        background-color 0.15s;
+    cursor: pointer;
+}
+.text-button:hover:not(:disabled) {
+    background-color: var(--color-hover);
+}
+.text-button.is-danger {
+    color: var(--color-danger);
+}
+.text-button.is-danger:hover:not(:disabled) {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: var(--color-danger-hover);
+}

@@ -5,15 +5,17 @@
  */
 
 import { useEffect, useState } from 'preact/hooks';
+import '../../components/list.css';
 import { type Session } from '../../../src-gen/api.ts';
-import { Card } from '../../components/card.tsx';
-import { ConfirmDialog } from '../../components/dialog.tsx';
+import { Card } from 'plaatui';
+import { ConfirmDialog } from 'plaatui';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $currentSessionId } from '../../services/auth.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
 import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { listSessions, revokeSession } from '../../services/sessions.service.ts';
-import { HistoryIcon, LaptopIcon } from '../../components/icons.tsx';
+import { Badge, Icon, LoadingText, SecondaryButton } from 'plaatui';
+import './sessions.css';
 
 function clientLabel(session: Session): string {
     const { name, version, os } = session.client;
@@ -60,11 +62,11 @@ export function SettingsSessions() {
                     <h1 class="page-title">{t('settings.sessions.heading')}</h1>
 
                     {loading && sessions.length === 0 && (
-                        <p class="loading-text is-initial">{t('settings.sessions.loading')}</p>
+                        <LoadingText initial>{t('settings.sessions.loading')}</LoadingText>
                     )}
 
                     {!loading && sessions.length === 0 && (
-                        <p class="loading-text is-initial">{t('settings.sessions.empty')}</p>
+                        <LoadingText initial>{t('settings.sessions.empty')}</LoadingText>
                     )}
 
                     {sessions.length > 0 && (
@@ -72,19 +74,15 @@ export function SettingsSessions() {
                             {sessions.map((session) => {
                                 const isCurrent = session.id === currentSessionId;
                                 return (
-                                    <Card key={session.id} class="session">
+                                    <Card key={session.id} class="session" padded={false}>
                                         <div class="session-icon">
-                                            <LaptopIcon class="is-lg" />
+                                            <Icon type="laptop" class="is-lg" />
                                         </div>
 
                                         <div class="session-body">
                                             <div class="session-head">
                                                 <p class="session-name">{clientLabel(session)}</p>
-                                                {isCurrent && (
-                                                    <span class="badge is-accent">
-                                                        {t('settings.sessions.current')}
-                                                    </span>
-                                                )}
+                                                {isCurrent && <Badge accent>{t('settings.sessions.current')}</Badge>}
                                             </div>
                                             <p class="session-location">{locationLabel(session)}</p>
                                             <p class="session-meta">
@@ -95,10 +93,10 @@ export function SettingsSessions() {
                                         </div>
 
                                         {!isCurrent && (
-                                            <button onClick={() => handleRevoke(session.id)} class="session-revoke">
-                                                <HistoryIcon class="is-xs" />
+                                            <SecondaryButton onClick={() => handleRevoke(session.id)}>
+                                                <Icon type="history" class="is-xs" />
                                                 {t('settings.sessions.revoke')}
-                                            </button>
+                                            </SecondaryButton>
                                         )}
                                     </Card>
                                 );
@@ -107,7 +105,7 @@ export function SettingsSessions() {
                     )}
 
                     {hasMore && <div ref={sentinelRef} class="sentinel" />}
-                    {loading && sessions.length > 0 && <p class="loading-text">{t('settings.sessions.loading')}</p>}
+                    {loading && sessions.length > 0 && <LoadingText>{t('settings.sessions.loading')}</LoadingText>}
                 </div>
             </SettingsLayout>
 
@@ -116,6 +114,7 @@ export function SettingsSessions() {
                     title={t('settings.sessions.revoke')}
                     message={t('settings.sessions.confirm_revoke')}
                     confirmLabel={t('settings.sessions.revoke')}
+                    cancelLabel={t('dialog.cancel')}
                     onConfirm={doRevoke}
                     onClose={() => setConfirmRevokeId(null)}
                 />

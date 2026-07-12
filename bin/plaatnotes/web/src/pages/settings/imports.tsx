@@ -5,14 +5,14 @@
  */
 
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Button } from '../../components/button.tsx';
-import { Card } from '../../components/card.tsx';
-import { FormActions, FormField, FormMessage } from '../../components/form.tsx';
-import { FormInput } from '../../components/input.tsx';
+import { Button } from 'plaatui';
+import { Card } from 'plaatui';
+import { FormActions, FormField, FormMessage } from 'plaatui';
+import { FormInput } from 'plaatui';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { authFetch } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
-import { CloudUploadIcon } from '../../components/icons.tsx';
+import { Icon } from 'plaatui';
 import { type ImportGoogleKeepResponse } from '../../../src-gen/api.ts';
 
 export function SettingsImports() {
@@ -87,7 +87,7 @@ export function SettingsImports() {
                             <FormActions class="is-flush">
                                 <Button type="submit" disabled={loading || !file}>
                                     <span class="icon-text">
-                                        <CloudUploadIcon class="is-sm" />
+                                        <Icon type="cloud-upload" class="is-sm" />
                                         {loading
                                             ? t('settings.imports.google_keep.importing')
                                             : t('settings.imports.google_keep.submit')}

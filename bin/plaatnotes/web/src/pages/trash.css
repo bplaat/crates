@@ -1,0 +1,17 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.hint-text {
+    font-size: 0.75rem;
+    color: var(--color-text-subtle);
+    margin-bottom: 1rem;
+}
+
+/* Pin the empty-trash action to the right of the relative toolbar */
+.empty-trash-btn {
+    position: absolute;
+    right: 0;
+}

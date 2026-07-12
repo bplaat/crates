@@ -9,19 +9,8 @@ import { marked } from 'marked';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import TurndownService from 'turndown';
 import { t } from '../services/i18n.service.ts';
-import {
-    CodeBracesIcon,
-    CodeTagsIcon,
-    FormatBoldIcon,
-    FormatItalicIcon,
-    FormatListBulletedIcon,
-    FormatListNumberedIcon,
-    FormatQuoteOpenIcon,
-    FormatStrikethroughIcon,
-    FormatUnderlineIcon,
-    LinkIcon,
-    MinusIcon,
-} from './icons.tsx';
+import { Icon } from 'plaatui';
+import './rich-editor.css';
 
 const td = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-' });
 td.addRule('underline', {
@@ -177,16 +166,16 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
                 {!plainMode && (
                     <>
                         <ToolbarButton onClick={() => execCmd('bold')} title={t('editor.bold')}>
-                            <FormatBoldIcon class="is-sm" />
+                            <Icon type="format-bold" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('italic')} title={t('editor.italic')}>
-                            <FormatItalicIcon class="is-sm" />
+                            <Icon type="format-italic" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('underline')} title={t('editor.underline')}>
-                            <FormatUnderlineIcon class="is-sm" />
+                            <Icon type="format-underline" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('strikeThrough')} title={t('editor.strikethrough')}>
-                            <FormatStrikethroughIcon class="is-sm" />
+                            <Icon type="format-strikethrough" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={() => execCmd('formatBlock', 'h1')} title={t('editor.h1')}>
@@ -205,29 +194,29 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
                             onClick={() => execCmd('formatBlock', 'blockquote')}
                             title={t('editor.blockquote')}
                         >
-                            <FormatQuoteOpenIcon class="is-sm" />
+                            <Icon type="format-quote-open" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={() => execCmd('insertUnorderedList')} title={t('editor.ul')}>
-                            <FormatListBulletedIcon class="is-sm" />
+                            <Icon type="format-list-bulleted" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={() => execCmd('insertOrderedList')} title={t('editor.ol')}>
-                            <FormatListNumberedIcon class="is-sm" />
+                            <Icon type="format-list-numbered" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={handleInlineCode} title={t('editor.code')}>
-                            <CodeTagsIcon class="is-sm" />
+                            <Icon type="code-tags" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarButton onClick={handleCodeBlock} title={t('editor.code_block')}>
-                            <CodeBracesIcon class="is-sm" />
+                            <Icon type="code-braces" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={handleLink} title={t('editor.link')}>
-                            <LinkIcon class="is-sm" />
+                            <Icon type="link" class="is-sm" />
                         </ToolbarButton>
                         <ToolbarSep />
                         <ToolbarButton onClick={() => execCmd('insertHorizontalRule')} title={t('editor.hr')}>
-                            <MinusIcon class="is-sm" />
+                            <Icon type="minus" class="is-sm" />
                         </ToolbarButton>
                     </>
                 )}
@@ -241,7 +230,7 @@ export function RichEditor({ value, onInput, placeholder, class: className, auto
                     title={plainMode ? t('editor.rich_mode') : t('editor.plain_mode')}
                     class="editor-mode-toggle"
                 >
-                    <CodeTagsIcon class="is-xs" />
+                    <Icon type="code-tags" class="is-xs" />
                     {plainMode ? t('editor.rich_mode') : t('editor.plain_mode')}
                 </button>
             </div>

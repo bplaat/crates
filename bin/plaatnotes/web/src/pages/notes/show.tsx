@@ -7,19 +7,13 @@
 import { useLocation, useParams } from 'wouter-preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { type Note } from '../../../src-gen/api.ts';
-import { Navbar } from '../../components/navbar.tsx';
-import { IconButton } from '../../components/button.tsx';
+import { PlaatNotesNavbar } from '../../components/navbar.tsx';
+import { IconButton } from 'plaatui';
 import { NoteEditorCard } from '../../components/note-editor-card.tsx';
 import { createNote, fetchNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
-import {
-    ArchiveArrowDownIcon,
-    ArchiveArrowUpIcon,
-    ArrowLeftIcon,
-    DeleteOutlineIcon,
-    PinIcon,
-    RestoreIcon,
-} from '../../components/icons.tsx';
+import { Icon, LoadingText } from 'plaatui';
+import './show.css';
 
 function hasMeaningfulBody(body: string): boolean {
     return body.replace(/<br\s*\/?>/gi, '').trim().length > 0;
@@ -151,15 +145,15 @@ export function NotesShow() {
     if (isLoading) {
         return (
             <div class="layout">
-                <Navbar />
-                <p class="loading-text is-initial">{t('app.loading')}</p>
+                <PlaatNotesNavbar />
+                <LoadingText initial>{t('app.loading')}</LoadingText>
             </div>
         );
     }
 
     return (
         <div class="note-show">
-            <Navbar />
+            <PlaatNotesNavbar />
             <main class="note-show-main">
                 <div class="note-show-header">
                     <IconButton
@@ -167,7 +161,7 @@ export function NotesShow() {
                         class="has-text-muted"
                         title={t('notes_show.back')}
                     >
-                        <ArrowLeftIcon class="is-md" />
+                        <Icon type="arrow-left" class="is-md" />
                     </IconButton>
                     <h1 class="note-show-title">{isNew ? t('notes_create.heading') : t('notes_show.heading')}</h1>
                     <div class="spacer" />
@@ -176,7 +170,7 @@ export function NotesShow() {
                         class={isPinned ? 'is-active' : 'has-text-muted'}
                         title={isPinned ? t('note.unpin') : t('note.pin')}
                     >
-                        <PinIcon class="is-md" />
+                        <Icon type="pin" class="is-md" />
                     </IconButton>
                     {!isNew && (
                         <>
@@ -186,9 +180,9 @@ export function NotesShow() {
                                 title={isArchived ? t('note.unarchive') : t('note.archive')}
                             >
                                 {isArchived ? (
-                                    <ArchiveArrowUpIcon class="is-md" />
+                                    <Icon type="package-up" class="is-md" />
                                 ) : (
-                                    <ArchiveArrowDownIcon class="is-md" />
+                                    <Icon type="package-down" class="is-md" />
                                 )}
                             </IconButton>
                             <IconButton
@@ -196,7 +190,11 @@ export function NotesShow() {
                                 class={isTrashed ? 'is-active-danger' : 'has-text-muted'}
                                 title={isTrashed ? t('note.restore') : t('note.trash')}
                             >
-                                {isTrashed ? <RestoreIcon class="is-md" /> : <DeleteOutlineIcon class="is-md" />}
+                                {isTrashed ? (
+                                    <Icon type="restore" class="is-md" />
+                                ) : (
+                                    <Icon type="delete" class="is-md" />
+                                )}
                             </IconButton>
                         </>
                     )}

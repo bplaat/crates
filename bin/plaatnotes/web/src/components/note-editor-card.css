@@ -1,0 +1,36 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.note-editor {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+.note-editor-header {
+    padding: 1.25rem 1.25rem 0.5rem;
+}
+.note-title-input {
+    width: 100%;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--color-text);
+    background: transparent;
+    border: none;
+    outline: none;
+}
+.note-title-input::placeholder {
+    color: var(--color-text-subtle);
+}
+.note-editor-footer {
+    border-top: 1px solid var(--color-border-soft);
+    padding: 0.75rem 1.25rem;
+    background-color: var(--color-hover-soft);
+}
+html.dark .note-editor-footer {
+    background-color: rgba(63, 63, 70, 0.5);
+}

@@ -1,0 +1,18 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+.toolbar.is-relative {
+    position: relative;
+}
+.toolbar .page-title {
+    margin-bottom: 0;
+}

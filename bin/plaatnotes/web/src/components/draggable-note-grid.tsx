@@ -5,6 +5,7 @@
  */
 
 import { useRef } from 'preact/hooks';
+import './note-grid.css';
 import { type Note } from '../../src-gen/api.ts';
 import { reorderNotes } from '../services/notes.service.ts';
 import { NoteCard } from './note-card.tsx';

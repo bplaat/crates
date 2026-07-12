@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.note-section {
+    margin-bottom: 1.5rem;
+}
+.sentinel {
+    height: 0.25rem;
+}
+
+/* PlaatNotes user table composition */
+.table .cell-actions {
+    text-align: right;
+}
+.table .cell-name {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.table .cell-name-text {
+    font-weight: 500;
+    color: var(--color-text);
+}
+.table-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+}
+.col-hide-sm,
+.col-hide-md,
+.col-hide-lg {
+    display: none;
+}
+@media (min-width: 640px) {
+    .col-hide-sm {
+        display: table-cell;
+    }
+}
+@media (min-width: 768px) {
+    .col-hide-md {
+        display: table-cell;
+    }
+}
+@media (min-width: 1024px) {
+    .col-hide-lg {
+        display: table-cell;
+    }
+}

@@ -1,0 +1,45 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.session {
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+.session-icon {
+    margin-top: 0.125rem;
+    color: var(--color-text-subtle);
+    flex-shrink: 0;
+}
+.session-body {
+    flex: 1;
+    min-width: 0;
+}
+.session-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.session-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.session-location {
+    font-size: 0.75rem;
+    color: var(--color-text-soft);
+    margin-top: 0.125rem;
+}
+.session-meta {
+    font-size: 0.75rem;
+    color: var(--color-text-subtle);
+    margin-top: 0.25rem;
+}
