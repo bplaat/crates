@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type Page, expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const API_URL = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8080'}/api`;
 

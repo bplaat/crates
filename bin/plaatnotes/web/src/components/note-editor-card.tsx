@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type ComponentChildren } from 'preact';
-import './note-editor-card.css';
 import { Card } from 'plaatui';
+import { type ComponentChildren } from 'preact';
 import { RichEditor } from './rich-editor.tsx';
+import './note-editor-card.css';
 
 interface NoteEditorCardProps {
     title: string;

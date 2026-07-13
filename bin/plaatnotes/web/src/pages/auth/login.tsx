@@ -4,14 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useLocation } from 'wouter-preact';
+import { Button, Form, FormActions, FormField, FormInput, IconText, LoginIcon } from 'plaatui';
 import { useEffect, useState } from 'preact/hooks';
-import { Button } from 'plaatui';
-import { FormActions, FormField } from 'plaatui';
-import { FormInput } from 'plaatui';
+import { useLocation } from 'wouter-preact';
 import { login } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
-import { Icon } from 'plaatui';
 import './login.css';
 
 export function AuthLogin() {
@@ -54,7 +51,7 @@ export function AuthLogin() {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} class="form">
+                <Form onSubmit={handleSubmit}>
                     <FormField id="email" label={t('login.email')}>
                         <FormInput
                             id="email"
@@ -79,13 +76,13 @@ export function AuthLogin() {
 
                     <FormActions>
                         <Button type="submit" disabled={loading}>
-                            <span class="icon-text">
-                                <Icon type="login" class="is-sm" />
+                            <IconText>
+                                <LoginIcon class="is-sm" />
                                 {loading ? t('login.submitting') : t('login.submit')}
-                            </span>
+                            </IconText>
                         </Button>
                     </FormActions>
-                </form>
+                </Form>
             </div>
 
             <p class="login-footer">

@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { DeleteIcon, PackageDownIcon, SidebarLayout, TextBoxIcon } from 'plaatui';
 import { type ComponentChildren } from 'preact';
 import { t } from '../services/i18n.service.ts';
-import { SidebarLayout } from 'plaatui';
 import { PlaatNotesNavbar } from './navbar.tsx';
 import { SidebarLink } from './sidebar-link.tsx';
 
@@ -17,9 +17,9 @@ export function AppLayout({ children, showSearch }: { children: ComponentChildre
             version={__APP_VERSION__}
             sidebar={
                 <>
-                    <SidebarLink href="/" label={t('sidebar.notes')} icon="text-box" />
-                    <SidebarLink href="/archive" label={t('sidebar.archive')} icon="package-down" />
-                    <SidebarLink href="/trash" label={t('sidebar.trash')} icon="delete" />
+                    <SidebarLink href="/" label={t('sidebar.notes')} icon={TextBoxIcon} />
+                    <SidebarLink href="/archive" label={t('sidebar.archive')} icon={PackageDownIcon} />
+                    <SidebarLink href="/trash" label={t('sidebar.trash')} icon={DeleteIcon} />
                 </>
             }
         >

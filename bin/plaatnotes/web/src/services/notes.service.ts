@@ -5,8 +5,6 @@
  */
 
 import { signal } from '@preact/signals';
-export const $searchQuery = signal('');
-
 import {
     type Note,
     type NoteCreateBody,
@@ -14,8 +12,9 @@ import {
     type NoteUpdateBody,
     type Pagination,
 } from '../../src-gen/api.ts';
-
 import { $authUser, authFetch } from './auth.service.ts';
+
+export const $searchQuery = signal('');
 
 const NOTE_CACHE_MAX_SIZE = 256;
 export const $notesCache = signal<Map<string, Note>>(new Map());

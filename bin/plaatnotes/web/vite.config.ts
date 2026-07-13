@@ -8,8 +8,8 @@ import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, type Plugin } from 'vite';
 import preact from '@preact/preset-vite';
+import { defineConfig, type Plugin } from 'vite';
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

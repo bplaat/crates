@@ -6,8 +6,8 @@
 
 import { type ComponentChildren } from 'preact';
 import { type JSX } from 'preact/jsx-runtime';
-import './form.css';
 import { cx } from '../utils.ts';
+import './form.css';
 
 export interface FormFieldProps {
     id: string;
@@ -38,6 +38,20 @@ export function FormMessage({ type, message }: FormMessageProps) {
     return <p class={type === 'success' ? 'form-message is-success' : 'form-message is-danger'}>{message}</p>;
 }
 
-export function FormActions({ class: extraClass, ...props }: JSX.IntrinsicElements['div']) {
-    return <div {...props} class={cx('form-actions', extraClass)} />;
+export function Form({ class: extraClass, ...props }: JSX.IntrinsicElements['form']) {
+    return <form {...props} class={cx('form', extraClass)} />;
+}
+
+export function FormRow({ class: extraClass, ...props }: JSX.IntrinsicElements['div']) {
+    return <div {...props} class={cx('field-row', extraClass)} />;
+}
+
+export function FormFooter({ class: extraClass, ...props }: JSX.IntrinsicElements['div']) {
+    return <div {...props} class={cx('form-footer', extraClass)} />;
+}
+
+export type FormActionsProps = JSX.IntrinsicElements['div'] & { flush?: boolean };
+
+export function FormActions({ class: extraClass, flush, ...props }: FormActionsProps) {
+    return <div {...props} class={cx('form-actions', flush && 'is-flush', extraClass)} />;
 }

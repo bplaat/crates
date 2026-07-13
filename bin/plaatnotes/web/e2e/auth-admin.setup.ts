@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { test as setup } from '@playwright/test';
 import path from 'node:path';
+import { test as setup } from '@playwright/test';
 
 const authFile = path.join(import.meta.dirname, '../playwright/.auth/admin.json');
 

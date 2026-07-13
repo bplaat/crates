@@ -28,6 +28,12 @@ detect_os() {
 
 OS=$(detect_os)
 
+ensure_npm_deps() {
+    if [ ! -d node_modules ]; then
+        npm ci --prefer-offline
+    fi
+}
+
 # Packages with features that completely swap the backend or linkage.
 # ASAN tests run without these features; global tests add an extra pass without them.
 BACKEND_SWAP_PAIRS=(
@@ -96,9 +102,10 @@ check_copyright() {
 }
 
 check_formatting() {
+    ensure_npm_deps
     echo "Checking prettier formatting..."
     find . -type f \( -name "*.md" -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" -o -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) ! -path "*/node_modules/*" ! -path "*/dist/*" ! -path "*/src-gen/*" ! -path "*/target/*" ! -path "*/.vscode/*" ! -path "*.min.js" ! -path "*playwright/*" ! -path "*playwright-report/*" ! -path "*test-results/*" -print0 \
-        | xargs -0 npx --prefer-offline --yes prettier@3.8.4 --check
+        | xargs -0 npx --no-install prettier --check
 
     echo "Checking clang-format formatting..."
     find bin/bob/examples -type f \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.m" -o -name "*.mm" -o -name "*.java" \) ! -path "*/target/*" -print0 \
@@ -188,16 +195,10 @@ check_docker() {
 
 check_e2e() {
     echo "Running end-to-end tests..."
+    ensure_npm_deps
     cargo build -p plaatnotes --locked
-    (cd bin/plaatnotes/web && check_e2e_plaatnotes)
-}
-
-check_e2e_plaatnotes() {
-    if [ ! -d node_modules ]; then
-        npm ci --prefer-offline
-    fi
-    npx playwright install --with-deps
-    npm test
+    npx --no-install --workspace plaatnotes playwright install --with-deps
+    npm test --workspace plaatnotes
 }
 
 coverage() {
@@ -223,9 +224,7 @@ build_pages_baksteen() {
 }
 
 build_pages_plaatui() {
-    if [ ! -d node_modules ]; then
-        npm ci --prefer-offline
-    fi
+    ensure_npm_deps
     npm run build-release --workspace plaatui-showcase
     mkdir -p target/pages/plaatui
     cp -r npm-lib/plaatui/showcase/dist/* target/pages/plaatui

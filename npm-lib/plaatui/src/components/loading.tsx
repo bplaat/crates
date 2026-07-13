@@ -5,8 +5,8 @@
  */
 
 import { type JSX } from 'preact/jsx-runtime';
-import './loading.css';
 import { cx } from '../utils.ts';
+import './loading.css';
 
 export type LoadingTextProps = JSX.IntrinsicElements['p'] & {
     // Extra top margin for the first load of a page.

@@ -4,22 +4,43 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+    Avatar,
+    Badge,
+    Button,
+    Card,
+    ConfirmDialog,
+    ContentSaveIcon,
+    DeleteOutlineIcon,
+    Dialog,
+    Form,
+    FormActions,
+    FormField,
+    FormInput,
+    FormMessage,
+    FormRow,
+    FormSelect,
+    IconText,
+    LoadingText,
+    LoginIcon,
+    Page,
+    PageTitle,
+    PencilIcon,
+    PlusIcon,
+    SecondaryButton,
+    SmallIconButton,
+    Table,
+} from 'plaatui';
 import { useEffect, useState } from 'preact/hooks';
-import '../../components/toolbar.css';
 import { useLocation } from 'wouter-preact';
 import { type Report, type User, type UserRole, type UserUpdateBody } from '../../../src-gen/api.ts';
 import { AdminLayout } from '../../components/admin-layout.tsx';
-import { Button, SecondaryButton, SmallIconButton } from 'plaatui';
-import { $authUser, loginAsUser } from '../../services/auth.service.ts';
-import { Card } from 'plaatui';
-import { ConfirmDialog, Dialog } from 'plaatui';
-import { FormActions, FormField, FormMessage } from 'plaatui';
-import { FormInput, FormSelect } from 'plaatui';
-import { formatDate, t } from '../../services/i18n.service.ts';
-import { Avatar, Badge, Icon, LoadingText, Table } from 'plaatui';
-import { lastNameInitial } from '../../utils.ts';
 import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
+import { $authUser, loginAsUser } from '../../services/auth.service.ts';
+import { formatDate, t } from '../../services/i18n.service.ts';
 import { createUser, deleteUser, listUsers, updateUser } from '../../services/users.service.ts';
+import { lastNameInitial } from '../../utils.ts';
+import '../../components/toolbar.css';
 
 type DialogMode = { kind: 'create' } | { kind: 'edit'; user: User };
 
@@ -133,18 +154,18 @@ export function AdminUsers() {
 
     return (
         <AdminLayout>
-            <div class="page is-wide">
+            <Page size="wide">
                 <div class="toolbar">
-                    <h1 class="page-title">{t('admin.users.heading')}</h1>
+                    <PageTitle>{t('admin.users.heading')}</PageTitle>
                     <Button onClick={openCreate}>
-                        <span class="icon-text">
-                            <Icon type="plus" class="is-sm" />
+                        <IconText>
+                            <PlusIcon class="is-sm" />
                             {t('admin.users.create_user')}
-                        </span>
+                        </IconText>
                     </Button>
                 </div>
 
-                <Card class="is-clipped" padded={false}>
+                <Card clipped padded={false}>
                     {loading && users.length === 0 && <LoadingText padded>{t('admin.users.loading')}</LoadingText>}
                     {!loading && users.length === 0 && <LoadingText padded>{t('admin.users.empty')}</LoadingText>}
                     {users.length > 0 && (
@@ -188,21 +209,21 @@ export function AdminUsers() {
                                                         onClick={() => setConfirmLoginAs(user)}
                                                         title={t('admin.users.login_as')}
                                                     >
-                                                        <Icon type="login" class="is-sm" />
+                                                        <LoginIcon class="is-sm" />
                                                     </SmallIconButton>
                                                 )}
                                                 <SmallIconButton
                                                     onClick={() => openEdit(user)}
                                                     title={t('admin.users.edit_user')}
                                                 >
-                                                    <Icon type="pencil" class="is-sm" />
+                                                    <PencilIcon class="is-sm" />
                                                 </SmallIconButton>
                                                 <SmallIconButton
                                                     onClick={() => handleDelete(user)}
                                                     title={t('admin.users.delete_user')}
                                                     class="hover-danger"
                                                 >
-                                                    <Icon type="delete-outline" class="is-sm" />
+                                                    <DeleteOutlineIcon class="is-sm" />
                                                 </SmallIconButton>
                                             </div>
                                         </td>
@@ -215,15 +236,15 @@ export function AdminUsers() {
                     {hasMore && <div ref={sentinelRef} class="sentinel" />}
                     {loading && users.length > 0 && <LoadingText>{t('admin.users.loading')}</LoadingText>}
                 </Card>
-            </div>
+            </Page>
 
             {dialog && (
                 <Dialog
                     title={isCreate ? t('admin.users.create_user') : t('admin.users.edit_user')}
                     onClose={closeDialog}
                 >
-                    <form onSubmit={handleSubmit} class="form">
-                        <div class="field-row">
+                    <Form onSubmit={handleSubmit}>
+                        <FormRow>
                             <FormField
                                 id="firstName"
                                 label={t('admin.users.first_name')}
@@ -254,7 +275,7 @@ export function AdminUsers() {
                                     }
                                 />
                             </FormField>
-                        </div>
+                        </FormRow>
 
                         <FormField id="email" label={t('admin.users.email')} error={report?.['email']?.[0]}>
                             <FormInput
@@ -291,17 +312,13 @@ export function AdminUsers() {
                         </FormField>
 
                         <FormMessage type="error" message={report && t('form.errors_occurred')} />
-                        <FormActions class="is-flush">
+                        <FormActions flush>
                             <SecondaryButton type="button" onClick={closeDialog}>
                                 {t('dialog.cancel')}
                             </SecondaryButton>
                             <Button type="submit" disabled={submitting}>
-                                <span class="icon-text">
-                                    {isCreate ? (
-                                        <Icon type="plus" class="is-sm" />
-                                    ) : (
-                                        <Icon type="content-save" class="is-sm" />
-                                    )}
+                                <IconText>
+                                    {isCreate ? <PlusIcon class="is-sm" /> : <ContentSaveIcon class="is-sm" />}
                                     {submitting
                                         ? isCreate
                                             ? t('admin.users.creating')
@@ -309,10 +326,10 @@ export function AdminUsers() {
                                         : isCreate
                                           ? t('admin.users.create')
                                           : t('admin.users.save')}
-                                </span>
+                                </IconText>
                             </Button>
                         </FormActions>
-                    </form>
+                    </Form>
                 </Dialog>
             )}
 
@@ -339,7 +356,7 @@ export function AdminUsers() {
                     )}
                     confirmLabel={t('admin.users.login_as')}
                     danger={false}
-                    icon={<Icon type="login" class="is-sm" />}
+                    icon={<LoginIcon class="is-sm" />}
                     onConfirm={doLoginAs}
                     onClose={() => setConfirmLoginAs(null)}
                 />

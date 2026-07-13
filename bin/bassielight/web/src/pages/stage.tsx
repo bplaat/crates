@@ -5,12 +5,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect, useContext, useRef } from 'preact/hooks';
-import './stage.css';
-import { AccountIcon, LightbulbOffIcon, MusicIcon, TweenDirect, TweenEase, TweenLinear } from '../components/icons.tsx';
-import { capitalize } from '../utils.ts';
+import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { IpcContext } from '../app.tsx';
+import { AccountIcon, LightbulbOffIcon, MusicIcon, TweenDirect, TweenEase, TweenLinear } from '../components/icons.tsx';
 import { $dmxLive } from '../components/menubar.tsx';
+import { capitalize } from '../utils.ts';
+import './stage.css';
 
 const COLORS = [0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff];
 const SPEEDS = [null, 22, 50, 100, 200, 250, 500, 1000];

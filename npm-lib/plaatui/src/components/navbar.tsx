@@ -7,8 +7,8 @@
 import { type ComponentChildren } from 'preact';
 import { forwardRef } from 'preact/compat';
 import { type JSX } from 'preact/jsx-runtime';
-import './navbar.css';
 import { cx } from '../utils.ts';
+import './navbar.css';
 
 export function Navbar({ class: extraClass, children, ...props }: JSX.IntrinsicElements['header']) {
     return (

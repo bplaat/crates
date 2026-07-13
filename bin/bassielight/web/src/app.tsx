@@ -6,12 +6,12 @@
 
 import { createContext } from 'preact';
 import { Route, Switch } from 'wouter-preact';
-import { StagePage } from './pages/stage.tsx';
-import { SettingsPage } from './pages/settings.tsx';
-import { NotFoundPage } from './pages/notfound.tsx';
 import { Menubar } from './components/menubar.tsx';
-import { EditorPage } from './pages/editor.tsx';
 import { Ipc } from './ipc.ts';
+import { EditorPage } from './pages/editor.tsx';
+import { NotFoundPage } from './pages/notfound.tsx';
+import { SettingsPage } from './pages/settings.tsx';
+import { StagePage } from './pages/stage.tsx';
 
 export const IpcContext = createContext<Ipc | null>(null);
 

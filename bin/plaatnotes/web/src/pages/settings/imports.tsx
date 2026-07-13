@@ -4,16 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+    Button,
+    Card,
+    CardTitle,
+    CloudUploadIcon,
+    Form,
+    FormActions,
+    FormField,
+    FormFooter,
+    FormInput,
+    FormMessage,
+    IconText,
+    Page,
+    PageTitle,
+} from 'plaatui';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Button } from 'plaatui';
-import { Card } from 'plaatui';
-import { FormActions, FormField, FormMessage } from 'plaatui';
-import { FormInput } from 'plaatui';
+import { type ImportGoogleKeepResponse } from '../../../src-gen/api.ts';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { authFetch } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
-import { Icon } from 'plaatui';
-import { type ImportGoogleKeepResponse } from '../../../src-gen/api.ts';
 
 export function SettingsImports() {
     useEffect(() => {
@@ -57,13 +67,13 @@ export function SettingsImports() {
 
     return (
         <SettingsLayout>
-            <div class="page is-narrow">
-                <h1 class="page-title">{t('settings.imports.heading')}</h1>
+            <Page size="narrow">
+                <PageTitle>{t('settings.imports.heading')}</PageTitle>
 
                 <Card>
-                    <h2 class="card-title is-tight">{t('settings.imports.google_keep.heading')}</h2>
+                    <CardTitle tight>{t('settings.imports.google_keep.heading')}</CardTitle>
                     <p class="card-desc">{t('settings.imports.google_keep.desc')}</p>
-                    <form ref={formRef} onSubmit={handleSubmit} class="form">
+                    <Form ref={formRef} onSubmit={handleSubmit}>
                         <FormField id="keepFile" label={t('settings.imports.google_keep.label')}>
                             <FormInput
                                 id="keepFile"
@@ -73,7 +83,7 @@ export function SettingsImports() {
                                 onChange={(e) => setFile((e.target as HTMLInputElement).files?.[0] ?? null)}
                             />
                         </FormField>
-                        <div class="form-footer">
+                        <FormFooter>
                             <div>
                                 <FormMessage
                                     type="success"
@@ -84,20 +94,20 @@ export function SettingsImports() {
                                 />
                                 <FormMessage type="error" message={error && t('settings.imports.google_keep.error')} />
                             </div>
-                            <FormActions class="is-flush">
+                            <FormActions flush>
                                 <Button type="submit" disabled={loading || !file}>
-                                    <span class="icon-text">
-                                        <Icon type="cloud-upload" class="is-sm" />
+                                    <IconText>
+                                        <CloudUploadIcon class="is-sm" />
                                         {loading
                                             ? t('settings.imports.google_keep.importing')
                                             : t('settings.imports.google_keep.submit')}
-                                    </span>
+                                    </IconText>
                                 </Button>
                             </FormActions>
-                        </div>
-                    </form>
+                        </FormFooter>
+                    </Form>
                 </Card>
-            </div>
+            </Page>
         </SettingsLayout>
     );
 }

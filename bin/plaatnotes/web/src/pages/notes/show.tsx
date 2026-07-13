@@ -4,15 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useLocation, useParams } from 'wouter-preact';
+import {
+    ArrowLeftIcon,
+    DeleteIcon,
+    IconButton,
+    LoadingText,
+    PackageDownIcon,
+    PackageUpIcon,
+    PinIcon,
+    RestoreIcon,
+} from 'plaatui';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { useLocation, useParams } from 'wouter-preact';
 import { type Note } from '../../../src-gen/api.ts';
 import { PlaatNotesNavbar } from '../../components/navbar.tsx';
-import { IconButton } from 'plaatui';
 import { NoteEditorCard } from '../../components/note-editor-card.tsx';
-import { createNote, fetchNote, updateNote } from '../../services/notes.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
-import { Icon, LoadingText } from 'plaatui';
+import { createNote, fetchNote, updateNote } from '../../services/notes.service.ts';
 import './show.css';
 
 function hasMeaningfulBody(body: string): boolean {
@@ -161,7 +169,7 @@ export function NotesShow() {
                         class="has-text-muted"
                         title={t('notes_show.back')}
                     >
-                        <Icon type="arrow-left" class="is-md" />
+                        <ArrowLeftIcon class="is-md" />
                     </IconButton>
                     <h1 class="note-show-title">{isNew ? t('notes_create.heading') : t('notes_show.heading')}</h1>
                     <div class="spacer" />
@@ -170,7 +178,7 @@ export function NotesShow() {
                         class={isPinned ? 'is-active' : 'has-text-muted'}
                         title={isPinned ? t('note.unpin') : t('note.pin')}
                     >
-                        <Icon type="pin" class="is-md" />
+                        <PinIcon class="is-md" />
                     </IconButton>
                     {!isNew && (
                         <>
@@ -179,22 +187,14 @@ export function NotesShow() {
                                 class={isArchived ? 'is-active' : 'has-text-muted'}
                                 title={isArchived ? t('note.unarchive') : t('note.archive')}
                             >
-                                {isArchived ? (
-                                    <Icon type="package-up" class="is-md" />
-                                ) : (
-                                    <Icon type="package-down" class="is-md" />
-                                )}
+                                {isArchived ? <PackageUpIcon class="is-md" /> : <PackageDownIcon class="is-md" />}
                             </IconButton>
                             <IconButton
                                 onClick={handleTrash}
                                 class={isTrashed ? 'is-active-danger' : 'has-text-muted'}
                                 title={isTrashed ? t('note.restore') : t('note.trash')}
                             >
-                                {isTrashed ? (
-                                    <Icon type="restore" class="is-md" />
-                                ) : (
-                                    <Icon type="delete" class="is-md" />
-                                )}
+                                {isTrashed ? <RestoreIcon class="is-md" /> : <DeleteIcon class="is-md" />}
                             </IconButton>
                         </>
                     )}

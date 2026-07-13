@@ -4,17 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useLocation } from 'wouter-preact';
+import { EmptyState, Fab, LoadingText, Page, PlusIcon, SectionLabel, TextBoxIcon } from 'plaatui';
 import { useEffect, useMemo } from 'preact/hooks';
+import { useLocation } from 'wouter-preact';
 import { type Note } from '../../src-gen/api.ts';
-import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
-import { EmptyState } from 'plaatui';
 import { AppLayout } from '../components/app-layout.tsx';
+import { DraggableNoteGrid } from '../components/draggable-note-grid.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
-import { listNotes, listPinnedNotes, updateNote } from '../services/notes.service.ts';
-import { t } from '../services/i18n.service.ts';
-import { Fab, Icon, LoadingText } from 'plaatui';
 import { useSearchQuery } from '../hooks/use-search-query.ts';
+import { t } from '../services/i18n.service.ts';
+import { listNotes, listPinnedNotes, updateNote } from '../services/notes.service.ts';
 
 export function Home() {
     const query = useSearchQuery();
@@ -98,19 +97,19 @@ export function Home() {
 
     return (
         <AppLayout showSearch>
-            <div class="page">
+            <Page>
                 {initialLoading && <LoadingText initial>{t('home.loading')}</LoadingText>}
 
                 {isEmpty && (
                     <EmptyState
-                        icon={<Icon type="text-box" class="is-huge" />}
+                        icon={<TextBoxIcon class="is-huge" />}
                         message={query ? t('home.empty_search') : t('home.empty')}
                     />
                 )}
 
                 {pinned.length > 0 && (
                     <section class="note-section">
-                        <h2 class="section-label">{t('home.pinned')}</h2>
+                        <SectionLabel>{t('home.pinned')}</SectionLabel>
                         <DraggableNoteGrid
                             notes={pinned}
                             reorderEndpoint="/notes/pinned/reorder"
@@ -126,7 +125,7 @@ export function Home() {
 
                 {others.length > 0 && (
                     <section>
-                        {pinned.length > 0 && <h2 class="section-label">{t('home.other')}</h2>}
+                        {pinned.length > 0 && <SectionLabel>{t('home.other')}</SectionLabel>}
                         <DraggableNoteGrid
                             notes={others}
                             reorderEndpoint="/notes/reorder"
@@ -140,10 +139,10 @@ export function Home() {
 
                 {otherHasMore && <div ref={otherSentinelRef} class="sentinel" />}
                 {otherLoading && otherItems.length > 0 && <LoadingText>{t('home.loading')}</LoadingText>}
-            </div>
+            </Page>
 
             <Fab onClick={() => navigate('/notes/create')} title={t('home.create')}>
-                <Icon type="plus" class="is-xl" />
+                <PlusIcon class="is-xl" />
             </Fab>
         </AppLayout>
     );

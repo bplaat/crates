@@ -4,18 +4,31 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+    Button,
+    Card,
+    CardTitle,
+    ContentSaveIcon,
+    Form,
+    FormActions,
+    FormField,
+    FormFooter,
+    FormInput,
+    FormMessage,
+    FormRow,
+    FormSelect,
+    IconText,
+    LockIcon,
+    Page,
+    PageTitle,
+} from 'plaatui';
 import { useEffect, useState } from 'preact/hooks';
-import '../../components/list.css';
 import { type Report, type UserTheme } from '../../../src-gen/api.ts';
-import { Button } from 'plaatui';
-import { Card } from 'plaatui';
-import { FormActions, FormField, FormMessage } from 'plaatui';
-import { FormInput, FormSelect } from 'plaatui';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
 import { $authUser } from '../../services/auth.service.ts';
 import { t } from '../../services/i18n.service.ts';
 import { changePassword, updateUser } from '../../services/users.service.ts';
-import { Icon } from 'plaatui';
+import '../../components/list.css';
 
 export function SettingsAccount() {
     const user = $authUser.value!;
@@ -84,15 +97,15 @@ export function SettingsAccount() {
 
     return (
         <SettingsLayout>
-            <div class="page is-narrow">
-                <h1 class="page-title">{t('settings.account')}</h1>
+            <Page size="narrow">
+                <PageTitle>{t('settings.account')}</PageTitle>
 
                 <div class="list is-large-gap">
                     {/* Profile form */}
                     <Card>
-                        <h2 class="card-title">{t('settings.profile_heading')}</h2>
-                        <form onSubmit={handleProfileSubmit} class="form">
-                            <div class="field-row">
+                        <CardTitle>{t('settings.profile_heading')}</CardTitle>
+                        <Form onSubmit={handleProfileSubmit}>
+                            <FormRow>
                                 <FormField
                                     id="firstName"
                                     label={t('settings.first_name')}
@@ -119,7 +132,7 @@ export function SettingsAccount() {
                                         onInput={(e) => setLastName((e.target as HTMLInputElement).value)}
                                     />
                                 </FormField>
-                            </div>
+                            </FormRow>
 
                             <FormField id="email" label={t('settings.email')} error={profileReport?.['email']?.[0]}>
                                 <FormInput
@@ -131,7 +144,7 @@ export function SettingsAccount() {
                                 />
                             </FormField>
 
-                            <div class="field-row">
+                            <FormRow>
                                 <FormField id="theme" label={t('settings.theme')}>
                                     <FormSelect
                                         id="theme"
@@ -153,29 +166,29 @@ export function SettingsAccount() {
                                         <option value="nl">{t('settings.language_nl')}</option>
                                     </FormSelect>
                                 </FormField>
-                            </div>
+                            </FormRow>
 
-                            <div class="form-footer">
+                            <FormFooter>
                                 <div>
                                     <FormMessage type="success" message={profileSaved && t('settings.saved')} />
                                     <FormMessage type="error" message={profileError && t('form.errors_occurred')} />
                                 </div>
-                                <FormActions class="is-flush">
+                                <FormActions flush>
                                     <Button type="submit" disabled={profileLoading}>
-                                        <span class="icon-text">
-                                            <Icon type="content-save" class="is-sm" />
+                                        <IconText>
+                                            <ContentSaveIcon class="is-sm" />
                                             {profileLoading ? t('settings.saving') : t('settings.save')}
-                                        </span>
+                                        </IconText>
                                     </Button>
                                 </FormActions>
-                            </div>
-                        </form>
+                            </FormFooter>
+                        </Form>
                     </Card>
 
                     {/* Change password form */}
                     <Card>
-                        <h2 class="card-title">{t('settings.password_heading')}</h2>
-                        <form onSubmit={handlePasswordSubmit} class="form">
+                        <CardTitle>{t('settings.password_heading')}</CardTitle>
+                        <Form onSubmit={handlePasswordSubmit}>
                             <FormField
                                 id="oldPassword"
                                 label={t('settings.current_password')}
@@ -215,7 +228,7 @@ export function SettingsAccount() {
                                 />
                             </FormField>
 
-                            <div class="form-footer">
+                            <FormFooter>
                                 <div>
                                     <FormMessage
                                         type="success"
@@ -223,21 +236,21 @@ export function SettingsAccount() {
                                     />
                                     <FormMessage type="error" message={passwordReport && t('form.errors_occurred')} />
                                 </div>
-                                <FormActions class="is-flush">
+                                <FormActions flush>
                                     <Button type="submit" disabled={passwordLoading}>
-                                        <span class="icon-text">
-                                            <Icon type="lock" class="is-sm" />
+                                        <IconText>
+                                            <LockIcon class="is-sm" />
                                             {passwordLoading
                                                 ? t('settings.changing_password')
                                                 : t('settings.change_password')}
-                                        </span>
+                                        </IconText>
                                     </Button>
                                 </FormActions>
-                            </div>
-                        </form>
+                            </FormFooter>
+                        </Form>
                     </Card>
                 </div>
-            </div>
+            </Page>
         </SettingsLayout>
     );
 }

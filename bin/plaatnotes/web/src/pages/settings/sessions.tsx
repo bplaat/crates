@@ -4,17 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+    Badge,
+    Card,
+    ConfirmDialog,
+    HistoryIcon,
+    LaptopIcon,
+    LoadingText,
+    Page,
+    PageTitle,
+    SecondaryButton,
+} from 'plaatui';
 import { useEffect, useState } from 'preact/hooks';
-import '../../components/list.css';
 import { type Session } from '../../../src-gen/api.ts';
-import { Card } from 'plaatui';
-import { ConfirmDialog } from 'plaatui';
 import { SettingsLayout } from '../../components/settings-layout.tsx';
+import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { $currentSessionId } from '../../services/auth.service.ts';
 import { formatDate, t } from '../../services/i18n.service.ts';
-import { useInfiniteScroll } from '../../hooks/use-infinite-scroll.ts';
 import { listSessions, revokeSession } from '../../services/sessions.service.ts';
-import { Badge, Icon, LoadingText, SecondaryButton } from 'plaatui';
+import '../../components/list.css';
 import './sessions.css';
 
 function clientLabel(session: Session): string {
@@ -58,8 +66,8 @@ export function SettingsSessions() {
     return (
         <>
             <SettingsLayout>
-                <div class="page is-narrow">
-                    <h1 class="page-title">{t('settings.sessions.heading')}</h1>
+                <Page size="narrow">
+                    <PageTitle>{t('settings.sessions.heading')}</PageTitle>
 
                     {loading && sessions.length === 0 && (
                         <LoadingText initial>{t('settings.sessions.loading')}</LoadingText>
@@ -76,7 +84,7 @@ export function SettingsSessions() {
                                 return (
                                     <Card key={session.id} class="session" padded={false}>
                                         <div class="session-icon">
-                                            <Icon type="laptop" class="is-lg" />
+                                            <LaptopIcon class="is-lg" />
                                         </div>
 
                                         <div class="session-body">
@@ -94,7 +102,7 @@ export function SettingsSessions() {
 
                                         {!isCurrent && (
                                             <SecondaryButton onClick={() => handleRevoke(session.id)}>
-                                                <Icon type="history" class="is-xs" />
+                                                <HistoryIcon class="is-xs" />
                                                 {t('settings.sessions.revoke')}
                                             </SecondaryButton>
                                         )}
@@ -106,7 +114,7 @@ export function SettingsSessions() {
 
                     {hasMore && <div ref={sentinelRef} class="sentinel" />}
                     {loading && sessions.length > 0 && <LoadingText>{t('settings.sessions.loading')}</LoadingText>}
-                </div>
+                </Page>
             </SettingsLayout>
 
             {confirmRevokeId && (

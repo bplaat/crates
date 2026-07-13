@@ -5,9 +5,9 @@
  */
 
 import { type JSX } from 'preact/jsx-runtime';
-import './input.css';
-import { Icon } from './icons.tsx';
 import { cx } from '../utils.ts';
+import { CloseIcon, MagnifyIcon } from './icons.tsx';
+import './input.css';
 
 export function FormInput({ class: extraClass, ...props }: JSX.IntrinsicElements['input']) {
     return <input {...props} class={cx('input', extraClass)} />;
@@ -31,7 +31,7 @@ export interface SearchInputProps {
 export function SearchInput({ value, onInput, onClear, placeholder }: SearchInputProps) {
     return (
         <div class="search">
-            <Icon type="magnify" class="search-icon" />
+            <MagnifyIcon class="search-icon" />
             <input
                 type="search"
                 value={value}
@@ -41,7 +41,7 @@ export function SearchInput({ value, onInput, onClear, placeholder }: SearchInpu
             />
             {value && (
                 <button type="button" onClick={onClear} class="search-clear">
-                    <Icon type="close" class="is-sm" />
+                    <CloseIcon class="is-sm" />
                 </button>
             )}
         </div>

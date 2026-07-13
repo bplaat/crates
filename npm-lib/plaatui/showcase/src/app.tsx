@@ -4,32 +4,34 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type ComponentChildren } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
 import {
+    AccountIcon,
     Avatar,
     Badge,
     Button,
     Card,
+    CogIcon,
     ConfirmDialog,
+    ContentSaveIcon,
     DangerButton,
     DangerTextButton,
+    DeleteOutlineIcon,
     Dialog,
-    DropdownItem,
     DropdownDivider,
+    DropdownItem,
     DropdownMenu,
     EmptyState,
     Fab,
+    Form,
     FormActions,
     FormField,
     FormInput,
     FormMessage,
     FormSelect,
-    Icon,
     IconButton,
-    type IconType,
-    iconTypes,
     LoadingText,
+    LogoutIcon,
+    MagnifyIcon,
     Navbar,
     NavbarBrand,
     NavbarMenu,
@@ -37,6 +39,10 @@ import {
     NavbarSpacer,
     NavbarUserButton,
     NavbarUserName,
+    Page,
+    PageTitle,
+    PencilIcon,
+    PlusIcon,
     SearchInput,
     SecondaryButton,
     SidebarLayout,
@@ -46,6 +52,14 @@ import {
     TextButton,
     useClickOutside,
 } from 'plaatui';
+import { type ComponentChildren } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
+import { iconCatalog, iconEntries, type IconType } from './icon-catalog.ts';
+
+function renderIcon(type: IconType, className: string) {
+    const IconComponent = iconCatalog[type];
+    return <IconComponent class={className} />;
+}
 
 const BRAND_IMAGE =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23facc15'%3E%3Crect width='24' height='24' rx='6'/%3E%3C/svg%3E";
@@ -194,20 +208,20 @@ export function App() {
                     </div>
                     <div class="showcase-row" style="margin-top: 1rem;">
                         <Button>
-                            <Icon type="content-save" class="is-sm" />
+                            <ContentSaveIcon class="is-sm" />
                             With icon
                         </Button>
                         <IconButton title="Edit">
-                            <Icon type="pencil" class="is-md" />
+                            <PencilIcon class="is-md" />
                         </IconButton>
                         <SmallIconButton title="Delete">
-                            <Icon type="delete-outline" class="is-sm" />
+                            <DeleteOutlineIcon class="is-sm" />
                         </SmallIconButton>
                     </div>
                     <div class="showcase-row" style="margin-top: 1rem;">
                         <TextButton>Text button</TextButton>
                         <DangerTextButton>
-                            <Icon type="delete-outline" class="is-sm" />
+                            <DeleteOutlineIcon class="is-sm" />
                             Danger text
                         </DangerTextButton>
                     </div>
@@ -324,10 +338,10 @@ export function App() {
                                 <td>
                                     <div class="table-actions">
                                         <SmallIconButton title="Edit">
-                                            <Icon type="pencil" class="is-sm" />
+                                            <PencilIcon class="is-sm" />
                                         </SmallIconButton>
                                         <SmallIconButton title="Delete" class="hover-danger">
-                                            <Icon type="delete-outline" class="is-sm" />
+                                            <DeleteOutlineIcon class="is-sm" />
                                         </SmallIconButton>
                                     </div>
                                 </td>
@@ -346,11 +360,11 @@ export function App() {
                 <div class="showcase-row">
                     <Button onClick={() => setDialogOpen(true)}>Open dialog</Button>
                     <SecondaryButton onClick={() => setFormDialogOpen(true)}>
-                        <Icon type="pencil" class="is-sm" />
+                        <PencilIcon class="is-sm" />
                         Open form dialog
                     </SecondaryButton>
                     <DangerButton onClick={() => setConfirmOpen(true)}>
-                        <Icon type="delete-outline" class="is-sm" />
+                        <DeleteOutlineIcon class="is-sm" />
                         Delete item
                     </DangerButton>
                 </div>
@@ -363,7 +377,7 @@ export function App() {
             description: 'A centered placeholder shown when there is no content.',
             render: () => (
                 <div class="showcase-empty-demo">
-                    <EmptyState icon={<Icon type="magnify" class="is-huge" />} message="No results found" />
+                    <EmptyState icon={<MagnifyIcon class="is-huge" />} message="No results found" />
                 </div>
             ),
         },
@@ -382,7 +396,7 @@ export function App() {
             render: () => (
                 <div class="showcase-fab-demo">
                     <Fab title="Create">
-                        <Icon type="plus" class="is-xl" />
+                        <PlusIcon class="is-xl" />
                     </Fab>
                 </div>
             ),
@@ -394,9 +408,9 @@ export function App() {
             description: 'All Material Design icons bundled with PlaatUI.',
             render: () => (
                 <div class="showcase-icons">
-                    {iconTypes.map((name) => (
+                    {iconEntries.map(([name, CatalogIcon]) => (
                         <div key={name} class="showcase-icon">
-                            <Icon type={name} class="is-lg" />
+                            <CatalogIcon class="is-lg" />
                             <span>{name}</span>
                         </div>
                     ))}
@@ -429,16 +443,16 @@ export function App() {
                             {navMenuOpen && (
                                 <DropdownMenu>
                                     <DropdownItem onClick={() => setNavMenuOpen(false)}>
-                                        <Icon type="account" class="is-sm" />
+                                        <AccountIcon class="is-sm" />
                                         Profile
                                     </DropdownItem>
                                     <DropdownItem onClick={() => setNavMenuOpen(false)}>
-                                        <Icon type="cog" class="is-sm" />
+                                        <CogIcon class="is-sm" />
                                         Settings
                                     </DropdownItem>
                                     <DropdownDivider />
                                     <DropdownItem onClick={() => setNavMenuOpen(false)}>
-                                        <Icon type="logout" class="is-sm" />
+                                        <LogoutIcon class="is-sm" />
                                         Logout
                                     </DropdownItem>
                                 </DropdownMenu>
@@ -462,7 +476,7 @@ export function App() {
                                     key={item.id}
                                     href="#sidebar"
                                     label={item.label}
-                                    icon={item.icon}
+                                    icon={iconCatalog[item.icon]}
                                     active={sidebarActive === item.id}
                                     onClick={(e) => {
                                         e.preventDefault();
@@ -497,7 +511,7 @@ export function App() {
                 />
             </NavbarSearch>
             <IconButton onClick={toggleTheme} title="Toggle theme">
-                <Icon type={dark ? 'weather-night' : 'weather-sunny'} class="is-md" />
+                {renderIcon(dark ? 'weather-night' : 'weather-sunny', 'is-md')}
             </IconButton>
             <NavbarMenu ref={menuRef}>
                 <NavbarUserButton onClick={() => setMenuOpen((o) => !o)}>
@@ -507,16 +521,16 @@ export function App() {
                 {menuOpen && (
                     <DropdownMenu>
                         <DropdownItem onClick={() => setMenuOpen(false)}>
-                            <Icon type="account" class="is-sm" />
+                            <AccountIcon class="is-sm" />
                             Profile
                         </DropdownItem>
                         <DropdownItem onClick={() => setMenuOpen(false)}>
-                            <Icon type="cog" class="is-sm" />
+                            <CogIcon class="is-sm" />
                             Settings
                         </DropdownItem>
                         <DropdownDivider />
                         <DropdownItem onClick={() => setMenuOpen(false)}>
-                            <Icon type="logout" class="is-sm" />
+                            <LogoutIcon class="is-sm" />
                             Logout
                         </DropdownItem>
                     </DropdownMenu>
@@ -530,7 +544,7 @@ export function App() {
             key={s.id}
             href={`#${s.id}`}
             label={s.label}
-            icon={s.icon}
+            icon={iconCatalog[s.icon]}
             active={active === s.id}
             onClick={() => setActive(s.id)}
         />
@@ -538,14 +552,11 @@ export function App() {
 
     return (
         <SidebarLayout navbar={navbar} sidebar={sidebar} version={__APP_VERSION__}>
-            <div class="page">
-                <h1 class="page-title">PlaatUI component showcase</h1>
+            <Page>
+                <PageTitle>PlaatUI component showcase</PageTitle>
 
                 {visible.length === 0 ? (
-                    <EmptyState
-                        icon={<Icon type="magnify" class="is-huge" />}
-                        message={`No components match "${query}"`}
-                    />
+                    <EmptyState icon={<MagnifyIcon class="is-huge" />} message={`No components match "${query}"`} />
                 ) : (
                     visible.map((s) => (
                         <Section key={s.id} id={s.id} title={s.label} description={s.description}>
@@ -553,7 +564,7 @@ export function App() {
                         </Section>
                     ))
                 )}
-            </div>
+            </Page>
 
             {dialogOpen && (
                 <Dialog title="Example dialog" onClose={() => setDialogOpen(false)}>
@@ -561,14 +572,19 @@ export function App() {
                         This is a basic modal dialog. Press escape, click the backdrop or the close button to dismiss
                         it.
                     </p>
-                    <FormActions class="is-flush">
+                    <FormActions flush>
                         <Button onClick={() => setDialogOpen(false)}>Got it</Button>
                     </FormActions>
                 </Dialog>
             )}
             {formDialogOpen && (
                 <Dialog title="Create note" onClose={() => setFormDialogOpen(false)}>
-                    <div class="form">
+                    <Form
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            setFormDialogOpen(false);
+                        }}
+                    >
                         <FormField id="dialog-title" label="Title">
                             <FormInput id="dialog-title" type="text" placeholder="My note" />
                         </FormField>
@@ -579,14 +595,16 @@ export function App() {
                                 <option>Ideas</option>
                             </FormSelect>
                         </FormField>
-                        <FormActions class="is-flush">
-                            <SecondaryButton onClick={() => setFormDialogOpen(false)}>Cancel</SecondaryButton>
-                            <Button onClick={() => setFormDialogOpen(false)}>
-                                <Icon type="content-save" class="is-sm" />
+                        <FormActions flush>
+                            <SecondaryButton type="button" onClick={() => setFormDialogOpen(false)}>
+                                Cancel
+                            </SecondaryButton>
+                            <Button type="submit">
+                                <ContentSaveIcon class="is-sm" />
                                 Save
                             </Button>
                         </FormActions>
-                    </div>
+                    </Form>
                 </Dialog>
             )}
             {confirmOpen && (

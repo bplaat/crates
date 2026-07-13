@@ -5,8 +5,8 @@
  */
 
 import { type JSX } from 'preact/jsx-runtime';
-import './button.css';
 import { cx } from '../utils.ts';
+import './button.css';
 
 export function Button({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
     return <button {...props} class={cx('button', 'is-primary', extraClass)} />;

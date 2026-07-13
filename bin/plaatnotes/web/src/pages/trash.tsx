@@ -4,19 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+    ConfirmDialog,
+    DangerTextButton,
+    DeleteOutlineIcon,
+    EmptyState,
+    LoadingText,
+    Page,
+    SectionLabel,
+} from 'plaatui';
 import { useEffect, useState } from 'preact/hooks';
-import '../components/note-grid.css';
-import '../components/toolbar.css';
 import { type Note } from '../../src-gen/api.ts';
-import { ConfirmDialog } from 'plaatui';
-import { EmptyState } from 'plaatui';
 import { AppLayout } from '../components/app-layout.tsx';
 import { NoteCard } from '../components/note-card.tsx';
 import { useInfiniteScroll } from '../hooks/use-infinite-scroll.ts';
-import { deleteNote, listTrashedNotes, updateNote, clearTrashedNotes } from '../services/notes.service.ts';
-import { t } from '../services/i18n.service.ts';
-import { DangerTextButton, Icon, LoadingText } from 'plaatui';
 import { useSearchQuery } from '../hooks/use-search-query.ts';
+import { t } from '../services/i18n.service.ts';
+import { clearTrashedNotes, deleteNote, listTrashedNotes, updateNote } from '../services/notes.service.ts';
+import '../components/note-grid.css';
+import '../components/toolbar.css';
 import './trash.css';
 
 type ConfirmAction = { kind: 'delete'; note: Note } | { kind: 'empty' } | null;
@@ -63,12 +69,14 @@ export function TrashPage() {
     return (
         <>
             <AppLayout showSearch>
-                <div class="page">
+                <Page>
                     <div class="toolbar is-relative">
-                        <h1 class="section-label is-spaced">{t('trash.heading')}</h1>
+                        <SectionLabel as="h1" spaced>
+                            {t('trash.heading')}
+                        </SectionLabel>
                         {notes.length > 0 && (
                             <DangerTextButton onClick={handleEmptyTrash} class="empty-trash-btn">
-                                <Icon type="delete-outline" class="is-sm" />
+                                <DeleteOutlineIcon class="is-sm" />
                                 {t('trash.empty_btn')}
                             </DangerTextButton>
                         )}
@@ -80,7 +88,7 @@ export function TrashPage() {
 
                     {!loading && notes.length === 0 && (
                         <EmptyState
-                            icon={<Icon type="delete-outline" class="is-huge" />}
+                            icon={<DeleteOutlineIcon class="is-huge" />}
                             message={query ? t('trash.empty_search') : t('trash.empty')}
                         />
                     )}
@@ -100,7 +108,7 @@ export function TrashPage() {
 
                     {hasMore && <div ref={sentinelRef} class="sentinel" />}
                     {loading && notes.length > 0 && <LoadingText>{t('trash.loading')}</LoadingText>}
-                </div>
+                </Page>
             </AppLayout>
 
             {confirmAction && (

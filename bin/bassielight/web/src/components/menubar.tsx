@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useContext, useEffect, useState } from 'preact/hooks';
-import './menubar.css';
 import { signal } from '@preact/signals';
+import { useContext, useEffect, useState } from 'preact/hooks';
 import { Link, useRoute } from 'wouter-preact';
-import { QrModal } from './qrmodal.tsx';
-import { CogIcon, MotionPlayOutlineIcon, QrcodeIcon, SquareEditOutlineIcon } from './icons.tsx';
 import { IpcContext } from '../app.tsx';
+import { CogIcon, MotionPlayOutlineIcon, QrcodeIcon, SquareEditOutlineIcon } from './icons.tsx';
+import { QrModal } from './qrmodal.tsx';
+import './menubar.css';
 
 export const $dmxLive = signal(false);
 

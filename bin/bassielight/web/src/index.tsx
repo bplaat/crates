@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { render } from 'preact';
 import './index.css';
+import { render } from 'preact';
 import { App } from './app.tsx';
 
 if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {

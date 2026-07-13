@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Route, Switch } from 'wouter-preact';
 import { LoadingText } from 'plaatui';
 import { useEffect } from 'preact/hooks';
+import { Route, Switch } from 'wouter-preact';
 import { AdminUsers } from './pages/admin/users.tsx';
 import { ArchivePage } from './pages/archive.tsx';
 import { AuthLogin } from './pages/auth/login.tsx';

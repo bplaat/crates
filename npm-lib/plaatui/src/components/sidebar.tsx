@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type ComponentChildren } from 'preact';
+import { type ComponentChildren, type ComponentType } from 'preact';
 import { type JSX } from 'preact/jsx-runtime';
-import './sidebar.css';
-import { Icon, type IconType } from './icons.tsx';
 import { cx } from '../utils.ts';
+import { type IconProps } from './icons.tsx';
+import './sidebar.css';
 
 export interface SidebarLayoutProps {
     children: ComponentChildren;
@@ -36,14 +36,15 @@ export function SidebarLayout({ children, navbar, sidebar, version }: SidebarLay
 export type SidebarLinkProps = Omit<JSX.IntrinsicElements['a'], 'href' | 'icon'> & {
     href: string;
     label: string;
-    icon: IconType;
+    icon: ComponentType<Omit<IconProps, 'path'>>;
     active?: boolean;
 };
 
 export function SidebarLink({ label, icon, active = false, class: extraClass, ...props }: SidebarLinkProps) {
+    const LinkIcon = icon;
     return (
         <a {...props} title={props.title ?? label} class={cx('sidebar-item', active && 'is-active', extraClass)}>
-            <Icon type={icon} class="is-md" />
+            <LinkIcon class="is-md" />
             <span class="sidebar-label">{label}</span>
         </a>
     );

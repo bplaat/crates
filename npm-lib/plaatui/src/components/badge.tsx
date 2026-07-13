@@ -5,8 +5,8 @@
  */
 
 import { type ComponentChildren } from 'preact';
-import './badge.css';
 import { cx } from '../utils.ts';
+import './badge.css';
 
 export interface BadgeProps {
     accent?: boolean;

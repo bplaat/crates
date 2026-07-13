@@ -4,17 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useLocation } from 'wouter-preact';
-import { useEffect, useState } from 'preact/hooks';
-import { $authUser, logout } from '../services/auth.service.ts';
-import { $searchQuery } from '../services/notes.service.ts';
-import { t } from '../services/i18n.service.ts';
 import {
     Avatar,
-    DropdownItem,
+    CogIcon,
     DropdownDivider,
+    DropdownItem,
     DropdownMenu,
-    Icon,
+    LogoutIcon,
     Navbar,
     NavbarBrand,
     NavbarMenu,
@@ -23,8 +19,14 @@ import {
     NavbarUserButton,
     NavbarUserName,
     SearchInput,
+    SecurityIcon,
     useClickOutside,
 } from 'plaatui';
+import { useEffect, useState } from 'preact/hooks';
+import { useLocation } from 'wouter-preact';
+import { $authUser, logout } from '../services/auth.service.ts';
+import { t } from '../services/i18n.service.ts';
+import { $searchQuery } from '../services/notes.service.ts';
 import { lastNameInitial } from '../utils.ts';
 
 export function PlaatNotesNavbar({ showSearch = false }: { showSearch?: boolean }) {
@@ -89,7 +91,7 @@ export function PlaatNotesNavbar({ showSearch = false }: { showSearch?: boolean 
                                         navigate('/admin/users');
                                     }}
                                 >
-                                    <Icon type="security" class="is-sm" />
+                                    <SecurityIcon class="is-sm" />
                                     {t('nav.admin')}
                                 </DropdownItem>
                             )}
@@ -99,12 +101,12 @@ export function PlaatNotesNavbar({ showSearch = false }: { showSearch?: boolean 
                                     navigate('/settings');
                                 }}
                             >
-                                <Icon type="cog" class="is-sm" />
+                                <CogIcon class="is-sm" />
                                 {t('nav.settings')}
                             </DropdownItem>
                             <DropdownDivider />
                             <DropdownItem onClick={handleLogout}>
-                                <Icon type="logout" class="is-sm" />
+                                <LogoutIcon class="is-sm" />
                                 {t('nav.logout')}
                             </DropdownItem>
                         </DropdownMenu>

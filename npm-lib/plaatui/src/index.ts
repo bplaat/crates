@@ -13,6 +13,7 @@ export * from './components/fab.tsx';
 export * from './components/form.tsx';
 export * from './components/icons.tsx';
 export * from './components/input.tsx';
+export * from './components/layout.tsx';
 export * from './components/loading.tsx';
 export * from './components/navbar.tsx';
 export * from './components/sidebar.tsx';

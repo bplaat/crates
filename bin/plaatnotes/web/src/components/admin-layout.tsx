@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { AccountMultipleIcon, SidebarLayout } from 'plaatui';
 import { type ComponentChildren } from 'preact';
 import { t } from '../services/i18n.service.ts';
-import { SidebarLayout } from 'plaatui';
 import { PlaatNotesNavbar } from './navbar.tsx';
 import { SidebarLink } from './sidebar-link.tsx';
 
@@ -15,7 +15,7 @@ export function AdminLayout({ children }: { children: ComponentChildren }) {
         <SidebarLayout
             navbar={<PlaatNotesNavbar />}
             version={__APP_VERSION__}
-            sidebar={<SidebarLink href="/admin/users" label={t('admin.users.sidebar')} icon="account-multiple" />}
+            sidebar={<SidebarLink href="/admin/users" label={t('admin.users.sidebar')} icon={AccountMultipleIcon} />}
         >
             {children}
         </SidebarLayout>

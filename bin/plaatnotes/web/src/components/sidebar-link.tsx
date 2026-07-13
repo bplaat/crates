@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useLocation, useRoute } from 'wouter-preact';
 import { SidebarLink as PlaatuiSidebarLink, type SidebarLinkProps } from 'plaatui';
+import { useLocation, useRoute } from 'wouter-preact';
 
 type Props = Pick<SidebarLinkProps, 'href' | 'label' | 'icon'>;
 

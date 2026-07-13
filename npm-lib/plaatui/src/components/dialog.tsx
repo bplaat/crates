@@ -6,11 +6,11 @@
 
 import { type ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import './dialog.css';
 import { Button, DangerButton, IconButton, SecondaryButton } from './button.tsx';
-import { FormActions, FormField } from './form.tsx';
+import { Form, FormActions, FormField } from './form.tsx';
+import { CloseIcon, DeleteOutlineIcon } from './icons.tsx';
 import { FormInput } from './input.tsx';
-import { Icon } from './icons.tsx';
+import './dialog.css';
 
 export interface DialogProps {
     title: string;
@@ -56,7 +56,7 @@ export function Dialog({ title, closeLabel = 'Close', onClose, children }: Dialo
                 <div class="modal-card-head">
                     <h2 class="modal-card-title">{title}</h2>
                     <IconButton type="button" onClick={onClose} class="has-text-muted" title={closeLabel}>
-                        <Icon type="close" class="is-md" />
+                        <CloseIcon class="is-md" />
                     </IconButton>
                 </div>
                 <div class="modal-card-body">{children}</div>
@@ -100,7 +100,12 @@ export function ConfirmDialog({
 
     return (
         <Dialog title={title} onClose={onClose}>
-            <div class="form">
+            <Form
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    if (!disabled) onConfirm();
+                }}
+            >
                 <p class="modal-text">{message}</p>
                 {gated && (
                     <FormField
@@ -117,14 +122,16 @@ export function ConfirmDialog({
                         />
                     </FormField>
                 )}
-                <FormActions class="is-flush">
-                    <SecondaryButton onClick={onClose}>{cancelLabel}</SecondaryButton>
-                    <ConfirmButton onClick={onConfirm} disabled={disabled}>
-                        {icon ?? <Icon type="delete-outline" class="is-sm" />}
+                <FormActions flush>
+                    <SecondaryButton type="button" onClick={onClose}>
+                        {cancelLabel}
+                    </SecondaryButton>
+                    <ConfirmButton type="submit" disabled={disabled}>
+                        {icon ?? <DeleteOutlineIcon class="is-sm" />}
                         {confirmLabel}
                     </ConfirmButton>
                 </FormActions>
-            </div>
+            </Form>
         </Dialog>
     );
 }
