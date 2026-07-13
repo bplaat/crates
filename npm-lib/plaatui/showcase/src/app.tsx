@@ -386,7 +386,7 @@ export function App() {
             label: 'Loading',
             icon: 'progress-clock',
             description: 'A centered loading-text placeholder.',
-            render: () => <LoadingText>Loading notes...</LoadingText>,
+            render: () => <LoadingText>Loading notes…</LoadingText>,
         },
         {
             id: 'fab',
