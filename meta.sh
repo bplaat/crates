@@ -83,7 +83,7 @@ is_platform_excluded() {
 
 clean() {
     cargo clean
-    find . \( -name "*.db*" -o -type d -name "target" -o -type d -name "node_modules" -o -type d -name "playwright" -o -type d -name "playwright-report" -o -type d -name "test-results" \) -exec rm -rf {} +
+    find . \( -name "*.db*" -o -type d -name "target" -o -type d -name "node_modules" -o -type d -name "dist" -o -type d -name "src-gen" -o -type d -name "playwright" -o -type d -name "playwright-report" -o -type d -name "test-results" \) -exec rm -rf {} +
 }
 
 check_copyright() {
