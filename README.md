@@ -137,20 +137,19 @@ These libraries are created as minimal / smaller replacements for common used cr
 
 ## Getting Started
 
-- Open a posix shell environment when you are on Windows (e.g. Git Bash)
-- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [ShellCheck](https://www.shellcheck.net/), [Hadolint](https://github.com/hadolint/hadolint) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
+- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [Hadolint](https://github.com/hadolint/hadolint) and [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
 - Install Rust nightly toolchain, `cargo-binstall`, `cargo-deny` and `cargo-nextest`:
 
     ```sh
     rustup toolchain add nightly --component rust-src --component rustfmt
-    curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+    cargo install cargo-binstall
     cargo binstall -y --locked cargo-deny cargo-nextest
     ```
 
 - Run checks, or run an example:
 
     ```sh
-    ./meta.sh check
+    cargo xtask check
     cargo run --bin example-persons-api
     cargo run --bin example-todo-app
     ```
@@ -162,7 +161,7 @@ These libraries are created as minimal / smaller replacements for common used cr
     ```sh
     rustup component add llvm-tools
     cargo binstall -y --locked cargo-llvm-cov
-    ./meta.sh coverage
+    cargo xtask coverage
     ```
 
 - To build pages, install a wasm target and the `wasm-bindgen-cli` tool:
@@ -170,20 +169,20 @@ These libraries are created as minimal / smaller replacements for common used cr
     ```sh
     rustup target add wasm32-unknown-unknown
     cargo binstall -y --locked wasm-bindgen-cli --version 0.2.104
-    ./meta.sh build-pages
+    cargo xtask build-pages
     ```
 
 - To build macOS app bundles, only on macOS, install targets:
 
     ```sh
     rustup target add aarch64-apple-darwin x86_64-apple-darwin
-    ./meta.sh build-bundle
+    cargo xtask build-bundle
     ```
 
 - To build and install bins and GUI applications to your system:
 
     ```sh
-    ./meta.sh install
+    cargo xtask install
     ```
 
 ## Goals
@@ -200,7 +199,7 @@ Rather than pulling in large, general-purpose dependencies, this repo grows a cu
 
 **3. Tools and a custom build system for complex multi-language projects**
 
-Building projects that span multiple languages and artifact types (Rust, JavaScript, WASM, native bundles) requires coordination that general-purpose build systems handle poorly. [bob](bin/bob) is a minimal build system inspired by `Cargo`'s simplicity, designed to describe and orchestrate such projects cleanly. [cargo-bundle](bin/cargo-bundle) handles macOS `.app` bundle packaging from within the `Cargo` ecosystem. Together with [meta.sh](meta.sh) these tools keep the build pipeline simple, scriptable, and easy to follow.
+Building projects that span multiple languages and artifact types (Rust, JavaScript, WASM, native bundles) requires coordination that general-purpose build systems handle poorly. [bob](bin/bob) is a minimal build system inspired by `Cargo`'s simplicity, designed to describe and orchestrate such projects cleanly. [cargo-bundle](bin/cargo-bundle) handles macOS `.app` bundle packaging from within the `Cargo` ecosystem. Together with the [xtask](xtask) crate these tools keep the build pipeline typed, cross-platform and easy to follow.
 
 ### Repo organization
 
@@ -208,7 +207,7 @@ This repo is organized as a monorepo with `Cargo` as the single build system. Mo
 
 All Rust code lives in a single `Cargo` workspace that builds everything together. Some crates extend this with custom build steps that invoke other tools like `npm` or `vite`, but those are orchestrated from within `Cargo` build scripts.
 
-The [meta.sh](meta.sh) script contains all top-level tasks and is used both from the command line and in CI. The only exception is the [bob/examples](bin/bob/examples) directory, which intentionally uses a different build system as a showcase for the [bob](bin/bob) build tool itself.
+The root-level [xtask](xtask) crate contains all top-level tasks and is used through `cargo xtask` both from the command line and in CI. The only exception is the [bob/examples](bin/bob/examples) directory, which intentionally uses a different build system as a showcase for the [bob](bin/bob) build tool itself.
 
 ## License
 

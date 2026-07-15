@@ -29,7 +29,7 @@ jobs:
           hadolint --version
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y --locked cargo-deny
-      - run: ./meta.sh check-shared
+      - run: cargo xtask check-shared
 
   # MARK: Check rust
   check:
@@ -92,8 +92,7 @@ jobs:
           iex (iwr "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.ps1").Content
           cargo binstall -y --locked cargo-nextest
 
-      - run: ./meta.sh check-rust
-        shell: bash
+      - run: cargo xtask check-rust
 
       - name: Report test results
         uses: dorny/test-reporter@v3
@@ -122,7 +121,7 @@ jobs:
           rustup toolchain add nightly --component rust-src --component rustfmt
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y --locked cargo-nextest
-      - run: ./meta.sh check-e2e
+      - run: cargo xtask check-e2e
       - name: Report E2E test results
         uses: dorny/test-reporter@v3
         if: always()
