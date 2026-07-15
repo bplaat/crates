@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0"
-regex = { version = "1.11", default-features = false, features = [
+regex = { version = "1.13", default-features = false, features = [
     "unicode-perl",
 ] }
 serde_json = "1.0"

@@ -4,16 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::sync::LazyLock;
-
-use regex::Regex;
+use regex::regex;
 
 use crate::types::Argument;
-
-static RE_ARGUMENT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)")
-        .expect("valid regex")
-});
 
 pub(crate) fn to_snake_case(camel_case: &str) -> String {
     let mut s = String::new();
@@ -56,7 +49,10 @@ pub(crate) fn parse_arguments(arguments_str: &str) -> Vec<Argument> {
     let mut arguments = Vec::new();
     if !arguments_str.trim().is_empty() {
         for argument_str in arguments_str.split(',') {
-            if let Some(caps) = RE_ARGUMENT.captures(argument_str) {
+            if let Some(caps) =
+                regex!(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)")
+                    .captures(argument_str)
+            {
                 arguments.push(Argument {
                     name: caps[2].trim().to_owned(),
                     type_: caps[1].to_owned(),

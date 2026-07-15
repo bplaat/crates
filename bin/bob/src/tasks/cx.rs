@@ -9,7 +9,7 @@ use std::fmt::Write;
 use std::fs::{self};
 use std::process::{Command, exit};
 
-use regex::Regex;
+use regex::{Regex, regex};
 
 use crate::args::Profile;
 use crate::bobje::{Bobje, PackageType};
@@ -659,9 +659,9 @@ fn find_included_header_files(bobje: &Bobje, source_file: &str) -> Vec<String> {
         }
         included_files
     }
-    let re = Regex::new(r#"#include\s+"([^"]+)""#).expect("Can't compile regex");
+    let re = regex!(r#"#include\s+"([^"]+)""#);
     let mut visited = HashSet::new();
-    visit_file(bobje, source_file, &mut visited, &re)
+    visit_file(bobje, source_file, &mut visited, re)
 }
 
 struct TestFunction {
@@ -671,7 +671,7 @@ struct TestFunction {
 
 fn find_test_functions(bobje: &Bobje) -> Vec<TestFunction> {
     let mut test_functions = Vec::new();
-    let re = Regex::new(r"void\s+(test_[^\(]+)").expect("Can't compile regex");
+    let re = regex!(r"void\s+(test_[^\(]+)");
     for source_file in &bobje.source_files {
         if let Ok(contents) = fs::read_to_string(source_file) {
             let mut functions = Vec::new();

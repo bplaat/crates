@@ -9,7 +9,7 @@ use std::path::Path;
 use std::process::{Command, exit};
 use std::{env, fs};
 
-use regex::Regex;
+use regex::{Regex, regex};
 
 use crate::Bobje;
 use crate::args::Profile;
@@ -355,7 +355,7 @@ pub(crate) fn get_java_major_version(java_bin: &str) -> Option<u32> {
     // java -version writes to stderr: openjdk version "17.0.1" ...
     let output = Command::new(java_bin).arg("-version").output().ok()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let re = Regex::new(r#"version "(\d+)"#).ok()?;
+    let re = regex!(r#"version "(\d+)"#);
     let caps = re.captures(&stderr)?;
     caps[1].parse().ok()
 }
@@ -525,9 +525,8 @@ fn find_dependencies(modules: &Vec<Module>) -> HashMap<String, Vec<Module>> {
 }
 
 fn find_main_class(bobje: &Bobje) -> Option<String> {
-    let java_re =
-        Regex::new(r"(public\s+)?static\s+void\s+main\s*\(").expect("Failed to compile regex");
-    let kotlin_re = Regex::new(r"fun\s+main\s*\(").expect("Failed to compile regex");
+    let java_re = regex!(r"(public\s+)?static\s+void\s+main\s*\(");
+    let kotlin_re = regex!(r"fun\s+main\s*\(");
     for source_file in &bobje.source_files {
         if source_file.ends_with(".java")
             && let Ok(contents) = fs::read_to_string(source_file)

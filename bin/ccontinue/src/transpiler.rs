@@ -6,10 +6,9 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::LazyLock;
 
 use indexmap::IndexMap;
-use regex::{Captures, Regex};
+use regex::{Captures, Regex, regex};
 
 use crate::types::{Argument, Class, Field, Interface, Method};
 use crate::utils::{find_matching_close, parse_arguments, to_snake_case};
@@ -171,9 +170,9 @@ impl Transpiler {
         supers_raw: Option<&str>,
         contents: &str,
     ) -> String {
-        static RE_IFACE_METHOD: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0\s*)?;").expect("valid regex")
-        });
+        let re_iface_method = regex!(
+            r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0\s*)?;"
+        );
         let snake_name = to_snake_case(iface_name);
         let id = self.next_interface_id;
         self.next_interface_id += 1;
@@ -198,7 +197,7 @@ impl Transpiler {
             }
         }
 
-        for caps in RE_IFACE_METHOD.captures_iter(contents) {
+        for caps in re_iface_method.captures_iter(contents) {
             let return_type = caps[1].replace("virtual ", "").trim().to_owned();
             let name = caps[2].to_owned();
             let arguments = parse_arguments(&caps[3]);
@@ -264,18 +263,12 @@ impl Transpiler {
         supers_raw: Option<&str>,
         contents: &str,
     ) -> (String, Option<String>) {
-        static RE_FIELD: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"(.+[^=][\s|\*])([_A-Za-z][_A-Za-z0-9]*)\s*(=\s*[^;]+)?;")
-                .expect("valid regex")
-        });
-        static RE_FIELD_ATTR: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"@([_A-Za-z][_A-Za-z0-9]*)(\([^\)]*\))?").expect("valid regex")
-        });
-        static RE_METHOD_DECL: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0)?;").expect("valid regex")
-        });
-        static RE_SELF_RETURN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"Self\s*\*").expect("valid regex"));
+        let re_field = regex!(r"(.+[^=][\s|\*])([_A-Za-z][_A-Za-z0-9]*)\s*(=\s*[^;]+)?;");
+        let re_field_attr = regex!(r"@([_A-Za-z][_A-Za-z0-9]*)(\([^\)]*\))?");
+        let re_method_decl = regex!(
+            r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*(=\s*0)?;"
+        );
+        let re_self_return = regex!(r"Self\s*\*");
         let mut parent_name: Option<String> = if class_name == "Object" {
             None
         } else {
@@ -372,13 +365,13 @@ impl Transpiler {
         }
 
         // Index fields
-        for caps in RE_FIELD.captures_iter(contents) {
+        for caps in re_field.captures_iter(contents) {
             let attributes_and_type_str = &caps[1];
             let name = caps[2].to_owned();
             let default_str = caps.get(3).map(|m| m.as_str()).unwrap_or("");
 
             let mut attributes: IndexMap<String, Vec<String>> = IndexMap::new();
-            for attr_m in RE_FIELD_ATTR.captures_iter(attributes_and_type_str) {
+            for attr_m in re_field_attr.captures_iter(attributes_and_type_str) {
                 let attr_name = attr_m[1].to_owned();
                 let attr_args = attr_m.get(2).map(|m| m.as_str());
                 let args: Vec<String> = if let Some(args_str) = attr_args {
@@ -391,7 +384,7 @@ impl Transpiler {
                 };
                 attributes.insert(attr_name, args);
             }
-            let field_type = RE_FIELD_ATTR
+            let field_type = re_field_attr
                 .replace_all(attributes_and_type_str, "")
                 .trim()
                 .to_owned();
@@ -418,7 +411,7 @@ impl Transpiler {
         }
 
         // Index methods
-        for caps in RE_METHOD_DECL.captures_iter(contents) {
+        for caps in re_method_decl.captures_iter(contents) {
             let mut return_type = caps[1].to_owned();
             let name = caps[2].to_owned();
             let arguments = parse_arguments(&caps[3]);
@@ -437,7 +430,7 @@ impl Transpiler {
             }
 
             let mut is_return_self = false;
-            if RE_SELF_RETURN.is_match(&return_type) {
+            if re_self_return.is_match(&return_type) {
                 is_return_self = true;
                 return_type = return_type.replace("Self", class_name);
             }
@@ -1065,26 +1058,20 @@ impl Transpiler {
 
     // MARK: Transpile steps
     fn step_prelude_and_includes(&mut self, path: &str, is_header: bool, text: &str) -> String {
-        static RE_PRAGMA_ONCE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"#pragma once\n").expect("valid regex"));
-        static RE_INCLUDE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"#include\s*["<](.+)\.hh[">]"#).expect("valid regex"));
-        static RE_LITERAL_STRING: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"@"([^"]*)""#).expect("valid regex"));
-        static RE_LITERAL_BOOL: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"@(true|false)\b").expect("valid regex"));
-        static RE_LITERAL_FLOAT: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"@([0-9]+\.[0-9]+)").expect("valid regex"));
-        static RE_LITERAL_INT: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"@([0-9]+)").expect("valid regex"));
+        let re_pragma_once = regex!(r"#pragma once\n");
+        let re_include = regex!(r#"#include\s*["<](.+)\.hh[">]"#);
+        let re_literal_string = regex!(r#"@"([^"]*)""#);
+        let re_literal_bool = regex!(r"@(true|false)\b");
+        let re_literal_float = regex!(r"@([0-9]+\.[0-9]+)");
+        let re_literal_int = regex!(r"@([0-9]+)");
         let mut text = if !is_header {
             format!("// @generated\n#include \"prelude.h\"\n#include \"Object.hh\"\n{text}")
         } else {
             text.to_owned()
         };
-        text = RE_PRAGMA_ONCE.replace_all(&text, "").into_owned();
+        text = re_pragma_once.replace_all(&text, "").into_owned();
         // Inline convert_include using replace loop (can't use closure with &mut self)
-        while let Some(caps) = RE_INCLUDE.captures(&text) {
+        while let Some(caps) = re_include.captures(&text) {
             let start = caps.get(0).expect("group 0 always present").start();
             let end = caps.get(0).expect("group 0 always present").end();
             let include_name = caps[1].to_owned();
@@ -1092,32 +1079,30 @@ impl Transpiler {
             let replacement = self.convert_include(path, &include_name);
             text = format!("{}{}{}", &text[..start], replacement, &text[end..]);
         }
-        text = RE_LITERAL_STRING
+        text = re_literal_string
             .replace_all(&text, |caps: &Captures| {
                 format!("string_new(\"{}\")", &caps[1])
             })
             .into_owned();
-        text = RE_LITERAL_BOOL
+        text = re_literal_bool
             .replace_all(&text, |caps: &Captures| format!("bool_new({})", &caps[1]))
             .into_owned();
-        text = RE_LITERAL_FLOAT
+        text = re_literal_float
             .replace_all(&text, |caps: &Captures| format!("float_new({})", &caps[1]))
             .into_owned();
-        text = RE_LITERAL_INT
+        text = re_literal_int
             .replace_all(&text, |caps: &Captures| format!("int_new({})", &caps[1]))
             .into_owned();
         text
     }
 
     fn step_interfaces(&mut self, text: &str) -> String {
-        static RE_INTERFACE: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"class\s+(I[A-Z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{")
-                .expect("valid regex")
-        });
+        let re_interface =
+            regex!(r"class\s+(I[A-Z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{");
         let mut text = text.to_owned();
         loop {
             let (match_start, match_end, iface_name, supers_raw) = {
-                let Some(caps) = RE_INTERFACE.captures(&text) else {
+                let Some(caps) = re_interface.captures(&text) else {
                     break;
                 };
                 let m0 = caps.get(0).expect("group 0 always present");
@@ -1167,19 +1152,15 @@ impl Transpiler {
     }
 
     fn step_classes(&mut self, text: &str, is_header: bool) -> String {
-        static RE_CLASS_FWD: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"class\s+([_A-Za-z][_A-Za-z0-9]*)\s*;").expect("valid regex")
-        });
-        static RE_CLASS: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"class\s+([_A-Za-z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{")
-                .expect("valid regex")
-        });
-        let mut text = RE_CLASS_FWD
+        let re_class_fwd = regex!(r"class\s+([_A-Za-z][_A-Za-z0-9]*)\s*;");
+        let re_class =
+            regex!(r"class\s+([_A-Za-z][_A-Za-z0-9]*)(\s*:\s*[_A-Za-z][_A-Za-z0-9,\s]*)?\s*\{");
+        let mut text = re_class_fwd
             .replace_all(text, "typedef struct $1 $1;")
             .into_owned();
         loop {
             let (match_start, match_end, class_name, supers_raw) = {
-                let Some(caps) = RE_CLASS.captures(&text) else {
+                let Some(caps) = re_class.captures(&text) else {
                     break;
                 };
                 let m0 = caps.get(0).expect("group 0 always present");
@@ -1316,18 +1297,16 @@ impl Transpiler {
     }
 
     fn step_methods_and_super_calls(&self, text: &str) -> String {
-        static RE_METHOD_DEF: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{").expect("valid regex")
-        });
-        static RE_SUPER_CALL: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*;")
-                .expect("valid regex")
-        });
+        let re_method_def = regex!(
+            r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{"
+        );
+        let re_super_call =
+            regex!(r"([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*;");
         // replace_all with closure needs shared ref; clone self data via closure capture
         let text = {
             let mut result = String::new();
             let mut last = 0;
-            for caps in RE_METHOD_DEF.captures_iter(text) {
+            for caps in re_method_def.captures_iter(text) {
                 let m = caps.get(0).expect("group 0 always present");
                 result.push_str(&text[last..m.start()]);
                 result.push_str(&self.convert_method(&caps));
@@ -1339,7 +1318,7 @@ impl Transpiler {
         {
             let mut result = String::new();
             let mut last = 0;
-            for caps in RE_SUPER_CALL.captures_iter(&text.clone()) {
+            for caps in re_super_call.captures_iter(&text.clone()) {
                 let m = caps.get(0).expect("group 0 always present");
                 result.push_str(&text[last..m.start()]);
                 result.push_str(&self.convert_super_call(&caps));
@@ -1351,14 +1330,14 @@ impl Transpiler {
     }
 
     fn step_for_in(&self, text: &str) -> String {
-        static RE_FOR_IN: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"for\s*\(\s*([_A-Za-z][_A-Za-z0-9 \*]*\*?)\s+([_A-Za-z][_A-Za-z0-9]*)\s+in\s+([^\)]+)\)\s*\{").expect("valid regex")
-        });
+        let re_for_in = regex!(
+            r"for\s*\(\s*([_A-Za-z][_A-Za-z0-9 \*]*\*?)\s+([_A-Za-z][_A-Za-z0-9]*)\s+in\s+([^\)]+)\)\s*\{"
+        );
         let mut text = text.to_owned();
         let mut counter = 0usize;
         loop {
             let (match_start, match_end, var_type, var_name, iterable_expr) = {
-                let Some(caps) = RE_FOR_IN.captures(&text) else {
+                let Some(caps) = re_for_in.captures(&text) else {
                     break;
                 };
                 let m0 = caps.get(0).expect("group 0 always present");
@@ -1385,17 +1364,13 @@ impl Transpiler {
     }
 
     fn step_cast(&self, text: &str) -> String {
-        static RE_CAST_SCAN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"cast<([_A-Za-z][_A-Za-z0-9]*)>").expect("valid regex"));
-        static RE_CAST: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"cast<([_A-Za-z][_A-Za-z0-9]*)>\(").expect("valid regex"));
-        static RE_MAIN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"\bint\s+main\s*\(").expect("valid regex"));
-        static RE_INSERT_AFTER_CLOSE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"(}\n\n)([a-zA-Z#])").expect("valid regex"));
+        let re_cast_scan = regex!(r"cast<([_A-Za-z][_A-Za-z0-9]*)>");
+        let re_cast = regex!(r"cast<([_A-Za-z][_A-Za-z0-9]*)>\(");
+        let re_main = regex!(r"\bint\s+main\s*\(");
+        let re_insert_after_close = regex!(r"(}\n\n)([a-zA-Z#])");
         let mut text = text.to_owned();
         let mut ifaces_used: Vec<String> = Vec::new();
-        for caps in RE_CAST_SCAN.captures_iter(&text.clone()) {
+        for caps in re_cast_scan.captures_iter(&text.clone()) {
             let name = caps[1].to_owned();
             if self.interfaces.contains_key(&name) && !ifaces_used.contains(&name) {
                 ifaces_used.push(name);
@@ -1419,9 +1394,9 @@ impl Transpiler {
                     &format!("    return ({lk_iface_name}){{ .obj = _obj, .vtbl = vtbl }};\n");
                 lookup_code += "}\n\n";
             }
-            let ins_pos = if let Some(m) = RE_MAIN.find(&text.clone()) {
+            let ins_pos = if let Some(m) = re_main.find(&text.clone()) {
                 m.start()
-            } else if let Some(m) = RE_INSERT_AFTER_CLOSE.find(&text.clone()) {
+            } else if let Some(m) = re_insert_after_close.find(&text.clone()) {
                 m.end() - 1
             } else {
                 text.len()
@@ -1431,7 +1406,7 @@ impl Transpiler {
 
         loop {
             let (match_start, match_end, cast_iface_name) = {
-                let Some(caps) = RE_CAST.captures(&text) else {
+                let Some(caps) = re_cast.captures(&text) else {
                     break;
                 };
                 let iface = caps[1].to_owned();
@@ -1457,24 +1432,14 @@ impl Transpiler {
     }
 
     fn step_instanceof(&self, text: &str) -> String {
-        static RE_INSTANCEOF_SCAN: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>").expect("valid regex")
-        });
-        static RE_INSTANCEOF: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>\(").expect("valid regex")
-        });
-        static RE_MAIN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"\bint\s+main\s*\(").expect("valid regex"));
-        static RE_FUNC_MARKER: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"\n(?:typedef|extern|#|struct|}\s*;)").expect("valid regex")
-        });
-        static RE_FUNC_IMPL: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(")
-                .expect("valid regex")
-        });
+        let re_instanceof_scan = regex!(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>");
+        let re_instanceof = regex!(r"instanceof<([_A-Za-z][_A-Za-z0-9]*)>\(");
+        let re_main = regex!(r"\bint\s+main\s*\(");
+        let re_func_marker = regex!(r"\n(?:typedef|extern|#|struct|}\s*;)");
+        let re_func_impl = regex!(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(");
         let mut text = text.to_owned();
         let mut types_for_instanceof: Vec<String> = Vec::new();
-        for caps in RE_INSTANCEOF_SCAN.captures_iter(&text.clone()) {
+        for caps in re_instanceof_scan.captures_iter(&text.clone()) {
             let type_name = caps[1].to_owned();
             if !types_for_instanceof.contains(&type_name) {
                 types_for_instanceof.push(type_name);
@@ -1532,11 +1497,11 @@ impl Transpiler {
                 }
             }
 
-            let ins_pos2 = if let Some(m) = RE_MAIN.find(&text.clone()) {
+            let ins_pos2 = if let Some(m) = re_main.find(&text.clone()) {
                 m.start()
-            } else if let Some(fm) = RE_FUNC_MARKER.find(&text.clone()) {
+            } else if let Some(fm) = re_func_marker.find(&text.clone()) {
                 let rest = &text[fm.end()..];
-                if let Some(fi) = RE_FUNC_IMPL.find(rest) {
+                if let Some(fi) = re_func_impl.find(rest) {
                     fm.end() + fi.start()
                 } else {
                     text.len()
@@ -1554,7 +1519,7 @@ impl Transpiler {
 
         loop {
             let (match_start, match_end, inst_type_name) = {
-                let Some(caps) = RE_INSTANCEOF.captures(&text) else {
+                let Some(caps) = re_instanceof.captures(&text) else {
                     break;
                 };
                 let m0 = caps.get(0).expect("group 0 always present");

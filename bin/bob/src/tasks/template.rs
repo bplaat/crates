@@ -16,7 +16,7 @@ pub(crate) fn detect_template(source_files: &[String]) -> bool {
 }
 
 pub(crate) fn process_templates(bobje: &mut Bobje, _executor: &mut ExecutorBuilder) {
-    let regex = regex::Regex::new(r"@([A-Z0-9_]+)@").expect("Can't compile regex");
+    let regex = regex::regex!(r"@([A-Z0-9_]+)@");
     let template_paths = bobje
         .source_files
         .iter()

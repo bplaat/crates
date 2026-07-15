@@ -89,27 +89,17 @@ pub trait Validate {
     fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), Report>;
 }
 
-#[cfg(feature = "email")]
-static EMAIL_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
-        .expect("Invalid regex")
-});
-
 /// Validate email
 #[cfg(feature = "email")]
 pub fn is_valid_email(email: &str) -> bool {
-    EMAIL_REGEX.is_match(email)
+    regex::regex!(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$")
+        .is_match(email)
 }
-
-#[cfg(feature = "url")]
-static URL_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r"(https?://[\w./?=&-]+)").expect("Invalid regex")
-});
 
 /// Validate url
 #[cfg(feature = "url")]
 pub fn is_valid_url(url: &str) -> bool {
-    URL_REGEX.is_match(url)
+    regex::regex!(r"(https?://[\w./?=&-]+)").is_match(url)
 }
 
 // MARK: Tests

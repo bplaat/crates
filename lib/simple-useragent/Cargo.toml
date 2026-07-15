@@ -15,7 +15,7 @@ homepage = "https://github.com/bplaat/crates/tree/master/lib/simple-useragent"
 workspace = true
 
 [dependencies]
-regex = { version = "1.11", default-features = false, features = [
+regex = { version = "1.13", default-features = false, features = [
     "unicode-perl",
 ] }
 serde = { version = "1.0", features = ["derive"], optional = true }

@@ -5,11 +5,10 @@
  */
 
 use std::process::Command;
-use std::sync::LazyLock;
 use std::{env, fs};
 
 use anyhow::{Context, Result, bail};
-use regex::Regex;
+use regex::regex;
 use serde_json::Value;
 
 use crate::metadata::{
@@ -21,13 +20,6 @@ use crate::{Os, Xtask};
 
 pub(crate) const BACKEND_SWAP_PAIRS: [(&str, &str); 2] =
     [("native-tls", "vendored"), ("bsqlite", "bundled")];
-
-static COPYRIGHT_HEADER: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+").expect("valid regex")
-});
-
-static UNSAFE_BLOCK: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"unsafe\s*\{").expect("valid regex"));
 
 impl Xtask {
     pub(crate) fn check(&self) -> Result<()> {
@@ -61,7 +53,7 @@ impl Xtask {
             }
             let contents = fs::read_to_string(&file)
                 .with_context(|| format!("failed to read {}", file.display()))?;
-            if !COPYRIGHT_HEADER.is_match(&contents) {
+            if !regex!(r"Copyright \(c\) 20[0-9]{2}(-20[0-9]{2})? \w+").is_match(&contents) {
                 bad.push(relative);
             }
         }
@@ -311,5 +303,5 @@ impl Xtask {
 }
 
 fn contains_unsafe_block(contents: &str) -> bool {
-    UNSAFE_BLOCK.is_match(contents)
+    regex!(r"unsafe\s*\{").is_match(contents)
 }
