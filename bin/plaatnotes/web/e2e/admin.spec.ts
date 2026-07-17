@@ -104,7 +104,7 @@ test.describe('Admin - Users', () => {
         // Create a user to delete
         const { headers } = await authState(page);
         const email = `deleteme-${Date.now()}@example.com`;
-        const createRes = await page.request.post(`${API_URL}/users`, {
+        await page.request.post(`${API_URL}/users`, {
             headers,
             data: JSON.stringify({
                 firstName: 'Delete',
@@ -114,7 +114,6 @@ test.describe('Admin - Users', () => {
                 role: 'normal',
             }),
         });
-        const created = await createRes.json();
 
         await page.goto('/admin/users');
         const row = page.getByRole('row').filter({ hasText: email });

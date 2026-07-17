@@ -76,7 +76,7 @@ test.describe('Trash', () => {
     });
 
     test('delete forever shows confirm dialog and removes note', async ({ page }) => {
-        const note = await createTrashedNote(page, 'Delete forever test note');
+        await createTrashedNote(page, 'Delete forever test note');
 
         await page.goto('/trash');
         await expect(page.getByText('Delete forever test note')).toBeVisible();
@@ -93,8 +93,8 @@ test.describe('Trash', () => {
     });
 
     test('empty trash shows confirm dialog and clears all notes', async ({ page }) => {
-        const note1 = await createTrashedNote(page, 'Empty trash test note 1');
-        const note2 = await createTrashedNote(page, 'Empty trash test note 2');
+        await createTrashedNote(page, 'Empty trash test note 1');
+        await createTrashedNote(page, 'Empty trash test note 2');
 
         await page.goto('/trash');
         await expect(page.getByText('Empty trash test note 1')).toBeVisible();
