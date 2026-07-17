@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-pub(crate) const IPC_SCRIPT: &str = r#"try { window.ipc = new EventTarget(); } catch (e) {
+macro_rules! ipc_script {
+    () => {
+        r#"try { window.ipc = new EventTarget(); } catch (e) {
   window.ipc = { _h: {},
     addEventListener(t, l) { (this._h[t] = this._h[t] || []).push(l); },
     removeEventListener(t, l) { this._h[t] = (this._h[t] || []).filter(x => x !== l); },
@@ -18,10 +20,14 @@ if (window.webkit) {
   window.ipc.postMessage = m =>
     window.chrome.webview.postMessage('i' + (typeof m !== 'string' ? JSON.stringify(m) : m));
 }
-"#;
+"#
+    };
+}
 
 #[cfg(feature = "log")]
-pub(crate) const CONSOLE_SCRIPT: &str = r#"for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log']) {
+macro_rules! console_script {
+    () => {
+        r#"for (const level of ['error', 'warn', 'info', 'debug', 'trace', 'log']) {
   window.console[level] = (...args) => {
     const msg = args.map(arg => typeof arg !== 'string' ? JSON.stringify(arg) : arg).join(' ');
     if (window.webkit) {
@@ -31,4 +37,15 @@ pub(crate) const CONSOLE_SCRIPT: &str = r#"for (const level of ['error', 'warn',
     }
   };
 }
-"#;
+"#
+    };
+}
+
+cfg_select! {
+    feature = "log" => {
+        pub(crate) const IPC_SCRIPT: &str = concat!(ipc_script!(), "\n", console_script!());
+    }
+    _ => {
+        pub(crate) const IPC_SCRIPT: &str = ipc_script!();
+    }
+}

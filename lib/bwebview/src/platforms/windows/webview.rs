@@ -381,10 +381,7 @@ extern "system" fn controller_created(
         }
 
         // Setup ipc and console logging
-        let script = cfg_select! {
-            feature = "log" => { format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT) }
-            _ => { super::super::IPC_SCRIPT }
-        };
+        let script = super::super::IPC_SCRIPT;
         (*webview).AddScriptToExecuteOnDocumentCreated(
             script.to_wide_string().as_ptr() as *mut _,
             null_mut(),

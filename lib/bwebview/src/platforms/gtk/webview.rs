@@ -69,10 +69,7 @@ impl PlatformWebview {
 
         // Create webview user content manager
         let user_content_manager = unsafe {
-            let script = cfg_select! {
-                feature = "log" => { format!("{}\n{}", super::super::IPC_SCRIPT, super::super::CONSOLE_SCRIPT) }
-                _ => { super::super::IPC_SCRIPT }
-            };
+            let script = super::super::IPC_SCRIPT;
 
             let user_content_manager = webkit_user_content_manager_new();
             let script = CString::new(script).expect("Can't convert to CString");
