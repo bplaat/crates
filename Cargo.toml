@@ -58,6 +58,7 @@ plist = { path = "lib/plist" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 semver = { path = "lib/semver" }
+serde_yaml = { path = "lib/serde_yaml" }
 digest = { path = "lib/digest" }
 hmac = { path = "lib/hmac" }
 subtle = { path = "lib/subtle" }

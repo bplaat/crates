@@ -1,0 +1,16 @@
+[package]
+name = "serde_yaml"
+version = "0.9.34+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+granit-parser = "0.0.7"
+serde = "1.0"
+
+[dev-dependencies]
+serde = { version = "1.0", features = ["derive"] }
