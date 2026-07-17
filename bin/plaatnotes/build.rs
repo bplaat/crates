@@ -34,6 +34,7 @@ fn main() {
     const NPM: &str = if cfg!(windows) { "npm.cmd" } else { "npm" };
 
     // Install npm packages at the npm workspace root if needed
+    println!("cargo:rerun-if-changed=../../.npmrc");
     println!("cargo:rerun-if-changed=../../package.json");
     println!("cargo:rerun-if-changed=../../package-lock.json");
     {
@@ -50,11 +51,10 @@ fn main() {
         if !Path::new("../../node_modules/.package-lock.json").exists() {
             let status = Command::new(NPM)
                 .arg("ci")
-                .arg("--prefer-offline")
                 .current_dir("../..")
                 .status()
-                .expect("Failed to run npm install");
-            assert!(status.success(), "npm install failed with {status}");
+                .expect("Failed to run npm ci");
+            assert!(status.success(), "npm ci failed with {status}");
         }
     }
 

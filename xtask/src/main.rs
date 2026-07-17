@@ -106,7 +106,7 @@ impl Xtask {
 
     fn ensure_npm_deps(&self) -> Result<()> {
         if !self.root.join("node_modules").is_dir() {
-            run(Command::new(npm_program(self.os)).args(["ci", "--prefer-offline"]))?;
+            run(Command::new(npm_program(self.os)).arg("ci"))?;
         }
         Ok(())
     }

@@ -19,6 +19,16 @@ use crate::utils::{
 };
 use crate::{Os, Xtask};
 
+fn is_generated_database(root: &Path, path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    name.contains(".db")
+        || (name.ends_with(".mmdb")
+            && path != root.join("lib/maxminddb/test-data/GeoLite2-City-Test.mmdb"))
+}
+
 impl Xtask {
     pub(crate) fn clean(&self) -> Result<()> {
         if self.os == Os::Windows {
@@ -51,7 +61,7 @@ impl Xtask {
                             | "test-results"
                     )
             } else {
-                name.contains(".db")
+                is_generated_database(&self.root, path)
             }
         })?;
         for path in generated {
