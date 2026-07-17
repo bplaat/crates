@@ -121,7 +121,7 @@ pub(super) const WM_SEND_MESSAGE: u32 = WM_USER + 1;
 pub(crate) struct PlatformEventLoopProxy;
 
 impl PlatformEventLoopProxy {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self
     }
 }

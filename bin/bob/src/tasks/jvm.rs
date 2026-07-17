@@ -196,7 +196,7 @@ pub(crate) fn run_junit_tests(bobje: &Bobje) -> ! {
 }
 
 // MARK: Jar tasks
-pub(crate) fn detect_jar(bobje: &Bobje) -> bool {
+pub(crate) const fn detect_jar(bobje: &Bobje) -> bool {
     bobje.manifest.package.metadata.jar.is_some()
 }
 

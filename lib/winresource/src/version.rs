@@ -22,7 +22,7 @@ pub(crate) struct MicrosoftVersion {
 
 impl MicrosoftVersion {
     /// Create a new Microsoft version
-    pub(crate) fn new(major: u16, minor: u16, build: u16, revision: u16) -> Self {
+    pub(crate) const fn new(major: u16, minor: u16, build: u16, revision: u16) -> Self {
         Self {
             major,
             minor,

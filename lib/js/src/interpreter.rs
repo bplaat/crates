@@ -31,7 +31,7 @@ pub(crate) struct Interpreter {
 }
 
 impl Interpreter {
-    pub(crate) fn new(global_env: Rc<RefCell<IndexMap<String, Value>>>) -> Self {
+    pub(crate) const fn new(global_env: Rc<RefCell<IndexMap<String, Value>>>) -> Self {
         Interpreter {
             global_env,
             scopes: Vec::new(),

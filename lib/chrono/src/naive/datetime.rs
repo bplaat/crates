@@ -22,23 +22,23 @@ impl NaiveDateTime {
     /// Create a [NaiveDateTime] from a unix timestamp
     #[deprecated]
     #[allow(unused_variables)]
-    pub fn from_timestamp(secs: i64, nsecs: u32) -> Option<Self> {
+    pub const fn from_timestamp(secs: i64, nsecs: u32) -> Option<Self> {
         Some(Self(secs))
     }
 
     /// Get the [NaiveDate] of the date and time
-    pub fn date(&self) -> NaiveDate {
+    pub const fn date(&self) -> NaiveDate {
         NaiveDate::from_timestamp(self.0)
     }
 
     /// Get the [DateTime] in UTC timezone
-    pub fn and_utc(&self) -> DateTime<Utc> {
+    pub const fn and_utc(&self) -> DateTime<Utc> {
         DateTime::<Utc>::from_timestamp_secs(self.0).expect("Should be some")
     }
 
     /// Get the unix timestamp of the [NaiveDateTime]
     #[deprecated]
-    pub fn timestamp(&self) -> i64 {
+    pub const fn timestamp(&self) -> i64 {
         self.0
     }
 }

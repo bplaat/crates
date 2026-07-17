@@ -86,69 +86,69 @@ impl<'a> WindowBuilder<'a> {
     }
 
     /// Set position
-    pub fn position(mut self, position: LogicalPoint) -> Self {
+    pub const fn position(mut self, position: LogicalPoint) -> Self {
         self.position = Some(position);
         self
     }
 
     /// Set size
-    pub fn size(mut self, size: LogicalSize) -> Self {
+    pub const fn size(mut self, size: LogicalSize) -> Self {
         self.size = size;
         self
     }
 
     /// Set minimum size
-    pub fn min_size(mut self, min_size: LogicalSize) -> Self {
+    pub const fn min_size(mut self, min_size: LogicalSize) -> Self {
         self.min_size = Some(min_size);
         self
     }
 
     /// Set resizable
-    pub fn resizable(mut self, resizable: bool) -> Self {
+    pub const fn resizable(mut self, resizable: bool) -> Self {
         self.resizable = resizable;
         self
     }
 
     /// Set theme
-    pub fn theme(mut self, theme: Theme) -> Self {
+    pub const fn theme(mut self, theme: Theme) -> Self {
         self.theme = Some(theme);
         self
     }
 
     /// Set window background color
-    pub fn background_color(mut self, color: u32) -> Self {
+    pub const fn background_color(mut self, color: u32) -> Self {
         self.background_color = Some(color);
         self
     }
 
     /// Set remember window state
     #[cfg(feature = "remember_window_state")]
-    pub fn remember_window_state(mut self) -> Self {
+    pub const fn remember_window_state(mut self) -> Self {
         self.remember_window_state = true;
         self
     }
 
     /// Set monitor
-    pub fn monitor(mut self, monitor: &'a crate::Monitor) -> Self {
+    pub const fn monitor(mut self, monitor: &'a crate::Monitor) -> Self {
         self.monitor = Some(&monitor.0);
         self
     }
 
     /// Center window on monitor
-    pub fn center(mut self) -> Self {
+    pub const fn center(mut self) -> Self {
         self.should_center = true;
         self
     }
 
     /// Set fullscreen
-    pub fn fullscreen(mut self) -> Self {
+    pub const fn fullscreen(mut self) -> Self {
         self.should_fullscreen = true;
         self
     }
 
     /// Set macOS titlebar style
     #[cfg(target_os = "macos")]
-    pub fn macos_titlebar_style(mut self, style: MacosTitlebarStyle) -> Self {
+    pub const fn macos_titlebar_style(mut self, style: MacosTitlebarStyle) -> Self {
         self.macos_titlebar_style = style;
         self
     }

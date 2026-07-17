@@ -42,7 +42,7 @@ impl Response {
     }
 
     /// Set status
-    pub fn status(mut self, status: Status) -> Self {
+    pub const fn status(mut self, status: Status) -> Self {
         self.status = status;
         self
     }

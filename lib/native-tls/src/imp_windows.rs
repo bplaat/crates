@@ -25,7 +25,7 @@ impl SecHandle {
         upper: usize::MAX,
     };
 
-    fn is_invalid(&self) -> bool {
+    const fn is_invalid(&self) -> bool {
         self.lower == usize::MAX && self.upper == usize::MAX
     }
 }
@@ -393,7 +393,7 @@ pub struct TlsConnector {
 
 impl TlsConnector {
     /// Create a new TLS connector
-    pub fn new() -> Result<Self, Error> {
+    pub const fn new() -> Result<Self, Error> {
         Ok(Self {
             accept_invalid_certs: false,
         })
@@ -457,12 +457,12 @@ pub struct TlsStream<S> {
 
 impl<S> TlsStream<S> {
     /// Returns a reference to the underlying stream
-    pub fn get_ref(&self) -> &S {
+    pub const fn get_ref(&self) -> &S {
         &self.stream
     }
 
     /// Returns a mutable reference to the underlying stream
-    pub fn get_mut(&mut self) -> &mut S {
+    pub const fn get_mut(&mut self) -> &mut S {
         &mut self.stream
     }
 }

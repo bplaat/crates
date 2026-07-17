@@ -57,17 +57,17 @@ define_class!(
 
     impl MethodClass {
         #[unsafe(method(answer))]
-        fn _answer(&self) -> i64 {
+        const fn _answer(&self) -> i64 {
             42
         }
 
         #[unsafe(method(double:))]
-        fn _double(&self, n: i64) -> i64 {
+        const fn _double(&self, n: i64) -> i64 {
             n * 2
         }
 
         #[unsafe(method(add:to:))]
-        fn _add(&self, a: i64, b: i64) -> i64 {
+        const fn _add(&self, a: i64, b: i64) -> i64 {
             a + b
         }
     }

@@ -15,7 +15,7 @@ pub struct LogicalPoint {
 
 impl LogicalPoint {
     /// Create new logical point
-    pub fn new(x: f32, y: f32) -> Self {
+    pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 }
@@ -31,7 +31,7 @@ pub struct LogicalSize {
 
 impl LogicalSize {
     /// Create new logical size
-    pub fn new(width: f32, height: f32) -> Self {
+    pub const fn new(width: f32, height: f32) -> Self {
         Self { width, height }
     }
 }

@@ -13,7 +13,7 @@ use percent_encoding::{percent_decode, percent_encode_byte};
 
 // MARK: Parse
 /// Parse an `application/x-www-form-urlencoded` byte string into an iterator of (name, value) pairs.
-pub fn parse(input: &[u8]) -> Parse<'_> {
+pub const fn parse(input: &[u8]) -> Parse<'_> {
     Parse { input }
 }
 
@@ -47,7 +47,7 @@ impl<'a> Iterator for Parse<'a> {
 
 impl<'a> Parse<'a> {
     /// Return an iterator that yields owned `String` pairs.
-    pub fn into_owned(self) -> ParseIntoOwned<'a> {
+    pub const fn into_owned(self) -> ParseIntoOwned<'a> {
         ParseIntoOwned { inner: self }
     }
 }
@@ -98,7 +98,7 @@ fn replace_plus(input: &[u8]) -> Cow<'_, [u8]> {
 
 // MARK: ByteSerialize
 /// Serialize bytes as `application/x-www-form-urlencoded`, yielding `&str` slices.
-pub fn byte_serialize(input: &[u8]) -> ByteSerialize<'_> {
+pub const fn byte_serialize(input: &[u8]) -> ByteSerialize<'_> {
     ByteSerialize { bytes: input }
 }
 
@@ -107,7 +107,7 @@ pub struct ByteSerialize<'a> {
     bytes: &'a [u8],
 }
 
-fn is_unchanged(b: u8) -> bool {
+const fn is_unchanged(b: u8) -> bool {
     matches!(b, b'*' | b'-' | b'.' | b'0'..=b'9' | b'A'..=b'Z' | b'_' | b'a'..=b'z')
 }
 

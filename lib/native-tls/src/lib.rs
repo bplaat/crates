@@ -56,7 +56,7 @@ pub struct HandshakeError<S> {
 }
 
 impl<S> HandshakeError<S> {
-    pub(crate) fn new(error: Error) -> Self {
+    pub(crate) const fn new(error: Error) -> Self {
         Self {
             error,
             _stream: PhantomData,
@@ -64,7 +64,7 @@ impl<S> HandshakeError<S> {
     }
 
     /// Returns the underlying TLS error
-    pub fn error(&self) -> &Error {
+    pub const fn error(&self) -> &Error {
         &self.error
     }
 }

@@ -32,7 +32,7 @@ impl Context {
     }
 
     /// Set verbose
-    pub fn set_verbose(&mut self, verbose: bool) {
+    pub const fn set_verbose(&mut self, verbose: bool) {
         self.verbose = verbose;
     }
 

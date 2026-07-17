@@ -192,7 +192,7 @@ pub struct LookupResult {
 
 impl LookupResult {
     /// Returns `true` if the database contains data for the looked-up IP.
-    pub fn has_data(&self) -> bool {
+    pub const fn has_data(&self) -> bool {
         self.data_value.is_some()
     }
 

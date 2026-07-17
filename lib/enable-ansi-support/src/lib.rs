@@ -8,6 +8,8 @@
 
 /// Enables ANSI escape code support for terminal output on Windows.
 #[allow(unsafe_code)]
+// Const-compatible on Unix, but calls non-const Win32 APIs on Windows.
+#[allow(clippy::missing_const_for_fn)]
 pub fn enable_ansi_support() -> Result<(), std::io::Error> {
     cfg_select! {
         unix => {

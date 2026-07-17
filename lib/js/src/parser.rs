@@ -144,7 +144,7 @@ pub(crate) struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn new(tokens: &'a Vec<Token>) -> Self {
+    pub(crate) const fn new(tokens: &'a Vec<Token>) -> Self {
         Parser {
             tokens,
             position: 0,

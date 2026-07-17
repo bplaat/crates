@@ -34,17 +34,17 @@ impl Mime {
     }
 
     /// Type
-    pub fn type_(&self) -> &str {
+    pub const fn type_(&self) -> &str {
         self.type_
     }
 
     /// Subtype
-    pub fn subtype(&self) -> &str {
+    pub const fn subtype(&self) -> &str {
         self.subtype
     }
 
     /// Suffix
-    pub fn suffix(&self) -> Option<&str> {
+    pub const fn suffix(&self) -> Option<&str> {
         self.suffix
     }
 }

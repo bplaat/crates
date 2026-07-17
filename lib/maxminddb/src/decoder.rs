@@ -320,7 +320,7 @@ fn decode_array(
     Ok((Value::Array(arr), offset))
 }
 
-fn decode_bool(size: usize, offset: usize) -> Result<(Value, usize), MaxMindDbError> {
+const fn decode_bool(size: usize, offset: usize) -> Result<(Value, usize), MaxMindDbError> {
     Ok((Value::Bool(size != 0), offset))
 }
 

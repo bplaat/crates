@@ -21,18 +21,18 @@ pub struct DateTime<T: TimeZone>(i64, PhantomData<T>);
 
 impl<T: TimeZone> DateTime<T> {
     /// Create a [DateTime] from a unix timestamp
-    pub fn from_timestamp_secs(secs: i64) -> Option<Self> {
+    pub const fn from_timestamp_secs(secs: i64) -> Option<Self> {
         Some(Self(secs, PhantomData))
     }
 
     /// Get the NaiveDateTime
-    pub fn naive_utc(&self) -> NaiveDateTime {
+    pub const fn naive_utc(&self) -> NaiveDateTime {
         #[allow(deprecated)]
         NaiveDateTime::from_timestamp(self.0, 0).expect("Should be some")
     }
 
     /// Get the unix timestamp of the date and time
-    pub fn timestamp(&self) -> i64 {
+    pub const fn timestamp(&self) -> i64 {
         self.0
     }
 

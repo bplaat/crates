@@ -22,7 +22,7 @@ pub struct Version {
 
 impl Version {
     /// Create a new version
-    pub fn new(major: u16, minor: u16, patch: u16) -> Self {
+    pub const fn new(major: u16, minor: u16, patch: u16) -> Self {
         Self {
             major,
             minor,

@@ -237,7 +237,7 @@ pub(crate) struct ExecutorBuilder {
 }
 
 impl ExecutorBuilder {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             tasks_id_counter: 0,
             tasks: Vec::new(),
@@ -438,7 +438,7 @@ impl Executor {
         }
     }
 
-    pub(crate) fn total_tasks(&self) -> usize {
+    pub(crate) const fn total_tasks(&self) -> usize {
         self.tasks.len()
     }
 

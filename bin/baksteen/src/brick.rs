@@ -17,7 +17,7 @@ pub(crate) struct Brick {
 }
 
 impl Brick {
-    pub(crate) fn new(x: f64, y: f64, width: f64) -> Self {
+    pub(crate) const fn new(x: f64, y: f64, width: f64) -> Self {
         Brick {
             x,
             y,
@@ -26,23 +26,23 @@ impl Brick {
         }
     }
 
-    pub(crate) fn x(&self) -> f64 {
+    pub(crate) const fn x(&self) -> f64 {
         self.x
     }
 
-    pub(crate) fn y(&self) -> f64 {
+    pub(crate) const fn y(&self) -> f64 {
         self.y
     }
 
-    pub(crate) fn width(&self) -> f64 {
+    pub(crate) const fn width(&self) -> f64 {
         self.width
     }
 
-    pub(crate) fn is_build(&self) -> bool {
+    pub(crate) const fn is_build(&self) -> bool {
         self.build_stride.is_some()
     }
 
-    pub(crate) fn build(&mut self, stride: usize) {
+    pub(crate) const fn build(&mut self, stride: usize) {
         self.build_stride = Some(stride);
     }
 

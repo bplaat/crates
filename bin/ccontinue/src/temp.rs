@@ -29,7 +29,7 @@ impl TempFileManager {
     }
 
     /// Get the base temp directory path for this compiler process.
-    pub(crate) fn base_dir(&self) -> &PathBuf {
+    pub(crate) const fn base_dir(&self) -> &PathBuf {
         &self.base_dir
     }
 

@@ -19,7 +19,7 @@ use crate::{NaiveDateTime, ParseError};
 pub struct NaiveDate(i64);
 
 impl NaiveDate {
-    pub(crate) fn from_timestamp(secs: i64) -> Self {
+    pub(crate) const fn from_timestamp(secs: i64) -> Self {
         Self(secs - secs.rem_euclid(SECS_IN_DAY))
     }
 
@@ -50,14 +50,14 @@ impl NaiveDate {
     }
 
     /// Create a [NaiveDateTime] from date with hour, minute and second
-    pub fn and_hms_opt(&self, hour: u32, minute: u32, second: u32) -> Option<NaiveDateTime> {
+    pub const fn and_hms_opt(&self, hour: u32, minute: u32, second: u32) -> Option<NaiveDateTime> {
         let secs = (hour as i64) * SECS_IN_HOUR + (minute as i64) * SECS_IN_MIN + (second as i64);
         #[allow(deprecated)]
         NaiveDateTime::from_timestamp(self.0 + secs, 0)
     }
 
     #[cfg(test)]
-    fn timestamp(&self) -> i64 {
+    const fn timestamp(&self) -> i64 {
         self.0
     }
 }

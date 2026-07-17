@@ -135,7 +135,7 @@ impl Request {
     }
 
     /// Set method
-    pub fn method(mut self, method: Method) -> Self {
+    pub const fn method(mut self, method: Method) -> Self {
         self.method = method;
         self
     }

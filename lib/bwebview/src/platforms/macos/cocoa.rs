@@ -30,7 +30,7 @@ pub(crate) struct CGPoint {
     pub(crate) y: f64,
 }
 impl CGPoint {
-    pub(crate) fn new(x: f64, y: f64) -> Self {
+    pub(crate) const fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
 }
@@ -46,7 +46,7 @@ pub(crate) struct CGSize {
     pub(crate) height: f64,
 }
 impl CGSize {
-    pub(crate) fn new(width: f64, height: f64) -> Self {
+    pub(crate) const fn new(width: f64, height: f64) -> Self {
         Self { width, height }
     }
 }
@@ -62,7 +62,7 @@ pub(crate) struct CGRect {
     pub(crate) size: CGSize,
 }
 impl CGRect {
-    pub(crate) fn new(origin: CGPoint, size: CGSize) -> Self {
+    pub(crate) const fn new(origin: CGPoint, size: CGSize) -> Self {
         Self { origin, size }
     }
 }

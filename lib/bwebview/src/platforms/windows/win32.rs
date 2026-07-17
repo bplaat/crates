@@ -463,7 +463,7 @@ impl Default for LPWSTR {
     }
 }
 impl LPWSTR {
-    pub(crate) fn as_mut_ptr(&mut self) -> *mut *mut w_char {
+    pub(crate) const fn as_mut_ptr(&mut self) -> *mut *mut w_char {
         &mut self.0
     }
 }

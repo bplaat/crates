@@ -60,7 +60,7 @@ pub(crate) trait EventLoopInterface {
 pub struct EventLoop(pub(crate) PlatformEventLoop);
 
 impl EventLoop {
-    pub(crate) fn from_platform(event_loop: PlatformEventLoop) -> Self {
+    pub(crate) const fn from_platform(event_loop: PlatformEventLoop) -> Self {
         Self(event_loop)
     }
 
@@ -104,7 +104,7 @@ pub(crate) trait EventLoopProxyInterface {
 pub struct EventLoopProxy(pub(crate) PlatformEventLoopProxy);
 
 impl EventLoopProxy {
-    pub(crate) fn new(proxy: PlatformEventLoopProxy) -> Self {
+    pub(crate) const fn new(proxy: PlatformEventLoopProxy) -> Self {
         Self(proxy)
     }
 
@@ -127,7 +127,7 @@ pub(crate) trait MonitorInterface {
 pub struct Monitor(pub(crate) PlatformMonitor);
 
 impl Monitor {
-    pub(crate) fn new(monitor: PlatformMonitor) -> Self {
+    pub(crate) const fn new(monitor: PlatformMonitor) -> Self {
         Self(monitor)
     }
 

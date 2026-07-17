@@ -19,7 +19,7 @@ pub struct AsciiSet(
 );
 
 impl AsciiSet {
-    fn contains(&self, byte: u8) -> bool {
+    const fn contains(&self, byte: u8) -> bool {
         (self.0[(byte / 64) as usize] >> (byte % 64)) & 1 != 0
     }
 }
@@ -57,7 +57,7 @@ impl fmt::Display for PercentEncode<'_> {
 }
 
 /// Percent-encode every byte of the UTF-8 encoding of `input` that is in `set`.
-pub fn utf8_percent_encode<'a>(input: &'a str, set: &'static AsciiSet) -> PercentEncode<'a> {
+pub const fn utf8_percent_encode<'a>(input: &'a str, set: &'static AsciiSet) -> PercentEncode<'a> {
     PercentEncode { input, set }
 }
 
@@ -107,7 +107,7 @@ pub fn percent_decode(input: &[u8]) -> Cow<'_, [u8]> {
     Cow::Owned(out)
 }
 
-fn from_hex(byte: u8) -> Option<u8> {
+const fn from_hex(byte: u8) -> Option<u8> {
     match byte {
         b'0'..=b'9' => Some(byte - b'0'),
         b'a'..=b'f' => Some(byte - b'a' + 10),

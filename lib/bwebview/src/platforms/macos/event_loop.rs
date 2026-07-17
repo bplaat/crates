@@ -31,7 +31,7 @@ define_class!(
         fn _did_finish_launching(&self, notification: *mut Object) { self.did_finish_launching(notification); }
 
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
-        fn _should_terminate(&self, _: *mut Object) -> Bool { Bool::YES }
+        const fn _should_terminate(&self, _: *mut Object) -> Bool { Bool::YES }
 
         #[unsafe(method(sendEvent:))]
         fn _send_event(&self, value: *mut Object) { self.send_event(value); }
@@ -284,7 +284,7 @@ pub(crate) fn send_event(event: Event) {
 pub(crate) struct PlatformEventLoopProxy;
 
 impl PlatformEventLoopProxy {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self
     }
 }
@@ -308,7 +308,7 @@ pub(crate) struct PlatformMonitor {
 }
 
 impl PlatformMonitor {
-    pub(crate) fn new(screen: *mut Object) -> Self {
+    pub(crate) const fn new(screen: *mut Object) -> Self {
         Self { screen }
     }
 }

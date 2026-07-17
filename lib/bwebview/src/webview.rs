@@ -44,7 +44,7 @@ pub struct WebviewBuilder<'a> {
 
 impl<'a> WebviewBuilder<'a> {
     /// Create new webview builder
-    pub fn new(window: &'a Window) -> Self {
+    pub const fn new(window: &'a Window) -> Self {
         Self {
             window,
             should_load_url: None,

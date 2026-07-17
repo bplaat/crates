@@ -189,7 +189,7 @@ pub struct TlsConnector {
 
 impl TlsConnector {
     /// Create a new TLS connector
-    pub fn new() -> Result<Self, Error> {
+    pub const fn new() -> Result<Self, Error> {
         Ok(Self {
             accept_invalid_certs: false,
         })

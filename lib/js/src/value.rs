@@ -118,7 +118,7 @@ impl Display for Value {
 }
 
 impl Value {
-    pub(crate) fn typeof_string(&self) -> &'static str {
+    pub(crate) const fn typeof_string(&self) -> &'static str {
         match self {
             Value::Undefined => "undefined",
             Value::Null => "object",

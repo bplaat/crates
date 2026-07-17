@@ -131,12 +131,12 @@ pub struct TlsStream<S> {
 
 impl<S> TlsStream<S> {
     /// Returns a reference to the underlying stream
-    pub fn get_ref(&self) -> &S {
+    pub const fn get_ref(&self) -> &S {
         &self.stream
     }
 
     /// Returns a mutable reference to the underlying stream
-    pub fn get_mut(&mut self) -> &mut S {
+    pub const fn get_mut(&mut self) -> &mut S {
         &mut self.stream
     }
 }

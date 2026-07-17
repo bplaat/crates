@@ -15,7 +15,7 @@ use crate::manifest::BundleMetadata;
 use crate::utils::{index_files, write_bytes_when_different};
 
 // MARK: Bundle tasks
-pub(crate) fn detect_bundle(bobje: &Bobje) -> bool {
+pub(crate) const fn detect_bundle(bobje: &Bobje) -> bool {
     bobje.manifest.package.metadata.bundle.is_some()
 }
 

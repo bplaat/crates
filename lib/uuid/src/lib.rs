@@ -17,17 +17,17 @@ pub struct Uuid([u8; 16]);
 
 impl Uuid {
     /// Create zero UUID
-    pub fn nil() -> Uuid {
+    pub const fn nil() -> Uuid {
         Uuid([0; 16])
     }
 
     /// Create UUID from bytes
-    pub fn from_bytes(bytes: [u8; 16]) -> Uuid {
+    pub const fn from_bytes(bytes: [u8; 16]) -> Uuid {
         Uuid(bytes)
     }
 
     /// Create UUID from slice
-    pub fn from_slice(slice: &[u8]) -> Result<Uuid, InvalidError> {
+    pub const fn from_slice(slice: &[u8]) -> Result<Uuid, InvalidError> {
         if slice.len() != 16 {
             return Err(InvalidError);
         }
@@ -37,7 +37,7 @@ impl Uuid {
     }
 
     /// Get bytes from UUID
-    pub fn into_bytes(self) -> [u8; 16] {
+    pub const fn into_bytes(self) -> [u8; 16] {
         self.0
     }
 }

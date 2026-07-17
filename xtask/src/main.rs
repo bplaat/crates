@@ -37,7 +37,7 @@ impl Os {
         }
     }
 
-    fn name(self) -> &'static str {
+    const fn name(self) -> &'static str {
         match self {
             Self::Linux => "linux",
             Self::Macos => "macos",

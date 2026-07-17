@@ -186,17 +186,17 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 }
 
-extern "system" fn unimplemented_query_interface(
+const extern "system" fn unimplemented_query_interface(
     _this: *mut c_void,
     _riid: *const GUID,
     _ppv_object: *mut *mut c_void,
 ) -> HRESULT {
     E_NOINTERFACE
 }
-extern "system" fn unimplemented_add_ref(_this: *mut c_void) -> HRESULT {
+const extern "system" fn unimplemented_add_ref(_this: *mut c_void) -> HRESULT {
     E_NOTIMPL
 }
-extern "system" fn unimplemented_release(_this: *mut c_void) -> HRESULT {
+const extern "system" fn unimplemented_release(_this: *mut c_void) -> HRESULT {
     E_NOTIMPL
 }
 

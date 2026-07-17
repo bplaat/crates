@@ -56,7 +56,7 @@ pub enum ColumnType {
 pub struct RawStatement(*mut sqlite3_stmt);
 
 impl RawStatement {
-    pub(crate) fn new(statement: *mut sqlite3_stmt) -> Self {
+    pub(crate) const fn new(statement: *mut sqlite3_stmt) -> Self {
         Self(statement)
     }
 
@@ -312,7 +312,7 @@ impl Drop for RawStatement {
 pub struct Statement<T>(RawStatement, PhantomData<T>);
 
 impl<T> Statement<T> {
-    pub(crate) fn new(statement: *mut sqlite3_stmt) -> Self {
+    pub(crate) const fn new(statement: *mut sqlite3_stmt) -> Self {
         Self(RawStatement::new(statement), PhantomData)
     }
 

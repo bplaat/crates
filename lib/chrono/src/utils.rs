@@ -8,11 +8,11 @@ use crate::consts::{
     DAYS_IN_MONTHS, DAYS_IN_MONTHS_LEAP, DAYS_IN_YEAR, DAYS_IN_YEAR_LEAP, EPOCH_YEAR, SECS_IN_DAY,
 };
 
-pub(crate) fn is_leap_year(year: u32) -> bool {
+pub(crate) const fn is_leap_year(year: u32) -> bool {
     (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
 }
 
-pub(crate) fn days_in_year(year: u32) -> i64 {
+pub(crate) const fn days_in_year(year: u32) -> i64 {
     if is_leap_year(year) {
         DAYS_IN_YEAR_LEAP
     } else {

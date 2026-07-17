@@ -30,7 +30,7 @@ pub(crate) enum FixtureType {
 }
 
 impl FixtureType {
-    pub(crate) fn channel_count(&self) -> usize {
+    pub(crate) const fn channel_count(&self) -> usize {
         match self {
             FixtureType::AmericanDJP56Led => 6,
             FixtureType::AmericanDJMegaTripar => 7,

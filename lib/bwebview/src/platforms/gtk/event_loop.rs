@@ -124,7 +124,7 @@ pub(super) fn send_event(event: Event) {
 pub(crate) struct PlatformEventLoopProxy;
 
 impl PlatformEventLoopProxy {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self
     }
 }
@@ -152,12 +152,12 @@ pub(crate) struct PlatformMonitor {
 
 impl PlatformMonitor {
     #[cfg(gtk3_22)]
-    pub(crate) fn new(monitor: *mut GdkMonitor) -> Self {
+    pub(crate) const fn new(monitor: *mut GdkMonitor) -> Self {
         Self { monitor }
     }
 
     #[cfg(not(gtk3_22))]
-    pub(crate) fn new(index: i32) -> Self {
+    pub(crate) const fn new(index: i32) -> Self {
         Self { index }
     }
 }

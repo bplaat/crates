@@ -77,7 +77,7 @@ struct TableDataQuery {
     limit: i64,
 }
 
-fn default_limit() -> i64 {
+const fn default_limit() -> i64 {
     100
 }
 

@@ -40,7 +40,7 @@ pub(crate) mod windows {
         }
     }
     impl LPWSTR {
-        pub(crate) fn as_mut_ptr(&mut self) -> *mut *mut u16 {
+        pub(crate) const fn as_mut_ptr(&mut self) -> *mut *mut u16 {
             &mut self.0
         }
     }

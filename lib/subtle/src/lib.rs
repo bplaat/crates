@@ -18,7 +18,7 @@ pub struct Choice(u8);
 
 impl Choice {
     /// Unwrap the `Choice` as a `u8` (0 or 1).
-    pub fn unwrap_u8(self) -> u8 {
+    pub const fn unwrap_u8(self) -> u8 {
         self.0
     }
 }

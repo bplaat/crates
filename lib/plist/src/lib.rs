@@ -104,7 +104,7 @@ impl Value {
     }
 
     /// Returns a reference to the inner dictionary if this value is a `Dictionary`.
-    pub fn as_dictionary(&self) -> Option<&Dictionary> {
+    pub const fn as_dictionary(&self) -> Option<&Dictionary> {
         match self {
             Value::Dictionary(d) => Some(d),
             _ => None,

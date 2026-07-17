@@ -38,15 +38,15 @@ pub(crate) enum PackageType {
 }
 
 impl PackageType {
-    pub(crate) fn is_binary(&self) -> bool {
+    pub(crate) const fn is_binary(&self) -> bool {
         matches!(self, PackageType::Binary)
     }
 
-    pub(crate) fn is_library(&self) -> bool {
+    pub(crate) const fn is_library(&self) -> bool {
         matches!(self, PackageType::Library { .. })
     }
 
-    pub(crate) fn is_external_jar(&self) -> bool {
+    pub(crate) const fn is_external_jar(&self) -> bool {
         matches!(self, PackageType::ExternalJar)
     }
 }
