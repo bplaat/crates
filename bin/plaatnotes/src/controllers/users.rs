@@ -7,7 +7,6 @@
 use anyhow::Result;
 use bsqlite::{execute_args, preprocess_fts_query, query_args};
 use chrono::Utc;
-use const_format::formatcp;
 use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
@@ -49,7 +48,7 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
         let users = query_args!(
             User,
             ctx.database,
-            formatcp!(
+            format!(
                 "SELECT {} FROM users WHERE id IN (SELECT id FROM users_fts WHERE users_fts MATCH :fts_query)
                 ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                 User::columns()
@@ -71,7 +70,7 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
         let users = query_args!(
             User,
             ctx.database,
-            formatcp!(
+            format!(
                 "SELECT {} FROM users ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                 User::columns()
             ),
@@ -475,7 +474,7 @@ pub(crate) fn get_user(user_id: Uuid, ctx: &Context) -> Result<Option<User>> {
     Ok(ctx
         .database
         .query::<User>(
-            formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+            format!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
             user_id,
         )?
         .next()
@@ -863,7 +862,7 @@ mod test {
         let stored_user = ctx
             .database
             .query::<User>(
-                formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+                format!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
             .unwrap()
@@ -954,7 +953,7 @@ mod test {
         let stored_user = ctx
             .database
             .query::<User>(
-                formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+                format!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
             .unwrap()
@@ -1345,7 +1344,7 @@ mod test {
         let stored = ctx
             .database
             .query::<User>(
-                formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+                format!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
             .unwrap()
@@ -1373,7 +1372,7 @@ mod test {
         let stored = ctx
             .database
             .query::<User>(
-                formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+                format!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
                 user.id,
             )
             .unwrap()

@@ -6,7 +6,6 @@
 
 use anyhow::Result;
 use bsqlite::{Connection, OpenMode, run_migrations};
-use const_format::formatcp;
 
 use crate::models::{Person, Relation};
 
@@ -44,7 +43,7 @@ pub(crate) trait DatabaseHelpers {
 impl DatabaseHelpers for Connection {
     fn insert_person(&self, person: Person) -> Result<()> {
         self.execute(
-            formatcp!(
+            format!(
                 "INSERT INTO persons ({}) VALUES ({})",
                 Person::columns(),
                 Person::values()

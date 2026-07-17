@@ -9,7 +9,6 @@ use std::time::Duration;
 use anyhow::{Ok, Result};
 use bsqlite::Connection;
 use chrono::Utc;
-use const_format::formatcp;
 use small_http::{Request, Response, Status};
 
 use crate::Context;
@@ -71,7 +70,7 @@ pub(crate) fn auth_required_pre_layer(
 fn lookup_session_and_user(token: &str, db: &Connection) -> Option<(Session, User)> {
     let session = db
         .query::<Session>(
-            formatcp!(
+            format!(
                 "SELECT {} FROM sessions WHERE token = ? AND expires_at > ? LIMIT 1",
                 Session::columns()
             ),
@@ -83,7 +82,7 @@ fn lookup_session_and_user(token: &str, db: &Connection) -> Option<(Session, Use
 
     let user = db
         .query::<User>(
-            formatcp!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
+            format!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
             session.user_id,
         )
         .expect("Database error")
@@ -107,7 +106,6 @@ fn lookup_session_and_user(token: &str, db: &Connection) -> Option<(Session, Use
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use const_format::formatcp;
 
     use super::*;
     use crate::context::DatabaseHelpers;
@@ -169,7 +167,7 @@ mod test {
         let updated_session = ctx
             .database
             .query::<Session>(
-                formatcp!(
+                format!(
                     "SELECT {} FROM sessions WHERE token = ? LIMIT 1",
                     Session::columns()
                 ),

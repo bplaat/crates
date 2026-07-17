@@ -11,7 +11,6 @@ use std::time::Instant;
 
 use anyhow::Result;
 use bsqlite::{Connection, OpenMode, run_migrations};
-use const_format::formatcp;
 use uuid::Uuid;
 
 use crate::models::{Note, Session, User, UserRole};
@@ -96,7 +95,7 @@ pub(crate) trait DatabaseHelpers {
 impl DatabaseHelpers for Connection {
     fn insert_user(&self, user: User) -> Result<()> {
         self.execute(
-            formatcp!(
+            format!(
                 "INSERT INTO users ({}) VALUES ({})",
                 User::columns(),
                 User::values()
@@ -108,7 +107,7 @@ impl DatabaseHelpers for Connection {
 
     fn insert_session(&self, session: Session) -> Result<()> {
         self.execute(
-            formatcp!(
+            format!(
                 "INSERT INTO sessions ({}) VALUES ({})",
                 Session::columns(),
                 Session::values()
@@ -120,7 +119,7 @@ impl DatabaseHelpers for Connection {
 
     fn insert_note(&self, note: Note) -> Result<()> {
         self.execute(
-            formatcp!(
+            format!(
                 "INSERT INTO notes ({}) VALUES ({})",
                 Note::columns(),
                 Note::values()

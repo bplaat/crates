@@ -11,7 +11,6 @@ use anyhow::Result;
 use base64::prelude::*;
 use bsqlite::execute_args;
 use chrono::Utc;
-use const_format::formatcp;
 use from_derive::FromStruct;
 use serde::Deserialize;
 use simple_useragent::UserAgentParser;
@@ -75,7 +74,7 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     let user = match ctx
         .database
         .query::<User>(
-            formatcp!(
+            format!(
                 "SELECT {} FROM users WHERE email = ? LIMIT 1",
                 User::columns()
             ),
@@ -308,7 +307,7 @@ mod test {
         let expired_session = query_args!(
             Session,
             ctx.database,
-            formatcp!(
+            format!(
                 "SELECT {} FROM sessions WHERE token = :token LIMIT 1",
                 Session::columns()
             ),

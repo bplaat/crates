@@ -7,7 +7,6 @@
 //! A example that inserts and reads rows with structs that derive [FromRow] and uses [uuid::Uuid] for ids.
 
 use bsqlite::{Connection, FromRow};
-use const_format::formatcp;
 use uuid::Uuid;
 
 #[derive(Debug, FromRow)]
@@ -44,7 +43,7 @@ fn main() -> anyhow::Result<()> {
     ];
     for person in persons {
         db.execute(
-            formatcp!(
+            format!(
                 "INSERT INTO persons ({}) VALUES ({})",
                 Person::columns(),
                 Person::values()
@@ -54,7 +53,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Read rows back
-    for person in db.query::<Person>(formatcp!("SELECT {} FROM persons", Person::columns()), ())? {
+    for person in db.query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())? {
         println!("{:?}", person?);
     }
     Ok(())

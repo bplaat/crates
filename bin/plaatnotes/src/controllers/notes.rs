@@ -7,7 +7,6 @@
 use anyhow::Result;
 use bsqlite::{execute_args, preprocess_fts_query, query_args};
 use chrono::Utc;
-use const_format::formatcp;
 use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
@@ -346,7 +345,7 @@ fn fetch_note_for_user(note_id: Uuid, ctx: &Context, user: &User) -> Result<Opti
         UserRole::Admin => Ok(query_args!(
             Note,
             ctx.database,
-            formatcp!(
+            format!(
                 "SELECT {} FROM notes WHERE id = :note_id LIMIT 1",
                 Note::columns()
             ),
@@ -357,7 +356,7 @@ fn fetch_note_for_user(note_id: Uuid, ctx: &Context, user: &User) -> Result<Opti
         UserRole::Normal => Ok(query_args!(
             Note,
             ctx.database,
-            formatcp!(
+            format!(
                 "SELECT {} FROM notes WHERE id = :note_id AND user_id = :user_id LIMIT 1",
                 Note::columns()
             ),

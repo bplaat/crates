@@ -6,7 +6,6 @@
 
 use anyhow::Result;
 use bsqlite::{preprocess_fts_query, query_args};
-use const_format::formatcp;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
 
@@ -106,7 +105,7 @@ fn list_sessions(
         )?;
         let sessions = query_args!(
             Session, ctx.database,
-            formatcp!("SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
+            format!("SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now AND id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
             Args { user_id: user_id, now: now, fts_query: fts_query, limit: query.limit, offset: offset }
         )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
         Ok((total, sessions))
@@ -117,7 +116,7 @@ fn list_sessions(
         )?;
         let sessions = query_args!(
             Session, ctx.database,
-            formatcp!("SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
+            format!("SELECT {} FROM sessions WHERE user_id = :user_id AND expires_at > :now ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
             Args { user_id: user_id, now: now, limit: query.limit, offset: offset }
         )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
         Ok((total, sessions))
@@ -134,7 +133,7 @@ fn list_all_sessions(ctx: &Context, query: &IndexQuery) -> Result<(i64, Vec<api:
         )?;
         let sessions = query_args!(
             Session, ctx.database,
-            formatcp!("SELECT {} FROM sessions WHERE id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
+            format!("SELECT {} FROM sessions WHERE id IN (SELECT id FROM sessions_fts WHERE sessions_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset", Session::columns()),
             Args { fts_query: fts_query, limit: query.limit, offset: offset }
         )?.map(|r| r.map(Into::into)).collect::<Result<Vec<_>, _>>()?;
         Ok((total, sessions))
@@ -145,7 +144,7 @@ fn list_all_sessions(ctx: &Context, query: &IndexQuery) -> Result<(i64, Vec<api:
         let sessions = query_args!(
             Session,
             ctx.database,
-            formatcp!(
+            format!(
                 "SELECT {} FROM sessions ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
                 Session::columns()
             ),
@@ -206,7 +205,7 @@ fn get_session(session_id: Uuid, ctx: &Context) -> Result<Option<Session>> {
     Ok(ctx
         .database
         .query::<Session>(
-            formatcp!(
+            format!(
                 "SELECT {} FROM sessions WHERE id = ? LIMIT 1",
                 Session::columns()
             ),
@@ -379,7 +378,7 @@ mod test {
         let deleted = query_args!(
             Session,
             ctx.database,
-            formatcp!(
+            format!(
                 "SELECT {} FROM sessions WHERE id = :id LIMIT 1",
                 Session::columns()
             ),
@@ -409,7 +408,7 @@ mod test {
         let existing = query_args!(
             Session,
             ctx.database,
-            formatcp!(
+            format!(
                 "SELECT {} FROM sessions WHERE id = :id LIMIT 1",
                 Session::columns()
             ),

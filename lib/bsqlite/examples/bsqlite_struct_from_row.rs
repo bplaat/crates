@@ -7,7 +7,6 @@
 //! A example that inserts and reads rows with structs that derive [FromRow].
 
 use bsqlite::{Connection, FromRow};
-use const_format::formatcp;
 
 #[derive(FromRow)]
 struct NewPerson {
@@ -47,7 +46,7 @@ fn main() -> anyhow::Result<()> {
     ];
     for person in persons {
         db.execute(
-            formatcp!(
+            format!(
                 "INSERT INTO persons ({}) VALUES ({})",
                 NewPerson::columns(),
                 NewPerson::values()
@@ -57,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Read rows back
-    for person in db.query::<Person>(formatcp!("SELECT {} FROM persons", Person::columns()), ())? {
+    for person in db.query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ())? {
         println!("{:?}", person?);
     }
     Ok(())
