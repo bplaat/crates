@@ -125,9 +125,8 @@ unsafe extern "C" {
     );
 
     pub(crate) fn webkit_web_view_get_type() -> *mut c_void;
-    pub(crate) fn webkit_web_view_get_settings(
-        web_view: *mut WebKitWebView,
-    ) -> *mut WebkitSettings;
+    pub(crate) fn webkit_web_view_get_settings(web_view: *mut WebKitWebView)
+    -> *mut WebkitSettings;
     pub(crate) fn webkit_web_view_load_uri(web_view: *mut WebKitWebView, uri: *const c_char);
     pub(crate) fn webkit_web_view_load_html(
         web_view: *mut WebKitWebView,

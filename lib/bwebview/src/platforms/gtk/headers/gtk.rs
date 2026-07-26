@@ -9,9 +9,9 @@
 use std::ffi::{c_char, c_void};
 
 use super::gdk::GdkRGBA;
-use super::glib::{GError, GSList};
 #[cfg(not(gtk3_22))]
 use super::gdk::GdkScreen;
+use super::glib::{GError, GSList};
 
 // MARK: GTK
 #[repr(C)]

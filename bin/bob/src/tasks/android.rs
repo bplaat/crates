@@ -369,7 +369,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut ExecutorB
             format!("--output {}", bobje.out_dir()),
             "--pg-compat".to_string(),
             format!("--pg-conf {proguard_config_path}"),
-            format!("$(find {} -name *.class)", &classes_dir),
+            format!("$(find {classes_dir} -name *.class)"),
         ];
         executor.add_task_cmd(
             r8_command.join(" "),
@@ -385,7 +385,7 @@ pub(crate) fn generate_android_dex_tasks(bobje: &Bobje, executor: &mut ExecutorB
             format!("--min-api {}", vars.android_metadata.min_sdk_version),
             format!("--lib {}", vars.platform_jar),
             format!("--output {}", bobje.out_dir()),
-            format!("$(find {} -name *.class)", &classes_dir),
+            format!("$(find {classes_dir} -name *.class)"),
         ];
         executor.add_task_cmd(
             d8_command.join(" "),

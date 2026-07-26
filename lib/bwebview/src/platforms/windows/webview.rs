@@ -521,7 +521,7 @@ extern "system" fn web_resource_requested(
     unsafe { (*webview2_request).Release() };
 
     for custom_protocol in &_self.custom_protocols {
-        if http_request.url.host() == Some(&format!("{}.localhost", &custom_protocol.scheme)) {
+        if http_request.url.host() == Some(&format!("{}.localhost", custom_protocol.scheme)) {
             let response = (custom_protocol.handler)(&http_request);
 
             let webview2_response = http_response_to_webview2_response(
@@ -540,10 +540,10 @@ extern "system" fn web_resource_requested(
 #[cfg(feature = "custom_protocol")]
 fn replace_custom_protocol_in_url(url: &str, custom_protocols: &[CustomProtocol]) -> String {
     for custom_protocol in custom_protocols {
-        if url.starts_with(&format!("{}://", &custom_protocol.scheme)) {
+        if url.starts_with(&format!("{}://", custom_protocol.scheme)) {
             return url.replace(
-                &format!("{}://", &custom_protocol.scheme),
-                &format!("http://{}.localhost/", &custom_protocol.scheme),
+                &format!("{}://", custom_protocol.scheme),
+                &format!("http://{}.localhost/", custom_protocol.scheme),
             );
         }
     }

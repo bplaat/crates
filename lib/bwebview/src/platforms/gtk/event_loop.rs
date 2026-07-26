@@ -218,7 +218,9 @@ impl crate::MonitorInterface for PlatformMonitor {
 
     fn scale_factor(&self) -> f32 {
         #[cfg(gtk3_22)]
-        unsafe { gdk_monitor_get_scale_factor(self.monitor) as f32 }
+        unsafe {
+            gdk_monitor_get_scale_factor(self.monitor) as f32
+        }
         #[cfg(not(gtk3_22))]
         unsafe {
             gdk_screen_get_monitor_scale_factor(gdk_screen_get_default(), self.index) as f32
@@ -227,9 +229,13 @@ impl crate::MonitorInterface for PlatformMonitor {
 
     fn is_primary(&self) -> bool {
         #[cfg(gtk3_22)]
-        unsafe { gdk_monitor_is_primary(self.monitor) }
+        unsafe {
+            gdk_monitor_is_primary(self.monitor)
+        }
         #[cfg(not(gtk3_22))]
-        unsafe { gdk_screen_get_primary_monitor(gdk_screen_get_default()) == self.index }
+        unsafe {
+            gdk_screen_get_primary_monitor(gdk_screen_get_default()) == self.index
+        }
     }
 }
 

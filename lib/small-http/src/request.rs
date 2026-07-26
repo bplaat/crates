@@ -475,7 +475,7 @@ impl Request {
         self.headers.insert(
             "Host".to_string(),
             if let Some(port) = self.url.port() {
-                format!("{}:{}", &host, port)
+                format!("{host}:{port}")
             } else {
                 host.to_string()
             },
@@ -506,7 +506,7 @@ impl Request {
         // Write request
         let path = self.url.path();
         let path = if let Some(query) = self.url.query() {
-            format!("{}?{}", &path, query)
+            format!("{path}?{query}")
         } else {
             path.to_string()
         };

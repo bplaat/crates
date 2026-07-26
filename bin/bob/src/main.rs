@@ -101,7 +101,7 @@ fn main() {
         .unwrap_or_else(|_| {
             eprintln!(
                 "Can't find or access manifest directory: {}",
-                &args.manifest_dir
+                args.manifest_dir
             );
             exit(1);
         });
@@ -140,7 +140,7 @@ fn main() {
     // Build main bobje
     let mut executor = ExecutorBuilder::new();
     let bobje = Bobje::new(&args, ".", &mut executor, true);
-    let mut executor = executor.build(&format!("{}/bob.log", &args.target_dir));
+    let mut executor = executor.build(&format!("{}/bob.log", args.target_dir));
 
     executor.execute(args.verbose, args.thread_count);
 
