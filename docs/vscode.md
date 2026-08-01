@@ -15,6 +15,12 @@
         "**/node_modules/**": true,
         "**/dist/**": true
     },
+    "files.watcherExclude": {
+        "**/target/**": true,
+        "**/sqlite3/**": true,
+        "**/node_modules/**": true,
+        "**/dist/**": true
+    },
 
     // Rust extensions settings
     "[rust]": {

@@ -7,7 +7,7 @@
         "dev": "vite --mode debug",
         "build-debug": "tsc -p tsconfig.app.json --noEmit && vite build --mode debug --minify=false",
         "build-release": "tsc -p tsconfig.app.json --noEmit && vite build --mode release",
-        "test": "NODE_OPTIONS=--no-deprecation playwright test"
+        "test": "npm exec --node-options=--no-deprecation -- playwright test"
     },
     "dependencies": {
         "plaatui": "file:../../../npm-lib/plaatui",
