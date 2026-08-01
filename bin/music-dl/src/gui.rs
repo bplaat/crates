@@ -9,7 +9,7 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 
 use bwebview::{
-    Event, EventLoopBuilder, EventLoopProxy, LogicalSize, WebviewBuilder, WebviewEvent,
+    Event, EventLoopBuilder, EventLoopProxy, LogicalSize, Theme, WebviewBuilder, WebviewEvent,
     WindowBuilder,
 };
 use rust_embed::Embed;
@@ -233,21 +233,48 @@ pub(crate) fn run() {
     let worker_proxy = Arc::clone(&proxy);
     thread::spawn(move || background_worker(cmd_rx, worker_proxy));
 
-    let mut window = WindowBuilder::new()
+    #[allow(unused_mut)]
+    let mut window_builder = WindowBuilder::new()
         .title("Music Downloader")
         .size(LogicalSize::new(1200.0, 720.0))
         .min_size(LogicalSize::new(900.0, 500.0))
+        .background_color(if event_loop.theme() == Theme::Dark {
+            0x222222
+        } else {
+            0xffffff
+        })
         .center()
-        .remember_window_state()
-        .build();
+        .remember_window_state();
+    #[cfg(target_os = "macos")]
+    {
+        window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+    }
+    let mut window = window_builder.build();
 
     let mut webview = WebviewBuilder::new(&window)
         .load_rust_embed::<WebAssets>()
         .build();
 
+    #[cfg(target_os = "macos")]
+    webview.add_user_script(
+        format!(
+            "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
+            window.macos_titlebar_size().height
+        ),
+        bwebview::InjectionTime::DocumentStart,
+    );
+
     event_loop.run(move |event| match event {
         Event::UserEvent(json) => webview.send_ipc_message(json),
         Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
+        #[cfg(target_os = "macos")]
+        Event::Window(bwebview::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
+            if is_fullscreen {
+                webview.evaluate_script("document.body.classList.add('is-fullscreen');");
+            } else {
+                webview.evaluate_script("document.body.classList.remove('is-fullscreen');");
+            }
+        }
         Event::Webview(WebviewEvent::MessageReceive(msg)) => {
             if let Ok(req) = serde_json::from_str::<IpcRequest>(&msg) {
                 let cmd = match req {

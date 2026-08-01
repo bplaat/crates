@@ -175,18 +175,24 @@ body {
 }
 
 .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     flex-shrink: 0;
-    padding: 0.75rem 1rem;
+    height: 3.25rem;
+    padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--color-border);
     background: var(--color-surface);
 }
 
 .panel-title {
+    flex-shrink: 0;
     color: var(--color-text-secondary);
     font-size: 0.8125rem;
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .panel-content {
@@ -205,9 +211,32 @@ MARK: Application
 
 /* App layout */
 #app {
+    position: relative;
     display: flex;
     height: 100vh;
     overflow: hidden;
+}
+
+.macos-titlebar {
+    display: none;
+}
+
+body.is-bwebview-macos:not(.is-fullscreen) #app {
+    padding-top: var(--macos-titlebar-height);
+}
+
+body.is-bwebview-macos:not(.is-fullscreen) .macos-titlebar {
+    position: absolute;
+    inset: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--macos-titlebar-height);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
 }
 
 /* Panels */
@@ -236,15 +265,6 @@ MARK: Application
     background: var(--color-surface);
 }
 
-/* Panel header */
-.panel-header {
-    padding-bottom: 0.625rem;
-}
-
-.panel-title {
-    margin-bottom: 0.5rem;
-}
-
 /* Panel content */
 .panel-content {
     padding: 0.375rem 0;
@@ -252,7 +272,8 @@ MARK: Application
 
 /* Search form */
 .search-form {
-    margin-bottom: 0.5rem;
+    flex: 1;
+    min-width: 0;
 }
 
 /* Artist result row (mixed search results) */

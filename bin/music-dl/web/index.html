@@ -17,16 +17,17 @@
     </head>
     <body>
         <div id="app" v-cloak @vue:mounted="init()">
+            <div class="macos-titlebar">Music Downloader</div>
+
             <!-- Search panel -->
             <div class="panel" id="search-panel">
                 <div class="panel-header">
-                    <h2 class="panel-title">Search</h2>
                     <form class="field has-addons search-form" @submit.prevent="search()">
                         <input
                             class="input"
                             type="text"
                             v-model="searchQuery"
-                            placeholder="Search artists & albums…"
+                            placeholder="Search…"
                             autocomplete="off"
                         />
                         <button class="button is-primary" type="submit">Search</button>

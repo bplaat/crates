@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {
+    document.body.classList.add('is-bwebview-macos');
+}
+
 PetiteVue.createApp({
     // Search state
     searchQuery: '',
