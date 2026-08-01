@@ -7,7 +7,7 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use bwebview::{EventLoopBuilder, LogicalSize, WebviewBuilder, WindowBuilder};
+use bwebview::{EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WindowBuilder};
 use rust_embed::Embed;
 
 #[derive(Embed)]
@@ -24,6 +24,7 @@ fn main() {
         .title("2048")
         .size(LogicalSize::new(600.0, 850.0))
         .resizable(false)
+        .theme(Theme::Light)
         .background_color(0xfaf8ef)
         .center()
         .remember_window_state();
