@@ -302,7 +302,7 @@ fn main() {
         .build();
 
     #[allow(unused_mut)]
-    let mut window = WindowBuilder::new()
+    let mut window_builder = WindowBuilder::new()
         .title("Sequel Explorer")
         .size(LogicalSize::new(1200.0, 768.0))
         .min_size(LogicalSize::new(800.0, 480.0))
@@ -312,8 +312,12 @@ fn main() {
             0xffffff
         })
         .center()
-        .remember_window_state()
-        .build();
+        .remember_window_state();
+    #[cfg(target_os = "macos")]
+    {
+        window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+    }
+    let mut window = window_builder.build();
 
     let mut webview = WebviewBuilder::new(&window)
         .load_rust_embed_with_custom_handler::<WebAssets>(move |req| {
@@ -326,8 +330,25 @@ fn main() {
         })
         .build();
 
+    #[cfg(target_os = "macos")]
+    webview.add_user_script(
+        format!(
+            "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
+            window.macos_titlebar_size().height
+        ),
+        bwebview::InjectionTime::DocumentStart,
+    );
+
     event_loop.run(move |event| match event {
         Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
+        #[cfg(target_os = "macos")]
+        Event::Window(bwebview::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
+            if is_fullscreen {
+                webview.evaluate_script("document.body.classList.add('is-fullscreen');");
+            } else {
+                webview.evaluate_script("document.body.classList.remove('is-fullscreen');");
+            }
+        }
         Event::Webview(WebviewEvent::MessageReceive(message)) => {
             match serde_json::from_str(&message).expect("Can't parse IPC message") {
                 IpcMessage::OpenFileDialog => {
