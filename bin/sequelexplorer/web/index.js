@@ -77,6 +77,9 @@ PetiteVue.createApp({
     async _openDatabaseByPath(path) {
         const { ok, error } = await ipcRequest('openDatabase', { path });
         if (!ok) {
+            if (localStorage.getItem('lastDbPath') === path) {
+                localStorage.removeItem('lastDbPath');
+            }
             alert('Failed to open database:\n' + error);
             return;
         }
