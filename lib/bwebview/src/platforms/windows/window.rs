@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
 
-use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event};
+use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event, system_theme};
 use super::webview2::*;
 use super::win32::*;
 use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
@@ -46,7 +46,10 @@ impl PlatformWindow {
         };
         let class_name_c = CString::new(class_name).expect("Can't convert to CString");
         unsafe {
-            let mut wndclass: WNDCLASSEXA = mem::zeroed();
+            let mut wndclass = WNDCLASSEXA {
+                cbSize: size_of::<WNDCLASSEXA>() as u32,
+                ..Default::default()
+            };
             if GetClassInfoExA(instance, class_name_c.as_ptr(), &mut wndclass as *mut _) != TRUE {
                 // Get executable icons
                 let executable_path = CString::new(
@@ -72,6 +75,7 @@ impl PlatformWindow {
                     lpfnWndProc: Some(window_proc),
                     hInstance: instance,
                     hIcon: large_icon,
+                    hbrBackground: GetSysColorBrush(COLOR_WINDOW) as usize,
                     lpszClassName: class_name_c.as_ptr(),
                     hIconSm: small_icon,
                     ..Default::default()
@@ -81,7 +85,7 @@ impl PlatformWindow {
         }
 
         // Create window
-        let hwnd = unsafe {
+        let (hwnd, should_show_window) = unsafe {
             let style = if builder.should_fullscreen {
                 WS_POPUP
             } else if builder.resizable {
@@ -162,15 +166,13 @@ impl PlatformWindow {
                 instance,
                 0,
             );
-            if let Some(theme) = builder.theme {
-                let enabled: BOOL = (theme == Theme::Dark).into();
-                DwmSetWindowAttribute(
-                    hwnd,
-                    DWMWA_USE_IMMERSIVE_DARK_MODE,
-                    &enabled as *const _ as *const _,
-                    size_of::<BOOL>() as u32,
-                );
-            }
+            let enabled: BOOL = (builder.theme.unwrap_or_else(system_theme) == Theme::Dark).into();
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                &enabled as *const _ as *const _,
+                size_of::<BOOL>() as u32,
+            );
 
             #[cfg(feature = "remember_window_state")]
             let should_show_window = if builder.remember_window_state {
@@ -178,7 +180,9 @@ impl PlatformWindow {
                     let size = size_of::<WINDOWPLACEMENT>();
                     let mut buffer = vec![0u8; size];
                     if file.read_exact(&mut buffer).is_ok() {
-                        let window_placement = std::ptr::read(buffer.as_ptr() as *const _);
+                        let mut window_placement: WINDOWPLACEMENT =
+                            std::ptr::read(buffer.as_ptr() as *const _);
+                        window_placement.length = size as u32;
                         SetWindowPlacement(hwnd, &window_placement);
                         false
                     } else {
@@ -192,14 +196,10 @@ impl PlatformWindow {
             };
             #[cfg(not(feature = "remember_window_state"))]
             let should_show_window = true;
-            if should_show_window {
-                ShowWindow(hwnd, SW_SHOWDEFAULT);
-            }
-            UpdateWindow(hwnd);
-            hwnd
+            (hwnd, should_show_window)
         };
 
-        // Alloc Webview data
+        // Allocate window data
         unsafe {
             #[allow(static_mut_refs)]
             if FIRST_HWND.is_none() {
@@ -221,8 +221,13 @@ impl PlatformWindow {
                 hwnd,
                 GWL_USERDATA,
                 window_data.as_ref() as *const _ as isize,
-            )
-        };
+            );
+            // Install window data before explicitly showing a new placement
+            if should_show_window {
+                ShowWindow(hwnd, SW_SHOWDEFAULT);
+            }
+            UpdateWindow(hwnd);
+        }
 
         PlatformWindow(window_data)
     }
@@ -414,7 +419,8 @@ unsafe extern "system" fn window_proc(
             if _self.remember_window_state {
                 unsafe {
                     use std::io::Write;
-                    let mut window_placement = mem::zeroed();
+                    let mut window_placement: WINDOWPLACEMENT = mem::zeroed();
+                    window_placement.length = size_of::<WINDOWPLACEMENT>() as u32;
                     GetWindowPlacement(hwnd, &mut window_placement);
                     if let Ok(mut file) = File::create(config_dir().join("window.bin")) {
                         _ = file.write_all(std::slice::from_raw_parts(

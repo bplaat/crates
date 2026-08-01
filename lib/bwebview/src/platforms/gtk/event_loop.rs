@@ -12,10 +12,12 @@ use std::ptr::{null, null_mut};
 use std::{env, fs, iter};
 
 use super::headers::*;
-use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize};
+use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
 
 // MARK: EventLoop
-pub(crate) struct PlatformEventLoop;
+pub(crate) struct PlatformEventLoop {
+    theme: Theme,
+}
 
 pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
@@ -57,11 +59,49 @@ impl PlatformEventLoop {
             gtk_init(&mut argc, &mut argv_ptr);
         }
 
-        Self
+        Self {
+            theme: system_theme(),
+        }
+    }
+}
+
+// MARK: Theme
+fn system_theme() -> Theme {
+    let settings = unsafe { gtk_settings_get_default() };
+    let mut prefer_dark = 0i32;
+    let mut theme_name: *mut c_char = null_mut();
+    unsafe {
+        g_object_get(
+            settings as *mut GObject,
+            c"gtk-application-prefer-dark-theme".as_ptr(),
+            &mut prefer_dark,
+            c"gtk-theme-name".as_ptr(),
+            &mut theme_name,
+            null::<c_void>(),
+        );
+    }
+    let theme_name_is_dark = if theme_name.is_null() {
+        false
+    } else {
+        let is_dark = unsafe { CStr::from_ptr(theme_name) }
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .contains("dark");
+        unsafe { g_free(theme_name as *mut c_void) };
+        is_dark
+    };
+    if prefer_dark != 0 || theme_name_is_dark {
+        Theme::Dark
+    } else {
+        Theme::Light
     }
 }
 
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn theme(&self) -> Theme {
+        self.theme
+    }
+
     fn primary_monitor(&self) -> PlatformMonitor {
         #[cfg(gtk3_22)]
         unsafe {

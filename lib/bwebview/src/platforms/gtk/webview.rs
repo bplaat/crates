@@ -189,8 +189,11 @@ impl PlatformWebview {
 
         data.webview = webview;
 
-        // Show window
-        unsafe { gtk_widget_show_all(data.window as *mut GtkWidget) };
+        // Show the native window but keep partial WebKit paints hidden
+        unsafe {
+            gtk_widget_show_all(data.window as *mut GtkWidget);
+            gtk_widget_hide(data.webview as *mut GtkWidget);
+        }
 
         // Send window created event
         send_event(crate::Event::Window(WindowEvent::Create));
@@ -280,7 +283,7 @@ impl crate::WebviewInterface for PlatformWebview {
 }
 
 extern "C" fn webview_on_load_changed(
-    _webview: *mut WebKitWebView,
+    webview: *mut WebKitWebView,
     event: i32,
     _self: &mut WebviewData,
 ) {
@@ -288,6 +291,7 @@ extern "C" fn webview_on_load_changed(
         send_event(crate::Event::Webview(WebviewEvent::PageLoadStart))
     }
     if event == WEBKIT_LOAD_FINISHED {
+        unsafe { gtk_widget_show(webview as *mut GtkWidget) };
         send_event(crate::Event::Webview(WebviewEvent::PageLoadFinish))
     }
 }

@@ -5,7 +5,7 @@
  */
 
 use crate::platforms::{PlatformEventLoop, PlatformEventLoopProxy, PlatformMonitor};
-use crate::{Event, LogicalPoint, LogicalSize};
+use crate::{Event, LogicalPoint, LogicalSize, Theme};
 
 // MARK: AppId
 pub(crate) struct AppId {
@@ -50,6 +50,7 @@ impl EventLoopBuilder {
 
 // MARK: EventLoop
 pub(crate) trait EventLoopInterface {
+    fn theme(&self) -> Theme;
     fn primary_monitor(&self) -> PlatformMonitor;
     fn available_monitors(&self) -> Vec<PlatformMonitor>;
     fn create_proxy(&self) -> PlatformEventLoopProxy;
@@ -68,6 +69,11 @@ impl EventLoop {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         EventLoopBuilder::new().build()
+    }
+
+    /// Get the current system theme
+    pub fn theme(&self) -> Theme {
+        self.0.theme()
     }
 
     /// Get primary monitor

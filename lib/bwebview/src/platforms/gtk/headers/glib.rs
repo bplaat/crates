@@ -19,6 +19,7 @@ unsafe extern "C" {
         first_property_name: *const c_char,
         ...
     ) -> *mut GObject;
+    pub(crate) fn g_object_get(instance: *mut GObject, first_property_name: *const c_char, ...);
     pub(crate) fn g_object_set(instance: *mut GObject, first_property_name: *const c_char, ...);
     pub(crate) fn g_signal_connect_data(
         instance: *mut GObject,

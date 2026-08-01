@@ -240,6 +240,9 @@ extern "system" fn controller_created(
         (*controller).AddRef();
         _self.controller = Some(controller);
 
+        // Keep partial WebView2 paints hidden behind the native backing surface.
+        (*controller).put_IsVisible(FALSE);
+
         // Register resize callback on the window
         (*_self.window_data).resize_callback = Some(Box::new(move |w, h| {
             (*controller).put_Bounds(RECT {
@@ -405,7 +408,7 @@ extern "system" fn controller_created(
         if let Some(url) = &_self.should_load_url {
             let url = cfg_select! {
                 feature = "custom_protocol" => { replace_custom_protocol_in_url(url, &_self.custom_protocols) }
-                _ => { url.as_ref() }
+                _ => { url.as_str() }
             };
             (*webview).Navigate(url.to_wide_string().as_ptr() as *mut _);
         }
@@ -433,6 +436,9 @@ extern "system" fn navigation_completed(
     _args: *mut ICoreWebView2NavigationCompletedEventArgs,
 ) -> HRESULT {
     let _self = unsafe { &*((*_this).user_data as *const WebviewData) };
+    if let Some(controller) = _self.controller {
+        unsafe { (*controller).put_IsVisible(TRUE) };
+    }
     send_event(crate::Event::Webview(WebviewEvent::PageLoadFinish));
     S_OK
 }

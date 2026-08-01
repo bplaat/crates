@@ -18,6 +18,10 @@ pub(crate) const TRUE: BOOL = 1;
 pub(crate) const FALSE: BOOL = 0;
 pub(crate) type w_char = u16;
 pub(crate) type HANDLE = *mut c_void;
+pub(crate) type HKEY = HANDLE;
+pub(crate) const HKEY_CURRENT_USER: HKEY = 0x80000001usize as HKEY;
+pub(crate) const RRF_RT_REG_DWORD: u32 = 0x00000018;
+pub(crate) const ERROR_SUCCESS: i32 = 0;
 
 #[repr(C)]
 pub(crate) struct FILETIME {
@@ -39,6 +43,20 @@ unsafe extern "system" {
         bInitialOwner: BOOL,
         lpName: *const c_char,
     ) -> HANDLE;
+}
+
+// MARK: advapi32.dll
+#[link(name = "advapi32")]
+unsafe extern "system" {
+    pub(crate) fn RegGetValueA(
+        hkey: HKEY,
+        lpSubKey: *const c_char,
+        lpValue: *const c_char,
+        dwFlags: u32,
+        pdwType: *mut u32,
+        pvData: *mut c_void,
+        pcbData: *mut u32,
+    ) -> i32;
 }
 
 // MARK: gdi32.dll
@@ -174,6 +192,7 @@ pub(crate) const MDT_EFFECTIVE_DPI: i32 = 0;
 
 pub(crate) const SM_CXSCREEN: i32 = 0;
 pub(crate) const SM_CYSCREEN: i32 = 1;
+pub(crate) const COLOR_WINDOW: i32 = 5;
 
 pub(crate) const GWL_STYLE: i32 = -16;
 pub(crate) const GWL_USERDATA: i32 = -21;
@@ -185,6 +204,7 @@ pub(crate) const SWP_NOREPOSITION: u32 = 0x0200;
 
 #[link(name = "user32")]
 unsafe extern "system" {
+    pub(crate) fn GetSysColorBrush(nIndex: i32) -> HBRUSH;
     pub(crate) fn ExtractIconExA(
         lpszFile: *const c_char,
         nIconIndex: i32,

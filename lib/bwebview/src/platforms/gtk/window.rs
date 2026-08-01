@@ -34,10 +34,11 @@ impl PlatformWindow {
                 .contains("wayland")
         };
 
-        // Force dark mode if enabled
+        let settings = unsafe { gtk_settings_get_default() };
+
+        // Apply an explicit application theme preference
         if let Some(theme) = builder.theme {
             unsafe {
-                let settings = gtk_settings_get_default();
                 g_object_set(
                     settings as *mut GObject,
                     c"gtk-application-prefer-dark-theme".as_ptr(),

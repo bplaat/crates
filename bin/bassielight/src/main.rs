@@ -132,7 +132,7 @@ fn main() {
         .center()
         .remember_window_state()
         .theme(Theme::Dark)
-        .background_color(0x1a1a1a);
+        .background_color(0x18181b);
     #[cfg(target_os = "macos")]
     {
         window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);

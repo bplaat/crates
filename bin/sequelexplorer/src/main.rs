@@ -14,7 +14,8 @@ use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use bsqlite::{ColumnType, Connection, OpenMode, StatementError, Value};
 use bwebview::{
-    Event, EventLoopBuilder, FileDialog, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder,
+    Event, EventLoopBuilder, FileDialog, LogicalSize, Theme, WebviewBuilder, WebviewEvent,
+    WindowBuilder,
 };
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -305,6 +306,11 @@ fn main() {
         .title("Sequel Explorer")
         .size(LogicalSize::new(1200.0, 768.0))
         .min_size(LogicalSize::new(800.0, 480.0))
+        .background_color(if event_loop.theme() == Theme::Dark {
+            0x222222
+        } else {
+            0xffffff
+        })
         .center()
         .remember_window_state()
         .build();

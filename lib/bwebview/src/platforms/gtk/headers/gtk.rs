@@ -43,6 +43,8 @@ unsafe extern "C" {
     pub(crate) fn gtk_window_set_resizable(window: *mut GtkWindow, resizable: bool);
     pub(crate) fn gtk_window_is_maximized(window: *mut GtkWindow) -> bool;
     pub(crate) fn gtk_window_maximize(window: *mut GtkWindow);
+    pub(crate) fn gtk_widget_show(widget: *mut GtkWidget);
+    pub(crate) fn gtk_widget_hide(widget: *mut GtkWidget);
     pub(crate) fn gtk_widget_show_all(window: *mut GtkWidget);
     // GTK 3.22+: show URI via window parent
     #[cfg(gtk3_22)]

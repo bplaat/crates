@@ -14,7 +14,7 @@ use objc2::{class, define_class, msg_send, sel};
 
 use super::cocoa::*;
 use super::webkit::*;
-use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, WindowEvent};
+use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WindowEvent};
 
 // MARK: AppDelegate
 struct AppDelegateIvars {
@@ -72,6 +72,7 @@ impl AppDelegate {
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
     application: *mut Object,
+    theme: Theme,
     event_handler: Option<Box<dyn FnMut(Event) + 'static>>,
 }
 
@@ -223,12 +224,31 @@ impl PlatformEventLoop {
 
         Self {
             application,
+            theme: system_theme(),
             event_handler: None,
         }
     }
 }
 
+// MARK: Theme
+fn system_theme() -> Theme {
+    unsafe {
+        let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
+        let appearance: *mut Object = msg_send![application, effectiveAppearance];
+        let name: NSString = msg_send![appearance, name];
+        if name.to_string().contains("Dark") {
+            Theme::Dark
+        } else {
+            Theme::Light
+        }
+    }
+}
+
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn theme(&self) -> Theme {
+        self.theme
+    }
+
     fn primary_monitor(&self) -> PlatformMonitor {
         unsafe {
             let screen: *mut Object = msg_send![class!(NSScreen), mainScreen];

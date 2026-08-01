@@ -28,7 +28,13 @@ define_class!(
         fn _did_start_provisional_navigation(&self, _: *mut Object, _: *mut Object) { self.did_start_provisional_navigation(); }
 
         #[unsafe(method(webView:didFinishNavigation:))]
-        fn _did_finish_navigation(&self, _: *mut Object, _: *mut Object) { self.did_finish_navigation(); }
+        fn _did_finish_navigation(&self, webview: *mut Object, _: *mut Object) { self.finish_navigation(webview); }
+
+        #[unsafe(method(webView:didFailProvisionalNavigation:withError:))]
+        fn _did_fail_provisional_navigation(&self, webview: *mut Object, _: *mut Object, _: *mut Object) { self.finish_navigation(webview); }
+
+        #[unsafe(method(webView:didFailNavigation:withError:))]
+        fn _did_fail_navigation(&self, webview: *mut Object, _: *mut Object, _: *mut Object) { self.finish_navigation(webview); }
 
         #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
         fn _observe_value(&self, key_path: NSString, _: *mut Object, change: *mut Object, _: *mut c_void) {
@@ -52,7 +58,10 @@ impl WebviewDelegate {
         send_event(crate::Event::Webview(WebviewEvent::PageLoadStart));
     }
 
-    fn did_finish_navigation(&self) {
+    fn finish_navigation(&self, webview: *mut Object) {
+        // Reveal successful loads and WebKit error pages alike. Otherwise a failed
+        // initial navigation would leave the window on its backing color forever.
+        let _: () = unsafe { msg_send![webview, setHidden:Bool::NO] };
         send_event(crate::Event::Webview(WebviewEvent::PageLoadFinish));
     }
 
@@ -156,6 +165,7 @@ impl PlatformWebview {
             let webview: *mut Object = msg_send![class!(WKWebView), alloc];
             let webview: *mut Object =
                 msg_send![webview, initWithFrame:webview_rect, configuration:webview_config];
+            let _: () = msg_send![webview, setHidden:Bool::YES];
             let _: () = msg_send![webview, setNavigationDelegate:webview_delegate];
             let _: () = msg_send![content_view, addSubview:webview, positioned:NS_WINDOW_BELOW, relativeTo:null_mut::<Object>()];
             let _: () = msg_send![webview, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];

@@ -9,7 +9,9 @@
 use std::process::{Command, exit};
 
 use anyhow::Result;
-use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder};
+use bwebview::{
+    Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
+};
 use rust_embed::Embed;
 use serde::Serialize;
 use small_http::{Request, Response, Status};
@@ -104,6 +106,11 @@ fn main() {
         .title("Man Explorer")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(800.0, 480.0))
+        .background_color(if event_loop.theme() == Theme::Dark {
+            0x222222
+        } else {
+            0xffffff
+        })
         .center()
         .remember_window_state();
     #[cfg(target_os = "macos")]

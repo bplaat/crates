@@ -4,21 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::CString;
+use std::ffi::{CString, c_void};
 use std::mem::{self, size_of};
 use std::process::exit;
 use std::ptr::{null, null_mut};
 
 use super::webview2::*;
 use super::win32::*;
-use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize};
+use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
 
 pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 pub(super) static mut FIRST_HWND: Option<HWND> = None;
 
 // MARK: EventLoop
-pub(crate) struct PlatformEventLoop;
+pub(crate) struct PlatformEventLoop {
+    theme: Theme,
+}
 
 impl PlatformEventLoop {
     pub(crate) fn new(builder: EventLoopBuilder) -> Self {
@@ -51,12 +53,40 @@ impl PlatformEventLoop {
             // Enable PerMonitorV2 high DPI awareness
             SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-            Self
+            Self {
+                theme: system_theme(),
+            }
         }
     }
 }
 
+// MARK: Theme
+pub(super) fn system_theme() -> Theme {
+    let mut apps_use_light_theme = 1u32;
+    let mut size = size_of::<u32>() as u32;
+    let status = unsafe {
+        RegGetValueA(
+            HKEY_CURRENT_USER,
+            c"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize".as_ptr(),
+            c"AppsUseLightTheme".as_ptr(),
+            RRF_RT_REG_DWORD,
+            null_mut(),
+            &mut apps_use_light_theme as *mut _ as *mut c_void,
+            &mut size,
+        )
+    };
+    if status == ERROR_SUCCESS && apps_use_light_theme == 0 {
+        Theme::Dark
+    } else {
+        Theme::Light
+    }
+}
+
 impl crate::EventLoopInterface for PlatformEventLoop {
+    fn theme(&self) -> Theme {
+        self.theme
+    }
+
     fn primary_monitor(&self) -> PlatformMonitor {
         let hmonitor = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
         PlatformMonitor::new(hmonitor)
@@ -129,8 +159,7 @@ impl PlatformEventLoopProxy {
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
         if let Some(hwnd) = unsafe { FIRST_HWND } {
-            let ptr =
-                Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut std::ffi::c_void;
+            let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
             unsafe { PostMessageA(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
         }
     }
