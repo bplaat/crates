@@ -13,6 +13,22 @@ use super::cocoa::*;
 use super::event_loop::send_event;
 use crate::{LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent};
 
+define_class!(
+    #[unsafe(super(NSView))]
+    pub(super) struct DraggableView;
+
+    impl DraggableView {
+        #[unsafe(method(mouseDown:))]
+        fn _mouse_down(&self, event: *mut Object) {
+            let this = self as *const DraggableView as *mut Object;
+            let window: *mut Object = unsafe { msg_send![this, window] };
+            if !window.is_null() {
+                let _: () = unsafe { msg_send![window, performWindowDragWithEvent:event] };
+            }
+        }
+    }
+);
+
 // MARK: WindowDelegate
 define_class!(
     #[unsafe(super(NSObject))]
@@ -29,10 +45,19 @@ define_class!(
         fn _window_will_close(&self, _: *mut Object) { self.window_will_close(); }
 
         #[unsafe(method(windowWillEnterFullScreen:))]
-        fn _window_will_enter_fullscreen(&self, _: *mut Object) { self.window_will_enter_fullscreen(); }
+        fn _window_will_enter_fullscreen(&self, notification: *mut Object) { self.window_will_enter_fullscreen(notification); }
 
         #[unsafe(method(windowWillExitFullScreen:))]
         fn _window_will_exit_fullscreen(&self, _: *mut Object) { self.window_will_exit_fullscreen(); }
+
+        #[unsafe(method(windowDidExitFullScreen:))]
+        fn _window_did_exit_fullscreen(&self, notification: *mut Object) { self.window_did_exit_fullscreen(notification); }
+
+        #[unsafe(method(windowDidFailToEnterFullScreen:))]
+        fn _window_did_fail_to_enter_fullscreen(&self, window: *mut Object) { self.window_did_fail_to_enter_fullscreen(window); }
+
+        #[unsafe(method(windowDidFailToExitFullScreen:))]
+        fn _window_did_fail_to_exit_fullscreen(&self, window: *mut Object) { self.window_did_fail_to_exit_fullscreen(window); }
     }
 );
 
@@ -60,7 +85,9 @@ impl WindowDelegate {
         send_event(crate::Event::Window(WindowEvent::Close));
     }
 
-    fn window_will_enter_fullscreen(&self) {
+    fn window_will_enter_fullscreen(&self, notification: *mut Object) {
+        let window: *mut Object = unsafe { msg_send![notification, object] };
+        set_drag_view_hidden(window, true);
         send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
             true,
         )));
@@ -71,6 +98,61 @@ impl WindowDelegate {
             false,
         )));
     }
+
+    fn window_did_exit_fullscreen(&self, notification: *mut Object) {
+        let window: *mut Object = unsafe { msg_send![notification, object] };
+        set_drag_view_hidden(window, false);
+    }
+
+    fn window_did_fail_to_enter_fullscreen(&self, window: *mut Object) {
+        set_drag_view_hidden(window, false);
+        send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
+            false,
+        )));
+    }
+
+    fn window_did_fail_to_exit_fullscreen(&self, window: *mut Object) {
+        set_drag_view_hidden(window, true);
+        send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
+            true,
+        )));
+    }
+}
+
+fn set_drag_view_hidden(window: *mut Object, hidden: bool) {
+    let has_transparent_titlebar: Bool = unsafe { msg_send![window, titlebarAppearsTransparent] };
+    if has_transparent_titlebar == Bool::NO {
+        return;
+    }
+    let content_view: *mut Object = unsafe { msg_send![window, contentView] };
+    let subviews: *mut Object = unsafe { msg_send![content_view, subviews] };
+    let drag_view: *mut Object = unsafe { msg_send![subviews, lastObject] };
+    if drag_view.is_null() {
+        return;
+    }
+    let hidden = if hidden { Bool::YES } else { Bool::NO };
+    let _: () = unsafe { msg_send![drag_view, setHidden:hidden] };
+}
+
+fn add_drag_view(window: *mut Object, content_view: *mut Object) {
+    let drag_view: *mut Object = unsafe { msg_send![DraggableView::class(), new] };
+    let bounds: NSRect = unsafe { msg_send![content_view, bounds] };
+    let content_layout_rect: NSRect = unsafe { msg_send![window, contentLayoutRect] };
+    let content_layout_rect: NSRect = unsafe {
+        msg_send![content_view, convertRect:content_layout_rect, fromView:null_mut::<Object>()]
+    };
+    let titlebar_height =
+        bounds.size.height - content_layout_rect.origin.y - content_layout_rect.size.height;
+    let _: () = unsafe {
+        msg_send![drag_view, setFrame:NSRect::new(
+            NSPoint::new(bounds.origin.x, bounds.origin.y + bounds.size.height - titlebar_height),
+            NSSize::new(bounds.size.width, titlebar_height),
+        )]
+    };
+    let _: () = unsafe {
+        msg_send![drag_view, setAutoresizingMask:NS_VIEW_WIDTH_SIZABLE | NS_VIEW_MIN_Y_MARGIN]
+    };
+    let _: () = unsafe { msg_send![content_view, addSubview:drag_view] };
 }
 
 pub(super) struct PlatformWindowData {
@@ -131,6 +213,11 @@ impl PlatformWindow {
         if builder.resizable {
             window_style_mask |= NS_WINDOW_STYLE_MASK_RESIZABLE;
         }
+        if builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
+            || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden
+        {
+            window_style_mask |= NS_WINDOW_STYLE_MASK_FULL_SIZE_CONTENT_VIEW;
+        }
         if builder.should_fullscreen {
             window_style_mask = 0;
         }
@@ -166,7 +253,7 @@ impl PlatformWindow {
                 let _: () = msg_send![window, setAppearance:appearance];
             }
             if let Some(min_size) = builder.min_size {
-                let _: () = msg_send![window, setMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
+                let _: () = msg_send![window, setContentMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
             }
             #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
@@ -177,6 +264,13 @@ impl PlatformWindow {
         };
 
         window_data.window = window;
+        if !builder.should_fullscreen
+            && (builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
+                || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden)
+        {
+            let content_view: *mut Object = unsafe { msg_send![window, contentView] };
+            add_drag_view(window, content_view);
+        }
         PlatformWindow(window_data)
     }
 }
@@ -204,15 +298,14 @@ impl crate::WindowInterface for PlatformWindow {
     }
 
     fn set_size(&mut self, size: LogicalSize) {
-        let frame: NSRect = unsafe { msg_send![self.0.window, frame] };
         unsafe {
-            msg_send![self.0.window, setFrame:NSRect::new(frame.origin, NSSize::new(size.width as f64, size.height as f64)), display:true]
+            msg_send![self.0.window, setContentSize:NSSize::new(size.width as f64, size.height as f64)]
         }
     }
 
     fn set_min_size(&mut self, min_size: LogicalSize) {
         unsafe {
-            msg_send![self.0.window, setMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)]
+            msg_send![self.0.window, setContentMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)]
         }
     }
 
@@ -248,11 +341,10 @@ impl crate::WindowInterface for PlatformWindow {
 
     fn macos_titlebar_size(&self) -> LogicalSize {
         let window_frame: NSRect = unsafe { msg_send![self.0.window, frame] };
-        let content_rect: NSRect =
-            unsafe { msg_send![self.0.window, contentRectForFrameRect:window_frame] };
+        let content_layout_rect: NSRect = unsafe { msg_send![self.0.window, contentLayoutRect] };
         LogicalSize::new(
             window_frame.size.width as f32,
-            (window_frame.size.height - content_rect.size.height) as f32,
+            (window_frame.size.height - content_layout_rect.size.height) as f32,
         )
     }
 }

@@ -150,21 +150,14 @@ impl PlatformWebview {
 
             // Get content view rect
             let content_view: *mut Object = msg_send![self.0.window, contentView];
-            let webview_rect = if unsafe { msg_send![self.0.window, titlebarAppearsTransparent] } {
-                let mut window_frame: NSRect = msg_send![self.0.window, frame];
-                window_frame.origin.x = 0.0;
-                window_frame.origin.y = 0.0;
-                window_frame
-            } else {
-                msg_send![content_view, frame]
-            };
+            let webview_rect: NSRect = msg_send![content_view, bounds];
 
             // Create webview
             let webview: *mut Object = msg_send![class!(WKWebView), alloc];
             let webview: *mut Object =
                 msg_send![webview, initWithFrame:webview_rect, configuration:webview_config];
             let _: () = msg_send![webview, setNavigationDelegate:webview_delegate];
-            let _: () = msg_send![content_view, addSubview:webview];
+            let _: () = msg_send![content_view, addSubview:webview, positioned:NS_WINDOW_BELOW, relativeTo:null_mut::<Object>()];
             let _: () = msg_send![webview, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
             if unsafe { self.0.background_color }.is_some() {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
