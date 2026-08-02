@@ -28,9 +28,60 @@ pub(super) struct WindowData {
 
 pub(crate) struct PlatformWindow(pub(super) Box<WindowData>);
 
+fn calculate_window_rect(
+    builder: &WindowBuilder,
+    monitor_rect: &RECT,
+    style: u32,
+    dpi: u32,
+) -> (RECT, bool) {
+    let mut position_set = false;
+    let mut x = 0;
+    let mut y = 0;
+    let mut width = (builder.size.width as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+    let mut height = (builder.size.height as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+    if let Some(position) = builder.position {
+        position_set = true;
+        x = monitor_rect.left + (position.x as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+        y = monitor_rect.top + (position.y as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+    }
+    if builder.should_fullscreen {
+        position_set = true;
+        x = monitor_rect.left;
+        y = monitor_rect.top;
+        width = monitor_rect.right - monitor_rect.left;
+        height = monitor_rect.bottom - monitor_rect.top;
+    } else if builder.should_center {
+        position_set = true;
+        x = monitor_rect.left + ((monitor_rect.right - monitor_rect.left) - width) / 2;
+        y = monitor_rect.top + ((monitor_rect.bottom - monitor_rect.top) - height) / 2;
+    } else if !position_set && builder.monitor.is_some() {
+        position_set = true;
+        x = monitor_rect.left + (64 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+        y = monitor_rect.top + (64 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
+    }
+    let mut rect = RECT {
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height,
+    };
+    // SAFETY: rect is valid and style is a supported window style.
+    unsafe { AdjustWindowRectExForDpi(&mut rect, style, FALSE, 0, dpi) };
+    (rect, position_set)
+}
+
 impl PlatformWindow {
     pub(crate) fn new(builder: &WindowBuilder) -> Self {
-        let dpi = unsafe { GetDpiForSystem() };
+        let initial_dpi = unsafe { GetDpiForSystem() };
+        let mut window_data = Box::new(WindowData {
+            hwnd: null_mut(),
+            dpi: initial_dpi,
+            min_size: builder.min_size,
+            background_color: builder.background_color,
+            #[cfg(feature = "remember_window_state")]
+            remember_window_state: builder.remember_window_state,
+            resize_callback: None,
+        });
 
         // Check if window class is already registered
         let instance = unsafe { GetModuleHandleA(null_mut()) };
@@ -85,7 +136,7 @@ impl PlatformWindow {
         }
 
         // Create window
-        let (hwnd, should_show_window) = unsafe {
+        let (hwnd, restored_window_state) = unsafe {
             let style = if builder.should_fullscreen {
                 WS_POPUP
             } else if builder.resizable {
@@ -94,7 +145,6 @@ impl PlatformWindow {
                 WS_OVERLAPPEDWINDOW & !WS_THICKFRAME & !WS_MAXIMIZEBOX
             };
 
-            // Calculate window rect based on size and position
             let monitor_rect = if let Some(monitor) = builder.monitor {
                 monitor.rect()
             } else {
@@ -105,43 +155,8 @@ impl PlatformWindow {
                     bottom: GetSystemMetrics(SM_CYSCREEN),
                 }
             };
-
-            let mut position_set = false;
-            let mut x = 0;
-            let mut y = 0;
-            let mut width =
-                (builder.size.width as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-            let mut height =
-                (builder.size.height as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-            if let Some(position) = builder.position {
-                position_set = true;
-                x = monitor_rect.left
-                    + (position.x as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-                y = monitor_rect.top
-                    + (position.y as i32 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-            }
-            if builder.should_fullscreen {
-                position_set = true;
-                x = monitor_rect.left;
-                y = monitor_rect.top;
-                width = monitor_rect.right - monitor_rect.left;
-                height = monitor_rect.bottom - monitor_rect.top;
-            } else if builder.should_center {
-                position_set = true;
-                x = monitor_rect.left + ((monitor_rect.right - monitor_rect.left) - width) / 2;
-                y = monitor_rect.top + ((monitor_rect.bottom - monitor_rect.top) - height) / 2;
-            } else if !position_set && builder.monitor.is_some() {
-                position_set = true;
-                x = monitor_rect.left + (64 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-                y = monitor_rect.top + (64 * dpi as i32) / USER_DEFAULT_SCREEN_DPI as i32;
-            }
-            let mut rect = RECT {
-                left: x,
-                top: y,
-                right: x + width,
-                bottom: y + height,
-            };
-            AdjustWindowRectExForDpi(&mut rect, style, FALSE, 0, dpi);
+            let (rect, position_set) =
+                calculate_window_rect(builder, &monitor_rect, style, initial_dpi);
 
             let title = CString::new(builder.title.clone()).expect("Can't convert to CString");
             let hwnd = CreateWindowExA(
@@ -164,8 +179,9 @@ impl PlatformWindow {
                 null_mut(),
                 null_mut(),
                 instance,
-                0,
+                window_data.as_mut() as *mut WindowData as LPARAM,
             );
+            window_data.hwnd = hwnd;
             let enabled: BOOL = (builder.theme.unwrap_or_else(system_theme) == Theme::Dark).into();
             DwmSetWindowAttribute(
                 hwnd,
@@ -175,7 +191,7 @@ impl PlatformWindow {
             );
 
             #[cfg(feature = "remember_window_state")]
-            let should_show_window = if builder.remember_window_state {
+            let restored_window_state = if builder.remember_window_state {
                 if let Ok(mut file) = File::open(config_dir().join("window.bin")) {
                     let size = size_of::<WINDOWPLACEMENT>();
                     let mut buffer = vec![0u8; size];
@@ -184,22 +200,42 @@ impl PlatformWindow {
                             std::ptr::read(buffer.as_ptr() as *const _);
                         window_placement.length = size as u32;
                         SetWindowPlacement(hwnd, &window_placement);
-                        false
-                    } else {
                         true
+                    } else {
+                        false
                     }
                 } else {
-                    true
+                    false
                 }
             } else {
-                true
+                false
             };
             #[cfg(not(feature = "remember_window_state"))]
-            let should_show_window = true;
-            (hwnd, should_show_window)
+            let restored_window_state = false;
+
+            let window_dpi = GetDpiForWindow(hwnd);
+            let dpi = if window_dpi == 0 {
+                initial_dpi
+            } else {
+                window_dpi
+            };
+            window_data.dpi = dpi;
+            if !restored_window_state && dpi != initial_dpi {
+                let (rect, position_set) =
+                    calculate_window_rect(builder, &monitor_rect, style, dpi);
+                SetWindowPos(
+                    hwnd,
+                    null_mut(),
+                    rect.left,
+                    rect.top,
+                    rect.right - rect.left,
+                    rect.bottom - rect.top,
+                    SWP_NOZORDER | SWP_NOACTIVATE | if position_set { 0 } else { SWP_NOMOVE },
+                );
+            }
+            (hwnd, restored_window_state)
         };
 
-        // Allocate window data
         unsafe {
             #[allow(static_mut_refs)]
             if FIRST_HWND.is_none() {
@@ -207,23 +243,8 @@ impl PlatformWindow {
             }
         }
 
-        let window_data = Box::new(WindowData {
-            hwnd,
-            dpi,
-            min_size: builder.min_size,
-            background_color: builder.background_color,
-            #[cfg(feature = "remember_window_state")]
-            remember_window_state: builder.remember_window_state,
-            resize_callback: None,
-        });
         unsafe {
-            SetWindowLong(
-                hwnd,
-                GWL_USERDATA,
-                window_data.as_ref() as *const _ as isize,
-            );
-            // Install window data before explicitly showing a new placement
-            if should_show_window {
+            if !restored_window_state {
                 ShowWindow(hwnd, SW_SHOWDEFAULT);
             }
             UpdateWindow(hwnd);
@@ -329,11 +350,18 @@ unsafe extern "system" fn window_proc(
     l_param: LPARAM,
 ) -> LRESULT {
     let _self = unsafe {
-        let ptr = GetWindowLong(hwnd, GWL_USERDATA) as *mut WindowData;
-        if ptr.is_null() {
+        let ptr = if msg == WM_NCCREATE {
+            let create = &*(l_param as *const CREATESTRUCTA);
+            let ptr = create.lpCreateParams.cast::<WindowData>();
+            SetWindowLong(hwnd, GWL_USERDATA, ptr as isize);
+            ptr
+        } else {
+            GetWindowLong(hwnd, GWL_USERDATA) as *mut WindowData
+        };
+        let Some(window_data) = ptr.as_mut() else {
             return DefWindowProcA(hwnd, msg, w_param, l_param);
-        }
-        &mut *ptr
+        };
+        window_data
     };
     match msg {
         WM_CREATE => {

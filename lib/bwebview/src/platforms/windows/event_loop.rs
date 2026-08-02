@@ -50,13 +50,34 @@ impl PlatformEventLoop {
                 COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE,
             );
 
-            // Enable PerMonitorV2 high DPI awareness
-            SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            enable_high_dpi_awareness();
 
             Self {
                 theme: system_theme(),
             }
         }
+    }
+}
+
+// Enable PerMonitorV2 when available without requiring Windows 10 1703
+unsafe fn enable_high_dpi_awareness() {
+    type SetProcessDpiAwarenessContext = unsafe extern "system" fn(isize) -> BOOL;
+
+    let user32 = unsafe { GetModuleHandleA(b"user32.dll\0".as_ptr()) };
+    if !user32.is_null() {
+        let proc = unsafe { GetProcAddress(user32, b"SetProcessDpiAwarenessContext\0".as_ptr()) };
+        if !proc.is_null() {
+            // SAFETY: proc points to SetProcessDpiAwarenessContext with this signature.
+            let set_context: SetProcessDpiAwarenessContext = unsafe { mem::transmute(proc) };
+            if unsafe { set_context(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) } != FALSE {
+                return;
+            }
+        }
+    }
+
+    // Fall back to PerMonitor on older Windows versions
+    unsafe {
+        SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     }
 }
 

@@ -37,6 +37,7 @@ pub(crate) const ERROR_ALREADY_EXISTS: u32 = 183;
 #[link(name = "kernel32")]
 unsafe extern "system" {
     pub(crate) fn GetModuleHandleA(lpModuleName: *const u8) -> HMODULE;
+    pub(crate) fn GetProcAddress(hModule: HMODULE, lpProcName: *const u8) -> *const c_void;
     pub(crate) fn GetLastError() -> u32;
     pub(crate) fn CreateMutexA(
         lpMutexAttributes: *mut c_void,
@@ -103,6 +104,22 @@ pub(crate) struct WNDCLASSEXA {
     pub(crate) lpszMenuName: *const c_char,
     pub(crate) lpszClassName: *const c_char,
     pub(crate) hIconSm: HICON,
+}
+
+#[repr(C)]
+pub(crate) struct CREATESTRUCTA {
+    pub(crate) lpCreateParams: *mut c_void,
+    pub(crate) hInstance: HMODULE,
+    pub(crate) hMenu: HMENU,
+    pub(crate) hwndParent: HWND,
+    pub(crate) cy: i32,
+    pub(crate) cx: i32,
+    pub(crate) y: i32,
+    pub(crate) x: i32,
+    pub(crate) style: i32,
+    pub(crate) lpszName: *const c_char,
+    pub(crate) lpszClass: *const c_char,
+    pub(crate) dwExStyle: u32,
 }
 
 #[repr(C)]
@@ -174,6 +191,7 @@ pub(crate) const WM_SIZE: u32 = 0x0005;
 pub(crate) const WM_CLOSE: u32 = 0x0010;
 pub(crate) const WM_ERASEBKGND: u32 = 0x0014;
 pub(crate) const WM_GETMINMAXINFO: u32 = 0x0024;
+pub(crate) const WM_NCCREATE: u32 = 0x0081;
 pub(crate) const WM_DPICHANGED: u32 = 0x02E0;
 pub(crate) const WM_USER: u32 = 0x0400;
 
@@ -183,6 +201,7 @@ pub(crate) const SW_SHOWDEFAULT: i32 = 10;
 
 pub(crate) const MB_OK: u32 = 0x00000000;
 
+pub(crate) const PROCESS_PER_MONITOR_DPI_AWARE: i32 = 2;
 pub(crate) const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: isize = -4isize;
 
 pub(crate) const MONITOR_DEFAULTTOPRIMARY: u32 = 0x00000001;
@@ -198,6 +217,7 @@ pub(crate) const GWL_STYLE: i32 = -16;
 pub(crate) const GWL_USERDATA: i32 = -21;
 
 pub(crate) const SWP_NOSIZE: u32 = 0x0001;
+pub(crate) const SWP_NOMOVE: u32 = 0x0002;
 pub(crate) const SWP_NOZORDER: u32 = 0x0004;
 pub(crate) const SWP_NOACTIVATE: u32 = 0x0010;
 pub(crate) const SWP_NOREPOSITION: u32 = 0x0200;
@@ -256,7 +276,6 @@ unsafe extern "system" {
     pub(crate) fn DispatchMessageA(lpMsg: *const MSG) -> isize;
     pub(crate) fn DefWindowProcA(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> isize;
     pub(crate) fn PostQuitMessage(nExitCode: i32);
-    pub(crate) fn SetProcessDpiAwarenessContext(value: isize) -> i32;
     pub(crate) fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
     pub(crate) fn MessageBoxA(
         hWnd: HWND,
@@ -283,6 +302,7 @@ unsafe extern "system" {
     pub(crate) fn PostMessageA(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> BOOL;
     pub(crate) fn GetMonitorInfoA(hMonitor: HMONITOR, lpmi: *mut MONITORINFOEXA) -> BOOL;
     pub(crate) fn GetDpiForSystem() -> u32;
+    pub(crate) fn GetDpiForWindow(hWnd: HWND) -> u32;
     pub(crate) fn GetSystemMetrics(nIndex: i32) -> i32;
     pub(crate) fn AdjustWindowRectExForDpi(
         lpRect: *mut RECT,
@@ -338,6 +358,7 @@ unsafe extern "system" {
 // MARK: shcore.dll
 #[link(name = "shcore")]
 unsafe extern "system" {
+    pub(crate) fn SetProcessDpiAwareness(value: i32) -> HRESULT;
     pub(crate) fn GetDpiForMonitor(
         hmonitor: HMONITOR,
         dpiType: i32,
