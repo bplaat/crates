@@ -36,8 +36,12 @@ impl InnerConnection {
     fn open(path: &Path, mode: OpenMode) -> Result<Self, ConnectionError> {
         // Open database
         let mut db = ptr::null_mut();
-        let path = CString::new(path.to_str().expect("Can't convert to CString").as_bytes())
-            .expect("Can't convert to CString");
+        let path = path.to_str().ok_or_else(|| ConnectionError {
+            msg: "Database path is not valid Unicode".to_string(),
+        })?;
+        let path = CString::new(path).map_err(|_| ConnectionError {
+            msg: "Database path contains a null byte".to_string(),
+        })?;
         // SAFETY: path is a valid NUL-terminated CString, db is initialized to null_mut, the
         // flags are valid SQLite open mode constants, and the vfs argument is null (use default).
         let result = unsafe {
