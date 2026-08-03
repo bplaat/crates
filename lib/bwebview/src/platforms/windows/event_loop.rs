@@ -11,11 +11,16 @@ use std::ptr::{null, null_mut};
 
 use super::webview2::*;
 use super::win32::*;
-use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
+use crate::{
+    AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, ProgressBarState, Theme,
+};
 
 pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 pub(super) static mut FIRST_HWND: Option<HWND> = None;
+pub(super) static mut TASKBAR_BUTTON_CREATED: u32 = 0;
+static mut TASKBAR_BUTTON_READY: bool = false;
+static mut PENDING_PROGRESS_BAR: ProgressBarState = ProgressBarState::None;
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
@@ -49,6 +54,11 @@ impl PlatformEventLoop {
                 null_mut(),
                 COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE,
             );
+
+            // Explorer creates the taskbar button asynchronously. Shell APIs must
+            // not be used until the window receives this registered message.
+            TASKBAR_BUTTON_CREATED =
+                RegisterWindowMessageW(wide!("TaskbarButtonCreated").as_ptr());
 
             enable_high_dpi_awareness();
 
@@ -155,6 +165,10 @@ impl crate::EventLoopInterface for PlatformEventLoop {
     fn create_proxy(&self) -> PlatformEventLoopProxy {
         PlatformEventLoopProxy::new()
     }
+
+    fn set_progress_bar(&self, state: ProgressBarState) {
+        set_progress_bar(state);
+    }
 }
 
 pub(crate) fn send_event(event: Event) {
@@ -168,6 +182,7 @@ pub(crate) fn send_event(event: Event) {
 
 // MARK: EventLoopProxy
 pub(super) const WM_SEND_MESSAGE: u32 = WM_USER + 1;
+pub(super) const WM_SET_PROGRESS_BAR: u32 = WM_USER + 2;
 
 pub(crate) struct PlatformEventLoopProxy;
 
@@ -183,6 +198,115 @@ impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
             let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
             unsafe { PostMessageW(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
         }
+    }
+
+    fn set_progress_bar(&self, state: ProgressBarState) {
+        if let Some(hwnd) = unsafe { FIRST_HWND } {
+            let ptr = Box::into_raw(Box::new(state));
+            if unsafe { PostMessageW(hwnd, WM_SET_PROGRESS_BAR, ptr as WPARAM, 0) } == FALSE {
+                // The window may have closed between reading FIRST_HWND and posting.
+                unsafe { drop(Box::from_raw(ptr)) };
+            }
+        }
+    }
+}
+
+// MARK: Taskbar progress
+const CLSID_TASKBAR_LIST: GUID = GUID {
+    data1: 0x56FDF344,
+    data2: 0xFD6D,
+    data3: 0x11D0,
+    data4: [0x95, 0x8A, 0x00, 0x60, 0x97, 0xC9, 0xA0, 0x90],
+};
+const IID_TASKBAR_LIST3: GUID = GUID {
+    data1: 0xEA1AFB91,
+    data2: 0x9E28,
+    data3: 0x4B86,
+    data4: [0x90, 0xE9, 0x9E, 0x9F, 0x8A, 0x5E, 0xEF, 0xAF],
+};
+
+#[repr(C)]
+struct TaskbarList3 {
+    vtable: *const TaskbarList3Vtable,
+}
+
+#[repr(C)]
+struct TaskbarList3Vtable {
+    query_interface: usize,
+    add_ref: usize,
+    release: unsafe extern "system" fn(*mut TaskbarList3) -> u32,
+    hr_init: unsafe extern "system" fn(*mut TaskbarList3) -> HRESULT,
+    add_tab: usize,
+    delete_tab: usize,
+    activate_tab: usize,
+    set_active_alt: usize,
+    mark_fullscreen_window: usize,
+    set_progress_value:
+        unsafe extern "system" fn(*mut TaskbarList3, HWND, u64, u64) -> HRESULT,
+    set_progress_state: unsafe extern "system" fn(*mut TaskbarList3, HWND, u32) -> HRESULT,
+}
+
+pub(super) fn set_progress_bar(state: ProgressBarState) {
+    unsafe { PENDING_PROGRESS_BAR = state };
+    if !unsafe { TASKBAR_BUTTON_READY } {
+        return;
+    }
+    let Some(hwnd) = (unsafe { FIRST_HWND }) else {
+        return;
+    };
+    let mut taskbar = null_mut::<TaskbarList3>();
+    let result = unsafe {
+        CoCreateInstance(
+            &CLSID_TASKBAR_LIST,
+            null_mut(),
+            CLSCTX_INPROC_SERVER,
+            &IID_TASKBAR_LIST3,
+            &mut taskbar as *mut _ as *mut *mut c_void,
+        )
+    };
+    if result < 0 || taskbar.is_null() {
+        return;
+    }
+    unsafe {
+        let vtable = &*(*taskbar).vtable;
+        let init_result = (vtable.hr_init)(taskbar);
+        if init_result >= 0 {
+            let taskbar_state = match state {
+                ProgressBarState::None => 0,
+                ProgressBarState::Indeterminate => 1,
+                ProgressBarState::Normal(_) => 2,
+                ProgressBarState::Error(_) => 4,
+                ProgressBarState::Paused(_) => 8,
+            };
+            if let Some(progress) = state.progress() {
+                _ =
+                    (vtable.set_progress_value)(taskbar, hwnd, (progress * 1000.0) as u64, 1000);
+            }
+            // An explicit normal state is required to clear paused/error states.
+            _ = (vtable.set_progress_state)(taskbar, hwnd, taskbar_state);
+        }
+        _ = (vtable.release)(taskbar);
+    }
+}
+
+pub(super) fn taskbar_button_created() {
+    unsafe { TASKBAR_BUTTON_READY = true };
+    set_progress_bar(unsafe { PENDING_PROGRESS_BAR });
+}
+
+#[cfg(test)]
+mod taskbar_tests {
+    use super::IID_TASKBAR_LIST3;
+
+    #[test]
+    fn taskbar_list3_iid_matches_windows_sdk() {
+        assert_eq!(IID_TASKBAR_LIST3.data1, 0xEA1AFB91);
+        assert_eq!(IID_TASKBAR_LIST3.data2, 0x9E28);
+        assert_eq!(IID_TASKBAR_LIST3.data3, 0x4B86);
+        assert_eq!(
+            IID_TASKBAR_LIST3.data4,
+            [0x90, 0xE9, 0x9E, 0x9F, 0x8A, 0x5E, 0xEF, 0xAF]
+        );
     }
 }
 

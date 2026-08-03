@@ -25,7 +25,7 @@ fn main() {
     let window = window_builder.build();
 
     let mut _webview = WebviewBuilder::new(&window)
-        .load_html("<body style=\"height:100vh;margin:0;display:flex;align-items:center;justify-content:center\"><h1 style=\"color:#fff\">Hello Webview!</h1>")
+        .load_html("<body style=\"font:16px system-ui;height:100vh;margin:0;display:flex;align-items:center;justify-content:center;color:#fff\"><h1>Hello Webview!</h1></body>")
         .build();
 
     event_loop.run(|_| {});

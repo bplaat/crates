@@ -300,6 +300,7 @@ unsafe extern "system" {
         dwData: LPARAM,
     ) -> BOOL;
     pub(crate) fn PostMessageW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> BOOL;
+    pub(crate) fn RegisterWindowMessageW(lpString: *const w_char) -> u32;
     pub(crate) fn GetMonitorInfoW(hMonitor: HMONITOR, lpmi: *mut MONITORINFOEXW) -> BOOL;
     pub(crate) fn GetDpiForSystem() -> u32;
     pub(crate) fn GetDpiForWindow(hWnd: HWND) -> u32;

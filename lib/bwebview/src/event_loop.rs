@@ -7,6 +7,73 @@
 use crate::platforms::{PlatformEventLoop, PlatformEventLoopProxy, PlatformMonitor};
 use crate::{Event, LogicalPoint, LogicalSize, Theme};
 
+// MARK: ProgressBarState
+/// Application progress shown by the platform shell.
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    windows
+))]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ProgressBarState {
+    /// Hide application progress.
+    #[default]
+    None,
+    /// Show progress without a known completion percentage.
+    Indeterminate,
+    /// Show normal progress between `0.0` and `1.0`.
+    Normal(f64),
+    /// Show paused progress between `0.0` and `1.0`.
+    Paused(f64),
+    /// Show failed progress between `0.0` and `1.0`.
+    Error(f64),
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    windows
+))]
+impl ProgressBarState {
+    pub(crate) const fn progress(self) -> Option<f64> {
+        match self {
+            Self::Normal(progress) | Self::Paused(progress) | Self::Error(progress) => {
+                Some(progress.clamp(0.0, 1.0))
+            }
+            Self::None | Self::Indeterminate => None,
+        }
+    }
+}
+
+#[cfg(all(
+    test,
+    any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        windows
+    )
+))]
+mod progress_bar_state_tests {
+    use super::ProgressBarState;
+
+    #[test]
+    fn progress_values_are_clamped() {
+        assert_eq!(ProgressBarState::Normal(-1.0).progress(), Some(0.0));
+        assert_eq!(ProgressBarState::Paused(0.5).progress(), Some(0.5));
+        assert_eq!(ProgressBarState::Error(2.0).progress(), Some(1.0));
+        assert_eq!(ProgressBarState::Indeterminate.progress(), None);
+    }
+}
+
 // MARK: AppId
 pub(crate) struct AppId {
     pub qualifier: String,
@@ -54,6 +121,15 @@ pub(crate) trait EventLoopInterface {
     fn primary_monitor(&self) -> PlatformMonitor;
     fn available_monitors(&self) -> Vec<PlatformMonitor>;
     fn create_proxy(&self) -> PlatformEventLoopProxy;
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        windows
+    ))]
+    fn set_progress_bar(&self, state: ProgressBarState);
     fn run(self, event_handler: impl FnMut(Event) + 'static) -> !;
 }
 
@@ -95,6 +171,21 @@ impl EventLoop {
         EventLoopProxy::new(self.0.create_proxy())
     }
 
+    /// Set application progress in the platform shell.
+    ///
+    /// Use an [`EventLoopProxy`] to update progress from a worker thread.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        windows
+    ))]
+    pub fn set_progress_bar(&self, state: ProgressBarState) {
+        self.0.set_progress_bar(state);
+    }
+
     /// Run the event loop
     pub fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
         self.0.run(event_handler)
@@ -104,6 +195,15 @@ impl EventLoop {
 // MARK: EventLoopProxy
 pub(crate) trait EventLoopProxyInterface {
     fn send_user_event(&self, data: String);
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        windows
+    ))]
+    fn set_progress_bar(&self, state: ProgressBarState);
 }
 
 /// Event loop proxy
@@ -117,6 +217,19 @@ impl EventLoopProxy {
     /// Send user event to the event loop
     pub fn send_user_event(&self, data: String) {
         self.0.send_user_event(data);
+    }
+
+    /// Set application progress from any thread.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        windows
+    ))]
+    pub fn set_progress_bar(&self, state: ProgressBarState) {
+        self.0.set_progress_bar(state);
     }
 }
 

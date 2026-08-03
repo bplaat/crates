@@ -11,7 +11,10 @@ use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
 
-use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event, system_theme};
+use super::event_loop::{
+    APP_ID, FIRST_HWND, TASKBAR_BUTTON_CREATED, WM_SEND_MESSAGE, WM_SET_PROGRESS_BAR, send_event,
+    set_progress_bar, system_theme, taskbar_button_created,
+};
 use super::webview2::*;
 use super::win32::*;
 use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
@@ -356,6 +359,10 @@ unsafe extern "system" fn window_proc(
         window_data
     };
     match msg {
+        message if message == unsafe { TASKBAR_BUTTON_CREATED } => {
+            taskbar_button_created();
+            0
+        }
         WM_CREATE => {
             send_event(crate::Event::Window(WindowEvent::Create));
             0
@@ -432,6 +439,11 @@ unsafe extern "system" fn window_proc(
             let ptr = w_param as *mut c_void;
             let event = unsafe { Box::from_raw(ptr as *mut crate::Event) };
             send_event(*event);
+            0
+        }
+        WM_SET_PROGRESS_BAR => {
+            let state = unsafe { Box::from_raw(w_param as *mut crate::ProgressBarState) };
+            set_progress_bar(*state);
             0
         }
         WM_CLOSE => {

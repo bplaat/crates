@@ -8,7 +8,9 @@ use std::ffi::{CStr, CString, c_void};
 use std::ptr::{null, null_mut};
 use std::{env, fs};
 
-use super::event_loop::{APP_ID, primary_monitor_rect, send_event};
+use super::event_loop::{
+    APP_ID, FIRST_WINDOW, FIRST_WINDOW_TITLE, primary_monitor_rect, send_event,
+};
 use super::headers::*;
 use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
@@ -149,6 +151,12 @@ impl PlatformWindow {
         };
 
         window_data.window = window;
+        unsafe {
+            if FIRST_WINDOW.is_null() {
+                FIRST_WINDOW = window;
+                FIRST_WINDOW_TITLE = Some(builder.title.clone());
+            }
+        }
         PlatformWindow(window_data)
     }
 
@@ -214,8 +222,14 @@ impl PlatformWindow {
 
 impl crate::WindowInterface for PlatformWindow {
     fn set_title(&mut self, title: impl AsRef<str>) {
-        let title = CString::new(title.as_ref()).expect("Can't convert to CString");
-        unsafe { gtk_window_set_title(self.0.window, title.as_ptr()) }
+        let title = title.as_ref();
+        let title_c = CString::new(title).expect("Can't convert to CString");
+        unsafe {
+            gtk_window_set_title(self.0.window, title_c.as_ptr());
+            if self.0.window == FIRST_WINDOW {
+                FIRST_WINDOW_TITLE = Some(title.to_owned());
+            }
+        }
     }
 
     fn position(&self) -> LogicalPoint {
