@@ -214,6 +214,14 @@ pub fn define_class(input: TokenStream) -> TokenStream {
     let super_path: syn::Path =
         extract_super(&struct_item.attrs).unwrap_or_else(|| syn::parse_quote!(NSObject));
     let class_name = extract_name(&struct_item.attrs).unwrap_or_else(|| struct_name.to_string());
+    let class_name_c = match std::ffi::CString::new(class_name.as_str()) {
+        Ok(name) => name,
+        Err(_) => {
+            return syn::Error::new_spanned(struct_name, "class name contains a null byte")
+                .into_compile_error()
+                .into();
+        }
+    };
     let ivars_expr = extract_ivars(&struct_item.attrs);
 
     let forwarded_attrs: Vec<&Attribute> = struct_item
@@ -298,9 +306,7 @@ pub fn define_class(input: TokenStream) -> TokenStream {
 
     let ivar_reg = ivars_expr.as_ref().map(|ivars| {
         quote! {
-            builder.add_ivar_raw::<#ivars>(unsafe {
-                ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"__ivars\0")
-            });
+            builder.add_ivar_raw::<#ivars>(c"__ivars");
         }
     });
 
@@ -312,7 +318,7 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                 let offset = *OFFSET.get_or_init(|| unsafe {
                     let ivar = ::objc2::ffi::class_getInstanceVariable(
                         Self::class() as *const _,
-                        b"__ivars\0".as_ptr() as *const ::std::ffi::c_char,
+                        c"__ivars".as_ptr(),
                     );
                     assert!(!ivar.is_null(), "__ivars ivar not found on class");
                     ::objc2::ffi::ivar_getOffset(ivar) as usize
@@ -322,14 +328,13 @@ pub fn define_class(input: TokenStream) -> TokenStream {
         }
     });
 
-    let class_name_nul = format!("{class_name}\0");
     let class_method = quote! {
         #[allow(clippy::undocumented_unsafe_blocks)]
         fn class() -> *mut ::objc2::runtime::AnyObject {
             static CLASS: ::std::sync::OnceLock<usize> = ::std::sync::OnceLock::new();
             *CLASS.get_or_init(|| unsafe {
                 let mut builder = ::objc2::runtime::ClassBuilder::new(
-                    ::std::ffi::CStr::from_bytes_with_nul_unchecked(#class_name_nul.as_bytes()),
+                    #class_name_c,
                     ::objc2::class!(#super_path),
                 ).expect(concat!("class \"", #class_name, "\" already registered"));
                 #ivar_reg
