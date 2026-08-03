@@ -47,6 +47,12 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
     </a>
 </td>
 <td width="100" align="center">
+    <a href="bin/binman">
+        <img src="bin/binman/docs/images/icon.svg" alt="Binman icon" width="48" height="48"/><br/>
+        Binman
+    </a>
+</td>
+<td width="100" align="center">
     <a href="bin/manexplorer">
         <img src="bin/manexplorer/docs/images/icon.svg" alt="ManExplorer icon" width="48" height="48"/><br/>
         ManExplorer
@@ -81,6 +87,7 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 
 - [2048](bin/game2048) An offline desktop 2048 game app
 - [BassieLight](bin/bassielight) A simple lights controller with GUI
+- [Binman](bin/binman) A safe and minimal Windows cleanup tool
 - [ManExplorer](bin/manexplorer) A simple man page explorer tool
 - [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 - [Music Downloader](bin/music-dl) A tool that downloads complete albums with the correct metadata

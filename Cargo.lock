@@ -63,6 +63,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "binman"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bwebview",
+ "directories",
+ "glob",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "winresource",
+]
+
+[[package]]
 name = "block2"
 version = "0.6.0+patch"
 dependencies = [
@@ -282,6 +296,12 @@ dependencies = [
 [[package]]
 name = "getrandom"
 version = "0.3.0+patch"
+
+[[package]]
+name = "glob"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "granit-parser"

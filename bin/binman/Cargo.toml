@@ -1,0 +1,25 @@
+[package]
+name = "binman"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+build = "build.rs"
+
+[package.metadata]
+platforms = ["windows"]
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1"
+bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
+directories = { path = "../../lib/directories" }
+glob = "0.3"
+rust-embed = { path = "../../lib/rust-embed" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[build-dependencies]
+winresource = { path = "../../lib/winresource" }
