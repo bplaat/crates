@@ -715,9 +715,8 @@ mod tests {
 
     #[test]
     fn test_xml_false() {
-        let xml = r#"<plist><false/></plist>"#;
         assert_eq!(
-            parse_value(&tokenize(xml), &mut 0).expect("parse"),
+            parse_value(&tokenize(r#"<plist><false/></plist>"#), &mut 0).expect("parse"),
             Value::Boolean(false)
         );
     }
@@ -746,8 +745,10 @@ mod tests {
     #[test]
     fn test_xml_data() {
         // "hello" in base64 = "aGVsbG8="
-        let xml = r#"<plist><data>aGVsbG8=</data></plist>"#;
-        let Value::Data(d) = parse_value(&tokenize(xml), &mut 0).expect("parse") else {
+        let Value::Data(d) =
+            parse_value(&tokenize(r#"<plist><data>aGVsbG8=</data></plist>"#), &mut 0)
+                .expect("parse")
+        else {
             panic!("expected data");
         };
         assert_eq!(d, b"hello");

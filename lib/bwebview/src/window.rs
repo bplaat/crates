@@ -40,7 +40,6 @@ pub struct WindowBuilder<'a> {
     pub(crate) resizable: bool,
     pub(crate) theme: Option<Theme>,
     pub(crate) background_color: Option<u32>,
-    #[cfg(feature = "remember_window_state")]
     pub(crate) remember_window_state: bool,
     pub(crate) monitor: Option<&'a PlatformMonitor>,
     pub(crate) should_center: bool,
@@ -62,7 +61,6 @@ impl<'a> Default for WindowBuilder<'a> {
             resizable: true,
             theme: None,
             background_color: None,
-            #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
             monitor: None,
             should_center: false,
@@ -122,7 +120,6 @@ impl<'a> WindowBuilder<'a> {
     }
 
     /// Set remember window state
-    #[cfg(feature = "remember_window_state")]
     pub const fn remember_window_state(mut self) -> Self {
         self.remember_window_state = true;
         self

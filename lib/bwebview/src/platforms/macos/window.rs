@@ -255,7 +255,6 @@ impl PlatformWindow {
             if let Some(min_size) = builder.min_size {
                 let _: () = msg_send![window, setContentMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
             }
-            #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
                 let _: Bool = msg_send![window, setFrameAutosaveName:ns_string!("window")];
             }

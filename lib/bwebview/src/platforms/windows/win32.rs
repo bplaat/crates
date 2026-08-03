@@ -36,23 +36,23 @@ pub(crate) const ERROR_ALREADY_EXISTS: u32 = 183;
 
 #[link(name = "kernel32")]
 unsafe extern "system" {
-    pub(crate) fn GetModuleHandleA(lpModuleName: *const u8) -> HMODULE;
-    pub(crate) fn GetProcAddress(hModule: HMODULE, lpProcName: *const u8) -> *const c_void;
+    pub(crate) fn GetModuleHandleW(lpModuleName: *const w_char) -> HMODULE;
+    pub(crate) fn GetProcAddress(hModule: HMODULE, lpProcName: *const c_char) -> *const c_void;
     pub(crate) fn GetLastError() -> u32;
-    pub(crate) fn CreateMutexA(
+    pub(crate) fn CreateMutexW(
         lpMutexAttributes: *mut c_void,
         bInitialOwner: BOOL,
-        lpName: *const c_char,
+        lpName: *const w_char,
     ) -> HANDLE;
 }
 
 // MARK: advapi32.dll
 #[link(name = "advapi32")]
 unsafe extern "system" {
-    pub(crate) fn RegGetValueA(
+    pub(crate) fn RegGetValueW(
         hkey: HKEY,
-        lpSubKey: *const c_char,
-        lpValue: *const c_char,
+        lpSubKey: *const w_char,
+        lpValue: *const w_char,
         dwFlags: u32,
         pdwType: *mut u32,
         pvData: *mut c_void,
@@ -84,7 +84,7 @@ pub(crate) type LRESULT = isize;
 
 #[repr(C)]
 #[derive(Default)]
-pub(crate) struct WNDCLASSEXA {
+pub(crate) struct WNDCLASSEXW {
     pub(crate) cbSize: u32,
     pub(crate) style: u32,
     pub(crate) lpfnWndProc: Option<
@@ -101,13 +101,13 @@ pub(crate) struct WNDCLASSEXA {
     pub(crate) hIcon: HICON,
     pub(crate) hCursor: HCURSOR,
     pub(crate) hbrBackground: usize,
-    pub(crate) lpszMenuName: *const c_char,
-    pub(crate) lpszClassName: *const c_char,
+    pub(crate) lpszMenuName: *const w_char,
+    pub(crate) lpszClassName: *const w_char,
     pub(crate) hIconSm: HICON,
 }
 
 #[repr(C)]
-pub(crate) struct CREATESTRUCTA {
+pub(crate) struct CREATESTRUCTW {
     pub(crate) lpCreateParams: *mut c_void,
     pub(crate) hInstance: HMODULE,
     pub(crate) hMenu: HMENU,
@@ -117,8 +117,8 @@ pub(crate) struct CREATESTRUCTA {
     pub(crate) y: i32,
     pub(crate) x: i32,
     pub(crate) style: i32,
-    pub(crate) lpszName: *const c_char,
-    pub(crate) lpszClass: *const c_char,
+    pub(crate) lpszName: *const w_char,
+    pub(crate) lpszClass: *const w_char,
     pub(crate) dwExStyle: u32,
 }
 
@@ -159,12 +159,12 @@ pub(crate) struct MINMAXINFO {
 
 #[repr(C)]
 #[derive(Default)]
-pub(crate) struct MONITORINFOEXA {
+pub(crate) struct MONITORINFOEXW {
     pub(crate) cbSize: u32,
     pub(crate) rcMonitor: RECT,
     pub(crate) rcWork: RECT,
     pub(crate) dwFlags: u32,
-    pub(crate) szDevice: [c_char; 32],
+    pub(crate) szDevice: [w_char; 32],
 }
 
 #[repr(C)]
@@ -225,23 +225,23 @@ pub(crate) const SWP_NOREPOSITION: u32 = 0x0200;
 #[link(name = "user32")]
 unsafe extern "system" {
     pub(crate) fn GetSysColorBrush(nIndex: i32) -> HBRUSH;
-    pub(crate) fn ExtractIconExA(
-        lpszFile: *const c_char,
+    pub(crate) fn ExtractIconExW(
+        lpszFile: *const w_char,
         nIconIndex: i32,
         phiconLarge: *mut HICON,
         phiconSmall: *mut HICON,
         nIcons: u32,
     ) -> u32;
-    pub(crate) fn GetClassInfoExA(
+    pub(crate) fn GetClassInfoExW(
         hInstance: HMODULE,
-        lpClassName: *const c_char,
-        lpWndClass: *mut WNDCLASSEXA,
+        lpClassName: *const w_char,
+        lpWndClass: *mut WNDCLASSEXW,
     ) -> BOOL;
-    pub(crate) fn RegisterClassExA(lpWndClass: *const WNDCLASSEXA) -> ATOM;
-    pub(crate) fn CreateWindowExA(
+    pub(crate) fn RegisterClassExW(lpWndClass: *const WNDCLASSEXW) -> ATOM;
+    pub(crate) fn CreateWindowExW(
         dwExStyle: u32,
-        lpClassName: *const c_char,
-        lpWindowName: *const c_char,
+        lpClassName: *const w_char,
+        lpWindowName: *const w_char,
         dwStyle: u32,
         X: i32,
         Y: i32,
@@ -252,7 +252,7 @@ unsafe extern "system" {
         hInstance: HMODULE,
         lpParam: LPARAM,
     ) -> HWND;
-    pub(crate) fn SetWindowTextA(hWnd: HWND, lpString: *const c_char) -> i32;
+    pub(crate) fn SetWindowTextW(hWnd: HWND, lpString: *const w_char) -> i32;
     pub(crate) fn ShowWindow(hWnd: HWND, nCmdShow: i32) -> i32;
     pub(crate) fn UpdateWindow(hWnd: HWND) -> i32;
     pub(crate) fn GetWindowRect(hWnd: HWND, rect: *mut RECT) -> i32;
@@ -266,27 +266,27 @@ unsafe extern "system" {
         cy: i32,
         uFlags: u32,
     ) -> BOOL;
-    pub(crate) fn GetMessageA(
+    pub(crate) fn GetMessageW(
         lpMsg: *mut MSG,
         hWnd: HWND,
         wMsgFilterMin: u32,
         wMsgFilterMax: u32,
     ) -> i32;
     pub(crate) fn TranslateMessage(lpMsg: *const MSG) -> i32;
-    pub(crate) fn DispatchMessageA(lpMsg: *const MSG) -> isize;
-    pub(crate) fn DefWindowProcA(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> isize;
+    pub(crate) fn DispatchMessageW(lpMsg: *const MSG) -> isize;
+    pub(crate) fn DefWindowProcW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> isize;
     pub(crate) fn PostQuitMessage(nExitCode: i32);
     pub(crate) fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
-    pub(crate) fn MessageBoxA(
+    pub(crate) fn MessageBoxW(
         hWnd: HWND,
-        lpText: *const c_char,
-        lpCaption: *const c_char,
+        lpText: *const w_char,
+        lpCaption: *const w_char,
         uType: u32,
     ) -> i32;
-    pub(crate) fn GetWindowLongA(hwnd: HWND, index: i32) -> i32;
-    pub(crate) fn GetWindowLongPtrA(hwnd: HWND, index: i32) -> isize;
-    pub(crate) fn SetWindowLongA(hwnd: HWND, index: i32, value: i32) -> i32;
-    pub(crate) fn SetWindowLongPtrA(hwnd: HWND, index: i32, value: isize) -> isize;
+    pub(crate) fn GetWindowLongW(hwnd: HWND, index: i32) -> i32;
+    pub(crate) fn GetWindowLongPtrW(hwnd: HWND, index: i32) -> isize;
+    pub(crate) fn SetWindowLongW(hwnd: HWND, index: i32, value: i32) -> i32;
+    pub(crate) fn SetWindowLongPtrW(hwnd: HWND, index: i32, value: isize) -> isize;
     pub(crate) fn MonitorFromPoint(pt: POINT, dwFlags: u32) -> *mut c_void;
     pub(crate) fn EnumDisplayMonitors(
         hdc: HDC,
@@ -299,8 +299,8 @@ unsafe extern "system" {
         ) -> BOOL,
         dwData: LPARAM,
     ) -> BOOL;
-    pub(crate) fn PostMessageA(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> BOOL;
-    pub(crate) fn GetMonitorInfoA(hMonitor: HMONITOR, lpmi: *mut MONITORINFOEXA) -> BOOL;
+    pub(crate) fn PostMessageW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> BOOL;
+    pub(crate) fn GetMonitorInfoW(hMonitor: HMONITOR, lpmi: *mut MONITORINFOEXW) -> BOOL;
     pub(crate) fn GetDpiForSystem() -> u32;
     pub(crate) fn GetDpiForWindow(hWnd: HWND) -> u32;
     pub(crate) fn GetSystemMetrics(nIndex: i32) -> i32;
@@ -314,41 +314,41 @@ unsafe extern "system" {
     pub(crate) fn DestroyWindow(hWnd: HWND) -> BOOL;
     pub(crate) fn GetWindowPlacement(hWnd: HWND, lpwndpl: *mut WINDOWPLACEMENT) -> BOOL;
     pub(crate) fn SetWindowPlacement(hWnd: HWND, lpwndpl: *const WINDOWPLACEMENT) -> BOOL;
-    pub(crate) fn FindWindowA(lpClassName: *const c_char, lpWindowName: *const c_char) -> HWND;
+    pub(crate) fn FindWindowW(lpClassName: *const w_char, lpWindowName: *const w_char) -> HWND;
     pub(crate) fn SetForegroundWindow(hWnd: HWND) -> BOOL;
 }
 
 #[cfg(target_pointer_width = "32")]
 pub(crate) unsafe fn GetWindowLong(hwnd: HWND, index: i32) -> isize {
-    (unsafe { GetWindowLongA(hwnd, index) }) as isize
+    (unsafe { GetWindowLongW(hwnd, index) }) as isize
 }
 #[cfg(target_pointer_width = "64")]
 pub(crate) unsafe fn GetWindowLong(hwnd: HWND, index: i32) -> isize {
-    unsafe { GetWindowLongPtrA(hwnd, index) }
+    unsafe { GetWindowLongPtrW(hwnd, index) }
 }
 
 #[cfg(target_pointer_width = "32")]
 pub(crate) unsafe fn SetWindowLong(hwnd: HWND, index: i32, value: isize) -> isize {
-    (unsafe { SetWindowLongA(hwnd, index, value as i32) }) as isize
+    (unsafe { SetWindowLongW(hwnd, index, value as i32) }) as isize
 }
 #[cfg(target_pointer_width = "64")]
 pub(crate) unsafe fn SetWindowLong(hwnd: HWND, index: i32, value: isize) -> isize {
-    unsafe { SetWindowLongPtrA(hwnd, index, value) }
+    unsafe { SetWindowLongPtrW(hwnd, index, value) }
 }
 
 // MARK: shell32.dll
 #[link(name = "shell32")]
 unsafe extern "system" {
-    pub(crate) fn ShellExecuteA(
+    pub(crate) fn ShellExecuteW(
         hwnd: HWND,
-        lpOperation: *const c_char,
-        lpFile: *const c_char,
-        lpParameters: *const c_char,
-        lpDirectory: *const c_char,
+        lpOperation: *const w_char,
+        lpFile: *const w_char,
+        lpParameters: *const w_char,
+        lpDirectory: *const w_char,
         nShowCmd: i32,
     ) -> isize;
     pub(crate) fn SHCreateItemFromParsingName(
-        pszPath: *const u16,
+        pszPath: *const w_char,
         pbc: *mut c_void,
         riid: *const GUID,
         ppv: *mut *mut c_void,
@@ -393,7 +393,7 @@ pub(crate) struct GUID {
 
 #[repr(C)]
 pub(crate) struct STATSTG {
-    pub(crate) pwcsName: *mut u16,
+    pub(crate) pwcsName: *mut w_char,
     pub(crate) type_: u32,
     pub(crate) cbSize: u64,
     pub(crate) mtime: FILETIME,
@@ -479,6 +479,28 @@ unsafe extern "system" {
 }
 
 // MARK: Utils
+pub(crate) const fn wide_ascii<const N: usize>(value: &str) -> [w_char; N] {
+    let bytes = value.as_bytes();
+    assert!(N == bytes.len() + 1);
+    let mut wide = [0; N];
+    let mut i = 0;
+    while i < bytes.len() {
+        assert!(bytes[i].is_ascii());
+        wide[i] = bytes[i] as w_char;
+        i += 1;
+    }
+    wide
+}
+
+macro_rules! wide {
+    ($value:literal) => {{
+        const WIDE: &[w_char] =
+            &$crate::platforms::windows::win32::wide_ascii::<{ $value.len() + 1 }>($value);
+        WIDE
+    }};
+}
+pub(crate) use wide;
+
 pub(crate) trait ToWideString {
     fn to_wide_string(&self) -> Vec<u16>;
 }
@@ -504,6 +526,10 @@ impl Default for LPWSTR {
     }
 }
 impl LPWSTR {
+    pub(crate) const fn as_ptr(&self) -> *const w_char {
+        self.0
+    }
+
     pub(crate) const fn as_mut_ptr(&mut self) -> *mut *mut w_char {
         &mut self.0
     }

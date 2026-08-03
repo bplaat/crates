@@ -183,10 +183,9 @@ mod test {
     fn test_message_send_three_args() {
         // SAFETY: all classes are valid Foundation types; all selectors match their declared signatures.
         unsafe {
-            let hello = b"hello";
             let ns: *mut AnyObject = msg_send![class!(NSString), alloc];
             let ns: *mut AnyObject = msg_send![ns,
-                initWithBytes: hello.as_ptr() as *const c_void,
+                initWithBytes: b"hello".as_ptr() as *const c_void,
                 length: 5u64,
                 encoding: 4u64
             ];

@@ -10,7 +10,6 @@ workspace = true
 
 [dependencies]
 bwebview = { path = "../../lib/bwebview", default-features = false, features = [
-    "remember_window_state",
     "rust-embed",
 ] }
 directories = "6.0"

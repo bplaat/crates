@@ -283,8 +283,8 @@ mod test {
 
     #[test]
     fn test_parse_response() {
-        let response_text = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, world!";
-        let mut response_stream = response_text.as_bytes();
+        let mut response_stream =
+            "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, world!".as_bytes();
         let response = Response::read_from_stream(&mut response_stream).unwrap();
 
         assert_eq!(response.status, Status::Ok);
@@ -294,9 +294,9 @@ mod test {
 
     #[test]
     fn test_parse_response_with_headers() {
-        let response_text =
-            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nX-Custom-Header: Value\r\n\r\n";
-        let mut response_stream = response_text.as_bytes();
+        let mut response_stream =
+            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nX-Custom-Header: Value\r\n\r\n"
+                .as_bytes();
         let response = Response::read_from_stream(&mut response_stream).unwrap();
 
         assert_eq!(response.status, Status::NotFound);
@@ -307,8 +307,7 @@ mod test {
 
     #[test]
     fn test_parse_response_invalid() {
-        let response_text = "INVALID RESPONSE";
-        let mut response_stream = response_text.as_bytes();
+        let mut response_stream = "INVALID RESPONSE".as_bytes();
         let result = Response::read_from_stream(&mut response_stream);
 
         assert!(result.is_err());
@@ -316,8 +315,7 @@ mod test {
 
     #[test]
     fn test_parse_response_chunked_encoding() {
-        let response_text = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nBast\r\n4\r\niaan\r\n0\r\n\r\n";
-        let mut response_stream = response_text.as_bytes();
+        let mut response_stream = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nBast\r\n4\r\niaan\r\n0\r\n\r\n".as_bytes();
         let response = Response::read_from_stream(&mut response_stream).unwrap();
 
         assert_eq!(response.status, Status::Ok);
@@ -331,8 +329,7 @@ mod test {
     #[test]
     #[cfg(feature = "json")]
     fn test_parse_response_with_json() {
-        let response_text = "HTTP/1.1 200 OK\r\nContent-Length: 15\r\nContent-Type: application/json\r\n\r\n{\"key\":\"value\"}";
-        let mut response_stream = response_text.as_bytes();
+        let mut response_stream = "HTTP/1.1 200 OK\r\nContent-Length: 15\r\nContent-Type: application/json\r\n\r\n{\"key\":\"value\"}".as_bytes();
         let response = Response::read_from_stream(&mut response_stream).unwrap();
 
         assert_eq!(response.status, Status::Ok);

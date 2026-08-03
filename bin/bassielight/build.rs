@@ -93,7 +93,6 @@ fn main() {
     </compatibility>
     <asmv3:application>
         <asmv3:windowsSettings>
-            <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
             <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
             <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor</dpiAwareness>
         </asmv3:windowsSettings>

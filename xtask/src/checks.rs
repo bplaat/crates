@@ -176,7 +176,7 @@ impl Xtask {
             "--config-file",
             "nextest.toml",
         ]);
-        if env::var_os("CI").is_some_and(|value| !value.is_empty()) {
+        if env::var("CI").is_ok_and(|value| !value.is_empty()) {
             command.args(["--profile", "ci"]);
         }
         command.arg("--workspace");
@@ -202,7 +202,7 @@ impl Xtask {
                 "--config-file",
                 "nextest.toml",
             ]);
-            if env::var_os("CI").is_some_and(|value| !value.is_empty()) {
+            if env::var("CI").is_ok_and(|value| !value.is_empty()) {
                 command.args(["--profile", "ci"]);
             }
             command.args(["-p", package]);

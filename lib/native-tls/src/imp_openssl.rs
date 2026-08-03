@@ -688,10 +688,9 @@ unsafe fn do_write<S: Write>(ptr: *mut c_void, buf: *const u8, len: usize) -> io
 
 #[cfg(not(openssl_v10x))]
 fn make_bio_method() -> *mut c_void {
-    let name = c"rust-stream";
-    // SAFETY: name is a valid C string; all callback functions have the correct signatures.
+    // SAFETY: the name is a valid C string; all callback functions have the correct signatures.
     unsafe {
-        let m = BIO_meth_new(CUSTOM_BIO_TYPE, name.as_ptr());
+        let m = BIO_meth_new(CUSTOM_BIO_TYPE, c"rust-stream".as_ptr());
         BIO_meth_set_read(m, bio_read);
         BIO_meth_set_write(m, bio_write);
         BIO_meth_set_ctrl(m, bio_ctrl);

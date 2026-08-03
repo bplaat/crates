@@ -50,14 +50,17 @@ mod test {
     #[test]
     fn test_hmac_sha256_rfc4231_tc1() {
         // RFC 4231 Test Case 1
-        let key =
-            b"\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b";
-        let data = b"Hi There";
         let expected = [
             0xb0, 0x34, 0x4c, 0x61, 0xd8, 0xdb, 0x38, 0x53, 0x5c, 0xa8, 0xaf, 0xce, 0xaf, 0x0b,
             0xf1, 0x2b, 0x88, 0x1d, 0xc2, 0x00, 0xc9, 0x83, 0x3d, 0xa7, 0x26, 0xe9, 0x37, 0x6c,
             0x2e, 0x32, 0xcf, 0xf7,
         ];
-        assert_eq!(hmac::<Sha256>(key, data), expected);
+        assert_eq!(
+            hmac::<Sha256>(
+                b"\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b",
+                b"Hi There"
+            ),
+            expected
+        );
     }
 }

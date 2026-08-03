@@ -10,10 +10,8 @@ use std::ptr::null_mut;
 
 use super::headers::*;
 
-#[cfg(feature = "file_dialog")]
 pub(crate) struct PlatformFileDialog;
 
-#[cfg(feature = "file_dialog")]
 impl crate::FileDialogInterface for PlatformFileDialog {
     fn pick_file(dialog: crate::FileDialog) -> Option<PathBuf> {
         open_files_impl(dialog, false).map(|mut v| v.remove(0))
@@ -27,25 +25,23 @@ impl crate::FileDialogInterface for PlatformFileDialog {
         unsafe {
             let title = CString::new(dialog.title.as_deref().unwrap_or("Save File"))
                 .expect("Can't convert to CString");
-            let accept = CString::new("_Save").expect("Can't convert to CString");
-            let cancel = CString::new("_Cancel").expect("Can't convert to CString");
 
             #[cfg(gtk3_20)]
             let chooser = gtk_file_chooser_native_new(
                 title.as_ptr(),
                 null_mut(),
                 GTK_FILE_CHOOSER_ACTION_SAVE,
-                accept.as_ptr(),
-                cancel.as_ptr(),
+                c"_Save".as_ptr(),
+                c"_Cancel".as_ptr(),
             ) as *mut c_void;
             #[cfg(not(gtk3_20))]
             let chooser = gtk_file_chooser_dialog_new(
                 title.as_ptr(),
                 null_mut(),
                 GTK_FILE_CHOOSER_ACTION_SAVE,
-                cancel.as_ptr(),
+                c"_Cancel".as_ptr(),
                 GTK_RESPONSE_CANCEL,
-                accept.as_ptr(),
+                c"_Save".as_ptr(),
                 GTK_RESPONSE_ACCEPT,
                 null_mut::<c_void>(),
             ) as *mut c_void;
@@ -88,30 +84,27 @@ impl crate::FileDialogInterface for PlatformFileDialog {
     }
 }
 
-#[cfg(feature = "file_dialog")]
 fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<PathBuf>> {
     unsafe {
         let title = CString::new(dialog.title.as_deref().unwrap_or("Open File"))
             .expect("Can't convert to CString");
-        let accept = CString::new("_Open").expect("Can't convert to CString");
-        let cancel = CString::new("_Cancel").expect("Can't convert to CString");
 
         #[cfg(gtk3_20)]
         let chooser = gtk_file_chooser_native_new(
             title.as_ptr(),
             null_mut(),
             GTK_FILE_CHOOSER_ACTION_OPEN,
-            accept.as_ptr(),
-            cancel.as_ptr(),
+            c"_Open".as_ptr(),
+            c"_Cancel".as_ptr(),
         ) as *mut c_void;
         #[cfg(not(gtk3_20))]
         let chooser = gtk_file_chooser_dialog_new(
             title.as_ptr(),
             null_mut(),
             GTK_FILE_CHOOSER_ACTION_OPEN,
-            cancel.as_ptr(),
+            c"_Cancel".as_ptr(),
             GTK_RESPONSE_CANCEL,
-            accept.as_ptr(),
+            c"_Open".as_ptr(),
             GTK_RESPONSE_ACCEPT,
             null_mut::<c_void>(),
         ) as *mut c_void;
@@ -173,7 +166,6 @@ fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<Path
     }
 }
 
-#[cfg(feature = "file_dialog")]
 unsafe fn add_gtk_filters(chooser: *mut c_void, filters: &[crate::FileDialogFilter]) {
     for filter in filters {
         let f = unsafe { gtk_file_filter_new() };

@@ -4,23 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-#[cfg(feature = "remember_window_state")]
-use std::env;
 use std::ffi::{CStr, CString, c_void};
-#[cfg(feature = "remember_window_state")]
-use std::fs;
 use std::ptr::{null, null_mut};
+use std::{env, fs};
 
-#[cfg(feature = "remember_window_state")]
-use super::event_loop::APP_ID;
-use super::event_loop::{primary_monitor_rect, send_event};
+use super::event_loop::{APP_ID, primary_monitor_rect, send_event};
 use super::headers::*;
 use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
 pub(super) struct WindowData {
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
-    #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
 }
 
@@ -51,7 +45,6 @@ impl PlatformWindow {
         let mut window_data = Box::new(WindowData {
             window: null_mut(),
             background_color: builder.background_color,
-            #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
         });
 
@@ -114,7 +107,6 @@ impl PlatformWindow {
                     gtk_window_set_position(window, GTK_WIN_POS_CENTER);
                 }
             }
-            #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
                 Self::load_window_state(window);
             }
@@ -160,7 +152,6 @@ impl PlatformWindow {
         PlatformWindow(window_data)
     }
 
-    #[cfg(feature = "remember_window_state")]
     fn load_window_state(window: *mut GtkWindow) {
         unsafe {
             let settings = g_key_file_new();
@@ -191,7 +182,6 @@ impl PlatformWindow {
         }
     }
 
-    #[cfg(feature = "remember_window_state")]
     fn save_window_state(window: *mut GtkWindow) {
         fs::create_dir_all(config_dir()).expect("Can't create settings directory");
         let settings_path = config_dir().join("settings.ini");
@@ -335,7 +325,6 @@ extern "C" fn window_on_close(
     _self: &mut WindowData,
 ) -> bool {
     // Save window state
-    #[cfg(feature = "remember_window_state")]
     if _self.remember_window_state {
         PlatformWindow::save_window_state(_self.window);
     }
@@ -345,7 +334,6 @@ extern "C" fn window_on_close(
     false
 }
 
-#[cfg(feature = "remember_window_state")]
 pub(super) fn config_dir() -> std::path::PathBuf {
     let project_dirs = unsafe {
         if let Some(ref app_id) = APP_ID {

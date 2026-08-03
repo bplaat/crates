@@ -11,10 +11,8 @@ use std::ptr::null_mut;
 use super::event_loop::FIRST_HWND;
 use super::win32::*;
 
-#[cfg(feature = "file_dialog")]
 pub(crate) struct PlatformFileDialog;
 
-#[cfg(feature = "file_dialog")]
 impl crate::FileDialogInterface for PlatformFileDialog {
     fn pick_file(dialog: crate::FileDialog) -> Option<PathBuf> {
         unsafe {
@@ -184,10 +182,8 @@ impl crate::FileDialogInterface for PlatformFileDialog {
     }
 }
 
-#[cfg(feature = "file_dialog")]
 type FilterStorage = Vec<(Box<[u16]>, Box<[u16]>)>;
 
-#[cfg(feature = "file_dialog")]
 fn build_com_filters(
     filters: &[crate::FileDialogFilter],
 ) -> (Vec<COMDLG_FILTERSPEC>, FilterStorage) {
@@ -211,7 +207,6 @@ fn build_com_filters(
     (specs, storage)
 }
 
-#[cfg(feature = "file_dialog")]
 unsafe fn make_shell_item_from_path(path: Option<&PathBuf>) -> Option<*mut IShellItem> {
     let path = path?;
     let w = path.to_string_lossy().to_string().to_wide_string();
@@ -231,7 +226,6 @@ unsafe fn make_shell_item_from_path(path: Option<&PathBuf>) -> Option<*mut IShel
     }
 }
 
-#[cfg(feature = "file_dialog")]
 unsafe fn shell_item_path(item: *mut IShellItem) -> Option<PathBuf> {
     let mut name = LPWSTR::default();
     if unsafe { (*item).GetDisplayName(SIGDN_FILESYSPATH, name.as_mut_ptr()) } == S_OK {

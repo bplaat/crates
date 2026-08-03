@@ -601,8 +601,7 @@ mod test {
 
     #[test]
     fn test_read_from_stream() {
-        let raw_request = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
-        let mut stream = &raw_request[..];
+        let mut stream = &b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n"[..];
         let request =
             Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
         assert_eq!(request.method, Method::Get);
@@ -613,9 +612,8 @@ mod test {
 
     #[test]
     fn test_read_from_stream_with_body() {
-        let raw_request =
-            b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 13\r\n\r\nHello, world!";
-        let mut stream = &raw_request[..];
+        let mut stream =
+            &b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 13\r\n\r\nHello, world!"[..];
         let request =
             Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
         assert_eq!(request.method, Method::Post);
@@ -627,9 +625,8 @@ mod test {
 
     #[test]
     fn test_read_from_stream_with_body_lowercase_headers() {
-        let raw_request =
-            b"POST / HTTP/1.1\r\nhost: localhost\r\ncontent-Length: 13\r\n\r\nHello, world!";
-        let mut stream = &raw_request[..];
+        let mut stream =
+            &b"POST / HTTP/1.1\r\nhost: localhost\r\ncontent-Length: 13\r\n\r\nHello, world!"[..];
         let request =
             Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
         assert_eq!(request.method, Method::Post);
@@ -641,8 +638,7 @@ mod test {
 
     #[test]
     fn test_invalid_request_error() {
-        let raw_request = b"INVALID REQUEST";
-        let mut stream = &raw_request[..];
+        let mut stream = &b"INVALID REQUEST"[..];
         let result = Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into());
         assert!(result.is_err());
     }

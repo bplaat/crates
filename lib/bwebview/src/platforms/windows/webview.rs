@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CString, c_void};
+use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
 
@@ -90,11 +90,10 @@ impl PlatformWebview {
                 completed_handler,
             ) != S_OK
             {
-                use super::win32::MessageBoxA;
-                MessageBoxA(
+                MessageBoxW(
                     null_mut(),
-                    c"Failed to create WebView2 environment".as_ptr(),
-                    c"Error".as_ptr(),
+                    wide!("Failed to create WebView2 environment").as_ptr(),
+                    wide!("Error").as_ptr(),
                     MB_OK,
                 );
                 std::process::exit(1);
@@ -468,13 +467,12 @@ extern "system" fn new_window_requested(
         (*args).put_Handled(TRUE);
         let mut uri = LPWSTR::default();
         (*args).get_Uri(uri.as_mut_ptr());
-        let uri = CString::new(uri.to_string()).expect("Can't convert to CString");
-        ShellExecuteA(
+        ShellExecuteW(
             null_mut(),
-            c"open".as_ptr(),
+            wide!("open").as_ptr(),
             uri.as_ptr(),
-            null_mut(),
-            null_mut(),
+            null(),
+            null(),
             SW_SHOWNORMAL,
         );
     }

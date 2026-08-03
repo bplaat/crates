@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CString, c_void};
+use std::ffi::c_void;
 use std::mem::{self, size_of};
 use std::process::exit;
 use std::ptr::{null, null_mut};
@@ -31,10 +31,10 @@ impl PlatformEventLoop {
                     "bwebview-{}.{}.{}",
                     app_id.qualifier, app_id.organization, app_id.application
                 );
-                let mutex_name_c = CString::new(mutex_name).expect("Can't convert to CString");
-                CreateMutexA(null_mut(), TRUE, mutex_name_c.as_ptr());
+                let mutex_name_w = mutex_name.to_wide_string();
+                CreateMutexW(null_mut(), TRUE, mutex_name_w.as_ptr());
                 if GetLastError() == ERROR_ALREADY_EXISTS {
-                    let hwnd = FindWindowA(mutex_name_c.as_ptr(), null_mut());
+                    let hwnd = FindWindowW(mutex_name_w.as_ptr(), null());
                     if !hwnd.is_null() {
                         ShowWindow(hwnd, SW_RESTORE);
                         SetForegroundWindow(hwnd);
@@ -63,9 +63,9 @@ impl PlatformEventLoop {
 unsafe fn enable_high_dpi_awareness() {
     type SetProcessDpiAwarenessContext = unsafe extern "system" fn(isize) -> BOOL;
 
-    let user32 = unsafe { GetModuleHandleA(b"user32.dll\0".as_ptr()) };
+    let user32 = unsafe { GetModuleHandleW(wide!("user32.dll").as_ptr()) };
     if !user32.is_null() {
-        let proc = unsafe { GetProcAddress(user32, b"SetProcessDpiAwarenessContext\0".as_ptr()) };
+        let proc = unsafe { GetProcAddress(user32, c"SetProcessDpiAwarenessContext".as_ptr()) };
         if !proc.is_null() {
             // SAFETY: proc points to SetProcessDpiAwarenessContext with this signature.
             let set_context: SetProcessDpiAwarenessContext = unsafe { mem::transmute(proc) };
@@ -86,10 +86,10 @@ pub(super) fn system_theme() -> Theme {
     let mut apps_use_light_theme = 1u32;
     let mut size = size_of::<u32>() as u32;
     let status = unsafe {
-        RegGetValueA(
+        RegGetValueW(
             HKEY_CURRENT_USER,
-            c"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize".as_ptr(),
-            c"AppsUseLightTheme".as_ptr(),
+            wide!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize").as_ptr(),
+            wide!("AppsUseLightTheme").as_ptr(),
             RRF_RT_REG_DWORD,
             null_mut(),
             &mut apps_use_light_theme as *mut _ as *mut c_void,
@@ -143,9 +143,9 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         // Start message loop
         unsafe {
             let mut msg = mem::zeroed();
-            while GetMessageA(&mut msg, null_mut(), 0, 0) != 0 {
+            while GetMessageW(&mut msg, null_mut(), 0, 0) != 0 {
                 TranslateMessage(&msg);
-                DispatchMessageA(&msg);
+                DispatchMessageW(&msg);
             }
             CoUninitialize();
             exit(msg.wParam as i32);
@@ -181,7 +181,7 @@ impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
         if let Some(hwnd) = unsafe { FIRST_HWND } {
             let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
-            unsafe { PostMessageA(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
+            unsafe { PostMessageW(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
         }
     }
 }
@@ -189,17 +189,17 @@ impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
 // MARK: Monitor
 pub(crate) struct PlatformMonitor {
     hmonitor: HMONITOR,
-    info: MONITORINFOEXA,
+    info: MONITORINFOEXW,
 }
 
 impl PlatformMonitor {
     pub(crate) fn new(hmonitor: HMONITOR) -> Self {
-        let mut info = MONITORINFOEXA {
-            cbSize: size_of::<MONITORINFOEXA>() as u32,
+        let mut info = MONITORINFOEXW {
+            cbSize: size_of::<MONITORINFOEXW>() as u32,
             ..Default::default()
         };
         unsafe {
-            GetMonitorInfoA(hmonitor, &mut info as *mut _ as *mut _);
+            GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _);
         }
         Self { hmonitor, info }
     }
@@ -211,14 +211,13 @@ impl PlatformMonitor {
 
 impl crate::MonitorInterface for PlatformMonitor {
     fn name(&self) -> String {
-        let byte_vec: Vec<u8> = self
+        let len = self
             .info
             .szDevice
             .iter()
-            .take_while(|&x| *x != 0)
-            .map(|&x| x as u8)
-            .collect();
-        String::from_utf8(byte_vec).expect("Can't parse string")
+            .position(|&unit| unit == 0)
+            .unwrap_or(self.info.szDevice.len());
+        String::from_utf16_lossy(&self.info.szDevice[..len])
     }
 
     fn position(&self) -> LogicalPoint {

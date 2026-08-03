@@ -5,6 +5,7 @@
  */
 
 mod event_loop;
+#[cfg(feature = "file_dialog")]
 mod file_dialog;
 mod webview;
 mod webview2;

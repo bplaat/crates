@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CString, c_void};
+use std::ffi::c_void;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
@@ -21,7 +21,6 @@ pub(super) struct WindowData {
     pub(super) dpi: u32,
     pub(super) min_size: Option<LogicalSize>,
     pub(super) background_color: Option<u32>,
-    #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
     pub(super) resize_callback: Option<Box<dyn Fn(i32, i32)>>,
 }
@@ -78,13 +77,12 @@ impl PlatformWindow {
             dpi: initial_dpi,
             min_size: builder.min_size,
             background_color: builder.background_color,
-            #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
             resize_callback: None,
         });
 
         // Check if window class is already registered
-        let instance = unsafe { GetModuleHandleA(null_mut()) };
+        let instance = unsafe { GetModuleHandleW(null()) };
         let class_name = unsafe {
             if let Some(ref app_id) = APP_ID {
                 format!(
@@ -95,24 +93,22 @@ impl PlatformWindow {
                 "bwebview".to_string()
             }
         };
-        let class_name_c = CString::new(class_name).expect("Can't convert to CString");
+        let class_name_w = class_name.to_wide_string();
         unsafe {
-            let mut wndclass = WNDCLASSEXA {
-                cbSize: size_of::<WNDCLASSEXA>() as u32,
+            let mut wndclass = WNDCLASSEXW {
+                cbSize: size_of::<WNDCLASSEXW>() as u32,
                 ..Default::default()
             };
-            if GetClassInfoExA(instance, class_name_c.as_ptr(), &mut wndclass as *mut _) != TRUE {
+            if GetClassInfoExW(instance, class_name_w.as_ptr(), &mut wndclass as *mut _) != TRUE {
                 // Get executable icons
-                let executable_path = CString::new(
-                    env::current_exe()
-                        .expect("Can't get current exe path")
-                        .display()
-                        .to_string(),
-                )
-                .expect("Can't convert to CString");
+                let executable_path = env::current_exe()
+                    .expect("Can't get current exe path")
+                    .display()
+                    .to_string()
+                    .to_wide_string();
                 let mut large_icon = HICON::default();
                 let mut small_icon = HICON::default();
-                ExtractIconExA(
+                ExtractIconExW(
                     executable_path.as_ptr(),
                     0,
                     &mut large_icon,
@@ -121,17 +117,17 @@ impl PlatformWindow {
                 );
 
                 // Register window class
-                let wndclass = WNDCLASSEXA {
-                    cbSize: size_of::<WNDCLASSEXA>() as u32,
+                let wndclass = WNDCLASSEXW {
+                    cbSize: size_of::<WNDCLASSEXW>() as u32,
                     lpfnWndProc: Some(window_proc),
                     hInstance: instance,
                     hIcon: large_icon,
                     hbrBackground: GetSysColorBrush(COLOR_WINDOW) as usize,
-                    lpszClassName: class_name_c.as_ptr(),
+                    lpszClassName: class_name_w.as_ptr(),
                     hIconSm: small_icon,
                     ..Default::default()
                 };
-                RegisterClassExA(&wndclass);
+                RegisterClassExW(&wndclass);
             }
         }
 
@@ -158,11 +154,11 @@ impl PlatformWindow {
             let (rect, position_set) =
                 calculate_window_rect(builder, &monitor_rect, style, initial_dpi);
 
-            let title = CString::new(builder.title.clone()).expect("Can't convert to CString");
-            let hwnd = CreateWindowExA(
+            let title_w = builder.title.to_wide_string();
+            let hwnd = CreateWindowExW(
                 0,
-                class_name_c.as_ptr(),
-                title.as_ptr(),
+                class_name_w.as_ptr(),
+                title_w.as_ptr(),
                 style,
                 if position_set {
                     rect.left
@@ -190,7 +186,6 @@ impl PlatformWindow {
                 size_of::<BOOL>() as u32,
             );
 
-            #[cfg(feature = "remember_window_state")]
             let restored_window_state = if builder.remember_window_state {
                 if let Ok(mut file) = File::open(config_dir().join("window.bin")) {
                     let size = size_of::<WINDOWPLACEMENT>();
@@ -210,9 +205,6 @@ impl PlatformWindow {
             } else {
                 false
             };
-            #[cfg(not(feature = "remember_window_state"))]
-            let restored_window_state = false;
-
             let window_dpi = GetDpiForWindow(hwnd);
             let dpi = if window_dpi == 0 {
                 initial_dpi
@@ -256,8 +248,8 @@ impl PlatformWindow {
 
 impl crate::WindowInterface for PlatformWindow {
     fn set_title(&mut self, title: impl AsRef<str>) {
-        let title = CString::new(title.as_ref()).expect("Can't convert to CString");
-        unsafe { SetWindowTextA(self.0.hwnd, title.as_ptr()) };
+        let title_w = title.as_ref().to_wide_string();
+        unsafe { SetWindowTextW(self.0.hwnd, title_w.as_ptr()) };
     }
 
     fn position(&self) -> LogicalPoint {
@@ -351,7 +343,7 @@ unsafe extern "system" fn window_proc(
 ) -> LRESULT {
     let _self = unsafe {
         let ptr = if msg == WM_NCCREATE {
-            let create = &*(l_param as *const CREATESTRUCTA);
+            let create = &*(l_param as *const CREATESTRUCTW);
             let ptr = create.lpCreateParams.cast::<WindowData>();
             SetWindowLong(hwnd, GWL_USERDATA, ptr as isize);
             ptr
@@ -359,7 +351,7 @@ unsafe extern "system" fn window_proc(
             GetWindowLong(hwnd, GWL_USERDATA) as *mut WindowData
         };
         let Some(window_data) = ptr.as_mut() else {
-            return DefWindowProcA(hwnd, msg, w_param, l_param);
+            return DefWindowProcW(hwnd, msg, w_param, l_param);
         };
         window_data
     };
@@ -443,7 +435,6 @@ unsafe extern "system" fn window_proc(
             0
         }
         WM_CLOSE => {
-            #[cfg(feature = "remember_window_state")]
             if _self.remember_window_state {
                 unsafe {
                     use std::io::Write;
@@ -467,7 +458,7 @@ unsafe extern "system" fn window_proc(
             unsafe { PostQuitMessage(0) };
             0
         }
-        _ => unsafe { DefWindowProcA(hwnd, msg, w_param, l_param) },
+        _ => unsafe { DefWindowProcW(hwnd, msg, w_param, l_param) },
     }
 }
 

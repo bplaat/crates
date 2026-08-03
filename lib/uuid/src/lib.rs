@@ -255,8 +255,7 @@ mod test {
     #[test]
     #[cfg(feature = "serde")]
     fn test_serde_deserialization() {
-        let data = "\"a0b1c2d3-e4f5-6789-9a0b-cdef01234567\"";
-        let uuid: Uuid = serde_json::from_str(data).unwrap();
+        let uuid: Uuid = serde_json::from_str("\"a0b1c2d3-e4f5-6789-9a0b-cdef01234567\"").unwrap();
         assert_eq!(
             uuid,
             Uuid::from_bytes([
@@ -269,8 +268,7 @@ mod test {
     #[test]
     #[cfg(feature = "serde")]
     fn test_serde_invalid_deserialization() {
-        let data = "\"invalid-uuid-string\"";
-        let result: Result<Uuid, _> = serde_json::from_str(data);
+        let result: Result<Uuid, _> = serde_json::from_str("\"invalid-uuid-string\"");
         assert!(result.is_err());
     }
 }

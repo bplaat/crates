@@ -95,7 +95,12 @@ mod test {
 
     #[test]
     fn test_verify_password_with_invalid_parts() {
-        let invalid_hash = "$pbkdf2-sha256$t=100000$invalid*salt$inval&idhash";
-        assert!(password_verify("password", invalid_hash).is_err());
+        assert!(
+            password_verify(
+                "password",
+                "$pbkdf2-sha256$t=100000$invalid*salt$inval&idhash"
+            )
+            .is_err()
+        );
     }
 }

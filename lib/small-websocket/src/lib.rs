@@ -431,8 +431,7 @@ mod test {
     fn test_parse_masked_frame() {
         // Client-masked text frame with key [0x37, 0xFA, 0x21, 0x3D] and payload "Hello"
         let mask = [0x37u8, 0xFA, 0x21, 0x3D];
-        let plain = b"Hello";
-        let masked: Vec<u8> = plain
+        let masked: Vec<u8> = b"Hello"
             .iter()
             .enumerate()
             .map(|(i, &b)| b ^ mask[i % 4])

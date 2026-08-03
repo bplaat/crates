@@ -5,7 +5,6 @@
  */
 
 use std::ffi::c_void;
-use std::path::PathBuf;
 
 use block2::RcBlock;
 use objc2::runtime::{AnyObject as Object, Bool};
@@ -13,10 +12,8 @@ use objc2::{class, msg_send, sel};
 
 use super::cocoa::*;
 
-#[cfg(feature = "file_dialog")]
 pub(crate) struct PlatformFileDialog;
 
-#[cfg(feature = "file_dialog")]
 impl crate::FileDialogInterface for PlatformFileDialog {
     fn pick_file(dialog: crate::FileDialog) -> Option<std::path::PathBuf> {
         unsafe {
@@ -81,7 +78,6 @@ impl crate::FileDialogInterface for PlatformFileDialog {
     }
 }
 
-#[cfg(feature = "file_dialog")]
 unsafe fn setup_ns_panel(panel: *mut Object, dialog: &crate::FileDialog) {
     unsafe {
         if let Some(title) = &dialog.title {
@@ -105,7 +101,6 @@ unsafe fn setup_ns_panel(panel: *mut Object, dialog: &crate::FileDialog) {
     }
 }
 
-#[cfg(feature = "file_dialog")]
 unsafe fn run_panel_modal(panel: *mut Object) -> i64 {
     unsafe {
         let key_window: *mut Object = unsafe { msg_send![NSApp, keyWindow] };
