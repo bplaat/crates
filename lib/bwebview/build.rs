@@ -80,52 +80,10 @@ fn main() {
         }
     }
 
-    // Windows requires generating bindings from the WebView2 winmd and linking with WebView2Loader
+    // Windows requires generating bindings from the WebView2 winmd. The small runtime loader in
+    // loader.rs replaces Microsoft's WebView2Loader library.
     if target_os == "windows" {
         generate_webview2_bindings(&manifest_dir, &out_dir);
-
-        // Link with the correct WebView2Loader library based on architecture
-        let target = env::var("CARGO_CFG_TARGET_ARCH").expect("CARGO_CFG_TARGET_ARCH not set");
-        let lib_dir = PathBuf::from(&manifest_dir)
-            .join("webview2")
-            .join(if target == "x86_64" {
-                "x64"
-            } else if target == "aarch64" {
-                "arm64"
-            } else if target == "x86" {
-                "x86"
-            } else {
-                panic!("Unsupported architecture")
-            });
-
-        println!("cargo:rustc-link-search=native={}", lib_dir.display());
-        let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-        match target_env.as_str() {
-            "msvc" => {
-                println!("cargo:rustc-link-lib=static=WebView2LoaderStatic");
-            }
-            "gnu" => {
-                println!("cargo:rustc-link-lib=dylib=WebView2Loader");
-
-                // Copy WebView2Loader.dll to output directory for dynamic linking
-                let out_dir_path = PathBuf::from(&out_dir);
-                std::fs::copy(
-                    lib_dir.join("WebView2Loader.dll"),
-                    out_dir_path
-                        .parent()
-                        .expect("Should be some")
-                        .parent()
-                        .expect("Should be some")
-                        .parent()
-                        .expect("Should be some")
-                        .join("WebView2Loader.dll"),
-                )
-                .expect("Failed to copy WebView2Loader.dll");
-            }
-            other => {
-                panic!("unsupported target environment: {other}");
-            }
-        }
     }
 }
 
@@ -302,42 +260,6 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
         for f in t.fields() {
             let field_type = map_type(&f.ty(), &enum_types, &struct_types);
             _ = writeln!(code, "    pub(crate) {}: {},", f.name(), field_type);
-        }
-        _ = writeln!(code, "}}");
-        _ = writeln!(code);
-    }
-
-    // Extern function block (Apis class = PInvoke methods)
-    for t in index.all().filter(|t| {
-        t.namespace() == "Microsoft.Web.WebView2.Win32"
-            && t.category() == TypeCategory::Class
-            && t.name() == "Apis"
-    }) {
-        _ = writeln!(
-            code,
-            "#[cfg_attr(not(target_env = \"msvc\"), link(name = \"WebView2Loader\"))]"
-        );
-        _ = writeln!(code, "unsafe extern \"system\" {{");
-        for m in t.methods() {
-            let sig = m.signature(&[]);
-            let params: Vec<_> = m.params().skip(1).collect();
-            let ret = map_type(&sig.return_type, &enum_types, &struct_types);
-            _ = write!(code, "    pub(crate) fn {}(", m.name());
-            let param_strs: Vec<String> = sig
-                .types
-                .iter()
-                .enumerate()
-                .map(|(i, ty)| {
-                    let name = if i < params.len() && !params[i].name().is_empty() {
-                        params[i].name().to_string()
-                    } else {
-                        format!("p{i}")
-                    };
-                    format!("{}: {}", name, map_type(ty, &enum_types, &struct_types))
-                })
-                .collect();
-            _ = write!(code, "{}", param_strs.join(", "));
-            _ = writeln!(code, ") -> {ret};");
         }
         _ = writeln!(code, "}}");
         _ = writeln!(code);

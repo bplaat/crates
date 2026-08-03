@@ -6,6 +6,7 @@
 
 mod event_loop;
 mod file_dialog;
+mod loader;
 mod webview;
 mod webview2;
 mod win32;

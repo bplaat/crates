@@ -20,7 +20,10 @@ pub(crate) type w_char = u16;
 pub(crate) type HANDLE = *mut c_void;
 pub(crate) type HKEY = HANDLE;
 pub(crate) const HKEY_CURRENT_USER: HKEY = 0x80000001usize as HKEY;
+pub(crate) const HKEY_LOCAL_MACHINE: HKEY = 0x80000002usize as HKEY;
 pub(crate) const RRF_RT_REG_DWORD: u32 = 0x00000018;
+pub(crate) const RRF_RT_REG_SZ: u32 = 0x00000002;
+pub(crate) const RRF_SUBKEY_WOW6432KEY: u32 = 0x00020000;
 pub(crate) const ERROR_SUCCESS: i32 = 0;
 
 #[repr(C)]
@@ -37,6 +40,9 @@ pub(crate) const ERROR_ALREADY_EXISTS: u32 = 183;
 #[link(name = "kernel32")]
 unsafe extern "system" {
     pub(crate) fn GetModuleHandleA(lpModuleName: *const u8) -> HMODULE;
+    pub(crate) fn LoadLibraryW(lpLibFileName: *const u16) -> HMODULE;
+    pub(crate) fn GetProcAddress(hModule: HMODULE, lpProcName: *const c_char) -> *const c_void;
+    pub(crate) fn FreeLibrary(hLibModule: HMODULE) -> BOOL;
     pub(crate) fn GetLastError() -> u32;
     pub(crate) fn CreateMutexA(
         lpMutexAttributes: *mut c_void,
@@ -52,6 +58,15 @@ unsafe extern "system" {
         hkey: HKEY,
         lpSubKey: *const c_char,
         lpValue: *const c_char,
+        dwFlags: u32,
+        pdwType: *mut u32,
+        pvData: *mut c_void,
+        pcbData: *mut u32,
+    ) -> i32;
+    pub(crate) fn RegGetValueW(
+        hkey: HKEY,
+        lpSubKey: *const u16,
+        lpValue: *const u16,
         dwFlags: u32,
         pdwType: *mut u32,
         pvData: *mut c_void,
@@ -182,6 +197,10 @@ pub(crate) const SW_RESTORE: i32 = 9;
 pub(crate) const SW_SHOWDEFAULT: i32 = 10;
 
 pub(crate) const MB_OK: u32 = 0x00000000;
+pub(crate) const MB_YESNO: u32 = 0x00000004;
+pub(crate) const MB_ICONERROR: u32 = 0x00000010;
+pub(crate) const MB_ICONWARNING: u32 = 0x00000030;
+pub(crate) const IDYES: i32 = 6;
 
 pub(crate) const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: isize = -4isize;
 
@@ -362,6 +381,7 @@ unsafe extern "system" {
 // MARK: ole32.dll
 pub(crate) type HRESULT = i32;
 
+#[derive(PartialEq, Eq)]
 #[repr(C)]
 pub(crate) struct GUID {
     pub(crate) data1: u32,
@@ -391,6 +411,7 @@ pub(crate) const COINIT_DISABLE_OLE1DDE: u32 = 0x4;
 pub(crate) const S_OK: HRESULT = 0;
 pub(crate) const E_NOINTERFACE: HRESULT = 0x80004002u32 as HRESULT;
 pub(crate) const E_NOTIMPL: HRESULT = 0x80004001u32 as HRESULT;
+pub(crate) const E_POINTER: HRESULT = 0x80004003u32 as HRESULT;
 
 #[link(name = "ole32")]
 unsafe extern "system" {

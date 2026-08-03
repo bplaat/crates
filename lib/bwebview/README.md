@@ -68,10 +68,9 @@ The Linux backend automatically selects the best available WebKitGTK version at 
 - **custom_protocol** Adds support for custom protocols, allowing you to serve content from custom URL schemes.
 - **file_dialog** Adds support for file dialogs, allowing you to open file selection dialogs from your webview.
 
-## Sources binary blobs
+## Binary blob sources
 
-- `webview2/{arm64, x64, x86}/` [Microsoft.Web.WebView2 nuget](https://www.nuget.org/packages/Microsoft.Web.WebView2/)
-- `webview2/*.winmd` [Microsoft.Web.WebView2 win32 windmd generator](https://github.com/wravery/webview2-win32md/tree/main)
+- `webview2/*.winmd` [webview2-rs Win32 metadata](https://github.com/wravery/webview2-rs/blob/12be1a54bf4dae4958efc09289ae05f3caa94616/crates/update-bindings/winmd/Microsoft.Web.WebView2.Win32.winmd) generated from WebView2 SDK 1.0.3800.47
 
 ## License
 
