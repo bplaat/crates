@@ -6,7 +6,7 @@
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::path::PathBuf;
-use std::ptr::null_mut;
+use std::ptr::{null, null_mut};
 
 use super::headers::*;
 
@@ -42,7 +42,7 @@ impl crate::FileDialogInterface for PlatformFileDialog {
                     GTK_RESPONSE_CANCEL,
                     c"_Save".as_ptr(),
                     GTK_RESPONSE_ACCEPT,
-                    null_mut::<c_void>(),
+                    null::<c_char>(),
                 ) as *mut c_void,
             };
 
@@ -105,7 +105,7 @@ fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<Path
                 GTK_RESPONSE_CANCEL,
                 c"_Open".as_ptr(),
                 GTK_RESPONSE_ACCEPT,
-                null_mut::<c_void>(),
+                null::<c_char>(),
             ) as *mut c_void,
         };
 

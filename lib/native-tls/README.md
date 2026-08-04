@@ -55,7 +55,7 @@ With the `vendored` feature, rustls is used on all platforms instead:
 still functional). SecureTransport is limited to TLS 1.2. TLS 1.3 on macOS requires
 Network.framework, which exposes only an async, Grand Central Dispatch (GCD) based API - making it
 difficult to wrap in a synchronous `Read`/`Write` interface without a full async runtime or complex
-callback machinery. Certificate trust is evaluated manually via `SecTrustEvaluateWithError`.
+callback machinery.
 
 ² TLS 1.3 requires OpenSSL 1.1.1+. OpenSSL 1.0.2 supports TLS 1.2 only.
 

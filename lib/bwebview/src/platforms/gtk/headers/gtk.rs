@@ -8,9 +8,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use super::gdk::GdkRGBA;
-#[cfg(not(gtk3_22))]
-use super::gdk::GdkScreen;
+use super::gdk::{GdkRGBA, GdkScreen};
 use super::glib::{GError, GSList};
 
 // MARK: GTK
@@ -47,31 +45,27 @@ unsafe extern "C" {
     pub(crate) fn gtk_widget_show(widget: *mut GtkWidget);
     pub(crate) fn gtk_widget_hide(widget: *mut GtkWidget);
     pub(crate) fn gtk_widget_show_all(window: *mut GtkWidget);
-    cfg_select! {
-        // GTK 3.22+: show URI via window parent
-        gtk3_22 => {
-            pub(crate) fn gtk_show_uri_on_window(
-                parent: *mut GtkWindow,
-                uri: *const c_char,
-                timestamp: u32,
-                error: *mut *mut GError,
-            );
-        }
-        // GTK < 3.22: show URI via screen
-        _ => {
-            pub(crate) fn gtk_show_uri(
-                screen: *mut GdkScreen,
-                uri: *const c_char,
-                timestamp: u32,
-                error: *mut *mut GError,
-            ) -> bool;
-        }
-    }
     pub(crate) fn gtk_settings_get_default() -> *mut GtkSettings;
     pub(crate) fn gtk_widget_override_background_color(
         widget: *mut GtkWidget,
         state: i32,
         color: *const GdkRGBA,
+    );
+
+    // GTK < 3.22
+    pub(crate) fn gtk_show_uri(
+        screen: *mut GdkScreen,
+        uri: *const c_char,
+        timestamp: u32,
+        error: *mut *mut GError,
+    ) -> bool;
+
+    // GTK 3.22+
+    pub(crate) fn gtk_show_uri_on_window(
+        parent: *mut GtkWindow,
+        uri: *const c_char,
+        timestamp: u32,
+        error: *mut *mut GError,
     );
 }
 
@@ -79,51 +73,18 @@ unsafe extern "C" {
 pub(crate) const GTK_FILE_CHOOSER_ACTION_OPEN: i32 = 0;
 pub(crate) const GTK_FILE_CHOOSER_ACTION_SAVE: i32 = 1;
 pub(crate) const GTK_RESPONSE_ACCEPT: i32 = -3;
-#[cfg(not(gtk3_20))]
 pub(crate) const GTK_RESPONSE_CANCEL: i32 = -6;
-
-// GTK 3.20+: native file chooser dialog
-#[cfg(gtk3_20)]
-#[repr(C)]
-pub(crate) struct GtkFileChooserNative([u8; 0]);
-#[cfg(gtk3_20)]
-#[repr(C)]
-pub(crate) struct GtkNativeDialog([u8; 0]);
 #[repr(C)]
 pub(crate) struct GtkFileFilter([u8; 0]);
 
+// GTK 3.20+
+#[repr(C)]
+pub(crate) struct GtkFileChooserNative([u8; 0]);
+#[repr(C)]
+pub(crate) struct GtkNativeDialog([u8; 0]);
+
 #[link(name = "gtk-3")]
 unsafe extern "C" {
-    cfg_select! {
-        gtk3_20 => {
-            // GTK 3.20+: GtkFileChooserNative
-            pub(crate) fn gtk_file_chooser_native_new(
-                title: *const c_char,
-                parent: *mut GtkWindow,
-                action: i32,
-                accept_label: *const c_char,
-                cancel_label: *const c_char,
-            ) -> *mut GtkFileChooserNative;
-            pub(crate) fn gtk_native_dialog_run(dialog: *mut GtkNativeDialog) -> i32;
-        }
-        _ => {
-            // GTK < 3.20: GtkFileChooserDialog with a fixed-arity declaration (C function is variadic
-            // but we always pass exactly: title, parent, action, cancel-btn, cancel-id, accept-btn, accept-id, NULL)
-            #[link_name = "gtk_file_chooser_dialog_new"]
-            pub(crate) fn gtk_file_chooser_dialog_new(
-                title: *const c_char,
-                parent: *mut GtkWindow,
-                action: i32,
-                cancel_text: *const c_char,
-                cancel_response: i32,
-                accept_text: *const c_char,
-                accept_response: i32,
-                null: *const c_void,
-            ) -> *mut GtkWidget;
-            pub(crate) fn gtk_dialog_run(dialog: *mut GtkWidget) -> i32;
-            pub(crate) fn gtk_widget_destroy(widget: *mut GtkWidget);
-        }
-    }
     pub(crate) fn gtk_file_chooser_set_select_multiple(chooser: *mut c_void, select_multiple: bool);
     pub(crate) fn gtk_file_chooser_set_current_folder(
         chooser: *mut c_void,
@@ -136,4 +97,25 @@ unsafe extern "C" {
     pub(crate) fn gtk_file_filter_set_name(filter: *mut GtkFileFilter, name: *const c_char);
     pub(crate) fn gtk_file_filter_add_pattern(filter: *mut GtkFileFilter, pattern: *const c_char);
     pub(crate) fn gtk_file_chooser_add_filter(chooser: *mut c_void, filter: *mut GtkFileFilter);
+
+    // GTK < 3.20
+    pub(crate) fn gtk_file_chooser_dialog_new(
+        title: *const c_char,
+        parent: *mut GtkWindow,
+        action: i32,
+        first_button_text: *const c_char,
+        ...
+    ) -> *mut GtkWidget;
+    pub(crate) fn gtk_dialog_run(dialog: *mut GtkWidget) -> i32;
+    pub(crate) fn gtk_widget_destroy(widget: *mut GtkWidget);
+
+    // GTK 3.20+
+    pub(crate) fn gtk_file_chooser_native_new(
+        title: *const c_char,
+        parent: *mut GtkWindow,
+        action: i32,
+        accept_label: *const c_char,
+        cancel_label: *const c_char,
+    ) -> *mut GtkFileChooserNative;
+    pub(crate) fn gtk_native_dialog_run(dialog: *mut GtkNativeDialog) -> i32;
 }

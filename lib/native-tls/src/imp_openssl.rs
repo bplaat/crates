@@ -23,12 +23,16 @@
 //!   `TLS_client_method`, a custom BIO method and `SSL_set1_host` (1.1.x/3.x)
 //!   or `SSL_set1_dnsname` (4.x, where `SSL_set1_host` is deprecated).
 
+#![allow(unused)]
+
 use std::ffi::{CString, c_char, c_int, c_long, c_ulong, c_void};
 use std::io::{self, Read, Write};
 
 use crate::{Error, HandshakeError};
 
-// MARK: Common FFI - available in all supported OpenSSL versions
+// MARK: FFI
+
+// All supported OpenSSL versions
 unsafe extern "C" {
     fn SSL_CTX_new(method: *const c_void) -> *mut c_void;
     fn SSL_CTX_free(ctx: *mut c_void);
@@ -47,6 +51,73 @@ unsafe extern "C" {
     // OpenSSL error queue - available in all versions
     fn ERR_get_error() -> c_ulong;
     fn ERR_error_string(err: c_ulong, buf: *mut c_char) -> *mut c_char;
+}
+
+// OpenSSL 1.0.x
+unsafe extern "C" {
+    fn SSLv23_client_method() -> *const c_void;
+    fn SSL_library_init() -> c_int;
+    fn SSL_load_error_strings();
+    fn OPENSSL_add_all_algorithms_noconf();
+    fn BIO_new_bio_pair(
+        bio1: *mut *mut c_void,
+        writebuf1: usize,
+        bio2: *mut *mut c_void,
+        writebuf2: usize,
+    ) -> c_int;
+    fn BIO_read(bio: *mut c_void, buf: *mut c_void, len: c_int) -> c_int;
+    fn BIO_write(bio: *mut c_void, buf: *const c_void, len: c_int) -> c_int;
+    fn BIO_free(bio: *mut c_void) -> c_int;
+
+    // OpenSSL 1.0.2+
+    fn SSL_get_peer_certificate(ssl: *const c_void) -> *mut c_void;
+    fn X509_free(cert: *mut c_void);
+    fn X509_check_host(
+        cert: *mut c_void,
+        chk: *const c_char,
+        chklen: usize,
+        flags: u32,
+        peername: *mut *mut c_char,
+    ) -> c_int;
+}
+
+// OpenSSL 1.1.x / 3.x / 4.x
+unsafe extern "C" {
+    fn TLS_client_method() -> *const c_void;
+    fn BIO_meth_new(type_: c_int, name: *const c_char) -> *mut c_void;
+    fn BIO_meth_free(biom: *mut c_void);
+    fn BIO_meth_set_read(
+        biom: *mut c_void,
+        read: unsafe extern "C" fn(*mut c_void, *mut c_char, c_int) -> c_int,
+    ) -> c_int;
+    fn BIO_meth_set_write(
+        biom: *mut c_void,
+        write: unsafe extern "C" fn(*mut c_void, *const c_char, c_int) -> c_int,
+    ) -> c_int;
+    fn BIO_meth_set_ctrl(
+        biom: *mut c_void,
+        ctrl: unsafe extern "C" fn(*mut c_void, c_int, c_long, *mut c_void) -> c_long,
+    ) -> c_int;
+    fn BIO_meth_set_create(
+        biom: *mut c_void,
+        create: unsafe extern "C" fn(*mut c_void) -> c_int,
+    ) -> c_int;
+    fn BIO_meth_set_destroy(
+        biom: *mut c_void,
+        destroy: unsafe extern "C" fn(*mut c_void) -> c_int,
+    ) -> c_int;
+    fn BIO_new(biom: *const c_void) -> *mut c_void;
+    fn BIO_set_data(bio: *mut c_void, data: *mut c_void);
+    fn BIO_get_data(bio: *const c_void) -> *mut c_void;
+    fn BIO_set_init(bio: *mut c_void, init: c_int);
+    fn BIO_set_flags(bio: *mut c_void, flags: c_int);
+    fn BIO_clear_flags(bio: *mut c_void, flags: c_int);
+
+    // OpenSSL 1.1.x / 3.x
+    fn SSL_set1_host(ssl: *mut c_void, hostname: *const c_char) -> c_int;
+
+    // OpenSSL 4.x
+    fn SSL_set1_dnsname(ssl: *mut c_void, dnsname: *const c_char) -> c_int;
 }
 
 // Common constants
@@ -92,34 +163,6 @@ fn ssl_error(context: &str, code: c_int) -> Error {
 // Uses BIO_new_bio_pair + explicit I/O pumping because the BIO method API
 // (BIO_meth_new, BIO_set_data, etc.) does not exist in 1.0.x.
 // ---------------------------------------------------------------------------
-#[cfg(openssl_v10x)]
-unsafe extern "C" {
-    fn SSLv23_client_method() -> *const c_void;
-    // OpenSSL 1.0.x requires explicit initialization before any SSL use
-    fn SSL_library_init() -> c_int;
-    fn SSL_load_error_strings();
-    // OpenSSL_add_all_algorithms() is a C macro; call the real function directly
-    fn OPENSSL_add_all_algorithms_noconf();
-    fn BIO_new_bio_pair(
-        bio1: *mut *mut c_void,
-        writebuf1: usize,
-        bio2: *mut *mut c_void,
-        writebuf2: usize,
-    ) -> c_int;
-    fn BIO_read(bio: *mut c_void, buf: *mut c_void, len: c_int) -> c_int;
-    fn BIO_write(bio: *mut c_void, buf: *const c_void, len: c_int) -> c_int;
-    fn BIO_free(bio: *mut c_void) -> c_int;
-    // X509 hostname verification (available since OpenSSL 1.0.2)
-    fn SSL_get_peer_certificate(ssl: *const c_void) -> *mut c_void;
-    fn X509_free(cert: *mut c_void);
-    fn X509_check_host(
-        cert: *mut c_void,
-        chk: *const c_char,
-        chklen: usize,
-        flags: u32,
-        peername: *mut *mut c_char,
-    ) -> c_int;
-}
 
 // SSL_CTX_ctrl cmd to set option flags (SSL_CTX_set_options macro equivalent)
 #[cfg(openssl_v10x)]
@@ -511,48 +554,6 @@ impl<S> Drop for TlsStream<S> {
 // hostname verification (SSL_set1_dnsname on OpenSSL 4.x where SSL_set1_host
 // is deprecated).
 // ---------------------------------------------------------------------------
-#[cfg(not(openssl_v10x))]
-unsafe extern "C" {
-    fn TLS_client_method() -> *const c_void;
-    cfg_select! {
-        // SSL_set1_dnsname is the OpenSSL 4.x replacement for SSL_set1_host.
-        openssl_v4xx => {
-            fn SSL_set1_dnsname(ssl: *mut c_void, dnsname: *const c_char) -> c_int;
-        }
-        _ => {
-            fn SSL_set1_host(ssl: *mut c_void, hostname: *const c_char) -> c_int;
-        }
-    }
-    fn BIO_meth_new(type_: c_int, name: *const c_char) -> *mut c_void;
-    fn BIO_meth_free(biom: *mut c_void);
-    fn BIO_meth_set_read(
-        biom: *mut c_void,
-        read: unsafe extern "C" fn(*mut c_void, *mut c_char, c_int) -> c_int,
-    ) -> c_int;
-    fn BIO_meth_set_write(
-        biom: *mut c_void,
-        write: unsafe extern "C" fn(*mut c_void, *const c_char, c_int) -> c_int,
-    ) -> c_int;
-    fn BIO_meth_set_ctrl(
-        biom: *mut c_void,
-        ctrl: unsafe extern "C" fn(*mut c_void, c_int, c_long, *mut c_void) -> c_long,
-    ) -> c_int;
-    fn BIO_meth_set_create(
-        biom: *mut c_void,
-        create: unsafe extern "C" fn(*mut c_void) -> c_int,
-    ) -> c_int;
-    fn BIO_meth_set_destroy(
-        biom: *mut c_void,
-        destroy: unsafe extern "C" fn(*mut c_void) -> c_int,
-    ) -> c_int;
-    fn BIO_new(biom: *const c_void) -> *mut c_void;
-    fn BIO_set_data(bio: *mut c_void, data: *mut c_void);
-    fn BIO_get_data(bio: *const c_void) -> *mut c_void;
-    fn BIO_set_init(bio: *mut c_void, init: c_int);
-    fn BIO_set_flags(bio: *mut c_void, flags: c_int);
-    fn BIO_clear_flags(bio: *mut c_void, flags: c_int);
-}
-
 #[cfg(not(openssl_v10x))]
 const SSL_CTRL_SET_MIN_PROTO_VERSION: c_int = 123;
 #[cfg(not(openssl_v10x))]

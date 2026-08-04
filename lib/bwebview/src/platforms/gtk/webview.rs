@@ -386,80 +386,78 @@ extern "C" fn webview_custom_uri_scheme(
     webkit_finish_uri_scheme_response(uri_scheme_request, res);
 }
 
-#[cfg(all(feature = "custom_protocol", webkit2gtk_4_1))]
+#[cfg(feature = "custom_protocol")]
 fn webkit_uri_scheme_request_to_http_request(
     uri_scheme_request: *mut WebKitURISchemeRequest,
 ) -> small_http::Request {
-    use std::str::FromStr;
-
-    let method = unsafe { webkit_uri_scheme_request_get_http_method(uri_scheme_request) };
-    let method = unsafe { CStr::from_ptr(method) }.to_string_lossy();
-
     let uri = unsafe { webkit_uri_scheme_request_get_uri(uri_scheme_request) };
     let uri = unsafe { CStr::from_ptr(uri) }.to_string_lossy();
 
-    let mut req = small_http::Request::with_method_and_url(
-        small_http::Method::from_str(&method).unwrap_or(small_http::Method::Get),
-        &uri,
-    );
+    cfg_select! {
+        webkit2gtk_4_1 => {
+            use std::str::FromStr;
 
-    let headers = unsafe { webkit_uri_scheme_request_get_http_headers(uri_scheme_request) };
-    extern "C" fn headers_foreach(
-        key: *const c_char,
-        value: *const c_char,
-        user_data: *mut c_void,
-    ) {
-        let req = unsafe { &mut *(user_data as *mut small_http::Request) };
-        let key = unsafe { CStr::from_ptr(key) }.to_string_lossy();
-        let value = unsafe { CStr::from_ptr(value) }.to_string_lossy();
-        req.headers.insert(key.to_string(), value.to_string());
-    }
-    unsafe {
-        soup_message_headers_foreach(headers, headers_foreach, &mut req as *mut _ as *mut c_void)
-    };
+            let method = unsafe { webkit_uri_scheme_request_get_http_method(uri_scheme_request) };
+            let method = unsafe { CStr::from_ptr(method) }.to_string_lossy();
+            let mut req = small_http::Request::with_method_and_url(
+                small_http::Method::from_str(&method).unwrap_or(small_http::Method::Get),
+                &uri,
+            );
 
-    let body = unsafe { webkit_uri_scheme_request_get_http_body(uri_scheme_request) };
-    if !body.is_null() {
-        let mut body_data = Vec::new();
-        let mut bytes_read = 0;
-        let mut buffer = [0u8; 4096];
-        loop {
-            let result = unsafe {
-                g_input_stream_read_all(
-                    body,
-                    buffer.as_mut_ptr() as *mut c_void,
-                    buffer.len(),
-                    &mut bytes_read,
-                    null_mut(),
-                    null_mut(),
+            let headers = unsafe { webkit_uri_scheme_request_get_http_headers(uri_scheme_request) };
+            extern "C" fn headers_foreach(
+                key: *const c_char,
+                value: *const c_char,
+                user_data: *mut c_void,
+            ) {
+                let req = unsafe { &mut *(user_data as *mut small_http::Request) };
+                let key = unsafe { CStr::from_ptr(key) }.to_string_lossy();
+                let value = unsafe { CStr::from_ptr(value) }.to_string_lossy();
+                req.headers.insert(key.to_string(), value.to_string());
+            }
+            unsafe {
+                soup_message_headers_foreach(
+                    headers,
+                    headers_foreach,
+                    &mut req as *mut _ as *mut c_void,
                 )
             };
-            if result || bytes_read == 0 {
-                break;
+
+            let body = unsafe { webkit_uri_scheme_request_get_http_body(uri_scheme_request) };
+            if !body.is_null() {
+                let mut body_data = Vec::new();
+                let mut bytes_read = 0;
+                let mut buffer = [0u8; 4096];
+                loop {
+                    let result = unsafe {
+                        g_input_stream_read_all(
+                            body,
+                            buffer.as_mut_ptr() as *mut c_void,
+                            buffer.len(),
+                            &mut bytes_read,
+                            null_mut(),
+                            null_mut(),
+                        )
+                    };
+                    if result || bytes_read == 0 {
+                        break;
+                    }
+                    body_data.extend_from_slice(&buffer[..bytes_read]);
+                    if bytes_read < buffer.len() {
+                        break;
+                    }
+                }
+                req = req.body(body_data);
             }
-            body_data.extend_from_slice(&buffer[..bytes_read]);
-            if bytes_read < buffer.len() {
-                break;
-            }
+
+            req
         }
-        req = req.body(body_data);
+        // webkit2gtk-4.0 exposes only the URI, so every request is treated as GET.
+        _ => small_http::Request::with_method_and_url(small_http::Method::Get, &uri),
     }
-
-    req
 }
 
-#[cfg(all(feature = "custom_protocol", webkit2gtk_4_0))]
-fn webkit_uri_scheme_request_to_http_request(
-    uri_scheme_request: *mut WebKitURISchemeRequest,
-) -> small_http::Request {
-    // webkit2gtk-4.0 does not expose HTTP method, headers, or body for URI scheme
-    // requests. Only the URI is available, so all requests are treated as GET.
-    let uri = unsafe { webkit_uri_scheme_request_get_uri(uri_scheme_request) };
-    let uri = unsafe { CStr::from_ptr(uri) }.to_string_lossy();
-    small_http::Request::with_method_and_url(small_http::Method::Get, &uri)
-}
-
-#[cfg(all(feature = "custom_protocol", webkit2gtk_4_1))]
+#[cfg(feature = "custom_protocol")]
 fn webkit_finish_uri_scheme_response(
     uri_scheme_request: *mut WebKitURISchemeRequest,
     res: small_http::Response,
@@ -474,59 +472,59 @@ fn webkit_finish_uri_scheme_response(
             body_data_destroy as *const c_void,
         )
     };
-    let uri_scheme_response =
-        unsafe { webkit_uri_scheme_response_new(stream, res.body.len() as i64) };
-    unsafe {
-        webkit_uri_scheme_response_set_status(uri_scheme_response, res.status as u32, null())
-    };
-    let headers = unsafe {
-        let headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
-        for (key, value) in &res.headers {
-            let key = CString::new(key.as_str()).expect("Can't convert to CString");
-            let value = CString::new(value.as_str()).expect("Can't convert to CString");
-            soup_message_headers_append(headers, key.as_ptr(), value.as_ptr());
-        }
-        headers
-    };
-    unsafe { webkit_uri_scheme_response_set_http_headers(uri_scheme_response, headers) };
-    if let Some(content_type) = res.headers.get("Content-Type") {
-        let content_type = CString::new(content_type).expect("Can't convert to CString");
-        unsafe {
-            webkit_uri_scheme_response_set_content_type(uri_scheme_response, content_type.as_ptr())
-        };
-    }
-    unsafe {
-        webkit_uri_scheme_request_finish_with_response(uri_scheme_request, uri_scheme_response);
-        g_object_unref(uri_scheme_response as *mut GObject);
-    }
-}
 
-#[cfg(all(feature = "custom_protocol", webkit2gtk_4_0))]
-fn webkit_finish_uri_scheme_response(
-    uri_scheme_request: *mut WebKitURISchemeRequest,
-    res: small_http::Response,
-) {
-    extern "C" fn body_data_destroy(data: *mut c_void) {
-        drop(unsafe { Box::from_raw(data as *mut u8) });
-    }
-    let stream = unsafe {
-        g_memory_input_stream_new_from_data(
-            Box::into_raw(res.body.clone().into_boxed_slice()) as *const c_void,
-            res.body.len(),
-            body_data_destroy as *const c_void,
-        )
-    };
-    let content_type = res
-        .headers
-        .get("Content-Type")
-        .map(|ct| CString::new(ct).expect("Can't convert to CString"));
-    unsafe {
-        webkit_uri_scheme_request_finish(
-            uri_scheme_request,
-            stream,
-            res.body.len() as i64,
-            content_type.as_ref().map_or(null(), |ct| ct.as_ptr()),
-        );
-        g_object_unref(stream as *mut GObject);
+    cfg_select! {
+        webkit2gtk_4_1 => {
+            let uri_scheme_response =
+                unsafe { webkit_uri_scheme_response_new(stream, res.body.len() as i64) };
+            unsafe {
+                webkit_uri_scheme_response_set_status(
+                    uri_scheme_response,
+                    res.status as u32,
+                    null(),
+                )
+            };
+            let headers = unsafe {
+                let headers = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+                for (key, value) in &res.headers {
+                    let key = CString::new(key.as_str()).expect("Can't convert to CString");
+                    let value = CString::new(value.as_str()).expect("Can't convert to CString");
+                    soup_message_headers_append(headers, key.as_ptr(), value.as_ptr());
+                }
+                headers
+            };
+            unsafe { webkit_uri_scheme_response_set_http_headers(uri_scheme_response, headers) };
+            if let Some(content_type) = res.headers.get("Content-Type") {
+                let content_type = CString::new(content_type).expect("Can't convert to CString");
+                unsafe {
+                    webkit_uri_scheme_response_set_content_type(
+                        uri_scheme_response,
+                        content_type.as_ptr(),
+                    )
+                };
+            }
+            unsafe {
+                webkit_uri_scheme_request_finish_with_response(
+                    uri_scheme_request,
+                    uri_scheme_response,
+                );
+                g_object_unref(uri_scheme_response as *mut GObject);
+            }
+        }
+        _ => {
+            let content_type = res
+                .headers
+                .get("Content-Type")
+                .map(|ct| CString::new(ct).expect("Can't convert to CString"));
+            unsafe {
+                webkit_uri_scheme_request_finish(
+                    uri_scheme_request,
+                    stream,
+                    res.body.len() as i64,
+                    content_type.as_ref().map_or(null(), |ct| ct.as_ptr()),
+                );
+                g_object_unref(stream as *mut GObject);
+            }
+        }
     }
 }
