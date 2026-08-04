@@ -31,6 +31,7 @@ unsafe extern "C" {
     pub(crate) fn gtk_main();
     pub(crate) fn gtk_main_quit();
     pub(crate) fn gtk_window_new(r#type: i32) -> *mut GtkWindow;
+    pub(crate) fn gtk_window_set_default_icon_name(name: *const c_char) -> bool;
     pub(crate) fn gtk_widget_set_size_request(widget: *mut GtkWidget, width: i32, height: i32);
     pub(crate) fn gtk_window_fullscreen(window: *mut GtkWindow);
     pub(crate) fn gtk_container_add(container: *mut GtkWidget, widget: *mut GtkWidget);

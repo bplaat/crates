@@ -173,29 +173,48 @@ impl Xtask {
             }
             Os::Linux => {
                 let home = PathBuf::from(env::var("HOME").context("HOME is not set")?);
+                let data = env::var_os("XDG_DATA_HOME")
+                    .filter(|data| !data.is_empty())
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| home.join(".local/share"));
                 let bin = home.join(".local/bin");
-                let applications = home.join(".local/share/applications");
-                let icons = home.join(".local/share/icons");
+                let applications = data.join("applications");
+                let icons = data.join("icons/hicolor");
                 fs::create_dir_all(&bin)?;
                 fs::create_dir_all(&applications)?;
-                fs::create_dir_all(&icons)?;
                 for app in self.installable_apps()? {
                     run(Command::new("cargo").args(["build", "--release", "--bin", &app.package]))?;
+                    let executable = bin.join(&app.name);
                     fs::copy(
                         self.root.join(format!("target/release/{}", app.package)),
-                        bin.join(&app.name),
+                        &executable,
                     )?;
-                    fs::copy(
+                    let desktop_template = fs::read_to_string(
                         self.root
                             .join(format!("bin/{}/meta/freedesktop/.desktop", app.package)),
-                        applications.join(format!("{}.desktop", app.name)),
                     )?;
-                    fs::copy(
-                        self.root
-                            .join(format!("bin/{}/docs/images/icon.svg", app.package)),
-                        icons.join(format!("{}.svg", app.name)),
+                    let desktop_entry = desktop_template
+                        .replace("Exec=\n", &format!("Exec=\"{}\"\n", executable.display()));
+                    fs::write(
+                        applications.join(format!("{}.desktop", app.identifier)),
+                        desktop_entry,
                     )?;
+                    for size in [16, 24, 32, 48, 64, 128, 256, 512] {
+                        let destination = icons.join(format!("{size}x{size}/apps"));
+                        fs::create_dir_all(&destination)?;
+                        fs::copy(
+                            self.root.join(format!(
+                                "bin/{}/meta/freedesktop/icons/{size}x{size}.png",
+                                app.package
+                            )),
+                            destination.join(format!("{}.png", app.identifier)),
+                        )?;
+                    }
                 }
+                run(Command::new("update-desktop-database").arg(&applications))?;
+                run(Command::new("gtk-update-icon-cache")
+                    .args(["--force", "--ignore-theme-index"])
+                    .arg(&icons))?;
             }
         }
         Ok(())
@@ -220,6 +239,7 @@ impl Xtask {
                 .context("Cargo package has no name")?;
             apps.push(InstallableApp {
                 package: package_name.to_owned(),
+                identifier: identifier.to_owned(),
                 name: identifier
                     .rsplit('.')
                     .next()

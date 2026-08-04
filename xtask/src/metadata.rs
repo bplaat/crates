@@ -17,6 +17,7 @@ use crate::utils::normalize_path;
 pub(crate) struct InstallableApp {
     pub(crate) package: String,
     pub(crate) name: String,
+    pub(crate) identifier: String,
 }
 
 pub(crate) fn packages(metadata: &Value) -> Result<&[Value]> {

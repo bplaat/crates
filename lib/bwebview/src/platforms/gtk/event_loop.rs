@@ -24,6 +24,14 @@ static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 
 impl PlatformEventLoop {
     pub(crate) fn new(builder: EventLoopBuilder) -> Self {
+        let app_id_name = builder.app_id.as_ref().map(|app_id| {
+            CString::new(format!(
+                "{}.{}.{}",
+                app_id.qualifier, app_id.organization, app_id.application
+            ))
+            .expect("Can't convert app id to CString")
+        });
+
         // Ensure single instance
         // FIXME: Use GtkApplication for this
         if let Some(app_id) = builder.app_id {
@@ -46,6 +54,10 @@ impl PlatformEventLoop {
 
         // Init GTK
         unsafe {
+            if let Some(ref app_id) = app_id_name {
+                g_set_prgname(app_id.as_ptr());
+            }
+
             let args = env::args()
                 .map(|arg| CString::new(arg.as_str()).expect("Can't convert to CString"))
                 .collect::<Vec<CString>>();
@@ -57,6 +69,10 @@ impl PlatformEventLoop {
                 .collect();
             let mut argv_ptr = argv.as_mut_ptr();
             gtk_init(&mut argc, &mut argv_ptr);
+
+            if let Some(ref app_id) = app_id_name {
+                gtk_window_set_default_icon_name(app_id.as_ptr());
+            }
         }
 
         Self {

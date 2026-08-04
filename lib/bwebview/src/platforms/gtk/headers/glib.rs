@@ -44,6 +44,7 @@ pub(crate) struct GSList {
 }
 #[link(name = "glib-2.0")]
 unsafe extern "C" {
+    pub(crate) fn g_set_prgname(prgname: *const c_char);
     pub(crate) fn g_error_free(error: *mut GError);
     pub(crate) fn g_key_file_new() -> *mut GKeyFile;
     pub(crate) fn g_key_file_load_from_file(
