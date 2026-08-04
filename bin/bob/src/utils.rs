@@ -91,20 +91,19 @@ pub(crate) fn spawn_service(program: &str, args: &[&str]) -> io::Result<()> {
         .stdout(Stdio::null()) // Detach stdout
         .stderr(Stdio::null()); // Detach stderr
 
-    #[cfg(unix)]
-    {
-        // On Unix, use `setsid` to create a new session, detaching from the parent terminal
-        use std::os::unix::process::CommandExt;
-        command.process_group(0); // Set process group ID to 0 to start a new session
-    }
-
-    #[cfg(windows)]
-    {
-        // On Windows, use creation flags to detach the process
-        use std::os::windows::process::CommandExt;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
-        const DETACHED_PROCESS: u32 = 0x00000008;
-        command.creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+    cfg_select! {
+        unix => {
+            // On Unix, create a new process group to detach from the parent terminal.
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
+        windows => {
+            // On Windows, use creation flags to detach the process.
+            use std::os::windows::process::CommandExt;
+            const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+            const DETACHED_PROCESS: u32 = 0x00000008;
+            command.creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+        }
     }
 
     // Spawn the process and forget it (do not wait for it)

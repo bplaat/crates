@@ -119,8 +119,11 @@ impl crate::WebviewInterface for PlatformWebview {
         unsafe {
             if let Some(webview) = self.webview_data.webview {
                 let url = cfg_select! {
-                    feature = "custom_protocol" => { replace_custom_protocol_in_url(url.as_ref(), &self.webview_data.custom_protocols) }
-                    _ => { url.as_ref() }
+                    feature = "custom_protocol" => replace_custom_protocol_in_url(
+                        url.as_ref(),
+                        &self.webview_data.custom_protocols,
+                    ),
+                    _ => url.as_ref(),
                 };
                 (*webview).Navigate(url.to_wide_string().as_ptr() as *mut _);
             }
@@ -406,8 +409,10 @@ extern "system" fn controller_created(
         // Load initial contents
         if let Some(url) = &_self.should_load_url {
             let url = cfg_select! {
-                feature = "custom_protocol" => { replace_custom_protocol_in_url(url, &_self.custom_protocols) }
-                _ => { url.as_str() }
+                feature = "custom_protocol" => {
+                    replace_custom_protocol_in_url(url, &_self.custom_protocols)
+                }
+                _ => url.as_str(),
             };
             (*webview).Navigate(url.to_wide_string().as_ptr() as *mut _);
         }

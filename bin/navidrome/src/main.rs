@@ -11,6 +11,48 @@ use bwebview::{
     EventLoopBuilder, InjectionTime, LogicalSize, Theme, WebviewBuilder, WindowBuilder,
 };
 
+fn player_script(titlebar_height: f32) -> String {
+    format!(
+        r#"
+const style = document.createElement('style');
+style.innerHTML = `
+    html {{
+        overscroll-behavior: none;
+        cursor: default;
+        -webkit-user-select: none;
+        user-select: none;
+    }}
+    ::-webkit-scrollbar {{
+        width: 8px;
+        height: 8px;
+    }}
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {{
+        background-color: #131313;
+    }}
+    ::-webkit-scrollbar-thumb {{
+        background-color: #444;
+        border-radius: 4px;
+    }}
+    ::-webkit-scrollbar-thumb:hover {{
+        background-color: #555;
+    }}
+    .is-bwebview-macos:not(.is-fullscreen) #main-content {{
+        padding-top: {titlebar_height}px !important;
+    }}
+    .is-bwebview-macos:not(.is-fullscreen) header.MuiAppBar-root {{
+        padding-top: {titlebar_height}px;
+    }}
+`;
+document.documentElement.appendChild(style);
+if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {{
+    document.documentElement.classList.add('is-bwebview-macos');
+}}
+window.addEventListener('contextmenu', (event) => event.preventDefault());
+"#,
+    )
+}
+
 fn main() {
     let event_loop = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "Navidrome")
@@ -41,98 +83,10 @@ fn main() {
         _ => 28.0,
     };
 
-    // Inject some styles to make the player look better
-    webview.evaluate_script(
-                format!(r#"
-                    const style = document.createElement('style');
-                    style.innerHTML = `
-                       html {{
-                            overscroll-behavior: none;
-                            cursor: default;
-                            -webkit-user-select: none;
-                            user-select: none;
-                        }}
-                        ::-webkit-scrollbar {{
-                            width: 8px;
-                            height: 8px;
-                        }}
-                        ::-webkit-scrollbar-track,
-                        ::-webkit-scrollbar-corner {{
-                            background-color: #131313;
-                        }}
-                        ::-webkit-scrollbar-thumb {{
-                            background-color: #444;
-                            border-radius: 4px;
-                        }}
-                        ::-webkit-scrollbar-thumb:hover {{
-                            background-color: #555;
-                        }}
-                        .is-bwebview-macos:not(.is-fullscreen) #main-content {{
-                            padding-top: {titlebar_height}px !important;
-                        }}
-                        .is-bwebview-macos:not(.is-fullscreen) header.MuiAppBar-root {{
-                            padding-top: {titlebar_height}px;
-                        }}
-                    `;
-                    document.documentElement.appendChild(style);
-                    if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {{
-                        document.documentElement.classList.add('is-bwebview-macos');
-                    }}
-                    window.addEventListener('contextmenu', (e) => e.preventDefault());
-                    "#
-                )
-            );
-
-    // Inject some styles to make the player look better
-    cfg_select! {
-        target_os = "macos" => {
-            let titlebar_height = window.macos_titlebar_size().height;
-        }
-        _ => {
-            let titlebar_height = 28.0;
-        }
-    }
-    webview.add_user_script(
-                format!(r#"
-                    const style = document.createElement('style');
-                    style.innerHTML = `
-                       html {{
-                            overscroll-behavior: none;
-                            cursor: default;
-                            -webkit-user-select: none;
-                            user-select: none;
-                        }}
-                        ::-webkit-scrollbar {{
-                            width: 8px;
-                            height: 8px;
-                        }}
-                        ::-webkit-scrollbar-track,
-                        ::-webkit-scrollbar-corner {{
-                            background-color: #131313;
-                        }}
-                        ::-webkit-scrollbar-thumb {{
-                            background-color: #444;
-                            border-radius: 4px;
-                        }}
-                        ::-webkit-scrollbar-thumb:hover {{
-                            background-color: #555;
-                        }}
-                        .is-bwebview-macos:not(.is-fullscreen) #main-content {{
-                            padding-top: {titlebar_height}px !important;
-                        }}
-                        .is-bwebview-macos:not(.is-fullscreen) header.MuiAppBar-root {{
-                            padding-top: {titlebar_height}px;
-                        }}
-                    `;
-                    document.documentElement.appendChild(style);
-                    if (navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh')) {{
-                        document.documentElement.classList.add('is-bwebview-macos');
-                    }}
-                    window.addEventListener('contextmenu', (e) => e.preventDefault());
-                    "#
-                ),
-                InjectionTime::DocumentStart
-            );
+    // Apply the styles to the current page and every subsequent navigation.
+    let player_script = player_script(titlebar_height);
+    webview.evaluate_script(&player_script);
+    webview.add_user_script(player_script, InjectionTime::DocumentStart);
 
     #[allow(unused)]
     event_loop.run(move |event| {

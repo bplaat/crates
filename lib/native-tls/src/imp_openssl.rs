@@ -514,12 +514,15 @@ impl<S> Drop for TlsStream<S> {
 #[cfg(not(openssl_v10x))]
 unsafe extern "C" {
     fn TLS_client_method() -> *const c_void;
-    // SSL_set1_host: available in 1.1.x and 3.x (deprecated in 4.x)
-    #[cfg(not(openssl_v4xx))]
-    fn SSL_set1_host(ssl: *mut c_void, hostname: *const c_char) -> c_int;
-    // SSL_set1_dnsname: new in 4.x, replaces SSL_set1_host
-    #[cfg(openssl_v4xx)]
-    fn SSL_set1_dnsname(ssl: *mut c_void, dnsname: *const c_char) -> c_int;
+    cfg_select! {
+        // SSL_set1_dnsname is the OpenSSL 4.x replacement for SSL_set1_host.
+        openssl_v4xx => {
+            fn SSL_set1_dnsname(ssl: *mut c_void, dnsname: *const c_char) -> c_int;
+        }
+        _ => {
+            fn SSL_set1_host(ssl: *mut c_void, hostname: *const c_char) -> c_int;
+        }
+    }
     fn BIO_meth_new(type_: c_int, name: *const c_char) -> *mut c_void;
     fn BIO_meth_free(biom: *mut c_void);
     fn BIO_meth_set_read(
@@ -829,10 +832,10 @@ impl TlsConnector {
             if !self.accept_invalid_certs {
                 // Enable built-in hostname verification against the certificate.
                 // SSL_set1_dnsname is the new name in OpenSSL 4.x; older versions use SSL_set1_host.
-                #[cfg(openssl_v4xx)]
-                let ok = SSL_set1_dnsname(ssl, domain_c.as_ptr());
-                #[cfg(not(openssl_v4xx))]
-                let ok = SSL_set1_host(ssl, domain_c.as_ptr());
+                let ok = cfg_select! {
+                    openssl_v4xx => SSL_set1_dnsname(ssl, domain_c.as_ptr()),
+                    _ => SSL_set1_host(ssl, domain_c.as_ptr()),
+                };
                 if ok != 1 {
                     SSL_free(ssl);
                     return Err(Error("Failed to set hostname for verification".to_string()));

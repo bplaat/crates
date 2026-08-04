@@ -12,9 +12,7 @@
 #[allow(clippy::missing_const_for_fn)]
 pub fn enable_ansi_support() -> Result<(), std::io::Error> {
     cfg_select! {
-        unix => {
-            Ok(())
-        }
+        unix => Ok(()),
         windows => {
             const STD_OUTPUT_HANDLE: i32 = -11;
             const INVALID_HANDLE_VALUE: *mut std::ffi::c_void = (-1isize) as *mut std::ffi::c_void;
@@ -43,8 +41,6 @@ pub fn enable_ansi_support() -> Result<(), std::io::Error> {
             }
             Ok(())
         }
-        _ => {
-            compile_error!("Unsupported platform")
-        }
+        _ => compile_error!("Unsupported platform"),
     }
 }

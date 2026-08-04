@@ -26,25 +26,25 @@ impl crate::FileDialogInterface for PlatformFileDialog {
             let title = CString::new(dialog.title.as_deref().unwrap_or("Save File"))
                 .expect("Can't convert to CString");
 
-            #[cfg(gtk3_20)]
-            let chooser = gtk_file_chooser_native_new(
-                title.as_ptr(),
-                null_mut(),
-                GTK_FILE_CHOOSER_ACTION_SAVE,
-                c"_Save".as_ptr(),
-                c"_Cancel".as_ptr(),
-            ) as *mut c_void;
-            #[cfg(not(gtk3_20))]
-            let chooser = gtk_file_chooser_dialog_new(
-                title.as_ptr(),
-                null_mut(),
-                GTK_FILE_CHOOSER_ACTION_SAVE,
-                c"_Cancel".as_ptr(),
-                GTK_RESPONSE_CANCEL,
-                c"_Save".as_ptr(),
-                GTK_RESPONSE_ACCEPT,
-                null_mut::<c_void>(),
-            ) as *mut c_void;
+            let chooser = cfg_select! {
+                gtk3_20 => gtk_file_chooser_native_new(
+                    title.as_ptr(),
+                    null_mut(),
+                    GTK_FILE_CHOOSER_ACTION_SAVE,
+                    c"_Save".as_ptr(),
+                    c"_Cancel".as_ptr(),
+                ) as *mut c_void,
+                _ => gtk_file_chooser_dialog_new(
+                    title.as_ptr(),
+                    null_mut(),
+                    GTK_FILE_CHOOSER_ACTION_SAVE,
+                    c"_Cancel".as_ptr(),
+                    GTK_RESPONSE_CANCEL,
+                    c"_Save".as_ptr(),
+                    GTK_RESPONSE_ACCEPT,
+                    null_mut::<c_void>(),
+                ) as *mut c_void,
+            };
 
             if let Some(dir) = &dialog.directory {
                 let dir_c =
@@ -57,10 +57,10 @@ impl crate::FileDialogInterface for PlatformFileDialog {
             }
             add_gtk_filters(chooser, &dialog.filters);
 
-            #[cfg(gtk3_20)]
-            let result = gtk_native_dialog_run(chooser as *mut GtkNativeDialog);
-            #[cfg(not(gtk3_20))]
-            let result = gtk_dialog_run(chooser as *mut GtkWidget);
+            let result = cfg_select! {
+                gtk3_20 => gtk_native_dialog_run(chooser as *mut GtkNativeDialog),
+                _ => gtk_dialog_run(chooser as *mut GtkWidget),
+            };
 
             let path = if result == GTK_RESPONSE_ACCEPT {
                 let raw = gtk_file_chooser_get_filename(chooser);
@@ -75,10 +75,10 @@ impl crate::FileDialogInterface for PlatformFileDialog {
                 None
             };
 
-            #[cfg(gtk3_20)]
-            g_object_unref(chooser as *mut GObject);
-            #[cfg(not(gtk3_20))]
-            gtk_widget_destroy(chooser as *mut GtkWidget);
+            cfg_select! {
+                gtk3_20 => g_object_unref(chooser as *mut GObject),
+                _ => gtk_widget_destroy(chooser as *mut GtkWidget),
+            }
             path
         }
     }
@@ -89,25 +89,25 @@ fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<Path
         let title = CString::new(dialog.title.as_deref().unwrap_or("Open File"))
             .expect("Can't convert to CString");
 
-        #[cfg(gtk3_20)]
-        let chooser = gtk_file_chooser_native_new(
-            title.as_ptr(),
-            null_mut(),
-            GTK_FILE_CHOOSER_ACTION_OPEN,
-            c"_Open".as_ptr(),
-            c"_Cancel".as_ptr(),
-        ) as *mut c_void;
-        #[cfg(not(gtk3_20))]
-        let chooser = gtk_file_chooser_dialog_new(
-            title.as_ptr(),
-            null_mut(),
-            GTK_FILE_CHOOSER_ACTION_OPEN,
-            c"_Cancel".as_ptr(),
-            GTK_RESPONSE_CANCEL,
-            c"_Open".as_ptr(),
-            GTK_RESPONSE_ACCEPT,
-            null_mut::<c_void>(),
-        ) as *mut c_void;
+        let chooser = cfg_select! {
+            gtk3_20 => gtk_file_chooser_native_new(
+                title.as_ptr(),
+                null_mut(),
+                GTK_FILE_CHOOSER_ACTION_OPEN,
+                c"_Open".as_ptr(),
+                c"_Cancel".as_ptr(),
+            ) as *mut c_void,
+            _ => gtk_file_chooser_dialog_new(
+                title.as_ptr(),
+                null_mut(),
+                GTK_FILE_CHOOSER_ACTION_OPEN,
+                c"_Cancel".as_ptr(),
+                GTK_RESPONSE_CANCEL,
+                c"_Open".as_ptr(),
+                GTK_RESPONSE_ACCEPT,
+                null_mut::<c_void>(),
+            ) as *mut c_void,
+        };
 
         if multiple {
             gtk_file_chooser_set_select_multiple(chooser, true);
@@ -119,10 +119,10 @@ fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<Path
         }
         add_gtk_filters(chooser, &dialog.filters);
 
-        #[cfg(gtk3_20)]
-        let result = gtk_native_dialog_run(chooser as *mut GtkNativeDialog);
-        #[cfg(not(gtk3_20))]
-        let result = gtk_dialog_run(chooser as *mut GtkWidget);
+        let result = cfg_select! {
+            gtk3_20 => gtk_native_dialog_run(chooser as *mut GtkNativeDialog),
+            _ => gtk_dialog_run(chooser as *mut GtkWidget),
+        };
 
         let paths = if result == GTK_RESPONSE_ACCEPT {
             if multiple {
@@ -158,10 +158,10 @@ fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<Path
             None
         };
 
-        #[cfg(gtk3_20)]
-        g_object_unref(chooser as *mut GObject);
-        #[cfg(not(gtk3_20))]
-        gtk_widget_destroy(chooser as *mut GtkWidget);
+        cfg_select! {
+            gtk3_20 => g_object_unref(chooser as *mut GObject),
+            _ => gtk_widget_destroy(chooser as *mut GtkWidget),
+        }
         paths
     }
 }

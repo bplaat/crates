@@ -10,26 +10,25 @@
 use std::fmt::{self, Display, Formatter};
 use std::marker::PhantomData;
 
-// vendored feature: use rustls on all platforms (no native backend)
-#[cfg(feature = "vendored")]
-mod imp_rustls;
-#[cfg(feature = "vendored")]
-use imp_rustls as imp;
-
-#[cfg(all(target_os = "macos", not(feature = "vendored")))]
-mod imp_macos;
-#[cfg(all(target_os = "macos", not(feature = "vendored")))]
-use imp_macos as imp;
-
-#[cfg(all(windows, not(feature = "vendored")))]
-mod imp_windows;
-#[cfg(all(windows, not(feature = "vendored")))]
-use imp_windows as imp;
-
-#[cfg(all(not(any(target_os = "macos", windows)), not(feature = "vendored")))]
-mod imp_openssl;
-#[cfg(all(not(any(target_os = "macos", windows)), not(feature = "vendored")))]
-use imp_openssl as imp;
+cfg_select! {
+    // The vendored feature uses rustls on every platform.
+    feature = "vendored" => {
+        mod imp_rustls;
+        use imp_rustls as imp;
+    }
+    target_os = "macos" => {
+        mod imp_macos;
+        use imp_macos as imp;
+    }
+    windows => {
+        mod imp_windows;
+        use imp_windows as imp;
+    }
+    _ => {
+        mod imp_openssl;
+        use imp_openssl as imp;
+    }
+}
 
 // MARK: Error
 /// TLS error

@@ -18,7 +18,9 @@ fn main() {
         }
         // Or link to the system SQLite library
         _ => {
-            if std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set") == "windows" {
+            if std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set")
+                == "windows"
+            {
                 println!("cargo:rustc-link-lib=winsqlite3");
             } else {
                 println!("cargo:rustc-link-lib=sqlite3");

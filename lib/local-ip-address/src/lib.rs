@@ -207,9 +207,7 @@ pub fn local_ip() -> Result<IpAddr, std::io::Error> {
                 "No local IP address found",
             ))
         }
-        _ => {
-            compile_error!("Unsupported platform")
-        }
+        _ => compile_error!("Unsupported platform"),
     }
 }
 

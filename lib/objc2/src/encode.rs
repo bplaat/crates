@@ -156,17 +156,17 @@ unsafe impl Encode for bool {
 }
 // SAFETY: see group comment above.
 unsafe impl Encode for isize {
-    #[cfg(target_pointer_width = "64")]
-    const ENCODING: Encoding = Encoding::LongLong;
-    #[cfg(target_pointer_width = "32")]
-    const ENCODING: Encoding = Encoding::Long;
+    const ENCODING: Encoding = cfg_select! {
+        target_pointer_width = "64" => Encoding::LongLong,
+        _ => Encoding::Long,
+    };
 }
 // SAFETY: see group comment above.
 unsafe impl Encode for usize {
-    #[cfg(target_pointer_width = "64")]
-    const ENCODING: Encoding = Encoding::ULongLong;
-    #[cfg(target_pointer_width = "32")]
-    const ENCODING: Encoding = Encoding::UInt;
+    const ENCODING: Encoding = cfg_select! {
+        target_pointer_width = "64" => Encoding::ULongLong,
+        _ => Encoding::UInt,
+    };
 }
 // SAFETY: see group comment above.
 unsafe impl Encode for *const c_void {

@@ -67,31 +67,31 @@ macro_rules! message_send_impl {
             unsafe fn invoke<R: crate::Encode>(obj: *mut AnyObject, sel: Sel, ($($a,)*): Self) -> R {
                 #[cfg(debug_assertions)]
                 crate::verify::verify_send(obj, sel, &[$($t::ENCODING),*], &R::ENCODING);
-                #[cfg(target_arch = "x86_64")]
-                // SAFETY: `objc_msgSend`/`objc_msgSend_stret` are C variadics that accept any
-                // argument list. The transmute gives them the concrete Rust types we verified via
-                // `verify_send` (debug) or statically via `Encode` bounds (release). The call is
-                // sound because the caller (`msg_send!`) must ensure `obj` is a valid ObjC object
-                // and `sel` is a registered selector, as documented on `MessageSend::invoke`.
-                unsafe {
-                    if const { size_of::<R>() > 16 } {
-                        let mut ret = std::mem::zeroed();
-                        let imp: unsafe extern "C" fn (*mut R, *mut AnyObject, *const c_void, $($t,)*) =
-                            std::mem::transmute(crate::ffi::objc_msgSend_stret as *const c_void);
-                        imp(&mut ret, obj, sel.0, $($a,)*);
-                        ret
-                    } else {
+                cfg_select! {
+                    target_arch = "x86_64" => unsafe {
+                        // SAFETY: `objc_msgSend`/`objc_msgSend_stret` are C variadics that accept any
+                        // argument list. The transmute gives them the concrete Rust types we verified via
+                        // `verify_send` (debug) or statically via `Encode` bounds (release). The call is
+                        // sound because the caller (`msg_send!`) must ensure `obj` is a valid ObjC object
+                        // and `sel` is a registered selector, as documented on `MessageSend::invoke`.
+                        if const { size_of::<R>() > 16 } {
+                            let mut ret = std::mem::zeroed();
+                            let imp: unsafe extern "C" fn (*mut R, *mut AnyObject, *const c_void, $($t,)*) =
+                                std::mem::transmute(crate::ffi::objc_msgSend_stret as *const c_void);
+                            imp(&mut ret, obj, sel.0, $($a,)*);
+                            ret
+                        } else {
+                            let imp: unsafe extern "C" fn (*mut AnyObject, *const c_void, $($t,)*) -> R =
+                                std::mem::transmute(objc_msgSend as *const c_void);
+                            imp(obj, sel.0, $($a,)*)
+                        }
+                    }
+                    _ => unsafe {
+                        // SAFETY: see the x86_64 branch above for the full justification.
                         let imp: unsafe extern "C" fn (*mut AnyObject, *const c_void, $($t,)*) -> R =
                             std::mem::transmute(objc_msgSend as *const c_void);
                         imp(obj, sel.0, $($a,)*)
                     }
-                }
-                #[cfg(not(target_arch = "x86_64"))]
-                // SAFETY: see the x86_64 branch above for the full justification.
-                unsafe {
-                    let imp: unsafe extern "C" fn (*mut AnyObject, *const c_void, $($t,)*) -> R =
-                        std::mem::transmute(objc_msgSend as *const c_void);
-                    imp(obj, sel.0, $($a,)*)
                 }
             }
         }

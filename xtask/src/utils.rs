@@ -166,19 +166,18 @@ pub(crate) fn copy_directory(source: &Path, destination: &Path) -> Result<()> {
     copy_directory_contents(source, destination)
 }
 
-#[cfg(unix)]
-fn copy_symlink(source: &Path, destination: &Path) -> Result<()> {
-    std::os::unix::fs::symlink(fs::read_link(source)?, destination)
-        .with_context(|| format!("failed to copy symlink {}", source.display()))
-}
-
-#[cfg(windows)]
 fn copy_symlink(source: &Path, destination: &Path) -> Result<()> {
     let target = fs::read_link(source)?;
-    if source.is_dir() {
-        std::os::windows::fs::symlink_dir(target, destination)
-    } else {
-        std::os::windows::fs::symlink_file(target, destination)
+    cfg_select! {
+        unix => std::os::unix::fs::symlink(target, destination),
+        windows => {
+            if source.is_dir() {
+                std::os::windows::fs::symlink_dir(target, destination)
+            } else {
+                std::os::windows::fs::symlink_file(target, destination)
+            }
+        }
+        _ => compile_error!("Unsupported platform"),
     }
     .with_context(|| format!("failed to copy symlink {}", source.display()))
 }

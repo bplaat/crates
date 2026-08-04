@@ -90,22 +90,19 @@ impl Sha1 {
                 {
                     // SAFETY: Runtime detection confirmed every non-baseline CPU feature used by this code path.
                     unsafe { self.process_block_x86_sha() }
-                } else {
-                    self.process_block_software()
+                    return;
                 }
             }
             target_arch = "aarch64" => {
                 if std::arch::is_aarch64_feature_detected!("sha2") {
                     // SAFETY: is_aarch64_feature_detected! confirmed the sha2 hardware feature is available.
                     unsafe { self.process_block_aarch64_sha() }
-                } else {
-                    self.process_block_software()
+                    return;
                 }
             }
-            _ => {
-                self.process_block_software()
-            }
+            _ => {}
         }
+        self.process_block_software();
     }
 
     // MARK: Software

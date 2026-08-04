@@ -297,25 +297,25 @@ impl Bobje {
             }
         };
 
-        #[cfg(target_os = "macos")]
-        {
-            if bobje.r#type.is_binary() && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
-                let mut bobje_x86_64 = bobje.clone();
-                bobje_x86_64.target = Some("x86_64-apple-darwin".to_string());
-                visit_bobje(&mut bobje_x86_64);
+        cfg_select! {
+            target_os = "macos" => {
+                if bobje.r#type.is_binary() && detect_bundle(&bobje) && bundle_is_lipo(&bobje) {
+                    let mut bobje_x86_64 = bobje.clone();
+                    bobje_x86_64.target = Some("x86_64-apple-darwin".to_string());
+                    visit_bobje(&mut bobje_x86_64);
 
-                let mut bobje_aarch64 = bobje.clone();
-                bobje_aarch64.target = Some("aarch64-apple-darwin".to_string());
-                visit_bobje(&mut bobje_aarch64);
-            } else {
-                visit_bobje(&mut bobje);
+                    let mut bobje_aarch64 = bobje.clone();
+                    bobje_aarch64.target = Some("aarch64-apple-darwin".to_string());
+                    visit_bobje(&mut bobje_aarch64);
+                } else {
+                    visit_bobje(&mut bobje);
+                }
+                if bobje.r#type.is_binary() && detect_bundle(&bobje) {
+                    generate_bundle_tasks(&bobje, executor);
+                }
             }
-            if bobje.r#type.is_binary() && detect_bundle(&bobje) {
-                generate_bundle_tasks(&bobje, executor);
-            }
+            _ => visit_bobje(&mut bobje),
         }
-        #[cfg(not(target_os = "macos"))]
-        visit_bobje(&mut bobje);
 
         bobje
     }

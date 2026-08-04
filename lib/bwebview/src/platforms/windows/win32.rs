@@ -318,22 +318,18 @@ unsafe extern "system" {
     pub(crate) fn SetForegroundWindow(hWnd: HWND) -> BOOL;
 }
 
-#[cfg(target_pointer_width = "32")]
 pub(crate) unsafe fn GetWindowLong(hwnd: HWND, index: i32) -> isize {
-    (unsafe { GetWindowLongW(hwnd, index) }) as isize
-}
-#[cfg(target_pointer_width = "64")]
-pub(crate) unsafe fn GetWindowLong(hwnd: HWND, index: i32) -> isize {
-    unsafe { GetWindowLongPtrW(hwnd, index) }
+    cfg_select! {
+        target_pointer_width = "32" => (unsafe { GetWindowLongW(hwnd, index) }) as isize,
+        _ => unsafe { GetWindowLongPtrW(hwnd, index) },
+    }
 }
 
-#[cfg(target_pointer_width = "32")]
 pub(crate) unsafe fn SetWindowLong(hwnd: HWND, index: i32, value: isize) -> isize {
-    (unsafe { SetWindowLongW(hwnd, index, value as i32) }) as isize
-}
-#[cfg(target_pointer_width = "64")]
-pub(crate) unsafe fn SetWindowLong(hwnd: HWND, index: i32, value: isize) -> isize {
-    unsafe { SetWindowLongPtrW(hwnd, index, value) }
+    cfg_select! {
+        target_pointer_width = "32" => (unsafe { SetWindowLongW(hwnd, index, value as i32) }) as isize,
+        _ => unsafe { SetWindowLongPtrW(hwnd, index, value) },
+    }
 }
 
 // MARK: shell32.dll

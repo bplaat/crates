@@ -43,7 +43,8 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
                     Some(unsafe { std::mem::transmute::<*mut std::ffi::c_void, GetrandomFn>(ptr) })
                 }
             }
-            static GETRANDOM: std::sync::LazyLock<Option<GetrandomFn>> = std::sync::LazyLock::new(resolve_getrandom);
+            static GETRANDOM: std::sync::LazyLock<Option<GetrandomFn>> =
+                std::sync::LazyLock::new(resolve_getrandom);
             if let Some(getrandom) = *GETRANDOM {
                 // SAFETY: buf is a valid mutable byte slice; getrandom was resolved and has the correct signature.
                 let n = unsafe { getrandom(buf.as_mut_ptr(), buf.len(), 0) };
@@ -60,16 +61,17 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
                 .map_err(|_| Error::other("failed to read /dev/urandom"))?;
         }
         windows => {
-            #[cfg(not(target_arch = "x86"))]
-            #[link(name = "bcryptprimitives", kind = "raw-dylib")]
-            unsafe extern "system" {
-                fn ProcessPrng(pbData: *mut u8, cbData: usize) -> i32;
-            }
-            #[cfg(target_arch = "x86")]
-            #[link(
-                name = "bcryptprimitives",
-                kind = "raw-dylib",
-                import_name_type = "undecorated"
+            #[cfg_attr(
+                target_arch = "x86",
+                link(
+                    name = "bcryptprimitives",
+                    kind = "raw-dylib",
+                    import_name_type = "undecorated"
+                )
+            )]
+            #[cfg_attr(
+                not(target_arch = "x86"),
+                link(name = "bcryptprimitives", kind = "raw-dylib")
             )]
             unsafe extern "system" {
                 fn ProcessPrng(pbData: *mut u8, cbData: usize) -> i32;
@@ -79,9 +81,7 @@ pub fn fill(buf: &mut [u8]) -> Result<(), Error> {
                 return Err(Error::other("ProcessPrng failed"));
             }
         }
-        _ => {
-            compile_error!("Unsupported platform");
-        }
+        _ => compile_error!("Unsupported platform"),
     }
     Ok(())
 }

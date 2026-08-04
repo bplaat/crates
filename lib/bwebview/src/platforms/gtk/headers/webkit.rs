@@ -71,58 +71,60 @@ unsafe extern "C" {
         user_data_destroy_func: *const c_void,
     );
 
-    // webkit2gtk-4.1: full URI scheme response with status, headers, content-type
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_uri_scheme_response_new(
-        input_stream: *mut GInputStream,
-        stream_length: i64,
-    ) -> *mut WebKitURISchemeResponse;
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_uri_scheme_response_set_status(
-        response: *mut WebKitURISchemeResponse,
-        status_code: u32,
-        reason_phrase: *const c_char,
-    );
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_uri_scheme_response_set_http_headers(
-        response: *mut WebKitURISchemeResponse,
-        headers: *mut SoupMessageHeaders,
-    );
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_uri_scheme_response_set_content_type(
-        response: *mut WebKitURISchemeResponse,
-        content_type: *const c_char,
-    );
+    cfg_select! {
+        webkit2gtk_4_1 => {
+            // Full URI scheme response with status, headers, and content type.
+            pub(crate) fn webkit_uri_scheme_response_new(
+                input_stream: *mut GInputStream,
+                stream_length: i64,
+            ) -> *mut WebKitURISchemeResponse;
+            pub(crate) fn webkit_uri_scheme_response_set_status(
+                response: *mut WebKitURISchemeResponse,
+                status_code: u32,
+                reason_phrase: *const c_char,
+            );
+            pub(crate) fn webkit_uri_scheme_response_set_http_headers(
+                response: *mut WebKitURISchemeResponse,
+                headers: *mut SoupMessageHeaders,
+            );
+            pub(crate) fn webkit_uri_scheme_response_set_content_type(
+                response: *mut WebKitURISchemeResponse,
+                content_type: *const c_char,
+            );
+        }
+        _ => {}
+    }
 
     pub(crate) fn webkit_uri_scheme_request_get_uri(
         request: *mut WebKitURISchemeRequest,
     ) -> *const c_char;
-    // webkit2gtk-4.1: method, headers and body available on URI scheme requests
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_uri_scheme_request_get_http_method(
-        request: *mut WebKitURISchemeRequest,
-    ) -> *const c_char;
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_uri_scheme_request_get_http_headers(
-        request: *mut WebKitURISchemeRequest,
-    ) -> *mut SoupMessageHeaders;
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_uri_scheme_request_get_http_body(
-        request: *mut WebKitURISchemeRequest,
-    ) -> *mut GInputStream;
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_uri_scheme_request_finish_with_response(
-        request: *mut WebKitURISchemeRequest,
-        response: *mut WebKitURISchemeResponse,
-    );
-    // webkit2gtk-4.0: only URI is available; finish with stream + content-type
-    #[cfg(webkit2gtk_4_0)]
-    pub(crate) fn webkit_uri_scheme_request_finish(
-        request: *mut WebKitURISchemeRequest,
-        stream: *mut GInputStream,
-        stream_length: i64,
-        content_type: *const c_char,
-    );
+    cfg_select! {
+        webkit2gtk_4_1 => {
+            // Method, headers, and body are available on URI scheme requests.
+            pub(crate) fn webkit_uri_scheme_request_get_http_method(
+                request: *mut WebKitURISchemeRequest,
+            ) -> *const c_char;
+            pub(crate) fn webkit_uri_scheme_request_get_http_headers(
+                request: *mut WebKitURISchemeRequest,
+            ) -> *mut SoupMessageHeaders;
+            pub(crate) fn webkit_uri_scheme_request_get_http_body(
+                request: *mut WebKitURISchemeRequest,
+            ) -> *mut GInputStream;
+            pub(crate) fn webkit_uri_scheme_request_finish_with_response(
+                request: *mut WebKitURISchemeRequest,
+                response: *mut WebKitURISchemeResponse,
+            );
+        }
+        _ => {
+            // The 4.0 API only has URI access and finishes with a stream and content type.
+            pub(crate) fn webkit_uri_scheme_request_finish(
+                request: *mut WebKitURISchemeRequest,
+                stream: *mut GInputStream,
+                stream_length: i64,
+                content_type: *const c_char,
+            );
+        }
+    }
 
     pub(crate) fn webkit_web_view_get_type() -> *mut c_void;
     pub(crate) fn webkit_web_view_get_settings(web_view: *mut WebKitWebView)
@@ -135,26 +137,30 @@ unsafe extern "C" {
     );
     pub(crate) fn webkit_web_view_get_title(web_view: *mut WebKitWebView) -> *mut c_char;
     pub(crate) fn webkit_web_view_get_uri(web_view: *mut WebKitWebView) -> *mut c_char;
-    // webkit2gtk-4.1: evaluate_javascript replaces run_javascript
-    #[cfg(webkit2gtk_4_1)]
-    pub(crate) fn webkit_web_view_evaluate_javascript(
-        web_view: *mut WebKitWebView,
-        script: *const c_char,
-        length: usize,
-        world_name: *const c_char,
-        source_uri: *const c_char,
-        cancellable: *const c_void,
-        callback: *const c_void,
-        user_data: *const c_void,
-    );
-    #[cfg(webkit2gtk_4_0)]
-    pub(crate) fn webkit_web_view_run_javascript(
-        web_view: *mut WebKitWebView,
-        script: *const c_char,
-        cancellable: *const c_void,
-        callback: *const c_void,
-        user_data: *const c_void,
-    );
+    cfg_select! {
+        // evaluate_javascript replaces run_javascript in webkit2gtk-4.1.
+        webkit2gtk_4_1 => {
+            pub(crate) fn webkit_web_view_evaluate_javascript(
+                web_view: *mut WebKitWebView,
+                script: *const c_char,
+                length: usize,
+                world_name: *const c_char,
+                source_uri: *const c_char,
+                cancellable: *const c_void,
+                callback: *const c_void,
+                user_data: *const c_void,
+            );
+        }
+        _ => {
+            pub(crate) fn webkit_web_view_run_javascript(
+                web_view: *mut WebKitWebView,
+                script: *const c_char,
+                cancellable: *const c_void,
+                callback: *const c_void,
+                user_data: *const c_void,
+            );
+        }
+    }
     pub(crate) fn webkit_navigation_policy_decision_get_request(
         decision: *mut WebKitNavigationPolicyDecision,
     ) -> *mut WebKitURIRequest;
@@ -178,20 +184,23 @@ unsafe extern "C" {
         manager: *mut WebKitUserContentManager,
         name: *const c_char,
     );
-    // JSC GLib API available since webkit2gtk-4.0 2.22; the 4.1 API always has it.
-    #[cfg(any(webkit2gtk_4_1, webkit2gtk_4_0_jsc_glib))]
-    pub(crate) fn webkit_javascript_result_get_js_value(
-        result: *mut WebKitJavascriptResult,
-    ) -> *mut c_void;
-    // Legacy JavaScriptCore C API (webkit2gtk-4.0 < 2.22)
-    #[cfg(all(webkit2gtk_4_0, not(webkit2gtk_4_0_jsc_glib)))]
-    pub(crate) fn webkit_javascript_result_get_global_context(
-        result: *mut WebKitJavascriptResult,
-    ) -> *mut c_void;
-    #[cfg(all(webkit2gtk_4_0, not(webkit2gtk_4_0_jsc_glib)))]
-    pub(crate) fn webkit_javascript_result_get_value(
-        result: *mut WebKitJavascriptResult,
-    ) -> *mut c_void;
+    cfg_select! {
+        // JSC GLib is available since webkit2gtk-4.0 2.22; the 4.1 API always has it.
+        any(webkit2gtk_4_1, webkit2gtk_4_0_jsc_glib) => {
+            pub(crate) fn webkit_javascript_result_get_js_value(
+                result: *mut WebKitJavascriptResult,
+            ) -> *mut c_void;
+        }
+        _ => {
+            // Legacy JavaScriptCore C API (webkit2gtk-4.0 < 2.22).
+            pub(crate) fn webkit_javascript_result_get_global_context(
+                result: *mut WebKitJavascriptResult,
+            ) -> *mut c_void;
+            pub(crate) fn webkit_javascript_result_get_value(
+                result: *mut WebKitJavascriptResult,
+            ) -> *mut c_void;
+        }
+    }
     pub(crate) fn webkit_settings_set_user_agent(
         settings: *mut WebkitSettings,
         user_agent: *const c_char,
@@ -206,28 +215,31 @@ unsafe extern "C" {
     );
 }
 
-// MARK: JavaScriptCore GLib API (webkit2gtk-4.1 and webkit2gtk-4.0 >= 2.22)
-#[cfg(any(webkit2gtk_4_1, webkit2gtk_4_0_jsc_glib))]
-#[cfg_attr(webkit2gtk_4_1, link(name = "javascriptcoregtk-4.1"))]
-#[cfg_attr(webkit2gtk_4_0_jsc_glib, link(name = "javascriptcoregtk-4.0"))]
-unsafe extern "C" {
-    pub(crate) fn jsc_value_to_string(value: *mut c_void) -> *const c_char;
-}
-
-// MARK: JavaScriptCore C API (webkit2gtk-4.0 < 2.22)
-#[cfg(all(webkit2gtk_4_0, not(webkit2gtk_4_0_jsc_glib)))]
-#[link(name = "javascriptcoregtk-4.0")]
-unsafe extern "C" {
-    pub(crate) fn JSValueToStringCopy(
-        ctx: *mut c_void,
-        value: *mut c_void,
-        exception: *mut c_void,
-    ) -> *mut c_void;
-    pub(crate) fn JSStringGetMaximumUTF8CStringSize(string: *mut c_void) -> usize;
-    pub(crate) fn JSStringGetUTF8CString(
-        string: *mut c_void,
-        buffer: *mut c_char,
-        buffer_size: usize,
-    ) -> usize;
-    pub(crate) fn JSStringRelease(string: *mut c_void);
+cfg_select! {
+    // JavaScriptCore GLib API (webkit2gtk-4.1 and webkit2gtk-4.0 >= 2.22).
+    any(webkit2gtk_4_1, webkit2gtk_4_0_jsc_glib) => {
+        #[cfg_attr(webkit2gtk_4_1, link(name = "javascriptcoregtk-4.1"))]
+        #[cfg_attr(webkit2gtk_4_0_jsc_glib, link(name = "javascriptcoregtk-4.0"))]
+        unsafe extern "C" {
+            pub(crate) fn jsc_value_to_string(value: *mut c_void) -> *const c_char;
+        }
+    }
+    // Legacy JavaScriptCore C API (webkit2gtk-4.0 < 2.22).
+    _ => {
+        #[link(name = "javascriptcoregtk-4.0")]
+        unsafe extern "C" {
+            pub(crate) fn JSValueToStringCopy(
+                ctx: *mut c_void,
+                value: *mut c_void,
+                exception: *mut c_void,
+            ) -> *mut c_void;
+            pub(crate) fn JSStringGetMaximumUTF8CStringSize(string: *mut c_void) -> usize;
+            pub(crate) fn JSStringGetUTF8CString(
+                string: *mut c_void,
+                buffer: *mut c_char,
+                buffer_size: usize,
+            ) -> usize;
+            pub(crate) fn JSStringRelease(string: *mut c_void);
+        }
+    }
 }

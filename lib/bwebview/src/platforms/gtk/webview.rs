@@ -238,27 +238,27 @@ impl crate::WebviewInterface for PlatformWebview {
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         let script = script.as_ref();
         unsafe {
-            #[cfg(webkit2gtk_4_1)]
-            webkit_web_view_evaluate_javascript(
-                self.0.webview,
-                script.as_ptr() as *const c_char,
-                script.len(),
-                null(),
-                null(),
-                null(),
-                null(),
-                null(),
-            );
-            #[cfg(webkit2gtk_4_0)]
-            {
-                let script = CString::new(script).expect("Can't convert to CString");
-                webkit_web_view_run_javascript(
+            cfg_select! {
+                webkit2gtk_4_1 => webkit_web_view_evaluate_javascript(
                     self.0.webview,
-                    script.as_ptr(),
+                    script.as_ptr() as *const c_char,
+                    script.len(),
                     null(),
                     null(),
                     null(),
-                );
+                    null(),
+                    null(),
+                ),
+                _ => {
+                    let script = CString::new(script).expect("Can't convert to CString");
+                    webkit_web_view_run_javascript(
+                        self.0.webview,
+                        script.as_ptr(),
+                        null(),
+                        null(),
+                        null(),
+                    );
+                }
             }
         }
     }
@@ -318,8 +318,8 @@ extern "C" fn webview_on_navigation_policy_decision(
         let request = unsafe { webkit_navigation_policy_decision_get_request(decision) };
         let uri = unsafe { webkit_uri_request_get_uri(request) };
         cfg_select! {
-            gtk3_22 => { unsafe { gtk_show_uri_on_window(null_mut(), uri, 0, null_mut()) }; }
-            _ => { unsafe { gtk_show_uri(gdk_screen_get_default(), uri, 0, null_mut()) }; }
+            gtk3_22 => unsafe { gtk_show_uri_on_window(null_mut(), uri, 0, null_mut()) },
+            _ => unsafe { gtk_show_uri(gdk_screen_get_default(), uri, 0, null_mut()) },
         }
         return true;
     }
@@ -353,25 +353,26 @@ extern "C" fn webview_on_message_console(
     }
 }
 
-#[cfg(any(webkit2gtk_4_1, webkit2gtk_4_0_jsc_glib))]
 fn js_result_to_string(result: *mut WebKitJavascriptResult) -> String {
-    let value = unsafe { webkit_javascript_result_get_js_value(result) };
-    let s = unsafe { jsc_value_to_string(value) };
-    unsafe { CStr::from_ptr(s) }.to_string_lossy().into_owned()
-}
-
-#[cfg(all(webkit2gtk_4_0, not(webkit2gtk_4_0_jsc_glib)))]
-fn js_result_to_string(result: *mut WebKitJavascriptResult) -> String {
-    let ctx = unsafe { webkit_javascript_result_get_global_context(result) };
-    let value = unsafe { webkit_javascript_result_get_value(result) };
-    let js_str = unsafe { JSValueToStringCopy(ctx, value, null_mut()) };
-    let max_size = unsafe { JSStringGetMaximumUTF8CStringSize(js_str) };
-    let mut buf = vec![0u8; max_size];
-    unsafe { JSStringGetUTF8CString(js_str, buf.as_mut_ptr() as *mut c_char, max_size) };
-    unsafe { JSStringRelease(js_str) };
-    unsafe { CStr::from_ptr(buf.as_ptr() as *const c_char) }
-        .to_string_lossy()
-        .into_owned()
+    cfg_select! {
+        any(webkit2gtk_4_1, webkit2gtk_4_0_jsc_glib) => {
+            let value = unsafe { webkit_javascript_result_get_js_value(result) };
+            let s = unsafe { jsc_value_to_string(value) };
+            unsafe { CStr::from_ptr(s) }.to_string_lossy().into_owned()
+        }
+        _ => {
+            let ctx = unsafe { webkit_javascript_result_get_global_context(result) };
+            let value = unsafe { webkit_javascript_result_get_value(result) };
+            let js_str = unsafe { JSValueToStringCopy(ctx, value, null_mut()) };
+            let max_size = unsafe { JSStringGetMaximumUTF8CStringSize(js_str) };
+            let mut buf = vec![0u8; max_size];
+            unsafe { JSStringGetUTF8CString(js_str, buf.as_mut_ptr() as *mut c_char, max_size) };
+            unsafe { JSStringRelease(js_str) };
+            unsafe { CStr::from_ptr(buf.as_ptr() as *const c_char) }
+                .to_string_lossy()
+                .into_owned()
+        }
+    }
 }
 
 #[cfg(feature = "custom_protocol")]

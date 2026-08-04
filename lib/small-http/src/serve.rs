@@ -42,8 +42,8 @@ pub fn serve_single_threaded(
                 // Invalid request received
                 _ = write!(stream, "HTTP/1.0 400 Bad Request\r\n\r\n");
                 cfg_select! {
-                    feature = "log" => { log::error!("Invalid http request: {err:?}"); }
-                    _ => { eprintln!("[small-http] Error invalid http request: {err:?}"); }
+                    feature = "log" => log::error!("Invalid http request: {err:?}"),
+                    _ => eprintln!("[small-http] Error invalid http request: {err:?}"),
                 }
             }
         }
@@ -82,8 +82,8 @@ pub fn serve(
                         && err.kind() != std::io::ErrorKind::TimedOut
                     {
                         cfg_select! {
-                            feature = "log" => { log::error!("Peeking tcp stream: {err:?}"); }
-                            _ => { eprintln!("[small-http] Error peeking tcp stream: {err:?}"); }
+                            feature = "log" => log::error!("Peeking tcp stream: {err:?}"),
+                            _ => eprintln!("[small-http] Error peeking tcp stream: {err:?}"),
                         }
                     }
                     return;
@@ -117,8 +117,8 @@ pub fn serve(
                     // Invalid request received
                     _ = write!(stream, "HTTP/1.0 400 Bad Request\r\n\r\n");
                     cfg_select! {
-                        feature = "log" => { log::error!("Invalid http request: {err:?}"); }
-                        _ => { eprintln!("[small-http] Error invalid http request: {err:?}"); }
+                        feature = "log" => log::error!("Invalid http request: {err:?}"),
+                        _ => eprintln!("[small-http] Error invalid http request: {err:?}"),
                     }
                     return;
                 }

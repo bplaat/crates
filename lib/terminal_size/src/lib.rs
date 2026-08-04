@@ -99,8 +99,6 @@ pub fn terminal_size() -> Option<(Width, Height)> {
             let csbi = unsafe { csbi.assume_init() };
             Some((Width(csbi.dwSize.X as u16), Height(csbi.dwSize.Y as u16)))
         }
-        _ => {
-            compile_error!("Unsupported platform")
-        }
+        _ => compile_error!("Unsupported platform"),
     }
 }

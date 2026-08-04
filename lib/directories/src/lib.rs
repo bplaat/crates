@@ -127,21 +127,13 @@ impl ProjectDirs {
     pub fn from(qualifier: &str, organization: &str, application: &str) -> Option<Self> {
         Some(Self {
             home_dir: std::env::home_dir()?,
-            project_path: {
-                cfg_select! {
-                    all(unix, not(target_os = "macos")) => {
-                        PathBuf::from(application)
-                    }
-                    target_os = "macos" => {
-                        PathBuf::from(format!("{qualifier}.{organization}.{application}"))
-                    }
-                    windows => {
-                        PathBuf::from(organization).join(application)
-                    }
-                    _ => {
-                        unreachable!()
-                    }
+            project_path: cfg_select! {
+                all(unix, not(target_os = "macos")) => PathBuf::from(application),
+                target_os = "macos" => {
+                    PathBuf::from(format!("{qualifier}.{organization}.{application}"))
                 }
+                windows => PathBuf::from(organization).join(application),
+                _ => unreachable!(),
             },
         })
     }
@@ -162,15 +154,9 @@ impl ProjectDirs {
                     let xdg_cache = std::env::var("XDG_CACHE_HOME").map(PathBuf::from);
                     xdg_cache.unwrap_or_else(|_| self.home_dir.join(".cache"))
                 }
-                target_os = "macos" => {
-                    self.home_dir.join("Library").join("Caches")
-                }
-                windows => {
-                    windows::get_known_folder_path(&windows::FOLDERID_LOCAL_APPDATA)
-                }
-                _ => {
-                    unreachable!()
-                }
+                target_os = "macos" => self.home_dir.join("Library").join("Caches"),
+                windows => windows::get_known_folder_path(&windows::FOLDERID_LOCAL_APPDATA),
+                _ => unreachable!(),
             }
         };
         cache_dir.join(&self.project_path)
@@ -184,15 +170,9 @@ impl ProjectDirs {
                     let xdg_config = std::env::var("XDG_CONFIG_HOME").map(PathBuf::from);
                     xdg_config.unwrap_or_else(|_| self.home_dir.join(".config"))
                 }
-                target_os = "macos" => {
-                    self.home_dir.join("Library").join("Application Support")
-                }
-                windows => {
-                    windows::get_known_folder_path(&windows::FOLDERID_ROAMING_APPDATA)
-                }
-                _ => {
-                    unreachable!()
-                }
+                target_os = "macos" => self.home_dir.join("Library").join("Application Support"),
+                windows => windows::get_known_folder_path(&windows::FOLDERID_ROAMING_APPDATA),
+                _ => unreachable!(),
             }
         };
         config_dir.join(&self.project_path)
@@ -219,15 +199,9 @@ impl UserDirs {
                 let xdg_music = std::env::var("XDG_MUSIC_DIR").map(PathBuf::from);
                 xdg_music.unwrap_or_else(|_| self.home_dir.join("Music"))
             }
-            target_os = "macos" => {
-                self.home_dir.join("Music")
-            }
-            windows => {
-                windows::get_known_folder_path(&windows::FOLDERID_MUSIC)
-            }
-            _ => {
-                unreachable!()
-            }
+            target_os = "macos" => self.home_dir.join("Music"),
+            windows => windows::get_known_folder_path(&windows::FOLDERID_MUSIC),
+            _ => unreachable!(),
         }
     }
 }
