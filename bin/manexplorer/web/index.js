@@ -26,6 +26,7 @@ PetiteVue.createApp({
     sidebarTitle: 'Man Explorer',
     currentHash: '',
     pages: [],
+    indexState: 'loading',
     entries: [],
     searchQuery: '',
     searchResults: [],
@@ -96,6 +97,7 @@ PetiteVue.createApp({
     async loadPages() {
         const res = await fetch('/api/man');
         this.pages = await res.json();
+        this.indexState = 'loaded';
     },
 
     async openManPage(page, name) {

@@ -47,8 +47,14 @@
                     </div>
 
                     <div class="sidebar-content" ref="sidebarContent">
-                        <div id="pages" class="sidebar-container fixed" v-show="!searchQuery.trim()">
-                            <ul>
+                        <div
+                            id="pages"
+                            class="sidebar-container fixed"
+                            :class="{ placeholder: indexState === 'loading' }"
+                            v-show="!searchQuery.trim()"
+                        >
+                            <span v-show="indexState === 'loading'">Loading…</span>
+                            <ul v-show="indexState === 'loaded'">
                                 <li v-for="page in pages" :key="page.page">
                                     <a
                                         :href="'#' + page.page"

@@ -6,6 +6,7 @@
 
 #![doc = include_str!("../README.md")]
 
+use std::collections::HashSet;
 use std::process::{Command, exit};
 
 use anyhow::Result;
@@ -42,24 +43,20 @@ fn man_index(_req: &Request, _ctx: &()) -> Result<Response> {
                     .and_then(|n| n.parse::<i32>().ok())
                 {
                     // List all files in this manX directory
-                    let mut names = Vec::new();
+                    let mut names = HashSet::new();
                     if let Ok(file_iter) = std::fs::read_dir(&path) {
                         for file in file_iter.flatten() {
                             if let Some(file_name) = file.file_name().to_str() {
                                 // Remove file extension if present (e.g., "ls.1.gz" -> "ls")
-                                let name =
-                                    file_name.split('.').next().unwrap_or(file_name).to_string();
-                                if !name.is_empty() && !names.contains(&name) {
-                                    names.push(name);
+                                let name = file_name.split('.').next().unwrap_or(file_name);
+                                if !name.is_empty() {
+                                    names.insert(name.to_string());
                                 }
                             }
                         }
                     }
-                    names.sort_by(|a, b| {
-                        a.to_lowercase()
-                            .cmp(&b.to_lowercase())
-                            .then_with(|| a.cmp(b))
-                    });
+                    let mut names: Vec<_> = names.into_iter().collect();
+                    names.sort_by_cached_key(|name| (name.to_lowercase(), name.clone()));
                     pages.push(ManPage {
                         page: page_num,
                         names,
