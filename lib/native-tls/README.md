@@ -4,22 +4,6 @@ A minimal replacement for the [native-tls](https://crates.io/crates/native-tls) 
 
 ## Getting Started
 
-On some platforms, you may need to install additional dependencies before using this library:
-
-### Linux (Debian/Ubuntu)
-
-```sh
-sudo apt install libssl-dev
-```
-
-### Linux (Fedora)
-
-```sh
-sudo dnf install openssl-devel
-```
-
-### Code example
-
 A simple example that opens a TLS connection and sends an HTTPS request:
 
 ```rs

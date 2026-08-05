@@ -2,22 +2,40 @@
 
 A cross-platform webview library for Rust with minimal dependencies
 
-## Getting Started
+## Linux runtime dependencies
 
-On some platforms, you may need to install additional dependencies before using this library:
+The Linux backend requires the GTK 3 and WebKitGTK runtime libraries.
 
-### Linux (Debian/Ubuntu)
+### Debian / Ubuntu
+
+Ubuntu 22.04 and other distributions using the original GTK 3 package names:
 
 ```sh
-sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
-sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev # for older systems
+sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0
 ```
 
-### Linux (Fedora)
+Newer distributions using 64-bit `time_t` package names:
 
 ```sh
-sudo dnf install gtk3-devel webkit2gtk4.1-devel
-sudo dnf install gtk3-devel webkit2gtk4.0-devel # for older systems
+sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0
+```
+
+Older distributions with WebKitGTK 4.0 can use:
+
+```sh
+sudo apt install libgtk-3-0 libwebkit2gtk-4.0-37
+```
+
+### Fedora
+
+```sh
+sudo dnf install gtk3 webkit2gtk4.1
+```
+
+Older Fedora installations with WebKitGTK 4.0 can use:
+
+```sh
+sudo dnf install gtk3 webkit2gtk4.0
 ```
 
 ## Platforms

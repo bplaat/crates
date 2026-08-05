@@ -16,8 +16,6 @@ use super::glib::GInputStream;
 pub(crate) struct SoupMessageHeaders([u8; 0]);
 pub(crate) const SOUP_MESSAGE_HEADERS_RESPONSE: i32 = 1;
 // WebKitGTK 4.0 uses libsoup 2.4; WebKitGTK 4.1 uses libsoup 3.0.
-#[cfg_attr(webkit2gtk_4_0, link(name = "soup-2.4"))]
-#[cfg_attr(webkit2gtk_4_1, link(name = "soup-3.0"))]
 unsafe extern "C" {
     pub(crate) fn soup_message_headers_new(r#type: i32) -> *mut SoupMessageHeaders;
     pub(crate) fn soup_message_headers_foreach(
@@ -62,8 +60,6 @@ pub(crate) const WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION: i32 = 1;
 pub(crate) const WEBKIT_USER_CONTENT_INJECT_TOP_FRAME: i32 = 1;
 pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START: i32 = 0;
 pub(crate) const WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END: i32 = 1;
-#[cfg_attr(webkit2gtk_4_0, link(name = "webkit2gtk-4.0"))]
-#[cfg_attr(webkit2gtk_4_1, link(name = "webkit2gtk-4.1"))]
 unsafe extern "C" {
     pub(crate) fn webkit_web_context_get_default() -> *mut WebKitWebContext;
     pub(crate) fn webkit_web_context_register_uri_scheme(
@@ -195,8 +191,6 @@ unsafe extern "C" {
     );
 }
 
-#[cfg_attr(webkit2gtk_4_0, link(name = "javascriptcoregtk-4.0"))]
-#[cfg_attr(webkit2gtk_4_1, link(name = "javascriptcoregtk-4.1"))]
 unsafe extern "C" {
     // WebKitGTK 4.0 before 2.22
     pub(crate) fn JSValueToStringCopy(

@@ -12,7 +12,6 @@ use std::ffi::{c_char, c_void};
 #[repr(C)]
 pub(crate) struct GObject([u8; 0]);
 pub(crate) const G_CONNECT_DEFAULT: i32 = 0;
-#[link(name = "gobject-2.0")]
 unsafe extern "C" {
     pub(crate) fn g_object_new(
         object_type: *mut c_void,
@@ -42,7 +41,6 @@ pub(crate) struct GSList {
     pub(crate) data: *mut c_void,
     pub(crate) next: *mut GSList,
 }
-#[link(name = "glib-2.0")]
 unsafe extern "C" {
     pub(crate) fn g_set_prgname(prgname: *const c_char);
     pub(crate) fn g_error_free(error: *mut GError);
@@ -95,7 +93,6 @@ unsafe extern "C" {
 // MARK: GIO
 #[repr(C)]
 pub(crate) struct GInputStream([u8; 0]);
-#[link(name = "gio-2.0")]
 unsafe extern "C" {
     pub(crate) fn g_memory_input_stream_new_from_data(
         data: *const c_void,

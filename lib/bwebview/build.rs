@@ -7,7 +7,7 @@
 #![doc = include_str!("README.md")]
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
@@ -27,57 +27,7 @@ fn main() {
     println!("cargo::rustc-check-cfg=cfg(gtk3_22)");
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
     if target_os != "macos" && target_os != "windows" {
-        if pkg_config::Config::new()
-            .atleast_version("2.40")
-            .probe("webkit2gtk-4.1")
-            .is_ok()
-        {
-            println!("cargo:rustc-cfg=webkit2gtk_4_1");
-            // webkit2gtk-4.1 >= 2.40 requires GTK >= 3.22
-            println!("cargo:rustc-cfg=gtk3_20");
-            println!("cargo:rustc-cfg=gtk3_22");
-        } else if pkg_config::Config::new()
-            .atleast_version("2.20")
-            .probe("webkit2gtk-4.0")
-            .is_ok()
-        {
-            // webkit2gtk-4.0 does not enforce a GTK minimum that covers all APIs we use
-            pkg_config::Config::new()
-                .atleast_version("3.18")
-                .cargo_metadata(false)
-                .probe("gtk+-3.0")
-                .unwrap_or_else(|_| {
-                    panic!("bwebview requires gtk+-3.0 >= 3.18 when building with webkit2gtk-4.0")
-                });
-            if pkg_config::Config::new()
-                .atleast_version("3.20")
-                .cargo_metadata(false)
-                .probe("gtk+-3.0")
-                .is_ok()
-            {
-                println!("cargo:rustc-cfg=gtk3_20");
-            }
-            if pkg_config::Config::new()
-                .atleast_version("3.22")
-                .cargo_metadata(false)
-                .probe("gtk+-3.0")
-                .is_ok()
-            {
-                println!("cargo:rustc-cfg=gtk3_22");
-            }
-            // JSC GLib API is only available from 2.22 onward
-            if pkg_config::Config::new()
-                .atleast_version("2.22")
-                .cargo_metadata(false)
-                .probe("webkit2gtk-4.0")
-                .is_ok()
-            {
-                println!("cargo:rustc-cfg=webkit2gtk_4_0_jsc_glib");
-            }
-            println!("cargo:rustc-cfg=webkit2gtk_4_0");
-        } else {
-            panic!("bwebview requires webkit2gtk-4.1 >= 2.40 or webkit2gtk-4.0 >= 2.20");
-        }
+        link_gtk_libraries();
     }
 
     // Windows requires generating bindings from the WebView2 winmd and linking with WebView2Loader
@@ -127,6 +77,147 @@ fn main() {
             }
         }
     }
+}
+
+fn link_gtk_libraries() {
+    println!("cargo::rerun-if-env-changed=BWEBVIEW_LIB_DIR");
+
+    let mut search_dirs = Vec::new();
+    if let Some(path) = env::var_os("BWEBVIEW_LIB_DIR") {
+        push_unique(&mut search_dirs, PathBuf::from(path));
+    }
+    if let Some(multiarch) = command_stdout("cc", &["-print-multiarch"]) {
+        let multiarch = multiarch.trim();
+        if !multiarch.is_empty() {
+            push_unique(&mut search_dirs, PathBuf::from("/usr/lib").join(multiarch));
+            push_unique(&mut search_dirs, PathBuf::from("/lib").join(multiarch));
+        }
+    }
+    for path in ["/usr/local/lib", "/usr/lib64", "/lib64", "/usr/lib", "/lib"] {
+        push_unique(&mut search_dirs, PathBuf::from(path));
+    }
+
+    let gtk = require_library(&search_dirs, "gtk-3");
+    let gdk = require_library(&search_dirs, "gdk-3");
+    // gtk_widget_set_font_map was added in GTK 3.18 and serves as a
+    // runtime-only minimum-version marker.
+    if !library_has_symbol(&gtk, b"gtk_widget_set_font_map") {
+        panic!("bwebview requires GTK 3.18 or newer");
+    }
+    for name in ["gobject-2.0", "glib-2.0", "gio-2.0"] {
+        link_library(&require_library(&search_dirs, name));
+    }
+    link_library(&gtk);
+    link_library(&gdk);
+
+    if library_has_symbol(&gtk, b"gtk_file_chooser_native_new") {
+        println!("cargo::rustc-cfg=gtk3_20");
+    }
+    if library_has_symbol(&gdk, b"gdk_display_get_n_monitors") {
+        println!("cargo::rustc-cfg=gtk3_22");
+    }
+
+    if let Some(webkit) = find_library(&search_dirs, "webkit2gtk-4.1") {
+        link_library(&webkit);
+        link_library(&require_library(&search_dirs, "javascriptcoregtk-4.1"));
+        link_library(&require_library(&search_dirs, "soup-3.0"));
+        println!("cargo::rustc-cfg=webkit2gtk_4_1");
+        // WebKitGTK 4.1 starts at 2.40 and therefore requires GTK 3.22.
+        println!("cargo::rustc-cfg=gtk3_20");
+        println!("cargo::rustc-cfg=gtk3_22");
+    } else if let Some(webkit) = find_library(&search_dirs, "webkit2gtk-4.0") {
+        // webkit_cookie_manager_get_cookies was added in WebKitGTK 2.20
+        // and serves as a runtime-only minimum-version marker.
+        if !library_has_symbol(&webkit, b"webkit_cookie_manager_get_cookies") {
+            panic!("bwebview requires WebKitGTK 4.0 version 2.20 or newer");
+        }
+        link_library(&webkit);
+        link_library(&require_library(&search_dirs, "javascriptcoregtk-4.0"));
+        link_library(&require_library(&search_dirs, "soup-2.4"));
+        if library_has_symbol(&webkit, b"webkit_javascript_result_get_js_value") {
+            println!("cargo::rustc-cfg=webkit2gtk_4_0_jsc_glib");
+        }
+        println!("cargo::rustc-cfg=webkit2gtk_4_0");
+    } else {
+        panic!(
+            "could not find the WebKitGTK runtime library (webkit2gtk-4.1 or webkit2gtk-4.0); searched: {}. Set BWEBVIEW_LIB_DIR to its library directory",
+            display_paths(&search_dirs)
+        );
+    }
+}
+
+fn find_library(search_dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
+    let prefix = format!("lib{name}.so");
+    for directory in search_dirs {
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            continue;
+        };
+        let mut candidates = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|file| file.to_str())
+                    .is_some_and(|file| file == prefix || file.starts_with(&format!("{prefix}.")))
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|path| path.file_name().is_some_and(|file| file == prefix.as_str()));
+        if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn require_library(search_dirs: &[PathBuf], name: &str) -> PathBuf {
+    find_library(search_dirs, name).unwrap_or_else(|| {
+        panic!(
+            "could not find the {name} runtime library; searched: {}. Set BWEBVIEW_LIB_DIR to its library directory",
+            display_paths(search_dirs)
+        )
+    })
+}
+
+fn link_library(path: &Path) {
+    let directory = path
+        .parent()
+        .expect("library should have a parent directory");
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("library filename should be valid UTF-8");
+    println!("cargo::rustc-link-search=native={}", directory.display());
+    println!("cargo::rustc-link-lib=dylib:+verbatim={file_name}");
+}
+
+fn library_has_symbol(path: &Path, symbol: &[u8]) -> bool {
+    std::fs::read(path)
+        .is_ok_and(|bytes| bytes.windows(symbol.len()).any(|window| window == symbol))
+}
+
+fn command_stdout(command: &str, args: &[&str]) -> Option<String> {
+    let output = std::process::Command::new(command)
+        .args(args)
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {
+    if !path.as_os_str().is_empty() && !paths.iter().any(|existing| existing == &path) {
+        paths.push(path);
+    }
+}
+
+fn display_paths(paths: &[PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 // (method_name, params: Vec<(param_name, param_type)>, ret_type)

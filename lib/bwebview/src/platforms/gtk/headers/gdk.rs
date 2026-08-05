@@ -34,7 +34,6 @@ pub(crate) struct GdkScreen([u8; 0]);
 #[repr(C)]
 pub(crate) struct GdkMonitor([u8; 0]);
 
-#[link(name = "gdk-3")]
 unsafe extern "C" {
     pub(crate) fn gdk_display_get_default() -> *mut GdkDisplay;
     pub(crate) fn gdk_display_get_name(display: *mut GdkDisplay) -> *const c_char;

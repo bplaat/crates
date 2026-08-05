@@ -23,7 +23,6 @@ pub(crate) struct GtkSettings([u8; 0]);
 pub(crate) const GTK_WINDOW_TOPLEVEL: i32 = 0;
 pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
 pub(crate) const GTK_STATE_FLAG_NORMAL: i32 = 0;
-#[link(name = "gtk-3")]
 unsafe extern "C" {
     pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
     pub(crate) fn gtk_main();
@@ -83,7 +82,6 @@ pub(crate) struct GtkFileChooserNative([u8; 0]);
 #[repr(C)]
 pub(crate) struct GtkNativeDialog([u8; 0]);
 
-#[link(name = "gtk-3")]
 unsafe extern "C" {
     pub(crate) fn gtk_file_chooser_set_select_multiple(chooser: *mut c_void, select_multiple: bool);
     pub(crate) fn gtk_file_chooser_set_current_folder(
