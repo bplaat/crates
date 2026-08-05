@@ -30,6 +30,22 @@ pub enum MacosTitlebarStyle {
     Hidden,
 }
 
+// MARK: WindowsProgressBarState
+/// Windows taskbar progress state
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WindowsProgressBarState {
+    /// Show normal progress
+    #[default]
+    Normal,
+    /// Show failed progress
+    Error,
+    /// Show paused progress
+    Paused,
+    /// Show progress without a known completion percentage
+    Indeterminate,
+}
+
 // MARK: WindowBuilder
 /// Window builder
 pub struct WindowBuilder<'a> {
@@ -168,8 +184,18 @@ pub(crate) trait WindowInterface {
     fn set_resizable(&mut self, resizable: bool);
     fn set_theme(&mut self, theme: Theme);
     fn set_background_color(&mut self, color: u32);
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+    ))]
+    fn gtk_set_progress_bar(&mut self, progress: Option<f32>);
     #[cfg(target_os = "macos")]
     fn macos_titlebar_size(&self) -> LogicalSize;
+    #[cfg(windows)]
+    fn windows_set_progress_bar(&mut self, progress: Option<f32>, state: WindowsProgressBarState);
 }
 
 // MARK: Window
@@ -224,9 +250,32 @@ impl Window {
         self.platform.set_background_color(color)
     }
 
+    /// Set GTK application launcher progress, use a value above `1.0` for indeterminate progress,
+    /// or hide it with `None`
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
+    pub fn gtk_set_progress_bar(&mut self, progress: Option<f32>) {
+        self.platform.gtk_set_progress_bar(progress)
+    }
+
     /// Get macOS titlebar size
     #[cfg(target_os = "macos")]
     pub fn macos_titlebar_size(&self) -> LogicalSize {
         self.platform.macos_titlebar_size()
+    }
+
+    /// Set Windows taskbar progress for this window, or hide it with `None`
+    #[cfg(windows)]
+    pub fn windows_set_progress_bar(
+        &mut self,
+        progress: Option<f32>,
+        state: WindowsProgressBarState,
+    ) {
+        self.platform.windows_set_progress_bar(progress, state)
     }
 }

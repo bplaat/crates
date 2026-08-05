@@ -20,7 +20,7 @@ fn main() {
 <meta charset="utf-8">
 <title>File Dialog Example</title>
 <style>
-body { font-family: sans-serif; padding: 1rem 2rem; display: flex; flex-direction: column; gap: .75rem; }
+body { font: 16px system-ui, sans-serif; padding: 1rem 2rem; display: flex; flex-direction: column; gap: .75rem; background-color: #fff; color: #111; }
 button { padding: .5rem 1rem; font-size: 1rem; cursor: pointer; }
 #result { margin-top: 1rem; white-space: pre-wrap; font-family: monospace;
           background: #f5f5f5; padding: 1rem; border-radius: 4px; min-height: 3rem; }
