@@ -2,7 +2,7 @@
 Version=1.0
 Type=Application
 Name=ManExplorer
-Exec=
+Exec="$BIN_DIR/ManExplorer"
 Icon=nl.bplaat.ManExplorer
 Terminal=false
 Categories=Utility;

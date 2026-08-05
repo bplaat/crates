@@ -6,6 +6,7 @@
 
 use std::cell::Cell;
 use std::ffi::c_void;
+use std::path::PathBuf;
 use std::ptr::null;
 
 use objc2::rc::autoreleasepool;
@@ -32,6 +33,9 @@ define_class!(
 
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
         const fn _should_terminate(&self, _: *mut Object) -> Bool { Bool::YES }
+
+        #[unsafe(method(application:openURLs:))]
+        fn _open_urls(&self, _: *mut Object, urls: *mut Object) { self.open_urls(urls); }
 
         #[unsafe(method(sendEvent:))]
         fn _send_event(&self, value: *mut Object) { self.send_event(value); }
@@ -62,6 +66,24 @@ impl AppDelegate {
         let ptr: *mut c_void = unsafe { msg_send![value, pointerValue] };
         let event = unsafe { Box::from_raw(ptr as *mut Event) };
         send_event(*event);
+    }
+
+    fn open_urls(&self, urls: *mut Object) {
+        let mut paths = Vec::new();
+        unsafe {
+            let count: usize = msg_send![urls, count];
+            for index in 0..count {
+                let url: *mut Object = msg_send![urls, objectAtIndex:index];
+                let is_file_url: Bool = msg_send![url, isFileURL];
+                if is_file_url == Bool::YES {
+                    let path: NSString = msg_send![url, path];
+                    paths.push(PathBuf::from(path.to_string()));
+                }
+            }
+        }
+        if !paths.is_empty() {
+            send_event(Event::MacosOpenFiles(paths));
+        }
     }
 
     fn open_about_dialog(&self) {

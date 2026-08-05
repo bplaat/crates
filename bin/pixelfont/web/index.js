@@ -147,6 +147,8 @@ PetiteVue.createApp({
     },
 
     async init() {
+        window.addEventListener('bwebview-open-file', (event) => this._loadFont(event.detail));
+
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
             this.renderAllChars();
             this._renderPreview();
@@ -173,10 +175,13 @@ PetiteVue.createApp({
             }
         });
 
-        this.$nextTick(() => {
+        this.$nextTick(async () => {
             this._updateTitle();
             this.renderAllChars();
             this.selectChar(0);
+            if (window.startupFilePath) {
+                await this._loadFont(window.startupFilePath);
+            }
         });
     },
 

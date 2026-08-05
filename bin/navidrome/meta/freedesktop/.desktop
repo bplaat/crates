@@ -2,7 +2,7 @@
 Version=1.0
 Type=Application
 Name=Navidrome
-Exec=
+Exec="$BIN_DIR/Navidrome"
 Icon=nl.bplaat.Navidrome
 Terminal=false
 Categories=AudioVideo;Player;

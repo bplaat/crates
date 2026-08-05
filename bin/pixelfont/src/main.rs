@@ -16,6 +16,14 @@ use serde::{Deserialize, Serialize};
 
 const FONT_SIZE: usize = 256 * 8;
 
+#[cfg(target_os = "macos")]
+fn open_file_script(path: &str) -> String {
+    format!(
+        "window.dispatchEvent(new CustomEvent('bwebview-open-file', {{ detail: {} }}));",
+        serde_json::to_string(path).expect("Failed to serialize file path")
+    )
+}
+
 #[derive(Embed)]
 #[folder = "web"]
 struct WebAssets;
@@ -68,6 +76,7 @@ enum IpcMessage {
 
 // MARK: Main
 fn main() {
+    let startup_path = std::env::args().nth(1);
     let event_loop = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "PixelFontEditor")
         .build();
@@ -90,7 +99,43 @@ fn main() {
         .load_rust_embed::<WebAssets>()
         .build();
 
+    if let Some(path) = startup_path {
+        webview.add_user_script(
+            format!(
+                "window.startupFilePath = {};",
+                serde_json::to_string(&path).expect("Failed to serialize startup path")
+            ),
+            bwebview::InjectionTime::DocumentStart,
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    let mut page_loaded = false;
+    #[cfg(target_os = "macos")]
+    let mut pending_open_path: Option<String> = None;
     event_loop.run(move |event| {
+        #[cfg(target_os = "macos")]
+        if let Event::Webview(WebviewEvent::PageLoadStart) = &event {
+            page_loaded = false;
+        }
+        #[cfg(target_os = "macos")]
+        if let Event::Webview(WebviewEvent::PageLoadFinish) = &event {
+            page_loaded = true;
+            if let Some(path) = pending_open_path.take() {
+                webview.evaluate_script(open_file_script(&path));
+            }
+        }
+        #[cfg(target_os = "macos")]
+        if let Event::MacosOpenFiles(paths) = &event
+            && let Some(path) = paths.first()
+        {
+            let path = path.to_string_lossy().into_owned();
+            if page_loaded {
+                webview.evaluate_script(open_file_script(&path));
+            } else {
+                pending_open_path = Some(path);
+            }
+        }
         if let Event::Webview(WebviewEvent::PageTitleChange(title)) = &event {
             window.set_title(title);
         }

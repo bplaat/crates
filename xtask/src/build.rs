@@ -180,8 +180,10 @@ impl Xtask {
                 let bin = home.join(".local/bin");
                 let applications = data.join("applications");
                 let icons = data.join("icons/hicolor");
+                let mime_packages = data.join("mime/packages");
                 fs::create_dir_all(&bin)?;
                 fs::create_dir_all(&applications)?;
+                fs::create_dir_all(&mime_packages)?;
                 for app in self.installable_apps()? {
                     run(Command::new("cargo").args(["build", "--release", "--bin", &app.package]))?;
                     let executable = bin.join(&app.name);
@@ -193,12 +195,21 @@ impl Xtask {
                         self.root
                             .join(format!("bin/{}/meta/freedesktop/.desktop", app.package)),
                     )?;
-                    let desktop_entry = desktop_template
-                        .replace("Exec=\n", &format!("Exec=\"{}\"\n", executable.display()));
+                    let desktop_entry =
+                        desktop_template.replace("$BIN_DIR", &bin.to_string_lossy());
                     fs::write(
                         applications.join(format!("{}.desktop", app.identifier)),
                         desktop_entry,
                     )?;
+                    let mime_package = self
+                        .root
+                        .join(format!("bin/{}/meta/freedesktop/mime.xml", app.package));
+                    if mime_package.exists() {
+                        fs::copy(
+                            mime_package,
+                            mime_packages.join(format!("{}.xml", app.identifier)),
+                        )?;
+                    }
                     for size in [16, 24, 32, 48, 64, 128, 256, 512] {
                         let destination = icons.join(format!("{size}x{size}/apps"));
                         fs::create_dir_all(&destination)?;
@@ -211,6 +222,7 @@ impl Xtask {
                         )?;
                     }
                 }
+                run(Command::new("update-mime-database").arg(data.join("mime")))?;
                 run(Command::new("update-desktop-database").arg(&applications))?;
                 run(Command::new("gtk-update-icon-cache")
                     .args(["--force", "--ignore-theme-index"])

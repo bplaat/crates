@@ -2,7 +2,8 @@
 Version=1.0
 Type=Application
 Name=Sequel Explorer
-Exec=
+Exec="$BIN_DIR/SequelExplorer" %f
 Icon=nl.bplaat.SequelExplorer
 Terminal=false
 Categories=Utility;
+MimeType=application/vnd.sqlite3;

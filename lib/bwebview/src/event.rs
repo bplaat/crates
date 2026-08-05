@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
+
 use crate::{LogicalPoint, LogicalSize};
 
 /// Window event
@@ -41,4 +44,7 @@ pub enum Event {
     Webview(WebviewEvent),
     /// User event
     UserEvent(String),
+    /// Files opened through macOS Launch Services
+    #[cfg(target_os = "macos")]
+    MacosOpenFiles(Vec<PathBuf>),
 }

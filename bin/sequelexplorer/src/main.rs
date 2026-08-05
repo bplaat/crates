@@ -27,6 +27,14 @@ use small_router::RouterBuilder;
 #[folder = "web"]
 struct WebAssets;
 
+#[cfg(target_os = "macos")]
+fn open_file_script(path: &str) -> String {
+    format!(
+        "window.dispatchEvent(new CustomEvent('bwebview-open-file', {{ detail: {} }}));",
+        serde_json::to_string(path).expect("Failed to serialize file path")
+    )
+}
+
 // MARK: IPC messages
 #[derive(Deserialize, Serialize)]
 #[allow(clippy::enum_variant_names)]
@@ -289,6 +297,7 @@ fn db_query(req: &Request, state: &State) -> Result<Response> {
 // MARK: Main
 
 fn main() {
+    let startup_path = std::env::args().nth(1);
     let state: State = Arc::new(Mutex::new(None));
     let event_loop = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "SequelExplorer")
@@ -330,6 +339,16 @@ fn main() {
         })
         .build();
 
+    if let Some(path) = startup_path {
+        webview.add_user_script(
+            format!(
+                "window.startupFilePath = {};",
+                serde_json::to_string(&path).expect("Failed to serialize startup path")
+            ),
+            bwebview::InjectionTime::DocumentStart,
+        );
+    }
+
     #[cfg(target_os = "macos")]
     webview.add_user_script(
         format!(
@@ -339,7 +358,31 @@ fn main() {
         bwebview::InjectionTime::DocumentStart,
     );
 
+    #[cfg(target_os = "macos")]
+    let mut page_loaded = false;
+    #[cfg(target_os = "macos")]
+    let mut pending_open_path: Option<String> = None;
     event_loop.run(move |event| match event {
+        #[cfg(target_os = "macos")]
+        Event::Webview(WebviewEvent::PageLoadStart) => page_loaded = false,
+        #[cfg(target_os = "macos")]
+        Event::MacosOpenFiles(paths) => {
+            if let Some(path) = paths.first() {
+                let path = path.to_string_lossy().into_owned();
+                if page_loaded {
+                    webview.evaluate_script(open_file_script(&path));
+                } else {
+                    pending_open_path = Some(path);
+                }
+            }
+        }
+        #[cfg(target_os = "macos")]
+        Event::Webview(WebviewEvent::PageLoadFinish) => {
+            page_loaded = true;
+            if let Some(path) = pending_open_path.take() {
+                webview.evaluate_script(open_file_script(&path));
+            }
+        }
         Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
         #[cfg(target_os = "macos")]
         Event::Window(bwebview::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {

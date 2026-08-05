@@ -52,6 +52,10 @@ PetiteVue.createApp({
     isLoading: false,
 
     async init() {
+        window.addEventListener('bwebview-open-file', (event) =>
+            this._openDatabaseByPath(event.detail),
+        );
+
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting && this.currentTable && !this.isCustomQuery) {
@@ -62,8 +66,11 @@ PetiteVue.createApp({
         );
         observer.observe(this.$refs.loadSentinel);
 
-        const lastDbPath = localStorage.getItem('lastDbPath');
-        if (lastDbPath) {
+        if (window.startupFilePath) {
+            await this._openDatabaseByPath(window.startupFilePath);
+        } else {
+            const lastDbPath = localStorage.getItem('lastDbPath');
+            if (!lastDbPath) return;
             await this._openDatabaseByPath(lastDbPath);
         }
     },

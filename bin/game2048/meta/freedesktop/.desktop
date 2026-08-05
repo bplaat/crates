@@ -2,7 +2,7 @@
 Version=1.0
 Type=Application
 Name=2048
-Exec=
+Exec="$BIN_DIR/2048"
 Icon=nl.bplaat.2048
 Terminal=false
 Categories=Game;
