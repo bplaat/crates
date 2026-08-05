@@ -300,6 +300,7 @@ unsafe extern "system" {
         dwData: LPARAM,
     ) -> BOOL;
     pub(crate) fn PostMessageW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> BOOL;
+    pub(crate) fn RegisterWindowMessageW(lpString: *const w_char) -> u32;
     pub(crate) fn GetMonitorInfoW(hMonitor: HMONITOR, lpmi: *mut MONITORINFOEXW) -> BOOL;
     pub(crate) fn GetDpiForSystem() -> u32;
     pub(crate) fn GetDpiForWindow(hWnd: HWND) -> u32;
@@ -800,4 +801,40 @@ pub(crate) struct IFileSaveDialogVtbl {
     _add_place: usize, // AddPlace
     pub(crate) SetDefaultExtension: unsafe extern "system" fn(*mut c_void, *const u16) -> HRESULT,
     // Close, SetClientGuid, ClearClientData, SetFilter, then IFileSaveDialog methods
+}
+
+// MARK: ITaskbarList3
+pub(crate) const CLSID_TASKBAR_LIST: GUID = GUID {
+    data1: 0x56FDF344,
+    data2: 0xFD6D,
+    data3: 0x11D0,
+    data4: [0x95, 0x8A, 0x00, 0x60, 0x97, 0xC9, 0xA0, 0x90],
+};
+pub(crate) const IID_TASKBAR_LIST3: GUID = GUID {
+    data1: 0xEA1AFB91,
+    data2: 0x9E28,
+    data3: 0x4B86,
+    data4: [0x90, 0xE9, 0x9E, 0x9F, 0x8A, 0x5E, 0xEF, 0xAF],
+};
+
+#[repr(C)]
+pub(crate) struct TaskbarList3 {
+    pub(crate) vtable: *const TaskbarList3Vtable,
+}
+
+#[repr(C)]
+pub(crate) struct TaskbarList3Vtable {
+    query_interface: usize,
+    add_ref: usize,
+    pub(crate) release: unsafe extern "system" fn(*mut TaskbarList3) -> u32,
+    pub(crate) hr_init: unsafe extern "system" fn(*mut TaskbarList3) -> HRESULT,
+    add_tab: usize,
+    delete_tab: usize,
+    activate_tab: usize,
+    set_active_alt: usize,
+    mark_fullscreen_window: usize,
+    pub(crate) set_progress_value:
+        unsafe extern "system" fn(*mut TaskbarList3, HWND, u64, u64) -> HRESULT,
+    pub(crate) set_progress_state:
+        unsafe extern "system" fn(*mut TaskbarList3, HWND, u32) -> HRESULT,
 }

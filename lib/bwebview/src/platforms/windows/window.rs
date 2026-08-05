@@ -11,10 +11,14 @@ use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
 
-use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event, system_theme};
+use super::event_loop::{
+    APP_ID, FIRST_HWND, TASKBAR_BUTTON_CREATED, WM_SEND_MESSAGE, send_event, system_theme,
+};
 use super::webview2::*;
 use super::win32::*;
-use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
+use crate::{
+    LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent, WindowsProgressBarState,
+};
 
 pub(super) struct WindowData {
     pub(super) hwnd: HWND,
@@ -23,6 +27,8 @@ pub(super) struct WindowData {
     pub(super) background_color: Option<u32>,
     pub(super) remember_window_state: bool,
     pub(super) resize_callback: Option<Box<dyn Fn(i32, i32)>>,
+    taskbar_button_ready: bool,
+    progress_bar: (Option<f32>, WindowsProgressBarState),
 }
 
 pub(crate) struct PlatformWindow(pub(super) Box<WindowData>);
@@ -79,6 +85,8 @@ impl PlatformWindow {
             background_color: builder.background_color,
             remember_window_state: builder.remember_window_state,
             resize_callback: None,
+            taskbar_button_ready: false,
+            progress_bar: (None, WindowsProgressBarState::Normal),
         });
 
         // Check if window class is already registered
@@ -333,6 +341,13 @@ impl crate::WindowInterface for PlatformWindow {
         self.0.background_color = Some(color);
         unsafe { InvalidateRect(self.0.hwnd, null_mut(), TRUE) };
     }
+
+    fn windows_set_progress_bar(&mut self, progress: Option<f32>, state: WindowsProgressBarState) {
+        self.0.progress_bar = (progress, state);
+        if self.0.taskbar_button_ready {
+            set_progress_bar(self.0.hwnd, progress, state);
+        }
+    }
 }
 
 unsafe extern "system" fn window_proc(
@@ -356,6 +371,11 @@ unsafe extern "system" fn window_proc(
         window_data
     };
     match msg {
+        message if message == unsafe { TASKBAR_BUTTON_CREATED } => {
+            _self.taskbar_button_ready = true;
+            set_progress_bar(hwnd, _self.progress_bar.0, _self.progress_bar.1);
+            0
+        }
         WM_CREATE => {
             send_event(crate::Event::Window(WindowEvent::Create));
             0
@@ -484,4 +504,42 @@ pub(super) fn config_dir() -> PathBuf {
     }
     .expect("Can't get dirs");
     project_dirs.config_dir()
+}
+
+// MARK: Windows progress bar
+fn set_progress_bar(hwnd: HWND, progress: Option<f32>, state: WindowsProgressBarState) {
+    let mut taskbar = null_mut::<TaskbarList3>();
+    let result = unsafe {
+        CoCreateInstance(
+            &CLSID_TASKBAR_LIST,
+            null_mut(),
+            CLSCTX_INPROC_SERVER,
+            &IID_TASKBAR_LIST3,
+            &mut taskbar as *mut _ as *mut *mut c_void,
+        )
+    };
+    if result < 0 || taskbar.is_null() {
+        return;
+    }
+    unsafe {
+        let vtable = &*(*taskbar).vtable;
+        if (vtable.hr_init)(taskbar) >= 0 {
+            let taskbar_state = match (progress, state) {
+                (None, _) => 0,
+                (Some(_), WindowsProgressBarState::Normal) => 2,
+                (Some(_), WindowsProgressBarState::Error) => 4,
+                (Some(_), WindowsProgressBarState::Paused) => 8,
+                (Some(_), WindowsProgressBarState::Indeterminate) => 1,
+            };
+            if let (Some(progress), false) = (
+                progress,
+                matches!(state, WindowsProgressBarState::Indeterminate),
+            ) {
+                let progress = progress.clamp(0.0, 1.0);
+                _ = (vtable.set_progress_value)(taskbar, hwnd, (progress * 1000.0) as u64, 1000);
+            }
+            _ = (vtable.set_progress_state)(taskbar, hwnd, taskbar_state);
+        }
+        _ = (vtable.release)(taskbar);
+    }
 }

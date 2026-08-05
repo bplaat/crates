@@ -8,7 +8,7 @@ use std::ffi::{CStr, CString, c_void};
 use std::ptr::{null, null_mut};
 use std::{env, fs};
 
-use super::event_loop::{APP_ID, primary_monitor_rect, send_event};
+use super::event_loop::{APP_ID, primary_monitor_rect, send_event, update_progress_bar};
 use super::headers::*;
 use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
@@ -215,7 +215,7 @@ impl PlatformWindow {
 impl crate::WindowInterface for PlatformWindow {
     fn set_title(&mut self, title: impl AsRef<str>) {
         let title = CString::new(title.as_ref()).expect("Can't convert to CString");
-        unsafe { gtk_window_set_title(self.0.window, title.as_ptr()) }
+        unsafe { gtk_window_set_title(self.0.window, title.as_ptr()) };
     }
 
     fn position(&self) -> LogicalPoint {
@@ -288,6 +288,10 @@ impl crate::WindowInterface for PlatformWindow {
                 &rgba,
             );
         }
+    }
+
+    fn gtk_set_progress_bar(&mut self, progress: Option<f32>) {
+        update_progress_bar(progress);
     }
 }
 

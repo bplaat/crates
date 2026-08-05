@@ -16,6 +16,7 @@ use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
 pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 pub(super) static mut FIRST_HWND: Option<HWND> = None;
+pub(super) static mut TASKBAR_BUTTON_CREATED: u32 = 0;
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
@@ -49,6 +50,10 @@ impl PlatformEventLoop {
                 null_mut(),
                 COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE,
             );
+
+            // Explorer creates the taskbar button asynchronously. Shell APIs must
+            // not be used until the window receives this registered message.
+            TASKBAR_BUTTON_CREATED = RegisterWindowMessageW(wide!("TaskbarButtonCreated").as_ptr());
 
             enable_high_dpi_awareness();
 
