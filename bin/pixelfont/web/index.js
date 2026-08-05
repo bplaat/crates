@@ -70,7 +70,7 @@ function opRotateBytes(bytes) {
                 byte |= 1 << row;
             }
         }
-        result[7 - col] = byte;
+        result[col] = byte;
     }
     return result;
 }
