@@ -16,14 +16,6 @@ use serde::{Deserialize, Serialize};
 
 const FONT_SIZE: usize = 256 * 8;
 
-#[cfg(target_os = "macos")]
-fn open_file_script(path: &str) -> String {
-    format!(
-        "window.dispatchEvent(new CustomEvent('bwebview-open-file', {{ detail: {} }}));",
-        serde_json::to_string(path).expect("Failed to serialize file path")
-    )
-}
-
 #[derive(Embed)]
 #[folder = "web"]
 struct WebAssets;
@@ -32,6 +24,9 @@ struct WebAssets;
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum IpcMessage {
+    OpenFile {
+        path: String,
+    },
     OpenFileDialog,
     OpenFileDialogResponse {
         path: Option<String>,
@@ -93,6 +88,7 @@ fn main() {
         })
         .center()
         .remember_window_state()
+        .allow_file_drop(true)
         .build();
 
     let mut webview = WebviewBuilder::new(&window)
@@ -122,7 +118,10 @@ fn main() {
         if let Event::Webview(WebviewEvent::PageLoadFinish) = &event {
             page_loaded = true;
             if let Some(path) = pending_open_path.take() {
-                webview.evaluate_script(open_file_script(&path));
+                webview.send_ipc_message(
+                    serde_json::to_string(&IpcMessage::OpenFile { path })
+                        .expect("Failed to serialize open file message"),
+                );
             }
         }
         #[cfg(target_os = "macos")]
@@ -131,13 +130,24 @@ fn main() {
         {
             let path = path.to_string_lossy().into_owned();
             if page_loaded {
-                webview.evaluate_script(open_file_script(&path));
+                webview.send_ipc_message(
+                    serde_json::to_string(&IpcMessage::OpenFile { path })
+                        .expect("Failed to serialize open file message"),
+                );
             } else {
                 pending_open_path = Some(path);
             }
         }
         if let Event::Webview(WebviewEvent::PageTitleChange(title)) = &event {
             window.set_title(title);
+        }
+        if let Event::Window(bwebview::WindowEvent::DroppedFile(path)) = &event {
+            webview.send_ipc_message(
+                serde_json::to_string(&IpcMessage::OpenFile {
+                    path: path.to_string_lossy().into_owned(),
+                })
+                .expect("Failed to serialize open file message"),
+            );
         }
         if let Event::Webview(WebviewEvent::MessageReceive(message)) = event {
             let Ok(ipc_message) = serde_json::from_str::<IpcMessage>(&message) else {

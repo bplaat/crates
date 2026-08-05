@@ -5,6 +5,7 @@
  */
 
 mod cocoa;
+mod drag_drop;
 mod event_loop;
 #[cfg(feature = "file_dialog")]
 mod file_dialog;

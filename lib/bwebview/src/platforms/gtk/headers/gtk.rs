@@ -20,9 +20,18 @@ pub(crate) struct GtkWidget([u8; 0]);
 pub(crate) struct GtkWindow([u8; 0]);
 #[repr(C)]
 pub(crate) struct GtkSettings([u8; 0]);
+#[repr(C)]
+pub(crate) struct GtkSelectionData([u8; 0]);
+#[repr(C)]
+pub(crate) struct GtkTargetEntry {
+    pub(crate) target: *mut c_char,
+    pub(crate) flags: u32,
+    pub(crate) info: u32,
+}
 pub(crate) const GTK_WINDOW_TOPLEVEL: i32 = 0;
 pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
 pub(crate) const GTK_STATE_FLAG_NORMAL: i32 = 0;
+pub(crate) const GTK_DEST_DEFAULT_ALL: i32 = 7;
 unsafe extern "C" {
     pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
     pub(crate) fn gtk_main();
@@ -50,6 +59,16 @@ unsafe extern "C" {
         state: i32,
         color: *const GdkRGBA,
     );
+    pub(crate) fn gtk_drag_dest_set(
+        widget: *mut GtkWidget,
+        flags: i32,
+        targets: *mut GtkTargetEntry,
+        target_count: i32,
+        actions: u32,
+    );
+    pub(crate) fn gtk_selection_data_get_uris(
+        selection_data: *const GtkSelectionData,
+    ) -> *mut *mut c_char;
 
     // GTK < 3.22
     pub(crate) fn gtk_show_uri(

@@ -52,9 +52,10 @@ PetiteVue.createApp({
     isLoading: false,
 
     async init() {
-        window.addEventListener('bwebview-open-file', (event) =>
-            this._openDatabaseByPath(event.detail),
-        );
+        window.ipc.addEventListener('message', (event) => {
+            const message = JSON.parse(event.data);
+            if (message.type === 'openFile') this._openDatabaseByPath(message.path);
+        });
 
         const observer = new IntersectionObserver(
             (entries) => {

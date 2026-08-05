@@ -90,6 +90,12 @@ unsafe extern "C" {
     pub(crate) fn g_idle_add(function: extern "C" fn(*mut c_void) -> i32, data: *mut c_void)
     -> u32;
     pub(crate) fn g_free(mem: *mut c_void);
+    pub(crate) fn g_filename_from_uri(
+        uri: *const c_char,
+        hostname: *mut *mut c_char,
+        error: *mut *mut GError,
+    ) -> *mut c_char;
+    pub(crate) fn g_strfreev(str_array: *mut *mut c_char);
     pub(crate) fn g_slist_free_full(
         list: *mut GSList,
         free_func: unsafe extern "C" fn(*mut c_void),

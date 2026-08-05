@@ -16,6 +16,7 @@ pub(super) struct WindowData {
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
     pub(super) remember_window_state: bool,
+    pub(super) allow_file_drop: bool,
 }
 
 pub(crate) struct PlatformWindow(pub(super) Box<WindowData>);
@@ -46,6 +47,7 @@ impl PlatformWindow {
             window: null_mut(),
             background_color: builder.background_color,
             remember_window_state: builder.remember_window_state,
+            allow_file_drop: builder.allow_file_drop,
         });
 
         // Create window

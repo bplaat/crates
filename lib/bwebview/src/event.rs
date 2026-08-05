@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#[cfg(target_os = "macos")]
 use std::path::PathBuf;
 
 use crate::{LogicalPoint, LogicalSize};
@@ -19,6 +18,8 @@ pub enum WindowEvent {
     Resize(LogicalSize),
     /// Window close
     Close,
+    /// File dropped
+    DroppedFile(PathBuf),
     /// macOS window fullscreen change
     #[cfg(target_os = "macos")]
     MacosFullscreenChange(bool),

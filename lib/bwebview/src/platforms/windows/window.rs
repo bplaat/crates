@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::c_void;
+use std::ffi::{OsString, c_void};
 use std::fs::File;
 use std::io::Read;
+use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
@@ -186,6 +187,9 @@ impl PlatformWindow {
                 window_data.as_mut() as *mut WindowData as LPARAM,
             );
             window_data.hwnd = hwnd;
+            if builder.allow_file_drop {
+                DragAcceptFiles(hwnd, TRUE);
+            }
             let enabled: BOOL = (builder.theme.unwrap_or_else(system_theme) == Theme::Dark).into();
             DwmSetWindowAttribute(
                 hwnd,
@@ -452,6 +456,20 @@ unsafe extern "system" fn window_proc(
             let ptr = w_param as *mut c_void;
             let event = unsafe { Box::from_raw(ptr as *mut crate::Event) };
             send_event(*event);
+            0
+        }
+        WM_DROPFILES => {
+            let drop = w_param as HDROP;
+            let count = unsafe { DragQueryFileW(drop, u32::MAX, null_mut(), 0) };
+            for index in 0..count {
+                let length = unsafe { DragQueryFileW(drop, index, null_mut(), 0) };
+                let mut buffer = vec![0; length as usize + 1];
+                unsafe { DragQueryFileW(drop, index, buffer.as_mut_ptr(), buffer.len() as u32) };
+                send_event(crate::Event::Window(WindowEvent::DroppedFile(
+                    OsString::from_wide(&buffer[..length as usize]).into(),
+                )));
+            }
+            unsafe { DragFinish(drop) };
             0
         }
         WM_CLOSE => {

@@ -10,6 +10,7 @@ use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
 use super::cocoa::*;
+use super::drag_drop::perform_file_drop;
 use super::event_loop::send_event;
 use crate::{LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent};
 
@@ -58,6 +59,18 @@ define_class!(
 
         #[unsafe(method(windowDidFailToExitFullScreen:))]
         fn _window_did_fail_to_exit_fullscreen(&self, window: *mut Object) { self.window_did_fail_to_exit_fullscreen(window); }
+
+        #[unsafe(method(draggingEntered:))]
+        const fn _dragging_entered(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
+
+        #[unsafe(method(draggingUpdated:))]
+        const fn _dragging_updated(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
+
+        #[unsafe(method(prepareForDragOperation:))]
+        const fn _prepare_for_drag_operation(&self, _: *mut Object) -> Bool { Bool::YES }
+
+        #[unsafe(method(performDragOperation:))]
+        fn _perform_drag_operation(&self, sender: *mut Object) -> Bool { perform_file_drop(sender) }
     }
 );
 
@@ -158,6 +171,7 @@ fn add_drag_view(window: *mut Object, content_view: *mut Object) {
 pub(super) struct PlatformWindowData {
     pub(super) window: *mut Object,
     pub(super) background_color: Option<u32>,
+    pub(super) allow_file_drop: bool,
 }
 
 pub(crate) struct PlatformWindow(pub(super) Box<PlatformWindowData>);
@@ -172,6 +186,7 @@ impl PlatformWindow {
         let mut window_data = Box::new(PlatformWindowData {
             window: null_mut(),
             background_color: builder.background_color,
+            allow_file_drop: builder.allow_file_drop,
         });
 
         // Create WindowDelegate instance
@@ -259,6 +274,11 @@ impl PlatformWindow {
                 let _: Bool = msg_send![window, setFrameAutosaveName:ns_string!("window")];
             }
             let _: () = msg_send![window, setDelegate:window_delegate];
+            if builder.allow_file_drop {
+                let dragged_types: *mut Object =
+                    msg_send![class!(NSArray), arrayWithObject:NSFilenamesPboardType];
+                let _: () = msg_send![window, registerForDraggedTypes:dragged_types];
+            }
             window
         };
 

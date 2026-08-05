@@ -20,6 +20,7 @@ unsafe extern "C" {
     pub(crate) static NSApp: *mut Object;
     pub(crate) static NSAppearanceNameAqua: *const Object;
     pub(crate) static NSAppearanceNameDarkAqua: *const Object;
+    pub(crate) static NSFilenamesPboardType: *mut Object;
     pub(crate) static NSKeyValueChangeNewKey: *const Object;
 }
 
@@ -96,6 +97,7 @@ pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
 pub(crate) const NS_KEY_VALUE_OBSERVING_OPTION_NEW: u64 = 0x1;
 
 pub(crate) const NS_MODAL_RESPONSE_OK: i64 = 1;
+pub(crate) const NS_DRAG_OPERATION_COPY: u64 = 1;
 
 #[repr(transparent)]
 pub(crate) struct NSString(pub *mut Object);

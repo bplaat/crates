@@ -192,6 +192,7 @@ pub(crate) const WM_CLOSE: u32 = 0x0010;
 pub(crate) const WM_ERASEBKGND: u32 = 0x0014;
 pub(crate) const WM_GETMINMAXINFO: u32 = 0x0024;
 pub(crate) const WM_NCCREATE: u32 = 0x0081;
+pub(crate) const WM_DROPFILES: u32 = 0x0233;
 pub(crate) const WM_DPICHANGED: u32 = 0x02E0;
 pub(crate) const WM_USER: u32 = 0x0400;
 
@@ -334,8 +335,18 @@ pub(crate) unsafe fn SetWindowLong(hwnd: HWND, index: i32, value: isize) -> isiz
 }
 
 // MARK: shell32.dll
+pub(crate) type HDROP = HANDLE;
+
 #[link(name = "shell32")]
 unsafe extern "system" {
+    pub(crate) fn DragAcceptFiles(hwnd: HWND, accept: BOOL);
+    pub(crate) fn DragFinish(drop: HDROP);
+    pub(crate) fn DragQueryFileW(
+        drop: HDROP,
+        file: u32,
+        buffer: *mut w_char,
+        buffer_size: u32,
+    ) -> u32;
     pub(crate) fn ShellExecuteW(
         hwnd: HWND,
         lpOperation: *const w_char,

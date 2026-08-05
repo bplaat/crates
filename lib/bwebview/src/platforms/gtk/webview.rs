@@ -5,7 +5,9 @@
  */
 
 use std::env;
-use std::ffi::{CStr, CString, c_char, c_void};
+use std::ffi::{CStr, CString, OsStr, c_char, c_void};
+use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 
 use super::event_loop::send_event;
@@ -16,6 +18,7 @@ use crate::{InjectionTime, WebviewBuilder, WebviewEvent, WindowEvent};
 pub(super) struct WebviewData {
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
+    pub(super) allow_file_drop: bool,
     pub(super) webview: *mut WebKitWebView,
 }
 
@@ -26,6 +29,7 @@ impl PlatformWebview {
         PlatformWebview(Box::new(WebviewData {
             window: window.0.window,
             background_color: window.0.background_color,
+            allow_file_drop: window.0.allow_file_drop,
             webview: null_mut(),
         }))
     }
@@ -123,6 +127,28 @@ impl PlatformWebview {
                 null::<c_void>(),
             ) as *mut WebKitWebView;
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
+            if data.allow_file_drop {
+                let mut drop_target = GtkTargetEntry {
+                    target: c"text/uri-list".as_ptr() as *mut c_char,
+                    flags: 0,
+                    info: 0,
+                };
+                gtk_drag_dest_set(
+                    webview as *mut GtkWidget,
+                    GTK_DEST_DEFAULT_ALL,
+                    &mut drop_target,
+                    1,
+                    GDK_ACTION_COPY,
+                );
+                g_signal_connect_data(
+                    webview as *mut GObject,
+                    c"drag-data-received".as_ptr(),
+                    webview_on_drag_data_received as *const c_void,
+                    data as *const WebviewData as *const c_void,
+                    null(),
+                    G_CONNECT_DEFAULT,
+                );
+            }
             if data.background_color.is_some() {
                 let rgba = GdkRGBA {
                     red: 0.0,
@@ -197,6 +223,34 @@ impl PlatformWebview {
 
         // Send window created event
         send_event(crate::Event::Window(WindowEvent::Create));
+    }
+}
+
+extern "C" fn webview_on_drag_data_received(
+    _webview: *mut WebKitWebView,
+    _context: *mut GdkDragContext,
+    _x: i32,
+    _y: i32,
+    selection_data: *mut GtkSelectionData,
+    _info: u32,
+    _time: u32,
+    _data: &WebviewData,
+) {
+    let uris = unsafe { gtk_selection_data_get_uris(selection_data) };
+    if !uris.is_null() {
+        let mut uri = uris;
+        while !unsafe { *uri }.is_null() {
+            let filename = unsafe { g_filename_from_uri(*uri, null_mut(), null_mut()) };
+            if !filename.is_null() {
+                let path = PathBuf::from(OsStr::from_bytes(unsafe {
+                    CStr::from_ptr(filename).to_bytes()
+                }));
+                unsafe { g_free(filename as *mut c_void) };
+                send_event(crate::Event::Window(WindowEvent::DroppedFile(path)));
+            }
+            uri = unsafe { uri.add(1) };
+        }
+        unsafe { g_strfreev(uris) };
     }
 }
 

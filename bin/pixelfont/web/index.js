@@ -147,7 +147,10 @@ PetiteVue.createApp({
     },
 
     async init() {
-        window.addEventListener('bwebview-open-file', (event) => this._loadFont(event.detail));
+        window.ipc.addEventListener('message', (event) => {
+            const message = JSON.parse(event.data);
+            if (message.type === 'openFile') this._loadFont(message.path);
+        });
 
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
             this.renderAllChars();

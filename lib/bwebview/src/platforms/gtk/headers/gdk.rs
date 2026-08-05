@@ -12,6 +12,8 @@ use std::ffi::{c_char, c_void};
 #[repr(C)]
 pub(crate) struct GdkDisplay([u8; 0]);
 #[repr(C)]
+pub(crate) struct GdkDragContext([u8; 0]);
+#[repr(C)]
 pub(crate) struct GdkRectangle {
     pub x: i32,
     pub y: i32,
@@ -25,6 +27,7 @@ pub(crate) struct GdkRGBA {
     pub blue: f64,
     pub alpha: f64,
 }
+pub(crate) const GDK_ACTION_COPY: u32 = 1;
 
 // GTK < 3.22
 #[repr(C)]

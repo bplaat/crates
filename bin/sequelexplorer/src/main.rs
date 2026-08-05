@@ -27,19 +27,12 @@ use small_router::RouterBuilder;
 #[folder = "web"]
 struct WebAssets;
 
-#[cfg(target_os = "macos")]
-fn open_file_script(path: &str) -> String {
-    format!(
-        "window.dispatchEvent(new CustomEvent('bwebview-open-file', {{ detail: {} }}));",
-        serde_json::to_string(path).expect("Failed to serialize file path")
-    )
-}
-
 // MARK: IPC messages
 #[derive(Deserialize, Serialize)]
 #[allow(clippy::enum_variant_names)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum IpcMessage {
+    OpenFile { path: String },
     OpenFileDialog,
     OpenFileDialogResponse { path: Option<String> },
     OpenDatabase { path: String },
@@ -321,7 +314,8 @@ fn main() {
             0xffffff
         })
         .center()
-        .remember_window_state();
+        .remember_window_state()
+        .allow_file_drop(true);
     #[cfg(target_os = "macos")]
     {
         window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
@@ -370,7 +364,10 @@ fn main() {
             if let Some(path) = paths.first() {
                 let path = path.to_string_lossy().into_owned();
                 if page_loaded {
-                    webview.evaluate_script(open_file_script(&path));
+                    webview.send_ipc_message(
+                        serde_json::to_string(&IpcMessage::OpenFile { path })
+                            .expect("Failed to serialize open file message"),
+                    );
                 } else {
                     pending_open_path = Some(path);
                 }
@@ -380,10 +377,21 @@ fn main() {
         Event::Webview(WebviewEvent::PageLoadFinish) => {
             page_loaded = true;
             if let Some(path) = pending_open_path.take() {
-                webview.evaluate_script(open_file_script(&path));
+                webview.send_ipc_message(
+                    serde_json::to_string(&IpcMessage::OpenFile { path })
+                        .expect("Failed to serialize open file message"),
+                );
             }
         }
         Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
+        Event::Window(bwebview::WindowEvent::DroppedFile(path)) => {
+            webview.send_ipc_message(
+                serde_json::to_string(&IpcMessage::OpenFile {
+                    path: path.to_string_lossy().into_owned(),
+                })
+                .expect("Failed to serialize open file message"),
+            );
+        }
         #[cfg(target_os = "macos")]
         Event::Window(bwebview::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
             if is_fullscreen {
