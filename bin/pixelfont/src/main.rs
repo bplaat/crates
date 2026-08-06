@@ -8,8 +8,9 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 use bwebview::{
-    Event, EventLoopBuilder, FileDialog, LogicalSize, Theme, WebviewBuilder, WebviewEvent,
-    WindowBuilder,
+    Event, EventLoopBuilder, FileDialog, LogicalSize, MessageButtons, MessageDialog,
+    MessageDialogResult, MessageLevel, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
+    WindowEvent,
 };
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -67,6 +68,18 @@ enum IpcMessage {
         ok: bool,
         error: Option<String>,
     },
+    ConfirmSaveChanges {
+        filename: String,
+    },
+    ConfirmSaveChangesResponse {
+        choice: String,
+    },
+    CloseRequested,
+    CloseWindow,
+    #[cfg(target_os = "macos")]
+    MacosDocumentEdited {
+        edited: bool,
+    },
 }
 
 // MARK: Main
@@ -105,16 +118,12 @@ fn main() {
         );
     }
 
-    #[cfg(target_os = "macos")]
     let mut page_loaded = false;
-    #[cfg(target_os = "macos")]
     let mut pending_open_path: Option<String> = None;
     event_loop.run(move |event| {
-        #[cfg(target_os = "macos")]
         if let Event::Webview(WebviewEvent::PageLoadStart) = &event {
             page_loaded = false;
         }
-        #[cfg(target_os = "macos")]
         if let Event::Webview(WebviewEvent::PageLoadFinish) = &event {
             page_loaded = true;
             if let Some(path) = pending_open_path.take() {
@@ -141,13 +150,27 @@ fn main() {
         if let Event::Webview(WebviewEvent::PageTitleChange(title)) = &event {
             window.set_title(title);
         }
-        if let Event::Window(bwebview::WindowEvent::DroppedFile(path)) = &event {
-            webview.send_ipc_message(
-                serde_json::to_string(&IpcMessage::OpenFile {
-                    path: path.to_string_lossy().into_owned(),
-                })
-                .expect("Failed to serialize open file message"),
-            );
+        if let Event::Window(WindowEvent::CloseRequested(request)) = &event {
+            request.prevent_close();
+            if page_loaded {
+                webview.send_ipc_message(
+                    serde_json::to_string(&IpcMessage::CloseRequested)
+                        .expect("Failed to serialize close request"),
+                );
+            } else {
+                window.close();
+            }
+        }
+        if let Event::Window(WindowEvent::DroppedFile(path)) = &event {
+            let path = path.to_string_lossy().into_owned();
+            if page_loaded {
+                webview.send_ipc_message(
+                    serde_json::to_string(&IpcMessage::OpenFile { path })
+                        .expect("Failed to serialize open file message"),
+                );
+            } else {
+                pending_open_path = Some(path);
+            }
         }
         if let Event::Webview(WebviewEvent::MessageReceive(message)) = event {
             let Ok(ipc_message) = serde_json::from_str::<IpcMessage>(&message) else {
@@ -156,6 +179,7 @@ fn main() {
             match ipc_message {
                 IpcMessage::OpenFileDialog => {
                     let path = FileDialog::new()
+                        .parent(&window)
                         .title("Open Pixel Font File")
                         .add_filter("Pixel Font files", &["pf"])
                         .pick_file()
@@ -189,8 +213,9 @@ fn main() {
                 }
                 IpcMessage::SaveFileDialog { filename } => {
                     let path = FileDialog::new()
+                        .parent(&window)
                         .title("Save Pixel Font File")
-                        .set_file_name(&filename)
+                        .file_name(&filename)
                         .add_filter("Pixel Font files", &["pf"])
                         .save_file()
                         .map(|p| p.to_string_lossy().into_owned());
@@ -226,8 +251,9 @@ fn main() {
                 }
                 IpcMessage::ExportFileDialog { filename } => {
                     let path = FileDialog::new()
+                        .parent(&window)
                         .title("Export Font File")
-                        .set_file_name(&filename)
+                        .file_name(&filename)
                         .save_file()
                         .map(|p| p.to_string_lossy().into_owned());
                     let response = IpcMessage::ExportFileDialogResponse { path };
@@ -249,6 +275,36 @@ fn main() {
                     webview.send_ipc_message(
                         serde_json::to_string(&response).expect("Failed to serialize response"),
                     );
+                }
+                IpcMessage::ConfirmSaveChanges { filename } => {
+                    let choice = match MessageDialog::new()
+                        .parent(&window)
+                        .title(format!(
+                            "Do you want to save the changes to \"{filename}\"?"
+                        ))
+                        .description("Your changes will be lost if you don't save them.")
+                        .level(MessageLevel::Warning)
+                        .buttons(MessageButtons::YesNoCancelCustom(
+                            "Save".to_string(),
+                            "Don't Save".to_string(),
+                            "Cancel".to_string(),
+                        ))
+                        .show()
+                    {
+                        MessageDialogResult::Custom(choice) if choice == "Save" => "save",
+                        MessageDialogResult::Custom(choice) if choice == "Don't Save" => "discard",
+                        _ => "cancel",
+                    }
+                    .to_string();
+                    webview.send_ipc_message(
+                        serde_json::to_string(&IpcMessage::ConfirmSaveChangesResponse { choice })
+                            .expect("Failed to serialize response"),
+                    );
+                }
+                IpcMessage::CloseWindow => window.close(),
+                #[cfg(target_os = "macos")]
+                IpcMessage::MacosDocumentEdited { edited } => {
+                    window.macos_set_document_edited(edited);
                 }
                 _ => {}
             }

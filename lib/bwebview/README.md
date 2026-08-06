@@ -84,7 +84,7 @@ The Linux backend automatically selects the best available WebKitGTK version at 
 - **remember_window_state** Adds remembers window position and size between launches options (default).
 - **rust-embed** Adds support for serving embedded assets using the `rust-embed` crate.
 - **custom_protocol** Adds support for custom protocols, allowing you to serve content from custom URL schemes.
-- **file_dialog** Adds support for file dialogs, allowing you to open file selection dialogs from your webview.
+- **dialog** Adds support for native message and file dialogs.
 
 ## Sources binary blobs
 

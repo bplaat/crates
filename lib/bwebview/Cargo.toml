@@ -29,10 +29,10 @@ windows-metadata = "0.59.0"
 [features]
 default = ["log"]
 custom_protocol = ["dep:small-http"]
-file_dialog = []
+dialog = []
 log = ["dep:log"]
 rust-embed = ["custom_protocol", "dep:rust-embed", "dep:mime_guess"]
 
 [[example]]
-name = "bwebview-file-dialog"
-required-features = ["file_dialog"]
+name = "bwebview-dialog"
+required-features = ["dialog"]

@@ -18,7 +18,8 @@ use super::event_loop::{
 use super::webview2::*;
 use super::win32::*;
 use crate::{
-    LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent, WindowsProgressBarState,
+    CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent,
+    WindowsProgressBarState,
 };
 
 pub(super) struct WindowData {
@@ -102,13 +103,13 @@ impl PlatformWindow {
                 "bwebview".to_string()
             }
         };
-        let class_name_w = class_name.to_wide_string();
+        let class_name = class_name.to_wide_string();
         unsafe {
             let mut wndclass = WNDCLASSEXW {
                 cbSize: size_of::<WNDCLASSEXW>() as u32,
                 ..Default::default()
             };
-            if GetClassInfoExW(instance, class_name_w.as_ptr(), &mut wndclass as *mut _) != TRUE {
+            if GetClassInfoExW(instance, class_name.as_ptr(), &mut wndclass as *mut _) != TRUE {
                 // Get executable icons
                 let executable_path = env::current_exe()
                     .expect("Can't get current exe path")
@@ -132,7 +133,7 @@ impl PlatformWindow {
                     hInstance: instance,
                     hIcon: large_icon,
                     hbrBackground: GetSysColorBrush(COLOR_WINDOW) as usize,
-                    lpszClassName: class_name_w.as_ptr(),
+                    lpszClassName: class_name.as_ptr(),
                     hIconSm: small_icon,
                     ..Default::default()
                 };
@@ -163,11 +164,11 @@ impl PlatformWindow {
             let (rect, position_set) =
                 calculate_window_rect(builder, &monitor_rect, style, initial_dpi);
 
-            let title_w = builder.title.to_wide_string();
+            let title = builder.title.to_wide_string();
             let hwnd = CreateWindowExW(
                 0,
-                class_name_w.as_ptr(),
-                title_w.as_ptr(),
+                class_name.as_ptr(),
+                title.as_ptr(),
                 style,
                 if position_set {
                     rect.left
@@ -259,9 +260,16 @@ impl PlatformWindow {
 }
 
 impl crate::WindowInterface for PlatformWindow {
+    fn close(&mut self) {
+        if self.0.remember_window_state {
+            save_window_state(self.0.hwnd);
+        }
+        unsafe { DestroyWindow(self.0.hwnd) };
+    }
+
     fn set_title(&mut self, title: impl AsRef<str>) {
-        let title_w = title.as_ref().to_wide_string();
-        unsafe { SetWindowTextW(self.0.hwnd, title_w.as_ptr()) };
+        let title = title.as_ref().to_wide_string();
+        unsafe { SetWindowTextW(self.0.hwnd, title.as_ptr()) };
     }
 
     fn position(&self) -> LogicalPoint {
@@ -473,23 +481,16 @@ unsafe extern "system" fn window_proc(
             0
         }
         WM_CLOSE => {
-            if _self.remember_window_state {
-                unsafe {
-                    use std::io::Write;
-                    let mut window_placement: WINDOWPLACEMENT = mem::zeroed();
-                    window_placement.length = size_of::<WINDOWPLACEMENT>() as u32;
-                    GetWindowPlacement(hwnd, &mut window_placement);
-                    if let Ok(mut file) = File::create(config_dir().join("window.bin")) {
-                        _ = file.write_all(std::slice::from_raw_parts(
-                            &window_placement as *const _ as *const u8,
-                            size_of::<WINDOWPLACEMENT>(),
-                        ));
-                    }
+            let request = CloseRequest::new();
+            send_event(crate::Event::Window(WindowEvent::CloseRequested(
+                request.clone(),
+            )));
+            if !request.is_prevented() {
+                if _self.remember_window_state {
+                    save_window_state(hwnd);
                 }
+                unsafe { DestroyWindow(hwnd) };
             }
-
-            send_event(crate::Event::Window(WindowEvent::Close));
-            unsafe { DestroyWindow(hwnd) };
             0
         }
         WM_DESTROY => {
@@ -497,6 +498,21 @@ unsafe extern "system" fn window_proc(
             0
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, w_param, l_param) },
+    }
+}
+
+fn save_window_state(hwnd: HWND) {
+    unsafe {
+        use std::io::Write;
+        let mut window_placement: WINDOWPLACEMENT = mem::zeroed();
+        window_placement.length = size_of::<WINDOWPLACEMENT>() as u32;
+        GetWindowPlacement(hwnd, &mut window_placement);
+        if let Ok(mut file) = File::create(config_dir().join("window.bin")) {
+            _ = file.write_all(std::slice::from_raw_parts(
+                &window_placement as *const _ as *const u8,
+                size_of::<WINDOWPLACEMENT>(),
+            ));
+        }
     }
 }
 

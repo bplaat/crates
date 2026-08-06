@@ -404,6 +404,7 @@ fn main() {
             match serde_json::from_str(&message).expect("Can't parse IPC message") {
                 IpcMessage::OpenFileDialog => {
                     let path = FileDialog::new()
+                        .parent(&window)
                         .title("Open SQLite Database")
                         .add_filter("SQLite databases", &["db", "sqlite", "sqlite3"])
                         .pick_file()

@@ -4,25 +4,80 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::c_void;
-
 use block2::RcBlock;
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send, sel};
 
 use super::cocoa::*;
 
+const ESCAPE_KEY_EQUIVALENT: &str = "\u{1b}";
+
+pub(crate) struct PlatformMessageDialog;
+
+impl crate::MessageDialogInterface for PlatformMessageDialog {
+    fn show(dialog: crate::MessageDialog<'_>) -> crate::MessageDialogResult {
+        unsafe {
+            let alert: *mut Object = msg_send![class!(NSAlert), new];
+            let style = match dialog.level {
+                crate::MessageLevel::Info => NS_ALERT_STYLE_INFORMATIONAL,
+                crate::MessageLevel::Warning => NS_ALERT_STYLE_WARNING,
+                crate::MessageLevel::Error => NS_ALERT_STYLE_CRITICAL,
+            };
+            let _: () = msg_send![alert, setAlertStyle:style];
+            if dialog.title.is_empty() {
+                let _: () =
+                    msg_send![alert, setMessageText:NSString::from_str(&dialog.description)];
+            } else {
+                let _: () = msg_send![alert, setMessageText:NSString::from_str(&dialog.title)];
+                let _: () =
+                    msg_send![alert, setInformativeText:NSString::from_str(&dialog.description)];
+            }
+
+            let labels = crate::dialog::message_button_labels(&dialog.buttons);
+            for label in &labels {
+                let _: *mut Object = msg_send![alert, addButtonWithTitle:NSString::from_str(label)];
+            }
+            if labels.len() > 1 {
+                let buttons: *mut Object = msg_send![alert, buttons];
+                let cancel: *mut Object = msg_send![buttons, lastObject];
+                let _: () =
+                    msg_send![cancel, setKeyEquivalent:NSString::from_str(ESCAPE_KEY_EQUIVALENT)];
+            }
+
+            let parent = dialog
+                .parent
+                .map(|window| window.0.window)
+                .unwrap_or_else(|| msg_send![NSApp, keyWindow]);
+            let response: i64 = if parent.is_null() {
+                msg_send![alert, runModal]
+            } else {
+                let block = RcBlock::new(move |response: i64| {
+                    let _: () = msg_send![NSApp, stopModalWithCode:response];
+                });
+                let _: () =
+                    msg_send![alert, beginSheetModalForWindow:parent, completionHandler:&*block];
+                let alert_window: *mut Object = msg_send![alert, window];
+                msg_send![NSApp, runModalForWindow:alert_window]
+            };
+            let index = response.saturating_sub(NS_ALERT_FIRST_BUTTON_RETURN) as usize;
+            let result = crate::dialog::message_dialog_result(&dialog.buttons, index);
+            let _: () = msg_send![alert, release];
+            result
+        }
+    }
+}
+
 pub(crate) struct PlatformFileDialog;
 
 impl crate::FileDialogInterface for PlatformFileDialog {
-    fn pick_file(dialog: crate::FileDialog) -> Option<std::path::PathBuf> {
+    fn pick_file(dialog: crate::FileDialog<'_>) -> Option<std::path::PathBuf> {
         unsafe {
             let panel: *mut Object = msg_send![class!(NSOpenPanel), openPanel];
             let _: () = msg_send![panel, setCanChooseFiles: Bool::YES];
             let _: () = msg_send![panel, setCanChooseDirectories: Bool::NO];
             let _: () = msg_send![panel, setAllowsMultipleSelection: Bool::NO];
             setup_ns_panel(panel, &dialog);
-            let result: i64 = run_panel_modal(panel);
+            let result: i64 = run_panel_modal(panel, dialog.parent);
             if result == NS_MODAL_RESPONSE_OK {
                 let urls: *mut Object = msg_send![panel, URLs];
                 let url: *mut Object = msg_send![urls, objectAtIndex: 0usize];
@@ -34,14 +89,14 @@ impl crate::FileDialogInterface for PlatformFileDialog {
         }
     }
 
-    fn pick_files(dialog: crate::FileDialog) -> Option<Vec<std::path::PathBuf>> {
+    fn pick_files(dialog: crate::FileDialog<'_>) -> Option<Vec<std::path::PathBuf>> {
         unsafe {
             let panel: *mut Object = msg_send![class!(NSOpenPanel), openPanel];
             let _: () = msg_send![panel, setCanChooseFiles: Bool::YES];
             let _: () = msg_send![panel, setCanChooseDirectories: Bool::NO];
             let _: () = msg_send![panel, setAllowsMultipleSelection: Bool::YES];
             setup_ns_panel(panel, &dialog);
-            let result: i64 = run_panel_modal(panel);
+            let result: i64 = run_panel_modal(panel, dialog.parent);
             if result == NS_MODAL_RESPONSE_OK {
                 let urls: *mut Object = msg_send![panel, URLs];
                 let count: usize = msg_send![urls, count];
@@ -59,14 +114,14 @@ impl crate::FileDialogInterface for PlatformFileDialog {
         }
     }
 
-    fn save_file(dialog: crate::FileDialog) -> Option<std::path::PathBuf> {
+    fn save_file(dialog: crate::FileDialog<'_>) -> Option<std::path::PathBuf> {
         unsafe {
             let panel: *mut Object = msg_send![class!(NSSavePanel), savePanel];
             setup_ns_panel(panel, &dialog);
             if let Some(filename) = &dialog.filename {
                 let _: () = msg_send![panel, setNameFieldStringValue: NSString::from_str(filename)];
             }
-            let result: i64 = run_panel_modal(panel);
+            let result: i64 = run_panel_modal(panel, dialog.parent);
             if result == NS_MODAL_RESPONSE_OK {
                 let url: *mut Object = msg_send![panel, URL];
                 let path: NSString = msg_send![url, path];
@@ -78,7 +133,7 @@ impl crate::FileDialogInterface for PlatformFileDialog {
     }
 }
 
-unsafe fn setup_ns_panel(panel: *mut Object, dialog: &crate::FileDialog) {
+unsafe fn setup_ns_panel(panel: *mut Object, dialog: &crate::FileDialog<'_>) {
     unsafe {
         if let Some(title) = &dialog.title {
             let _: () = msg_send![panel, setTitle: NSString::from_str(title)];
@@ -101,16 +156,21 @@ unsafe fn setup_ns_panel(panel: *mut Object, dialog: &crate::FileDialog) {
     }
 }
 
-unsafe fn run_panel_modal(panel: *mut Object) -> i64 {
+unsafe fn run_panel_modal(
+    panel: *mut Object,
+    parent: Option<&super::window::PlatformWindow>,
+) -> i64 {
     unsafe {
-        let key_window: *mut Object = unsafe { msg_send![NSApp, keyWindow] };
-        if !key_window.is_null() {
+        let parent = parent
+            .map(|window| window.0.window)
+            .unwrap_or_else(|| msg_send![NSApp, keyWindow]);
+        if !parent.is_null() {
             // Show as a sheet attached to the active window
             let block = RcBlock::new(move |response: i64| {
                 let _: () = unsafe { msg_send![NSApp, stopModalWithCode: response] };
             });
             let _: () =
-                msg_send![panel, beginSheetModalForWindow: key_window, completionHandler: &*block];
+                msg_send![panel, beginSheetModalForWindow: parent, completionHandler: &*block];
             unsafe { msg_send![NSApp, runModalForWindow: panel] }
         } else {
             msg_send![panel, runModal]

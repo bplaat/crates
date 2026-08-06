@@ -183,6 +183,7 @@ impl<'a> WindowBuilder<'a> {
 
 // MARK: WindowInterface
 pub(crate) trait WindowInterface {
+    fn close(&mut self);
     fn set_title(&mut self, title: impl AsRef<str>);
     fn position(&self) -> LogicalPoint;
     fn size(&self) -> LogicalSize;
@@ -202,6 +203,8 @@ pub(crate) trait WindowInterface {
     fn gtk_set_progress_bar(&mut self, progress: Option<f32>);
     #[cfg(target_os = "macos")]
     fn macos_titlebar_size(&self) -> LogicalSize;
+    #[cfg(target_os = "macos")]
+    fn macos_set_document_edited(&mut self, edited: bool);
     #[cfg(windows)]
     fn windows_set_progress_bar(&mut self, progress: Option<f32>, state: WindowsProgressBarState);
 }
@@ -213,6 +216,11 @@ pub struct Window {
 }
 
 impl Window {
+    /// Close the window
+    pub fn close(&mut self) {
+        self.platform.close()
+    }
+
     /// Set title
     pub fn set_title(&mut self, title: impl AsRef<str>) {
         self.platform.set_title(title)
@@ -275,6 +283,12 @@ impl Window {
     #[cfg(target_os = "macos")]
     pub fn macos_titlebar_size(&self) -> LogicalSize {
         self.platform.macos_titlebar_size()
+    }
+
+    /// Set whether the macOS window represents a document with unsaved changes
+    #[cfg(target_os = "macos")]
+    pub fn macos_set_document_edited(&mut self, edited: bool) {
+        self.platform.macos_set_document_edited(edited)
     }
 
     /// Set Windows taskbar progress for this window, or hide it with `None`

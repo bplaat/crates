@@ -97,6 +97,10 @@ pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
 pub(crate) const NS_KEY_VALUE_OBSERVING_OPTION_NEW: u64 = 0x1;
 
 pub(crate) const NS_MODAL_RESPONSE_OK: i64 = 1;
+pub(crate) const NS_ALERT_STYLE_WARNING: i64 = 0;
+pub(crate) const NS_ALERT_STYLE_INFORMATIONAL: i64 = 1;
+pub(crate) const NS_ALERT_STYLE_CRITICAL: i64 = 2;
+pub(crate) const NS_ALERT_FIRST_BUTTON_RETURN: i64 = 1000;
 pub(crate) const NS_DRAG_OPERATION_COPY: u64 = 1;
 
 #[repr(transparent)]

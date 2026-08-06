@@ -11,8 +11,10 @@ use objc2::{class, define_class, msg_send};
 
 use super::cocoa::*;
 use super::drag_drop::perform_file_drop;
-use super::event_loop::send_event;
-use crate::{LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent};
+use super::event_loop::{allow_termination_if_last_window, send_event};
+use crate::{
+    CloseRequest, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent,
+};
 
 define_class!(
     #[unsafe(super(NSView))]
@@ -36,14 +38,14 @@ define_class!(
     struct WindowDelegate;
 
     impl WindowDelegate {
+        #[unsafe(method(windowShouldClose:))]
+        fn _window_should_close(&self, window: *mut Object) -> Bool { self.window_should_close(window) }
+
         #[unsafe(method(windowDidMove:))]
         fn _window_did_move(&self, notification: *mut Object) { self.window_did_move(notification); }
 
         #[unsafe(method(windowDidResize:))]
         fn _window_did_resize(&self, notification: *mut Object) { self.window_did_resize(notification); }
-
-        #[unsafe(method(windowWillClose:))]
-        fn _window_will_close(&self, _: *mut Object) { self.window_will_close(); }
 
         #[unsafe(method(windowWillEnterFullScreen:))]
         fn _window_will_enter_fullscreen(&self, notification: *mut Object) { self.window_will_enter_fullscreen(notification); }
@@ -75,6 +77,19 @@ define_class!(
 );
 
 impl WindowDelegate {
+    fn window_should_close(&self, window: *mut Object) -> Bool {
+        let request = CloseRequest::new();
+        send_event(crate::Event::Window(WindowEvent::CloseRequested(
+            request.clone(),
+        )));
+        if request.is_prevented() {
+            Bool::NO
+        } else {
+            allow_termination_if_last_window(window);
+            Bool::YES
+        }
+    }
+
     fn window_did_move(&self, notification: *mut Object) {
         let window: *mut Object = unsafe { msg_send![notification, object] };
         let frame: NSRect = unsafe { msg_send![window, frame] };
@@ -92,10 +107,6 @@ impl WindowDelegate {
             frame.size.width as f32,
             frame.size.height as f32,
         ))));
-    }
-
-    fn window_will_close(&self) {
-        send_event(crate::Event::Window(WindowEvent::Close));
     }
 
     fn window_will_enter_fullscreen(&self, notification: *mut Object) {
@@ -295,6 +306,11 @@ impl PlatformWindow {
 }
 
 impl crate::WindowInterface for PlatformWindow {
+    fn close(&mut self) {
+        allow_termination_if_last_window(self.0.window);
+        let _: () = unsafe { msg_send![self.0.window, close] };
+    }
+
     fn set_title(&mut self, title: impl AsRef<str>) {
         unsafe { msg_send![self.0.window, setTitle:NSString::from_str(title)] }
     }
@@ -365,5 +381,9 @@ impl crate::WindowInterface for PlatformWindow {
             window_frame.size.width as f32,
             (window_frame.size.height - content_layout_rect.size.height) as f32,
         )
+    }
+
+    fn macos_set_document_edited(&mut self, edited: bool) {
+        let _: () = unsafe { msg_send![self.0.window, setDocumentEdited:edited] };
     }
 }

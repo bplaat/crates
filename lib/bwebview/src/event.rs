@@ -4,9 +4,30 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::Cell;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use crate::{LogicalPoint, LogicalSize};
+
+/// A close request that can be prevented by the event handler
+#[derive(Clone)]
+pub struct CloseRequest(Rc<Cell<bool>>);
+
+impl CloseRequest {
+    pub(crate) fn new() -> Self {
+        Self(Rc::new(Cell::new(false)))
+    }
+
+    /// Prevent the window from closing
+    pub fn prevent_close(&self) {
+        self.0.set(true);
+    }
+
+    pub(crate) fn is_prevented(&self) -> bool {
+        self.0.get()
+    }
+}
 
 /// Window event
 pub enum WindowEvent {
@@ -16,8 +37,8 @@ pub enum WindowEvent {
     Move(LogicalPoint),
     /// Window resize
     Resize(LogicalSize),
-    /// Window close
-    Close,
+    /// Window close requested; closes normally unless prevented
+    CloseRequested(CloseRequest),
     /// File dropped
     DroppedFile(PathBuf),
     /// macOS window fullscreen change

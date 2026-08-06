@@ -23,6 +23,8 @@ pub(crate) struct GtkSettings([u8; 0]);
 #[repr(C)]
 pub(crate) struct GtkSelectionData([u8; 0]);
 #[repr(C)]
+pub(crate) struct GtkDialog([u8; 0]);
+#[repr(C)]
 pub(crate) struct GtkTargetEntry {
     pub(crate) target: *mut c_char,
     pub(crate) flags: u32,
@@ -32,6 +34,12 @@ pub(crate) const GTK_WINDOW_TOPLEVEL: i32 = 0;
 pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
 pub(crate) const GTK_STATE_FLAG_NORMAL: i32 = 0;
 pub(crate) const GTK_DEST_DEFAULT_ALL: i32 = 7;
+pub(crate) const GTK_DIALOG_MODAL: i32 = 1;
+pub(crate) const GTK_DIALOG_DESTROY_WITH_PARENT: i32 = 2;
+pub(crate) const GTK_MESSAGE_INFO: i32 = 0;
+pub(crate) const GTK_MESSAGE_WARNING: i32 = 1;
+pub(crate) const GTK_MESSAGE_ERROR: i32 = 3;
+pub(crate) const GTK_BUTTONS_NONE: i32 = 0;
 unsafe extern "C" {
     pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
     pub(crate) fn gtk_main();
@@ -87,6 +95,24 @@ unsafe extern "C" {
     );
 }
 
+// MARK: GTK Message Dialog
+unsafe extern "C" {
+    pub(crate) fn gtk_message_dialog_new(
+        parent: *mut GtkWindow,
+        flags: i32,
+        r#type: i32,
+        buttons: i32,
+        message_format: *const c_char,
+        ...
+    ) -> *mut GtkWidget;
+    pub(crate) fn gtk_dialog_add_button(
+        dialog: *mut GtkDialog,
+        button_text: *const c_char,
+        response_id: i32,
+    ) -> *mut GtkWidget;
+    pub(crate) fn gtk_dialog_set_default_response(dialog: *mut GtkDialog, response_id: i32);
+}
+
 // MARK: GTK File Chooser
 pub(crate) const GTK_FILE_CHOOSER_ACTION_OPEN: i32 = 0;
 pub(crate) const GTK_FILE_CHOOSER_ACTION_SAVE: i32 = 1;
@@ -123,7 +149,7 @@ unsafe extern "C" {
         first_button_text: *const c_char,
         ...
     ) -> *mut GtkWidget;
-    pub(crate) fn gtk_dialog_run(dialog: *mut GtkWidget) -> i32;
+    pub(crate) fn gtk_dialog_run(dialog: *mut GtkDialog) -> i32;
     pub(crate) fn gtk_widget_destroy(widget: *mut GtkWidget);
 
     // GTK 3.20+

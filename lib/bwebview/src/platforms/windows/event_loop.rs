@@ -32,10 +32,10 @@ impl PlatformEventLoop {
                     "bwebview-{}.{}.{}",
                     app_id.qualifier, app_id.organization, app_id.application
                 );
-                let mutex_name_w = mutex_name.to_wide_string();
-                CreateMutexW(null_mut(), TRUE, mutex_name_w.as_ptr());
+                let mutex_name = mutex_name.to_wide_string();
+                CreateMutexW(null_mut(), TRUE, mutex_name.as_ptr());
                 if GetLastError() == ERROR_ALREADY_EXISTS {
-                    let hwnd = FindWindowW(mutex_name_w.as_ptr(), null());
+                    let hwnd = FindWindowW(mutex_name.as_ptr(), null());
                     if !hwnd.is_null() {
                         ShowWindow(hwnd, SW_RESTORE);
                         SetForegroundWindow(hwnd);

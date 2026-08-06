@@ -82,6 +82,11 @@ pub(crate) type WPARAM = usize;
 pub(crate) type LPARAM = isize;
 pub(crate) type LRESULT = isize;
 
+pub(crate) const IDOK: i32 = 1;
+pub(crate) const IDCANCEL: i32 = 2;
+pub(crate) const IDYES: i32 = 6;
+pub(crate) const IDNO: i32 = 7;
+
 #[repr(C)]
 #[derive(Default)]
 pub(crate) struct WNDCLASSEXW {
@@ -104,6 +109,63 @@ pub(crate) struct WNDCLASSEXW {
     pub(crate) lpszMenuName: *const w_char,
     pub(crate) lpszClassName: *const w_char,
     pub(crate) hIconSm: HICON,
+}
+
+// MARK: comctl32.dll
+pub(crate) const TDF_ALLOW_DIALOG_CANCELLATION: u32 = 0x0008;
+pub(crate) const TDCBF_OK_BUTTON: u32 = 0x0001;
+pub(crate) const TDCBF_YES_BUTTON: u32 = 0x0002;
+pub(crate) const TDCBF_NO_BUTTON: u32 = 0x0004;
+pub(crate) const TDCBF_CANCEL_BUTTON: u32 = 0x0008;
+pub(crate) const TD_WARNING_ICON: *const w_char = u16::MAX as usize as *const w_char;
+pub(crate) const TD_ERROR_ICON: *const w_char = (u16::MAX - 1) as usize as *const w_char;
+pub(crate) const TD_INFORMATION_ICON: *const w_char = (u16::MAX - 2) as usize as *const w_char;
+
+#[repr(C)]
+pub(crate) struct TASKDIALOG_BUTTON {
+    pub(crate) nButtonID: i32,
+    pub(crate) pszButtonText: *const w_char,
+}
+
+pub(crate) type TaskDialogCallback =
+    Option<unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM, isize) -> i32>;
+
+#[repr(C)]
+pub(crate) struct TASKDIALOGCONFIG {
+    pub(crate) cbSize: u32,
+    pub(crate) hwndParent: HWND,
+    pub(crate) hInstance: HMODULE,
+    pub(crate) dwFlags: u32,
+    pub(crate) dwCommonButtons: u32,
+    pub(crate) pszWindowTitle: *const w_char,
+    pub(crate) mainIcon: *const w_char,
+    pub(crate) pszMainInstruction: *const w_char,
+    pub(crate) pszContent: *const w_char,
+    pub(crate) cButtons: u32,
+    pub(crate) pButtons: *const TASKDIALOG_BUTTON,
+    pub(crate) nDefaultButton: i32,
+    pub(crate) cRadioButtons: u32,
+    pub(crate) pRadioButtons: *const TASKDIALOG_BUTTON,
+    pub(crate) nDefaultRadioButton: i32,
+    pub(crate) pszVerificationText: *const w_char,
+    pub(crate) pszExpandedInformation: *const w_char,
+    pub(crate) pszExpandedControlText: *const w_char,
+    pub(crate) pszCollapsedControlText: *const w_char,
+    pub(crate) footerIcon: *const w_char,
+    pub(crate) pszFooter: *const w_char,
+    pub(crate) pfCallback: TaskDialogCallback,
+    pub(crate) lpCallbackData: isize,
+    pub(crate) cxWidth: u32,
+}
+
+#[link(name = "comctl32")]
+unsafe extern "system" {
+    pub(crate) fn TaskDialogIndirect(
+        pTaskConfig: *const TASKDIALOGCONFIG,
+        pnButton: *mut i32,
+        pnRadioButton: *mut i32,
+        pfVerificationFlagChecked: *mut BOOL,
+    ) -> i32;
 }
 
 #[repr(C)]
@@ -201,6 +263,12 @@ pub(crate) const SW_RESTORE: i32 = 9;
 pub(crate) const SW_SHOWDEFAULT: i32 = 10;
 
 pub(crate) const MB_OK: u32 = 0x00000000;
+pub(crate) const MB_OKCANCEL: u32 = 0x00000001;
+pub(crate) const MB_YESNOCANCEL: u32 = 0x00000003;
+pub(crate) const MB_YESNO: u32 = 0x00000004;
+pub(crate) const MB_ICONERROR: u32 = 0x00000010;
+pub(crate) const MB_ICONWARNING: u32 = 0x00000030;
+pub(crate) const MB_ICONINFORMATION: u32 = 0x00000040;
 
 pub(crate) const PROCESS_PER_MONITOR_DPI_AWARE: i32 = 2;
 pub(crate) const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: isize = -4isize;

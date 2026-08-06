@@ -10,7 +10,7 @@ use std::{env, fs};
 
 use super::event_loop::{APP_ID, primary_monitor_rect, send_event, update_progress_bar};
 use super::headers::*;
-use crate::{LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
+use crate::{CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
 pub(super) struct WindowData {
     pub(super) window: *mut GtkWindow,
@@ -215,6 +215,13 @@ impl PlatformWindow {
 }
 
 impl crate::WindowInterface for PlatformWindow {
+    fn close(&mut self) {
+        if self.0.remember_window_state {
+            Self::save_window_state(self.0.window);
+        }
+        unsafe { gtk_widget_destroy(self.0.window as *mut GtkWidget) };
+    }
+
     fn set_title(&mut self, title: impl AsRef<str>) {
         let title = CString::new(title.as_ref()).expect("Can't convert to CString");
         unsafe { gtk_window_set_title(self.0.window, title.as_ptr()) };
@@ -330,14 +337,18 @@ extern "C" fn window_on_close(
     _event: *mut c_void,
     _self: &mut WindowData,
 ) -> bool {
-    // Save window state
-    if _self.remember_window_state {
-        PlatformWindow::save_window_state(_self.window);
+    let request = CloseRequest::new();
+    send_event(crate::Event::Window(WindowEvent::CloseRequested(
+        request.clone(),
+    )));
+    if request.is_prevented() {
+        true
+    } else {
+        if _self.remember_window_state {
+            PlatformWindow::save_window_state(_self.window);
+        }
+        false
     }
-
-    // Send window closed event
-    send_event(crate::Event::Window(WindowEvent::Close));
-    false
 }
 
 pub(super) fn config_dir() -> std::path::PathBuf {

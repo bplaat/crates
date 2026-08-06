@@ -15,11 +15,12 @@ use objc2::{class, define_class, msg_send, sel};
 
 use super::cocoa::*;
 use super::webkit::*;
-use crate::{Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WindowEvent};
+use crate::{CloseRequest, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WindowEvent};
 
 // MARK: AppDelegate
 struct AppDelegateIvars {
     event_loop: Cell<*mut PlatformEventLoop>,
+    allow_termination: Cell<bool>,
 }
 
 define_class!(
@@ -34,6 +35,9 @@ define_class!(
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
         const fn _should_terminate(&self, _: *mut Object) -> Bool { Bool::YES }
 
+        #[unsafe(method(applicationShouldTerminate:))]
+        fn _application_should_terminate(&self, _: *mut Object) -> u64 { self.application_should_terminate() }
+
         #[unsafe(method(application:openURLs:))]
         fn _open_urls(&self, _: *mut Object, urls: *mut Object) { self.open_urls(urls); }
 
@@ -46,6 +50,16 @@ define_class!(
 );
 
 impl AppDelegate {
+    fn application_should_terminate(&self) -> u64 {
+        if self.ivars().allow_termination.get() {
+            1
+        } else {
+            let request = CloseRequest::new();
+            send_event(Event::Window(WindowEvent::CloseRequested(request.clone())));
+            u64::from(!request.is_prevented())
+        }
+    }
+
     fn did_finish_launching(&self, notification: *mut Object) {
         unsafe {
             let application: *mut Object = msg_send![notification, object];
@@ -319,6 +333,21 @@ pub(crate) fn send_event(event: Event) {
 
     if let Some(handler) = _self.event_handler.as_mut() {
         handler(event);
+    }
+}
+
+pub(super) fn allow_termination_if_last_window(closing_window: *mut Object) {
+    let app_delegate: *mut Object = unsafe { msg_send![NSApp, delegate] };
+    let app_delegate = unsafe { &*(app_delegate as *const AppDelegate) };
+    let windows: *mut Object = unsafe { msg_send![NSApp, windows] };
+    let count: usize = unsafe { msg_send![windows, count] };
+    let has_other_visible_window = (0..count).any(|index| unsafe {
+        let window: *mut Object = msg_send![windows, objectAtIndex:index];
+        let visible: Bool = msg_send![window, isVisible];
+        window != closing_window && visible == Bool::YES
+    });
+    if !has_other_visible_window {
+        app_delegate.ivars().allow_termination.set(true);
     }
 }
 

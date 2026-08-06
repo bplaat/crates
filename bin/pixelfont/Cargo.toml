@@ -17,10 +17,7 @@ entitlements = "meta/macos/Entitlements.plist"
 workspace = true
 
 [dependencies]
-bwebview = { path = "../../lib/bwebview", features = [
-    "rust-embed",
-    "file_dialog",
-] }
+bwebview = { path = "../../lib/bwebview", features = ["rust-embed", "dialog"] }
 rust-embed = "8.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

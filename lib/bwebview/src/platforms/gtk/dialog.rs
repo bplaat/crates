@@ -10,33 +10,94 @@ use std::ptr::{null, null_mut};
 
 use super::headers::*;
 
+const FIRST_CUSTOM_RESPONSE: i32 = 1;
+
+pub(crate) struct PlatformMessageDialog;
+
+impl crate::MessageDialogInterface for PlatformMessageDialog {
+    fn show(dialog: crate::MessageDialog<'_>) -> crate::MessageDialogResult {
+        unsafe {
+            let parent = dialog
+                .parent
+                .map(|window| window.0.window)
+                .unwrap_or(null_mut());
+            let title =
+                CString::new(dialog.title.as_str()).expect("Can't convert title to CString");
+            let description = CString::new(dialog.description.as_str())
+                .expect("Can't convert description to CString");
+            let message_type = match dialog.level {
+                crate::MessageLevel::Info => GTK_MESSAGE_INFO,
+                crate::MessageLevel::Warning => GTK_MESSAGE_WARNING,
+                crate::MessageLevel::Error => GTK_MESSAGE_ERROR,
+            };
+            let message = gtk_message_dialog_new(
+                parent,
+                GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+                message_type,
+                GTK_BUTTONS_NONE,
+                c"%s".as_ptr(),
+                description.as_ptr(),
+            );
+            if !dialog.title.is_empty() {
+                gtk_window_set_title(message as *mut GtkWindow, title.as_ptr());
+            }
+
+            let labels = crate::dialog::message_button_labels(&dialog.buttons);
+            for (index, label) in labels.iter().enumerate() {
+                let label = CString::new(*label).expect("Can't convert button to CString");
+                gtk_dialog_add_button(
+                    message as *mut GtkDialog,
+                    label.as_ptr(),
+                    FIRST_CUSTOM_RESPONSE + index as i32,
+                );
+            }
+            gtk_dialog_set_default_response(message as *mut GtkDialog, FIRST_CUSTOM_RESPONSE);
+
+            let response = gtk_dialog_run(message as *mut GtkDialog);
+            gtk_widget_destroy(message);
+            if response < FIRST_CUSTOM_RESPONSE {
+                crate::MessageDialogResult::Cancel
+            } else {
+                crate::dialog::message_dialog_result(
+                    &dialog.buttons,
+                    (response - FIRST_CUSTOM_RESPONSE) as usize,
+                )
+            }
+        }
+    }
+}
+
 pub(crate) struct PlatformFileDialog;
 
 impl crate::FileDialogInterface for PlatformFileDialog {
-    fn pick_file(dialog: crate::FileDialog) -> Option<PathBuf> {
+    fn pick_file(dialog: crate::FileDialog<'_>) -> Option<PathBuf> {
         open_files_impl(dialog, false).map(|mut v| v.remove(0))
     }
 
-    fn pick_files(dialog: crate::FileDialog) -> Option<Vec<PathBuf>> {
+    fn pick_files(dialog: crate::FileDialog<'_>) -> Option<Vec<PathBuf>> {
         open_files_impl(dialog, true)
     }
 
-    fn save_file(dialog: crate::FileDialog) -> Option<PathBuf> {
+    fn save_file(dialog: crate::FileDialog<'_>) -> Option<PathBuf> {
         unsafe {
             let title = CString::new(dialog.title.as_deref().unwrap_or("Save File"))
                 .expect("Can't convert to CString");
+            let parent = dialog
+                .parent
+                .map(|window| window.0.window)
+                .unwrap_or(null_mut());
 
             let chooser = cfg_select! {
                 gtk3_20 => gtk_file_chooser_native_new(
                     title.as_ptr(),
-                    null_mut(),
+                    parent,
                     GTK_FILE_CHOOSER_ACTION_SAVE,
                     c"_Save".as_ptr(),
                     c"_Cancel".as_ptr(),
                 ) as *mut c_void,
                 _ => gtk_file_chooser_dialog_new(
                     title.as_ptr(),
-                    null_mut(),
+                    parent,
                     GTK_FILE_CHOOSER_ACTION_SAVE,
                     c"_Cancel".as_ptr(),
                     GTK_RESPONSE_CANCEL,
@@ -59,7 +120,7 @@ impl crate::FileDialogInterface for PlatformFileDialog {
 
             let result = cfg_select! {
                 gtk3_20 => gtk_native_dialog_run(chooser as *mut GtkNativeDialog),
-                _ => gtk_dialog_run(chooser as *mut GtkWidget),
+                _ => gtk_dialog_run(chooser as *mut GtkDialog),
             };
 
             let path = if result == GTK_RESPONSE_ACCEPT {
@@ -84,22 +145,26 @@ impl crate::FileDialogInterface for PlatformFileDialog {
     }
 }
 
-fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<PathBuf>> {
+fn open_files_impl(dialog: crate::FileDialog<'_>, multiple: bool) -> Option<Vec<PathBuf>> {
     unsafe {
         let title = CString::new(dialog.title.as_deref().unwrap_or("Open File"))
             .expect("Can't convert to CString");
+        let parent = dialog
+            .parent
+            .map(|window| window.0.window)
+            .unwrap_or(null_mut());
 
         let chooser = cfg_select! {
             gtk3_20 => gtk_file_chooser_native_new(
                 title.as_ptr(),
-                null_mut(),
+                parent,
                 GTK_FILE_CHOOSER_ACTION_OPEN,
                 c"_Open".as_ptr(),
                 c"_Cancel".as_ptr(),
             ) as *mut c_void,
             _ => gtk_file_chooser_dialog_new(
                 title.as_ptr(),
-                null_mut(),
+                parent,
                 GTK_FILE_CHOOSER_ACTION_OPEN,
                 c"_Cancel".as_ptr(),
                 GTK_RESPONSE_CANCEL,
@@ -121,7 +186,7 @@ fn open_files_impl(dialog: crate::FileDialog, multiple: bool) -> Option<Vec<Path
 
         let result = cfg_select! {
             gtk3_20 => gtk_native_dialog_run(chooser as *mut GtkNativeDialog),
-            _ => gtk_dialog_run(chooser as *mut GtkWidget),
+            _ => gtk_dialog_run(chooser as *mut GtkDialog),
         };
 
         let paths = if result == GTK_RESPONSE_ACCEPT {

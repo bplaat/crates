@@ -50,8 +50,8 @@ fn main() {
                 size.width, size.height
             ));
         }
-        Event::Window(WindowEvent::Close) => {
-            println!("Window closed");
+        Event::Window(WindowEvent::CloseRequested(_)) => {
+            println!("Window close requested");
         }
         #[cfg(target_os = "macos")]
         Event::Window(WindowEvent::MacosFullscreenChange(is_fullscreen)) => {

@@ -422,9 +422,9 @@ impl TlsConnector {
         stream: S,
     ) -> Result<TlsStream<S>, Error> {
         let mut cred = acquire_cred(self.accept_invalid_certs)?;
-        let domain_w = to_utf16(domain);
+        let domain = to_utf16(domain);
         let mut stream = stream;
-        let ctx = do_handshake(&mut cred, &domain_w, &mut stream)?;
+        let ctx = do_handshake(&mut cred, &domain, &mut stream)?;
         let mut ctx = ctx;
         let sizes = query_stream_sizes(&mut ctx)?;
         Ok(TlsStream {

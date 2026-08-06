@@ -6,6 +6,8 @@
 
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
+const isMacosBwebview = navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh');
+
 // IPC helpers
 function ipcSend(type, data = {}) {
     window.ipc.postMessage(JSON.stringify({ type, ...data }));
@@ -130,6 +132,7 @@ function renderCharCanvas(canvas, bytes) {
 // Module-level paint state (not reactive)
 let isPainting = false;
 let paintValue = true;
+let replacementQueue = Promise.resolve();
 
 PetiteVue.createApp({
     fontFileName: '',
@@ -137,6 +140,7 @@ PetiteVue.createApp({
     fontData: makeEmptyFont(),
     selectedChar: 0,
     dirty: false,
+    closePending: false,
 
     get charInfoText() {
         const idx = this.selectedChar;
@@ -147,9 +151,10 @@ PetiteVue.createApp({
     },
 
     async init() {
-        window.ipc.addEventListener('message', (event) => {
+        window.ipc.addEventListener('message', async (event) => {
             const message = JSON.parse(event.data);
-            if (message.type === 'openFile') this._loadFont(message.path);
+            if (message.type === 'openFile') await this._openFont(message.path);
+            if (message.type === 'closeRequested') await this.closeWindow();
         });
 
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -183,7 +188,10 @@ PetiteVue.createApp({
             this.renderAllChars();
             this.selectChar(0);
             if (window.startupFilePath) {
-                await this._loadFont(window.startupFilePath);
+                await this._openFont(window.startupFilePath);
+            } else {
+                const lastFontPath = localStorage.getItem('lastFontPath');
+                if (lastFontPath) await this._openFont(lastFontPath);
             }
         });
     },
@@ -194,67 +202,98 @@ PetiteVue.createApp({
         document.title = `8x8 Pixel Font Editor - ${name}${this.dirty ? '*' : ''}`;
     },
 
+    _setDirty(dirty) {
+        this.dirty = dirty;
+        this._updateTitle();
+        if (isMacosBwebview) ipcSend('macosDocumentEdited', { edited: dirty });
+    },
+
     _markDirty() {
-        if (!this.dirty) {
-            this.dirty = true;
-            this._updateTitle();
-        }
+        if (!this.dirty) this._setDirty(true);
+    },
+
+    async _confirmSaveChanges() {
+        if (!this.dirty) return true;
+        const filename = this.fontFileName || 'Untitled';
+        const { choice } = await ipcRequest('confirmSaveChanges', { filename });
+        if (choice === 'save') return await this.saveFile();
+        return choice === 'discard';
+    },
+
+    _replaceDocument(action) {
+        const request = replacementQueue.then(async () => {
+            if (!(await this._confirmSaveChanges())) return false;
+            return await action();
+        });
+        replacementQueue = request.catch(() => false);
+        return request;
     },
 
     newFile() {
-        this.fontData = makeEmptyFont();
-        this.fontFilePath = '';
-        this.fontFileName = '';
-        this.dirty = false;
-        this._updateTitle();
-        this.$nextTick(() => {
-            this.renderAllChars();
-            this.selectChar(0);
+        return this._replaceDocument(async () => {
+            this.fontData = makeEmptyFont();
+            this.fontFilePath = '';
+            this.fontFileName = '';
+            this._setDirty(false);
+            this.$nextTick(() => {
+                this.renderAllChars();
+                this.selectChar(0);
+            });
+            return true;
         });
     },
 
     async openFile() {
         const { path } = await ipcRequest('openFileDialog');
         if (!path) return;
-        await this._loadFont(path);
+        await this._openFont(path);
+    },
+
+    _openFont(path) {
+        return this._replaceDocument(() => this._loadFont(path));
     },
 
     async _loadFont(path) {
         const { ok, data, error } = await ipcRequest('openFont', { path });
         if (!ok) {
+            if (localStorage.getItem('lastFontPath') === path) {
+                localStorage.removeItem('lastFontPath');
+            }
             alert('Failed to open font file:\n' + error);
-            return;
+            return false;
         }
         this.fontData = new Uint8Array(data);
         this.fontFilePath = path;
         this.fontFileName = path.replace(/.*[\\/]/, '');
-        this.dirty = false;
-        this._updateTitle();
+        localStorage.setItem('lastFontPath', path);
+        this._setDirty(false);
 
         this.$nextTick(() => {
             this.renderAllChars();
             this.selectChar(0);
         });
+        return true;
     },
 
     async saveFile() {
         if (!this.fontFilePath) {
-            await this.saveFileAs();
-            return;
+            return await this.saveFileAs();
         }
-        await this._writeFont(this.fontFilePath);
+        return await this._writeFont(this.fontFilePath);
     },
 
     async saveFileAs() {
         const baseName = this.fontFileName || 'font.pf';
         const { path } = await ipcRequest('saveFileDialog', { filename: baseName });
-        if (!path) return;
+        if (!path) return false;
         const saved = await this._writeFont(path);
         if (saved) {
             this.fontFilePath = path;
             this.fontFileName = path.replace(/.*[\\/]/, '');
+            localStorage.setItem('lastFontPath', path);
             this._updateTitle();
         }
+        return saved;
     },
 
     async _writeFont(path) {
@@ -264,9 +303,21 @@ PetiteVue.createApp({
             alert('Failed to save font file:\n' + error);
             return false;
         }
-        this.dirty = false;
-        this._updateTitle();
+        this._setDirty(false);
         return true;
+    },
+
+    async closeWindow() {
+        if (this.closePending) return;
+        this.closePending = true;
+        try {
+            await this._replaceDocument(async () => {
+                ipcSend('closeWindow');
+                return true;
+            });
+        } finally {
+            this.closePending = false;
+        }
     },
 
     // Export
