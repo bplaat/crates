@@ -91,6 +91,8 @@ pub(crate) const NS_BACKING_STORE_BUFFERED: u64 = 2;
 pub(crate) const NS_WINDOW_TITLE_VISIBILITY_HIDDEN: i64 = 1;
 pub(crate) const NS_WINDOW_BELOW: i64 = -1;
 
+pub(crate) const NS_EVENT_MODIFIER_FLAG_SHIFT: u64 = 1 << 17;
+pub(crate) const NS_EVENT_MODIFIER_FLAG_CONTROL: u64 = 1 << 18;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_OPTION: u64 = 1 << 19;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
 

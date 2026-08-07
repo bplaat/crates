@@ -26,6 +26,9 @@ struct WebAssets;
 #[serde(tag = "type", rename_all = "camelCase")]
 enum IpcMessage {
     Ready,
+    MenuAction {
+        action: String,
+    },
     RestoreLastFile,
     OpenFile {
         path: String,
@@ -87,10 +90,116 @@ enum IpcMessage {
 // MARK: Main
 fn main() {
     let startup_path = std::env::args().nth(1);
-    let event_loop = EventLoopBuilder::new()
+    #[allow(unused_mut)]
+    let mut event_loop_builder = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "PixelFontEditor")
-        .single_instance(false)
-        .build();
+        .single_instance(false);
+    #[cfg(target_os = "macos")]
+    {
+        use bwebview::{Accelerator, KeyCode, MenuBarBuilder, MenuBuilder, MenuItem, Modifiers};
+
+        event_loop_builder = event_loop_builder.macos_set_menu(
+            MenuBarBuilder::new()
+                .menu(
+                    MenuBuilder::new("File")
+                        .item(
+                            MenuItem::new("New", "new")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyN)),
+                        )
+                        .item(
+                            MenuItem::new("Open…", "open")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyO)),
+                        )
+                        .item(
+                            MenuItem::new("Save", "save")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyS)),
+                        )
+                        .item(
+                            MenuItem::new("Save As…", "saveAs").accelerator(Accelerator::new(
+                                Modifiers::COMMAND | Modifiers::SHIFT,
+                                KeyCode::KeyS,
+                            )),
+                        )
+                        .separator()
+                        .item(
+                            MenuItem::new("Export as Assembly…", "exportAsm").accelerator(
+                                Accelerator::new(
+                                    Modifiers::COMMAND | Modifiers::OPTION,
+                                    KeyCode::KeyA,
+                                ),
+                            ),
+                        )
+                        .item(MenuItem::new("Export as C Header…", "exportC").accelerator(
+                            Accelerator::new(Modifiers::COMMAND | Modifiers::OPTION, KeyCode::KeyC),
+                        ))
+                        .separator(),
+                )
+                .menu(
+                    MenuBuilder::new("Edit")
+                        .item(
+                            MenuItem::new("Copy", "copy")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyC)),
+                        )
+                        .item(
+                            MenuItem::new("Paste", "paste")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyV)),
+                        ),
+                )
+                .menu(
+                    MenuBuilder::new("Character")
+                        .item(
+                            MenuItem::new("Clear", "clear").accelerator(Accelerator::new(
+                                Modifiers::COMMAND,
+                                KeyCode::Backspace,
+                            )),
+                        )
+                        .item(
+                            MenuItem::new("Invert", "invert")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyI)),
+                        )
+                        .item(
+                            MenuItem::new("Rotate", "rotate")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyR)),
+                        )
+                        .item(MenuItem::new("Mirror Horizontally", "mirrorH").accelerator(
+                            Accelerator::new(Modifiers::COMMAND | Modifiers::SHIFT, KeyCode::KeyH),
+                        ))
+                        .item(MenuItem::new("Mirror Vertically", "mirrorV").accelerator(
+                            Accelerator::new(Modifiers::COMMAND | Modifiers::SHIFT, KeyCode::KeyV),
+                        ))
+                        .separator()
+                        .item(
+                            MenuItem::new("Clear All", "clearAll").accelerator(Accelerator::new(
+                                Modifiers::COMMAND | Modifiers::OPTION,
+                                KeyCode::Backspace,
+                            )),
+                        )
+                        .item(MenuItem::new("Invert All", "invertAll").accelerator(
+                            Accelerator::new(Modifiers::COMMAND | Modifiers::OPTION, KeyCode::KeyI),
+                        ))
+                        .item(MenuItem::new("Rotate All", "rotateAll").accelerator(
+                            Accelerator::new(Modifiers::COMMAND | Modifiers::OPTION, KeyCode::KeyR),
+                        ))
+                        .item(
+                            MenuItem::new("Mirror All Horizontally", "mirrorHAll").accelerator(
+                                Accelerator::new(
+                                    Modifiers::COMMAND | Modifiers::OPTION | Modifiers::SHIFT,
+                                    KeyCode::KeyH,
+                                ),
+                            ),
+                        )
+                        .item(
+                            MenuItem::new("Mirror All Vertically", "mirrorVAll").accelerator(
+                                Accelerator::new(
+                                    Modifiers::COMMAND | Modifiers::OPTION | Modifiers::SHIFT,
+                                    KeyCode::KeyV,
+                                ),
+                            ),
+                        ),
+                ),
+        );
+    }
+    let event_loop = event_loop_builder.build();
 
     #[allow(unused_mut)]
     let mut window = WindowBuilder::new()
@@ -113,6 +222,8 @@ fn main() {
 
     let mut page_ready = false;
     let mut pending_open_path = startup_path;
+    #[cfg(target_os = "macos")]
+    let mut pending_menu_action: Option<String> = None;
     event_loop.run(move |event| {
         if let Event::Webview(WebviewEvent::PageLoadStart) = &event {
             page_ready = false;
@@ -133,6 +244,19 @@ fn main() {
         }
         if let Event::Webview(WebviewEvent::PageTitleChange(title)) = &event {
             window.set_title(title);
+        }
+        #[cfg(target_os = "macos")]
+        if let Event::MacosMenuItem(action) = &event {
+            if page_ready {
+                webview.send_ipc_message(
+                    serde_json::to_string(&IpcMessage::MenuAction {
+                        action: action.clone(),
+                    })
+                    .expect("Failed to serialize menu action"),
+                );
+            } else {
+                pending_menu_action = Some(action.clone());
+            }
         }
         if let Event::Window(WindowEvent::CloseRequested(request)) = &event {
             request.prevent_close();
@@ -172,6 +296,13 @@ fn main() {
                         webview.send_ipc_message(
                             serde_json::to_string(&IpcMessage::RestoreLastFile)
                                 .expect("Failed to serialize restore last file message"),
+                        );
+                    }
+                    #[cfg(target_os = "macos")]
+                    if let Some(action) = pending_menu_action.take() {
+                        webview.send_ipc_message(
+                            serde_json::to_string(&IpcMessage::MenuAction { action })
+                                .expect("Failed to serialize menu action"),
                         );
                     }
                 }

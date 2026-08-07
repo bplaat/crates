@@ -49,18 +49,10 @@
 
                     <div class="table-view" v-show="currentTable !== null">
                         <div class="tabs">
-                            <button
-                                class="tab"
-                                :class="{ 'is-active': activeTab === 'data' }"
-                                @click="activeTab = 'data'"
-                            >
+                            <button class="tab" :class="{ 'is-active': activeTab === 'data' }" @click="showData">
                                 Data
                             </button>
-                            <button
-                                class="tab"
-                                :class="{ 'is-active': activeTab === 'schema' }"
-                                @click="activeTab = 'schema'"
-                            >
+                            <button class="tab" :class="{ 'is-active': activeTab === 'schema' }" @click="showSchema">
                                 Schema
                             </button>
                             <div class="tab-spacer"></div>

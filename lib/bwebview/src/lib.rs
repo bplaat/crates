@@ -13,6 +13,8 @@
 pub use dialog::*;
 pub use event::*;
 pub use event_loop::*;
+#[cfg(target_os = "macos")]
+pub use menu::*;
 pub use sizes::*;
 pub use webview::*;
 pub use window::*;
@@ -21,6 +23,8 @@ pub use window::*;
 mod dialog;
 mod event;
 mod event_loop;
+#[cfg(target_os = "macos")]
+mod menu;
 mod platforms;
 mod sizes;
 mod webview;

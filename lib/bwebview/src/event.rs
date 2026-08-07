@@ -69,4 +69,7 @@ pub enum Event {
     /// Files opened through macOS Launch Services
     #[cfg(target_os = "macos")]
     MacosOpenFiles(Vec<PathBuf>),
+    /// A custom macOS menu item was selected
+    #[cfg(target_os = "macos")]
+    MacosMenuItem(String),
 }

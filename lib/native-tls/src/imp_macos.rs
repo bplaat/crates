@@ -196,7 +196,7 @@ impl TlsConnector {
     }
 
     #[cfg(test)]
-    pub(crate) fn new_danger_accept_invalid_certs() -> Result<Self, Error> {
+    pub(crate) const fn new_danger_accept_invalid_certs() -> Result<Self, Error> {
         Ok(Self {
             accept_invalid_certs: true,
         })

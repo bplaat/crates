@@ -33,6 +33,7 @@ struct WebAssets;
 #[serde(tag = "type", rename_all = "camelCase")]
 enum IpcMessage {
     Ready,
+    MenuAction { action: String },
     RestoreLastFile,
     OpenFile { path: String },
     OpenFileDialog,
@@ -294,10 +295,49 @@ fn db_query(req: &Request, state: &State) -> Result<Response> {
 fn main() {
     let startup_path = std::env::args().nth(1);
     let state: State = Arc::new(Mutex::new(None));
-    let event_loop = EventLoopBuilder::new()
+    #[allow(unused_mut)]
+    let mut event_loop_builder = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "SequelExplorer")
-        .single_instance(false)
-        .build();
+        .single_instance(false);
+    #[cfg(target_os = "macos")]
+    {
+        use bwebview::{Accelerator, KeyCode, MenuBarBuilder, MenuBuilder, MenuItem, Modifiers};
+
+        event_loop_builder = event_loop_builder.macos_set_menu(
+            MenuBarBuilder::new()
+                .menu(
+                    MenuBuilder::new("File")
+                        .item(
+                            MenuItem::new("Open Database…", "open")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyO)),
+                        )
+                        .separator(),
+                )
+                .menu(
+                    MenuBuilder::new("View")
+                        .item(
+                            MenuItem::new("Data", "showData")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::Digit1)),
+                        )
+                        .item(
+                            MenuItem::new("Schema", "showSchema")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::Digit2)),
+                        ),
+                )
+                .menu(
+                    MenuBuilder::new("Query")
+                        .item(
+                            MenuItem::new("Run Query", "runQuery")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::Enter)),
+                        )
+                        .item(
+                            MenuItem::new("Clear Query", "clearQuery")
+                                .accelerator(Accelerator::new(Modifiers::COMMAND, KeyCode::KeyK)),
+                        ),
+                ),
+        );
+    }
+    let event_loop = event_loop_builder.build();
 
     let router = RouterBuilder::<State>::with(Arc::clone(&state))
         .get("/api/tables", db_tables)
@@ -347,6 +387,8 @@ fn main() {
 
     #[cfg(target_os = "macos")]
     let mut page_ready = false;
+    #[cfg(target_os = "macos")]
+    let mut pending_menu_action: Option<String> = None;
     let mut pending_open_path = startup_path;
     event_loop.run(move |event| match event {
         #[cfg(target_os = "macos")]
@@ -366,6 +408,17 @@ fn main() {
             }
         }
         Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
+        #[cfg(target_os = "macos")]
+        Event::MacosMenuItem(action) => {
+            if page_ready {
+                webview.send_ipc_message(
+                    serde_json::to_string(&IpcMessage::MenuAction { action })
+                        .expect("Failed to serialize menu action"),
+                );
+            } else {
+                pending_menu_action = Some(action);
+            }
+        }
         Event::Window(bwebview::WindowEvent::DroppedFile(path)) => {
             webview.send_ipc_message(
                 serde_json::to_string(&IpcMessage::OpenFile {
@@ -398,6 +451,13 @@ fn main() {
                         webview.send_ipc_message(
                             serde_json::to_string(&IpcMessage::RestoreLastFile)
                                 .expect("Failed to serialize restore last file message"),
+                        );
+                    }
+                    #[cfg(target_os = "macos")]
+                    if let Some(action) = pending_menu_action.take() {
+                        webview.send_ipc_message(
+                            serde_json::to_string(&IpcMessage::MenuAction { action })
+                                .expect("Failed to serialize menu action"),
                         );
                     }
                 }

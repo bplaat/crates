@@ -19,6 +19,8 @@ pub(crate) struct AppId {
 pub struct EventLoopBuilder {
     pub(crate) app_id: Option<AppId>,
     pub(crate) single_instance: bool,
+    #[cfg(target_os = "macos")]
+    pub(crate) macos_menu: Option<crate::MenuBarBuilder>,
 }
 
 impl Default for EventLoopBuilder {
@@ -26,6 +28,8 @@ impl Default for EventLoopBuilder {
         Self {
             app_id: None,
             single_instance: true,
+            #[cfg(target_os = "macos")]
+            macos_menu: None,
         }
     }
 }
@@ -54,6 +58,13 @@ impl EventLoopBuilder {
     /// Set whether only one instance of the application may run (enabled by default)
     pub const fn single_instance(mut self, single_instance: bool) -> Self {
         self.single_instance = single_instance;
+        self
+    }
+
+    /// Add custom macOS menus to the default application menu bar
+    #[cfg(target_os = "macos")]
+    pub fn macos_set_menu(mut self, menu: crate::MenuBarBuilder) -> Self {
+        self.macos_menu = Some(menu);
         self
     }
 

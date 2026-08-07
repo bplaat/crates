@@ -8,6 +8,41 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 const isMacosBwebview = navigator.userAgent.includes('bwebview') && navigator.userAgent.includes('Macintosh');
 
+// Every action the user can trigger, keyed by the action id used in the macOS menu bar.
+// `method` is the app method that performs it, `key`/`shift`/`alt` are the Command-chord
+// fallback for platforms without a menu bar. Keep the ids and chords in sync with main.rs.
+const ACTIONS = {
+    new: { method: 'newFile', key: 'n' },
+    open: { method: 'openFile', key: 'o' },
+    save: { method: 'saveFile', key: 's' },
+    saveAs: { method: 'saveFileAs', key: 's', shift: true },
+    exportAsm: { method: 'exportAsm', key: 'a', alt: true },
+    exportC: { method: 'exportC', key: 'c', alt: true },
+    copy: { method: 'copyChar', key: 'c' },
+    paste: { method: 'pasteChar', key: 'v' },
+    clear: { method: 'opClear', key: 'Backspace' },
+    invert: { method: 'opInvert', key: 'i' },
+    rotate: { method: 'opRotate', key: 'r' },
+    mirrorH: { method: 'opMirrorH', key: 'h', shift: true },
+    mirrorV: { method: 'opMirrorV', key: 'v', shift: true },
+    clearAll: { method: 'opClearAll', key: 'Backspace', alt: true },
+    invertAll: { method: 'opInvertAll', key: 'i', alt: true },
+    rotateAll: { method: 'opRotateAll', key: 'r', alt: true },
+    mirrorHAll: { method: 'opMirrorHAll', key: 'h', alt: true, shift: true },
+    mirrorVAll: { method: 'opMirrorVAll', key: 'v', alt: true, shift: true },
+};
+
+// Returns the id of the action this key event triggers, or null when it is not a shortcut
+function matchShortcut(event) {
+    if (!event.metaKey && !event.ctrlKey) return null;
+    const pressed = event.key.toLowerCase();
+    const match = Object.entries(ACTIONS).find(
+        ([, { key, shift = false, alt = false }]) =>
+            key.toLowerCase() === pressed && event.shiftKey === shift && event.altKey === alt,
+    );
+    return match ? match[0] : null;
+}
+
 // IPC helpers
 function ipcSend(type, data = {}) {
     window.ipc.postMessage(JSON.stringify({ type, ...data }));
@@ -159,6 +194,7 @@ PetiteVue.createApp({
                 if (lastFontPath) await this._openFont(lastFontPath);
             }
             if (message.type === 'closeRequested') await this.closeWindow();
+            if (message.type === 'menuAction') this.performAction(message.action);
         });
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
             this.renderAllChars();
@@ -166,14 +202,19 @@ PetiteVue.createApp({
         });
 
         window.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-                e.preventDefault();
-                this.copyChar();
+            // On macOS the native menu bar already claims these chords and delivers them over IPC,
+            // so only the other platforms need to resolve them here
+            if (!isMacosBwebview) {
+                const action = matchShortcut(e);
+                if (action) {
+                    e.preventDefault();
+                    this.performAction(action);
+                    return;
+                }
             }
-            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-                e.preventDefault();
-                this.pasteChar();
-            }
+
+            // Unmodified arrow keys walk the character grid
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
             let next = this.selectedChar;
             if (e.key === 'ArrowLeft') next = Math.max(0, this.selectedChar - 1);
             if (e.key === 'ArrowRight') next = Math.min(255, this.selectedChar + 1);
@@ -192,6 +233,12 @@ PetiteVue.createApp({
             this.selectChar(0);
             ipcSend('ready');
         });
+    },
+
+    // Runs an action by id, coming from the macOS menu bar or from a keyboard shortcut
+    performAction(id) {
+        const action = ACTIONS[id];
+        if (action) this[action.method]();
     },
 
     // File operations
