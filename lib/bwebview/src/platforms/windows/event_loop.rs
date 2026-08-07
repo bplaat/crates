@@ -28,28 +28,28 @@ impl PlatformEventLoop {
         unsafe {
             // Ensure single instance
             if let Some(app_id) = builder.app_id {
-                let mutex_name = format!(
-                    "bwebview-{}.{}.{}",
-                    app_id.qualifier, app_id.organization, app_id.application
-                );
-                let mutex_name = mutex_name.to_wide_string();
-                CreateMutexW(null_mut(), TRUE, mutex_name.as_ptr());
-                if GetLastError() == ERROR_ALREADY_EXISTS {
-                    let hwnd = FindWindowW(mutex_name.as_ptr(), null());
-                    if !hwnd.is_null() {
-                        ShowWindow(hwnd, SW_RESTORE);
-                        SetForegroundWindow(hwnd);
+                if builder.single_instance {
+                    let mutex_name = format!(
+                        "bwebview-{}.{}.{}",
+                        app_id.qualifier, app_id.organization, app_id.application
+                    );
+                    let mutex_name = mutex_name.to_wide_string();
+                    CreateMutexW(null_mut(), TRUE, mutex_name.as_ptr());
+                    if GetLastError() == ERROR_ALREADY_EXISTS {
+                        let hwnd = FindWindowW(mutex_name.as_ptr(), null());
+                        if !hwnd.is_null() {
+                            ShowWindow(hwnd, SW_RESTORE);
+                            SetForegroundWindow(hwnd);
+                        }
+                        exit(0);
                     }
-                    exit(0);
                 }
                 APP_ID = Some(app_id);
             }
 
-            // Initialize COM
-            CoInitializeEx(
-                null_mut(),
-                COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE,
-            );
+            // Initialize OLE (and COM as a single-threaded apartment). OLE
+            // initialization is required for RegisterDragDrop to succeed.
+            OleInitialize(null_mut());
 
             // Explorer creates the taskbar button asynchronously. Shell APIs must
             // not be used until the window receives this registered message.
@@ -143,7 +143,9 @@ impl crate::EventLoopInterface for PlatformEventLoop {
     }
 
     fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
-        unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
+        unsafe {
+            EVENT_HANDLER = Some(Box::new(event_handler));
+        }
 
         // Start message loop
         unsafe {
@@ -152,7 +154,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
-            CoUninitialize();
+            OleUninitialize();
             exit(msg.wParam as i32);
         }
     }

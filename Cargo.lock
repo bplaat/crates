@@ -125,6 +125,7 @@ dependencies = [
  "serde_json",
  "small-http",
  "windows-metadata",
+ "winresource",
 ]
 
 [[package]]

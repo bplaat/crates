@@ -4,8 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::c_void;
+use std::ffi::{OsString, c_void};
+use std::os::windows::ffi::OsStringExt;
+use std::path::PathBuf;
 use std::ptr::{null, null_mut};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::{env, mem};
 
 use super::event_loop::send_event;
@@ -26,11 +29,194 @@ pub(super) struct WebviewData {
     pub(super) environment: Option<*mut ICoreWebView2Environment>,
     pub(super) webview: Option<*mut ICoreWebView2>,
     pub(super) controller: Option<*mut ICoreWebView2Controller>,
+    #[allow(clippy::vec_box)] // Registered COM pointers must remain stable when the vector grows.
+    drop_targets: Vec<Box<FileDropTarget>>,
     pub(super) window_data: *mut WindowData,
 }
 
 pub(crate) struct PlatformWebview {
     pub(super) webview_data: Box<WebviewData>,
+}
+
+#[repr(C)]
+struct FileDropTarget {
+    interface: IDropTarget,
+    refs: AtomicU32,
+    hwnd: HWND,
+    valid: bool,
+}
+
+static FILE_DROP_TARGET_VTBL: IDropTargetVtbl = IDropTargetVtbl {
+    QueryInterface: file_drop_query_interface,
+    AddRef: file_drop_add_ref,
+    Release: file_drop_release,
+    DragEnter: file_drop_drag_enter,
+    DragOver: file_drop_drag_over,
+    DragLeave: file_drop_drag_leave,
+    Drop: file_drop,
+};
+
+const IID_IUNKNOWN: GUID = GUID {
+    data1: 0,
+    data2: 0,
+    data3: 0,
+    data4: [0xc0, 0, 0, 0, 0, 0, 0, 0x46],
+};
+const IID_IDROP_TARGET: GUID = GUID {
+    data1: 0x00000122,
+    data2: 0,
+    data3: 0,
+    data4: [0xc0, 0, 0, 0, 0, 0, 0, 0x46],
+};
+
+impl Drop for WebviewData {
+    fn drop(&mut self) {
+        for target in &self.drop_targets {
+            unsafe { RevokeDragDrop(target.hwnd) };
+        }
+    }
+}
+
+unsafe fn install_file_drop_targets(data: &mut WebviewData) {
+    unsafe extern "system" fn enum_child(hwnd: HWND, data: LPARAM) -> BOOL {
+        let data = unsafe { &mut *(data as *mut WebviewData) };
+        let mut target = Box::new(FileDropTarget {
+            interface: IDropTarget {
+                lpVtbl: &FILE_DROP_TARGET_VTBL,
+            },
+            refs: AtomicU32::new(1),
+            hwnd,
+            valid: false,
+        });
+        let revoked = unsafe { RevokeDragDrop(hwnd) };
+        if revoked != DRAGDROP_E_INVALIDHWND
+            && unsafe { RegisterDragDrop(hwnd, &mut target.interface) } == S_OK
+        {
+            data.drop_targets.push(target);
+        }
+        TRUE
+    }
+
+    unsafe { EnumChildWindows(data.hwnd, enum_child, data as *mut WebviewData as LPARAM) };
+}
+
+unsafe extern "system" fn file_drop_query_interface(
+    this: *mut IDropTarget,
+    iid: *const GUID,
+    object: *mut *mut c_void,
+) -> HRESULT {
+    if !iid.is_null() && (unsafe { *iid == IID_IUNKNOWN } || unsafe { *iid == IID_IDROP_TARGET }) {
+        unsafe {
+            *object = this as *mut c_void;
+            file_drop_add_ref(this);
+        }
+        S_OK
+    } else {
+        unsafe { *object = null_mut() };
+        E_NOINTERFACE
+    }
+}
+
+unsafe extern "system" fn file_drop_add_ref(this: *mut IDropTarget) -> u32 {
+    let target = unsafe { &*(this as *mut FileDropTarget) };
+    target.refs.fetch_add(1, Ordering::Relaxed) + 1
+}
+
+unsafe extern "system" fn file_drop_release(this: *mut IDropTarget) -> u32 {
+    let target = unsafe { &*(this as *mut FileDropTarget) };
+    target.refs.fetch_sub(1, Ordering::Release) - 1
+}
+
+unsafe extern "system" fn file_drop_drag_enter(
+    this: *mut IDropTarget,
+    data: *mut IDataObject,
+    _key_state: u32,
+    _point: POINT,
+    effect: *mut u32,
+) -> HRESULT {
+    let target = unsafe { &mut *(this as *mut FileDropTarget) };
+    target.valid = unsafe { file_drop_paths(data) }.is_some();
+    unsafe {
+        *effect = if target.valid {
+            DROPEFFECT_COPY
+        } else {
+            DROPEFFECT_NONE
+        }
+    };
+    S_OK
+}
+
+unsafe extern "system" fn file_drop_drag_over(
+    this: *mut IDropTarget,
+    _key_state: u32,
+    _point: POINT,
+    effect: *mut u32,
+) -> HRESULT {
+    let target = unsafe { &*(this as *mut FileDropTarget) };
+    unsafe {
+        *effect = if target.valid {
+            DROPEFFECT_COPY
+        } else {
+            DROPEFFECT_NONE
+        }
+    };
+    S_OK
+}
+
+unsafe extern "system" fn file_drop_drag_leave(this: *mut IDropTarget) -> HRESULT {
+    unsafe { (*(this as *mut FileDropTarget)).valid = false };
+    S_OK
+}
+
+unsafe extern "system" fn file_drop(
+    this: *mut IDropTarget,
+    data: *mut IDataObject,
+    _key_state: u32,
+    _point: POINT,
+    effect: *mut u32,
+) -> HRESULT {
+    let target = unsafe { &mut *(this as *mut FileDropTarget) };
+    if target.valid
+        && let Some(paths) = unsafe { file_drop_paths(data) }
+    {
+        for path in paths {
+            send_event(crate::Event::Window(crate::WindowEvent::DroppedFile(path)));
+        }
+        unsafe { *effect = DROPEFFECT_COPY };
+    } else {
+        unsafe { *effect = DROPEFFECT_NONE };
+    }
+    target.valid = false;
+    S_OK
+}
+
+unsafe fn file_drop_paths(data: *mut IDataObject) -> Option<Vec<PathBuf>> {
+    if data.is_null() {
+        return None;
+    }
+    let format = FORMATETC {
+        cfFormat: CF_HDROP,
+        ptd: null_mut(),
+        dwAspect: DVASPECT_CONTENT,
+        lindex: -1,
+        tymed: TYMED_HGLOBAL,
+    };
+    let mut medium: STGMEDIUM = unsafe { mem::zeroed() };
+    if unsafe { ((*(*data).lpVtbl).GetData)(data, &format, &mut medium) } != S_OK {
+        return None;
+    }
+
+    let drop = medium.data as HDROP;
+    let count = unsafe { DragQueryFileW(drop, u32::MAX, null_mut(), 0) };
+    let mut paths = Vec::with_capacity(count as usize);
+    for index in 0..count {
+        let length = unsafe { DragQueryFileW(drop, index, null_mut(), 0) };
+        let mut buffer = vec![0; length as usize + 1];
+        unsafe { DragQueryFileW(drop, index, buffer.as_mut_ptr(), buffer.len() as u32) };
+        paths.push(OsString::from_wide(&buffer[..length as usize]).into());
+    }
+    unsafe { ReleaseStgMedium(&mut medium) };
+    Some(paths)
 }
 
 impl PlatformWebview {
@@ -46,6 +232,7 @@ impl PlatformWebview {
             environment: None,
             webview: None,
             controller: None,
+            drop_targets: Vec::new(),
             window_data,
         });
         PlatformWebview { webview_data }
@@ -259,6 +446,21 @@ extern "system" fn controller_created(
         let mut rect: RECT = mem::zeroed();
         GetClientRect(_self.hwnd, &mut rect);
         (*controller).put_Bounds(rect);
+
+        // Let our drop target handle files instead of allowing WebView2 to
+        // navigate to them.
+        if (*_self.window_data).allow_file_drop {
+            let mut controller4: *mut ICoreWebView2Controller4 = null_mut();
+            (*controller).QueryInterface(
+                &IID_ICoreWebView2Controller4,
+                &mut controller4 as *mut _ as *mut *mut c_void,
+            );
+            if !controller4.is_null() {
+                (*controller4).put_AllowExternalDrop(FALSE);
+                (*controller4).Release();
+            }
+            install_file_drop_targets(_self);
+        }
 
         // Get webview
         let mut webview: *mut ICoreWebView2 = null_mut();

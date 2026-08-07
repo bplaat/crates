@@ -26,7 +26,7 @@ use bwebview::WindowsProgressBarState;
     target_os = "netbsd",
     windows
 ))]
-use bwebview::{Event, EventLoopBuilder, WebviewBuilder, WindowBuilder};
+use bwebview::{Event, EventLoopBuilder, Theme, WebviewBuilder, WindowBuilder};
 
 #[cfg(target_os = "macos")]
 fn main() {}
@@ -47,13 +47,30 @@ fn main() {
     let progress = event_loop.create_proxy();
     let mut window = WindowBuilder::new()
         .title("Progress Bar Example")
+        .background_color(if event_loop.theme() == Theme::Dark {
+            0x222222
+        } else {
+            0xffffff
+        })
         .center()
         .build();
     let mut _webview = WebviewBuilder::new(&window)
         .load_html(
-            r#"<body style="font:16px system-ui,sans-serif;height:100vh;margin:0;display:flex;align-items:center;justify-content:center;text-align:center;background-color:#fff;color:#111">
-                <main><h1>Application progress</h1><p>Watch the taskbar or application launcher</p></main>
-            </body>"#,
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Progress Bar Example</title>
+<style>
+:root { color-scheme: light dark; background: #fff; }
+@media (prefers-color-scheme: dark) { :root { background: #222; } }
+body { font: 16px system-ui, sans-serif; height: 100vh; margin: 0; display: flex; align-items: center; justify-content: center; text-align: center; }
+</style>
+</head>
+<body>
+<main><h1>Application progress</h1><p>Watch the taskbar or application launcher</p></main>
+</body>
+</html>"#,
         )
         .build();
 

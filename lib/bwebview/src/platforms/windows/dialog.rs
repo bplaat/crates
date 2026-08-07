@@ -50,7 +50,7 @@ impl crate::MessageDialogInterface for PlatformMessageDialog {
             dwFlags: TDF_ALLOW_DIALOG_CANCELLATION,
             dwCommonButtons: common_buttons,
             pszWindowTitle: title.as_ptr(),
-            mainIcon,
+            mainIcon: main_icon,
             pszMainInstruction: null(),
             pszContent: description.as_ptr(),
             cButtons: custom_buttons.len() as u32,

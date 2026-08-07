@@ -76,7 +76,30 @@ fn main() {
                 panic!("unsupported target environment: {other}");
             }
         }
+
+        // Add minimal Windows manifest for examples
+        compile_example_manifest();
     }
+}
+
+fn compile_example_manifest() {
+    let manifest = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+    <assemblyIdentity type="win32" name="bwebview.examples" version="{}.0" processorArchitecture="*"/>
+    <dependency>
+        <dependentAssembly>
+            <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
+        </dependentAssembly>
+    </dependency>
+</assembly>
+"#,
+        env!("CARGO_PKG_VERSION")
+    );
+    winresource::WindowsResource::new()
+        .set_manifest(&manifest)
+        .compile_for_examples()
+        .expect("Failed to compile bwebview example manifest");
 }
 
 fn link_gtk_libraries() {

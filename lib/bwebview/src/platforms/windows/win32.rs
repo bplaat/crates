@@ -293,6 +293,11 @@ pub(crate) const SWP_NOREPOSITION: u32 = 0x0200;
 
 #[link(name = "user32")]
 unsafe extern "system" {
+    pub(crate) fn EnumChildWindows(
+        hwndParent: HWND,
+        lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL,
+        lParam: LPARAM,
+    ) -> BOOL;
     pub(crate) fn GetSysColorBrush(nIndex: i32) -> HBRUSH;
     pub(crate) fn ExtractIconExW(
         lpszFile: *const w_char,
@@ -460,6 +465,7 @@ unsafe extern "system" {
 pub(crate) type HRESULT = i32;
 
 #[repr(C)]
+#[derive(PartialEq, Eq)]
 pub(crate) struct GUID {
     pub(crate) data1: u32,
     pub(crate) data2: u16,
@@ -482,17 +488,84 @@ pub(crate) struct STATSTG {
     pub(crate) reserved: u32,
 }
 
-pub(crate) const COINIT_APARTMENTTHREADED: u32 = 0x2;
-pub(crate) const COINIT_DISABLE_OLE1DDE: u32 = 0x4;
-
 pub(crate) const S_OK: HRESULT = 0;
 pub(crate) const E_NOINTERFACE: HRESULT = 0x80004002u32 as HRESULT;
 pub(crate) const E_NOTIMPL: HRESULT = 0x80004001u32 as HRESULT;
+pub(crate) const DRAGDROP_E_INVALIDHWND: HRESULT = 0x80040102u32 as HRESULT;
+pub(crate) const CF_HDROP: u16 = 15;
+pub(crate) const DVASPECT_CONTENT: u32 = 1;
+pub(crate) const TYMED_HGLOBAL: u32 = 1;
+pub(crate) const DROPEFFECT_NONE: u32 = 0;
+pub(crate) const DROPEFFECT_COPY: u32 = 1;
+
+#[repr(C)]
+pub(crate) struct FORMATETC {
+    pub(crate) cfFormat: u16,
+    pub(crate) ptd: *mut c_void,
+    pub(crate) dwAspect: u32,
+    pub(crate) lindex: i32,
+    pub(crate) tymed: u32,
+}
+
+#[repr(C)]
+pub(crate) struct STGMEDIUM {
+    pub(crate) tymed: u32,
+    pub(crate) data: *mut c_void,
+    pub(crate) pUnkForRelease: *mut c_void,
+}
+
+#[repr(C)]
+pub(crate) struct IDataObject {
+    pub(crate) lpVtbl: *const IDataObjectVtbl,
+}
+
+#[repr(C)]
+pub(crate) struct IDataObjectVtbl {
+    pub(crate) QueryInterface:
+        unsafe extern "system" fn(*mut IDataObject, *const GUID, *mut *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(*mut IDataObject) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(*mut IDataObject) -> u32,
+    pub(crate) GetData:
+        unsafe extern "system" fn(*mut IDataObject, *const FORMATETC, *mut STGMEDIUM) -> HRESULT,
+}
+
+#[repr(C)]
+pub(crate) struct IDropTarget {
+    pub(crate) lpVtbl: *const IDropTargetVtbl,
+}
+
+#[repr(C)]
+pub(crate) struct IDropTargetVtbl {
+    pub(crate) QueryInterface:
+        unsafe extern "system" fn(*mut IDropTarget, *const GUID, *mut *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(*mut IDropTarget) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(*mut IDropTarget) -> u32,
+    pub(crate) DragEnter: unsafe extern "system" fn(
+        *mut IDropTarget,
+        *mut IDataObject,
+        u32,
+        POINT,
+        *mut u32,
+    ) -> HRESULT,
+    pub(crate) DragOver:
+        unsafe extern "system" fn(*mut IDropTarget, u32, POINT, *mut u32) -> HRESULT,
+    pub(crate) DragLeave: unsafe extern "system" fn(*mut IDropTarget) -> HRESULT,
+    pub(crate) Drop: unsafe extern "system" fn(
+        *mut IDropTarget,
+        *mut IDataObject,
+        u32,
+        POINT,
+        *mut u32,
+    ) -> HRESULT,
+}
 
 #[link(name = "ole32")]
 unsafe extern "system" {
-    pub(crate) fn CoInitializeEx(pvReserved: *mut c_void, dwCoInit: u32) -> HRESULT;
-    pub(crate) fn CoUninitialize();
+    pub(crate) fn OleInitialize(pvReserved: *mut c_void) -> HRESULT;
+    pub(crate) fn OleUninitialize();
+    pub(crate) fn RegisterDragDrop(hwnd: HWND, drop_target: *mut IDropTarget) -> HRESULT;
+    pub(crate) fn RevokeDragDrop(hwnd: HWND) -> HRESULT;
+    pub(crate) fn ReleaseStgMedium(medium: *mut STGMEDIUM);
     pub(crate) fn CoTaskMemFree(pv: *mut c_void);
     pub(crate) fn CoCreateInstance(
         rclsid: *const GUID,

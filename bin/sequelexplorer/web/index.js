@@ -55,8 +55,11 @@ PetiteVue.createApp({
         window.ipc.addEventListener('message', (event) => {
             const message = JSON.parse(event.data);
             if (message.type === 'openFile') this._openDatabaseByPath(message.path);
+            if (message.type === 'restoreLastFile') {
+                const lastDbPath = localStorage.getItem('lastDbPath');
+                if (lastDbPath) this._openDatabaseByPath(lastDbPath);
+            }
         });
-
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting && this.currentTable && !this.isCustomQuery) {
@@ -67,13 +70,7 @@ PetiteVue.createApp({
         );
         observer.observe(this.$refs.loadSentinel);
 
-        if (window.startupFilePath) {
-            await this._openDatabaseByPath(window.startupFilePath);
-        } else {
-            const lastDbPath = localStorage.getItem('lastDbPath');
-            if (!lastDbPath) return;
-            await this._openDatabaseByPath(lastDbPath);
-        }
+        ipcSend('ready');
     },
 
     async openDatabase() {

@@ -16,9 +16,18 @@ pub(crate) struct AppId {
 
 // MARK: EventLoopBuilder
 /// EventLoop builder
-#[derive(Default)]
 pub struct EventLoopBuilder {
     pub(crate) app_id: Option<AppId>,
+    pub(crate) single_instance: bool,
+}
+
+impl Default for EventLoopBuilder {
+    fn default() -> Self {
+        Self {
+            app_id: None,
+            single_instance: true,
+        }
+    }
 }
 
 impl EventLoopBuilder {
@@ -39,6 +48,12 @@ impl EventLoopBuilder {
             organization: organization.as_ref().to_string(),
             application: application.as_ref().to_string(),
         });
+        self
+    }
+
+    /// Set whether only one instance of the application may run (enabled by default)
+    pub const fn single_instance(mut self, single_instance: bool) -> Self {
+        self.single_instance = single_instance;
         self
     }
 

@@ -32,6 +32,8 @@ struct WebAssets;
 #[allow(clippy::enum_variant_names)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum IpcMessage {
+    Ready,
+    RestoreLastFile,
     OpenFile { path: String },
     OpenFileDialog,
     OpenFileDialogResponse { path: Option<String> },
@@ -294,6 +296,7 @@ fn main() {
     let state: State = Arc::new(Mutex::new(None));
     let event_loop = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "SequelExplorer")
+        .single_instance(false)
         .build();
 
     let router = RouterBuilder::<State>::with(Arc::clone(&state))
@@ -333,16 +336,6 @@ fn main() {
         })
         .build();
 
-    if let Some(path) = startup_path {
-        webview.add_user_script(
-            format!(
-                "window.startupFilePath = {};",
-                serde_json::to_string(&path).expect("Failed to serialize startup path")
-            ),
-            bwebview::InjectionTime::DocumentStart,
-        );
-    }
-
     #[cfg(target_os = "macos")]
     webview.add_user_script(
         format!(
@@ -353,17 +346,16 @@ fn main() {
     );
 
     #[cfg(target_os = "macos")]
-    let mut page_loaded = false;
-    #[cfg(target_os = "macos")]
-    let mut pending_open_path: Option<String> = None;
+    let mut page_ready = false;
+    let mut pending_open_path = startup_path;
     event_loop.run(move |event| match event {
         #[cfg(target_os = "macos")]
-        Event::Webview(WebviewEvent::PageLoadStart) => page_loaded = false,
+        Event::Webview(WebviewEvent::PageLoadStart) => page_ready = false,
         #[cfg(target_os = "macos")]
         Event::MacosOpenFiles(paths) => {
             if let Some(path) = paths.first() {
                 let path = path.to_string_lossy().into_owned();
-                if page_loaded {
+                if page_ready {
                     webview.send_ipc_message(
                         serde_json::to_string(&IpcMessage::OpenFile { path })
                             .expect("Failed to serialize open file message"),
@@ -371,16 +363,6 @@ fn main() {
                 } else {
                     pending_open_path = Some(path);
                 }
-            }
-        }
-        #[cfg(target_os = "macos")]
-        Event::Webview(WebviewEvent::PageLoadFinish) => {
-            page_loaded = true;
-            if let Some(path) = pending_open_path.take() {
-                webview.send_ipc_message(
-                    serde_json::to_string(&IpcMessage::OpenFile { path })
-                        .expect("Failed to serialize open file message"),
-                );
             }
         }
         Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
@@ -402,6 +384,24 @@ fn main() {
         }
         Event::Webview(WebviewEvent::MessageReceive(message)) => {
             match serde_json::from_str(&message).expect("Can't parse IPC message") {
+                IpcMessage::Ready => {
+                    #[cfg(target_os = "macos")]
+                    {
+                        page_ready = true;
+                    }
+                    if let Some(path) = pending_open_path.take() {
+                        webview.send_ipc_message(
+                            serde_json::to_string(&IpcMessage::OpenFile { path })
+                                .expect("Failed to serialize open file message"),
+                        );
+                    } else {
+                        webview.send_ipc_message(
+                            serde_json::to_string(&IpcMessage::RestoreLastFile)
+                                .expect("Failed to serialize restore last file message"),
+                        );
+                    }
+                }
+                IpcMessage::RestoreLastFile => {}
                 IpcMessage::OpenFileDialog => {
                     let path = FileDialog::new()
                         .parent(&window)

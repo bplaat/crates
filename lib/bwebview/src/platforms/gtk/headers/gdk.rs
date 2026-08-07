@@ -27,8 +27,6 @@ pub(crate) struct GdkRGBA {
     pub blue: f64,
     pub alpha: f64,
 }
-pub(crate) const GDK_ACTION_COPY: u32 = 1;
-
 // GTK < 3.22
 #[repr(C)]
 pub(crate) struct GdkScreen([u8; 0]);

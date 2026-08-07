@@ -7,14 +7,21 @@
 //! A bwebview dialog example
 
 use bwebview::{
-    Event, EventLoop, FileDialog, MessageButtons, MessageDialog, WebviewBuilder, WebviewEvent,
-    WindowBuilder,
+    Event, EventLoop, FileDialog, MessageButtons, MessageDialog, Theme, WebviewBuilder,
+    WebviewEvent, WindowBuilder,
 };
 
 fn main() {
     let event_loop = EventLoop::new();
 
-    let window = WindowBuilder::new().title("Dialog Example").build();
+    let window = WindowBuilder::new()
+        .title("Dialog Example")
+        .background_color(if event_loop.theme() == Theme::Dark {
+            0x222222
+        } else {
+            0xffffff
+        })
+        .build();
     let mut webview = WebviewBuilder::new(&window)
         .load_html(
             r#"<!DOCTYPE html>
@@ -23,10 +30,12 @@ fn main() {
 <meta charset="utf-8">
 <title>Dialog Example</title>
 <style>
-body { font: 16px system-ui, sans-serif; padding: 1rem 2rem; display: flex; flex-direction: column; gap: .75rem; background-color: #fff; color: #111; }
+:root { color-scheme: light dark; background: #fff; }
+@media (prefers-color-scheme: dark) { :root { background: #222; } }
+body { font: 16px system-ui, sans-serif; padding: 1rem 2rem; display: flex; flex-direction: column; gap: .75rem; }
 button { padding: .5rem 1rem; font-size: 1rem; cursor: pointer; }
 #result { margin-top: 1rem; white-space: pre-wrap; font-family: monospace;
-          background: #f5f5f5; padding: 1rem; border-radius: 4px; min-height: 3rem; }
+          padding: 1rem; border: 1px solid; border-radius: 4px; min-height: 3rem; }
 </style>
 </head>
 <body>

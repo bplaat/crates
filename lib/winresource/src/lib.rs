@@ -80,6 +80,15 @@ impl WindowsResource {
 
     /// Compile the resources
     pub fn compile(&self) -> Result<(), String> {
+        self.compile_inner(false)
+    }
+
+    /// Compile resources and link them only into examples of the current package
+    pub fn compile_for_examples(&self) -> Result<(), String> {
+        self.compile_inner(true)
+    }
+
+    fn compile_inner(&self, examples_only: bool) -> Result<(), String> {
         let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set");
 
         // Write manifest file
@@ -175,8 +184,11 @@ impl WindowsResource {
                     status.code().unwrap_or(-1)
                 ));
             }
-            println!("cargo:rustc-link-search=native={out_dir}");
-            println!("cargo:rustc-link-lib=static=resource");
+            emit_link_directives(
+                examples_only,
+                &Path::new(&out_dir).join("resource.lib"),
+                Some(&out_dir),
+            );
             return Ok(());
         }
 
@@ -197,8 +209,11 @@ impl WindowsResource {
                         status.code().unwrap_or(-1)
                     ));
                 }
-                println!("cargo:rustc-link-search=native={out_dir}");
-                println!("cargo:rustc-link-lib=static=resource");
+                emit_link_directives(
+                    examples_only,
+                    &Path::new(&out_dir).join("resource.lib"),
+                    Some(&out_dir),
+                );
                 Ok(())
             }
             "gnu" => {
@@ -237,11 +252,22 @@ impl WindowsResource {
                 if let Some(err) = last_error {
                     return Err(err);
                 }
-                println!("cargo:rustc-link-arg={}", object_path.display());
+                emit_link_directives(examples_only, &object_path, None);
                 Ok(())
             }
             other => Err(format!("unsupported target environment: {other}")),
         }
+    }
+}
+
+fn emit_link_directives(examples_only: bool, resource_path: &Path, out_dir: Option<&str>) {
+    if examples_only {
+        println!("cargo:rustc-link-arg-examples={}", resource_path.display());
+    } else if let Some(out_dir) = out_dir {
+        println!("cargo:rustc-link-search=native={out_dir}");
+        println!("cargo:rustc-link-lib=static=resource");
+    } else {
+        println!("cargo:rustc-link-arg={}", resource_path.display());
     }
 }
 

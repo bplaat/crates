@@ -6,13 +6,18 @@
 
 //! A bwebview file drop example
 
-use bwebview::{Event, EventLoop, WebviewBuilder, WindowBuilder, WindowEvent};
+use bwebview::{Event, EventLoop, Theme, WebviewBuilder, WindowBuilder, WindowEvent};
 
 fn main() {
     let event_loop = EventLoop::new();
 
     let window = WindowBuilder::new()
         .title("File Drop Example")
+        .background_color(if event_loop.theme() == Theme::Dark {
+            0x222222
+        } else {
+            0xffffff
+        })
         .allow_file_drop(true)
         .build();
     let mut webview = WebviewBuilder::new(&window)
@@ -23,9 +28,11 @@ fn main() {
 <meta charset="utf-8">
 <title>File Drop Example</title>
 <style>
-body { font: 16px system-ui, sans-serif; padding: 1rem 2rem; background-color: #fff; color: #111; }
+:root { color-scheme: light dark; background: #fff; }
+@media (prefers-color-scheme: dark) { :root { background: #222; } }
+body { font: 16px system-ui, sans-serif; padding: 1rem 2rem; }
 #result { margin-top: 1rem; white-space: pre-wrap; font-family: monospace;
-          background: #f5f5f5; padding: 1rem; border-radius: 4px; min-height: 3rem; }
+          padding: 1rem; border: 1px solid; border-radius: 4px; min-height: 3rem; }
 </style>
 </head>
 <body>

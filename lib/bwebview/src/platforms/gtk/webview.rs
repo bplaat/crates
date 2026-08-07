@@ -19,6 +19,8 @@ pub(super) struct WebviewData {
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
     pub(super) allow_file_drop: bool,
+    pub(super) file_drop_paths: Option<Vec<PathBuf>>,
+    pub(super) file_drop_leaving: bool,
     pub(super) webview: *mut WebKitWebView,
 }
 
@@ -30,6 +32,8 @@ impl PlatformWebview {
             window: window.0.window,
             background_color: window.0.background_color,
             allow_file_drop: window.0.allow_file_drop,
+            file_drop_paths: None,
+            file_drop_leaving: false,
             webview: null_mut(),
         }))
     }
@@ -128,17 +132,21 @@ impl PlatformWebview {
             ) as *mut WebKitWebView;
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
             if data.allow_file_drop {
-                let mut drop_target = GtkTargetEntry {
-                    target: c"text/uri-list".as_ptr() as *mut c_char,
-                    flags: 0,
-                    info: 0,
-                };
-                gtk_drag_dest_set(
-                    webview as *mut GtkWidget,
-                    GTK_DEST_DEFAULT_ALL,
-                    &mut drop_target,
-                    1,
-                    GDK_ACTION_COPY,
+                g_signal_connect_data(
+                    webview as *mut GObject,
+                    c"drag-leave".as_ptr(),
+                    webview_on_drag_leave as *const c_void,
+                    data as *const WebviewData as *const c_void,
+                    null(),
+                    G_CONNECT_DEFAULT,
+                );
+                g_signal_connect_data(
+                    webview as *mut GObject,
+                    c"drag-drop".as_ptr(),
+                    webview_on_drag_drop as *const c_void,
+                    data as *const WebviewData as *const c_void,
+                    null(),
+                    G_CONNECT_DEFAULT,
                 );
                 g_signal_connect_data(
                     webview as *mut GObject,
@@ -226,18 +234,55 @@ impl PlatformWebview {
     }
 }
 
+const extern "C" fn webview_on_drag_leave(
+    _webview: *mut WebKitWebView,
+    _context: *mut GdkDragContext,
+    _time: u32,
+    data: &mut WebviewData,
+) {
+    data.file_drop_leaving = true;
+}
+
+extern "C" fn webview_on_drag_drop(
+    _webview: *mut WebKitWebView,
+    context: *mut GdkDragContext,
+    _x: i32,
+    _y: i32,
+    time: u32,
+    data: &mut WebviewData,
+) -> i32 {
+    if data.file_drop_leaving
+        && let Some(paths) = data.file_drop_paths.take()
+    {
+        unsafe { gtk_drag_finish(context, 1, 0, time) };
+        data.file_drop_leaving = false;
+        for path in paths {
+            send_event(crate::Event::Window(WindowEvent::DroppedFile(path)));
+        }
+        return 1;
+    }
+    0
+}
+
 extern "C" fn webview_on_drag_data_received(
     _webview: *mut WebKitWebView,
     _context: *mut GdkDragContext,
     _x: i32,
     _y: i32,
     selection_data: *mut GtkSelectionData,
-    _info: u32,
+    info: u32,
     _time: u32,
-    _data: &WebviewData,
+    data: &mut WebviewData,
 ) {
+    // WebKitGTK registers URI lists as target info 2. Other data requests are
+    // used internally by the web view and are not native file drags.
+    if info != 2 {
+        return;
+    }
+
     let uris = unsafe { gtk_selection_data_get_uris(selection_data) };
     if !uris.is_null() {
+        let mut paths = Vec::new();
         let mut uri = uris;
         while !unsafe { *uri }.is_null() {
             let filename = unsafe { g_filename_from_uri(*uri, null_mut(), null_mut()) };
@@ -246,11 +291,13 @@ extern "C" fn webview_on_drag_data_received(
                     CStr::from_ptr(filename).to_bytes()
                 }));
                 unsafe { g_free(filename as *mut c_void) };
-                send_event(crate::Event::Window(WindowEvent::DroppedFile(path)));
+                paths.push(path);
             }
             uri = unsafe { uri.add(1) };
         }
         unsafe { g_strfreev(uris) };
+        data.file_drop_paths = Some(paths);
+        data.file_drop_leaving = false;
     }
 }
 

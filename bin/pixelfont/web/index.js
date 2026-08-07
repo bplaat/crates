@@ -154,9 +154,12 @@ PetiteVue.createApp({
         window.ipc.addEventListener('message', async (event) => {
             const message = JSON.parse(event.data);
             if (message.type === 'openFile') await this._openFont(message.path);
+            if (message.type === 'restoreLastFile') {
+                const lastFontPath = localStorage.getItem('lastFontPath');
+                if (lastFontPath) await this._openFont(lastFontPath);
+            }
             if (message.type === 'closeRequested') await this.closeWindow();
         });
-
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
             this.renderAllChars();
             this._renderPreview();
@@ -187,12 +190,7 @@ PetiteVue.createApp({
             this._updateTitle();
             this.renderAllChars();
             this.selectChar(0);
-            if (window.startupFilePath) {
-                await this._openFont(window.startupFilePath);
-            } else {
-                const lastFontPath = localStorage.getItem('lastFontPath');
-                if (lastFontPath) await this._openFont(lastFontPath);
-            }
+            ipcSend('ready');
         });
     },
 

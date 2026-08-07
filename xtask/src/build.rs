@@ -29,6 +29,27 @@ fn is_generated_database(root: &Path, path: &Path) -> bool {
             && path != root.join("lib/maxminddb/test-data/GeoLite2-City-Test.mmdb"))
 }
 
+fn cargo_install_path(path: &str, force: bool) -> Result<()> {
+    let mut offline = Command::new("cargo");
+    offline.args(["install", "--locked", "--offline"]);
+    if force {
+        offline.arg("--force");
+    }
+    offline.args(["--path", path]);
+    if run(&mut offline).is_ok() {
+        return Ok(());
+    }
+
+    println!("Locked dependencies are not fully cached; retrying with network access...");
+    let mut online = Command::new("cargo");
+    online.args(["install", "--locked"]);
+    if force {
+        online.arg("--force");
+    }
+    online.args(["--path", path]);
+    run(&mut online)
+}
+
 impl Xtask {
     pub(crate) fn clean(&self) -> Result<()> {
         if self.os == Os::Windows {
@@ -121,7 +142,7 @@ impl Xtask {
     }
 
     pub(crate) fn build_bundle(&self) -> Result<()> {
-        run(Command::new("cargo").args(["install", "--path", "bin/cargo-bundle"]))?;
+        cargo_install_path("bin/cargo-bundle", false)?;
         for app in self.installable_apps()? {
             run(Command::new("cargo").args(["bundle", "--path", &format!("bin/{}", app.package)]))?;
         }
@@ -130,12 +151,7 @@ impl Xtask {
 
     pub(crate) fn install(&self) -> Result<()> {
         for package in ["bob", "ccontinue", "music-dl"] {
-            run(Command::new("cargo").args([
-                "install",
-                "--force",
-                "--path",
-                &format!("bin/{package}"),
-            ]))?;
+            cargo_install_path(&format!("bin/{package}"), true)?;
         }
 
         match self.os {

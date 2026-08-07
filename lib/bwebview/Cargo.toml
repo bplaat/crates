@@ -25,6 +25,7 @@ serde_json = "1.0"
 
 [build-dependencies]
 windows-metadata = "0.59.0"
+winresource = "0.1.29"
 
 [features]
 default = ["log"]

@@ -28,6 +28,7 @@ pub(super) struct WindowData {
     pub(super) min_size: Option<LogicalSize>,
     pub(super) background_color: Option<u32>,
     pub(super) remember_window_state: bool,
+    pub(super) allow_file_drop: bool,
     pub(super) resize_callback: Option<Box<dyn Fn(i32, i32)>>,
     taskbar_button_ready: bool,
     progress_bar: (Option<f32>, WindowsProgressBarState),
@@ -86,6 +87,7 @@ impl PlatformWindow {
             min_size: builder.min_size,
             background_color: builder.background_color,
             remember_window_state: builder.remember_window_state,
+            allow_file_drop: builder.allow_file_drop,
             resize_callback: None,
             taskbar_button_ready: false,
             progress_bar: (None, WindowsProgressBarState::Normal),
@@ -191,13 +193,7 @@ impl PlatformWindow {
             if builder.allow_file_drop {
                 DragAcceptFiles(hwnd, TRUE);
             }
-            let enabled: BOOL = (builder.theme.unwrap_or_else(system_theme) == Theme::Dark).into();
-            DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_USE_IMMERSIVE_DARK_MODE,
-                &enabled as *const _ as *const _,
-                size_of::<BOOL>() as u32,
-            );
+            set_titlebar_theme(hwnd, builder.theme.unwrap_or_else(system_theme));
 
             let restored_window_state = if builder.remember_window_state {
                 if let Ok(mut file) = File::open(config_dir().join("window.bin")) {
@@ -338,15 +334,7 @@ impl crate::WindowInterface for PlatformWindow {
     }
 
     fn set_theme(&mut self, theme: Theme) {
-        unsafe {
-            let enabled: BOOL = (theme == Theme::Dark).into();
-            DwmSetWindowAttribute(
-                self.0.hwnd,
-                DWMWA_USE_IMMERSIVE_DARK_MODE,
-                &enabled as *const _ as *const _,
-                size_of::<BOOL>() as u32,
-            );
-        }
+        unsafe { set_titlebar_theme(self.0.hwnd, theme) }
     }
 
     fn set_background_color(&mut self, color: u32) {
@@ -359,6 +347,18 @@ impl crate::WindowInterface for PlatformWindow {
         if self.0.taskbar_button_ready {
             set_progress_bar(self.0.hwnd, progress, state);
         }
+    }
+}
+
+unsafe fn set_titlebar_theme(hwnd: HWND, theme: Theme) {
+    let enabled: BOOL = (theme == Theme::Dark).into();
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            &enabled as *const _ as *const _,
+            size_of::<BOOL>() as u32,
+        );
     }
 }
 
@@ -467,17 +467,7 @@ unsafe extern "system" fn window_proc(
             0
         }
         WM_DROPFILES => {
-            let drop = w_param as HDROP;
-            let count = unsafe { DragQueryFileW(drop, u32::MAX, null_mut(), 0) };
-            for index in 0..count {
-                let length = unsafe { DragQueryFileW(drop, index, null_mut(), 0) };
-                let mut buffer = vec![0; length as usize + 1];
-                unsafe { DragQueryFileW(drop, index, buffer.as_mut_ptr(), buffer.len() as u32) };
-                send_event(crate::Event::Window(WindowEvent::DroppedFile(
-                    OsString::from_wide(&buffer[..length as usize]).into(),
-                )));
-            }
-            unsafe { DragFinish(drop) };
+            unsafe { handle_file_drop(w_param as HDROP) };
             0
         }
         WM_CLOSE => {
@@ -499,6 +489,19 @@ unsafe extern "system" fn window_proc(
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, w_param, l_param) },
     }
+}
+
+unsafe fn handle_file_drop(drop: HDROP) {
+    let count = unsafe { DragQueryFileW(drop, u32::MAX, null_mut(), 0) };
+    for index in 0..count {
+        let length = unsafe { DragQueryFileW(drop, index, null_mut(), 0) };
+        let mut buffer = vec![0; length as usize + 1];
+        unsafe { DragQueryFileW(drop, index, buffer.as_mut_ptr(), buffer.len() as u32) };
+        send_event(crate::Event::Window(WindowEvent::DroppedFile(
+            OsString::from_wide(&buffer[..length as usize]).into(),
+        )));
+    }
+    unsafe { DragFinish(drop) };
 }
 
 fn save_window_state(hwnd: HWND) {

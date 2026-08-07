@@ -25,6 +25,8 @@ struct WebAssets;
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum IpcMessage {
+    Ready,
+    RestoreLastFile,
     OpenFile {
         path: String,
     },
@@ -87,6 +89,7 @@ fn main() {
     let startup_path = std::env::args().nth(1);
     let event_loop = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "PixelFontEditor")
+        .single_instance(false)
         .build();
 
     #[allow(unused_mut)]
@@ -108,37 +111,18 @@ fn main() {
         .load_rust_embed::<WebAssets>()
         .build();
 
-    if let Some(path) = startup_path {
-        webview.add_user_script(
-            format!(
-                "window.startupFilePath = {};",
-                serde_json::to_string(&path).expect("Failed to serialize startup path")
-            ),
-            bwebview::InjectionTime::DocumentStart,
-        );
-    }
-
-    let mut page_loaded = false;
-    let mut pending_open_path: Option<String> = None;
+    let mut page_ready = false;
+    let mut pending_open_path = startup_path;
     event_loop.run(move |event| {
         if let Event::Webview(WebviewEvent::PageLoadStart) = &event {
-            page_loaded = false;
-        }
-        if let Event::Webview(WebviewEvent::PageLoadFinish) = &event {
-            page_loaded = true;
-            if let Some(path) = pending_open_path.take() {
-                webview.send_ipc_message(
-                    serde_json::to_string(&IpcMessage::OpenFile { path })
-                        .expect("Failed to serialize open file message"),
-                );
-            }
+            page_ready = false;
         }
         #[cfg(target_os = "macos")]
         if let Event::MacosOpenFiles(paths) = &event
             && let Some(path) = paths.first()
         {
             let path = path.to_string_lossy().into_owned();
-            if page_loaded {
+            if page_ready {
                 webview.send_ipc_message(
                     serde_json::to_string(&IpcMessage::OpenFile { path })
                         .expect("Failed to serialize open file message"),
@@ -152,7 +136,7 @@ fn main() {
         }
         if let Event::Window(WindowEvent::CloseRequested(request)) = &event {
             request.prevent_close();
-            if page_loaded {
+            if page_ready {
                 webview.send_ipc_message(
                     serde_json::to_string(&IpcMessage::CloseRequested)
                         .expect("Failed to serialize close request"),
@@ -163,7 +147,7 @@ fn main() {
         }
         if let Event::Window(WindowEvent::DroppedFile(path)) = &event {
             let path = path.to_string_lossy().into_owned();
-            if page_loaded {
+            if page_ready {
                 webview.send_ipc_message(
                     serde_json::to_string(&IpcMessage::OpenFile { path })
                         .expect("Failed to serialize open file message"),
@@ -177,6 +161,21 @@ fn main() {
                 return;
             };
             match ipc_message {
+                IpcMessage::Ready => {
+                    page_ready = true;
+                    if let Some(path) = pending_open_path.take() {
+                        webview.send_ipc_message(
+                            serde_json::to_string(&IpcMessage::OpenFile { path })
+                                .expect("Failed to serialize open file message"),
+                        );
+                    } else {
+                        webview.send_ipc_message(
+                            serde_json::to_string(&IpcMessage::RestoreLastFile)
+                                .expect("Failed to serialize restore last file message"),
+                        );
+                    }
+                }
+                IpcMessage::RestoreLastFile => {}
                 IpcMessage::OpenFileDialog => {
                     let path = FileDialog::new()
                         .parent(&window)

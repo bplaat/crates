@@ -24,16 +24,9 @@ pub(crate) struct GtkSettings([u8; 0]);
 pub(crate) struct GtkSelectionData([u8; 0]);
 #[repr(C)]
 pub(crate) struct GtkDialog([u8; 0]);
-#[repr(C)]
-pub(crate) struct GtkTargetEntry {
-    pub(crate) target: *mut c_char,
-    pub(crate) flags: u32,
-    pub(crate) info: u32,
-}
 pub(crate) const GTK_WINDOW_TOPLEVEL: i32 = 0;
 pub(crate) const GTK_WIN_POS_CENTER: i32 = 1;
 pub(crate) const GTK_STATE_FLAG_NORMAL: i32 = 0;
-pub(crate) const GTK_DEST_DEFAULT_ALL: i32 = 7;
 pub(crate) const GTK_DIALOG_MODAL: i32 = 1;
 pub(crate) const GTK_DIALOG_DESTROY_WITH_PARENT: i32 = 2;
 pub(crate) const GTK_MESSAGE_INFO: i32 = 0;
@@ -67,12 +60,11 @@ unsafe extern "C" {
         state: i32,
         color: *const GdkRGBA,
     );
-    pub(crate) fn gtk_drag_dest_set(
-        widget: *mut GtkWidget,
-        flags: i32,
-        targets: *mut GtkTargetEntry,
-        target_count: i32,
-        actions: u32,
+    pub(crate) fn gtk_drag_finish(
+        context: *mut super::gdk::GdkDragContext,
+        success: i32,
+        delete: i32,
+        time: u32,
     );
     pub(crate) fn gtk_selection_data_get_uris(
         selection_data: *const GtkSelectionData,

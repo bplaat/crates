@@ -45,20 +45,22 @@ impl PlatformEventLoop {
         // Ensure single instance
         // FIXME: Use GtkApplication for this
         if let Some(app_id) = builder.app_id {
-            let lock_file = env::temp_dir()
-                .join(format!(
-                    "{}.{}.{}",
-                    app_id.qualifier, app_id.organization, app_id.application
-                ))
-                .join(".lock");
-            if let Some(parent) = lock_file.parent() {
-                fs::create_dir_all(parent).expect("Failed to create lock file directory");
+            if builder.single_instance {
+                let lock_file = env::temp_dir()
+                    .join(format!(
+                        "{}.{}.{}",
+                        app_id.qualifier, app_id.organization, app_id.application
+                    ))
+                    .join(".lock");
+                if let Some(parent) = lock_file.parent() {
+                    fs::create_dir_all(parent).expect("Failed to create lock file directory");
+                }
+                let file = File::create(&lock_file).expect("Failed to open lock file");
+                if file.try_lock().is_err() {
+                    exit(0);
+                }
+                std::mem::forget(file);
             }
-            let file = File::create(&lock_file).expect("Failed to open lock file");
-            if file.try_lock().is_err() {
-                exit(0);
-            }
-            std::mem::forget(file);
             unsafe { APP_ID = Some(app_id) };
         }
 
