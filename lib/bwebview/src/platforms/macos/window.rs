@@ -10,7 +10,8 @@ use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
 use super::cocoa::*;
-use super::drag_drop::perform_file_drop;
+#[cfg(feature = "drag_drop")]
+use super::drag_drop::{perform_file_drop, register_dragged_types};
 use super::event_loop::{allow_termination_if_last_window, send_event};
 use crate::{
     CloseRequest, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent,
@@ -62,15 +63,19 @@ define_class!(
         #[unsafe(method(windowDidFailToExitFullScreen:))]
         fn _window_did_fail_to_exit_fullscreen(&self, window: *mut Object) { self.window_did_fail_to_exit_fullscreen(window); }
 
+        #[cfg(feature = "drag_drop")]
         #[unsafe(method(draggingEntered:))]
         const fn _dragging_entered(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
 
+        #[cfg(feature = "drag_drop")]
         #[unsafe(method(draggingUpdated:))]
         const fn _dragging_updated(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
 
+        #[cfg(feature = "drag_drop")]
         #[unsafe(method(prepareForDragOperation:))]
         const fn _prepare_for_drag_operation(&self, _: *mut Object) -> Bool { Bool::YES }
 
+        #[cfg(feature = "drag_drop")]
         #[unsafe(method(performDragOperation:))]
         fn _perform_drag_operation(&self, sender: *mut Object) -> Bool { perform_file_drop(sender) }
     }
@@ -182,6 +187,7 @@ fn add_drag_view(window: *mut Object, content_view: *mut Object) {
 pub(super) struct PlatformWindowData {
     pub(super) window: *mut Object,
     pub(super) background_color: Option<u32>,
+    #[cfg(feature = "drag_drop")]
     pub(super) allow_file_drop: bool,
 }
 
@@ -197,6 +203,7 @@ impl PlatformWindow {
         let mut window_data = Box::new(PlatformWindowData {
             window: null_mut(),
             background_color: builder.background_color,
+            #[cfg(feature = "drag_drop")]
             allow_file_drop: builder.allow_file_drop,
         });
 
@@ -281,14 +288,14 @@ impl PlatformWindow {
             if let Some(min_size) = builder.min_size {
                 let _: () = msg_send![window, setContentMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
             }
+            #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
                 let _: Bool = msg_send![window, setFrameAutosaveName:ns_string!("window")];
             }
             let _: () = msg_send![window, setDelegate:window_delegate];
+            #[cfg(feature = "drag_drop")]
             if builder.allow_file_drop {
-                let dragged_types: *mut Object =
-                    msg_send![class!(NSArray), arrayWithObject:NSFilenamesPboardType];
-                let _: () = msg_send![window, registerForDraggedTypes:dragged_types];
+                register_dragged_types(window);
             }
             window
         };

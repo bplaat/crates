@@ -84,6 +84,12 @@ fn extract_ivars(attrs: &[Attribute]) -> Option<syn::Expr> {
     None
 }
 
+/// Conditional compilation attributes must also apply to the generated trampoline and its
+/// registration, otherwise a cfg'd out method leaves both behind
+fn is_cfg(attr: &Attribute) -> bool {
+    attr.path().is_ident("cfg") || attr.path().is_ident("cfg_attr")
+}
+
 fn extract_selector(attr: &Attribute) -> Option<String> {
     if let Meta::List(ml) = &attr.meta
         && ml.path.is_ident("unsafe")
@@ -267,7 +273,11 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                         .collect();
                     let arg_types: Vec<_> = typed_args.iter().map(|pt| &pt.ty).collect();
 
+                    let cfg_attrs: Vec<&Attribute> =
+                        method.attrs.iter().filter(|a| is_cfg(a)).collect();
+
                     trampolines.push(quote! {
+                        #(#cfg_attrs)*
                         #[allow(clippy::undocumented_unsafe_blocks)]
                         extern "C" fn #trampoline_name(
                             __this: *mut ::objc2::runtime::AnyObject,
@@ -281,6 +291,7 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                     let n_args = arg_types.len();
                     let wildcards: Vec<_> = (0..n_args).map(|_| quote! { _ }).collect();
                     registrations.push(quote! {
+                        #(#cfg_attrs)*
                         builder.add_method(
                             #sel_mac,
                             Self::#trampoline_name as extern "C" fn(_, _, #(#wildcards,)*) #ret,

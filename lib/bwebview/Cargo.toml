@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-directories = "6.0.0"
+directories = { version = "6.0.0", optional = true }
 mime_guess = { version = "2.0", default-features = false, optional = true }
 log = { version = "0.4.28", optional = true }
 rust-embed = { version = "8.7", optional = true }
@@ -18,6 +18,10 @@ small-http = { version = "0.2.1", optional = true, default-features = false }
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"
 objc2 = "0.6"
+
+# The WebView2 user data folder always needs a config directory on Windows
+[target.'cfg(windows)'.dependencies]
+directories = "6.0.0"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -28,12 +32,32 @@ windows-metadata = "0.59.0"
 winresource = "0.1.29"
 
 [features]
-default = ["log"]
+default = ["log", "remember_window_state"]
 custom_protocol = ["dep:small-http"]
 dialog = []
+drag_drop = []
 log = ["dep:log"]
+menu = []
+progress_bar = []
+remember_window_state = ["dep:directories"]
 rust-embed = ["custom_protocol", "dep:rust-embed", "dep:mime_guess"]
 
 [[example]]
 name = "bwebview-dialog"
 required-features = ["dialog"]
+
+[[example]]
+name = "bwebview-file-drop"
+required-features = ["drag_drop"]
+
+[[example]]
+name = "bwebview-ipc"
+required-features = ["remember_window_state"]
+
+[[example]]
+name = "bwebview-menu"
+required-features = ["menu"]
+
+[[example]]
+name = "bwebview-progress-bar"
+required-features = ["progress_bar"]

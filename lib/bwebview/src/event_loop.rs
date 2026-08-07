@@ -19,7 +19,7 @@ pub(crate) struct AppId {
 pub struct EventLoopBuilder {
     pub(crate) app_id: Option<AppId>,
     pub(crate) single_instance: bool,
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "menu"))]
     pub(crate) macos_menu: Option<crate::MenuBarBuilder>,
 }
 
@@ -28,7 +28,7 @@ impl Default for EventLoopBuilder {
         Self {
             app_id: None,
             single_instance: true,
-            #[cfg(target_os = "macos")]
+            #[cfg(all(target_os = "macos", feature = "menu"))]
             macos_menu: None,
         }
     }
@@ -62,7 +62,7 @@ impl EventLoopBuilder {
     }
 
     /// Add custom macOS menus to the default application menu bar
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "menu"))]
     pub fn macos_set_menu(mut self, menu: crate::MenuBarBuilder) -> Self {
         self.macos_menu = Some(menu);
         self

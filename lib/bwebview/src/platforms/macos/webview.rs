@@ -7,59 +7,18 @@
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
-use std::sync::OnceLock;
 
 use block2::Block;
-use objc2::runtime::{AnyObject as Object, Bool, ClassBuilder, Sel};
-use objc2::{class, define_class, msg_send, sel};
+use objc2::runtime::{AnyObject as Object, Bool};
+use objc2::{class, define_class, msg_send};
 
 use super::cocoa::*;
-use super::drag_drop::perform_file_drop;
+#[cfg(feature = "drag_drop")]
+use super::drag_drop::{droppable_webview_class, register_dragged_types};
 use super::event_loop::send_event;
 use super::webkit::*;
 use super::window::PlatformWindow;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent};
-
-const extern "C" fn webview_dragging_entered(_: *mut Object, _: Sel, _: *mut Object) -> u64 {
-    NS_DRAG_OPERATION_COPY
-}
-
-const extern "C" fn webview_prepare_for_drag_operation(
-    _: *mut Object,
-    _: Sel,
-    _: *mut Object,
-) -> Bool {
-    Bool::YES
-}
-
-extern "C" fn webview_perform_drag_operation(_: *mut Object, _: Sel, sender: *mut Object) -> Bool {
-    perform_file_drop(sender)
-}
-
-fn droppable_webview_class() -> *mut Object {
-    static CLASS: OnceLock<usize> = OnceLock::new();
-    *CLASS.get_or_init(|| {
-        let mut builder = ClassBuilder::new(c"BWebviewDroppableWebview", class!(WKWebView))
-            .expect("Failed to create droppable webview class");
-        assert!(builder.add_method(
-            sel!(draggingEntered:),
-            webview_dragging_entered as extern "C" fn(_, _, _) -> _
-        ));
-        assert!(builder.add_method(
-            sel!(draggingUpdated:),
-            webview_dragging_entered as extern "C" fn(_, _, _) -> _
-        ));
-        assert!(builder.add_method(
-            sel!(prepareForDragOperation:),
-            webview_prepare_for_drag_operation as extern "C" fn(_, _, _) -> _
-        ));
-        assert!(builder.add_method(
-            sel!(performDragOperation:),
-            webview_perform_drag_operation as extern "C" fn(_, _, _) -> _
-        ));
-        builder.register() as usize
-    }) as *mut Object
-}
 
 // MARK: WebviewDelegate
 define_class!(
@@ -160,6 +119,7 @@ impl WebviewDelegate {
 pub(super) struct WebviewData {
     pub(super) window: *mut Object,
     pub(super) background_color: Option<u32>,
+    #[cfg(feature = "drag_drop")]
     pub(super) allow_file_drop: bool,
     pub(super) webview: *mut Object,
 }
@@ -171,6 +131,7 @@ impl PlatformWebview {
         PlatformWebview(Box::new(WebviewData {
             window: window.0.window,
             background_color: window.0.background_color,
+            #[cfg(feature = "drag_drop")]
             allow_file_drop: window.0.allow_file_drop,
             webview: null_mut(),
         }))
@@ -207,18 +168,20 @@ impl PlatformWebview {
             let webview_rect: NSRect = msg_send![content_view, bounds];
 
             // Create webview
+            #[cfg(feature = "drag_drop")]
             let webview_class = if self.0.allow_file_drop {
                 droppable_webview_class()
             } else {
                 class!(WKWebView)
             };
+            #[cfg(not(feature = "drag_drop"))]
+            let webview_class = class!(WKWebView);
             let webview: *mut Object = msg_send![webview_class, alloc];
             let webview: *mut Object =
                 msg_send![webview, initWithFrame:webview_rect, configuration:webview_config];
+            #[cfg(feature = "drag_drop")]
             if self.0.allow_file_drop {
-                let dragged_types: *mut Object =
-                    msg_send![class!(NSArray), arrayWithObject:NSFilenamesPboardType];
-                let _: () = msg_send![webview, registerForDraggedTypes:dragged_types];
+                register_dragged_types(webview);
             }
             let _: () = msg_send![webview, setHidden:Bool::YES];
             let _: () = msg_send![webview, setNavigationDelegate:webview_delegate];

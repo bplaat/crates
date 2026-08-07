@@ -4,34 +4,38 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{OsString, c_void};
-use std::fs::File;
-use std::io::Read;
-use std::os::windows::ffi::OsStringExt;
+use std::env;
+use std::ffi::c_void;
 use std::path::PathBuf;
 use std::ptr::{null, null_mut};
-use std::{env, mem};
 
-use super::event_loop::{
-    APP_ID, FIRST_HWND, TASKBAR_BUTTON_CREATED, WM_SEND_MESSAGE, send_event, system_theme,
-};
+#[cfg(feature = "drag_drop")]
+use super::drag_drop::handle_file_drop;
+#[cfg(feature = "progress_bar")]
+use super::event_loop::TASKBAR_BUTTON_CREATED;
+use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event, system_theme};
+#[cfg(feature = "progress_bar")]
+use super::progress_bar::ProgressBar;
 use super::webview2::*;
 use super::win32::*;
-use crate::{
-    CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent,
-    WindowsProgressBarState,
-};
+#[cfg(feature = "remember_window_state")]
+use super::window_state::{restore_window_state, save_window_state};
+#[cfg(feature = "progress_bar")]
+use crate::WindowsProgressBarState;
+use crate::{CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
 pub(super) struct WindowData {
     pub(super) hwnd: HWND,
     pub(super) dpi: u32,
     pub(super) min_size: Option<LogicalSize>,
     pub(super) background_color: Option<u32>,
+    #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
+    #[cfg(feature = "drag_drop")]
     pub(super) allow_file_drop: bool,
     pub(super) resize_callback: Option<Box<dyn Fn(i32, i32)>>,
-    taskbar_button_ready: bool,
-    progress_bar: (Option<f32>, WindowsProgressBarState),
+    #[cfg(feature = "progress_bar")]
+    progress_bar: ProgressBar,
 }
 
 pub(crate) struct PlatformWindow(pub(super) Box<WindowData>);
@@ -86,11 +90,13 @@ impl PlatformWindow {
             dpi: initial_dpi,
             min_size: builder.min_size,
             background_color: builder.background_color,
+            #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
+            #[cfg(feature = "drag_drop")]
             allow_file_drop: builder.allow_file_drop,
             resize_callback: None,
-            taskbar_button_ready: false,
-            progress_bar: (None, WindowsProgressBarState::Normal),
+            #[cfg(feature = "progress_bar")]
+            progress_bar: ProgressBar::default(),
         });
 
         // Check if window class is already registered
@@ -190,30 +196,16 @@ impl PlatformWindow {
                 window_data.as_mut() as *mut WindowData as LPARAM,
             );
             window_data.hwnd = hwnd;
+            #[cfg(feature = "drag_drop")]
             if builder.allow_file_drop {
                 DragAcceptFiles(hwnd, TRUE);
             }
             set_titlebar_theme(hwnd, builder.theme.unwrap_or_else(system_theme));
 
-            let restored_window_state = if builder.remember_window_state {
-                if let Ok(mut file) = File::open(config_dir().join("window.bin")) {
-                    let size = size_of::<WINDOWPLACEMENT>();
-                    let mut buffer = vec![0u8; size];
-                    if file.read_exact(&mut buffer).is_ok() {
-                        let mut window_placement: WINDOWPLACEMENT =
-                            std::ptr::read(buffer.as_ptr() as *const _);
-                        window_placement.length = size as u32;
-                        SetWindowPlacement(hwnd, &window_placement);
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
+            #[cfg(feature = "remember_window_state")]
+            let restored_window_state = builder.remember_window_state && restore_window_state(hwnd);
+            #[cfg(not(feature = "remember_window_state"))]
+            let restored_window_state = false;
             let window_dpi = GetDpiForWindow(hwnd);
             let dpi = if window_dpi == 0 {
                 initial_dpi
@@ -257,6 +249,7 @@ impl PlatformWindow {
 
 impl crate::WindowInterface for PlatformWindow {
     fn close(&mut self) {
+        #[cfg(feature = "remember_window_state")]
         if self.0.remember_window_state {
             save_window_state(self.0.hwnd);
         }
@@ -342,11 +335,9 @@ impl crate::WindowInterface for PlatformWindow {
         unsafe { InvalidateRect(self.0.hwnd, null_mut(), TRUE) };
     }
 
+    #[cfg(feature = "progress_bar")]
     fn windows_set_progress_bar(&mut self, progress: Option<f32>, state: WindowsProgressBarState) {
-        self.0.progress_bar = (progress, state);
-        if self.0.taskbar_button_ready {
-            set_progress_bar(self.0.hwnd, progress, state);
-        }
+        self.0.progress_bar.set(self.0.hwnd, progress, state);
     }
 }
 
@@ -383,9 +374,9 @@ unsafe extern "system" fn window_proc(
         window_data
     };
     match msg {
+        #[cfg(feature = "progress_bar")]
         message if message == unsafe { TASKBAR_BUTTON_CREATED } => {
-            _self.taskbar_button_ready = true;
-            set_progress_bar(hwnd, _self.progress_bar.0, _self.progress_bar.1);
+            _self.progress_bar.button_created(hwnd);
             0
         }
         WM_CREATE => {
@@ -466,6 +457,7 @@ unsafe extern "system" fn window_proc(
             send_event(*event);
             0
         }
+        #[cfg(feature = "drag_drop")]
         WM_DROPFILES => {
             unsafe { handle_file_drop(w_param as HDROP) };
             0
@@ -476,6 +468,7 @@ unsafe extern "system" fn window_proc(
                 request.clone(),
             )));
             if !request.is_prevented() {
+                #[cfg(feature = "remember_window_state")]
                 if _self.remember_window_state {
                     save_window_state(hwnd);
                 }
@@ -488,34 +481,6 @@ unsafe extern "system" fn window_proc(
             0
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, w_param, l_param) },
-    }
-}
-
-unsafe fn handle_file_drop(drop: HDROP) {
-    let count = unsafe { DragQueryFileW(drop, u32::MAX, null_mut(), 0) };
-    for index in 0..count {
-        let length = unsafe { DragQueryFileW(drop, index, null_mut(), 0) };
-        let mut buffer = vec![0; length as usize + 1];
-        unsafe { DragQueryFileW(drop, index, buffer.as_mut_ptr(), buffer.len() as u32) };
-        send_event(crate::Event::Window(WindowEvent::DroppedFile(
-            OsString::from_wide(&buffer[..length as usize]).into(),
-        )));
-    }
-    unsafe { DragFinish(drop) };
-}
-
-fn save_window_state(hwnd: HWND) {
-    unsafe {
-        use std::io::Write;
-        let mut window_placement: WINDOWPLACEMENT = mem::zeroed();
-        window_placement.length = size_of::<WINDOWPLACEMENT>() as u32;
-        GetWindowPlacement(hwnd, &mut window_placement);
-        if let Ok(mut file) = File::create(config_dir().join("window.bin")) {
-            _ = file.write_all(std::slice::from_raw_parts(
-                &window_placement as *const _ as *const u8,
-                size_of::<WINDOWPLACEMENT>(),
-            ));
-        }
     }
 }
 
@@ -541,42 +506,4 @@ pub(super) fn config_dir() -> PathBuf {
     }
     .expect("Can't get dirs");
     project_dirs.config_dir()
-}
-
-// MARK: Windows progress bar
-fn set_progress_bar(hwnd: HWND, progress: Option<f32>, state: WindowsProgressBarState) {
-    let mut taskbar = null_mut::<TaskbarList3>();
-    let result = unsafe {
-        CoCreateInstance(
-            &CLSID_TASKBAR_LIST,
-            null_mut(),
-            CLSCTX_INPROC_SERVER,
-            &IID_TASKBAR_LIST3,
-            &mut taskbar as *mut _ as *mut *mut c_void,
-        )
-    };
-    if result < 0 || taskbar.is_null() {
-        return;
-    }
-    unsafe {
-        let vtable = &*(*taskbar).vtable;
-        if (vtable.hr_init)(taskbar) >= 0 {
-            let taskbar_state = match (progress, state) {
-                (None, _) => 0,
-                (Some(_), WindowsProgressBarState::Normal) => 2,
-                (Some(_), WindowsProgressBarState::Error) => 4,
-                (Some(_), WindowsProgressBarState::Paused) => 8,
-                (Some(_), WindowsProgressBarState::Indeterminate) => 1,
-            };
-            if let (Some(progress), false) = (
-                progress,
-                matches!(state, WindowsProgressBarState::Indeterminate),
-            ) {
-                let progress = progress.clamp(0.0, 1.0);
-                _ = (vtable.set_progress_value)(taskbar, hwnd, (progress * 1000.0) as u64, 1000);
-            }
-            _ = (vtable.set_progress_state)(taskbar, hwnd, taskbar_state);
-        }
-        _ = (vtable.release)(taskbar);
-    }
 }

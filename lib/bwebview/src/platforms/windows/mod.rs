@@ -6,11 +6,17 @@
 
 #[cfg(feature = "dialog")]
 mod dialog;
+#[cfg(feature = "drag_drop")]
+mod drag_drop;
 mod event_loop;
+#[cfg(feature = "progress_bar")]
+mod progress_bar;
 mod webview;
 mod webview2;
 mod win32;
 mod window;
+#[cfg(feature = "remember_window_state")]
+mod window_state;
 
 #[cfg(feature = "dialog")]
 pub(crate) use dialog::{PlatformFileDialog, PlatformMessageDialog};

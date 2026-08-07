@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 bwebview = { path = "../../lib/bwebview", default-features = false, features = [
     "rust-embed",
+    "remember_window_state",
 ] }
 directories = "6.0"
 rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }

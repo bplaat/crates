@@ -82,9 +82,12 @@ The Linux backend automatically selects the best available WebKitGTK version at 
 
 - **log** Enables logging support by forwarding `console.*` calls to the `log` crate (default).
 - **remember_window_state** Adds remembers window position and size between launches options (default).
-- **rust-embed** Adds support for serving embedded assets using the `rust-embed` crate.
 - **custom_protocol** Adds support for custom protocols, allowing you to serve content from custom URL schemes.
 - **dialog** Adds support for native message and file dialogs.
+- **drag_drop** Adds support for dropping files onto the window, reported as `WindowEvent::DroppedFile`.
+- **menu** Adds support for custom macOS menu bar entries, selections are reported as `Event::MacosMenuItem`.
+- **progress_bar** Adds support for the Windows taskbar and GTK application launcher progress bars.
+- **rust-embed** Adds support for serving embedded assets using the `rust-embed` crate.
 
 ## Sources binary blobs
 

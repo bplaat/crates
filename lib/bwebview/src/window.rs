@@ -32,7 +32,7 @@ pub enum MacosTitlebarStyle {
 
 // MARK: WindowsProgressBarState
 /// Windows taskbar progress state
-#[cfg(windows)]
+#[cfg(all(windows, feature = "progress_bar"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WindowsProgressBarState {
     /// Show normal progress
@@ -56,7 +56,9 @@ pub struct WindowBuilder<'a> {
     pub(crate) resizable: bool,
     pub(crate) theme: Option<Theme>,
     pub(crate) background_color: Option<u32>,
+    #[cfg(feature = "remember_window_state")]
     pub(crate) remember_window_state: bool,
+    #[cfg(feature = "drag_drop")]
     pub(crate) allow_file_drop: bool,
     pub(crate) monitor: Option<&'a PlatformMonitor>,
     pub(crate) should_center: bool,
@@ -78,7 +80,9 @@ impl<'a> Default for WindowBuilder<'a> {
             resizable: true,
             theme: None,
             background_color: None,
+            #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
+            #[cfg(feature = "drag_drop")]
             allow_file_drop: false,
             monitor: None,
             should_center: false,
@@ -138,12 +142,14 @@ impl<'a> WindowBuilder<'a> {
     }
 
     /// Set remember window state
+    #[cfg(feature = "remember_window_state")]
     pub const fn remember_window_state(mut self) -> Self {
         self.remember_window_state = true;
         self
     }
 
     /// Allow files to be dropped onto the window
+    #[cfg(feature = "drag_drop")]
     pub const fn allow_file_drop(mut self, allow: bool) -> Self {
         self.allow_file_drop = allow;
         self
@@ -193,19 +199,22 @@ pub(crate) trait WindowInterface {
     fn set_resizable(&mut self, resizable: bool);
     fn set_theme(&mut self, theme: Theme);
     fn set_background_color(&mut self, color: u32);
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd",
+    #[cfg(all(
+        feature = "progress_bar",
+        any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd",
+        )
     ))]
     fn gtk_set_progress_bar(&mut self, progress: Option<f32>);
     #[cfg(target_os = "macos")]
     fn macos_titlebar_size(&self) -> LogicalSize;
     #[cfg(target_os = "macos")]
     fn macos_set_document_edited(&mut self, edited: bool);
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "progress_bar"))]
     fn windows_set_progress_bar(&mut self, progress: Option<f32>, state: WindowsProgressBarState);
 }
 
@@ -268,12 +277,15 @@ impl Window {
 
     /// Set GTK application launcher progress, use a value above `1.0` for indeterminate progress,
     /// or hide it with `None`
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
+    #[cfg(all(
+        feature = "progress_bar",
+        any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd"
+        )
     ))]
     pub fn gtk_set_progress_bar(&mut self, progress: Option<f32>) {
         self.platform.gtk_set_progress_bar(progress)
@@ -292,7 +304,7 @@ impl Window {
     }
 
     /// Set Windows taskbar progress for this window, or hide it with `None`
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "progress_bar"))]
     pub fn windows_set_progress_bar(
         &mut self,
         progress: Option<f32>,

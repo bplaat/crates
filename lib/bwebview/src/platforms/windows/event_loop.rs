@@ -16,6 +16,7 @@ use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
 pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
 pub(super) static mut FIRST_HWND: Option<HWND> = None;
+#[cfg(feature = "progress_bar")]
 pub(super) static mut TASKBAR_BUTTON_CREATED: u32 = 0;
 
 // MARK: EventLoop
@@ -49,11 +50,16 @@ impl PlatformEventLoop {
 
             // Initialize OLE (and COM as a single-threaded apartment). OLE
             // initialization is required for RegisterDragDrop to succeed.
+            #[cfg(feature = "drag_drop")]
             OleInitialize(null_mut());
 
             // Explorer creates the taskbar button asynchronously. Shell APIs must
             // not be used until the window receives this registered message.
-            TASKBAR_BUTTON_CREATED = RegisterWindowMessageW(wide!("TaskbarButtonCreated").as_ptr());
+            #[cfg(feature = "progress_bar")]
+            {
+                TASKBAR_BUTTON_CREATED =
+                    RegisterWindowMessageW(wide!("TaskbarButtonCreated").as_ptr());
+            }
 
             enable_high_dpi_awareness();
 

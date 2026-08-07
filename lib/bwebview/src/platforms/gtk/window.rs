@@ -6,16 +6,21 @@
 
 use std::ffi::{CStr, CString, c_void};
 use std::ptr::{null, null_mut};
-use std::{env, fs};
 
-use super::event_loop::{APP_ID, primary_monitor_rect, send_event, update_progress_bar};
+use super::event_loop::{primary_monitor_rect, send_event};
 use super::headers::*;
+#[cfg(feature = "progress_bar")]
+use super::progress_bar::update_progress_bar;
+#[cfg(feature = "remember_window_state")]
+use super::window_state::{load_window_state, save_window_state};
 use crate::{CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
 pub(super) struct WindowData {
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
+    #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
+    #[cfg(feature = "drag_drop")]
     pub(super) allow_file_drop: bool,
 }
 
@@ -46,7 +51,9 @@ impl PlatformWindow {
         let mut window_data = Box::new(WindowData {
             window: null_mut(),
             background_color: builder.background_color,
+            #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
+            #[cfg(feature = "drag_drop")]
             allow_file_drop: builder.allow_file_drop,
         });
 
@@ -109,8 +116,9 @@ impl PlatformWindow {
                     gtk_window_set_position(window, GTK_WIN_POS_CENTER);
                 }
             }
+            #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
-                Self::load_window_state(window);
+                load_window_state(window);
             }
 
             g_signal_connect_data(
@@ -153,71 +161,13 @@ impl PlatformWindow {
         window_data.window = window;
         PlatformWindow(window_data)
     }
-
-    fn load_window_state(window: *mut GtkWindow) {
-        unsafe {
-            let settings = g_key_file_new();
-            let file = CString::new(config_dir().join("settings.ini").display().to_string())
-                .expect("Can't convert to CString");
-            let mut err = null_mut();
-            g_key_file_load_from_file(settings, file.as_ptr(), 0, &mut err);
-            if err.is_null() {
-                let group = c"window".as_ptr();
-                let x = g_key_file_get_integer(settings, group, c"x".as_ptr(), null_mut());
-                let y = g_key_file_get_integer(settings, group, c"y".as_ptr(), null_mut());
-                gtk_window_move(window, x, y);
-
-                let width = g_key_file_get_integer(settings, group, c"width".as_ptr(), null_mut());
-                let height =
-                    g_key_file_get_integer(settings, group, c"height".as_ptr(), null_mut());
-                gtk_window_set_default_size(window, width, height);
-
-                let maximized =
-                    g_key_file_get_boolean(settings, group, c"maximized".as_ptr(), null_mut());
-                if maximized {
-                    gtk_window_maximize(window);
-                }
-            } else {
-                g_error_free(err);
-            }
-            g_key_file_free(settings);
-        }
-    }
-
-    fn save_window_state(window: *mut GtkWindow) {
-        fs::create_dir_all(config_dir()).expect("Can't create settings directory");
-        let settings_path = config_dir().join("settings.ini");
-        unsafe {
-            let settings = g_key_file_new();
-            let group = c"window".as_ptr();
-
-            let mut x = 0;
-            let mut y = 0;
-            gtk_window_get_position(window, &mut x, &mut y);
-            g_key_file_set_integer(settings, group, c"x".as_ptr(), x);
-            g_key_file_set_integer(settings, group, c"y".as_ptr(), y);
-
-            let mut width = 0;
-            let mut height = 0;
-            gtk_window_get_size(window, &mut width, &mut height);
-            g_key_file_set_integer(settings, group, c"width".as_ptr(), width);
-            g_key_file_set_integer(settings, group, c"height".as_ptr(), height);
-
-            let maximized = gtk_window_is_maximized(window);
-            g_key_file_set_boolean(settings, group, c"maximized".as_ptr(), maximized);
-
-            let file = CString::new(settings_path.display().to_string())
-                .expect("Can't convert to CString");
-            g_key_file_save_to_file(settings, file.as_ptr(), null_mut());
-            g_key_file_free(settings);
-        }
-    }
 }
 
 impl crate::WindowInterface for PlatformWindow {
     fn close(&mut self) {
+        #[cfg(feature = "remember_window_state")]
         if self.0.remember_window_state {
-            Self::save_window_state(self.0.window);
+            save_window_state(self.0.window);
         }
         unsafe { gtk_widget_destroy(self.0.window as *mut GtkWidget) };
     }
@@ -299,6 +249,7 @@ impl crate::WindowInterface for PlatformWindow {
         }
     }
 
+    #[cfg(feature = "progress_bar")]
     fn gtk_set_progress_bar(&mut self, progress: Option<f32>) {
         update_progress_bar(progress);
     }
@@ -342,34 +293,11 @@ extern "C" fn window_on_close(
         request.clone(),
     )));
     if request.is_prevented() {
-        true
-    } else {
-        if _self.remember_window_state {
-            PlatformWindow::save_window_state(_self.window);
-        }
-        false
+        return true;
     }
-}
-
-pub(super) fn config_dir() -> std::path::PathBuf {
-    let project_dirs = unsafe {
-        if let Some(ref app_id) = APP_ID {
-            directories::ProjectDirs::from(
-                &app_id.qualifier,
-                &app_id.organization,
-                &app_id.application,
-            )
-        } else {
-            directories::ProjectDirs::from_path(std::path::PathBuf::from(
-                env::current_exe()
-                    .expect("Can't get current process name")
-                    .file_name()
-                    .expect("Can't get current process name")
-                    .to_string_lossy()
-                    .into_owned(),
-            ))
-        }
+    #[cfg(feature = "remember_window_state")]
+    if _self.remember_window_state {
+        save_window_state(_self.window);
     }
-    .expect("Can't get dirs");
-    project_dirs.config_dir()
+    false
 }

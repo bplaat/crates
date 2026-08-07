@@ -40,6 +40,7 @@ pub enum WindowEvent {
     /// Window close requested; closes normally unless prevented
     CloseRequested(CloseRequest),
     /// File dropped
+    #[cfg(feature = "drag_drop")]
     DroppedFile(PathBuf),
     /// macOS window fullscreen change
     #[cfg(target_os = "macos")]
@@ -70,6 +71,6 @@ pub enum Event {
     #[cfg(target_os = "macos")]
     MacosOpenFiles(Vec<PathBuf>),
     /// A custom macOS menu item was selected
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "menu"))]
     MacosMenuItem(String),
 }
