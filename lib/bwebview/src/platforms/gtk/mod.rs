@@ -6,9 +6,9 @@
 
 #[cfg(feature = "dialog")]
 mod dialog;
-#[cfg(feature = "drag_drop")]
-mod drag_drop;
 mod event_loop;
+#[cfg(feature = "file_drop")]
+mod file_drop;
 mod headers;
 #[cfg(feature = "progress_bar")]
 mod progress_bar;

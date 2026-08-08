@@ -40,7 +40,7 @@ pub enum WindowEvent {
     /// Window close requested; closes normally unless prevented
     CloseRequested(CloseRequest),
     /// File dropped
-    #[cfg(feature = "drag_drop")]
+    #[cfg(feature = "file_drop")]
     DroppedFile(PathBuf),
     /// macOS window fullscreen change
     #[cfg(target_os = "macos")]

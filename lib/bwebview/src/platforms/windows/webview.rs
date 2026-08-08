@@ -8,9 +8,9 @@ use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 use std::{env, mem};
 
-#[cfg(feature = "drag_drop")]
-use super::drag_drop::{FileDropTarget, install_file_drop_targets};
 use super::event_loop::send_event;
+#[cfg(feature = "file_drop")]
+use super::file_drop::{FileDropTarget, install_file_drop_targets};
 use super::webview2::*;
 use super::win32::*;
 use super::window::{PlatformWindow, WindowData, config_dir};
@@ -28,7 +28,7 @@ pub(super) struct WebviewData {
     pub(super) environment: Option<*mut ICoreWebView2Environment>,
     pub(super) webview: Option<*mut ICoreWebView2>,
     pub(super) controller: Option<*mut ICoreWebView2Controller>,
-    #[cfg(feature = "drag_drop")]
+    #[cfg(feature = "file_drop")]
     #[allow(clippy::vec_box)]
     // Registered COM pointers must remain stable when the vector grows.
     pub(super) drop_targets: Vec<Box<FileDropTarget>>,
@@ -52,7 +52,7 @@ impl PlatformWebview {
             environment: None,
             webview: None,
             controller: None,
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             drop_targets: Vec::new(),
             window_data,
         });
@@ -270,7 +270,7 @@ extern "system" fn controller_created(
 
         // Let our drop target handle files instead of allowing WebView2 to
         // navigate to them.
-        #[cfg(feature = "drag_drop")]
+        #[cfg(feature = "file_drop")]
         if (*_self.window_data).allow_file_drop {
             let mut controller4: *mut ICoreWebView2Controller4 = null_mut();
             (*controller).QueryInterface(

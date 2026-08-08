@@ -9,11 +9,11 @@ use std::ffi::c_void;
 use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 
-#[cfg(feature = "drag_drop")]
-use super::drag_drop::handle_file_drop;
 #[cfg(feature = "progress_bar")]
 use super::event_loop::TASKBAR_BUTTON_CREATED;
 use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event, system_theme};
+#[cfg(feature = "file_drop")]
+use super::file_drop::handle_file_drop;
 #[cfg(feature = "progress_bar")]
 use super::progress_bar::ProgressBar;
 use super::webview2::*;
@@ -31,7 +31,7 @@ pub(super) struct WindowData {
     pub(super) background_color: Option<u32>,
     #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
-    #[cfg(feature = "drag_drop")]
+    #[cfg(feature = "file_drop")]
     pub(super) allow_file_drop: bool,
     pub(super) resize_callback: Option<Box<dyn Fn(i32, i32)>>,
     #[cfg(feature = "progress_bar")]
@@ -92,7 +92,7 @@ impl PlatformWindow {
             background_color: builder.background_color,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             allow_file_drop: builder.allow_file_drop,
             resize_callback: None,
             #[cfg(feature = "progress_bar")]
@@ -196,7 +196,7 @@ impl PlatformWindow {
                 window_data.as_mut() as *mut WindowData as LPARAM,
             );
             window_data.hwnd = hwnd;
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             if builder.allow_file_drop {
                 DragAcceptFiles(hwnd, TRUE);
             }
@@ -457,7 +457,7 @@ unsafe extern "system" fn window_proc(
             send_event(*event);
             0
         }
-        #[cfg(feature = "drag_drop")]
+        #[cfg(feature = "file_drop")]
         WM_DROPFILES => {
             unsafe { handle_file_drop(w_param as HDROP) };
             0

@@ -8,9 +8,9 @@ use std::env;
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr::{null, null_mut};
 
-#[cfg(feature = "drag_drop")]
-use super::drag_drop::{FileDropState, connect_signals};
 use super::event_loop::send_event;
+#[cfg(feature = "file_drop")]
+use super::file_drop::{FileDropState, connect_signals};
 use super::headers::*;
 use super::window::PlatformWindow;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent, WindowEvent};
@@ -18,9 +18,9 @@ use crate::{InjectionTime, WebviewBuilder, WebviewEvent, WindowEvent};
 pub(super) struct WebviewData {
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
-    #[cfg(feature = "drag_drop")]
+    #[cfg(feature = "file_drop")]
     pub(super) allow_file_drop: bool,
-    #[cfg(feature = "drag_drop")]
+    #[cfg(feature = "file_drop")]
     pub(super) file_drop: FileDropState,
     pub(super) webview: *mut WebKitWebView,
 }
@@ -32,9 +32,9 @@ impl PlatformWebview {
         PlatformWebview(Box::new(WebviewData {
             window: window.0.window,
             background_color: window.0.background_color,
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             allow_file_drop: window.0.allow_file_drop,
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             file_drop: FileDropState::default(),
             webview: null_mut(),
         }))
@@ -133,7 +133,7 @@ impl PlatformWebview {
                 null::<c_void>(),
             ) as *mut WebKitWebView;
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             if data.allow_file_drop {
                 connect_signals(webview, data);
             }

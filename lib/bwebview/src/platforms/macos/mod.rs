@@ -7,9 +7,9 @@
 mod cocoa;
 #[cfg(feature = "dialog")]
 mod dialog;
-#[cfg(feature = "drag_drop")]
-mod drag_drop;
 mod event_loop;
+#[cfg(feature = "file_drop")]
+mod file_drop;
 mod menu;
 mod webkit;
 mod webview;

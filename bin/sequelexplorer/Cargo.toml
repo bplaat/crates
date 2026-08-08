@@ -22,7 +22,7 @@ bsqlite = "0.1.2"
 bwebview = { path = "../../lib/bwebview", features = [
     "rust-embed",
     "dialog",
-    "drag_drop",
+    "file_drop",
     "menu",
 ] }
 rust-embed = "8.7"

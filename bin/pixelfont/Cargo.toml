@@ -20,7 +20,7 @@ workspace = true
 bwebview = { path = "../../lib/bwebview", features = [
     "rust-embed",
     "dialog",
-    "drag_drop",
+    "file_drop",
     "menu",
 ] }
 rust-embed = "8.7"

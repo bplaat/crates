@@ -13,9 +13,9 @@ use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
 use super::cocoa::*;
-#[cfg(feature = "drag_drop")]
-use super::drag_drop::{droppable_webview_class, register_dragged_types};
 use super::event_loop::send_event;
+#[cfg(feature = "file_drop")]
+use super::file_drop::{droppable_webview_class, register_dragged_types};
 use super::webkit::*;
 use super::window::PlatformWindow;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent};
@@ -119,7 +119,7 @@ impl WebviewDelegate {
 pub(super) struct WebviewData {
     pub(super) window: *mut Object,
     pub(super) background_color: Option<u32>,
-    #[cfg(feature = "drag_drop")]
+    #[cfg(feature = "file_drop")]
     pub(super) allow_file_drop: bool,
     pub(super) webview: *mut Object,
 }
@@ -131,7 +131,7 @@ impl PlatformWebview {
         PlatformWebview(Box::new(WebviewData {
             window: window.0.window,
             background_color: window.0.background_color,
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             allow_file_drop: window.0.allow_file_drop,
             webview: null_mut(),
         }))
@@ -168,18 +168,18 @@ impl PlatformWebview {
             let webview_rect: NSRect = msg_send![content_view, bounds];
 
             // Create webview
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             let webview_class = if self.0.allow_file_drop {
                 droppable_webview_class()
             } else {
                 class!(WKWebView)
             };
-            #[cfg(not(feature = "drag_drop"))]
+            #[cfg(not(feature = "file_drop"))]
             let webview_class = class!(WKWebView);
             let webview: *mut Object = msg_send![webview_class, alloc];
             let webview: *mut Object =
                 msg_send![webview, initWithFrame:webview_rect, configuration:webview_config];
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             if self.0.allow_file_drop {
                 register_dragged_types(webview);
             }

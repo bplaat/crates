@@ -50,7 +50,7 @@ impl PlatformEventLoop {
 
             // Initialize OLE (and COM as a single-threaded apartment). OLE
             // initialization is required for RegisterDragDrop to succeed.
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             OleInitialize(null_mut());
 
             // Explorer creates the taskbar button asynchronously. Shell APIs must

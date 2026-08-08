@@ -58,7 +58,7 @@ pub struct WindowBuilder<'a> {
     pub(crate) background_color: Option<u32>,
     #[cfg(feature = "remember_window_state")]
     pub(crate) remember_window_state: bool,
-    #[cfg(feature = "drag_drop")]
+    #[cfg(feature = "file_drop")]
     pub(crate) allow_file_drop: bool,
     pub(crate) monitor: Option<&'a PlatformMonitor>,
     pub(crate) should_center: bool,
@@ -82,7 +82,7 @@ impl<'a> Default for WindowBuilder<'a> {
             background_color: None,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
-            #[cfg(feature = "drag_drop")]
+            #[cfg(feature = "file_drop")]
             allow_file_drop: false,
             monitor: None,
             should_center: false,
@@ -149,7 +149,7 @@ impl<'a> WindowBuilder<'a> {
     }
 
     /// Allow files to be dropped onto the window
-    #[cfg(feature = "drag_drop")]
+    #[cfg(feature = "file_drop")]
     pub const fn allow_file_drop(mut self, allow: bool) -> Self {
         self.allow_file_drop = allow;
         self

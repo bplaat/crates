@@ -35,7 +35,7 @@ winresource = "0.1.29"
 default = ["log", "remember_window_state"]
 custom_protocol = ["dep:small-http"]
 dialog = []
-drag_drop = []
+file_drop = []
 log = ["dep:log"]
 menu = []
 progress_bar = []
@@ -48,7 +48,7 @@ required-features = ["dialog"]
 
 [[example]]
 name = "bwebview-file-drop"
-required-features = ["drag_drop"]
+required-features = ["file_drop"]
 
 [[example]]
 name = "bwebview-ipc"
