@@ -98,6 +98,9 @@ body { font: 16px system-ui, sans-serif; height: 100vh; margin: 0; display: flex
         let Event::UserEvent(data) = event else {
             return;
         };
+        let Some(data) = data.downcast_ref::<String>() else {
+            return;
+        };
         #[cfg(any(
             target_os = "linux",
             target_os = "freebsd",

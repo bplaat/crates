@@ -9,12 +9,30 @@ use crate::{LogicalPoint, LogicalSize};
 
 // MARK: Theme
 /// Theme
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Theme {
     /// Light theme
     Light,
     /// Dark theme
     Dark,
+}
+
+/// Mouse cursor displayed over a window's content.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CursorIcon {
+    /// Platform default arrow.
+    #[default]
+    Default,
+    /// Pointing hand for clickable content.
+    Pointer,
+    /// Crosshair for precise selection.
+    Crosshair,
+    /// Text-selection I-beam.
+    Text,
+    /// Open hand for draggable content.
+    Grab,
+    /// Closed hand while dragging.
+    Grabbing,
 }
 
 // MARK: MacosTitlebarStyle
@@ -199,6 +217,7 @@ pub(crate) trait WindowInterface {
     fn set_resizable(&mut self, resizable: bool);
     fn set_theme(&mut self, theme: Theme);
     fn set_background_color(&mut self, color: u32);
+    fn set_cursor(&mut self, cursor: CursorIcon);
     #[cfg(all(
         feature = "progress_bar",
         any(
@@ -273,6 +292,11 @@ impl Window {
     /// Set window background color
     pub fn set_background_color(&mut self, color: u32) {
         self.platform.set_background_color(color)
+    }
+
+    /// Set the mouse cursor displayed over the window content.
+    pub fn set_cursor(&mut self, cursor: CursorIcon) {
+        self.platform.set_cursor(cursor)
     }
 
     /// Set GTK application launcher progress, use a value above `1.0` for indeterminate progress,

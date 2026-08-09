@@ -242,6 +242,41 @@ pub struct MenuItem {
     pub(crate) accelerator: Option<Accelerator>,
 }
 
+/// A native menu command routed through the macOS responder chain.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MenuItemRole {
+    /// Show the application About panel.
+    About,
+    /// Hide the application.
+    Hide,
+    /// Hide other applications.
+    HideOthers,
+    /// Show all applications.
+    ShowAll,
+    /// Quit the application.
+    Quit,
+    /// Close the active window.
+    Close,
+    /// Undo in the active responder.
+    Undo,
+    /// Redo in the active responder.
+    Redo,
+    /// Cut the selection.
+    Cut,
+    /// Copy the selection.
+    Copy,
+    /// Paste from the clipboard.
+    Paste,
+    /// Delete the selection.
+    Delete,
+    /// Select all content.
+    SelectAll,
+    /// Minimize the active window.
+    Minimize,
+    /// Toggle the active window zoom state.
+    Zoom,
+}
+
 impl MenuItem {
     /// Create a menu item with a title and stable action identifier
     pub fn new(title: impl Into<String>, action: impl Into<String>) -> Self {
@@ -261,6 +296,7 @@ impl MenuItem {
 
 pub(crate) enum MenuBuilderEntry {
     Item(MenuItem),
+    Role(MenuItemRole),
     Separator,
 }
 
@@ -282,6 +318,12 @@ impl MenuBuilder {
     /// Add a menu item
     pub fn item(mut self, item: MenuItem) -> Self {
         self.entries.push(MenuBuilderEntry::Item(item));
+        self
+    }
+
+    /// Add a standard native item with its conventional action and shortcut.
+    pub fn role(mut self, role: MenuItemRole) -> Self {
+        self.entries.push(MenuBuilderEntry::Role(role));
         self
     }
 

@@ -14,8 +14,8 @@ use std::ffi::{c_char, c_void};
 
 // MARK: Base types
 pub(crate) type BOOL = i32;
-pub(crate) const TRUE: BOOL = 1;
 pub(crate) const FALSE: BOOL = 0;
+pub(crate) const TRUE: BOOL = 1;
 pub(crate) type w_char = u16;
 pub(crate) type HANDLE = *mut c_void;
 pub(crate) type HKEY = HANDLE;
@@ -239,10 +239,10 @@ pub(crate) struct WINDOWPLACEMENT {
     pub(crate) rcNormalPosition: RECT,
 }
 
-pub(crate) const WS_POPUP: u32 = 0x80000000;
+pub(crate) const WS_MAXIMIZEBOX: u32 = 0x00010000;
 pub(crate) const WS_THICKFRAME: u32 = 0x00040000;
 pub(crate) const WS_OVERLAPPEDWINDOW: u32 = 0x00CF0000;
-pub(crate) const WS_MAXIMIZEBOX: u32 = 0x00010000;
+pub(crate) const WS_POPUP: u32 = 0x80000000;
 
 pub(crate) const CW_USEDEFAULT: i32 = 0x80000000u32 as i32;
 
@@ -250,12 +250,31 @@ pub(crate) const WM_CREATE: u32 = 0x0001;
 pub(crate) const WM_DESTROY: u32 = 0x0002;
 pub(crate) const WM_MOVE: u32 = 0x0003;
 pub(crate) const WM_SIZE: u32 = 0x0005;
+pub(crate) const WM_SETFOCUS: u32 = 0x0007;
+pub(crate) const WM_KILLFOCUS: u32 = 0x0008;
+pub(crate) const WM_PAINT: u32 = 0x000F;
 pub(crate) const WM_CLOSE: u32 = 0x0010;
 pub(crate) const WM_ERASEBKGND: u32 = 0x0014;
+pub(crate) const WM_SETTINGCHANGE: u32 = 0x001A;
+pub(crate) const WM_SETCURSOR: u32 = 0x0020;
 pub(crate) const WM_GETMINMAXINFO: u32 = 0x0024;
 pub(crate) const WM_NCCREATE: u32 = 0x0081;
+pub(crate) const WM_KEYDOWN: u32 = 0x0100;
+pub(crate) const WM_KEYUP: u32 = 0x0101;
+pub(crate) const WM_SYSKEYDOWN: u32 = 0x0104;
+pub(crate) const WM_SYSKEYUP: u32 = 0x0105;
+pub(crate) const WM_TIMER: u32 = 0x0113;
+pub(crate) const WM_MOUSEMOVE: u32 = 0x0200;
+pub(crate) const WM_LBUTTONDOWN: u32 = 0x0201;
+pub(crate) const WM_LBUTTONUP: u32 = 0x0202;
+pub(crate) const WM_RBUTTONDOWN: u32 = 0x0204;
+pub(crate) const WM_RBUTTONUP: u32 = 0x0205;
+pub(crate) const WM_MBUTTONDOWN: u32 = 0x0207;
+pub(crate) const WM_MBUTTONUP: u32 = 0x0208;
+pub(crate) const WM_MOUSEWHEEL: u32 = 0x020A;
 pub(crate) const WM_DROPFILES: u32 = 0x0233;
 pub(crate) const WM_DPICHANGED: u32 = 0x02E0;
+pub(crate) const WM_THEMECHANGED: u32 = 0x031A;
 pub(crate) const WM_USER: u32 = 0x0400;
 
 pub(crate) const SW_SHOWNORMAL: i32 = 1;
@@ -282,8 +301,8 @@ pub(crate) const SM_CXSCREEN: i32 = 0;
 pub(crate) const SM_CYSCREEN: i32 = 1;
 pub(crate) const COLOR_WINDOW: i32 = 5;
 
-pub(crate) const GWL_STYLE: i32 = -16;
 pub(crate) const GWL_USERDATA: i32 = -21;
+pub(crate) const GWL_STYLE: i32 = -16;
 
 pub(crate) const SWP_NOSIZE: u32 = 0x0001;
 pub(crate) const SWP_NOMOVE: u32 = 0x0002;
@@ -293,6 +312,10 @@ pub(crate) const SWP_NOREPOSITION: u32 = 0x0200;
 
 #[link(name = "user32")]
 unsafe extern "system" {
+    pub(crate) fn LoadCursorW(instance: HMODULE, cursor_name: *const u16) -> HCURSOR;
+    pub(crate) fn SetCursor(cursor: HCURSOR) -> HCURSOR;
+    pub(crate) fn SetTimer(hwnd: HWND, id: usize, milliseconds: u32, callback: Option<unsafe extern "system" fn(HWND, u32, usize, u32)>) -> usize;
+    pub(crate) fn KillTimer(hwnd: HWND, id: usize) -> BOOL;
     pub(crate) fn EnumChildWindows(
         hwndParent: HWND,
         lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL,
@@ -351,6 +374,9 @@ unsafe extern "system" {
     pub(crate) fn DefWindowProcW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> isize;
     pub(crate) fn PostQuitMessage(nExitCode: i32);
     pub(crate) fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
+    pub(crate) fn ValidateRect(hWnd: HWND, lpRect: *const RECT) -> BOOL;
+    pub(crate) fn ClientToScreen(hWnd: HWND, point: *mut POINT) -> BOOL;
+    pub(crate) fn GetKeyState(key: i32) -> i16;
     pub(crate) fn MessageBoxW(
         hWnd: HWND,
         lpText: *const w_char,
@@ -489,8 +515,8 @@ pub(crate) struct STATSTG {
 }
 
 pub(crate) const S_OK: HRESULT = 0;
-pub(crate) const E_NOINTERFACE: HRESULT = 0x80004002u32 as HRESULT;
 pub(crate) const E_NOTIMPL: HRESULT = 0x80004001u32 as HRESULT;
+pub(crate) const E_NOINTERFACE: HRESULT = 0x80004002u32 as HRESULT;
 pub(crate) const DRAGDROP_E_INVALIDHWND: HRESULT = 0x80040102u32 as HRESULT;
 pub(crate) const CF_HDROP: u16 = 15;
 pub(crate) const DVASPECT_CONTENT: u32 = 1;

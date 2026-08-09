@@ -8,7 +8,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use super::gdk::{GdkRGBA, GdkScreen};
+use super::gdk::{GdkRGBA, GdkScreen, GdkWindow};
 use super::glib::{GError, GSList};
 
 // MARK: GTK
@@ -34,6 +34,7 @@ pub(crate) const GTK_MESSAGE_WARNING: i32 = 1;
 pub(crate) const GTK_MESSAGE_ERROR: i32 = 3;
 pub(crate) const GTK_BUTTONS_NONE: i32 = 0;
 unsafe extern "C" {
+    pub(crate) fn gtk_widget_get_window(widget: *mut GtkWidget) -> *mut GdkWindow;
     pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
     pub(crate) fn gtk_main();
     pub(crate) fn gtk_main_quit();
@@ -54,6 +55,11 @@ unsafe extern "C" {
     pub(crate) fn gtk_widget_show(widget: *mut GtkWidget);
     pub(crate) fn gtk_widget_hide(widget: *mut GtkWidget);
     pub(crate) fn gtk_widget_show_all(window: *mut GtkWidget);
+    pub(crate) fn gtk_drawing_area_new() -> *mut GtkWidget;
+    pub(crate) fn gtk_widget_queue_draw(widget: *mut GtkWidget);
+    pub(crate) fn gtk_widget_set_can_focus(widget: *mut GtkWidget, can_focus: bool);
+    pub(crate) fn gtk_widget_grab_focus(widget: *mut GtkWidget) -> bool;
+    pub(crate) fn gtk_widget_add_events(widget: *mut GtkWidget, events: i32);
     pub(crate) fn gtk_settings_get_default() -> *mut GtkSettings;
     pub(crate) fn gtk_widget_override_background_color(
         widget: *mut GtkWidget,

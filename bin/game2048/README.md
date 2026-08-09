@@ -1,6 +1,9 @@
 # 2048 Desktop App
 
-An offline desktop 2048 game app
+An offline, fully native desktop 2048 game rendered with bwebview Canvas.
+
+Use the arrow keys, WASD, or Vim movement keys to play. Mouse drag gestures are
+also supported. Press `R` or choose **Game → New Game** on macOS to restart.
 
 ## Screenshot
 

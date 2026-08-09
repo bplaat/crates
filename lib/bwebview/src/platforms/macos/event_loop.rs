@@ -15,6 +15,7 @@ use objc2::{class, define_class, msg_send, sel};
 
 use super::cocoa::*;
 use super::menu::create_menu_bar;
+#[cfg(feature = "webview")]
 use super::webkit::*;
 use crate::{CloseRequest, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WindowEvent};
 
@@ -83,7 +84,7 @@ impl AppDelegate {
 
     fn send_event(&self, value: *mut Object) {
         let ptr: *mut c_void = unsafe { msg_send![value, pointerValue] };
-        let event = unsafe { Box::from_raw(ptr as *mut Event) };
+        let event = unsafe { Box::from_raw(ptr as *mut Event<'static>) };
         send_event(*event);
     }
 
@@ -119,8 +120,7 @@ impl AppDelegate {
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
     application: *mut Object,
-    theme: Theme,
-    event_handler: Option<Box<dyn FnMut(Event) + 'static>>,
+    event_handler: Option<crate::EventHandler>,
 }
 
 impl PlatformEventLoop {
@@ -140,7 +140,6 @@ impl PlatformEventLoop {
 
         Self {
             application,
-            theme: system_theme(),
             event_handler: None,
         }
     }
@@ -162,7 +161,7 @@ fn system_theme() -> Theme {
 
 impl crate::EventLoopInterface for PlatformEventLoop {
     fn theme(&self) -> Theme {
-        self.theme
+        system_theme()
     }
 
     fn primary_monitor(&self) -> PlatformMonitor {
@@ -185,7 +184,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         monitors
     }
 
-    fn run(mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
+    fn run(mut self, event_handler: impl for<'a> FnMut(Event<'a>) + 'static) -> ! {
         self.event_handler = Some(Box::new(event_handler));
         autoreleasepool(|_| unsafe {
             let delegate: *mut Object = msg_send![self.application, delegate];
@@ -204,11 +203,15 @@ impl crate::EventLoopInterface for PlatformEventLoop {
     }
 }
 
-pub(crate) fn send_event(event: Event) {
-    let _self = unsafe {
+pub(crate) fn send_event(event: Event<'_>) {
+    let event_loop = unsafe {
         let app_delegate: *mut Object = msg_send![NSApp, delegate];
         let delegate_ref = &*(app_delegate as *const AppDelegate);
-        &mut *delegate_ref.ivars().event_loop.get()
+        delegate_ref.ivars().event_loop.get()
+    };
+
+    let Some(_self) = (unsafe { event_loop.as_mut() }) else {
+        return;
     };
 
     if let Some(handler) = _self.event_handler.as_mut() {
@@ -241,7 +244,7 @@ impl PlatformEventLoopProxy {
 }
 
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
-    fn send_user_event(&self, data: String) {
+    fn send_user_event(&self, data: crate::UserEvent) {
         unsafe {
             let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
             let value: *mut Object = msg_send![class!(NSValue), valueWithPointer:ptr];

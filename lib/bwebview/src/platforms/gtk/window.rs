@@ -7,7 +7,7 @@
 use std::ffi::{CStr, CString, c_void};
 use std::ptr::{null, null_mut};
 
-use super::event_loop::{primary_monitor_rect, send_event};
+use super::event_loop::{primary_monitor_rect, send_event, system_theme};
 use super::headers::*;
 #[cfg(feature = "progress_bar")]
 use super::progress_bar::update_progress_bar;
@@ -18,6 +18,8 @@ use crate::{CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, Windo
 pub(super) struct WindowData {
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
+    pub(super) theme: Theme,
+    pub(super) follows_system_theme: bool,
     #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
     #[cfg(feature = "file_drop")]
@@ -51,6 +53,8 @@ impl PlatformWindow {
         let mut window_data = Box::new(WindowData {
             window: null_mut(),
             background_color: builder.background_color,
+            theme: builder.theme.unwrap_or_else(system_theme),
+            follows_system_theme: builder.theme.is_none(),
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
             #[cfg(feature = "file_drop")]
@@ -155,6 +159,14 @@ impl PlatformWindow {
                 null(),
                 G_CONNECT_DEFAULT,
             );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"style-updated".as_ptr(),
+                window_on_theme_change as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
             window
         };
 
@@ -221,6 +233,8 @@ impl crate::WindowInterface for PlatformWindow {
     }
 
     fn set_theme(&mut self, theme: Theme) {
+        self.0.theme = theme;
+        self.0.follows_system_theme = false;
         unsafe {
             let settings = gtk_settings_get_default();
             g_object_set(
@@ -249,9 +263,43 @@ impl crate::WindowInterface for PlatformWindow {
         }
     }
 
+    fn set_cursor(&mut self, cursor: crate::CursorIcon) {
+        use crate::CursorIcon;
+        let name = match cursor {
+            CursorIcon::Default => c"default",
+            CursorIcon::Pointer => c"pointer",
+            CursorIcon::Crosshair => c"crosshair",
+            CursorIcon::Text => c"text",
+            CursorIcon::Grab => c"grab",
+            CursorIcon::Grabbing => c"grabbing",
+        };
+        unsafe {
+            let cursor = gdk_cursor_new_from_name(gdk_display_get_default(), name.as_ptr());
+            gdk_window_set_cursor(gtk_widget_get_window(self.0.window as *mut GtkWidget), cursor);
+            if !cursor.is_null() {
+                g_object_unref(cursor as *mut GObject);
+            }
+        }
+    }
+
     #[cfg(feature = "progress_bar")]
     fn gtk_set_progress_bar(&mut self, progress: Option<f32>) {
         update_progress_bar(progress);
+    }
+}
+
+extern "C" fn window_on_theme_change(
+    _widget: *mut GtkWidget,
+    data: *mut c_void,
+) {
+    let window = unsafe { &mut *data.cast::<WindowData>() };
+    if !window.follows_system_theme {
+        return;
+    }
+    let theme = system_theme();
+    if theme != window.theme {
+        window.theme = theme;
+        send_event(crate::Event::Window(WindowEvent::ThemeChange(theme)));
     }
 }
 

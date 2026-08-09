@@ -5,7 +5,9 @@
  */
 
 use crate::platforms::{PlatformEventLoop, PlatformEventLoopProxy, PlatformMonitor};
-use crate::{Event, LogicalPoint, LogicalSize, Theme};
+use crate::{Event, LogicalPoint, LogicalSize, Theme, UserEvent};
+
+pub(crate) type EventHandler = Box<dyn for<'a> FnMut(Event<'a>) + 'static>;
 
 // MARK: AppId
 pub(crate) struct AppId {
@@ -80,7 +82,7 @@ pub(crate) trait EventLoopInterface {
     fn primary_monitor(&self) -> PlatformMonitor;
     fn available_monitors(&self) -> Vec<PlatformMonitor>;
     fn create_proxy(&self) -> PlatformEventLoopProxy;
-    fn run(self, event_handler: impl FnMut(Event) + 'static) -> !;
+    fn run(self, event_handler: impl for<'a> FnMut(Event<'a>) + 'static) -> !;
 }
 
 /// Event loop
@@ -122,14 +124,14 @@ impl EventLoop {
     }
 
     /// Run the event loop
-    pub fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
+    pub fn run(self, event_handler: impl for<'a> FnMut(Event<'a>) + 'static) -> ! {
         self.0.run(event_handler)
     }
 }
 
 // MARK: EventLoopProxy
 pub(crate) trait EventLoopProxyInterface {
-    fn send_user_event(&self, data: String);
+    fn send_user_event(&self, data: UserEvent);
 }
 
 /// Event loop proxy
@@ -141,8 +143,8 @@ impl EventLoopProxy {
     }
 
     /// Send user event to the event loop
-    pub fn send_user_event(&self, data: String) {
-        self.0.send_user_event(data);
+    pub fn send_user_event<T: Send + 'static>(&self, data: T) {
+        self.0.send_user_event(UserEvent::new(data));
     }
 }
 

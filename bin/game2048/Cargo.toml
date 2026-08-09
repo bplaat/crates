@@ -16,8 +16,13 @@ icon = "meta/macos/icon.icon"
 entitlements = "meta/macos/Entitlements.plist"
 
 [dependencies]
-bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
-rust-embed = "8.7"
+bwebview = { path = "../../lib/bwebview", default-features = false, features = [
+    "canvas",
+    "menu",
+    "remember_window_state",
+] }
+directories = "6.0"
+getrandom = "0.3"
 
 [build-dependencies]
 winresource = "0.1.29"

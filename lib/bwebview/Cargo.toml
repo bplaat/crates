@@ -22,6 +22,14 @@ objc2 = "0.6"
 # The WebView2 user data folder always needs a config directory on Windows
 [target.'cfg(windows)'.dependencies]
 directories = "6.0.0"
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Dxgi_Common",
+] }
+windows-numerics = "0.2"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -32,32 +40,62 @@ windows-metadata = "0.59.0"
 winresource = "0.1.29"
 
 [features]
-default = ["log", "remember_window_state"]
-custom_protocol = ["dep:small-http"]
+default = ["canvas", "webview", "log", "remember_window_state"]
+canvas = []
+webview = []
+custom_protocol = ["webview", "dep:small-http"]
 dialog = []
 file_drop = []
 log = ["dep:log"]
 menu = []
 progress_bar = []
 remember_window_state = ["dep:directories"]
-rust-embed = ["custom_protocol", "dep:rust-embed", "dep:mime_guess"]
+rust-embed = ["webview", "custom_protocol", "dep:rust-embed", "dep:mime_guess"]
+
+[[example]]
+name = "bwebview-canvas-reversi"
+required-features = ["canvas", "menu"]
+
+[[example]]
+name = "bwebview-canvas-showcase"
+required-features = ["canvas"]
 
 [[example]]
 name = "bwebview-dialog"
-required-features = ["dialog"]
+required-features = ["dialog", "webview"]
 
 [[example]]
 name = "bwebview-file-drop"
-required-features = ["file_drop"]
+required-features = ["file_drop", "webview"]
 
 [[example]]
 name = "bwebview-ipc"
-required-features = ["remember_window_state"]
+required-features = ["remember_window_state", "webview"]
 
 [[example]]
 name = "bwebview-menu"
-required-features = ["menu"]
+required-features = ["menu", "webview"]
 
 [[example]]
 name = "bwebview-progress-bar"
-required-features = ["progress_bar"]
+required-features = ["progress_bar", "webview"]
+
+[[example]]
+name = "bwebview-background"
+required-features = ["webview"]
+
+[[example]]
+name = "bwebview-fullscreen"
+required-features = ["webview"]
+
+[[example]]
+name = "bwebview-multi-monitor"
+required-features = ["webview"]
+
+[[example]]
+name = "bwebview-multi-window"
+required-features = ["webview"]
+
+[[example]]
+name = "bwebview-simple"
+required-features = ["webview"]

@@ -194,6 +194,29 @@ impl NativeMenuItem {
         self.accelerator(NativeAccelerator::command(key))
     }
 
+
+    #[cfg(feature = "menu")]
+    fn from_role(role: crate::MenuItemRole) -> Self {
+        use crate::MenuItemRole::*;
+        match role {
+            About => Self::new("About", MenuItemAction::About),
+            Hide => Self::new("Hide", MenuItemAction::Hide).command("h"),
+            HideOthers => Self::new("Hide Others", MenuItemAction::HideOthers),
+            ShowAll => Self::new("Show All", MenuItemAction::ShowAll),
+            Quit => Self::new("Quit", MenuItemAction::Terminate).command("q"),
+            Close => Self::new("Close", MenuItemAction::Close).command("w"),
+            Undo => Self::new("Undo", MenuItemAction::Undo).command("z"),
+            Redo => Self::new("Redo", MenuItemAction::Redo).accelerator(NativeAccelerator { modifiers: NS_EVENT_MODIFIER_FLAG_COMMAND | NS_EVENT_MODIFIER_FLAG_SHIFT, key: "z" }),
+            Cut => Self::new("Cut", MenuItemAction::Cut).command("x"),
+            Copy => Self::new("Copy", MenuItemAction::Copy).command("c"),
+            Paste => Self::new("Paste", MenuItemAction::Paste).command("v"),
+            Delete => Self::new("Delete", MenuItemAction::Delete),
+            SelectAll => Self::new("Select All", MenuItemAction::SelectAll).command("a"),
+            Minimize => Self::new("Minimize", MenuItemAction::Minimize).command("m"),
+            Zoom => Self::new("Zoom", MenuItemAction::Zoom),
+        }
+    }
+
     /// Creates the NSMenuItem carrying this item's title, accelerator and target action
     unsafe fn create_native(self, app_delegate: *mut Object) -> *mut Object {
         let native_item: *mut Object = unsafe { msg_send![class!(NSMenuItem), new] };
@@ -396,7 +419,7 @@ impl MenuBar {
                         .command("q"),
                 ),
             Menu::new("File", MenuRole::Normal)
-                .item(NativeMenuItem::new("Close Window", MenuItemAction::Close).command("w")),
+                .item(NativeMenuItem::new("Close", MenuItemAction::Close).command("w")),
             Menu::new("Edit", MenuRole::Normal)
                 .item(NativeMenuItem::new("Undo", MenuItemAction::Undo).command("z"))
                 .item(
@@ -500,6 +523,21 @@ impl MenuBar {
                             self.0[menu_index]
                                 .entries
                                 .insert(insertion_index, MenuEntry::Item(item));
+                            insertion_index += 1;
+                        }
+                    }
+                    crate::MenuBuilderEntry::Role(role) => {
+                        let item = NativeMenuItem::from_role(role);
+                        if let Some(accelerator) = item.accelerator {
+                            self.clear_shortcut(accelerator);
+                        }
+                        let existing = self.0[menu_index].entries.iter().position(|entry| {
+                            matches!(entry, MenuEntry::Item(existing) if existing.title == item.title)
+                        });
+                        if let Some(index) = existing {
+                            self.0[menu_index].entries[index] = MenuEntry::Item(item);
+                        } else {
+                            self.0[menu_index].entries.insert(insertion_index, MenuEntry::Item(item));
                             insertion_index += 1;
                         }
                     }

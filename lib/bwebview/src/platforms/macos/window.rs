@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::Cell;
 use std::ptr::null_mut;
 
 use objc2::runtime::{AnyObject as Object, Bool};
@@ -32,6 +33,55 @@ define_class!(
         }
     }
 );
+
+struct ThemeAwareViewIvars {
+    theme: Cell<i64>,
+}
+
+define_class!(
+    #[unsafe(super(NSView))]
+    #[ivars = ThemeAwareViewIvars]
+    struct ThemeAwareView;
+
+    impl ThemeAwareView {
+        #[unsafe(method(viewDidChangeEffectiveAppearance))]
+        fn _view_did_change_effective_appearance(&self) {
+            let view = self as *const ThemeAwareView as *mut Object;
+            let old_theme = self.ivars().theme.get();
+            // A zero tag means the window has an explicit appearance or has
+            // not completed initialization yet.
+            if old_theme == 0 {
+                return;
+            }
+            let theme = effective_theme(view);
+            let new_theme = theme_tag(theme);
+            if new_theme != old_theme {
+                self.ivars().theme.set(new_theme);
+                send_event(crate::Event::Window(WindowEvent::ThemeChange(theme)));
+                let _: () = unsafe { msg_send![view, setNeedsDisplay:Bool::YES] };
+            }
+        }
+    }
+);
+
+fn effective_theme(object: *mut Object) -> Theme {
+    unsafe {
+        let appearance: *mut Object = msg_send![object, effectiveAppearance];
+        let name: NSString = msg_send![appearance, name];
+        if name.to_string().contains("Dark") {
+            Theme::Dark
+        } else {
+            Theme::Light
+        }
+    }
+}
+
+const fn theme_tag(theme: Theme) -> i64 {
+    match theme {
+        Theme::Light => 1,
+        Theme::Dark => 2,
+    }
+}
 
 // MARK: WindowDelegate
 define_class!(
@@ -259,6 +309,11 @@ impl PlatformWindow {
             let window: *mut Object = msg_send![class!(NSWindow), alloc];
             let window: *mut Object = msg_send![window, initWithContentRect:NSRect::new(NSPoint::new(0.0, 0.0), window_rect.size),
                 styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:false];
+            let content_view: *mut Object = msg_send![ThemeAwareView::class(), alloc];
+            let content_view: *mut Object = msg_send![content_view, initWithFrame:NSRect::new(NSPoint::new(0.0, 0.0), window_rect.size)];
+            let _: () = msg_send![content_view, setAutoresizingMask:NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
+            let _: () = msg_send![window, setContentView:content_view];
+            let _: () = msg_send![content_view, release];
             let _: () = msg_send![window, setFrameOrigin:window_rect.origin];
             let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title)];
             if builder.should_fullscreen {
@@ -299,6 +354,15 @@ impl PlatformWindow {
             }
             window
         };
+
+        if builder.theme.is_none() {
+            let content_view: *mut Object = unsafe { msg_send![window, contentView] };
+            let content_view = unsafe { &*(content_view as *const ThemeAwareView) };
+            content_view
+                .ivars()
+                .theme
+                .set(theme_tag(effective_theme(window)));
+        }
 
         window_data.window = window;
         if !builder.should_fullscreen
@@ -363,6 +427,9 @@ impl crate::WindowInterface for PlatformWindow {
 
     fn set_theme(&mut self, theme: Theme) {
         unsafe {
+            let content_view: *mut Object = msg_send![self.0.window, contentView];
+            let content_view = &*(content_view as *const ThemeAwareView);
+            content_view.ivars().theme.set(0);
             let appearance: *mut Object = msg_send![class!(NSAppearance), appearanceNamed:match theme {
                 Theme::Light => NSAppearanceNameAqua,
                 Theme::Dark => NSAppearanceNameDarkAqua,
@@ -378,6 +445,21 @@ impl crate::WindowInterface for PlatformWindow {
                 green:((color >> 8) & 0xFF) as f64 / 255.0,
                 blue:(color & 0xFF) as f64 / 255.0, alpha:1.0];
             let _: () = msg_send![self.0.window, setBackgroundColor:color_obj];
+        }
+    }
+
+    fn set_cursor(&mut self, cursor: crate::CursorIcon) {
+        use crate::CursorIcon;
+        unsafe {
+            let cursor: *mut Object = match cursor {
+                CursorIcon::Default => msg_send![class!(NSCursor), arrowCursor],
+                CursorIcon::Pointer => msg_send![class!(NSCursor), pointingHandCursor],
+                CursorIcon::Crosshair => msg_send![class!(NSCursor), crosshairCursor],
+                CursorIcon::Text => msg_send![class!(NSCursor), IBeamCursor],
+                CursorIcon::Grab => msg_send![class!(NSCursor), openHandCursor],
+                CursorIcon::Grabbing => msg_send![class!(NSCursor), closedHandCursor],
+            };
+            let _: () = msg_send![cursor, set];
         }
     }
 

@@ -9,20 +9,19 @@ use std::mem::{self, size_of};
 use std::process::exit;
 use std::ptr::{null, null_mut};
 
+#[cfg(feature = "webview")]
 use super::webview2::*;
 use super::win32::*;
 use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
 
 pub(super) static mut APP_ID: Option<AppId> = None;
-static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
+static mut EVENT_HANDLER: Option<crate::EventHandler> = None;
 pub(super) static mut FIRST_HWND: Option<HWND> = None;
 #[cfg(feature = "progress_bar")]
 pub(super) static mut TASKBAR_BUTTON_CREATED: u32 = 0;
 
 // MARK: EventLoop
-pub(crate) struct PlatformEventLoop {
-    theme: Theme,
-}
+pub(crate) struct PlatformEventLoop;
 
 impl PlatformEventLoop {
     pub(crate) fn new(builder: EventLoopBuilder) -> Self {
@@ -63,9 +62,7 @@ impl PlatformEventLoop {
 
             enable_high_dpi_awareness();
 
-            Self {
-                theme: system_theme(),
-            }
+            Self
         }
     }
 }
@@ -116,7 +113,7 @@ pub(super) fn system_theme() -> Theme {
 
 impl crate::EventLoopInterface for PlatformEventLoop {
     fn theme(&self) -> Theme {
-        self.theme
+        system_theme()
     }
 
     fn primary_monitor(&self) -> PlatformMonitor {
@@ -148,7 +145,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         }
     }
 
-    fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
+    fn run(self, event_handler: impl for<'a> FnMut(Event<'a>) + 'static) -> ! {
         unsafe {
             EVENT_HANDLER = Some(Box::new(event_handler));
         }
@@ -170,7 +167,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
     }
 }
 
-pub(crate) fn send_event(event: Event) {
+pub(crate) fn send_event(event: Event<'_>) {
     unsafe {
         #[allow(static_mut_refs)]
         if let Some(handler) = &mut EVENT_HANDLER {
@@ -191,9 +188,10 @@ impl PlatformEventLoopProxy {
 }
 
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
-    fn send_user_event(&self, data: String) {
+    fn send_user_event(&self, data: crate::UserEvent) {
         if let Some(hwnd) = unsafe { FIRST_HWND } {
-            let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
+            let ptr =
+                Box::leak(Box::new(Event::UserEvent(data))) as *mut Event<'static> as *mut c_void;
             unsafe { PostMessageW(hwnd, WM_SEND_MESSAGE, ptr as WPARAM, 0) };
         }
     }

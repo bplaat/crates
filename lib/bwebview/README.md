@@ -1,6 +1,40 @@
 # Bassie Webview Rust library
 
-A cross-platform webview library for Rust with minimal dependencies
+A cross-platform native window library for Rust with Webview and Canvas views.
+
+## Canvas
+
+`Canvas` provides an HTML5 Canvas 2D-inspired API using Cairo on GTK, Core Graphics on macOS,
+and Direct2D/DirectWrite on Windows. Drawing is delivered through the existing event loop:
+
+```rust,no_run
+use bwebview::{CanvasBuilder, Color, CanvasEvent, Event, EventLoop, WindowBuilder};
+
+let event_loop = EventLoop::new();
+let window = WindowBuilder::new().title("Canvas").build();
+let mut canvas = CanvasBuilder::new(&window).build();
+event_loop.run(move |event| {
+    if let Event::Canvas(CanvasEvent::Draw(context)) = event {
+        // Frame dimensions are logical pixels; scale_factor() reports native pixels per point.
+        context.begin_path();
+        context.round_rect(20.0, 20.0, context.width() - 40.0, 120.0, 16.0);
+        context.set_fill_style(Color::rgb(30, 120, 80));
+        context.fill();
+        canvas.request_animation_frame();
+    }
+});
+```
+
+The API also includes path primitives, text, transforms, typed user-event payloads, standard macOS
+menu roles, and window cursor selection. Mouse and keyboard input is reported through DOM-style
+`WindowEvent` variants. Run the complete native Reversi example with
+`cargo run -p bwebview --example bwebview-canvas-reversi --features menu`.
+For a visual tour of every drawing primitive and animation, run
+`cargo run -p bwebview --example bwebview-canvas-showcase`.
+
+Application windows that follow the system appearance receive `WindowEvent::ThemeChange(Theme)` when the
+desktop switches between light and dark mode. Explicit themes set through `WindowBuilder::theme`
+or `Window::set_theme` remain fixed.
 
 ## Linux runtime dependencies
 
@@ -40,11 +74,11 @@ sudo dnf install gtk3 webkit2gtk4.0
 
 ## Platforms
 
-| Platform    | Backend                        | Notes                                     |
-| ----------- | ------------------------------ | ----------------------------------------- |
-| Windows     | WebView2 (Chromium/Edge)       | Requires WebView2 Runtime to be installed |
-| macOS       | WKWebView (WebKit)             | macOS 11.0+                               |
-| Linux/other | WebKitGTK (GTK 3 + WebKit2GTK) | See GTK tiers below                       |
+| Platform    | Webview backend                | Canvas backend           | Notes                                     |
+| ----------- | ------------------------------ | ------------------------ | ----------------------------------------- |
+| Windows     | WebView2 (Chromium/Edge)       | Direct2D + DirectWrite   | Requires WebView2 only for Webview builds |
+| macOS       | WKWebView (WebKit)             | Core Graphics + AppKit   | macOS 11.0+                               |
+| Linux/other | WebKitGTK (GTK 3 + WebKit2GTK) | GTK 3 + Cairo            | See GTK tiers below                       |
 
 ### Linux / GTK tiers
 
@@ -80,6 +114,8 @@ The Linux backend automatically selects the best available WebKitGTK version at 
 
 ## Features
 
+- **canvas** Enables the native Canvas view and drawing backend (default).
+- **webview** Enables the native Webview view and web-engine backend (default).
 - **log** Enables logging support by forwarding `console.*` calls to the `log` crate (default).
 - **remember_window_state** Adds remembers window position and size between launches options (default).
 - **custom_protocol** Adds support for custom protocols, allowing you to serve content from custom URL schemes.

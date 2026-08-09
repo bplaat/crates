@@ -15,12 +15,10 @@ use super::headers::*;
 use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
 
 // MARK: EventLoop
-pub(crate) struct PlatformEventLoop {
-    theme: Theme,
-}
+pub(crate) struct PlatformEventLoop;
 
 pub(super) static mut APP_ID: Option<AppId> = None;
-static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
+static mut EVENT_HANDLER: Option<crate::EventHandler> = None;
 
 impl PlatformEventLoop {
     pub(crate) fn new(builder: EventLoopBuilder) -> Self {
@@ -76,14 +74,12 @@ impl PlatformEventLoop {
                 gtk_window_set_default_icon_name(app_id.as_ptr());
             }
         }
-        Self {
-            theme: system_theme(),
-        }
+        Self
     }
 }
 
 // MARK: Theme
-fn system_theme() -> Theme {
+pub(super) fn system_theme() -> Theme {
     let settings = unsafe { gtk_settings_get_default() };
     let mut prefer_dark = 0i32;
     let mut theme_name: *mut c_char = null_mut();
@@ -116,7 +112,7 @@ fn system_theme() -> Theme {
 
 impl crate::EventLoopInterface for PlatformEventLoop {
     fn theme(&self) -> Theme {
-        self.theme
+        system_theme()
     }
 
     fn primary_monitor(&self) -> PlatformMonitor {
@@ -153,7 +149,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         }
     }
 
-    fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
+    fn run(self, event_handler: impl for<'a> FnMut(Event<'a>) + 'static) -> ! {
         unsafe { EVENT_HANDLER = Some(Box::new(event_handler)) };
 
         // Start event loop
@@ -166,7 +162,7 @@ impl crate::EventLoopInterface for PlatformEventLoop {
     }
 }
 
-pub(super) fn send_event(event: Event) {
+pub(super) fn send_event(event: Event<'_>) {
     unsafe {
         #[allow(static_mut_refs)]
         if let Some(handler) = &mut EVENT_HANDLER {
@@ -185,14 +181,14 @@ impl PlatformEventLoopProxy {
 }
 
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
-    fn send_user_event(&self, data: String) {
-        let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
+    fn send_user_event(&self, data: crate::UserEvent) {
+        let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event<'static> as *mut c_void;
         unsafe { g_idle_add(send_event_callback, ptr) };
     }
 }
 
 extern "C" fn send_event_callback(ptr: *mut c_void) -> i32 {
-    let event = unsafe { Box::from_raw(ptr as *mut Event) };
+    let event = unsafe { Box::from_raw(ptr as *mut Event<'static>) };
     send_event(*event);
     0
 }

@@ -26,12 +26,14 @@ fn main() {
     println!("cargo::rustc-check-cfg=cfg(gtk3_20)");
     println!("cargo::rustc-check-cfg=cfg(gtk3_22)");
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
+    let has_canvas = env::var_os("CARGO_FEATURE_CANVAS").is_some();
+    let has_webview = env::var_os("CARGO_FEATURE_WEBVIEW").is_some();
     if target_os != "macos" && target_os != "windows" {
-        link_gtk_libraries();
+        link_gtk_libraries(has_canvas, has_webview);
     }
 
     // Windows requires generating bindings from the WebView2 winmd and linking with WebView2Loader
-    if target_os == "windows" {
+    if target_os == "windows" && has_webview {
         generate_webview2_bindings(&manifest_dir, &out_dir);
 
         // Link with the correct WebView2Loader library based on architecture
@@ -102,7 +104,7 @@ fn compile_example_manifest() {
         .expect("Failed to compile bwebview example manifest");
 }
 
-fn link_gtk_libraries() {
+fn link_gtk_libraries(has_canvas: bool, has_webview: bool) {
     println!("cargo::rerun-if-env-changed=BWEBVIEW_LIB_DIR");
 
     let mut search_dirs = Vec::new();
@@ -132,6 +134,9 @@ fn link_gtk_libraries() {
     }
     link_library(&gtk);
     link_library(&gdk);
+    if has_canvas {
+        link_library(&require_library(&search_dirs, "cairo"));
+    }
 
     if library_has_symbol(&gtk, b"gtk_file_chooser_native_new") {
         println!("cargo::rustc-cfg=gtk3_20");
@@ -140,6 +145,9 @@ fn link_gtk_libraries() {
         println!("cargo::rustc-cfg=gtk3_22");
     }
 
+    if !has_webview {
+        return;
+    }
     if let Some(webkit) = find_library(&search_dirs, "webkit2gtk-4.1") {
         link_library(&webkit);
         link_library(&require_library(&search_dirs, "javascriptcoregtk-4.1"));
