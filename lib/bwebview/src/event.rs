@@ -8,7 +8,7 @@ use std::cell::Cell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use crate::{LogicalPoint, LogicalSize};
+use crate::{LogicalPoint, LogicalSize, Theme};
 
 /// A close request that can be prevented by the event handler
 #[derive(Clone)]
@@ -37,6 +37,8 @@ pub enum WindowEvent {
     Move(LogicalPoint),
     /// Window resize
     Resize(LogicalSize),
+    /// The effective light or dark system appearance changed.
+    ThemeChange(Theme),
     /// Window close requested; closes normally unless prevented
     CloseRequested(CloseRequest),
     /// File dropped

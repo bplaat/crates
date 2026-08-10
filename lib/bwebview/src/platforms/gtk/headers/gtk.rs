@@ -108,8 +108,8 @@ unsafe extern "C" {
 // MARK: GTK File Chooser
 pub(crate) const GTK_FILE_CHOOSER_ACTION_OPEN: i32 = 0;
 pub(crate) const GTK_FILE_CHOOSER_ACTION_SAVE: i32 = 1;
-pub(crate) const GTK_RESPONSE_ACCEPT: i32 = -3;
 pub(crate) const GTK_RESPONSE_CANCEL: i32 = -6;
+pub(crate) const GTK_RESPONSE_ACCEPT: i32 = -3;
 #[repr(C)]
 pub(crate) struct GtkFileFilter([u8; 0]);
 

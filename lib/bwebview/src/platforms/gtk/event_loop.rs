@@ -12,15 +12,14 @@ use std::ptr::{null, null_mut};
 use std::{env, fs, iter};
 
 use super::headers::*;
-use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
+use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WindowEvent};
 
 // MARK: EventLoop
-pub(crate) struct PlatformEventLoop {
-    theme: Theme,
-}
+pub(crate) struct PlatformEventLoop;
 
 pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
+static mut LAST_SYSTEM_THEME: Option<Theme> = None;
 
 impl PlatformEventLoop {
     pub(crate) fn new(builder: EventLoopBuilder) -> Self {
@@ -75,23 +74,20 @@ impl PlatformEventLoop {
             if let Some(ref app_id) = app_id_name {
                 gtk_window_set_default_icon_name(app_id.as_ptr());
             }
+
+            LAST_SYSTEM_THEME = Some(system_theme());
         }
-        Self {
-            theme: system_theme(),
-        }
+        Self
     }
 }
 
 // MARK: Theme
-fn system_theme() -> Theme {
+pub(super) fn system_theme() -> Theme {
     let settings = unsafe { gtk_settings_get_default() };
-    let mut prefer_dark = 0i32;
     let mut theme_name: *mut c_char = null_mut();
     unsafe {
         g_object_get(
             settings as *mut GObject,
-            c"gtk-application-prefer-dark-theme".as_ptr(),
-            &mut prefer_dark,
             c"gtk-theme-name".as_ptr(),
             &mut theme_name,
             null::<c_void>(),
@@ -107,7 +103,7 @@ fn system_theme() -> Theme {
         unsafe { g_free(theme_name as *mut c_void) };
         is_dark
     };
-    if prefer_dark != 0 || theme_name_is_dark {
+    if theme_name_is_dark {
         Theme::Dark
     } else {
         Theme::Light
@@ -116,7 +112,7 @@ fn system_theme() -> Theme {
 
 impl crate::EventLoopInterface for PlatformEventLoop {
     fn theme(&self) -> Theme {
-        self.theme
+        system_theme()
     }
 
     fn primary_monitor(&self) -> PlatformMonitor {
@@ -172,6 +168,20 @@ pub(super) fn send_event(event: Event) {
         if let Some(handler) = &mut EVENT_HANDLER {
             handler(event);
         }
+    }
+}
+
+pub(super) fn send_theme_change(theme: Theme) {
+    unsafe {
+        #[allow(static_mut_refs)]
+        let Some(handler) = &mut EVENT_HANDLER else {
+            return;
+        };
+        match LAST_SYSTEM_THEME {
+            Some(current_theme) if current_theme == theme => return,
+            _ => LAST_SYSTEM_THEME = Some(theme),
+        }
+        handler(Event::Window(WindowEvent::ThemeChange(theme)));
     }
 }
 

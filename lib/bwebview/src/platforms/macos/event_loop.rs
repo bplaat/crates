@@ -162,7 +162,7 @@ fn system_theme() -> Theme {
 
 impl crate::EventLoopInterface for PlatformEventLoop {
     fn theme(&self) -> Theme {
-        self.theme
+        system_theme()
     }
 
     fn primary_monitor(&self) -> PlatformMonitor {
@@ -205,14 +205,37 @@ impl crate::EventLoopInterface for PlatformEventLoop {
 }
 
 pub(crate) fn send_event(event: Event) {
-    let _self = unsafe {
+    let event_loop = unsafe {
         let app_delegate: *mut Object = msg_send![NSApp, delegate];
         let delegate_ref = &*(app_delegate as *const AppDelegate);
-        &mut *delegate_ref.ivars().event_loop.get()
+        delegate_ref.ivars().event_loop.get()
+    };
+
+    let Some(_self) = (unsafe { event_loop.as_mut() }) else {
+        return;
     };
 
     if let Some(handler) = _self.event_handler.as_mut() {
         handler(event);
+    }
+}
+
+pub(super) fn send_theme_change(theme: Theme) {
+    let event_loop = unsafe {
+        let app_delegate: *mut Object = msg_send![NSApp, delegate];
+        let delegate_ref = &*(app_delegate as *const AppDelegate);
+        delegate_ref.ivars().event_loop.get()
+    };
+
+    let Some(_self) = (unsafe { event_loop.as_mut() }) else {
+        return;
+    };
+    if _self.theme == theme {
+        return;
+    }
+    _self.theme = theme;
+    if let Some(handler) = _self.event_handler.as_mut() {
+        handler(Event::Window(WindowEvent::ThemeChange(theme)));
     }
 }
 

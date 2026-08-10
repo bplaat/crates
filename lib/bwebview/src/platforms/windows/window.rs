@@ -11,7 +11,9 @@ use std::ptr::{null, null_mut};
 
 #[cfg(feature = "progress_bar")]
 use super::event_loop::TASKBAR_BUTTON_CREATED;
-use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event, system_theme};
+use super::event_loop::{
+    APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event, send_theme_change, system_theme,
+};
 #[cfg(feature = "file_drop")]
 use super::file_drop::handle_file_drop;
 #[cfg(feature = "progress_bar")]
@@ -29,6 +31,8 @@ pub(super) struct WindowData {
     pub(super) dpi: u32,
     pub(super) min_size: Option<LogicalSize>,
     pub(super) background_color: Option<u32>,
+    pub(super) theme: Theme,
+    pub(super) follows_system_theme: bool,
     #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
     #[cfg(feature = "file_drop")]
@@ -90,6 +94,8 @@ impl PlatformWindow {
             dpi: initial_dpi,
             min_size: builder.min_size,
             background_color: builder.background_color,
+            theme: builder.theme.unwrap_or_else(system_theme),
+            follows_system_theme: builder.theme.is_none(),
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
             #[cfg(feature = "file_drop")]
@@ -327,6 +333,8 @@ impl crate::WindowInterface for PlatformWindow {
     }
 
     fn set_theme(&mut self, theme: Theme) {
+        self.0.theme = theme;
+        self.0.follows_system_theme = false;
         unsafe { set_titlebar_theme(self.0.hwnd, theme) }
     }
 
@@ -399,6 +407,16 @@ unsafe extern "system" fn window_proc(
             } else {
                 0
             }
+        }
+        WM_SETTINGCHANGE | WM_THEMECHANGED if _self.follows_system_theme => {
+            let theme = system_theme();
+            if theme != _self.theme {
+                _self.theme = theme;
+                unsafe { set_titlebar_theme(hwnd, theme) };
+                send_theme_change(theme);
+                unsafe { InvalidateRect(hwnd, null_mut(), TRUE) };
+            }
+            0
         }
         WM_MOVE => {
             let x = l_param as u16 as i32;

@@ -11,18 +11,17 @@ use std::ptr::{null, null_mut};
 
 use super::webview2::*;
 use super::win32::*;
-use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
+use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WindowEvent};
 
 pub(super) static mut APP_ID: Option<AppId> = None;
 static mut EVENT_HANDLER: Option<Box<dyn FnMut(Event) + 'static>> = None;
+static mut LAST_SYSTEM_THEME: Option<Theme> = None;
 pub(super) static mut FIRST_HWND: Option<HWND> = None;
 #[cfg(feature = "progress_bar")]
 pub(super) static mut TASKBAR_BUTTON_CREATED: u32 = 0;
 
 // MARK: EventLoop
-pub(crate) struct PlatformEventLoop {
-    theme: Theme,
-}
+pub(crate) struct PlatformEventLoop;
 
 impl PlatformEventLoop {
     pub(crate) fn new(builder: EventLoopBuilder) -> Self {
@@ -62,10 +61,9 @@ impl PlatformEventLoop {
             }
 
             enable_high_dpi_awareness();
+            LAST_SYSTEM_THEME = Some(system_theme());
 
-            Self {
-                theme: system_theme(),
-            }
+            Self
         }
     }
 }
@@ -116,7 +114,7 @@ pub(super) fn system_theme() -> Theme {
 
 impl crate::EventLoopInterface for PlatformEventLoop {
     fn theme(&self) -> Theme {
-        self.theme
+        system_theme()
     }
 
     fn primary_monitor(&self) -> PlatformMonitor {
@@ -176,6 +174,20 @@ pub(crate) fn send_event(event: Event) {
         if let Some(handler) = &mut EVENT_HANDLER {
             handler(event);
         }
+    }
+}
+
+pub(super) fn send_theme_change(theme: Theme) {
+    unsafe {
+        #[allow(static_mut_refs)]
+        let Some(handler) = &mut EVENT_HANDLER else {
+            return;
+        };
+        match LAST_SYSTEM_THEME {
+            Some(current_theme) if current_theme == theme => return,
+            _ => LAST_SYSTEM_THEME = Some(theme),
+        }
+        handler(Event::Window(WindowEvent::ThemeChange(theme)));
     }
 }
 

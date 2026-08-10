@@ -14,8 +14,8 @@ use std::ffi::{c_char, c_void};
 
 // MARK: Base types
 pub(crate) type BOOL = i32;
-pub(crate) const TRUE: BOOL = 1;
 pub(crate) const FALSE: BOOL = 0;
+pub(crate) const TRUE: BOOL = 1;
 pub(crate) type w_char = u16;
 pub(crate) type HANDLE = *mut c_void;
 pub(crate) type HKEY = HANDLE;
@@ -117,9 +117,9 @@ pub(crate) const TDCBF_OK_BUTTON: u32 = 0x0001;
 pub(crate) const TDCBF_YES_BUTTON: u32 = 0x0002;
 pub(crate) const TDCBF_NO_BUTTON: u32 = 0x0004;
 pub(crate) const TDCBF_CANCEL_BUTTON: u32 = 0x0008;
-pub(crate) const TD_WARNING_ICON: *const w_char = u16::MAX as usize as *const w_char;
-pub(crate) const TD_ERROR_ICON: *const w_char = (u16::MAX - 1) as usize as *const w_char;
 pub(crate) const TD_INFORMATION_ICON: *const w_char = (u16::MAX - 2) as usize as *const w_char;
+pub(crate) const TD_ERROR_ICON: *const w_char = (u16::MAX - 1) as usize as *const w_char;
+pub(crate) const TD_WARNING_ICON: *const w_char = u16::MAX as usize as *const w_char;
 
 #[repr(C)]
 pub(crate) struct TASKDIALOG_BUTTON {
@@ -239,10 +239,10 @@ pub(crate) struct WINDOWPLACEMENT {
     pub(crate) rcNormalPosition: RECT,
 }
 
-pub(crate) const WS_POPUP: u32 = 0x80000000;
+pub(crate) const WS_MAXIMIZEBOX: u32 = 0x00010000;
 pub(crate) const WS_THICKFRAME: u32 = 0x00040000;
 pub(crate) const WS_OVERLAPPEDWINDOW: u32 = 0x00CF0000;
-pub(crate) const WS_MAXIMIZEBOX: u32 = 0x00010000;
+pub(crate) const WS_POPUP: u32 = 0x80000000;
 
 pub(crate) const CW_USEDEFAULT: i32 = 0x80000000u32 as i32;
 
@@ -252,10 +252,12 @@ pub(crate) const WM_MOVE: u32 = 0x0003;
 pub(crate) const WM_SIZE: u32 = 0x0005;
 pub(crate) const WM_CLOSE: u32 = 0x0010;
 pub(crate) const WM_ERASEBKGND: u32 = 0x0014;
+pub(crate) const WM_SETTINGCHANGE: u32 = 0x001A;
 pub(crate) const WM_GETMINMAXINFO: u32 = 0x0024;
 pub(crate) const WM_NCCREATE: u32 = 0x0081;
 pub(crate) const WM_DROPFILES: u32 = 0x0233;
 pub(crate) const WM_DPICHANGED: u32 = 0x02E0;
+pub(crate) const WM_THEMECHANGED: u32 = 0x031A;
 pub(crate) const WM_USER: u32 = 0x0400;
 
 pub(crate) const SW_SHOWNORMAL: i32 = 1;
@@ -282,8 +284,8 @@ pub(crate) const SM_CXSCREEN: i32 = 0;
 pub(crate) const SM_CYSCREEN: i32 = 1;
 pub(crate) const COLOR_WINDOW: i32 = 5;
 
-pub(crate) const GWL_STYLE: i32 = -16;
 pub(crate) const GWL_USERDATA: i32 = -21;
+pub(crate) const GWL_STYLE: i32 = -16;
 
 pub(crate) const SWP_NOSIZE: u32 = 0x0001;
 pub(crate) const SWP_NOMOVE: u32 = 0x0002;
@@ -489,8 +491,8 @@ pub(crate) struct STATSTG {
 }
 
 pub(crate) const S_OK: HRESULT = 0;
-pub(crate) const E_NOINTERFACE: HRESULT = 0x80004002u32 as HRESULT;
 pub(crate) const E_NOTIMPL: HRESULT = 0x80004001u32 as HRESULT;
+pub(crate) const E_NOINTERFACE: HRESULT = 0x80004002u32 as HRESULT;
 pub(crate) const DRAGDROP_E_INVALIDHWND: HRESULT = 0x80040102u32 as HRESULT;
 pub(crate) const CF_HDROP: u16 = 15;
 pub(crate) const DVASPECT_CONTENT: u32 = 1;
