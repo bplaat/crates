@@ -15,7 +15,8 @@ use super::event_loop::{allow_termination_if_last_window, send_event, send_theme
 #[cfg(feature = "file_drop")]
 use super::file_drop::{perform_file_drop, register_dragged_types};
 use crate::{
-    CloseRequest, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent,
+    CloseRequest, Cursor, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder,
+    WindowEvent,
 };
 
 define_class!(
@@ -36,6 +37,7 @@ define_class!(
 
 struct ThemeAwareViewIvars {
     theme: Cell<i64>,
+    cursor: Cell<i64>,
 }
 
 define_class!(
@@ -61,6 +63,14 @@ define_class!(
                 let _: () = unsafe { msg_send![view, setNeedsDisplay:Bool::YES] };
             }
         }
+
+        #[unsafe(method(resetCursorRects))]
+        fn _reset_cursor_rects(&self) {
+            let view = self as *const ThemeAwareView as *mut Object;
+            let bounds: NSRect = unsafe { msg_send![view, bounds] };
+            let cursor = ns_cursor(cursor_from_tag(self.ivars().cursor.get()));
+            let _: () = unsafe { msg_send![view, addCursorRect:bounds, cursor:cursor] };
+        }
     }
 );
 
@@ -80,6 +90,41 @@ const fn theme_tag(theme: Theme) -> i64 {
     match theme {
         Theme::Light => 1,
         Theme::Dark => 2,
+    }
+}
+
+const fn cursor_tag(cursor: Cursor) -> i64 {
+    match cursor {
+        Cursor::Default => 0,
+        Cursor::Pointer => 1,
+        Cursor::Crosshair => 2,
+        Cursor::Text => 3,
+        Cursor::Grab => 4,
+        Cursor::Grabbing => 5,
+    }
+}
+
+const fn cursor_from_tag(tag: i64) -> Cursor {
+    match tag {
+        1 => Cursor::Pointer,
+        2 => Cursor::Crosshair,
+        3 => Cursor::Text,
+        4 => Cursor::Grab,
+        5 => Cursor::Grabbing,
+        _ => Cursor::Default,
+    }
+}
+
+fn ns_cursor(cursor: Cursor) -> *mut Object {
+    unsafe {
+        match cursor {
+            Cursor::Default => msg_send![class!(NSCursor), arrowCursor],
+            Cursor::Pointer => msg_send![class!(NSCursor), pointingHandCursor],
+            Cursor::Crosshair => msg_send![class!(NSCursor), crosshairCursor],
+            Cursor::Text => msg_send![class!(NSCursor), IBeamCursor],
+            Cursor::Grab => msg_send![class!(NSCursor), openHandCursor],
+            Cursor::Grabbing => msg_send![class!(NSCursor), closedHandCursor],
+        }
     }
 }
 
@@ -445,6 +490,16 @@ impl crate::WindowInterface for PlatformWindow {
                 green:((color >> 8) & 0xFF) as f64 / 255.0,
                 blue:(color & 0xFF) as f64 / 255.0, alpha:1.0];
             let _: () = msg_send![self.0.window, setBackgroundColor:color_obj];
+        }
+    }
+
+    fn set_cursor(&mut self, cursor: Cursor) {
+        unsafe {
+            let content_view: *mut Object = msg_send![self.0.window, contentView];
+            let theme_view = &*(content_view as *const ThemeAwareView);
+            theme_view.ivars().cursor.set(cursor_tag(cursor));
+            let _: () = msg_send![self.0.window, invalidateCursorRectsForView:content_view];
+            let _: () = msg_send![ns_cursor(cursor), set];
         }
     }
 

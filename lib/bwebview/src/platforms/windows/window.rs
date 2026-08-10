@@ -33,6 +33,7 @@ pub(super) struct WindowData {
     pub(super) background_color: Option<u32>,
     pub(super) theme: Theme,
     pub(super) follows_system_theme: bool,
+    pub(super) cursor: HCURSOR,
     #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
     #[cfg(feature = "file_drop")]
@@ -96,6 +97,7 @@ impl PlatformWindow {
             background_color: builder.background_color,
             theme: builder.theme.unwrap_or_else(system_theme),
             follows_system_theme: builder.theme.is_none(),
+            cursor: unsafe { LoadCursorW(null_mut(), IDC_ARROW) },
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
             #[cfg(feature = "file_drop")]
@@ -343,6 +345,20 @@ impl crate::WindowInterface for PlatformWindow {
         unsafe { InvalidateRect(self.0.hwnd, null_mut(), TRUE) };
     }
 
+    fn set_cursor(&mut self, cursor: crate::Cursor) {
+        use crate::Cursor;
+
+        let resource = match cursor {
+            Cursor::Default => IDC_ARROW,
+            Cursor::Pointer => IDC_HAND,
+            Cursor::Crosshair => IDC_CROSS,
+            Cursor::Text => IDC_IBEAM,
+            Cursor::Grab | Cursor::Grabbing => IDC_SIZEALL,
+        };
+        self.0.cursor = unsafe { LoadCursorW(null_mut(), resource) };
+        unsafe { SetCursor(self.0.cursor) };
+    }
+
     #[cfg(feature = "progress_bar")]
     fn windows_set_progress_bar(&mut self, progress: Option<f32>, state: WindowsProgressBarState) {
         self.0.progress_bar.set(self.0.hwnd, progress, state);
@@ -407,6 +423,10 @@ unsafe extern "system" fn window_proc(
             } else {
                 0
             }
+        }
+        WM_SETCURSOR if l_param as u16 as i32 == HTCLIENT => {
+            unsafe { SetCursor(_self.cursor) };
+            1
         }
         WM_SETTINGCHANGE | WM_THEMECHANGED if _self.follows_system_theme => {
             let theme = system_theme();

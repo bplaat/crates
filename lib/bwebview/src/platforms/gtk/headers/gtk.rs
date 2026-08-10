@@ -8,7 +8,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use super::gdk::{GdkRGBA, GdkScreen};
+use super::gdk::{GdkRGBA, GdkScreen, GdkWindow};
 use super::glib::{GError, GSList};
 
 // MARK: GTK
@@ -34,6 +34,7 @@ pub(crate) const GTK_MESSAGE_WARNING: i32 = 1;
 pub(crate) const GTK_MESSAGE_ERROR: i32 = 3;
 pub(crate) const GTK_BUTTONS_NONE: i32 = 0;
 unsafe extern "C" {
+    pub(crate) fn gtk_widget_get_window(widget: *mut GtkWidget) -> *mut GdkWindow;
     pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
     pub(crate) fn gtk_main();
     pub(crate) fn gtk_main_quit();

@@ -13,13 +13,16 @@ use super::headers::*;
 use super::progress_bar::update_progress_bar;
 #[cfg(feature = "remember_window_state")]
 use super::window_state::{load_window_state, save_window_state};
-use crate::{CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
+use crate::{
+    CloseRequest, Cursor, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent,
+};
 
 pub(super) struct WindowData {
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
     pub(super) theme: Theme,
     pub(super) follows_system_theme: bool,
+    pub(super) cursor: Cursor,
     #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
     #[cfg(feature = "file_drop")]
@@ -55,6 +58,7 @@ impl PlatformWindow {
             background_color: builder.background_color,
             theme: builder.theme.unwrap_or_else(system_theme),
             follows_system_theme: builder.theme.is_none(),
+            cursor: Cursor::Default,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
             #[cfg(feature = "file_drop")]
@@ -167,6 +171,14 @@ impl PlatformWindow {
                 null(),
                 G_CONNECT_DEFAULT,
             );
+            g_signal_connect_data(
+                window as *mut GObject,
+                c"realize".as_ptr(),
+                window_on_realize as *const c_void,
+                window_data.as_mut() as *mut _ as *const c_void,
+                null(),
+                G_CONNECT_DEFAULT,
+            );
             window
         };
 
@@ -263,10 +275,41 @@ impl crate::WindowInterface for PlatformWindow {
         }
     }
 
+    fn set_cursor(&mut self, cursor: Cursor) {
+        self.0.cursor = cursor;
+        apply_cursor(&self.0);
+    }
+
     #[cfg(feature = "progress_bar")]
     fn gtk_set_progress_bar(&mut self, progress: Option<f32>) {
         update_progress_bar(progress);
     }
+}
+
+fn apply_cursor(window: &WindowData) {
+    let name = match window.cursor {
+        Cursor::Default => c"default",
+        Cursor::Pointer => c"pointer",
+        Cursor::Crosshair => c"crosshair",
+        Cursor::Text => c"text",
+        Cursor::Grab => c"grab",
+        Cursor::Grabbing => c"grabbing",
+    };
+    unsafe {
+        let gdk_window = gtk_widget_get_window(window.window as *mut GtkWidget);
+        if gdk_window.is_null() {
+            return;
+        }
+        let cursor = gdk_cursor_new_from_name(gdk_display_get_default(), name.as_ptr());
+        gdk_window_set_cursor(gdk_window, cursor);
+        if !cursor.is_null() {
+            g_object_unref(cursor as *mut GObject);
+        }
+    }
+}
+
+extern "C" fn window_on_realize(_widget: *mut GtkWidget, data: *mut c_void) {
+    apply_cursor(unsafe { &*data.cast::<WindowData>() });
 }
 
 extern "C" fn window_on_theme_change(_widget: *mut GtkWidget, data: *mut c_void) {

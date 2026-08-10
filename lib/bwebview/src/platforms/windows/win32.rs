@@ -253,6 +253,7 @@ pub(crate) const WM_SIZE: u32 = 0x0005;
 pub(crate) const WM_CLOSE: u32 = 0x0010;
 pub(crate) const WM_ERASEBKGND: u32 = 0x0014;
 pub(crate) const WM_SETTINGCHANGE: u32 = 0x001A;
+pub(crate) const WM_SETCURSOR: u32 = 0x0020;
 pub(crate) const WM_GETMINMAXINFO: u32 = 0x0024;
 pub(crate) const WM_NCCREATE: u32 = 0x0081;
 pub(crate) const WM_DROPFILES: u32 = 0x0233;
@@ -287,6 +288,14 @@ pub(crate) const COLOR_WINDOW: i32 = 5;
 pub(crate) const GWL_USERDATA: i32 = -21;
 pub(crate) const GWL_STYLE: i32 = -16;
 
+pub(crate) const HTCLIENT: i32 = 1;
+
+pub(crate) const IDC_ARROW: *const w_char = 32512 as *const w_char;
+pub(crate) const IDC_IBEAM: *const w_char = 32513 as *const w_char;
+pub(crate) const IDC_CROSS: *const w_char = 32515 as *const w_char;
+pub(crate) const IDC_SIZEALL: *const w_char = 32646 as *const w_char;
+pub(crate) const IDC_HAND: *const w_char = 32649 as *const w_char;
+
 pub(crate) const SWP_NOSIZE: u32 = 0x0001;
 pub(crate) const SWP_NOMOVE: u32 = 0x0002;
 pub(crate) const SWP_NOZORDER: u32 = 0x0004;
@@ -295,6 +304,8 @@ pub(crate) const SWP_NOREPOSITION: u32 = 0x0200;
 
 #[link(name = "user32")]
 unsafe extern "system" {
+    pub(crate) fn LoadCursorW(instance: HMODULE, cursor_name: *const w_char) -> HCURSOR;
+    pub(crate) fn SetCursor(cursor: HCURSOR) -> HCURSOR;
     pub(crate) fn EnumChildWindows(
         hwndParent: HWND,
         lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL,

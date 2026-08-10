@@ -12,6 +12,10 @@ use std::ffi::{c_char, c_void};
 #[repr(C)]
 pub(crate) struct GdkDisplay([u8; 0]);
 #[repr(C)]
+pub(crate) struct GdkCursor([u8; 0]);
+#[repr(C)]
+pub(crate) struct GdkWindow([u8; 0]);
+#[repr(C)]
 pub(crate) struct GdkDragContext([u8; 0]);
 #[repr(C)]
 pub(crate) struct GdkRectangle {
@@ -38,6 +42,11 @@ pub(crate) struct GdkMonitor([u8; 0]);
 unsafe extern "C" {
     pub(crate) fn gdk_display_get_default() -> *mut GdkDisplay;
     pub(crate) fn gdk_display_get_name(display: *mut GdkDisplay) -> *const c_char;
+    pub(crate) fn gdk_cursor_new_from_name(
+        display: *mut GdkDisplay,
+        name: *const c_char,
+    ) -> *mut GdkCursor;
+    pub(crate) fn gdk_window_set_cursor(window: *mut GdkWindow, cursor: *mut GdkCursor);
 
     // GTK < 3.22
     pub(crate) fn gdk_screen_get_default() -> *mut GdkScreen;
