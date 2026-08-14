@@ -84,6 +84,7 @@ pub(crate) const NS_WINDOW_STYLE_MASK_TITLED: u64 = 1 << 0;
 pub(crate) const NS_WINDOW_STYLE_MASK_CLOSABLE: u64 = 1 << 1;
 pub(crate) const NS_WINDOW_STYLE_MASK_MINIATURIZABLE: u64 = 1 << 2;
 pub(crate) const NS_WINDOW_STYLE_MASK_RESIZABLE: u64 = 1 << 3;
+pub(crate) const NS_WINDOW_STYLE_MASK_FULL_SCREEN: u64 = 1 << 14;
 pub(crate) const NS_WINDOW_STYLE_MASK_FULL_SIZE_CONTENT_VIEW: u64 = 1 << 15;
 
 pub(crate) const NS_BACKING_STORE_BUFFERED: u64 = 2;
@@ -95,6 +96,11 @@ pub(crate) const NS_EVENT_MODIFIER_FLAG_SHIFT: u64 = 1 << 17;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_CONTROL: u64 = 1 << 18;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_OPTION: u64 = 1 << 19;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
+
+pub(crate) const NS_TRACKING_MOUSE_ENTERED_AND_EXITED: u64 = 1 << 0;
+pub(crate) const NS_TRACKING_MOUSE_MOVED: u64 = 1 << 1;
+pub(crate) const NS_TRACKING_ACTIVE_ALWAYS: u64 = 1 << 7;
+pub(crate) const NS_TRACKING_IN_VISIBLE_RECT: u64 = 1 << 9;
 
 pub(crate) const NS_KEY_VALUE_OBSERVING_OPTION_NEW: u64 = 0x1;
 

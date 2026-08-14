@@ -8,7 +8,7 @@
 
 use bwebview::{
     Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
-    WindowEvent,
+    WindowEvent, WindowEvents,
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,7 @@ fn main() {
         .center()
         .remember_window_state()
         .theme(Theme::Dark)
+        .enable_events(WindowEvents::MOVE | WindowEvents::RESIZE)
         .build();
     let mut webview = WebviewBuilder::new(&window).load_html(APP_HTML).build();
 

@@ -13,7 +13,7 @@ use super::event_loop::send_event;
 use super::file_drop::{FileDropTarget, install_file_drop_targets};
 use super::webview2::*;
 use super::win32::*;
-use super::window::{PlatformWindow, WindowData, config_dir};
+use super::window::{PlatformWindow, WindowData, config_dir, install_webview_input_hooks};
 #[cfg(feature = "custom_protocol")]
 use crate::CustomProtocol;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent};
@@ -267,6 +267,7 @@ extern "system" fn controller_created(
         let mut rect: RECT = mem::zeroed();
         GetClientRect(_self.hwnd, &mut rect);
         (*controller).put_Bounds(rect);
+        install_webview_input_hooks(_self.window_data);
 
         // Let our drop target handle files instead of allowing WebView2 to
         // navigate to them.

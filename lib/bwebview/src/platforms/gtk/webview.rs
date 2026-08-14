@@ -12,7 +12,7 @@ use super::event_loop::send_event;
 #[cfg(feature = "file_drop")]
 use super::file_drop::{FileDropState, connect_signals};
 use super::headers::*;
-use super::window::PlatformWindow;
+use super::window::{PlatformWindow, WindowData, register_webview};
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent, WindowEvent};
 
 pub(super) struct WebviewData {
@@ -23,6 +23,7 @@ pub(super) struct WebviewData {
     #[cfg(feature = "file_drop")]
     pub(super) file_drop: FileDropState,
     pub(super) webview: *mut WebKitWebView,
+    window_data: *mut WindowData,
 }
 
 pub(crate) struct PlatformWebview(pub(super) Box<WebviewData>);
@@ -37,6 +38,7 @@ impl PlatformWebview {
             #[cfg(feature = "file_drop")]
             file_drop: FileDropState::default(),
             webview: null_mut(),
+            window_data: &*window.0 as *const WindowData as *mut WindowData,
         }))
     }
 }
@@ -133,6 +135,7 @@ impl PlatformWebview {
                 null::<c_void>(),
             ) as *mut WebKitWebView;
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
+            register_webview(data.window_data, webview as *mut GtkWidget);
             #[cfg(feature = "file_drop")]
             if data.allow_file_drop {
                 connect_signals(webview, data);

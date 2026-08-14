@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::ops::{BitOr, BitOrAssign};
+
 use crate::platforms::{PlatformMonitor, PlatformWindow};
 use crate::{LogicalPoint, LogicalSize};
 
@@ -33,6 +35,49 @@ pub enum Cursor {
     Grab,
     /// Closed hand while dragging.
     Grabbing,
+}
+
+// MARK: WindowEvents
+/// Optional native window events to deliver to the event loop.
+#[derive(Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WindowEvents(pub(crate) u8);
+
+impl WindowEvents {
+    /// No optional events.
+    pub const NONE: Self = Self(0);
+    /// Window move events.
+    pub const MOVE: Self = Self(1 << 0);
+    /// Window resize events.
+    pub const RESIZE: Self = Self(1 << 1);
+    /// Effective system theme-change events.
+    pub const THEME_CHANGE: Self = Self(1 << 2);
+    /// Window focus and blur events.
+    pub const FOCUS: Self = Self(1 << 3);
+    /// Mouse button, movement, enter, leave, and click events.
+    pub const MOUSE: Self = Self(1 << 4);
+    /// Mouse wheel and trackpad scroll events.
+    pub const WHEEL: Self = Self(1 << 5);
+    /// Keyboard press and release events.
+    pub const KEYBOARD: Self = Self(1 << 6);
+
+    /// Returns whether every event group in `other` is enabled.
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+impl BitOr for WindowEvents {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl BitOrAssign for WindowEvents {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
 }
 
 // MARK: MacosTitlebarStyle
@@ -74,6 +119,8 @@ pub struct WindowBuilder<'a> {
     pub(crate) resizable: bool,
     pub(crate) theme: Option<Theme>,
     pub(crate) background_color: Option<u32>,
+    pub(crate) cursor: Cursor,
+    pub(crate) events: WindowEvents,
     #[cfg(feature = "remember_window_state")]
     pub(crate) remember_window_state: bool,
     #[cfg(feature = "file_drop")]
@@ -98,6 +145,8 @@ impl<'a> Default for WindowBuilder<'a> {
             resizable: true,
             theme: None,
             background_color: None,
+            cursor: Cursor::Default,
+            events: WindowEvents::NONE,
             #[cfg(feature = "remember_window_state")]
             remember_window_state: false,
             #[cfg(feature = "file_drop")]
@@ -147,7 +196,8 @@ impl<'a> WindowBuilder<'a> {
         self
     }
 
-    /// Set theme
+    /// Set theme. GTK applies this preference application-wide because `GtkSettings`
+    /// does not provide a per-window theme variant override.
     pub const fn theme(mut self, theme: Theme) -> Self {
         self.theme = Some(theme);
         self
@@ -156,6 +206,18 @@ impl<'a> WindowBuilder<'a> {
     /// Set window background color
     pub const fn background_color(mut self, color: u32) -> Self {
         self.background_color = Some(color);
+        self
+    }
+
+    /// Set the initial mouse cursor displayed over the window content.
+    pub const fn cursor(mut self, cursor: Cursor) -> Self {
+        self.cursor = cursor;
+        self
+    }
+
+    /// Enable optional native events.
+    pub const fn enable_events(mut self, events: WindowEvents) -> Self {
+        self.events.0 |= events.0;
         self
     }
 
@@ -200,7 +262,8 @@ impl<'a> WindowBuilder<'a> {
 
     /// Build window
     pub fn build(self) -> Window {
-        let platform = PlatformWindow::new(&self);
+        let mut platform = PlatformWindow::new(&self);
+        platform.enable_events(self.events);
         Window { platform }
     }
 }
@@ -213,11 +276,14 @@ pub(crate) trait WindowInterface {
     fn size(&self) -> LogicalSize;
     fn set_position(&mut self, point: LogicalPoint);
     fn set_size(&mut self, size: LogicalSize);
-    fn set_min_size(&mut self, min_size: LogicalSize);
+    fn set_min_size(&mut self, min_size: Option<LogicalSize>);
     fn set_resizable(&mut self, resizable: bool);
+    fn set_fullscreen(&mut self, fullscreen: bool);
     fn set_theme(&mut self, theme: Theme);
+    fn follow_system_theme(&mut self);
     fn set_background_color(&mut self, color: u32);
     fn set_cursor(&mut self, cursor: Cursor);
+    fn enable_events(&mut self, events: WindowEvents);
     #[cfg(all(
         feature = "progress_bar",
         any(
@@ -276,7 +342,12 @@ impl Window {
 
     /// Set minimum size
     pub fn set_min_size(&mut self, min_size: LogicalSize) {
-        self.platform.set_min_size(min_size)
+        self.platform.set_min_size(Some(min_size))
+    }
+
+    /// Remove the minimum window size constraint.
+    pub fn clear_min_size(&mut self) {
+        self.platform.set_min_size(None)
     }
 
     /// Set resizable
@@ -284,9 +355,21 @@ impl Window {
         self.platform.set_resizable(resizable)
     }
 
-    /// Set theme
+    /// Enter or leave fullscreen mode.
+    pub fn set_fullscreen(&mut self, fullscreen: bool) {
+        self.platform.set_fullscreen(fullscreen)
+    }
+
+    /// Set theme. GTK applies this preference application-wide because `GtkSettings`
+    /// does not provide a per-window theme variant override.
     pub fn set_theme(&mut self, theme: Theme) {
         self.platform.set_theme(theme)
+    }
+
+    /// Follow the effective system theme again after an explicit theme was set.
+    /// On GTK this changes the application-wide theme preference.
+    pub fn follow_system_theme(&mut self) {
+        self.platform.follow_system_theme()
     }
 
     /// Set window background color
@@ -297,6 +380,11 @@ impl Window {
     /// Set the mouse cursor displayed over the window content.
     pub fn set_cursor(&mut self, cursor: Cursor) {
         self.platform.set_cursor(cursor)
+    }
+
+    /// Enable optional native events. Event groups stay enabled for the window's lifetime.
+    pub fn enable_events(&mut self, events: WindowEvents) {
+        self.platform.enable_events(events)
     }
 
     /// Set GTK application launcher progress, use a value above `1.0` for indeterminate progress,
@@ -335,5 +423,20 @@ impl Window {
         state: WindowsProgressBarState,
     ) {
         self.platform.windows_set_progress_bar(progress, state)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WindowEvents;
+
+    #[test]
+    fn event_groups_can_be_combined_and_queried() {
+        let events = WindowEvents::MOVE | WindowEvents::RESIZE | WindowEvents::KEYBOARD;
+
+        assert!(events.contains(WindowEvents::MOVE));
+        assert!(events.contains(WindowEvents::MOVE | WindowEvents::RESIZE));
+        assert!(events.contains(WindowEvents::NONE));
+        assert!(!events.contains(WindowEvents::MOUSE));
     }
 }

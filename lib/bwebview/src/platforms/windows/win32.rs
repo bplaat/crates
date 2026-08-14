@@ -160,6 +160,13 @@ pub(crate) struct TASKDIALOGCONFIG {
 
 #[link(name = "comctl32")]
 unsafe extern "system" {
+    pub(crate) fn DefSubclassProc(hwnd: HWND, msg: u32, wParam: WPARAM, lParam: LPARAM) -> isize;
+    pub(crate) fn SetWindowSubclass(
+        hwnd: HWND,
+        callback: unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM, usize, usize) -> isize,
+        id: usize,
+        data: usize,
+    ) -> BOOL;
     pub(crate) fn TaskDialogIndirect(
         pTaskConfig: *const TASKDIALOGCONFIG,
         pnButton: *mut i32,
@@ -196,6 +203,15 @@ pub(crate) struct MSG {
 }
 
 #[repr(C)]
+pub(crate) struct TRACKMOUSEEVENT {
+    pub(crate) cbSize: u32,
+    pub(crate) dwFlags: u32,
+    pub(crate) hwndTrack: HWND,
+    pub(crate) dwHoverTime: u32,
+}
+
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
 pub(crate) struct POINT {
     pub(crate) x: i32,
     pub(crate) y: i32,
@@ -230,6 +246,7 @@ pub(crate) struct MONITORINFOEXW {
 }
 
 #[repr(C)]
+#[derive(Default, Clone)]
 pub(crate) struct WINDOWPLACEMENT {
     pub(crate) length: u32,
     pub(crate) flags: u32,
@@ -250,13 +267,28 @@ pub(crate) const WM_CREATE: u32 = 0x0001;
 pub(crate) const WM_DESTROY: u32 = 0x0002;
 pub(crate) const WM_MOVE: u32 = 0x0003;
 pub(crate) const WM_SIZE: u32 = 0x0005;
+pub(crate) const WM_ACTIVATE: u32 = 0x0006;
 pub(crate) const WM_CLOSE: u32 = 0x0010;
 pub(crate) const WM_ERASEBKGND: u32 = 0x0014;
 pub(crate) const WM_SETTINGCHANGE: u32 = 0x001A;
 pub(crate) const WM_SETCURSOR: u32 = 0x0020;
 pub(crate) const WM_GETMINMAXINFO: u32 = 0x0024;
 pub(crate) const WM_NCCREATE: u32 = 0x0081;
+pub(crate) const WM_KEYDOWN: u32 = 0x0100;
+pub(crate) const WM_KEYUP: u32 = 0x0101;
+pub(crate) const WM_SYSKEYDOWN: u32 = 0x0104;
+pub(crate) const WM_SYSKEYUP: u32 = 0x0105;
+pub(crate) const WM_MOUSEMOVE: u32 = 0x0200;
+pub(crate) const WM_LBUTTONDOWN: u32 = 0x0201;
+pub(crate) const WM_LBUTTONUP: u32 = 0x0202;
+pub(crate) const WM_RBUTTONDOWN: u32 = 0x0204;
+pub(crate) const WM_RBUTTONUP: u32 = 0x0205;
+pub(crate) const WM_MBUTTONDOWN: u32 = 0x0207;
+pub(crate) const WM_MBUTTONUP: u32 = 0x0208;
+pub(crate) const WM_MOUSEWHEEL: u32 = 0x020A;
+pub(crate) const WM_MOUSEHWHEEL: u32 = 0x020E;
 pub(crate) const WM_DROPFILES: u32 = 0x0233;
+pub(crate) const WM_MOUSELEAVE: u32 = 0x02A3;
 pub(crate) const WM_DPICHANGED: u32 = 0x02E0;
 pub(crate) const WM_THEMECHANGED: u32 = 0x031A;
 pub(crate) const WM_USER: u32 = 0x0400;
@@ -277,6 +309,7 @@ pub(crate) const PROCESS_PER_MONITOR_DPI_AWARE: i32 = 2;
 pub(crate) const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: isize = -4isize;
 
 pub(crate) const MONITOR_DEFAULTTOPRIMARY: u32 = 0x00000001;
+pub(crate) const MONITOR_DEFAULTTONEAREST: u32 = 0x00000002;
 
 pub(crate) const USER_DEFAULT_SCREEN_DPI: u32 = 96;
 pub(crate) const MDT_EFFECTIVE_DPI: i32 = 0;
@@ -290,6 +323,9 @@ pub(crate) const GWL_STYLE: i32 = -16;
 
 pub(crate) const HTCLIENT: i32 = 1;
 
+pub(crate) const TME_LEAVE: u32 = 0x00000002;
+pub(crate) const WA_INACTIVE: u16 = 0;
+
 pub(crate) const IDC_ARROW: *const w_char = 32512 as *const w_char;
 pub(crate) const IDC_IBEAM: *const w_char = 32513 as *const w_char;
 pub(crate) const IDC_CROSS: *const w_char = 32515 as *const w_char;
@@ -300,6 +336,7 @@ pub(crate) const SWP_NOSIZE: u32 = 0x0001;
 pub(crate) const SWP_NOMOVE: u32 = 0x0002;
 pub(crate) const SWP_NOZORDER: u32 = 0x0004;
 pub(crate) const SWP_NOACTIVATE: u32 = 0x0010;
+pub(crate) const SWP_FRAMECHANGED: u32 = 0x0020;
 pub(crate) const SWP_NOREPOSITION: u32 = 0x0200;
 
 #[link(name = "user32")]
@@ -364,6 +401,21 @@ unsafe extern "system" {
     pub(crate) fn DefWindowProcW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> isize;
     pub(crate) fn PostQuitMessage(nExitCode: i32);
     pub(crate) fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
+    pub(crate) fn ClientToScreen(hWnd: HWND, point: *mut POINT) -> BOOL;
+    pub(crate) fn ScreenToClient(hWnd: HWND, point: *mut POINT) -> BOOL;
+    pub(crate) fn GetKeyState(key: i32) -> i16;
+    pub(crate) fn GetKeyboardLayout(thread: u32) -> HANDLE;
+    pub(crate) fn GetKeyboardState(state: *mut u8) -> BOOL;
+    pub(crate) fn ToUnicodeEx(
+        virtual_key: u32,
+        scan_code: u32,
+        state: *const u8,
+        buffer: *mut u16,
+        buffer_len: i32,
+        flags: u32,
+        keyboard_layout: HANDLE,
+    ) -> i32;
+    pub(crate) fn TrackMouseEvent(event: *mut TRACKMOUSEEVENT) -> BOOL;
     pub(crate) fn MessageBoxW(
         hWnd: HWND,
         lpText: *const w_char,
@@ -375,6 +427,7 @@ unsafe extern "system" {
     pub(crate) fn SetWindowLongW(hwnd: HWND, index: i32, value: i32) -> i32;
     pub(crate) fn SetWindowLongPtrW(hwnd: HWND, index: i32, value: isize) -> isize;
     pub(crate) fn MonitorFromPoint(pt: POINT, dwFlags: u32) -> *mut c_void;
+    pub(crate) fn MonitorFromWindow(hwnd: HWND, dwFlags: u32) -> HMONITOR;
     pub(crate) fn EnumDisplayMonitors(
         hdc: HDC,
         lprcClip: *const RECT,

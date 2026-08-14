@@ -33,8 +33,16 @@ pub(crate) const GTK_MESSAGE_INFO: i32 = 0;
 pub(crate) const GTK_MESSAGE_WARNING: i32 = 1;
 pub(crate) const GTK_MESSAGE_ERROR: i32 = 3;
 pub(crate) const GTK_BUTTONS_NONE: i32 = 0;
+pub(crate) const GDK_POINTER_MOTION_MASK: i32 = 1 << 2;
+pub(crate) const GDK_BUTTON_PRESS_MASK: i32 = 1 << 8;
+pub(crate) const GDK_BUTTON_RELEASE_MASK: i32 = 1 << 9;
+pub(crate) const GDK_ENTER_NOTIFY_MASK: i32 = 1 << 12;
+pub(crate) const GDK_LEAVE_NOTIFY_MASK: i32 = 1 << 13;
+pub(crate) const GDK_SCROLL_MASK: i32 = 1 << 21;
+pub(crate) const GDK_SMOOTH_SCROLL_MASK: i32 = 1 << 23;
 unsafe extern "C" {
     pub(crate) fn gtk_widget_get_window(widget: *mut GtkWidget) -> *mut GdkWindow;
+    pub(crate) fn gtk_widget_add_events(widget: *mut GtkWidget, events: i32);
     pub(crate) fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
     pub(crate) fn gtk_main();
     pub(crate) fn gtk_main_quit();
@@ -42,6 +50,7 @@ unsafe extern "C" {
     pub(crate) fn gtk_window_set_default_icon_name(name: *const c_char) -> bool;
     pub(crate) fn gtk_widget_set_size_request(widget: *mut GtkWidget, width: i32, height: i32);
     pub(crate) fn gtk_window_fullscreen(window: *mut GtkWindow);
+    pub(crate) fn gtk_window_unfullscreen(window: *mut GtkWindow);
     pub(crate) fn gtk_container_add(container: *mut GtkWidget, widget: *mut GtkWidget);
     pub(crate) fn gtk_window_get_position(window: *mut GtkWindow, x: *mut i32, y: *mut i32);
     pub(crate) fn gtk_window_set_title(window: *mut GtkWindow, title: *const c_char);

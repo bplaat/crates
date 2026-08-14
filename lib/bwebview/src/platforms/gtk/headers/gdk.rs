@@ -18,6 +18,83 @@ pub(crate) struct GdkWindow([u8; 0]);
 #[repr(C)]
 pub(crate) struct GdkDragContext([u8; 0]);
 #[repr(C)]
+pub(crate) struct GdkEventButton {
+    pub r#type: i32,
+    pub window: *mut GdkWindow,
+    pub send_event: i8,
+    pub time: u32,
+    pub x: f64,
+    pub y: f64,
+    pub axes: *mut f64,
+    pub state: u32,
+    pub button: u32,
+    pub device: *mut c_void,
+    pub x_root: f64,
+    pub y_root: f64,
+}
+#[repr(C)]
+pub(crate) struct GdkEventMotion {
+    pub r#type: i32,
+    pub window: *mut GdkWindow,
+    pub send_event: i8,
+    pub time: u32,
+    pub x: f64,
+    pub y: f64,
+    pub axes: *mut f64,
+    pub state: u32,
+    pub is_hint: i16,
+    pub device: *mut c_void,
+    pub x_root: f64,
+    pub y_root: f64,
+}
+#[repr(C)]
+pub(crate) struct GdkEventCrossing {
+    pub r#type: i32,
+    pub window: *mut GdkWindow,
+    pub send_event: i8,
+    pub subwindow: *mut GdkWindow,
+    pub time: u32,
+    pub x: f64,
+    pub y: f64,
+    pub x_root: f64,
+    pub y_root: f64,
+    pub mode: i32,
+    pub detail: i32,
+    pub focus: i32,
+    pub state: u32,
+}
+#[repr(C)]
+pub(crate) struct GdkEventScroll {
+    pub r#type: i32,
+    pub window: *mut GdkWindow,
+    pub send_event: i8,
+    pub time: u32,
+    pub x: f64,
+    pub y: f64,
+    pub state: u32,
+    pub direction: i32,
+    pub device: *mut c_void,
+    pub x_root: f64,
+    pub y_root: f64,
+    pub delta_x: f64,
+    pub delta_y: f64,
+    pub is_stop: u32,
+}
+#[repr(C)]
+pub(crate) struct GdkEventKey {
+    pub r#type: i32,
+    pub window: *mut GdkWindow,
+    pub send_event: i8,
+    pub time: u32,
+    pub state: u32,
+    pub keyval: u32,
+    pub length: i32,
+    pub string: *mut c_char,
+    pub hardware_keycode: u16,
+    pub group: u8,
+    pub is_modifier: u32,
+}
+#[repr(C)]
 pub(crate) struct GdkRectangle {
     pub x: i32,
     pub y: i32,
@@ -47,6 +124,8 @@ unsafe extern "C" {
         name: *const c_char,
     ) -> *mut GdkCursor;
     pub(crate) fn gdk_window_set_cursor(window: *mut GdkWindow, cursor: *mut GdkCursor);
+    pub(crate) fn gdk_keyval_to_unicode(keyval: u32) -> u32;
+    pub(crate) fn gdk_keyval_name(keyval: u32) -> *const c_char;
 
     // GTK < 3.22
     pub(crate) fn gdk_screen_get_default() -> *mut GdkScreen;
