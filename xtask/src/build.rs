@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 use crate::metadata::{InstallableApp, packages, supports_os};
@@ -142,22 +142,45 @@ impl Xtask {
     }
 
     pub(crate) fn build_bundle(&self) -> Result<()> {
+        let apps = self.installable_apps()?;
+        self.build_bundles(&apps)
+    }
+
+    fn build_bundles(&self, apps: &[InstallableApp]) -> Result<()> {
         cargo_install_path("bin/cargo-bundle", false)?;
-        for app in self.installable_apps()? {
+        for app in apps {
             run(Command::new("cargo").args(["bundle", "--path", &format!("bin/{}", app.package)]))?;
         }
         Ok(())
     }
 
-    pub(crate) fn install(&self) -> Result<()> {
-        for package in ["bob", "ccontinue", "music-dl"] {
-            cargo_install_path(&format!("bin/{package}"), true)?;
+    pub(crate) fn install(&self, selected: Option<&str>) -> Result<()> {
+        let apps: Vec<_> = self
+            .installable_apps()?
+            .into_iter()
+            .filter(|app| selected.is_none_or(|selected| app.package == selected))
+            .collect();
+        if let Some(selected) = selected
+            && apps.is_empty()
+        {
+            bail!(
+                "application bundle is not installable on {}: {selected}",
+                self.os.name()
+            );
+        }
+
+        if selected.is_none() {
+            for package in ["bob", "ccontinue", "music-dl"] {
+                cargo_install_path(&format!("bin/{package}"), true)?;
+            }
         }
 
         match self.os {
             Os::Macos => {
-                self.build_bundle()?;
-                for app in self.installable_apps()? {
+                if !apps.is_empty() {
+                    self.build_bundles(&apps)?;
+                }
+                for app in apps {
                     let bundle_directory = self.root.join(format!("target/bundle/{}", app.package));
                     let source = fs::read_dir(&bundle_directory)?
                         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -178,7 +201,7 @@ impl Xtask {
                 let desktop =
                     PathBuf::from(env::var("USERPROFILE").context("USERPROFILE is not set")?)
                         .join("Desktop");
-                for app in self.installable_apps()? {
+                for app in apps {
                     run(Command::new("cargo").args(["build", "--release", "--bin", &app.package]))?;
                     fs::copy(
                         self.root
@@ -200,7 +223,7 @@ impl Xtask {
                 fs::create_dir_all(&bin)?;
                 fs::create_dir_all(&applications)?;
                 fs::create_dir_all(&mime_packages)?;
-                for app in self.installable_apps()? {
+                for app in apps {
                     run(Command::new("cargo").args(["build", "--release", "--bin", &app.package]))?;
                     let executable = bin.join(&app.name);
                     fs::copy(

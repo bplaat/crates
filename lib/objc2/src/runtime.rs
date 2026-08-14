@@ -29,6 +29,19 @@ impl AnyClass {
     }
 }
 
+/// Protocol type (opaque).
+#[repr(C)]
+pub struct AnyProtocol([u8; 0]);
+
+impl AnyProtocol {
+    /// Get a protocol by name, returning `None` if it is not registered.
+    pub fn get(name: &CStr) -> Option<&'static Self> {
+        // SAFETY: `name` is a valid null-terminated C string. The Objective-C runtime owns
+        // registered protocol objects for the lifetime of the process.
+        unsafe { objc_getProtocol(name.as_ptr()).as_ref() }
+    }
+}
+
 /// An Objective-C selector (pointer-sized, equivalent to C's `SEL`).
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -128,6 +141,11 @@ impl Bool {
     pub const YES: Self = Self { value: 1 };
     /// `NO`
     pub const NO: Self = Self { value: 0 };
+
+    /// Convert the Objective-C boolean to a Rust boolean.
+    pub const fn as_bool(&self) -> bool {
+        self.value != 0
+    }
 }
 // SAFETY: `Bool` is a transparent `u8`; ObjC encodes it as `B`.
 unsafe impl Encode for Bool {
@@ -248,6 +266,13 @@ impl ClassBuilder {
         unsafe { class_addMethod(self.0, sel.0, imp_ptr, encoding.as_ptr()) }
     }
 
+    /// Make the class conform to the given protocol.
+    pub fn add_protocol(&mut self, protocol: &AnyProtocol) -> bool {
+        // SAFETY: `self.0` is a valid not-yet-registered class pair and `protocol` is a
+        // process-lifetime protocol object returned by the Objective-C runtime.
+        unsafe { class_addProtocol(self.0.cast(), protocol).as_bool() }
+    }
+
     /// Register the class and return it as a `*mut AnyObject`.
     ///
     /// Consumes the builder since ivars and methods cannot be added after registration.
@@ -278,6 +303,21 @@ mod test {
     fn test_anyclass_get_unknown() {
         let cls = AnyClass::get(c"NoSuchClassXyzAbc123");
         assert!(cls.is_none(), "unknown class should return None");
+    }
+
+    #[test]
+    fn test_anyprotocol_get_known() {
+        let protocol = AnyProtocol::get(c"NSCopying");
+        assert!(protocol.is_some(), "NSCopying should always exist");
+    }
+
+    #[test]
+    fn test_class_add_protocol() {
+        let protocol = AnyProtocol::get(c"NSCopying").expect("NSCopying should exist");
+        let mut builder =
+            ClassBuilder::new(c"TestProtocolClass", class!(NSObject)).expect("create class");
+        assert!(builder.add_protocol(protocol));
+        builder.register();
     }
 
     #[test]

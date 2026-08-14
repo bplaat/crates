@@ -37,4 +37,16 @@ pub(crate) struct BundleMetadata {
     pub info_plist: Option<String>,
     pub entitlements: Option<String>,
     pub hardened_runtime: Option<bool>,
+    pub appex: Option<Vec<AppexMetadata>>,
+}
+
+#[derive(Clone, Deserialize)]
+pub(crate) struct AppexMetadata {
+    pub name: String,
+    pub identifier: String,
+    pub package: String,
+    pub binary: String,
+    pub minimal_os_version: Option<String>,
+    pub info_plist: String,
+    pub entitlements: Option<String>,
 }

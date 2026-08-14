@@ -65,7 +65,10 @@ impl Xtask {
         })
     }
 
-    fn run(&self, task: &str) -> Result<()> {
+    fn run(&self, task: &str, package: Option<&str>) -> Result<()> {
+        if package.is_some() && task != "install" {
+            bail!("task {task} does not accept a package");
+        }
         match task {
             "build-pages" => self.build_pages(),
             "build-bundle" => self.build_bundle(),
@@ -75,7 +78,7 @@ impl Xtask {
             "check-rust" => self.check_rust(),
             "check-e2e" => self.check_e2e(),
             "coverage" => self.coverage(),
-            "install" => self.install(),
+            "install" => self.install(package),
             "help" | "--help" | "-h" => {
                 Self::print_help();
                 Ok(())
@@ -90,7 +93,7 @@ impl Xtask {
     fn print_help() {
         println!("Repository tasks");
         println!();
-        println!("Usage: cargo xtask <task>");
+        println!("Usage: cargo xtask <task> [package]");
         println!();
         println!("Tasks:");
         println!("  check          Run every check");
@@ -101,7 +104,7 @@ impl Xtask {
         println!("  build-pages    Build GitHub Pages artifacts");
         println!("  build-bundle   Build native application bundles");
         println!("  clean          Remove generated files");
-        println!("  install        Install command-line and GUI applications");
+        println!("  install [name] Install all applications or only the named package");
     }
 
     fn ensure_npm_deps(&self) -> Result<()> {
@@ -136,9 +139,18 @@ impl Xtask {
     }
 }
 
+fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(String, Option<String>)> {
+    let task = args.next().unwrap_or_else(|| "check".to_owned());
+    let package = args.next();
+    if let Some(argument) = args.next() {
+        bail!("unexpected argument: {argument}");
+    }
+    Ok((task, package))
+}
+
 fn main() -> Result<()> {
-    let task = env::args().nth(1).unwrap_or_else(|| "check".to_owned());
-    Xtask::new()?.run(&task)
+    let (task, package) = parse_args(env::args().skip(1))?;
+    Xtask::new()?.run(&task, package.as_deref())
 }
 
 // MARK: Tests

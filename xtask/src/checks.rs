@@ -218,6 +218,7 @@ impl Xtask {
 
     fn check_address_sanitizer(&self, metadata: &Value) -> Result<()> {
         println!("Running Rust tests with address sanitizer on unsafe libs...");
+        let excludes = platform_excludes(metadata, self.os);
         let output = capture(Command::new("rustc").args(["+nightly", "-vV"]))?;
         let rustc_info = String::from_utf8(output.stdout)?;
         let target = rustc_info
@@ -243,6 +244,9 @@ impl Xtask {
                 continue;
             }
             let package = package_for_directory(metadata, &crate_dir, &self.root)?;
+            if excludes.contains(package) {
+                continue;
+            }
             println!("Testing {package} with address sanitizer...");
             let swap = BACKEND_SWAP_PAIRS
                 .iter()

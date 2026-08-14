@@ -19,15 +19,15 @@ use objc2::encode::{Encode, Encoding};
 
 #[link(name = "System", kind = "dylib")]
 unsafe extern "C" {
-    static _NSConcreteStackBlock: *const c_void;
+    static _NSConcreteStackBlock: u8;
     fn _Block_copy(block: *const c_void) -> *mut c_void;
     fn _Block_release(block: *const c_void);
 }
 
 #[repr(C)]
 struct BlockDescriptor {
-    reserved: u64,
-    size: u64,
+    reserved: usize,
+    size: usize,
     copy: unsafe extern "C" fn(*mut c_void, *const c_void),
     dispose: unsafe extern "C" fn(*mut c_void),
 }
@@ -59,17 +59,19 @@ unsafe impl<F: ?Sized> Encode for &Block<F> {
 
 macro_rules! impl_block_call {
     ($($t:ident: $a:ident),*) => {
-        impl<$($t: 'static + Copy),*> Block<dyn Fn($($t,)*)> {
+        impl<R: 'static + Copy + Encode, $($t: 'static + Copy + Encode),*>
+            Block<dyn Fn($($t),*) -> R>
+        {
             /// Call this block with the given arguments.
-            pub fn call(&self, ($($a,)*): ($($t,)*)) {
+            pub fn call(&self, ($($a,)*): ($($t,)*)) -> R {
                 // SAFETY: `_invoke` was stored by `RcBlock::make` as an `extern "C"` fn with
                 // exactly this signature. The block ABI stores all invoke pointers as opaque
                 // `*const c_void`, so the transmute is required. `self` is a valid shared
                 // reference that remains valid for the duration of this call.
                 unsafe {
-                    let invoke: unsafe extern "C" fn(*const c_void $(, $t)*) =
+                    let invoke: unsafe extern "C" fn(*const c_void $(, $t)*) -> R =
                         std::mem::transmute(self._invoke);
-                    invoke(self as *const Self as *const c_void $(, $a)*);
+                    invoke(self as *const Self as *const c_void $(, $a)*)
                 }
             }
         }
@@ -93,7 +95,7 @@ struct BlockDescriptorFor<F>(PhantomData<F>);
 impl<F> BlockDescriptorFor<F> {
     const VALUE: BlockDescriptor = BlockDescriptor {
         reserved: 0,
-        size: size_of::<RcBlockInner<F>>() as u64,
+        size: size_of::<RcBlockInner<F>>(),
         copy: copy_closure::<F>,
         dispose: dispose_closure::<F>,
     };
@@ -123,22 +125,22 @@ unsafe extern "C" fn dispose_closure<F>(block: *mut c_void) {
 }
 
 /// A heap-allocated ObjC block wrapping a Rust closure.
-pub struct RcBlock<F> {
-    inner: NonNull<RcBlockInner<F>>,
+pub struct RcBlock<F: ?Sized> {
+    inner: NonNull<Block<F>>,
 }
 
 // SAFETY: Sending an `RcBlock<F>` to another thread is safe iff F is Send.
-unsafe impl<F: Send + Sync> Send for RcBlock<F> {}
+unsafe impl<F: Send + Sync + ?Sized> Send for RcBlock<F> {}
 // SAFETY: Sharing `&RcBlock<F>` across threads is safe iff F is Sync.
-unsafe impl<F: Sync> Sync for RcBlock<F> {}
+unsafe impl<F: Sync + ?Sized> Sync for RcBlock<F> {}
 
 impl<F> RcBlock<F> {
     fn make(closure: F, invoke: *const c_void) -> Self {
-        let inner = Box::new(RcBlockInner {
+        let stack = RcBlockInner {
             block: Block {
                 // SAFETY: `_NSConcreteStackBlock` is a valid extern static exported by
                 // libSystem; it is always initialised before any Rust code runs.
-                _isa: unsafe { _NSConcreteStackBlock },
+                _isa: std::ptr::addr_of!(_NSConcreteStackBlock).cast(),
                 _flags: BLOCK_HAS_COPY_DISPOSE,
                 _reserved: 0,
                 _invoke: invoke,
@@ -146,9 +148,13 @@ impl<F> RcBlock<F> {
                 _marker: PhantomData,
             },
             closure: Arc::new(closure),
-        });
+        };
+        // SAFETY: `stack` has the Objective-C stack block layout. `_Block_copy` promotes it to
+        // independently owned heap storage and invokes `copy_closure` for the captured closure.
+        let inner = unsafe { _Block_copy((&stack.block as *const Block<F>).cast()) };
+        drop(stack);
         Self {
-            inner: NonNull::new(Box::into_raw(inner)).expect("Box::into_raw is non-null"),
+            inner: NonNull::new(inner.cast()).expect("_Block_copy returned null"),
         }
     }
 
@@ -159,7 +165,7 @@ impl<F> RcBlock<F> {
     {
         extern "C" fn invoke_impl<F: Fn()>(block: *const RcBlockInner<F>) {
             // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
-            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            // owned by the invoking block; it stays alive for the duration of this call.
             let closure = unsafe { &*(*block).closure };
             closure();
         }
@@ -167,13 +173,13 @@ impl<F> RcBlock<F> {
     }
 
     /// Create a new heap-allocated block from a single-argument closure.
-    pub fn new<A: 'static + Copy>(closure: F) -> Self
+    pub fn new<A: 'static + Copy + Encode>(closure: F) -> Self
     where
         F: Fn(A) + 'static,
     {
         extern "C" fn invoke_impl<F: Fn(A), A: Copy>(block: *const RcBlockInner<F>, a: A) {
             // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
-            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            // owned by the invoking block; it stays alive for the duration of this call.
             let closure = unsafe { &*(*block).closure };
             closure(a);
         }
@@ -181,7 +187,7 @@ impl<F> RcBlock<F> {
     }
 
     /// Create a new heap-allocated block from a single-argument closure returning `R`.
-    pub fn new_ret<A: 'static + Copy, R: 'static + Copy>(closure: F) -> Self
+    pub fn new_ret<A: 'static + Copy + Encode, R: 'static + Copy + Encode>(closure: F) -> Self
     where
         F: Fn(A) -> R + 'static,
     {
@@ -190,7 +196,7 @@ impl<F> RcBlock<F> {
             a: A,
         ) -> R {
             // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
-            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            // owned by the invoking block; it stays alive for the duration of this call.
             let closure = unsafe { &*(*block).closure };
             closure(a)
         }
@@ -198,7 +204,7 @@ impl<F> RcBlock<F> {
     }
 
     /// Create a new heap-allocated block from a two-argument closure.
-    pub fn new2<A: 'static + Copy, B: 'static + Copy>(closure: F) -> Self
+    pub fn new2<A: 'static + Copy + Encode, B: 'static + Copy + Encode>(closure: F) -> Self
     where
         F: Fn(A, B) + 'static,
     {
@@ -208,7 +214,7 @@ impl<F> RcBlock<F> {
             b: B,
         ) {
             // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
-            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            // owned by the invoking block; it stays alive for the duration of this call.
             let closure = unsafe { &*(*block).closure };
             closure(a, b);
         }
@@ -216,7 +222,13 @@ impl<F> RcBlock<F> {
     }
 
     /// Create a new heap-allocated block from a three-argument closure.
-    pub fn new3<A: 'static + Copy, B: 'static + Copy, C: 'static + Copy>(closure: F) -> Self
+    pub fn new3<
+        A: 'static + Copy + Encode,
+        B: 'static + Copy + Encode,
+        C: 'static + Copy + Encode,
+    >(
+        closure: F,
+    ) -> Self
     where
         F: Fn(A, B, C) + 'static,
     {
@@ -227,7 +239,7 @@ impl<F> RcBlock<F> {
             c: C,
         ) {
             // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
-            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            // owned by the invoking block; it stays alive for the duration of this call.
             let closure = unsafe { &*(*block).closure };
             closure(a, b, c);
         }
@@ -235,7 +247,12 @@ impl<F> RcBlock<F> {
     }
 
     /// Create a new heap-allocated block from a four-argument closure.
-    pub fn new4<A: 'static + Copy, B: 'static + Copy, C: 'static + Copy, D: 'static + Copy>(
+    pub fn new4<
+        A: 'static + Copy + Encode,
+        B: 'static + Copy + Encode,
+        C: 'static + Copy + Encode,
+        D: 'static + Copy + Encode,
+    >(
         closure: F,
     ) -> Self
     where
@@ -249,7 +266,7 @@ impl<F> RcBlock<F> {
             d: D,
         ) {
             // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
-            // allocated by `Box::into_raw`; it stays alive for the duration of this call.
+            // owned by the invoking block; it stays alive for the duration of this call.
             let closure = unsafe { &*(*block).closure };
             closure(a, b, c, d);
         }
@@ -257,33 +274,37 @@ impl<F> RcBlock<F> {
     }
 }
 
-impl<F> RcBlock<F> {
-    /// Call this block directly from Rust and return its value.
-    pub fn call_ret<A: Copy, R>(&self, a: A) -> R
-    where
-        F: Fn(A) -> R,
-    {
-        // SAFETY: `self.inner` is a valid non-null pointer to a live `RcBlockInner<F>`;
-        // we hold `&self` so it cannot be dropped during this call.
-        let closure = unsafe { &*self.inner.as_ref().closure };
-        closure(a)
+impl<F: ?Sized> Block<F> {
+    /// Copy this block to the heap or retain it if it is already heap allocated.
+    pub fn copy(&self) -> RcBlock<F> {
+        // SAFETY: `self` is a live Objective-C block. `_Block_copy` returns an owned heap block
+        // with the same function signature.
+        let inner = unsafe { _Block_copy((self as *const Self).cast()) };
+        RcBlock {
+            inner: NonNull::new(inner.cast()).expect("_Block_copy returned null"),
+        }
     }
 }
 
-impl<F> Deref for RcBlock<F> {
+impl<F: ?Sized> Clone for RcBlock<F> {
+    fn clone(&self) -> Self {
+        self.deref().copy()
+    }
+}
+
+impl<F: ?Sized> Deref for RcBlock<F> {
     type Target = Block<F>;
     fn deref(&self) -> &Block<F> {
-        // SAFETY: `self.inner` was produced by `NonNull::new(Box::into_raw(...))` in `make`
-        // and is valid until `Drop::drop` runs; we hold `&self` so it cannot be dropped here.
-        unsafe { &self.inner.as_ref().block }
+        // SAFETY: `self.inner` is the live block returned by `_Block_copy` in `make` and remains
+        // valid until `Drop::drop`; we hold `&self` so it cannot be dropped here.
+        unsafe { self.inner.as_ref() }
     }
 }
 
-impl<F> Drop for RcBlock<F> {
+impl<F: ?Sized> Drop for RcBlock<F> {
     fn drop(&mut self) {
-        // SAFETY: `self.inner` was produced by `Box::into_raw` in `make`; reconstructing
-        // the `Box` here is the exactly paired deallocation and runs the closure destructor.
-        unsafe { drop(Box::from_raw(self.inner.as_ptr())) };
+        // SAFETY: `self.inner` owns the reference returned by `_Block_copy` in `make`.
+        unsafe { _Block_release(self.inner.as_ptr().cast()) };
     }
 }
 
@@ -293,12 +314,22 @@ mod test {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
     use super::*;
 
     fn as_dyn<A: 'static + Copy, F: Fn(A) + 'static>(block: &RcBlock<F>) -> &Block<dyn Fn(A)> {
         // SAFETY: `Block<F>` and `Block<dyn Fn(A)>` have identical `repr(C)` layouts;
         // `PhantomData<*const F>` is zero-sized so the bit-pattern is the same either way.
         unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A)>) }
+    }
+
+    fn as_dyn_ret<A: 'static + Copy, R: 'static + Copy, F: Fn(A) -> R + 'static>(
+        block: &RcBlock<F>,
+    ) -> &Block<dyn Fn(A) -> R> {
+        // SAFETY: identical repr(C) layouts; PhantomData<*const F> is zero-sized.
+        unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A) -> R>) }
     }
 
     fn as_dyn0<F: Fn() + 'static>(block: &RcBlock<F>) -> &Block<dyn Fn()> {
@@ -461,9 +492,42 @@ mod test {
     }
 
     #[test]
+    fn test_clone_keeps_capture_alive() {
+        let dropped = Arc::new(AtomicBool::new(false));
+        struct DropGuard(Arc<AtomicBool>);
+        impl Drop for DropGuard {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+
+        let guard = DropGuard(dropped.clone());
+        let block = RcBlock::new::<i32>(move |_| {
+            let _ = &guard;
+        });
+        let cloned = block.clone();
+        drop(block);
+        assert!(!dropped.load(Ordering::SeqCst));
+        as_dyn(&cloned).call((0,));
+        drop(cloned);
+        assert!(dropped.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_block_is_objective_c_object() {
+        let block = RcBlock::new::<i32>(|_| {});
+        // SAFETY: A block is an Objective-C object and responds to the NSObject self selector.
+        unsafe {
+            let object = (&*block as *const Block<_>).cast::<AnyObject>().cast_mut();
+            let same: *mut AnyObject = msg_send![object, self];
+            assert_eq!(same, object);
+        }
+    }
+
+    #[test]
     fn test_block_call_1_arg_ret() {
         let block = RcBlock::new_ret::<i32, i32>(|x: i32| x * 2);
-        assert_eq!(block.call_ret(21), 42);
+        assert_eq!(as_dyn_ret(&block).call((21,)), 42);
     }
 
     #[test]

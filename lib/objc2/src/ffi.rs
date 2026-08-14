@@ -8,7 +8,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use crate::runtime::{AnyClass, AnyObject as Object};
+use crate::runtime::{AnyClass, AnyObject as Object, AnyProtocol, Bool};
 
 #[repr(C)]
 pub struct objc_super {
@@ -26,6 +26,7 @@ unsafe extern "C" {
     pub fn objc_msgSendSuper(receiver: *const objc_super, sel: *const c_void, ...) -> *mut c_void;
 
     pub fn object_getClass(obj: *const Object) -> *mut c_void;
+    pub fn objc_getProtocol(name: *const c_char) -> *const AnyProtocol;
     pub fn class_getInstanceVariable(cls: *const c_void, name: *const c_char) -> *const c_void;
     pub fn ivar_getOffset(ivar: *const c_void) -> isize;
     pub fn class_getInstanceMethod(cls: *const c_void, sel: *const c_void) -> *const c_void;
@@ -51,6 +52,7 @@ unsafe extern "C" {
         imp: *const c_void,
         types: *const c_char,
     ) -> bool;
+    pub fn class_addProtocol(class: *mut AnyClass, protocol: *const AnyProtocol) -> Bool;
     pub fn objc_registerClassPair(class: *mut c_void);
 
     pub fn objc_autoreleasePoolPush() -> *mut c_void;
