@@ -186,12 +186,26 @@ unsafe fn render_fitted(
     }
 }
 
-fn render(context: *mut c_void, document: &Document, minimum_line_width: f64) {
+/// Returns the width to stroke `line_width` with, in the current user space.
+///
+/// Strokes thinner than a device pixel are passed through untouched: Core Graphics antialiases
+/// them into a proportionally faint line, which keeps the drawing's balance at thumbnail sizes.
+/// Only a degenerate width falls back to `hairline`, the user space size of one device pixel,
+/// because Core Graphics draws a zero width stroke at full strength.
+fn stroke_width(line_width: f64, hairline: f64) -> f64 {
+    if line_width > 0.0 {
+        line_width
+    } else {
+        hairline
+    }
+}
+
+fn render(context: *mut c_void, document: &Document, hairline: f64) {
     for command in &document.commands {
         match command {
             Command::Fill { path, style } => {
                 add_path(context, path);
-                paint_path(context, style, Paint::Fill, minimum_line_width);
+                paint_path(context, style, Paint::Fill);
             }
             Command::Stroke {
                 path,
@@ -207,11 +221,10 @@ fn render(context: *mut c_void, document: &Document, minimum_line_width: f64) {
                     paint_path(
                         context,
                         style,
-                        Paint::Stroke(line_width.max(minimum_line_width)),
-                        minimum_line_width,
+                        Paint::Stroke(stroke_width(*line_width, hairline)),
                     );
                 } else {
-                    stroke_variable_path(context, path, style, *line_width, minimum_line_width);
+                    stroke_variable_path(context, path, style, *line_width, hairline);
                 }
             }
         }
@@ -224,16 +237,13 @@ enum Paint {
     Stroke(f64),
 }
 
-fn paint_path(context: *mut c_void, style: &Style, paint: Paint, minimum_line_width: f64) {
+fn paint_path(context: *mut c_void, style: &Style, paint: Paint) {
     // SAFETY: context contains a current path built from finite parsed coordinates.
     unsafe {
-        match paint {
-            Paint::Fill => {}
-            Paint::Stroke(width) => {
-                CGContextSetLineWidth(context, width.max(minimum_line_width));
-                CGContextSetLineCap(context, LINE_CAP_ROUND);
-                CGContextSetLineJoin(context, LINE_JOIN_ROUND);
-            }
+        if let Paint::Stroke(width) = paint {
+            CGContextSetLineWidth(context, width);
+            CGContextSetLineCap(context, LINE_CAP_ROUND);
+            CGContextSetLineJoin(context, LINE_JOIN_ROUND);
         }
         if let Style::Solid(color) = style {
             let color = display_color(*color);
@@ -430,7 +440,7 @@ fn stroke_variable_path(
     path: &Path,
     style: &Style,
     initial_width: f64,
-    minimum_line_width: f64,
+    hairline: f64,
 ) {
     for subpath in &path.subpaths {
         let mut current = subpath.start;
@@ -456,8 +466,7 @@ fn stroke_variable_path(
             paint_path(
                 context,
                 style,
-                Paint::Stroke(((width + next_width) / 2.0).max(minimum_line_width)),
-                minimum_line_width,
+                Paint::Stroke(stroke_width((width + next_width) / 2.0, hairline)),
             );
             current = end;
             width = next_width;
@@ -628,20 +637,52 @@ mod tests {
         assert_eq!(curves.last().expect("arc has curves").to.x, 200.0);
     }
 
-    #[test]
-    fn renders_into_a_bitmap_context() {
-        let mut pixels = [0u8; 16 * 16 * 4];
-        // SAFETY: The mutable pixel buffer outlives the bitmap context and the supplied format
-        // is 8-bit premultiplied RGBA. Created Core Graphics objects are released below.
+    /// The side of the square test document, which renders one unit per pixel.
+    const SIDE: usize = 32;
+
+    fn solid(red: f64, green: f64, blue: f64) -> Style {
+        Style::Solid(Color {
+            red,
+            green,
+            blue,
+            alpha: 1.0,
+            color_space: ColorSpace::Srgb,
+        })
+    }
+
+    fn path(start: Point, operations: impl IntoIterator<Item = PathOperation>) -> Path {
+        Path {
+            subpaths: vec![tinyvg::Subpath {
+                start,
+                nodes: operations
+                    .into_iter()
+                    .map(|operation| tinyvg::PathNode {
+                        operation,
+                        line_width: None,
+                    })
+                    .collect(),
+            }],
+        }
+    }
+
+    /// Renders `commands` over a white background and returns the `SIDE` square RGBA pixels.
+    fn render_to_bitmap(commands: Vec<Command>) -> Vec<u8> {
+        let mut pixels = vec![0u8; SIDE * SIDE * 4];
+        let size = Size {
+            width: SIDE as f64,
+            height: SIDE as f64,
+        };
+        // SAFETY: The pixel buffer outlives the bitmap context and the supplied format is 8-bit
+        // premultiplied RGBA. Created Core Graphics objects are released below.
         unsafe {
             let color_space = CGColorSpaceCreateDeviceRGB();
             assert!(!color_space.is_null());
             let context = CGBitmapContextCreate(
                 pixels.as_mut_ptr().cast::<c_void>(),
-                16,
-                16,
+                SIDE,
+                SIDE,
                 8,
-                16 * 4,
+                SIDE * 4,
                 color_space,
                 1,
             );
@@ -649,60 +690,75 @@ mod tests {
             assert!(!context.is_null());
             let document = Document {
                 size: tinyvg::Size {
-                    width: 16.0,
-                    height: 16.0,
+                    width: size.width,
+                    height: size.height,
                 },
-                commands: vec![Command::Fill {
-                    path: Path {
-                        subpaths: vec![tinyvg::Subpath {
-                            start: Point { x: 2.0, y: 2.0 },
-                            nodes: vec![
-                                tinyvg::PathNode {
-                                    operation: PathOperation::LineTo(Point { x: 14.0, y: 2.0 }),
-                                    line_width: None,
-                                },
-                                tinyvg::PathNode {
-                                    operation: PathOperation::LineTo(Point { x: 14.0, y: 14.0 }),
-                                    line_width: None,
-                                },
-                                tinyvg::PathNode {
-                                    operation: PathOperation::LineTo(Point { x: 2.0, y: 14.0 }),
-                                    line_width: None,
-                                },
-                                tinyvg::PathNode {
-                                    operation: PathOperation::Close,
-                                    line_width: None,
-                                },
-                            ],
-                        }],
-                    },
-                    style: Style::Solid(Color {
-                        red: 1.0,
-                        green: 0.0,
-                        blue: 0.0,
-                        alpha: 1.0,
-                        color_space: ColorSpace::Srgb,
-                    }),
-                }],
+                commands,
             };
-            fill_white_background(
-                context,
-                Size {
-                    width: 16.0,
-                    height: 16.0,
-                },
-            );
-            render_tinyvg(
-                context,
-                &document,
-                Size {
-                    width: 16.0,
-                    height: 16.0,
-                },
-                1.0,
-            );
+            fill_white_background(context, size);
+            render_tinyvg(context, &document, size, 1.0);
             CGContextRelease(context);
         }
-        assert!(pixels.iter().any(|component| *component != 0));
+        pixels
+    }
+
+    fn pixel(pixels: &[u8], x: usize, y: usize) -> [u8; 4] {
+        let offset = (y * SIDE + x) * 4;
+        pixels[offset..offset + 4].try_into().expect("RGBA pixel")
+    }
+
+    #[test]
+    fn renders_a_filled_path_into_a_bitmap_context() {
+        let pixels = render_to_bitmap(vec![Command::Fill {
+            path: path(
+                Point { x: 8.0, y: 8.0 },
+                [
+                    PathOperation::LineTo(Point { x: 24.0, y: 8.0 }),
+                    PathOperation::LineTo(Point { x: 24.0, y: 24.0 }),
+                    PathOperation::LineTo(Point { x: 8.0, y: 24.0 }),
+                    PathOperation::Close,
+                ],
+            ),
+            style: solid(1.0, 0.0, 0.0),
+        }]);
+        assert_eq!(pixel(&pixels, SIDE / 2, SIDE / 2), [255, 0, 0, 255]);
+        assert_eq!(pixel(&pixels, 0, 0), [255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn stroke_width_only_replaces_a_degenerate_width() {
+        // Anything positive is passed through so Core Graphics can fade sub-pixel strokes
+        // instead of promoting them to a full strength hairline.
+        assert_eq!(stroke_width(0.04, 1.0), 0.04);
+        assert_eq!(stroke_width(3.0, 1.0), 3.0);
+        assert_eq!(stroke_width(0.0, 0.25), 0.25);
+        assert_eq!(stroke_width(-1.0, 0.25), 0.25);
+    }
+
+    #[test]
+    fn sub_pixel_strokes_render_faintly_instead_of_solid_black() {
+        let darkest = |line_width| {
+            let middle = SIDE as f64 / 2.0;
+            let pixels = render_to_bitmap(vec![Command::Stroke {
+                path: path(
+                    Point { x: middle, y: 0.0 },
+                    [PathOperation::LineTo(Point {
+                        x: middle,
+                        y: SIDE as f64,
+                    })],
+                ),
+                style: solid(0.0, 0.0, 0.0),
+                line_width,
+            }]);
+            (0..SIDE)
+                .map(|x| pixel(&pixels, x, SIDE / 2)[0])
+                .min()
+                .expect("row has pixels")
+        };
+
+        // A hair thin stroke barely tints the background, while a wide one is solid black.
+        assert!(darkest(0.05) > 220);
+        assert!(darkest(0.5) > 128);
+        assert_eq!(darkest(4.0), 0);
     }
 }
