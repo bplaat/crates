@@ -10,6 +10,7 @@
 
 mod checkerboard;
 mod cocoa;
+mod window_controller;
 
 use std::cell::Cell;
 use std::ffi::c_void;
@@ -22,6 +23,7 @@ use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
+use window_controller::create_window_controller;
 
 struct DocumentIvars {
     image: Cell<*mut Object>,
@@ -119,16 +121,21 @@ impl Document {
             return;
         }
 
-        let image_size = if tinyvg.is_null() {
-            // SAFETY: image is a live NSImage owned by the document.
-            unsafe { msg_send![image, size] }
+        let (image_size, title_size) = if tinyvg.is_null() {
+            // SAFETY: image is a live NSImage owned by the document, and its representations stay
+            // alive with it.
+            unsafe {
+                let size: Size = msg_send![image, size];
+                (size, image_pixel_size(image, size))
+            }
         } else {
             // SAFETY: tinyvg is owned by the document and remains valid in this method.
             let document = unsafe { &*tinyvg };
-            Size {
+            let size = Size {
                 width: document.size.width,
                 height: document.size.height,
-            }
+            };
+            (size, size)
         };
 
         // SAFETY: All objects are valid AppKit instances, selectors use their documented ABI,
@@ -181,8 +188,7 @@ impl Document {
             let _: () = msg_send![window, setContentView: checkerboard];
             let _: () = msg_send![checkerboard, release];
 
-            let controller: *mut Object = msg_send![class!(NSWindowController), alloc];
-            let controller: *mut Object = msg_send![controller, initWithWindow: window];
+            let controller = create_window_controller(window, title_size);
             let this = self as *const Self as *mut Object;
             let _: () = msg_send![this, addWindowController: controller];
             let _: () = msg_send![controller, release];
@@ -247,6 +253,38 @@ impl AppDelegate {
             let application: *mut Object = msg_send![notification, object];
             let _: () = msg_send![application, activateIgnoringOtherApps: Bool::YES];
         }
+    }
+}
+
+/// Returns the pixel dimensions of the largest representation of an image.
+///
+/// An `NSImage` reports its size in points, which is smaller than the stored pixels for images
+/// that carry a resolution above 72 dpi, so the title shows the representation sizes instead.
+///
+/// # Safety
+///
+/// `image` must point to a valid `NSImage` for the duration of this call.
+unsafe fn image_pixel_size(image: *mut Object, fallback: Size) -> Size {
+    // SAFETY: The caller supplies a live NSImage that owns its representations.
+    unsafe {
+        let representations: *mut Object = msg_send![image, representations];
+        let count: usize = msg_send![representations, count];
+        let mut size = Size {
+            width: 0.0,
+            height: 0.0,
+        };
+        for index in 0..count {
+            let representation: *mut Object = msg_send![representations, objectAtIndex: index];
+            let width: isize = msg_send![representation, pixelsWide];
+            let height: isize = msg_send![representation, pixelsHigh];
+            if width > 0 && height > 0 && (width * height) as f64 > size.width * size.height {
+                size = Size {
+                    width: width as f64,
+                    height: height as f64,
+                };
+            }
+        }
+        if size.width > 0.0 { size } else { fallback }
     }
 }
 
