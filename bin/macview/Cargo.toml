@@ -1,0 +1,38 @@
+[package]
+name = "macview"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[package.metadata]
+platforms = ["macos"]
+
+[package.metadata.bundle]
+name = "MacView"
+identifier = "nl.bplaat.MacView"
+copyright = "Copyright (c) 2026 Bastiaan van der Plaat"
+entitlements = "Entitlements.plist"
+
+[[package.metadata.bundle.appex]]
+name = "MacView QOI Preview"
+identifier = "nl.bplaat.MacView.Preview"
+package = "../macview-qoi-preview"
+binary = "macview-qoi-preview"
+info_plist = "../macview-qoi-preview/Info.plist"
+entitlements = "../macview-qoi-preview/Entitlements.plist"
+
+[[package.metadata.bundle.appex]]
+name = "MacView QOI Thumbnail"
+identifier = "nl.bplaat.MacView.Thumbnail"
+package = "../macview-qoi-thumbnail"
+binary = "macview-qoi-thumbnail"
+info_plist = "../macview-qoi-thumbnail/Info.plist"
+entitlements = "../macview-qoi-thumbnail/Entitlements.plist"
+
+[lints]
+workspace = true
+
+[dependencies]
+objc2 = "0.6"
+macview-appkit = { path = "../../lib/macview-appkit" }

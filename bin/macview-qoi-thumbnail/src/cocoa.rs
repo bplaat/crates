@@ -8,7 +8,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use qoi_appkit::Rect;
+use macview_appkit::Rect;
 
 #[link(name = "Cocoa", kind = "framework")]
 unsafe extern "C" {}

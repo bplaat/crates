@@ -16,13 +16,13 @@ use std::ptr::null_mut;
 
 use block2::{Block, RcBlock};
 use cocoa::*;
+use macview_appkit::{Point, Rect, Size, load_image};
 use objc2::runtime::AnyObject as Object;
 use objc2::{class, define_class, msg_send};
-use qoi_appkit::{Point, Rect, Size, load_image};
 
 define_class!(
     #[unsafe(super(QLThumbnailProvider))]
-    #[name = "QoiThumbnailProvider"]
+    #[name = "MacViewQoiThumbnailProvider"]
     struct ThumbnailProvider;
 
     impl ThumbnailProvider {
@@ -63,7 +63,8 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
             msg_send![request, scale],
         )
     };
-    let (image, image_size) = match load_image(url) {
+    // SAFETY: Quick Look supplied url as a valid file NSURL for this callback.
+    let (image, image_size) = match unsafe { load_image(url) } {
         Ok((image, image_size)) => (OwnedImage(image), image_size),
         Err(description) => {
             completion.call((null_mut(), make_error(&description)));
@@ -136,7 +137,7 @@ fn make_error(description: &str) -> *mut Object {
             forKey: description_key
         ];
         let domain: *mut Object = msg_send![class!(NSString),
-            stringWithUTF8String: c"nl.bplaat.QOIViewer.Thumbnail".as_ptr()
+            stringWithUTF8String: c"nl.bplaat.MacView.Thumbnail".as_ptr()
         ];
         msg_send![class!(NSError),
             errorWithDomain: domain,

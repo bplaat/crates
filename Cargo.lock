@@ -382,6 +382,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
+name = "macview"
+version = "0.1.0"
+dependencies = [
+ "macview-appkit",
+ "objc2",
+]
+
+[[package]]
+name = "macview-appkit"
+version = "0.1.0"
+dependencies = [
+ "objc2",
+ "qoi",
+]
+
+[[package]]
+name = "macview-qoi-preview"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "macview-appkit",
+ "objc2",
+]
+
+[[package]]
+name = "macview-qoi-thumbnail"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "macview-appkit",
+ "objc2",
+]
+
+[[package]]
 name = "manexplorer"
 version = "0.1.0"
 dependencies = [
@@ -577,42 +611,6 @@ dependencies = [
 [[package]]
 name = "qoi"
 version = "0.1.0"
-
-[[package]]
-name = "qoi-appkit"
-version = "0.1.0"
-dependencies = [
- "objc2",
- "qoi",
-]
-
-[[package]]
-name = "qoi-viewer"
-version = "0.1.0"
-dependencies = [
- "objc2",
- "qoi",
- "qoi-appkit",
-]
-
-[[package]]
-name = "qoi-viewer-preview"
-version = "0.1.0"
-dependencies = [
- "block2",
- "objc2",
- "qoi",
- "qoi-appkit",
-]
-
-[[package]]
-name = "qoi-viewer-thumbnail"
-version = "0.1.0"
-dependencies = [
- "block2",
- "objc2",
- "qoi-appkit",
-]
 
 [[package]]
 name = "quote"

@@ -16,14 +16,14 @@ use std::ptr::null_mut;
 
 use block2::Block;
 use cocoa::*;
+use macview_appkit::{Point, Rect, Size, load_image};
 use objc2::ffi::class_addProtocol;
 use objc2::runtime::{AnyClass, AnyObject as Object, AnyProtocol};
 use objc2::{class, define_class, msg_send};
-use qoi_appkit::{Point, Rect, Size, load_image};
 
 define_class!(
     #[unsafe(super(NSViewController))]
-    #[name = "QoiPreviewViewController"]
+    #[name = "MacViewQoiPreviewViewController"]
     struct PreviewViewController;
 
     impl PreviewViewController {
@@ -66,7 +66,8 @@ impl PreviewViewController {
     }
 
     fn prepare_preview(&self, url: *mut Object, completion: &Block<dyn Fn(*mut Object)>) {
-        match load_image(url) {
+        // SAFETY: Quick Look supplied url as a valid file NSURL for this callback.
+        match unsafe { load_image(url) } {
             Ok((image, image_size)) => {
                 let size = Size {
                     width: image_size.width.clamp(320.0, 1200.0),
@@ -98,7 +99,7 @@ fn make_error(description: &str) -> *mut Object {
             forKey: description_key
         ];
         msg_send![class!(NSError),
-            errorWithDomain: ns_string("nl.bplaat.QOIViewer.Preview"),
+            errorWithDomain: ns_string("nl.bplaat.MacView.Preview"),
             code: 1isize,
             userInfo: user_info
         ]

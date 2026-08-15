@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A native macOS document-based QOI image viewer.
+//! A native macOS document-based image viewer.
 
 #![allow(unsafe_code)]
 
@@ -15,11 +15,11 @@ use std::ffi::c_void;
 use std::ptr::null_mut;
 
 use cocoa::*;
+use macview_appkit::{Point, Rect, Size, decode_image};
 use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
-use qoi_appkit::{Point, Rect, Size, make_image};
 
 struct DocumentIvars {
     image: Cell<*mut Object>,
@@ -27,7 +27,7 @@ struct DocumentIvars {
 
 define_class!(
     #[unsafe(super(NSDocument))]
-    #[name = "QoiDocument"]
+    #[name = "MacViewDocument"]
     #[ivars = DocumentIvars]
     struct Document;
 
@@ -56,24 +56,11 @@ define_class!(
 
 impl Document {
     fn read_from_data(&self, data: *mut Object, error_out: *mut c_void) -> Bool {
-        // SAFETY: AppKit passes a valid NSData object whose bytes remain alive for this call.
-        let bytes = unsafe {
-            let length: usize = msg_send![data, length];
-            let bytes: *const c_void = msg_send![data, bytes];
-            std::slice::from_raw_parts(bytes.cast::<u8>(), length)
-        };
-        let decoded = match qoi::decode(bytes) {
+        // SAFETY: AppKit supplied data as a valid NSData for the duration of this call.
+        let (image, _) = match unsafe { decode_image(data) } {
             Ok(image) => image,
             Err(error) => {
-                set_error(error_out, &error.to_string());
-                return Bool::NO;
-            }
-        };
-
-        let image = match make_image(&decoded) {
-            Some(image) => image,
-            None => {
-                set_error(error_out, "Could not create the image");
+                set_error(error_out, &error);
                 return Bool::NO;
             }
         };
@@ -201,7 +188,7 @@ fn set_error(error_out: *mut c_void, description: &str) {
     // SAFETY: error_out is a non-null NSError** supplied by NSDocument. All Objective-C
     // objects are autoreleased and remain valid for the current event cycle.
     unsafe {
-        let domain = ns_string("nl.bplaat.QOIViewer");
+        let domain = ns_string("nl.bplaat.MacView");
         let description_key = ns_string("NSLocalizedDescription");
         let description = ns_string(description);
         let user_info: *mut Object = msg_send![class!(NSDictionary),
@@ -289,7 +276,7 @@ fn create_menu(application: *mut Object) {
         let app_menu = add_menu(main_menu, "");
         add_item(
             app_menu,
-            "About QOI Viewer",
+            "About MacView",
             sel!(orderFrontStandardAboutPanel:),
             "",
             0,
@@ -307,7 +294,7 @@ fn create_menu(application: *mut Object) {
         add_separator(app_menu);
         add_item(
             app_menu,
-            "Hide QOI Viewer",
+            "Hide MacView",
             sel!(hide:),
             "h",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
@@ -332,7 +319,7 @@ fn create_menu(application: *mut Object) {
         add_separator(app_menu);
         add_item(
             app_menu,
-            "Quit QOI Viewer",
+            "Quit MacView",
             sel!(terminate:),
             "q",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
