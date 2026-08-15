@@ -16,6 +16,7 @@ use crate::cocoa::*;
 
 struct TinyVgViewIvars {
     document: Cell<*mut Document>,
+    margin: Cell<f64>,
 }
 
 define_class!(
@@ -75,7 +76,13 @@ impl TinyVgView {
                 msg_send![window, backingScaleFactor]
             };
 
-            render_fitted(context, &*document, bounds.size, backing_scale, 16.0);
+            render_fitted(
+                context,
+                &*document,
+                bounds.size,
+                backing_scale,
+                self.ivars().margin.get(),
+            );
         }
     }
 
@@ -98,10 +105,11 @@ impl TinyVgView {
     }
 }
 
-/// Creates an owned, resize-aware `NSView` that displays a TinyVG document.
+/// Creates an owned, resize-aware `NSView` that displays a TinyVG document inside `margin`.
 ///
-/// The caller owns the returned view and must send it `release`.
-pub fn create_tinyvg_view(frame: Rect, document: Box<Document>) -> *mut Object {
+/// A view that is scaled by a scroll view wants no margin of its own, because the magnification
+/// would scale that too. The caller owns the returned view and must send it `release`.
+pub fn create_tinyvg_view(frame: Rect, document: Box<Document>, margin: f64) -> *mut Object {
     // SAFETY: TinyVgView is a registered NSView subclass. The zero-initialized pointer ivar is
     // replaced with ownership of document before the view can draw.
     unsafe {
@@ -110,6 +118,7 @@ pub fn create_tinyvg_view(frame: Rect, document: Box<Document>) -> *mut Object {
         assert!(!view.is_null(), "failed to create TinyVG view");
         let view_ref = &*(view.cast::<TinyVgView>());
         view_ref.ivars().document.set(Box::into_raw(document));
+        view_ref.ivars().margin.set(margin);
         view
     }
 }

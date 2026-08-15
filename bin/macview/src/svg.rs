@@ -7,11 +7,11 @@
 use std::ptr::null_mut;
 
 use base64::prelude::*;
-use macview_appkit::{Rect, Size};
+use macview_appkit::{Point, Rect, Size};
 use objc2::runtime::{AnyObject as Object, Bool};
-use objc2::{class, msg_send};
+use objc2::{class, define_class, msg_send};
 
-use crate::cocoa::{WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START, ns_string};
+use crate::cocoa::ns_string;
 
 /// The size used for an SVG that declares neither dimensions nor a view box.
 const DEFAULT_SIZE: Size = Size {
@@ -19,19 +19,8 @@ const DEFAULT_SIZE: Size = Size {
     height: 512.0,
 };
 
-/// The margin the document is drawn inside, matching the TinyVG view.
-const MARGIN: f64 = 16.0;
-
 /// The byte order mark that a document may start with.
 const BYTE_ORDER_MARK: &[u8] = &[0xef, 0xbb, 0xbf];
-
-/// Swallows the context menu event of the page.
-///
-/// WebKit builds its page menu in the web process instead of asking the view for one, so
-/// overriding the menu of the view has no effect. Scripts injected by the application still run
-/// while content JavaScript is disabled, which leaves the SVG itself unable to script the page.
-const SUPPRESS_MENU_SCRIPT: &str =
-    "document.addEventListener('contextmenu', function (event) { event.preventDefault(); });";
 
 /// An SVG document, ready to be displayed by WebKit.
 pub(crate) struct Svg {
@@ -55,13 +44,31 @@ pub(crate) fn parse_svg(bytes: &[u8]) -> Svg {
         html: format!(
             "<!doctype html><meta charset=\"utf-8\"><style>\
              html,body{{margin:0;height:100%;overflow:hidden;background:transparent}}\
-             body{{box-sizing:border-box;padding:{MARGIN}px;user-select:none}}\
              img{{width:100%;height:100%;object-fit:contain}}\
              </style><img src=\"data:image/svg+xml;base64,{}\">",
             BASE64_STANDARD.encode(bytes)
         ),
     }
 }
+
+define_class!(
+    #[unsafe(super(WKWebView))]
+    #[name = "MacViewSvgView"]
+    struct SvgView;
+
+    impl SvgView {
+        /// Lets every event through to the scroll view around it.
+        ///
+        /// A web view handles scrolling, magnifying and its own page menu itself, none of which
+        /// belongs to an image. Taking the view out of hit testing hands all of it to the scroll
+        /// view, which scrolls, pans and zooms the media the same way it does for the other
+        /// formats, and leaves the page as a drawing only.
+        #[unsafe(method(hitTest:))]
+        const fn _hit_test(&self, _: Point) -> *mut Object {
+            null_mut()
+        }
+    }
+);
 
 /// Creates an owned view that draws an SVG document with WebKit.
 ///
@@ -73,16 +80,7 @@ pub(crate) fn create_svg_view(frame: Rect, svg: &Svg) -> *mut Object {
         let configuration: *mut Object = msg_send![class!(WKWebViewConfiguration), new];
         let preferences: *mut Object = msg_send![configuration, defaultWebpagePreferences];
         let _: () = msg_send![preferences, setAllowsContentJavaScript: Bool::NO];
-        let script: *mut Object = msg_send![class!(WKUserScript), alloc];
-        let script: *mut Object = msg_send![script,
-            initWithSource: ns_string(SUPPRESS_MENU_SCRIPT),
-            injectionTime: WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
-            forMainFrameOnly: Bool::YES
-        ];
-        let controller: *mut Object = msg_send![configuration, userContentController];
-        let _: () = msg_send![controller, addUserScript: script];
-        let _: () = msg_send![script, release];
-        let view: *mut Object = msg_send![class!(WKWebView), alloc];
+        let view: *mut Object = msg_send![SvgView::class(), alloc];
         let view: *mut Object = msg_send![view,
             initWithFrame: frame,
             configuration: configuration

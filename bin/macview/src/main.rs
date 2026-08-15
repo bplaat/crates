@@ -10,6 +10,7 @@
 
 mod checkerboard;
 mod cocoa;
+mod scroll_view;
 mod svg;
 mod window_controller;
 
@@ -24,6 +25,7 @@ use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
+use scroll_view::{MARGIN, create_scroll_view};
 use svg::{Svg, create_svg_view, is_svg, parse_svg};
 use window_controller::create_window_controller;
 
@@ -170,7 +172,7 @@ impl Document {
         // view is retained a second time because printing draws the loaded page again.
         unsafe {
             if !tinyvg.is_null() {
-                return create_tinyvg_view(frame, Box::new((*tinyvg).clone()));
+                return create_tinyvg_view(frame, Box::new((*tinyvg).clone()), 0.0);
             }
             if !svg.is_null() {
                 let view = create_svg_view(frame, &*svg);
@@ -205,9 +207,11 @@ impl Document {
         // SAFETY: All objects are valid AppKit instances, selectors use their documented ABI,
         // and ownership is balanced after the document retains its window controller.
         unsafe {
+            // The window holds the media and the margin around it, so that media which fits on
+            // screen is shown at its own size and the two zoom items agree from the start.
             let content_size = Size {
-                width: media_size.width.clamp(320.0, 1200.0),
-                height: media_size.height.clamp(240.0, 800.0),
+                width: (media_size.width + MARGIN * 2.0).clamp(320.0, 1200.0),
+                height: (media_size.height + MARGIN * 2.0).clamp(240.0, 800.0),
             };
             let rect = Rect {
                 origin: Point { x: 0.0, y: 0.0 },
@@ -227,13 +231,20 @@ impl Document {
             let _: () = msg_send![window, setContentMinSize: Size { width: 240.0, height: 180.0 }];
             let _: () = msg_send![window, center];
 
+            // The media keeps its own size and the scroll view magnifies it, so that zooming
+            // redraws the vector formats instead of scaling a picture of them.
             let checkerboard = create_checkerboard_view(rect);
-            let media_view = self.create_media_view(rect);
-            let _: () = msg_send![media_view,
-                setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
-            ];
-            let _: () = msg_send![checkerboard, addSubview: media_view];
+            let media_view = self.create_media_view(Rect {
+                origin: Point { x: 0.0, y: 0.0 },
+                size: media_size,
+            });
+            let scroll_view = create_scroll_view(rect, media_view);
             let _: () = msg_send![media_view, release];
+            // A window opens on the zoom the Zoom to Fit item sets, so that the media is shown
+            // the same way however it got there.
+            let _: () = msg_send![scroll_view, zoomToFit];
+            let _: () = msg_send![checkerboard, addSubview: scroll_view];
+            let _: () = msg_send![scroll_view, release];
             let _: () = msg_send![checkerboard,
                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
             ];
@@ -600,6 +611,42 @@ fn create_menu(application: *mut Object) {
         );
         let _: () = msg_send![edit_menu, release];
 
+        let view_menu = add_menu(main_menu, "View");
+        add_item(
+            view_menu,
+            "Zoom In",
+            sel!(zoomIn:),
+            "+",
+            NS_EVENT_MODIFIER_FLAG_COMMAND,
+            null_mut(),
+        );
+        add_item(
+            view_menu,
+            "Zoom Out",
+            sel!(zoomOut:),
+            "-",
+            NS_EVENT_MODIFIER_FLAG_COMMAND,
+            null_mut(),
+        );
+        add_separator(view_menu);
+        add_item(
+            view_menu,
+            "Actual Size",
+            sel!(actualSize:),
+            "0",
+            NS_EVENT_MODIFIER_FLAG_COMMAND,
+            null_mut(),
+        );
+        add_item(
+            view_menu,
+            "Zoom to Fit",
+            sel!(zoomToFit:),
+            "9",
+            NS_EVENT_MODIFIER_FLAG_COMMAND,
+            null_mut(),
+        );
+        let _: () = msg_send![view_menu, release];
+
         let window_menu = add_menu(main_menu, "Window");
         add_item(
             window_menu,
@@ -628,6 +675,9 @@ fn main() {
     autoreleasepool(|_| unsafe {
         let _ = Document::class();
         let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
+        // Every document gets a window of its own, so the tab items AppKit adds to the Window
+        // menu would control something this application does not have.
+        let _: () = msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing: Bool::NO];
         let _: Bool = msg_send![application,
             setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_REGULAR
         ];

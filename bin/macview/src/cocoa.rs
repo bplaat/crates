@@ -18,6 +18,7 @@ pub(crate) const NS_EVENT_MODIFIER_FLAG_SHIFT: u64 = 1 << 17;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_OPTION: u64 = 1 << 19;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
 pub(crate) const NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN: u64 = 3;
+pub(crate) const NS_NO_BORDER: u64 = 0;
 pub(crate) const NS_PRINTING_PAGINATION_MODE_FIT: u64 = 1;
 pub(crate) const NS_UTF8_STRING_ENCODING: u64 = 4;
 pub(crate) const NS_VIEW_HEIGHT_SIZABLE: u64 = 16;
@@ -26,7 +27,6 @@ pub(crate) const NS_WINDOW_STYLE_MASK_CLOSABLE: u64 = 1 << 1;
 pub(crate) const NS_WINDOW_STYLE_MASK_MINIATURIZABLE: u64 = 1 << 2;
 pub(crate) const NS_WINDOW_STYLE_MASK_RESIZABLE: u64 = 1 << 3;
 pub(crate) const NS_WINDOW_STYLE_MASK_TITLED: u64 = 1;
-pub(crate) const WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START: isize = 0;
 
 #[link(name = "Cocoa", kind = "framework")]
 unsafe extern "C" {}

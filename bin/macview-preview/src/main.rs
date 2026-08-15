@@ -93,12 +93,15 @@ impl PreviewViewController {
     }
 }
 
+/// The margin the media is drawn inside.
+const MARGIN: f64 = 16.0;
+
 /// Creates an owned view that draws `media` inside `frame`.
 ///
 /// The caller owns the returned view and must send it `release`.
 fn create_media_view(frame: Rect, media: Media) -> *mut Object {
     match media {
-        Media::TinyVg(document) => create_tinyvg_view(frame, Box::new(document)),
+        Media::TinyVg(document) => create_tinyvg_view(frame, Box::new(document), MARGIN),
         // SAFETY: NSImageView retains the image, which stays alive until this function returns.
         Media::Image(image) => unsafe {
             let view: *mut Object = msg_send![class!(NSImageView), alloc];
