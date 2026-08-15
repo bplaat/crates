@@ -18,6 +18,7 @@ pub(crate) const NS_EVENT_MODIFIER_FLAG_SHIFT: u64 = 1 << 17;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_OPTION: u64 = 1 << 19;
 pub(crate) const NS_EVENT_MODIFIER_FLAG_COMMAND: u64 = 1 << 20;
 pub(crate) const NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN: u64 = 3;
+pub(crate) const NS_PRINTING_PAGINATION_MODE_FIT: u64 = 1;
 pub(crate) const NS_UTF8_STRING_ENCODING: u64 = 4;
 pub(crate) const NS_VIEW_HEIGHT_SIZABLE: u64 = 16;
 pub(crate) const NS_VIEW_WIDTH_SIZABLE: u64 = 2;

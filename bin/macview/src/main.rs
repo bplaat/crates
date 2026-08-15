@@ -52,6 +52,15 @@ define_class!(
             self.make_window_controllers();
         }
 
+        #[unsafe(method(printOperationWithSettings:error:))]
+        fn _print_operation_with_settings(
+            &self,
+            settings: *mut Object,
+            _: *mut c_void,
+        ) -> *mut Object {
+            self.print_operation(settings)
+        }
+
         #[unsafe(method(dealloc))]
         fn _dealloc(&self) {
             self.dealloc();
@@ -114,36 +123,60 @@ impl Document {
         }
     }
 
-    fn make_window_controllers(&self) {
-        let image = self.ivars().image.get();
+    /// Returns the natural size of the loaded media, or `None` when the document is empty.
+    fn media_size(&self) -> Option<Size> {
         let tinyvg = self.ivars().tinyvg.get();
-        if image.is_null() && tinyvg.is_null() {
-            return;
-        }
-
-        let (image_size, title_size) = if tinyvg.is_null() {
-            // SAFETY: image is a live NSImage owned by the document, and its representations stay
-            // alive with it.
-            unsafe {
-                let size: Size = msg_send![image, size];
-                (size, image_pixel_size(image, size))
-            }
-        } else {
-            // SAFETY: tinyvg is owned by the document and remains valid in this method.
+        if !tinyvg.is_null() {
+            // SAFETY: The ivar owns the TinyVG document until dealloc.
             let document = unsafe { &*tinyvg };
-            let size = Size {
+            return Some(Size {
                 width: document.size.width,
                 height: document.size.height,
-            };
-            (size, size)
+            });
+        }
+        let image = self.ivars().image.get();
+        // SAFETY: The ivar owns a live NSImage when it is not null.
+        (!image.is_null()).then(|| unsafe { msg_send![image, size] })
+    }
+
+    /// Creates an owned view that draws the loaded media inside `frame`.
+    ///
+    /// The caller owns the returned view and must send it `release`.
+    fn create_media_view(&self, frame: Rect) -> *mut Object {
+        let tinyvg = self.ivars().tinyvg.get();
+        // SAFETY: The ivars own the media, and NSImageView retains the image it is given.
+        unsafe {
+            if !tinyvg.is_null() {
+                return create_tinyvg_view(frame, Box::new((*tinyvg).clone()));
+            }
+            let image_view: *mut Object = msg_send![class!(NSImageView), alloc];
+            let image_view: *mut Object = msg_send![image_view, initWithFrame: frame];
+            let _: () = msg_send![image_view, setImage: self.ivars().image.get()];
+            let _: () = msg_send![image_view,
+                setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN
+            ];
+            image_view
+        }
+    }
+
+    fn make_window_controllers(&self) {
+        let Some(media_size) = self.media_size() else {
+            return;
+        };
+        let image = self.ivars().image.get();
+        let title_size = if image.is_null() {
+            media_size
+        } else {
+            // SAFETY: The ivar owns a live NSImage that keeps its representations alive.
+            unsafe { image_pixel_size(image, media_size) }
         };
 
         // SAFETY: All objects are valid AppKit instances, selectors use their documented ABI,
         // and ownership is balanced after the document retains its window controller.
         unsafe {
             let content_size = Size {
-                width: image_size.width.clamp(320.0, 1200.0),
-                height: image_size.height.clamp(240.0, 800.0),
+                width: media_size.width.clamp(320.0, 1200.0),
+                height: media_size.height.clamp(240.0, 800.0),
             };
             let rect = Rect {
                 origin: Point { x: 0.0, y: 0.0 },
@@ -164,19 +197,7 @@ impl Document {
             let _: () = msg_send![window, center];
 
             let checkerboard = create_checkerboard_view(rect);
-            let media_view = if tinyvg.is_null() {
-                let image_view: *mut Object = msg_send![class!(NSImageView), alloc];
-                let image_view: *mut Object = msg_send![image_view, initWithFrame: rect];
-                let _: () = msg_send![image_view, setImage: image];
-                let _: () = msg_send![image_view,
-                    setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN
-                ];
-                image_view
-            } else {
-                let document = Box::from_raw(tinyvg);
-                self.ivars().tinyvg.set(null_mut());
-                create_tinyvg_view(rect, document)
-            };
+            let media_view = self.create_media_view(rect);
             let _: () = msg_send![media_view,
                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
             ];
@@ -193,11 +214,41 @@ impl Document {
             let _: () = msg_send![this, addWindowController: controller];
             let _: () = msg_send![controller, release];
             let _: () = msg_send![window, release];
+        }
+    }
 
-            if !image.is_null() {
-                let _: () = msg_send![image, release];
-                self.ivars().image.set(null_mut());
-            }
+    /// Creates a print operation that draws the media at its natural size, scaled to fit one page.
+    fn print_operation(&self, settings: *mut Object) -> *mut Object {
+        let Some(media_size) = self.media_size() else {
+            return null_mut();
+        };
+        // SAFETY: All objects are valid AppKit instances. The print info copy and the media view
+        // are released after the returned operation retains them.
+        unsafe {
+            let this = self as *const Self as *mut Object;
+            let print_info: *mut Object = msg_send![this, printInfo];
+            let print_info: *mut Object = msg_send![print_info, copy];
+            let attributes: *mut Object = msg_send![print_info, dictionary];
+            let _: () = msg_send![attributes, addEntriesFromDictionary: settings];
+            let _: () = msg_send![print_info,
+                setHorizontalPagination: NS_PRINTING_PAGINATION_MODE_FIT
+            ];
+            let _: () =
+                msg_send![print_info, setVerticalPagination: NS_PRINTING_PAGINATION_MODE_FIT];
+            let _: () = msg_send![print_info, setHorizontallyCentered: Bool::YES];
+            let _: () = msg_send![print_info, setVerticallyCentered: Bool::YES];
+
+            let view = self.create_media_view(Rect {
+                origin: Point { x: 0.0, y: 0.0 },
+                size: media_size,
+            });
+            let operation: *mut Object = msg_send![class!(NSPrintOperation),
+                printOperationWithView: view,
+                printInfo: print_info
+            ];
+            let _: () = msg_send![view, release];
+            let _: () = msg_send![print_info, release];
+            operation
         }
     }
 
@@ -443,6 +494,16 @@ fn create_menu(application: *mut Object) {
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
+        add_separator(file_menu);
+        add_item(
+            file_menu,
+            "Print...",
+            sel!(printDocument:),
+            "p",
+            NS_EVENT_MODIFIER_FLAG_COMMAND,
+            null_mut(),
+        );
+        add_separator(file_menu);
         add_item(
             file_menu,
             "Close Window",
