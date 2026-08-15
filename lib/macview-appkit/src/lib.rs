@@ -10,13 +10,15 @@
 
 use std::ptr::null;
 
-use objc2::runtime::AnyObject as Object;
+use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send};
 
 mod cocoa;
+mod tinyvg_renderer;
 
 use cocoa::*;
 pub use cocoa::{Point, Rect, Size};
+pub use tinyvg_renderer::{create_tinyvg_view, fill_white_background, render_tinyvg};
 
 /// Loads an image from a file URL into an owned `NSImage`.
 ///
@@ -26,13 +28,58 @@ pub use cocoa::{Point, Rect, Size};
 ///
 /// `url` must point to a valid `NSURL` for the duration of this call.
 pub unsafe fn load_image(url: *mut Object) -> Result<(*mut Object, Size), String> {
-    // SAFETY: The caller supplies a valid file URL. NSData owns its bytes for this scope.
+    // SAFETY: The caller supplies a valid file URL and decode_image consumes data synchronously.
+    unsafe { load_file(url, "Could not read the image", decode_image) }
+}
+
+/// Loads and parses a TinyVG document from a file URL.
+///
+/// # Safety
+///
+/// `url` must point to a valid `NSURL` for the duration of this call.
+pub unsafe fn load_tinyvg(url: *mut Object) -> Result<tinyvg::Document, String> {
+    // SAFETY: The caller supplies a valid file URL and decode_tinyvg consumes data synchronously.
+    unsafe { load_file(url, "Could not read the TinyVG image", decode_tinyvg) }
+}
+
+unsafe fn load_file<T>(
+    url: *mut Object,
+    read_error: &str,
+    decode: unsafe fn(*mut Object) -> Result<T, String>,
+) -> Result<T, String> {
+    // SAFETY: url is valid. Quick Look passes security-scoped URLs, and ordinary URLs simply
+    // return false without changing their access state.
+    let scoped: Bool = unsafe { msg_send![url, startAccessingSecurityScopedResource] };
+    // SAFETY: url is valid and NSData reads the file synchronously.
     let data: *mut Object = unsafe { msg_send![class!(NSData), dataWithContentsOfURL: url] };
-    if data.is_null() {
-        return Err(String::from("Could not read the image"));
+    let result = if data.is_null() {
+        Err(String::from(read_error))
+    } else {
+        // SAFETY: data is a live NSData for the duration of this call.
+        unsafe { decode(data) }
+    };
+    if scoped.as_bool() {
+        // SAFETY: This balances the successful start call above.
+        unsafe {
+            let _: () = msg_send![url, stopAccessingSecurityScopedResource];
+        }
     }
-    // SAFETY: data is the valid NSData object returned above and lives for this call.
-    unsafe { decode_image(data) }
+    result
+}
+
+/// Parses a TinyVG document from an `NSData` object.
+///
+/// # Safety
+///
+/// `data` must point to a valid `NSData` for the duration of this call.
+pub unsafe fn decode_tinyvg(data: *mut Object) -> Result<tinyvg::Document, String> {
+    // SAFETY: NSData keeps its immutable byte buffer alive for the duration of this function.
+    let bytes = unsafe {
+        let length: usize = msg_send![data, length];
+        let bytes: *const std::ffi::c_void = msg_send![data, bytes];
+        std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+    };
+    tinyvg::parse_auto(bytes).map_err(|error| error.to_string())
 }
 
 /// Decodes QOI or an AppKit-supported image format into an owned `NSImage`.

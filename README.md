@@ -25,6 +25,7 @@ These libraries are not published to [crates.io](https://crates.io) and are more
 - [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [plaatui](npm-lib/plaatui) A Preact web components ui library for my own services
 - [qoi](lib/qoi) A small decoder for the Quite OK Image format
+- [tinyvg](lib/tinyvg) A TinyVG binary vector image parser
 - [macview-appkit](lib/macview-appkit) Shared AppKit image loading for MacView
 - [small-websocket](lib/small-websocket) A simple and small websocket library for the [small-http](lib/small-http) library
 - [validate](lib/validate) A simple struct validation library
@@ -87,7 +88,7 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 - [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 - [Music Downloader](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](bin/pixelfont) An 8x8 pixel font editor
-- [MacView](bin/macview) A macOS image viewer with QOI [Quick Look preview](bin/macview-qoi-preview) and [thumbnail](bin/macview-qoi-thumbnail) extensions
+- [MacView](bin/macview) A macOS bitmap, QOI, and TinyVG image viewer with Quick Look preview and thumbnail extensions for [QOI](bin/macview-qoi-preview) and [TinyVG](bin/macview-tvg-preview)
 - [Sequel Explorer](bin/sequelexplorer) A simple SQLite database GUI viewer
 
 ### Tools / Websites

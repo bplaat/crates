@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Quick Look thumbnail extension for QOI images.
+//! Quick Look thumbnail extension for TinyVG images.
 
 #![allow(unsafe_code)]
 
@@ -16,13 +16,13 @@ use std::ptr::null_mut;
 
 use block2::{Block, RcBlock};
 use cocoa::*;
-use macview_appkit::{Point, Rect, Size, fill_white_background, load_image};
+use macview_appkit::{Size, fill_white_background, load_tinyvg, render_tinyvg};
 use objc2::runtime::AnyObject as Object;
 use objc2::{class, define_class, msg_send};
 
 define_class!(
     #[unsafe(super(QLThumbnailProvider))]
-    #[name = "MacViewQoiThumbnailProvider"]
+    #[name = "MacViewTvgThumbnailProvider"]
     struct ThumbnailProvider;
 
     impl ThumbnailProvider {
@@ -37,23 +37,6 @@ define_class!(
     }
 );
 
-struct OwnedImage(*mut Object);
-
-impl OwnedImage {
-    const fn as_ptr(&self) -> *mut Object {
-        self.0
-    }
-}
-
-impl Drop for OwnedImage {
-    fn drop(&mut self) {
-        // SAFETY: OwnedImage contains the non-null, retained NSImage returned by load_image.
-        unsafe {
-            let _: () = msg_send![self.0, release];
-        }
-    }
-}
-
 fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object, *mut Object)>) {
     // SAFETY: Quick Look supplies a valid request with a file URL and maximum size.
     let (url, maximum_size, scale): (*mut Object, Size, f64) = unsafe {
@@ -64,34 +47,26 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
         )
     };
     // SAFETY: Quick Look supplied url as a valid file NSURL for this callback.
-    let (image, image_size) = match unsafe { load_image(url) } {
-        Ok((image, image_size)) => (OwnedImage(image), image_size),
+    let document = match unsafe { load_tinyvg(url) } {
+        Ok(document) => document,
         Err(description) => {
             completion.call((null_mut(), make_error(&description)));
             return;
         }
     };
 
+    let image_size = Size {
+        width: document.size.width,
+        height: document.size.height,
+    };
     let context_size = aspect_fit(image_size, maximum_size);
     let drawing_size = scaled(context_size, scale);
     let drawing = RcBlock::new_ret::<*mut c_void, bool>(move |context| {
-        let rectangle = Rect {
-            origin: Point { x: 0.0, y: 0.0 },
-            size: drawing_size,
-        };
-        // SAFETY: Quick Look owns the drawing context for this call. The copied drawing block
-        // owns image, and the returned CGImage remains valid for the duration of the draw.
+        // SAFETY: Quick Look owns the valid drawing context for this call. The copied drawing
+        // block owns document and rendering is synchronous within the block invocation.
         unsafe {
-            let cg_image: *const c_void = msg_send![image.as_ptr(),
-                CGImageForProposedRect: null_mut::<Rect>().cast::<c_void>(),
-                context: null_mut::<Object>(),
-                hints: null_mut::<Object>()
-            ];
-            if cg_image.is_null() {
-                return false;
-            }
             fill_white_background(context, drawing_size);
-            CGContextDrawImage(context, rectangle, cg_image);
+            render_tinyvg(context, &document, drawing_size, 1.0);
         }
         true
     });
@@ -138,7 +113,7 @@ fn make_error(description: &str) -> *mut Object {
             forKey: description_key
         ];
         let domain: *mut Object = msg_send![class!(NSString),
-            stringWithUTF8String: c"nl.bplaat.MacView.Thumbnail".as_ptr()
+            stringWithUTF8String: c"nl.bplaat.MacView.TVGThumbnail".as_ptr()
         ];
         msg_send![class!(NSError),
             errorWithDomain: domain,
@@ -174,7 +149,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn thumbnail_context_uses_the_image_aspect_ratio() {
+    fn thumbnail_context_uses_the_document_aspect_ratio() {
         let size = aspect_fit(
             Size {
                 width: 400.0,
@@ -190,42 +165,20 @@ mod tests {
     }
 
     #[test]
-    fn image_fills_a_retina_context() {
-        let maximum_size = Size {
-            width: 256.0,
-            height: 256.0,
-        };
-        let scale = 2.0;
+    fn document_fills_a_retina_context() {
         let context_size = aspect_fit(
             Size {
                 width: 400.0,
                 height: 200.0,
             },
-            maximum_size,
+            Size {
+                width: 256.0,
+                height: 256.0,
+            },
         );
-        let drawing_size = scaled(context_size, scale);
+        let drawing_size = scaled(context_size, 2.0);
         assert_eq!(drawing_size.width, 512.0);
         assert_eq!(drawing_size.height, 256.0);
-    }
-
-    #[test]
-    fn thumbnail_reply_is_an_object() {
-        autoreleasepool(|_| {
-            let drawing = RcBlock::new_ret::<*mut c_void, bool>(|_| true);
-            // SAFETY: The block has the CGContext drawing signature required by QLThumbnailReply.
-            unsafe {
-                let reply: *mut Object = msg_send![class!(QLThumbnailReply),
-                    replyWithContextSize: Size {
-                        width: 32.0,
-                        height: 32.0,
-                    },
-                    drawingBlock: &*drawing
-                ];
-                assert!(!reply.is_null());
-                let _: *mut Object = msg_send![reply, retain];
-                let _: () = msg_send![reply, release];
-            }
-        });
     }
 
     #[test]
@@ -247,19 +200,13 @@ mod tests {
             // SAFETY: The block has the CGContext drawing signature required by QLThumbnailReply.
             let reply: *mut Object = unsafe {
                 msg_send![class!(QLThumbnailReply),
-                    replyWithContextSize: Size {
-                        width: 32.0,
-                        height: 32.0,
-                    },
+                    replyWithContextSize: Size { width: 32.0, height: 32.0 },
                     drawingBlock: &*drawing
                 ]
             };
             assert!(!reply.is_null());
             drop(drawing);
-            assert!(
-                !dropped.load(Ordering::SeqCst),
-                "QLThumbnailReply must retain its escaping drawing block"
-            );
+            assert!(!dropped.load(Ordering::SeqCst));
         });
         assert!(dropped.load(Ordering::SeqCst));
     }

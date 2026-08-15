@@ -20,7 +20,7 @@
         </dict>
         <dict>
             <key>CFBundleTypeName</key>
-            <string>Quite OK Image</string>
+            <string>QOI Image</string>
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>
             <key>LSHandlerRank</key>
@@ -28,6 +28,34 @@
             <key>LSItemContentTypes</key>
             <array>
                 <string>org.qoiformat.qoi</string>
+            </array>
+            <key>NSDocumentClass</key>
+            <string>MacViewDocument</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>TinyVG Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.tinyvg.tvg</string>
+            </array>
+            <key>NSDocumentClass</key>
+            <string>MacViewDocument</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>TinyVG Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.tinyvg.tvgt</string>
             </array>
             <key>NSDocumentClass</key>
             <string>MacViewDocument</string>
@@ -41,7 +69,7 @@
                 <string>public.image</string>
             </array>
             <key>UTTypeDescription</key>
-            <string>Quite OK Image</string>
+            <string>QOI Image</string>
             <key>UTTypeIdentifier</key>
             <string>org.qoiformat.qoi</string>
             <key>UTTypeTagSpecification</key>
@@ -52,6 +80,45 @@
                 </array>
                 <key>public.mime-type</key>
                 <string>image/qoi</string>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.image</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>TinyVG Image</string>
+            <key>UTTypeIdentifier</key>
+            <string>org.tinyvg.tvg</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>tvg</string>
+                </array>
+                <key>public.mime-type</key>
+                <string>image/tinyvg</string>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.image</string>
+                <string>public.text</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>TinyVG Image</string>
+            <key>UTTypeIdentifier</key>
+            <string>org.tinyvg.tvgt</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>tvgt</string>
+                </array>
+                <key>public.mime-type</key>
+                <string>text/tinyvg</string>
             </dict>
         </dict>
     </array>

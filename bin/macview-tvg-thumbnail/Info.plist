@@ -12,15 +12,16 @@
         <dict>
             <key>QLSupportedContentTypes</key>
             <array>
-                <string>org.qoiformat.qoi</string>
+                <string>org.tinyvg.tvg</string>
+                <string>org.tinyvg.tvgt</string>
             </array>
             <key>QLThumbnailMinimumDimension</key>
-            <integer>32</integer>
+            <integer>0</integer>
         </dict>
         <key>NSExtensionPointIdentifier</key>
         <string>com.apple.quicklook.thumbnail</string>
         <key>NSExtensionPrincipalClass</key>
-        <string>MacViewQoiThumbnailProvider</string>
+        <string>MacViewTvgThumbnailProvider</string>
     </dict>
 </dict>
 </plist>

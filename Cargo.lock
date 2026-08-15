@@ -387,6 +387,7 @@ version = "0.1.0"
 dependencies = [
  "macview-appkit",
  "objc2",
+ "tinyvg",
 ]
 
 [[package]]
@@ -395,6 +396,7 @@ version = "0.1.0"
 dependencies = [
  "objc2",
  "qoi",
+ "tinyvg",
 ]
 
 [[package]]
@@ -408,6 +410,24 @@ dependencies = [
 
 [[package]]
 name = "macview-qoi-thumbnail"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "macview-appkit",
+ "objc2",
+]
+
+[[package]]
+name = "macview-tvg-preview"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "macview-appkit",
+ "objc2",
+]
+
+[[package]]
+name = "macview-tvg-thumbnail"
 version = "0.1.0"
 dependencies = [
  "block2",
@@ -919,6 +939,10 @@ version = "0.4.2+patch"
 [[package]]
 name = "threadpool"
 version = "1.8.0+patch"
+
+[[package]]
+name = "tinyvg"
+version = "0.1.0"
 
 [[package]]
 name = "unicode-ident"

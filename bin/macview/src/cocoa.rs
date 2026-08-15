@@ -4,8 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+#![allow(non_snake_case, non_upper_case_globals)]
+
 use std::ffi::c_void;
 
+use macview_appkit::Rect;
 use objc2::runtime::AnyObject as Object;
 use objc2::{class, msg_send};
 
@@ -25,6 +28,24 @@ pub(crate) const NS_WINDOW_STYLE_MASK_TITLED: u64 = 1;
 
 #[link(name = "Cocoa", kind = "framework")]
 unsafe extern "C" {}
+
+#[link(name = "AppKit", kind = "framework")]
+unsafe extern "C" {
+    pub(crate) static NSAppearanceNameAqua: *mut Object;
+    pub(crate) static NSAppearanceNameDarkAqua: *mut Object;
+}
+
+#[link(name = "CoreGraphics", kind = "framework")]
+unsafe extern "C" {
+    pub(crate) fn CGContextFillRect(context: *mut c_void, rectangle: Rect);
+    pub(crate) fn CGContextSetRGBFillColor(
+        context: *mut c_void,
+        red: f64,
+        green: f64,
+        blue: f64,
+        alpha: f64,
+    );
+}
 
 pub(crate) fn ns_string(value: &str) -> *mut Object {
     // SAFETY: NSString copies the valid UTF-8 bytes before the returned object is autoreleased.

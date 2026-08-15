@@ -30,9 +30,26 @@ binary = "macview-qoi-thumbnail"
 info_plist = "../macview-qoi-thumbnail/Info.plist"
 entitlements = "../macview-qoi-thumbnail/Entitlements.plist"
 
+[[package.metadata.bundle.appex]]
+name = "MacView TVG Preview"
+identifier = "nl.bplaat.MacView.TVGPreview"
+package = "../macview-tvg-preview"
+binary = "macview-tvg-preview"
+info_plist = "../macview-tvg-preview/Info.plist"
+entitlements = "../macview-tvg-preview/Entitlements.plist"
+
+[[package.metadata.bundle.appex]]
+name = "MacView TVG Thumbnail"
+identifier = "nl.bplaat.MacView.TVGThumbnail"
+package = "../macview-tvg-thumbnail"
+binary = "macview-tvg-thumbnail"
+info_plist = "../macview-tvg-thumbnail/Info.plist"
+entitlements = "../macview-tvg-thumbnail/Entitlements.plist"
+
 [lints]
 workspace = true
 
 [dependencies]
 objc2 = "0.6"
 macview-appkit = { path = "../../lib/macview-appkit" }
+tinyvg = { path = "../../lib/tinyvg" }

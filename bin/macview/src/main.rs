@@ -8,14 +8,16 @@
 
 #![allow(unsafe_code)]
 
+mod checkerboard;
 mod cocoa;
 
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::null_mut;
 
+use checkerboard::create_checkerboard_view;
 use cocoa::*;
-use macview_appkit::{Point, Rect, Size, decode_image};
+use macview_appkit::{Point, Rect, Size, create_tinyvg_view, decode_image, decode_tinyvg};
 use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
@@ -23,6 +25,7 @@ use objc2::{class, define_class, msg_send, sel};
 
 struct DocumentIvars {
     image: Cell<*mut Object>,
+    tinyvg: Cell<*mut tinyvg::Document>,
 }
 
 define_class!(
@@ -56,6 +59,26 @@ define_class!(
 
 impl Document {
     fn read_from_data(&self, data: *mut Object, error_out: *mut c_void) -> Bool {
+        // SAFETY: AppKit passes a valid NSData object whose bytes remain alive for this call.
+        let bytes = unsafe {
+            let length: usize = msg_send![data, length];
+            let bytes: *const c_void = msg_send![data, bytes];
+            std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+        };
+        if tinyvg::is_tinyvg(bytes) {
+            // SAFETY: AppKit supplied data as a valid NSData for the duration of this call.
+            let document = match unsafe { decode_tinyvg(data) } {
+                Ok(document) => document,
+                Err(error) => {
+                    set_error(error_out, &error.to_string());
+                    return Bool::NO;
+                }
+            };
+            self.replace_image(null_mut());
+            self.replace_tinyvg(Box::into_raw(Box::new(document)));
+            return Bool::YES;
+        }
+
         // SAFETY: AppKit supplied data as a valid NSData for the duration of this call.
         let (image, _) = match unsafe { decode_image(data) } {
             Ok(image) => image,
@@ -64,26 +87,53 @@ impl Document {
                 return Bool::NO;
             }
         };
+        self.replace_tinyvg(null_mut());
+        self.replace_image(image);
+        Bool::YES
+    }
+
+    fn replace_image(&self, image: *mut Object) {
         let old_image = self.ivars().image.replace(image);
         if !old_image.is_null() {
-            // SAFETY: The ivar owns the retained NSImage created by make_image.
+            // SAFETY: The ivar owns the retained NSImage returned by decode_image.
             unsafe {
                 let _: () = msg_send![old_image, release];
             }
         }
-        Bool::YES
+    }
+
+    fn replace_tinyvg(&self, document: *mut tinyvg::Document) {
+        let old_document = self.ivars().tinyvg.replace(document);
+        if !old_document.is_null() {
+            // SAFETY: The ivar owns the Box converted into this pointer.
+            unsafe {
+                drop(Box::from_raw(old_document));
+            }
+        }
     }
 
     fn make_window_controllers(&self) {
         let image = self.ivars().image.get();
-        if image.is_null() {
+        let tinyvg = self.ivars().tinyvg.get();
+        if image.is_null() && tinyvg.is_null() {
             return;
         }
+
+        let image_size = if tinyvg.is_null() {
+            // SAFETY: image is a live NSImage owned by the document.
+            unsafe { msg_send![image, size] }
+        } else {
+            // SAFETY: tinyvg is owned by the document and remains valid in this method.
+            let document = unsafe { &*tinyvg };
+            Size {
+                width: document.size.width,
+                height: document.size.height,
+            }
+        };
 
         // SAFETY: All objects are valid AppKit instances, selectors use their documented ABI,
         // and ownership is balanced after the document retains its window controller.
         unsafe {
-            let image_size: Size = msg_send![image, size];
             let content_size = Size {
                 width: image_size.width.clamp(320.0, 1200.0),
                 height: image_size.height.clamp(240.0, 800.0),
@@ -106,17 +156,30 @@ impl Document {
             let _: () = msg_send![window, setContentMinSize: Size { width: 240.0, height: 180.0 }];
             let _: () = msg_send![window, center];
 
-            let image_view: *mut Object = msg_send![class!(NSImageView), alloc];
-            let image_view: *mut Object = msg_send![image_view, initWithFrame: rect];
-            let _: () = msg_send![image_view, setImage: image];
-            let _: () = msg_send![image_view,
-                setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN
-            ];
-            let _: () = msg_send![image_view,
+            let checkerboard = create_checkerboard_view(rect);
+            let media_view = if tinyvg.is_null() {
+                let image_view: *mut Object = msg_send![class!(NSImageView), alloc];
+                let image_view: *mut Object = msg_send![image_view, initWithFrame: rect];
+                let _: () = msg_send![image_view, setImage: image];
+                let _: () = msg_send![image_view,
+                    setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN
+                ];
+                image_view
+            } else {
+                let document = Box::from_raw(tinyvg);
+                self.ivars().tinyvg.set(null_mut());
+                create_tinyvg_view(rect, document)
+            };
+            let _: () = msg_send![media_view,
                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
             ];
-            let _: () = msg_send![window, setContentView: image_view];
-            let _: () = msg_send![image_view, release];
+            let _: () = msg_send![checkerboard, addSubview: media_view];
+            let _: () = msg_send![media_view, release];
+            let _: () = msg_send![checkerboard,
+                setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
+            ];
+            let _: () = msg_send![window, setContentView: checkerboard];
+            let _: () = msg_send![checkerboard, release];
 
             let controller: *mut Object = msg_send![class!(NSWindowController), alloc];
             let controller: *mut Object = msg_send![controller, initWithWindow: window];
@@ -125,8 +188,10 @@ impl Document {
             let _: () = msg_send![controller, release];
             let _: () = msg_send![window, release];
 
-            let _: () = msg_send![image, release];
-            self.ivars().image.set(null_mut());
+            if !image.is_null() {
+                let _: () = msg_send![image, release];
+                self.ivars().image.set(null_mut());
+            }
         }
     }
 
@@ -137,6 +202,10 @@ impl Document {
         unsafe {
             if !image.is_null() {
                 let _: () = msg_send![image, release];
+            }
+            let tinyvg = self.ivars().tinyvg.get();
+            if !tinyvg.is_null() {
+                drop(Box::from_raw(tinyvg));
             }
             let super_info = objc_super {
                 receiver: self as *const Self as *mut Object,
