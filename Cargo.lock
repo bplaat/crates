@@ -385,6 +385,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 name = "macview"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "macview-appkit",
  "objc2",
  "tinyvg",
@@ -400,7 +401,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "macview-qoi-preview"
+name = "macview-preview"
 version = "0.1.0"
 dependencies = [
  "block2",
@@ -409,25 +410,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "macview-qoi-thumbnail"
-version = "0.1.0"
-dependencies = [
- "block2",
- "macview-appkit",
- "objc2",
-]
-
-[[package]]
-name = "macview-tvg-preview"
-version = "0.1.0"
-dependencies = [
- "block2",
- "macview-appkit",
- "objc2",
-]
-
-[[package]]
-name = "macview-tvg-thumbnail"
+name = "macview-thumbnail"
 version = "0.1.0"
 dependencies = [
  "block2",

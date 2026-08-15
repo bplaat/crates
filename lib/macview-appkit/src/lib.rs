@@ -20,26 +20,78 @@ use cocoa::*;
 pub use cocoa::{Point, Rect, Size};
 pub use tinyvg_renderer::{create_tinyvg_view, fill_white_background, render_tinyvg};
 
-/// Loads an image from a file URL into an owned `NSImage`.
-///
-/// The caller owns the returned object and must send it `release`.
-///
-/// # Safety
-///
-/// `url` must point to a valid `NSURL` for the duration of this call.
-pub unsafe fn load_image(url: *mut Object) -> Result<(*mut Object, Size), String> {
-    // SAFETY: The caller supplies a valid file URL and decode_image consumes data synchronously.
-    unsafe { load_file(url, "Could not read the image", decode_image) }
+/// An owned `NSImage` that is released when it is dropped.
+pub struct Image {
+    image: *mut Object,
+    size: Size,
 }
 
-/// Loads and parses a TinyVG document from a file URL.
+impl Image {
+    /// Returns the image, which stays alive for as long as this value does.
+    pub const fn as_ptr(&self) -> *mut Object {
+        self.image
+    }
+}
+
+impl Drop for Image {
+    fn drop(&mut self) {
+        // SAFETY: The value owns the retained NSImage returned by decode_image.
+        unsafe {
+            let _: () = msg_send![self.image, release];
+        }
+    }
+}
+
+/// An image in one of the formats the viewer and its Quick Look extensions display.
+pub enum Media {
+    /// An image AppKit can draw, which covers QOI, SVG and every built-in format.
+    Image(Image),
+    /// A parsed TinyVG document.
+    TinyVg(tinyvg::Document),
+}
+
+impl Media {
+    /// Returns the natural size of the image in points.
+    pub const fn size(&self) -> Size {
+        match self {
+            Self::Image(image) => image.size,
+            Self::TinyVg(document) => Size {
+                width: document.size.width,
+                height: document.size.height,
+            },
+        }
+    }
+}
+
+/// Loads a supported image from a file URL.
 ///
 /// # Safety
 ///
 /// `url` must point to a valid `NSURL` for the duration of this call.
-pub unsafe fn load_tinyvg(url: *mut Object) -> Result<tinyvg::Document, String> {
-    // SAFETY: The caller supplies a valid file URL and decode_tinyvg consumes data synchronously.
-    unsafe { load_file(url, "Could not read the TinyVG image", decode_tinyvg) }
+pub unsafe fn load_media(url: *mut Object) -> Result<Media, String> {
+    // SAFETY: The caller supplies a valid file URL and decoding consumes data synchronously.
+    unsafe { load_file(url, "Could not read the image", decode_media) }
+}
+
+/// Decodes a supported image from an `NSData` object.
+///
+/// # Safety
+///
+/// `data` must point to a valid `NSData` for the duration of this call.
+pub unsafe fn decode_media(data: *mut Object) -> Result<Media, String> {
+    // SAFETY: NSData keeps its immutable byte buffer alive for the duration of this function.
+    let bytes = unsafe {
+        let length: usize = msg_send![data, length];
+        let bytes: *const std::ffi::c_void = msg_send![data, bytes];
+        std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+    };
+    if tinyvg::is_tinyvg(bytes) {
+        // SAFETY: data is a live NSData for the duration of this call.
+        return unsafe { decode_tinyvg(data) }.map(Media::TinyVg);
+    }
+    // SAFETY: data is a live NSData for the duration of this call.
+    let (image, size) = unsafe { decode_image(data) }?;
+    Ok(Media::Image(Image { image, size }))
 }
 
 unsafe fn load_file<T>(

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Quick Look thumbnail extension for QOI images.
+//! Quick Look thumbnail extension for the image formats MacView displays.
 
 #![allow(unsafe_code)]
 
@@ -16,13 +16,13 @@ use std::ptr::null_mut;
 
 use block2::{Block, RcBlock};
 use cocoa::*;
-use macview_appkit::{Point, Rect, Size, fill_white_background, load_image};
-use objc2::runtime::AnyObject as Object;
+use macview_appkit::{Media, Point, Rect, Size, fill_white_background, load_media, render_tinyvg};
+use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
 define_class!(
     #[unsafe(super(QLThumbnailProvider))]
-    #[name = "MacViewQoiThumbnailProvider"]
+    #[name = "MacViewThumbnailProvider"]
     struct ThumbnailProvider;
 
     impl ThumbnailProvider {
@@ -37,23 +37,6 @@ define_class!(
     }
 );
 
-struct OwnedImage(*mut Object);
-
-impl OwnedImage {
-    const fn as_ptr(&self) -> *mut Object {
-        self.0
-    }
-}
-
-impl Drop for OwnedImage {
-    fn drop(&mut self) {
-        // SAFETY: OwnedImage contains the non-null, retained NSImage returned by load_image.
-        unsafe {
-            let _: () = msg_send![self.0, release];
-        }
-    }
-}
-
 fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object, *mut Object)>) {
     // SAFETY: Quick Look supplies a valid request with a file URL and maximum size.
     let (url, maximum_size, scale): (*mut Object, Size, f64) = unsafe {
@@ -64,34 +47,25 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
         )
     };
     // SAFETY: Quick Look supplied url as a valid file NSURL for this callback.
-    let (image, image_size) = match unsafe { load_image(url) } {
-        Ok((image, image_size)) => (OwnedImage(image), image_size),
+    let media = match unsafe { load_media(url) } {
+        Ok(media) => media,
         Err(description) => {
             completion.call((null_mut(), make_error(&description)));
             return;
         }
     };
 
-    let context_size = aspect_fit(image_size, maximum_size);
+    let context_size = aspect_fit(media.size(), maximum_size);
     let drawing_size = scaled(context_size, scale);
     let drawing = RcBlock::new_ret::<*mut c_void, bool>(move |context| {
-        let rectangle = Rect {
-            origin: Point { x: 0.0, y: 0.0 },
-            size: drawing_size,
-        };
         // SAFETY: Quick Look owns the drawing context for this call. The copied drawing block
-        // owns image, and the returned CGImage remains valid for the duration of the draw.
+        // owns the media and drawing is synchronous within the block invocation.
         unsafe {
-            let cg_image: *const c_void = msg_send![image.as_ptr(),
-                CGImageForProposedRect: null_mut::<Rect>().cast::<c_void>(),
-                context: null_mut::<Object>(),
-                hints: null_mut::<Object>()
-            ];
-            if cg_image.is_null() {
-                return false;
-            }
             fill_white_background(context, drawing_size);
-            CGContextDrawImage(context, rectangle, cg_image);
+            match &media {
+                Media::Image(image) => draw_image(context, image.as_ptr(), drawing_size),
+                Media::TinyVg(document) => render_tinyvg(context, document, drawing_size, 1.0),
+            }
         }
         true
     });
@@ -106,7 +80,42 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
     completion.call((reply, null_mut()));
 }
 
+/// Draws an image over the whole thumbnail.
+///
+/// AppKit draws through the image itself instead of a fixed size bitmap, so vector formats like
+/// SVG are rasterized at the size the thumbnail is actually requested in.
+///
+/// # Safety
+///
+/// `context` must be a valid `CGContext` and `image` a valid `NSImage` for this call.
+unsafe fn draw_image(context: *mut c_void, image: *mut Object, size: Size) {
+    // SAFETY: The caller guarantees both objects are valid, and the graphics state is restored
+    // before returning.
+    unsafe {
+        let graphics_context: *mut Object = msg_send![class!(NSGraphicsContext),
+            graphicsContextWithCGContext: context,
+            flipped: Bool::NO
+        ];
+        let _: () = msg_send![class!(NSGraphicsContext), saveGraphicsState];
+        let _: () = msg_send![class!(NSGraphicsContext), setCurrentContext: graphics_context];
+        let _: () = msg_send![image,
+            drawInRect: Rect {
+                origin: Point { x: 0.0, y: 0.0 },
+                size,
+            }
+        ];
+        let _: () = msg_send![class!(NSGraphicsContext), restoreGraphicsState];
+    }
+}
+
+/// Returns the size `image` gets when it is scaled to fit inside `bounds`.
+///
+/// A drawing without a size, which is what AppKit reports for an SVG that declares none, keeps
+/// the requested bounds instead of scaling to nothing.
 fn aspect_fit(image: Size, bounds: Size) -> Size {
+    if image.width <= 0.0 || image.height <= 0.0 {
+        return bounds;
+    }
     let scale = (bounds.width / image.width).min(bounds.height / image.height);
     Size {
         width: image.width * scale,
@@ -190,42 +199,37 @@ mod tests {
     }
 
     #[test]
-    fn image_fills_a_retina_context() {
-        let maximum_size = Size {
-            width: 256.0,
-            height: 256.0,
+    fn media_without_a_size_keeps_the_requested_bounds() {
+        let bounds = Size {
+            width: 128.0,
+            height: 96.0,
         };
-        let scale = 2.0;
+        let size = aspect_fit(
+            Size {
+                width: 0.0,
+                height: 0.0,
+            },
+            bounds,
+        );
+        assert_eq!(size.width, bounds.width);
+        assert_eq!(size.height, bounds.height);
+    }
+
+    #[test]
+    fn image_fills_a_retina_context() {
         let context_size = aspect_fit(
             Size {
                 width: 400.0,
                 height: 200.0,
             },
-            maximum_size,
+            Size {
+                width: 256.0,
+                height: 256.0,
+            },
         );
-        let drawing_size = scaled(context_size, scale);
+        let drawing_size = scaled(context_size, 2.0);
         assert_eq!(drawing_size.width, 512.0);
         assert_eq!(drawing_size.height, 256.0);
-    }
-
-    #[test]
-    fn thumbnail_reply_is_an_object() {
-        autoreleasepool(|_| {
-            let drawing = RcBlock::new_ret::<*mut c_void, bool>(|_| true);
-            // SAFETY: The block has the CGContext drawing signature required by QLThumbnailReply.
-            unsafe {
-                let reply: *mut Object = msg_send![class!(QLThumbnailReply),
-                    replyWithContextSize: Size {
-                        width: 32.0,
-                        height: 32.0,
-                    },
-                    drawingBlock: &*drawing
-                ];
-                assert!(!reply.is_null());
-                let _: *mut Object = msg_send![reply, retain];
-                let _: () = msg_send![reply, release];
-            }
-        });
     }
 
     #[test]

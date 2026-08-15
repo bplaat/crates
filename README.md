@@ -88,7 +88,7 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 - [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 - [Music Downloader](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](bin/pixelfont) An 8x8 pixel font editor
-- [MacView](bin/macview) A macOS bitmap, QOI, and TinyVG image viewer with Quick Look preview and thumbnail extensions for [QOI](bin/macview-qoi-preview) and [TinyVG](bin/macview-tvg-preview)
+- [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
 - [Sequel Explorer](bin/sequelexplorer) A simple SQLite database GUI viewer
 
 ### Tools / Websites

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionAttributes</key>
@@ -10,6 +14,8 @@
             <false/>
             <key>QLSupportedContentTypes</key>
             <array>
+                <string>public.svg-image</string>
+                <string>org.qoiformat.qoi</string>
                 <string>org.tinyvg.tvg</string>
                 <string>org.tinyvg.tvgt</string>
             </array>
@@ -19,7 +25,7 @@
         <key>NSExtensionPointIdentifier</key>
         <string>com.apple.quicklook.preview</string>
         <key>NSExtensionPrincipalClass</key>
-        <string>MacViewTvgPreviewViewController</string>
+        <string>MacViewPreviewViewController</string>
     </dict>
 </dict>
 </plist>

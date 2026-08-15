@@ -10,6 +10,7 @@
 
 mod checkerboard;
 mod cocoa;
+mod svg;
 mod window_controller;
 
 use std::cell::Cell;
@@ -23,11 +24,14 @@ use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
+use svg::{Svg, create_svg_view, is_svg, parse_svg};
 use window_controller::create_window_controller;
 
 struct DocumentIvars {
     image: Cell<*mut Object>,
     tinyvg: Cell<*mut tinyvg::Document>,
+    svg: Cell<*mut Svg>,
+    svg_view: Cell<*mut Object>,
 }
 
 define_class!(
@@ -85,8 +89,15 @@ impl Document {
                     return Bool::NO;
                 }
             };
-            self.replace_image(null_mut());
-            self.replace_tinyvg(Box::into_raw(Box::new(document)));
+            self.set_media(null_mut(), Box::into_raw(Box::new(document)), null_mut());
+            return Bool::YES;
+        }
+        if is_svg(bytes) {
+            self.set_media(
+                null_mut(),
+                null_mut(),
+                Box::into_raw(Box::new(parse_svg(bytes))),
+            );
             return Bool::YES;
         }
 
@@ -98,27 +109,32 @@ impl Document {
                 return Bool::NO;
             }
         };
-        self.replace_tinyvg(null_mut());
-        self.replace_image(image);
+        self.set_media(image, null_mut(), null_mut());
         Bool::YES
     }
 
-    fn replace_image(&self, image: *mut Object) {
+    /// Replaces the loaded media, releasing whatever the document held before.
+    ///
+    /// The web view of the previous media goes with it, because it draws a page that belongs to
+    /// media the document no longer holds.
+    fn set_media(&self, image: *mut Object, tinyvg: *mut tinyvg::Document, svg: *mut Svg) {
         let old_image = self.ivars().image.replace(image);
-        if !old_image.is_null() {
-            // SAFETY: The ivar owns the retained NSImage returned by decode_image.
-            unsafe {
+        let old_tinyvg = self.ivars().tinyvg.replace(tinyvg);
+        let old_svg = self.ivars().svg.replace(svg);
+        let old_svg_view = self.ivars().svg_view.replace(null_mut());
+        // SAFETY: The ivars own the retained objects and the Boxes converted into these pointers.
+        unsafe {
+            if !old_image.is_null() {
                 let _: () = msg_send![old_image, release];
             }
-        }
-    }
-
-    fn replace_tinyvg(&self, document: *mut tinyvg::Document) {
-        let old_document = self.ivars().tinyvg.replace(document);
-        if !old_document.is_null() {
-            // SAFETY: The ivar owns the Box converted into this pointer.
-            unsafe {
-                drop(Box::from_raw(old_document));
+            if !old_svg_view.is_null() {
+                let _: () = msg_send![old_svg_view, release];
+            }
+            if !old_tinyvg.is_null() {
+                drop(Box::from_raw(old_tinyvg));
+            }
+            if !old_svg.is_null() {
+                drop(Box::from_raw(old_svg));
             }
         }
     }
@@ -134,6 +150,11 @@ impl Document {
                 height: document.size.height,
             });
         }
+        let svg = self.ivars().svg.get();
+        if !svg.is_null() {
+            // SAFETY: The ivar owns the SVG document until dealloc.
+            return Some(unsafe { &*svg }.size);
+        }
         let image = self.ivars().image.get();
         // SAFETY: The ivar owns a live NSImage when it is not null.
         (!image.is_null()).then(|| unsafe { msg_send![image, size] })
@@ -144,10 +165,20 @@ impl Document {
     /// The caller owns the returned view and must send it `release`.
     fn create_media_view(&self, frame: Rect) -> *mut Object {
         let tinyvg = self.ivars().tinyvg.get();
-        // SAFETY: The ivars own the media, and NSImageView retains the image it is given.
+        let svg = self.ivars().svg.get();
+        // SAFETY: The ivars own the media, and NSImageView retains the image it is given. The web
+        // view is retained a second time because printing draws the loaded page again.
         unsafe {
             if !tinyvg.is_null() {
                 return create_tinyvg_view(frame, Box::new((*tinyvg).clone()));
+            }
+            if !svg.is_null() {
+                let view = create_svg_view(frame, &*svg);
+                let old_view = self.ivars().svg_view.replace(msg_send![view, retain]);
+                if !old_view.is_null() {
+                    let _: () = msg_send![old_view, release];
+                }
+                return view;
             }
             let image_view: *mut Object = msg_send![class!(NSImageView), alloc];
             let image_view: *mut Object = msg_send![image_view, initWithFrame: frame];
@@ -238,6 +269,15 @@ impl Document {
             let _: () = msg_send![print_info, setHorizontallyCentered: Bool::YES];
             let _: () = msg_send![print_info, setVerticallyCentered: Bool::YES];
 
+            // WebKit paginates the loaded page itself, and only the view in the window has it.
+            let svg_view = self.ivars().svg_view.get();
+            if !svg_view.is_null() {
+                let operation: *mut Object =
+                    msg_send![svg_view, printOperationWithPrintInfo: print_info];
+                let _: () = msg_send![print_info, release];
+                return operation;
+            }
+
             let view = self.create_media_view(Rect {
                 origin: Point { x: 0.0, y: 0.0 },
                 size: media_size,
@@ -253,17 +293,10 @@ impl Document {
     }
 
     fn dealloc(&self) {
-        let image = self.ivars().image.get();
-        // SAFETY: The ivar owns image when non-null. objc_msgSendSuper invokes NSDocument's
-        // dealloc with the exact Objective-C deallocation ABI.
+        self.set_media(null_mut(), null_mut(), null_mut());
+        // SAFETY: objc_msgSendSuper invokes NSDocument's dealloc with the exact Objective-C
+        // deallocation ABI.
         unsafe {
-            if !image.is_null() {
-                let _: () = msg_send![image, release];
-            }
-            let tinyvg = self.ivars().tinyvg.get();
-            if !tinyvg.is_null() {
-                drop(Box::from_raw(tinyvg));
-            }
             let super_info = objc_super {
                 receiver: self as *const Self as *mut Object,
                 super_class: class!(NSDocument).cast::<AnyClass>(),

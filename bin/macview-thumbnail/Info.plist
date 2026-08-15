@@ -12,6 +12,8 @@
         <dict>
             <key>QLSupportedContentTypes</key>
             <array>
+                <string>public.svg-image</string>
+                <string>org.qoiformat.qoi</string>
                 <string>org.tinyvg.tvg</string>
                 <string>org.tinyvg.tvgt</string>
             </array>
@@ -21,7 +23,7 @@
         <key>NSExtensionPointIdentifier</key>
         <string>com.apple.quicklook.thumbnail</string>
         <key>NSExtensionPrincipalClass</key>
-        <string>MacViewTvgThumbnailProvider</string>
+        <string>MacViewThumbnailProvider</string>
     </dict>
 </dict>
 </plist>

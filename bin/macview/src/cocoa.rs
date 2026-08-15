@@ -26,8 +26,12 @@ pub(crate) const NS_WINDOW_STYLE_MASK_CLOSABLE: u64 = 1 << 1;
 pub(crate) const NS_WINDOW_STYLE_MASK_MINIATURIZABLE: u64 = 1 << 2;
 pub(crate) const NS_WINDOW_STYLE_MASK_RESIZABLE: u64 = 1 << 3;
 pub(crate) const NS_WINDOW_STYLE_MASK_TITLED: u64 = 1;
+pub(crate) const WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START: isize = 0;
 
 #[link(name = "Cocoa", kind = "framework")]
+unsafe extern "C" {}
+
+#[link(name = "WebKit", kind = "framework")]
 unsafe extern "C" {}
 
 #[link(name = "AppKit", kind = "framework")]

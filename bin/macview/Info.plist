@@ -20,6 +20,20 @@
         </dict>
         <dict>
             <key>CFBundleTypeName</key>
+            <string>SVG Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.svg-image</string>
+            </array>
+            <key>NSDocumentClass</key>
+            <string>MacViewDocument</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
             <string>QOI Image</string>
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>

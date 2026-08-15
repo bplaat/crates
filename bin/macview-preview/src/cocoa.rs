@@ -11,6 +11,7 @@ use std::ffi::{c_char, c_void};
 use objc2::runtime::AnyObject as Object;
 use objc2::{class, msg_send};
 
+pub(crate) const NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN: u64 = 3;
 pub(crate) const NS_UTF8_STRING_ENCODING: u64 = 4;
 pub(crate) const NS_VIEW_HEIGHT_SIZABLE: u64 = 16;
 pub(crate) const NS_VIEW_WIDTH_SIZABLE: u64 = 2;

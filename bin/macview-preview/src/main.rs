@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Quick Look preview extension for TinyVG images.
+//! Quick Look preview extension for the image formats MacView displays.
 
 #![allow(unsafe_code)]
 
@@ -16,14 +16,14 @@ use std::ptr::null_mut;
 
 use block2::Block;
 use cocoa::*;
-use macview_appkit::{Point, Rect, Size, create_tinyvg_view, load_tinyvg};
+use macview_appkit::{Media, Point, Rect, Size, create_tinyvg_view, load_media};
 use objc2::ffi::class_addProtocol;
 use objc2::runtime::{AnyClass, AnyObject as Object, AnyProtocol};
 use objc2::{class, define_class, msg_send};
 
 define_class!(
     #[unsafe(super(NSViewController))]
-    #[name = "MacViewTvgPreviewViewController"]
+    #[name = "MacViewPreviewViewController"]
     struct PreviewViewController;
 
     impl PreviewViewController {
@@ -62,30 +62,53 @@ impl PreviewViewController {
 
     fn prepare_preview(&self, url: *mut Object, completion: &Block<dyn Fn(*mut Object)>) {
         // SAFETY: Quick Look supplied url as a valid file NSURL for this callback.
-        match unsafe { load_tinyvg(url) } {
-            Ok(document) => {
-                let size = Size {
-                    width: document.size.width.clamp(320.0, 1200.0),
-                    height: document.size.height.clamp(240.0, 800.0),
-                };
-                // SAFETY: self and its root view are live. Keeping the loadView root in place is
-                // required because replacing it after ViewBridge connects tears down the service.
-                unsafe {
-                    let this = self as *const Self as *mut Object;
-                    let root: *mut Object = msg_send![this, view];
-                    let bounds: Rect = msg_send![root, bounds];
-                    let view = create_tinyvg_view(bounds, Box::new(document));
-                    let _: () = msg_send![view,
-                        setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
-                    ];
-                    let _: () = msg_send![root, addSubview: view];
-                    let _: () = msg_send![this, setPreferredContentSize: size];
-                    let _: () = msg_send![view, release];
-                }
-                completion.call((null_mut(),));
+        let media = match unsafe { load_media(url) } {
+            Ok(media) => media,
+            Err(description) => {
+                completion.call((make_error(&description),));
+                return;
             }
-            Err(description) => completion.call((make_error(&description),)),
+        };
+
+        let media_size = media.size();
+        let size = Size {
+            width: media_size.width.clamp(320.0, 1200.0),
+            height: media_size.height.clamp(240.0, 800.0),
+        };
+        // SAFETY: self and its root view are live. Keeping the loadView root in place is required
+        // because replacing it after ViewBridge connects tears down the service.
+        unsafe {
+            let this = self as *const Self as *mut Object;
+            let root: *mut Object = msg_send![this, view];
+            let bounds: Rect = msg_send![root, bounds];
+            let view = create_media_view(bounds, media);
+            let _: () = msg_send![view,
+                setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
+            ];
+            let _: () = msg_send![root, addSubview: view];
+            let _: () = msg_send![this, setPreferredContentSize: size];
+            let _: () = msg_send![view, release];
         }
+        completion.call((null_mut(),));
+    }
+}
+
+/// Creates an owned view that draws `media` inside `frame`.
+///
+/// The caller owns the returned view and must send it `release`.
+fn create_media_view(frame: Rect, media: Media) -> *mut Object {
+    match media {
+        Media::TinyVg(document) => create_tinyvg_view(frame, Box::new(document)),
+        // SAFETY: NSImageView retains the image, which stays alive until this function returns.
+        Media::Image(image) => unsafe {
+            let view: *mut Object = msg_send![class!(NSImageView), alloc];
+            let view: *mut Object = msg_send![view, initWithFrame: frame];
+            let _: () = msg_send![view, setImage: image.as_ptr()];
+            let _: () = msg_send![view,
+                setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN
+            ];
+            view
+        },
     }
 }
 
@@ -99,7 +122,7 @@ fn make_error(description: &str) -> *mut Object {
             forKey: description_key
         ];
         msg_send![class!(NSError),
-            errorWithDomain: ns_string("nl.bplaat.MacView.TVGPreview"),
+            errorWithDomain: ns_string("nl.bplaat.MacView.Preview"),
             code: 1isize,
             userInfo: user_info
         ]
