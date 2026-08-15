@@ -20,7 +20,10 @@ use std::ptr::null_mut;
 
 use checkerboard::create_checkerboard_view;
 use cocoa::*;
-use macview_appkit::{Point, Rect, Size, create_tinyvg_view, decode_image, decode_tinyvg};
+use macview_appkit::{
+    NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, create_image_view,
+    create_tinyvg_view, decode_image, decode_tinyvg, make_error, ns_string,
+};
 use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
@@ -182,13 +185,7 @@ impl Document {
                 }
                 return view;
             }
-            let image_view: *mut Object = msg_send![class!(NSImageView), alloc];
-            let image_view: *mut Object = msg_send![image_view, initWithFrame: frame];
-            let _: () = msg_send![image_view, setImage: self.ivars().image.get()];
-            let _: () = msg_send![image_view,
-                setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN
-            ];
-            image_view
+            create_image_view(frame, self.ivars().image.get())
         }
     }
 
@@ -387,22 +384,13 @@ fn set_error(error_out: *mut c_void, description: &str) {
     if error_out.is_null() {
         return;
     }
-    // SAFETY: error_out is a non-null NSError** supplied by NSDocument. All Objective-C
-    // objects are autoreleased and remain valid for the current event cycle.
+    let domain = ns_string!("nl.bplaat.MacView");
+    // SAFETY: error_out is a non-null NSError** supplied by NSDocument. The error is
+    // autoreleased and remains valid for the current event cycle.
     unsafe {
-        let domain = ns_string("nl.bplaat.MacView");
-        let description_key = ns_string("NSLocalizedDescription");
-        let description = ns_string(description);
-        let user_info: *mut Object = msg_send![class!(NSDictionary),
-            dictionaryWithObject: description,
-            forKey: description_key
-        ];
-        let error: *mut Object = msg_send![class!(NSError),
-            errorWithDomain: domain,
-            code: 1isize,
-            userInfo: user_info
-        ];
-        error_out.cast::<*mut Object>().write(error);
+        error_out
+            .cast::<*mut Object>()
+            .write(make_error(domain, description));
     }
 }
 
@@ -486,7 +474,7 @@ fn create_menu(application: *mut Object) {
         );
         add_separator(app_menu);
         let services_item: *mut Object = msg_send![class!(NSMenuItem), new];
-        let _: () = msg_send![services_item, setTitle: ns_string("Services")];
+        let _: () = msg_send![services_item, setTitle: ns_string!("Services")];
         let services_menu: *mut Object = msg_send![class!(NSMenu), new];
         let _: () = msg_send![services_item, setSubmenu: services_menu];
         let _: () = msg_send![app_menu, addItem: services_item];

@@ -6,7 +6,7 @@
 
 use std::ffi::c_void;
 
-use macview_appkit::{Point, Rect, Size};
+use macview_appkit::{NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size};
 use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};

@@ -7,11 +7,9 @@
 use std::cell::Cell;
 use std::ptr::null_mut;
 
-use macview_appkit::Size;
+use macview_appkit::{Size, ns_string};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
-
-use crate::cocoa::ns_string;
 
 /// The factor a single zoom step magnifies or shrinks the media by.
 const ZOOM_STEP: f64 = 1.5;

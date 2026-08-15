@@ -7,11 +7,9 @@
 use std::ptr::null_mut;
 
 use base64::prelude::*;
-use macview_appkit::{Point, Rect, Size};
+use macview_appkit::{Point, Rect, Size, ns_string};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
-
-use crate::cocoa::ns_string;
 
 /// The size used for an SVG that declares neither dimensions nor a view box.
 const DEFAULT_SIZE: Size = Size {
@@ -90,7 +88,7 @@ pub(crate) fn create_svg_view(frame: Rect, svg: &Svg) -> *mut Object {
 
         // A web view paints an opaque background of its own, which would hide the checkerboard.
         let opaque: *mut Object = msg_send![class!(NSNumber), numberWithBool: Bool::NO];
-        let _: () = msg_send![view, setValue: opaque, forKey: ns_string("drawsBackground")];
+        let _: () = msg_send![view, setValue: opaque, forKey: ns_string!("drawsBackground")];
         let _: *mut Object = msg_send![view,
             loadHTMLString: ns_string(&svg.html),
             baseURL: null_mut::<Object>()

@@ -10,13 +10,14 @@
 
 mod cocoa;
 
-use std::ffi::{CString, c_char, c_void};
-use std::os::unix::ffi::OsStrExt;
+use std::ffi::c_void;
 use std::ptr::null_mut;
 
 use block2::{Block, RcBlock};
-use cocoa::*;
-use macview_appkit::{Media, Point, Rect, Size, fill_white_background, load_media, render_tinyvg};
+use macview_appkit::{
+    Media, Point, Rect, Size, extension_main, fill_white_background, load_media, make_error,
+    ns_string, render_tinyvg,
+};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
@@ -38,6 +39,7 @@ define_class!(
 );
 
 fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object, *mut Object)>) {
+    let domain = ns_string!("nl.bplaat.MacView.Thumbnail");
     // SAFETY: Quick Look supplies a valid request with a file URL and maximum size.
     let (url, maximum_size, scale): (*mut Object, Size, f64) = unsafe {
         (
@@ -50,7 +52,9 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
     let media = match unsafe { load_media(url) } {
         Ok(media) => media,
         Err(description) => {
-            completion.call((null_mut(), make_error(&description)));
+            // SAFETY: The error domain is a constant string.
+            let error = unsafe { make_error(domain, &description) };
+            completion.call((null_mut(), error));
             return;
         }
     };
@@ -130,47 +134,9 @@ fn scaled(size: Size, scale: f64) -> Size {
     }
 }
 
-fn make_error(description: &str) -> *mut Object {
-    // SAFETY: The Foundation convenience constructors return autoreleased objects that remain
-    // valid while Quick Look receives the completion callback.
-    unsafe {
-        let description: *mut Object = msg_send![class!(NSString),
-            stringWithUTF8String: CString::new(description)
-                .expect("error description contains a null byte")
-                .as_ptr()
-        ];
-        let description_key: *mut Object = msg_send![class!(NSString),
-            stringWithUTF8String: c"NSLocalizedDescription".as_ptr()
-        ];
-        let user_info: *mut Object = msg_send![class!(NSDictionary),
-            dictionaryWithObject: description,
-            forKey: description_key
-        ];
-        let domain: *mut Object = msg_send![class!(NSString),
-            stringWithUTF8String: c"nl.bplaat.MacView.Thumbnail".as_ptr()
-        ];
-        msg_send![class!(NSError),
-            errorWithDomain: domain,
-            code: 1isize,
-            userInfo: user_info
-        ]
-    }
-}
-
 fn main() {
     let _ = ThumbnailProvider::class();
-    let arguments: Vec<CString> = std::env::args_os()
-        .map(|argument| {
-            CString::new(argument.as_os_str().as_bytes())
-                .expect("process argument contains a null byte")
-        })
-        .collect();
-    let argument_pointers: Vec<*const c_char> =
-        arguments.iter().map(|argument| argument.as_ptr()).collect();
-    // SAFETY: The argument pointers stay alive for the non-returning extension entry point.
-    unsafe {
-        NSExtensionMain(argument_pointers.len() as i32, argument_pointers.as_ptr());
-    }
+    extension_main();
 }
 
 #[cfg(test)]

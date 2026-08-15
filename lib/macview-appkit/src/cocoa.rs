@@ -6,9 +6,10 @@
 
 #![allow(non_snake_case, non_upper_case_globals)]
 
-use std::ffi::c_void;
+use std::ffi::{c_char, c_void};
 
-use objc2::{Encode, Encoding};
+use objc2::runtime::AnyObject as Object;
+use objc2::{Encode, Encoding, class, msg_send};
 
 pub(crate) const DRAW_PATH_EVEN_ODD_FILL: i32 = 1;
 pub(crate) const DRAW_PATH_STROKE: i32 = 2;
@@ -16,9 +17,114 @@ pub(crate) const GRADIENT_DRAWS_AFTER_END: u32 = 2;
 pub(crate) const GRADIENT_DRAWS_BEFORE_START: u32 = 1;
 pub(crate) const LINE_CAP_ROUND: i32 = 1;
 pub(crate) const LINE_JOIN_ROUND: i32 = 1;
+pub(crate) const NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN: u64 = 3;
+pub(crate) const NS_UTF8_STRING_ENCODING: u64 = 4;
+
+/// The autoresizing mask bit that keeps a view as wide as its superview.
+pub const NS_VIEW_WIDTH_SIZABLE: u64 = 2;
+/// The autoresizing mask bit that keeps a view as tall as its superview.
+pub const NS_VIEW_HEIGHT_SIZABLE: u64 = 16;
 
 #[link(name = "Cocoa", kind = "framework")]
 unsafe extern "C" {}
+
+#[link(name = "Foundation", kind = "framework")]
+unsafe extern "C" {
+    /// The class of compile-time constant strings, which [`ns_string!`] fills in at load time.
+    pub static __CFConstantStringClassReference: Object;
+
+    pub(crate) fn NSExtensionMain(argc: i32, argv: *const *const c_char) -> i32;
+}
+
+/// Creates an autoreleased `NSString` from a runtime string.
+///
+/// Use [`ns_string!`] instead when the string is a literal.
+pub fn ns_string(value: &str) -> *mut Object {
+    // SAFETY: NSString copies the valid UTF-8 bytes before the returned object is autoreleased.
+    unsafe {
+        let string: *mut Object = msg_send![class!(NSString), alloc];
+        let string: *mut Object = msg_send![string,
+            initWithBytes: value.as_ptr().cast::<c_void>(),
+            length: value.len(),
+            encoding: NS_UTF8_STRING_ENCODING
+        ];
+        msg_send![string, autorelease]
+    }
+}
+
+/// Mirrors the layout of Apple's `__CFConstantString` (`CFRuntimeBase` + data + len).
+///
+/// Statics of this type placed in `__DATA,__cfstring` are recognised by dyld as NSString
+/// literals, equivalent to Clang's `@"..."` syntax. The ISA is fixed up at load time via
+/// `__CFConstantStringClassReference`, provided by CoreFoundation.
+#[repr(C)]
+pub struct CFConstString {
+    /// The class pointer, fixed up at load time.
+    pub isa: *const c_void,
+    /// The Core Foundation flags: 0x07C8 is ASCII, immutable, not inline, not freed, NUL terminated.
+    pub cfinfo: u32,
+    /// The retain count, which is unused for constant strings.
+    #[cfg(target_pointer_width = "64")]
+    pub _rc: u32,
+    /// The NUL terminated string bytes.
+    pub data: *const u8,
+    /// The string length in bytes, excluding the NUL terminator.
+    pub len: usize,
+}
+// SAFETY: A constant string is immutable and lives for the whole program.
+unsafe impl Send for CFConstString {}
+// SAFETY: A constant string is immutable and lives for the whole program.
+unsafe impl Sync for CFConstString {}
+
+/// Creates a zero-cost `NSString` literal, equivalent to Clang's `@"..."` syntax.
+///
+/// The string must be ASCII without interior NUL bytes, which is checked at compile time.
+/// It returns a `*mut AnyObject` pointing at a static string in `__DATA,__cfstring`, so unlike
+/// [`ns_string`] it allocates nothing and never needs to be released.
+///
+/// Do not call this inside a closure: rustc may split the static definition into a separate
+/// codegen unit with internal linkage, which hides it from the linker (see madsmtm/objc2#258).
+/// Hoist the call to the enclosing function scope instead.
+#[macro_export]
+macro_rules! ns_string {
+    ($s:expr) => {{
+        const INPUT: &str = $s;
+        const BYTES: &[u8] = INPUT.as_bytes();
+        const _: () = {
+            let mut i = 0usize;
+            while i < BYTES.len() {
+                if !BYTES[i].is_ascii() || BYTES[i] == b'\0' {
+                    panic!("ns_string! only supports ASCII strings without NUL bytes");
+                }
+                i += 1;
+            }
+        };
+        #[unsafe(link_section = "__TEXT,__cstring,cstring_literals")]
+        static DATA: [u8; BYTES.len() + 1] = {
+            let mut arr = [0u8; BYTES.len() + 1];
+            let mut i = 0usize;
+            while i < BYTES.len() {
+                arr[i] = BYTES[i];
+                i += 1;
+            }
+            arr
+        };
+        #[unsafe(link_section = "__DATA,__cfstring")]
+        // SAFETY: The fields mirror a constant string that dyld finalizes at load time.
+        static CFSTRING: $crate::CFConstString = unsafe {
+            $crate::CFConstString {
+                isa: &$crate::__CFConstantStringClassReference as *const objc2::runtime::AnyObject
+                    as *const ::std::ffi::c_void,
+                cfinfo: 0x07C8,
+                #[cfg(target_pointer_width = "64")]
+                _rc: 0,
+                data: DATA.as_ptr(),
+                len: BYTES.len(),
+            }
+        };
+        &CFSTRING as *const $crate::CFConstString as *mut objc2::runtime::AnyObject
+    }};
+}
 
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
@@ -87,7 +193,8 @@ unsafe extern "C" {
         options: u32,
     );
     pub(crate) fn CGContextEOClip(context: *mut c_void);
-    pub(crate) fn CGContextFillRect(context: *mut c_void, rectangle: Rect);
+    /// Fills a rectangle with the current fill color.
+    pub fn CGContextFillRect(context: *mut c_void, rectangle: Rect);
     pub(crate) fn CGContextMoveToPoint(context: *mut c_void, x: f64, y: f64);
     #[cfg(test)]
     pub(crate) fn CGContextRelease(context: *mut c_void);
@@ -98,7 +205,8 @@ unsafe extern "C" {
     pub(crate) fn CGContextSetLineCap(context: *mut c_void, line_cap: i32);
     pub(crate) fn CGContextSetLineJoin(context: *mut c_void, line_join: i32);
     pub(crate) fn CGContextSetLineWidth(context: *mut c_void, width: f64);
-    pub(crate) fn CGContextSetRGBFillColor(
+    /// Sets the fill color of a context in the device RGB color space.
+    pub fn CGContextSetRGBFillColor(
         context: *mut c_void,
         red: f64,
         green: f64,

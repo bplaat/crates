@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Shared AppKit image loading for MacView and its Quick Look extensions.
+//! Shared AppKit support for MacView and its Quick Look extensions.
 
 #![allow(unsafe_code)]
 
+use std::ffi::{CString, c_char};
+use std::os::unix::ffi::OsStrExt;
 use std::ptr::null;
 
 use objc2::runtime::{AnyObject as Object, Bool};
@@ -17,7 +19,10 @@ mod cocoa;
 mod tinyvg_renderer;
 
 use cocoa::*;
-pub use cocoa::{Point, Rect, Size};
+pub use cocoa::{
+    __CFConstantStringClassReference, CFConstString, CGContextFillRect, CGContextSetRGBFillColor,
+    NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, ns_string,
+};
 pub use tinyvg_renderer::{create_tinyvg_view, fill_white_background, render_tinyvg};
 
 /// An owned `NSImage` that is released when it is dropped.
@@ -167,6 +172,62 @@ pub unsafe fn decode_image(data: *mut Object) -> Result<(*mut Object, Size), Str
     // SAFETY: image is a valid, initialized NSImage.
     let size = unsafe { msg_send![image, size] };
     Ok((image, size))
+}
+
+/// Creates an owned `NSImageView` that scales `image` to fit `frame`.
+///
+/// The caller owns the returned view and must send it `release`.
+///
+/// # Safety
+///
+/// `image` must point to a valid `NSImage` for the duration of this call.
+pub unsafe fn create_image_view(frame: Rect, image: *mut Object) -> *mut Object {
+    // SAFETY: The caller guarantees the image is valid, and NSImageView retains it.
+    unsafe {
+        let view: *mut Object = msg_send![class!(NSImageView), alloc];
+        let view: *mut Object = msg_send![view, initWithFrame: frame];
+        let _: () = msg_send![view, setImage: image];
+        let _: () = msg_send![view, setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN];
+        view
+    }
+}
+
+/// Creates an autoreleased `NSError` that carries `description` as its localized description.
+///
+/// # Safety
+///
+/// `domain` must point to a valid `NSString`, which [`ns_string!`] guarantees.
+pub unsafe fn make_error(domain: *mut Object, description: &str) -> *mut Object {
+    // SAFETY: The Foundation convenience constructors return autoreleased objects, and the caller
+    // guarantees the domain is a valid string.
+    unsafe {
+        let user_info: *mut Object = msg_send![class!(NSDictionary),
+            dictionaryWithObject: ns_string(description),
+            forKey: ns_string!("NSLocalizedDescription")
+        ];
+        msg_send![class!(NSError),
+            errorWithDomain: domain,
+            code: 1isize,
+            userInfo: user_info
+        ]
+    }
+}
+
+/// Hands the process over to the app extension entry point, which does not return.
+pub fn extension_main() -> ! {
+    let arguments: Vec<CString> = std::env::args_os()
+        .map(|argument| {
+            CString::new(argument.as_os_str().as_bytes())
+                .expect("process argument contains a null byte")
+        })
+        .collect();
+    let argument_pointers: Vec<*const c_char> =
+        arguments.iter().map(|argument| argument.as_ptr()).collect();
+    // SAFETY: The argument pointers stay alive for the non-returning extension entry point.
+    unsafe {
+        NSExtensionMain(argument_pointers.len() as i32, argument_pointers.as_ptr());
+    }
+    unreachable!("NSExtensionMain does not return");
 }
 
 /// Creates an owned `NSImage` from a decoded QOI image.

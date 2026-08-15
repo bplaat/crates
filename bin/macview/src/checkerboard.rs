@@ -6,7 +6,7 @@
 
 use std::ffi::c_void;
 
-use macview_appkit::{Point, Rect, Size};
+use macview_appkit::{CGContextFillRect, CGContextSetRGBFillColor, Point, Rect, Size};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
