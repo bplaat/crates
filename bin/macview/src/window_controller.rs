@@ -117,6 +117,35 @@ impl WindowController {
     }
 }
 
+/// Shows another media view in the window of `controller` and titles the window with `size`.
+///
+/// The window keeps the size it has, and the media is shown the way a window that opens on it
+/// shows it. Does nothing for a controller of some other window.
+///
+/// # Safety
+///
+/// `controller` must point to a valid `NSWindowController` and `view` to a valid `NSView`, which
+/// the scroll view of the window takes ownership of.
+pub(crate) unsafe fn show_media(controller: *mut Object, view: *mut Object, size: Size) {
+    // SAFETY: The caller supplies live AppKit objects, and the class check makes the cast to the
+    // window controller of this application sound.
+    unsafe {
+        let ours: Bool = msg_send![controller, isKindOfClass: WindowController::class()];
+        if !ours.as_bool() {
+            return;
+        }
+        let controller_ref = &*(controller.cast::<WindowController>());
+        controller_ref.ivars().size.set(size);
+
+        let scroll_view = controller_ref.scroll_view();
+        if !scroll_view.is_null() {
+            let _: () = msg_send![scroll_view, setDocumentView: view];
+            let _: () = msg_send![scroll_view, zoomToFit];
+        }
+        let _: () = msg_send![controller, synchronizeWindowTitleWithDocumentName];
+    }
+}
+
 /// Creates an owned `NSWindowController` that shows the media size in its window title.
 ///
 /// The caller owns the returned controller and must send it `release`.

@@ -15,7 +15,7 @@ use std::ptr::null_mut;
 use block2::Block;
 use macview_appkit::{
     Media, NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, create_image_view,
-    create_tinyvg_view, extension_main, load_media, make_error, ns_string,
+    create_tinyvg_view, extension_main, load_media, make_error, ns_string, preferred_content_size,
 };
 use objc2::ffi::class_addProtocol;
 use objc2::runtime::{AnyClass, AnyObject as Object, AnyProtocol};
@@ -73,11 +73,7 @@ impl PreviewViewController {
             }
         };
 
-        let media_size = media.size();
-        let size = Size {
-            width: media_size.width.clamp(320.0, 1200.0),
-            height: media_size.height.clamp(240.0, 800.0),
-        };
+        let size = preferred_content_size(media.size());
         // SAFETY: self and its root view are live. Keeping the loadView root in place is required
         // because replacing it after ViewBridge connects tears down the service.
         unsafe {
@@ -96,15 +92,12 @@ impl PreviewViewController {
     }
 }
 
-/// The margin the media is drawn inside.
-const MARGIN: f64 = 16.0;
-
 /// Creates an owned view that draws `media` inside `frame`.
 ///
 /// The caller owns the returned view and must send it `release`.
 fn create_media_view(frame: Rect, media: Media) -> *mut Object {
     match media {
-        Media::TinyVg(document) => create_tinyvg_view(frame, Box::new(document), MARGIN),
+        Media::TinyVg(document) => create_tinyvg_view(frame, Box::new(document)),
         // SAFETY: NSImageView retains the image, which stays alive until this function returns.
         Media::Image(image) => unsafe { create_image_view(frame, image.as_ptr()) },
     }

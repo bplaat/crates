@@ -16,7 +16,6 @@ use crate::cocoa::*;
 
 struct TinyVgViewIvars {
     document: Cell<*mut Document>,
-    margin: Cell<f64>,
 }
 
 define_class!(
@@ -76,13 +75,7 @@ impl TinyVgView {
                 msg_send![window, backingScaleFactor]
             };
 
-            render_fitted(
-                context,
-                &*document,
-                bounds.size,
-                backing_scale,
-                self.ivars().margin.get(),
-            );
+            render_fitted(context, &*document, bounds.size, backing_scale);
         }
     }
 
@@ -105,11 +98,11 @@ impl TinyVgView {
     }
 }
 
-/// Creates an owned, resize-aware `NSView` that displays a TinyVG document inside `margin`.
+/// Creates an owned, resize-aware `NSView` that displays a TinyVG document.
 ///
-/// A view that is scaled by a scroll view wants no margin of its own, because the magnification
-/// would scale that too. The caller owns the returned view and must send it `release`.
-pub fn create_tinyvg_view(frame: Rect, document: Box<Document>, margin: f64) -> *mut Object {
+/// The document is drawn to the edges of the view, which is what the scroll view of the viewer and
+/// the panel of a preview both want. The caller owns the returned view and must send it `release`.
+pub fn create_tinyvg_view(frame: Rect, document: Box<Document>) -> *mut Object {
     // SAFETY: TinyVgView is a registered NSView subclass. The zero-initialized pointer ivar is
     // replaced with ownership of document before the view can draw.
     unsafe {
@@ -118,7 +111,6 @@ pub fn create_tinyvg_view(frame: Rect, document: Box<Document>, margin: f64) -> 
         assert!(!view.is_null(), "failed to create TinyVG view");
         let view_ref = &*(view.cast::<TinyVgView>());
         view_ref.ivars().document.set(Box::into_raw(document));
-        view_ref.ivars().margin.set(margin);
         view
     }
 }
@@ -144,7 +136,7 @@ pub unsafe fn render_tinyvg(
         CGContextSaveGState(context);
         CGContextTranslateCTM(context, 0.0, bounds.height);
         CGContextScaleCTM(context, 1.0, -1.0);
-        render_fitted(context, document, bounds, backing_scale, 0.0);
+        render_fitted(context, document, bounds, backing_scale);
         CGContextRestoreGState(context);
     }
 }
@@ -173,15 +165,12 @@ unsafe fn render_fitted(
     document: &Document,
     bounds: Size,
     backing_scale: f64,
-    margin: f64,
 ) {
     if document.size.width <= 0.0 || document.size.height <= 0.0 {
         return;
     }
-    let available_width = (bounds.width - margin * 2.0).max(1.0);
-    let available_height = (bounds.height - margin * 2.0).max(1.0);
-    let scale = (available_width / document.size.width)
-        .min(available_height / document.size.height)
+    let scale = (bounds.width.max(1.0) / document.size.width)
+        .min(bounds.height.max(1.0) / document.size.height)
         .max(f64::EPSILON);
     let origin_x = (bounds.width - document.size.width * scale) / 2.0;
     let origin_y = (bounds.height - document.size.height * scale) / 2.0;

@@ -8,6 +8,7 @@
 
 #![allow(unsafe_code)]
 
+mod browse;
 mod checkerboard;
 mod cocoa;
 mod scroll_view;
@@ -18,19 +19,20 @@ use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::null_mut;
 
+use browse::neighbour_url;
 use checkerboard::create_checkerboard_view;
 use cocoa::*;
 use macview_appkit::{
     NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, create_image_view,
-    create_tinyvg_view, decode_image, decode_tinyvg, make_error, ns_string,
+    create_tinyvg_view, decode_image, decode_tinyvg, make_error, ns_string, preferred_content_size,
 };
 use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
-use scroll_view::{MARGIN, create_scroll_view};
+use scroll_view::create_scroll_view;
 use svg::{Svg, create_svg_view, is_svg, parse_svg};
-use window_controller::create_window_controller;
+use window_controller::{create_window_controller, show_media};
 
 struct DocumentIvars {
     image: Cell<*mut Object>,
@@ -59,6 +61,16 @@ define_class!(
         #[unsafe(method(makeWindowControllers))]
         fn _make_window_controllers(&self) {
             self.make_window_controllers();
+        }
+
+        #[unsafe(method(nextImage:))]
+        fn _next_image(&self, _: *mut Object) {
+            self.show_sibling(1);
+        }
+
+        #[unsafe(method(previousImage:))]
+        fn _previous_image(&self, _: *mut Object) {
+            self.show_sibling(-1);
         }
 
         #[unsafe(method(printOperationWithSettings:error:))]
@@ -175,7 +187,7 @@ impl Document {
         // view is retained a second time because printing draws the loaded page again.
         unsafe {
             if !tinyvg.is_null() {
-                return create_tinyvg_view(frame, Box::new((*tinyvg).clone()), 0.0);
+                return create_tinyvg_view(frame, Box::new((*tinyvg).clone()));
             }
             if !svg.is_null() {
                 let view = create_svg_view(frame, &*svg);
@@ -189,27 +201,113 @@ impl Document {
         }
     }
 
-    fn make_window_controllers(&self) {
-        let Some(media_size) = self.media_size() else {
-            return;
-        };
+    /// Returns the size the window title shows, which is the stored size of a bitmap.
+    fn title_size(&self, media_size: Size) -> Size {
         let image = self.ivars().image.get();
-        let title_size = if image.is_null() {
+        if image.is_null() {
             media_size
         } else {
             // SAFETY: The ivar owns a live NSImage that keeps its representations alive.
             unsafe { image_pixel_size(image, media_size) }
+        }
+    }
+
+    /// Shows the image `offset` places from this one in its folder, in the window of this
+    /// document.
+    ///
+    /// A file that is open already has a document and a window of its own, which browsing brings
+    /// forward instead of showing the same file twice.
+    fn show_sibling(&self, offset: isize) {
+        // SAFETY: The document controller and the file URL of this document are valid AppKit
+        // objects, and the neighbour URL lives in the autorelease pool of the current event.
+        unsafe {
+            let this = self as *const Self as *mut Object;
+            let url: *mut Object = msg_send![this, fileURL];
+            if url.is_null() {
+                return;
+            }
+            let neighbour = neighbour_url(url, offset, Self::class());
+            if neighbour.is_null() {
+                return;
+            }
+
+            let controller: *mut Object =
+                msg_send![class!(NSDocumentController), sharedDocumentController];
+            let open: *mut Object = msg_send![controller, documentForURL: neighbour];
+            if open.is_null() {
+                self.read_url(neighbour, controller);
+            } else {
+                let _: () = msg_send![open, showWindows];
+            }
+        }
+    }
+
+    /// Replaces the contents of this document with another file, keeping the window it has.
+    ///
+    /// # Safety
+    ///
+    /// `url` must point to a valid file `NSURL` and `controller` to the shared document
+    /// controller for the duration of this call.
+    unsafe fn read_url(&self, url: *mut Object, controller: *mut Object) {
+        // SAFETY: The caller supplies valid objects, the error out parameter is an autoreleased
+        // NSError the document presents itself, and NSDocument reads the file synchronously.
+        unsafe {
+            let this = self as *const Self as *mut Object;
+            let kind: *mut Object = msg_send![controller,
+                typeForContentsOfURL: url,
+                error: null_mut::<c_void>()
+            ];
+            let mut error: *mut Object = null_mut();
+            let error_out: *mut c_void = (&raw mut error).cast();
+            let read: Bool = msg_send![this, readFromURL: url, ofType: kind, error: error_out];
+            if !read.as_bool() {
+                if !error.is_null() {
+                    let _: () = msg_send![this, presentError: error];
+                }
+                return;
+            }
+
+            let _: () = msg_send![this, setFileURL: url];
+            let _: () = msg_send![this, setFileType: kind];
+            let _: () = msg_send![controller, noteNewRecentDocumentURL: url];
+            self.refresh_windows();
+        }
+    }
+
+    /// Shows the media this document holds now in the windows it opened before.
+    fn refresh_windows(&self) {
+        let Some(media_size) = self.media_size() else {
+            return;
         };
+        let title_size = self.title_size(media_size);
+        // SAFETY: The document owns its window controllers, and each media view is released after
+        // the scroll view of a window retains it.
+        unsafe {
+            let this = self as *const Self as *mut Object;
+            let controllers: *mut Object = msg_send![this, windowControllers];
+            let count: usize = msg_send![controllers, count];
+            for index in 0..count {
+                let controller: *mut Object = msg_send![controllers, objectAtIndex: index];
+                let view = self.create_media_view(Rect {
+                    origin: Point { x: 0.0, y: 0.0 },
+                    size: media_size,
+                });
+                show_media(controller, view, title_size);
+                let _: () = msg_send![view, release];
+            }
+        }
+    }
+
+    fn make_window_controllers(&self) {
+        let Some(media_size) = self.media_size() else {
+            return;
+        };
+        let title_size = self.title_size(media_size);
 
         // SAFETY: All objects are valid AppKit instances, selectors use their documented ABI,
         // and ownership is balanced after the document retains its window controller.
         unsafe {
-            // The window holds the media and the margin around it, so that media which fits on
-            // screen is shown at its own size and the two zoom items agree from the start.
-            let content_size = Size {
-                width: (media_size.width + MARGIN * 2.0).clamp(320.0, 1200.0),
-                height: (media_size.height + MARGIN * 2.0).clamp(240.0, 800.0),
-            };
+            let content_size = preferred_content_size(media_size);
             let rect = Rect {
                 origin: Point { x: 0.0, y: 0.0 },
                 size: content_size,
@@ -226,6 +324,12 @@ impl Document {
                 defer: Bool::NO
             ];
             let _: () = msg_send![window, setContentMinSize: Size { width: 240.0, height: 180.0 }];
+            // A window that is created in code takes no part in full screen until it says so,
+            // which leaves the green button of the title bar zooming only.
+            let behavior: u64 = msg_send![window, collectionBehavior];
+            let _: () = msg_send![window,
+                setCollectionBehavior: behavior | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_PRIMARY
+            ];
             let _: () = msg_send![window, center];
 
             // The media keeps its own size and the scroll view magnifies it, so that zooming
@@ -449,6 +553,45 @@ fn add_item(
     }
 }
 
+/// Returns the key equivalent of a function key, which AppKit spells as a single character.
+fn function_key(code: u16) -> String {
+    char::from_u32(u32::from(code))
+        .expect("function keys are characters of the private use area")
+        .to_string()
+}
+
+/// Adds the submenu that `NSDocumentController` fills with the files that were opened before.
+///
+/// A menu says what it is by its name, which is how the document controller finds this one and
+/// keeps it up to date. The name is set through a method AppKit does not document, so the menu
+/// stays an ordinary one when a future release drops it.
+fn add_open_recent_menu(menu: *mut Object) {
+    // SAFETY: menu is a valid NSMenu that retains the item, which retains the submenu.
+    unsafe {
+        let item: *mut Object = msg_send![class!(NSMenuItem), new];
+        let _: () = msg_send![item, setTitle: ns_string!("Open Recent")];
+        let recent_menu: *mut Object = msg_send![class!(NSMenu), alloc];
+        let recent_menu: *mut Object =
+            msg_send![recent_menu, initWithTitle: ns_string!("Open Recent")];
+        let named: Bool = msg_send![recent_menu, respondsToSelector: sel!(_setMenuName:)];
+        if named.as_bool() {
+            let _: () = msg_send![recent_menu, _setMenuName: ns_string!("NSRecentDocumentsMenu")];
+        }
+        add_item(
+            recent_menu,
+            "Clear Menu",
+            sel!(clearRecentDocuments:),
+            "",
+            0,
+            null_mut(),
+        );
+        let _: () = msg_send![item, setSubmenu: recent_menu];
+        let _: () = msg_send![recent_menu, release];
+        let _: () = msg_send![menu, addItem: item];
+        let _: () = msg_send![item, release];
+    }
+}
+
 fn add_separator(menu: *mut Object) {
     // SAFETY: menu is a valid NSMenu and separatorItem returns a valid shared menu item.
     unsafe {
@@ -526,6 +669,7 @@ fn create_menu(application: *mut Object) {
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
+        add_open_recent_menu(file_menu);
         add_separator(file_menu);
         add_item(
             file_menu,
@@ -631,6 +775,33 @@ fn create_menu(application: *mut Object) {
             sel!(zoomToFit:),
             "9",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
+            null_mut(),
+        );
+        add_separator(view_menu);
+        add_item(
+            view_menu,
+            "Previous Image",
+            sel!(previousImage:),
+            &function_key(NS_LEFT_ARROW_FUNCTION_KEY),
+            0,
+            null_mut(),
+        );
+        add_item(
+            view_menu,
+            "Next Image",
+            sel!(nextImage:),
+            &function_key(NS_RIGHT_ARROW_FUNCTION_KEY),
+            0,
+            null_mut(),
+        );
+        add_separator(view_menu);
+        // AppKit renames the item to Exit Full Screen while a window is in full screen itself.
+        add_item(
+            view_menu,
+            "Enter Full Screen",
+            sel!(toggleFullScreen:),
+            "f",
+            NS_EVENT_MODIFIER_FLAG_COMMAND | NS_EVENT_MODIFIER_FLAG_CONTROL,
             null_mut(),
         );
         let _: () = msg_send![view_menu, release];

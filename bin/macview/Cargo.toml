@@ -12,7 +12,7 @@ platforms = ["macos"]
 name = "MacView"
 identifier = "nl.bplaat.MacView"
 copyright = "Copyright (c) 2026 Bastiaan van der Plaat"
-entitlements = "Entitlements.plist"
+hardened_runtime = true
 
 [[package.metadata.bundle.appex]]
 name = "MacView Preview"

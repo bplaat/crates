@@ -68,6 +68,31 @@ impl Media {
     }
 }
 
+/// The size media is shown at, which is the media itself when it lies between these bounds.
+const MINIMUM_CONTENT_SIZE: Size = Size {
+    width: 320.0,
+    height: 240.0,
+};
+const MAXIMUM_CONTENT_SIZE: Size = Size {
+    width: 1200.0,
+    height: 800.0,
+};
+
+/// Returns the size of the window or preview panel that media is shown in.
+///
+/// Media larger than the bounds is shrunk with its shape kept, so that what shows it has the shape
+/// of the media and the media fills it. Clamping the width and the height on their own would give
+/// some other shape, which leaves a band of background along one pair of edges.
+pub fn preferred_content_size(media_size: Size) -> Size {
+    let scale = (MAXIMUM_CONTENT_SIZE.width / media_size.width)
+        .min(MAXIMUM_CONTENT_SIZE.height / media_size.height)
+        .min(1.0);
+    Size {
+        width: (media_size.width * scale).max(MINIMUM_CONTENT_SIZE.width),
+        height: (media_size.height * scale).max(MINIMUM_CONTENT_SIZE.height),
+    }
+}
+
 /// Loads a supported image from a file URL.
 ///
 /// # Safety
@@ -83,7 +108,7 @@ pub unsafe fn load_media(url: *mut Object) -> Result<Media, String> {
 /// # Safety
 ///
 /// `data` must point to a valid `NSData` for the duration of this call.
-pub unsafe fn decode_media(data: *mut Object) -> Result<Media, String> {
+unsafe fn decode_media(data: *mut Object) -> Result<Media, String> {
     // SAFETY: NSData keeps its immutable byte buffer alive for the duration of this function.
     let bytes = unsafe {
         let length: usize = msg_send![data, length];
@@ -176,7 +201,8 @@ pub unsafe fn decode_image(data: *mut Object) -> Result<(*mut Object, Size), Str
 
 /// Creates an owned `NSImageView` that scales `image` to fit `frame`.
 ///
-/// The caller owns the returned view and must send it `release`.
+/// An image that holds more than one frame, such as an animated GIF or APNG, plays instead of
+/// showing its first frame. The caller owns the returned view and must send it `release`.
 ///
 /// # Safety
 ///
@@ -188,6 +214,7 @@ pub unsafe fn create_image_view(frame: Rect, image: *mut Object) -> *mut Object 
         let view: *mut Object = msg_send![view, initWithFrame: frame];
         let _: () = msg_send![view, setImage: image];
         let _: () = msg_send![view, setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN];
+        let _: () = msg_send![view, setAnimates: Bool::YES];
         view
     }
 }
@@ -233,7 +260,7 @@ pub fn extension_main() -> ! {
 /// Creates an owned `NSImage` from a decoded QOI image.
 ///
 /// The caller owns the returned object and must send it `release`.
-pub fn make_image(image: &qoi::Image) -> Option<*mut Object> {
+fn make_image(image: &qoi::Image) -> Option<*mut Object> {
     // SAFETY: Core Foundation copies the decoded bytes. Each create call is checked, and every
     // owned Core Foundation/Core Graphics object is released after ownership is transferred.
     unsafe {
@@ -329,5 +356,69 @@ mod tests {
                 let _: () = msg_send![image, release];
             }
         });
+    }
+
+    /// Returns the magnification that shows all of the media inside a window of `content`.
+    fn fit(media: Size, content: Size) -> f64 {
+        (content.width / media.width).min(content.height / media.height)
+    }
+
+    #[test]
+    fn a_window_opens_on_the_media_at_its_own_size() {
+        let media = Size {
+            width: 448.0,
+            height: 220.0,
+        };
+        let content = preferred_content_size(media);
+        assert_eq!(content.width, 448.0);
+        // A window is never smaller than the size every window has room for.
+        assert_eq!(content.height, MINIMUM_CONTENT_SIZE.height);
+        assert_eq!(fit(media, content), 1.0);
+    }
+
+    #[test]
+    fn a_window_of_shrunk_media_keeps_the_shape_of_the_media() {
+        // Media that is taller than the bounds allow used to open in a window as wide as itself,
+        // which left a band of background along the sides.
+        for media in [
+            Size {
+                width: 1152.0,
+                height: 858.0,
+            },
+            Size {
+                width: 2000.0,
+                height: 1500.0,
+            },
+        ] {
+            let content = preferred_content_size(media);
+            assert!(content.width <= MAXIMUM_CONTENT_SIZE.width);
+            assert!(content.height <= MAXIMUM_CONTENT_SIZE.height);
+            // The media fills the window it opens in, in both directions.
+            let magnification = fit(media, content);
+            assert!((media.width * magnification - content.width).abs() < 0.001);
+            assert!((media.height * magnification - content.height).abs() < 0.001);
+        }
+    }
+
+    #[test]
+    fn media_that_is_shrunk_below_the_smallest_window_keeps_a_band_of_background() {
+        // A panorama is 1200 points wide long before it is 240 points tall, and a window this
+        // short is one no window gets, so the background shows above and below it.
+        let content = preferred_content_size(Size {
+            width: 4000.0,
+            height: 500.0,
+        });
+        assert_eq!(content.width, MAXIMUM_CONTENT_SIZE.width);
+        assert_eq!(content.height, MINIMUM_CONTENT_SIZE.height);
+    }
+
+    #[test]
+    fn a_window_of_small_media_is_the_smallest_a_window_gets() {
+        let content = preferred_content_size(Size {
+            width: 24.0,
+            height: 24.0,
+        });
+        assert_eq!(content.width, MINIMUM_CONTENT_SIZE.width);
+        assert_eq!(content.height, MINIMUM_CONTENT_SIZE.height);
     }
 }

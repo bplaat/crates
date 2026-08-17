@@ -25,7 +25,7 @@ These libraries are not published to [crates.io](https://crates.io) and are more
 - [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [plaatui](npm-lib/plaatui) A Preact web components ui library for my own services
 - [qoi](lib/qoi) A small decoder for the Quite OK Image format
-- [tinyvg](lib/tinyvg) A TinyVG binary vector image parser
+- [tinyvg](lib/tinyvg) A TinyVG vector image parser (binary and text formats)
 - [macview-appkit](lib/macview-appkit) Shared AppKit image loading for MacView
 - [small-websocket](lib/small-websocket) A simple and small websocket library for the [small-http](lib/small-http) library
 - [validate](lib/validate) A simple struct validation library

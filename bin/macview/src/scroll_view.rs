@@ -17,19 +17,23 @@ use crate::cocoa::*;
 const MINIMUM_MAGNIFICATION: f64 = 0.02;
 const MAXIMUM_MAGNIFICATION: f64 = 64.0;
 
-/// The space kept free around the media when all of it is shown.
-///
-/// The margin belongs to the window and not to the media, so that every format is shown the same
-/// way and switching between showing all of the media and showing it at its own size moves it by
-/// the difference in size alone.
-pub(crate) const MARGIN: f64 = 16.0;
-
 define_class!(
     #[unsafe(super(NSClipView))]
     #[name = "MacViewClipView"]
     struct ClipView;
 
     impl ClipView {
+        /// Anchors the media at the top left of the window instead of the bottom left.
+        ///
+        /// A clip view scrolls in its own coordinates, so an unflipped one keeps the bottom of the
+        /// media in place while the window is resized, which leaves the view at the end of a taller
+        /// image and scrolls the top of it out of sight. Flipping it keeps the top in place, and
+        /// what a smaller window loses is scrolled to downwards.
+        #[unsafe(method(isFlipped))]
+        const fn _is_flipped(&self) -> Bool {
+            Bool::YES
+        }
+
         #[unsafe(method(constrainBoundsRect:))]
         fn _constrain_bounds_rect(&self, proposed: Rect) -> Rect {
             self.constrain_bounds_rect(proposed)
@@ -100,7 +104,7 @@ define_class!(
 );
 
 impl ScrollView {
-    /// Returns the magnification that shows all of the media inside its margin.
+    /// Returns the magnification that shows all of the media.
     fn fit_magnification(&self) -> f64 {
         // SAFETY: The scroll view keeps its document view alive, and its content size is the
         // visible area in points.
@@ -115,10 +119,8 @@ impl ScrollView {
                 return 1.0;
             }
             let content: Size = msg_send![this, contentSize];
-            let width = (content.width - MARGIN * 2.0).max(1.0);
-            let height = (content.height - MARGIN * 2.0).max(1.0);
-            (width / media.size.width)
-                .min(height / media.size.height)
+            (content.width.max(1.0) / media.size.width)
+                .min(content.height.max(1.0) / media.size.height)
                 .clamp(MINIMUM_MAGNIFICATION, MAXIMUM_MAGNIFICATION)
         }
     }
