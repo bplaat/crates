@@ -12,10 +12,11 @@ mod cocoa;
 
 use std::ptr::null_mut;
 
-use block2::Block;
+use block2::{Block, RcBlock};
 use macview_appkit::{
     Media, NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, create_image_view,
-    create_tinyvg_view, extension_main, load_media, make_error, ns_string, preferred_content_size,
+    create_tinyvg_view, dispatch_async, dispatch_async_main, extension_main, load_media,
+    make_error, ns_string, preferred_content_size,
 };
 use objc2::ffi::class_addProtocol;
 use objc2::runtime::{AnyClass, AnyObject as Object, AnyProtocol};
@@ -43,6 +44,18 @@ define_class!(
     }
 );
 
+struct PreviewCompletion(RcBlock<dyn Fn(*mut Object)>);
+
+// SAFETY: Quick Look completion blocks are escaping blocks intended for asynchronous use. This
+// wrapper moves its owned copy to the main queue and invokes it there exactly once.
+unsafe impl Send for PreviewCompletion {}
+
+impl PreviewCompletion {
+    fn call(&self, error: *mut Object) {
+        self.0.call((error,));
+    }
+}
+
 impl PreviewViewController {
     fn load_view(&self) {
         // SAFETY: The controller owns the placeholder view after setView:.
@@ -61,34 +74,52 @@ impl PreviewViewController {
     }
 
     fn prepare_preview(&self, url: *mut Object, completion: &Block<dyn Fn(*mut Object)>) {
-        let domain = ns_string!("nl.bplaat.MacView.Preview");
-        // SAFETY: Quick Look supplied url as a valid file NSURL for this callback.
-        let media = match unsafe { load_media(url) } {
-            Ok(media) => media,
-            Err(description) => {
-                // SAFETY: The error domain is a constant string.
-                let error = unsafe { make_error(domain, &description) };
-                completion.call((error,));
-                return;
-            }
+        // SAFETY: Quick Look supplied live objects. Copies keep them alive until the asynchronous
+        // load and main-queue UI continuation have finished.
+        let (this, url, completion) = unsafe {
+            let this = self as *const Self as *mut Object;
+            let this: *mut Object = msg_send![this, retain];
+            let url: *mut Object = msg_send![url, retain];
+            let completion = PreviewCompletion(completion.copy());
+            (this as usize, url as usize, completion)
         };
 
-        let size = preferred_content_size(media.size());
-        // SAFETY: self and its root view are live. Keeping the loadView root in place is required
-        // because replacing it after ViewBridge connects tears down the service.
-        unsafe {
-            let this = self as *const Self as *mut Object;
-            let root: *mut Object = msg_send![this, view];
-            let bounds: Rect = msg_send![root, bounds];
-            let view = create_media_view(bounds, media);
-            let _: () = msg_send![view,
-                setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
-            ];
-            let _: () = msg_send![root, addSubview: view];
-            let _: () = msg_send![this, setPreferredContentSize: size];
-            let _: () = msg_send![view, release];
-        }
-        completion.call((null_mut(),));
+        dispatch_async(move || {
+            // SAFETY: url is retained until this load completes.
+            let media = unsafe { load_media(url as *mut Object) };
+            // SAFETY: This balances the retain before dispatching the load.
+            unsafe {
+                let _: () = msg_send![url as *mut Object, release];
+            }
+            dispatch_async_main(move || {
+                // SAFETY: this is retained and all AppKit view work happens on the main queue.
+                unsafe {
+                    let this = this as *mut Object;
+                    match media {
+                        Ok(media) => {
+                            let size = preferred_content_size(media.size());
+                            let root: *mut Object = msg_send![this, view];
+                            let bounds: Rect = msg_send![root, bounds];
+                            let view = create_media_view(bounds, media);
+                            let _: () = msg_send![view,
+                                setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE
+                                    | NS_VIEW_HEIGHT_SIZABLE
+                            ];
+                            let _: () = msg_send![root, addSubview: view];
+                            let _: () = msg_send![this, setPreferredContentSize: size];
+                            let _: () = msg_send![view, release];
+                            completion.call(null_mut());
+                        }
+                        Err(description) => {
+                            let error =
+                                make_error(ns_string!("nl.bplaat.MacView.Preview"), &description);
+                            completion.call(error);
+                        }
+                    }
+                    let _: () = msg_send![this, release];
+                }
+            });
+        });
     }
 }
 
@@ -97,7 +128,7 @@ impl PreviewViewController {
 /// The caller owns the returned view and must send it `release`.
 fn create_media_view(frame: Rect, media: Media) -> *mut Object {
     match media {
-        Media::TinyVg(document) => create_tinyvg_view(frame, Box::new(document)),
+        Media::TinyVg(document) => create_tinyvg_view(frame, document),
         // SAFETY: NSImageView retains the image, which stays alive until this function returns.
         Media::Image(image) => unsafe { create_image_view(frame, image.as_ptr()) },
     }

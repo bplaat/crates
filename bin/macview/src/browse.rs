@@ -28,32 +28,22 @@ pub(crate) fn sibling_index(count: usize, current: usize, offset: isize) -> Opti
     (index != current).then_some(index)
 }
 
-/// Returns the file URL of the image `offset` places from `url` inside its folder.
-///
-/// The returned URL is autoreleased, and is null when the folder holds no other image
-/// `document_class` can read.
+/// Returns the path of the image `offset` places from `path` inside its folder.
 ///
 /// # Safety
 ///
-/// `url` must point to a valid file `NSURL` for the duration of this call.
-pub(crate) unsafe fn neighbour_url(
-    url: *mut Object,
+/// `document_class` must be an `NSDocument` subclass.
+pub(crate) unsafe fn neighbour_path(
+    path: &Path,
     offset: isize,
     document_class: *mut Object,
-) -> *mut Object {
-    // SAFETY: The caller supplies a valid file URL, and the types are read from a document class.
+) -> Option<PathBuf> {
+    // SAFETY: The caller supplies a document class whose readable types are process-lifetime
+    // objects.
     unsafe {
-        let Some(path) = url_path(url) else {
-            return null_mut();
-        };
-        let siblings = openable_siblings(&path, &readable_types(document_class));
-        let Some(current) = siblings.iter().position(|sibling| *sibling == path) else {
-            return null_mut();
-        };
-        match sibling_index(siblings.len(), current, offset) {
-            Some(index) => file_url(&siblings[index]),
-            None => null_mut(),
-        }
+        let siblings = openable_siblings(path, &readable_types(document_class));
+        let current = siblings.iter().position(|sibling| sibling == path)?;
+        sibling_index(siblings.len(), current, offset).map(|index| siblings[index].clone())
     }
 }
 
@@ -176,7 +166,7 @@ unsafe fn compare_names(left: *mut Object, right: *mut Object) -> Ordering {
 /// # Safety
 ///
 /// `url` must point to a valid file `NSURL` for the duration of this call.
-unsafe fn url_path(url: *mut Object) -> Option<PathBuf> {
+pub(crate) unsafe fn url_path(url: *mut Object) -> Option<PathBuf> {
     // SAFETY: The caller supplies a valid file URL, whose representation is copied before the
     // autorelease pool that owns it is drained.
     unsafe {
@@ -190,7 +180,7 @@ unsafe fn url_path(url: *mut Object) -> Option<PathBuf> {
 }
 
 /// Returns an autoreleased file `NSURL` for a path, or null for a path holding a null byte.
-unsafe fn file_url(path: &Path) -> *mut Object {
+pub(crate) unsafe fn file_url(path: &Path) -> *mut Object {
     let Ok(representation) = CString::new(path.as_os_str().as_bytes()) else {
         return null_mut();
     };

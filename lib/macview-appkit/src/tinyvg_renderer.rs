@@ -6,6 +6,7 @@
 
 use std::cell::Cell;
 use std::ffi::c_void;
+use std::sync::Arc;
 
 use objc2::ffi::{objc_msgSendSuper, objc_super};
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
@@ -15,7 +16,7 @@ use tinyvg::{Color, ColorSpace, Command, Document, Path, PathOperation, Point, S
 use crate::cocoa::*;
 
 struct TinyVgViewIvars {
-    document: Cell<*mut Document>,
+    document: Cell<*mut Arc<Document>>,
 }
 
 define_class!(
@@ -102,7 +103,7 @@ impl TinyVgView {
 ///
 /// The document is drawn to the edges of the view, which is what the scroll view of the viewer and
 /// the panel of a preview both want. The caller owns the returned view and must send it `release`.
-pub fn create_tinyvg_view(frame: Rect, document: Box<Document>) -> *mut Object {
+pub fn create_tinyvg_view(frame: Rect, document: Arc<Document>) -> *mut Object {
     // SAFETY: TinyVgView is a registered NSView subclass. The zero-initialized pointer ivar is
     // replaced with ownership of document before the view can draw.
     unsafe {
@@ -110,7 +111,10 @@ pub fn create_tinyvg_view(frame: Rect, document: Box<Document>) -> *mut Object {
         let view: *mut Object = msg_send![view, initWithFrame: frame];
         assert!(!view.is_null(), "failed to create TinyVG view");
         let view_ref = &*(view.cast::<TinyVgView>());
-        view_ref.ivars().document.set(Box::into_raw(document));
+        view_ref
+            .ivars()
+            .document
+            .set(Box::into_raw(Box::new(document)));
         view
     }
 }

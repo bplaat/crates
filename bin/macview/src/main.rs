@@ -19,14 +19,16 @@ use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::null_mut;
 
-use browse::neighbour_url;
+use block2::RcBlock;
+use browse::{file_url, neighbour_path, url_path};
 use checkerboard::create_checkerboard_view;
 use cocoa::*;
 use macview_appkit::{
-    NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, create_image_view,
-    create_tinyvg_view, decode_image, decode_tinyvg, make_error, ns_string, preferred_content_size,
+    Image, NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, OwnedString, Point, Rect, Size,
+    create_image_view, create_tinyvg_view, decode_image, decode_image_data, decode_tinyvg,
+    dispatch_async, dispatch_async_main, make_error, ns_string, preferred_content_size,
 };
-use objc2::ffi::{objc_msgSendSuper, objc_super};
+use objc2::ffi::{class_addMethod, objc_msgSendSuper, objc_super, object_getClass};
 use objc2::rc::autoreleasepool;
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
@@ -35,10 +37,17 @@ use svg::{Svg, create_svg_view, is_svg, parse_svg};
 use window_controller::{create_window_controller, show_media};
 
 struct DocumentIvars {
-    image: Cell<*mut Object>,
-    tinyvg: Cell<*mut tinyvg::Document>,
+    image: Cell<*mut Image>,
+    tinyvg: Cell<*mut std::sync::Arc<tinyvg::Document>>,
     svg: Cell<*mut Svg>,
     svg_view: Cell<*mut Object>,
+    browse_generation: Cell<u64>,
+}
+
+enum DecodedMedia {
+    Image(Image),
+    TinyVg(std::sync::Arc<tinyvg::Document>),
+    Svg(Box<Svg>),
 }
 
 define_class!(
@@ -91,50 +100,152 @@ define_class!(
 
 impl Document {
     fn read_from_data(&self, data: *mut Object, error_out: *mut c_void) -> Bool {
-        // SAFETY: AppKit passes a valid NSData object whose bytes remain alive for this call.
-        let bytes = unsafe {
-            let length: usize = msg_send![data, length];
-            let bytes: *const c_void = msg_send![data, bytes];
-            std::slice::from_raw_parts(bytes.cast::<u8>(), length)
-        };
-        if tinyvg::is_tinyvg(bytes) {
-            // SAFETY: AppKit supplied data as a valid NSData for the duration of this call.
-            let document = match unsafe { decode_tinyvg(data) } {
-                Ok(document) => document,
-                Err(error) => {
-                    set_error(error_out, &error.to_string());
-                    return Bool::NO;
-                }
-            };
-            self.set_media(null_mut(), Box::into_raw(Box::new(document)), null_mut());
-            return Bool::YES;
-        }
-        if is_svg(bytes) {
-            self.set_media(
-                null_mut(),
-                null_mut(),
-                Box::into_raw(Box::new(parse_svg(bytes))),
-            );
-            return Bool::YES;
-        }
-
-        // SAFETY: AppKit supplied data as a valid NSData for the duration of this call.
-        let (image, _) = match unsafe { decode_image(data) } {
-            Ok(image) => image,
+        // SAFETY: AppKit supplied a valid NSData for the duration of this call.
+        match unsafe { decode_document(data) } {
+            Ok(media) => {
+                self.install_media(media);
+                Bool::YES
+            }
             Err(error) => {
                 set_error(error_out, &error);
-                return Bool::NO;
+                Bool::NO
+            }
+        }
+    }
+
+    fn install_media(&self, media: DecodedMedia) {
+        match media {
+            DecodedMedia::Image(image) => {
+                self.set_media(Box::into_raw(Box::new(image)), null_mut(), null_mut());
+            }
+            DecodedMedia::TinyVg(document) => {
+                self.set_media(null_mut(), Box::into_raw(Box::new(document)), null_mut());
+            }
+            DecodedMedia::Svg(document) => {
+                self.set_media(null_mut(), null_mut(), Box::into_raw(document));
+            }
+        }
+    }
+
+    fn next_browse_generation(&self) -> u64 {
+        let generation = self.ivars().browse_generation.get().wrapping_add(1);
+        self.ivars().browse_generation.set(generation);
+        generation
+    }
+
+    fn is_current_browse(&self, generation: u64) -> bool {
+        self.ivars().browse_generation.get() == generation
+    }
+
+    fn show_sibling(&self, offset: isize) {
+        // SAFETY: AppKit calls actions on the main thread. The retained document remains live
+        // until the final main-queue continuation releases it.
+        let (path, generation, retained, document_class) = unsafe {
+            let this = self as *const Self as *mut Object;
+            let url: *mut Object = msg_send![this, fileURL];
+            let Some(path) = (!url.is_null()).then(|| url_path(url)).flatten() else {
+                return;
+            };
+            let generation = self.next_browse_generation();
+            let retained: *mut Object = msg_send![this, retain];
+            (path, generation, retained as usize, Self::class() as usize)
+        };
+
+        dispatch_async(move || {
+            // SAFETY: The document class is registered for the process lifetime.
+            let neighbour = unsafe { neighbour_path(&path, offset, document_class as *mut Object) };
+            dispatch_async_main(move || {
+                // SAFETY: retained owns a live document until this continuation releases it.
+                unsafe {
+                    let this = retained as *mut Object;
+                    let document = &*this.cast::<Document>();
+                    if !document.is_current_browse(generation) {
+                        let _: () = msg_send![this, release];
+                        return;
+                    }
+                    let Some(path) = neighbour else {
+                        let _: () = msg_send![this, release];
+                        return;
+                    };
+                    document.load_sibling(path, generation);
+                }
+            });
+        });
+    }
+
+    /// Starts loading a neighbouring file after its folder scan has completed.
+    unsafe fn load_sibling(&self, path: std::path::PathBuf, generation: u64) {
+        let error_domain = ns_string!("nl.bplaat.MacView") as usize;
+        // SAFETY: This runs on the main queue with a retained document from show_sibling.
+        let prepared = unsafe {
+            let this = self as *const Self as *mut Object;
+            let url = file_url(&path);
+            if url.is_null() {
+                let _: () = msg_send![this, release];
+                None
+            } else {
+                let controller: *mut Object =
+                    msg_send![class!(NSDocumentController), sharedDocumentController];
+                let open: *mut Object = msg_send![controller, documentForURL: url];
+                if !open.is_null() {
+                    let _: () = msg_send![open, showWindows];
+                    let _: () = msg_send![this, release];
+                    None
+                } else {
+                    let url: *mut Object = msg_send![url, retain];
+                    Some((url as usize, this as usize))
+                }
             }
         };
-        self.set_media(image, null_mut(), null_mut());
-        Bool::YES
+        let Some((url_address, this_address)) = prepared else {
+            return;
+        };
+
+        dispatch_async(move || {
+            // SAFETY: The URL is retained until the main-queue continuation releases it.
+            let result = unsafe { load_document(url_address as *mut Object) };
+            dispatch_async_main(move || {
+                // SAFETY: All Objective-C objects were retained for this continuation.
+                unsafe {
+                    let this = this_address as *mut Object;
+                    let document = &*this.cast::<Document>();
+                    let url = url_address as *mut Object;
+                    if document.is_current_browse(generation) {
+                        match result {
+                            Ok((media, kind)) => {
+                                document.install_media(media);
+                                let _: () = msg_send![this, setFileURL: url];
+                                let _: () = msg_send![this, setFileType: kind.as_ptr()];
+                                let controller: *mut Object = msg_send![
+                                    class!(NSDocumentController),
+                                    sharedDocumentController
+                                ];
+                                let _: () = msg_send![controller, noteNewRecentDocumentURL: url];
+                                document.refresh_windows();
+                            }
+                            Err(description) => {
+                                let error = make_error(error_domain as *mut Object, &description);
+                                let _: () = msg_send![this, presentError: error];
+                            }
+                        }
+                    }
+                    let _: () = msg_send![url, release];
+                    let _: () = msg_send![this, release];
+                }
+            });
+        });
     }
 
     /// Replaces the loaded media, releasing whatever the document held before.
     ///
     /// The web view of the previous media goes with it, because it draws a page that belongs to
     /// media the document no longer holds.
-    fn set_media(&self, image: *mut Object, tinyvg: *mut tinyvg::Document, svg: *mut Svg) {
+    fn set_media(
+        &self,
+        image: *mut Image,
+        tinyvg: *mut std::sync::Arc<tinyvg::Document>,
+        svg: *mut Svg,
+    ) {
         let old_image = self.ivars().image.replace(image);
         let old_tinyvg = self.ivars().tinyvg.replace(tinyvg);
         let old_svg = self.ivars().svg.replace(svg);
@@ -142,7 +253,7 @@ impl Document {
         // SAFETY: The ivars own the retained objects and the Boxes converted into these pointers.
         unsafe {
             if !old_image.is_null() {
-                let _: () = msg_send![old_image, release];
+                drop(Box::from_raw(old_image));
             }
             if !old_svg_view.is_null() {
                 let _: () = msg_send![old_svg_view, release];
@@ -174,7 +285,7 @@ impl Document {
         }
         let image = self.ivars().image.get();
         // SAFETY: The ivar owns a live NSImage when it is not null.
-        (!image.is_null()).then(|| unsafe { msg_send![image, size] })
+        (!image.is_null()).then(|| unsafe { &*image }.size())
     }
 
     /// Creates an owned view that draws the loaded media inside `frame`.
@@ -187,7 +298,7 @@ impl Document {
         // view is retained a second time because printing draws the loaded page again.
         unsafe {
             if !tinyvg.is_null() {
-                return create_tinyvg_view(frame, Box::new((*tinyvg).clone()));
+                return create_tinyvg_view(frame, (*tinyvg).clone());
             }
             if !svg.is_null() {
                 let view = create_svg_view(frame, &*svg);
@@ -197,7 +308,7 @@ impl Document {
                 }
                 return view;
             }
-            create_image_view(frame, self.ivars().image.get())
+            create_image_view(frame, (&*self.ivars().image.get()).as_ptr())
         }
     }
 
@@ -208,69 +319,7 @@ impl Document {
             media_size
         } else {
             // SAFETY: The ivar owns a live NSImage that keeps its representations alive.
-            unsafe { image_pixel_size(image, media_size) }
-        }
-    }
-
-    /// Shows the image `offset` places from this one in its folder, in the window of this
-    /// document.
-    ///
-    /// A file that is open already has a document and a window of its own, which browsing brings
-    /// forward instead of showing the same file twice.
-    fn show_sibling(&self, offset: isize) {
-        // SAFETY: The document controller and the file URL of this document are valid AppKit
-        // objects, and the neighbour URL lives in the autorelease pool of the current event.
-        unsafe {
-            let this = self as *const Self as *mut Object;
-            let url: *mut Object = msg_send![this, fileURL];
-            if url.is_null() {
-                return;
-            }
-            let neighbour = neighbour_url(url, offset, Self::class());
-            if neighbour.is_null() {
-                return;
-            }
-
-            let controller: *mut Object =
-                msg_send![class!(NSDocumentController), sharedDocumentController];
-            let open: *mut Object = msg_send![controller, documentForURL: neighbour];
-            if open.is_null() {
-                self.read_url(neighbour, controller);
-            } else {
-                let _: () = msg_send![open, showWindows];
-            }
-        }
-    }
-
-    /// Replaces the contents of this document with another file, keeping the window it has.
-    ///
-    /// # Safety
-    ///
-    /// `url` must point to a valid file `NSURL` and `controller` to the shared document
-    /// controller for the duration of this call.
-    unsafe fn read_url(&self, url: *mut Object, controller: *mut Object) {
-        // SAFETY: The caller supplies valid objects, the error out parameter is an autoreleased
-        // NSError the document presents itself, and NSDocument reads the file synchronously.
-        unsafe {
-            let this = self as *const Self as *mut Object;
-            let kind: *mut Object = msg_send![controller,
-                typeForContentsOfURL: url,
-                error: null_mut::<c_void>()
-            ];
-            let mut error: *mut Object = null_mut();
-            let error_out: *mut c_void = (&raw mut error).cast();
-            let read: Bool = msg_send![this, readFromURL: url, ofType: kind, error: error_out];
-            if !read.as_bool() {
-                if !error.is_null() {
-                    let _: () = msg_send![this, presentError: error];
-                }
-                return;
-            }
-
-            let _: () = msg_send![this, setFileURL: url];
-            let _: () = msg_send![this, setFileType: kind];
-            let _: () = msg_send![controller, noteNewRecentDocumentURL: url];
-            self.refresh_windows();
+            unsafe { image_pixel_size((&*image).as_ptr(), media_size) }
         }
     }
 
@@ -417,6 +466,166 @@ impl Document {
                 std::mem::transmute(objc_msgSendSuper as *const c_void);
             send(&super_info, sel!(dealloc).0);
         }
+    }
+}
+
+/// Decodes document data without creating any views or touching window state.
+///
+/// # Safety
+///
+/// `data` must point to a valid `NSData` for the duration of this call.
+unsafe fn decode_document(data: *mut Object) -> Result<DecodedMedia, String> {
+    // SAFETY: NSData keeps its immutable byte buffer alive for this call.
+    let bytes = unsafe {
+        let length: usize = msg_send![data, length];
+        let bytes: *const c_void = msg_send![data, bytes];
+        std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+    };
+    if tinyvg::is_tinyvg(bytes) {
+        return decode_tinyvg(bytes)
+            .map(std::sync::Arc::new)
+            .map(DecodedMedia::TinyVg);
+    }
+    if is_svg(bytes) {
+        return Ok(DecodedMedia::Svg(Box::new(parse_svg(bytes))));
+    }
+
+    // SAFETY: data remains live and is retained when AppKit needs it after this call.
+    unsafe { decode_image_data(data) }.map(DecodedMedia::Image)
+}
+
+/// Decodes bytes read by Rust without creating views or touching window state.
+fn decode_document_bytes(bytes: Vec<u8>) -> Result<DecodedMedia, String> {
+    if tinyvg::is_tinyvg(&bytes) {
+        return decode_tinyvg(&bytes)
+            .map(std::sync::Arc::new)
+            .map(DecodedMedia::TinyVg);
+    }
+    if is_svg(&bytes) {
+        return Ok(DecodedMedia::Svg(Box::new(parse_svg(&bytes))));
+    }
+    decode_image(bytes).map(DecodedMedia::Image)
+}
+
+/// Reads and decodes a document URL on a background queue.
+///
+/// # Safety
+///
+/// `url` must point to a retained `NSURL` for the duration of this call.
+unsafe fn load_document(url: *mut Object) -> Result<(DecodedMedia, OwnedString), String> {
+    let result = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let accessor_result = result.clone();
+    let accessor = RcBlock::new::<*mut Object>(move |coordinated_url| {
+        // SAFETY: NSFileCoordinator supplies a live coordinated file URL for this synchronous
+        // accessor invocation. Catching a panic here prevents unwinding across the Objective-C
+        // block ABI.
+        let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            decode_document_url(coordinated_url)
+        }))
+        .unwrap_or_else(|_| Err(String::from("Could not decode the image")));
+        *accessor_result
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(decoded);
+    });
+
+    // SAFETY: url is retained by the caller. The coordinator invokes the copied accessor before
+    // returning, and it coordinates the read against file presenters and writers.
+    unsafe {
+        let scoped: Bool = msg_send![url, startAccessingSecurityScopedResource];
+        let coordinator: *mut Object = msg_send![class!(NSFileCoordinator), alloc];
+        let coordinator: *mut Object = msg_send![coordinator,
+            initWithFilePresenter: null_mut::<Object>()
+        ];
+        let _: () = msg_send![coordinator,
+            coordinateReadingItemAtURL: url,
+            options: 0usize,
+            error: null_mut::<c_void>(),
+            byAccessor: &*accessor
+        ];
+        let _: () = msg_send![coordinator, release];
+        if scoped.as_bool() {
+            let _: () = msg_send![url, stopAccessingSecurityScopedResource];
+        }
+    }
+
+    result
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .take()
+        .unwrap_or_else(|| Err(String::from("Could not coordinate reading the image")))
+}
+
+/// Reads and decodes a URL supplied by `NSFileCoordinator`.
+///
+/// # Safety
+///
+/// `url` must be a valid coordinated file URL for this call.
+unsafe fn decode_document_url(url: *mut Object) -> Result<(DecodedMedia, OwnedString), String> {
+    // SAFETY: The caller supplies a live coordinated file URL.
+    let path = unsafe { url_path(url) }.ok_or_else(|| String::from("Could not read the image"))?;
+    let bytes = std::fs::read(&path).map_err(|_| String::from("Could not read the image"))?;
+    let extension = path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .ok_or_else(|| String::from("Unsupported image type"))?;
+    // SAFETY: UTType and NSString are immutable and safe on this worker.
+    let identifier = unsafe { type_identifier(extension) }?;
+    decode_document_bytes(bytes).map(|media| (media, identifier))
+}
+
+/// Returns the type identifier MacView declares for an extension.
+///
+/// # Safety
+///
+/// This calls thread-safe immutable Uniform Type Identifier APIs.
+unsafe fn type_identifier(extension: &str) -> Result<OwnedString, String> {
+    let declared = if extension.eq_ignore_ascii_case("qoi") {
+        Some("org.qoiformat.qoi")
+    } else if extension.eq_ignore_ascii_case("tvg") {
+        Some("org.tinyvg.tvg")
+    } else if extension.eq_ignore_ascii_case("tvgt") {
+        Some("org.tinyvg.tvgt")
+    } else {
+        None
+    };
+    if let Some(identifier) = declared {
+        return Ok(OwnedString::new(identifier));
+    }
+
+    // SAFETY: UTType returns immutable autoreleased objects, and OwnedString retains the result.
+    unsafe {
+        let kind: *mut Object = msg_send![class!(UTType),
+            typeWithFilenameExtension: ns_string(extension)
+        ];
+        if kind.is_null() {
+            return Err(String::from("Unsupported image type"));
+        }
+        let identifier: *mut Object = msg_send![kind, identifier];
+        Ok(OwnedString::retain(identifier))
+    }
+}
+
+const extern "C" fn can_concurrently_read_documents(
+    _: *mut Object,
+    _: objc2::runtime::Sel,
+    _: *mut Object,
+) -> Bool {
+    Bool::YES
+}
+
+/// Tells `NSDocumentController` that document decoding is safe on its background queue.
+unsafe fn enable_concurrent_document_reading() {
+    // SAFETY: Document is registered, object_getClass returns its metaclass, and the function
+    // signature matches +canConcurrentlyReadDocumentsOfType: (BOOL, Class, SEL, NSString *).
+    unsafe {
+        let metaclass = object_getClass(Document::class());
+        let added = class_addMethod(
+            metaclass,
+            sel!(canConcurrentlyReadDocumentsOfType:).0,
+            can_concurrently_read_documents as *const c_void,
+            c"c@:@".as_ptr(),
+        );
+        assert!(added, "failed to enable concurrent document reading");
     }
 }
 
@@ -833,6 +1042,7 @@ fn main() {
     // the entire AppKit run loop. Selectors use their documented Objective-C signatures.
     autoreleasepool(|_| unsafe {
         let _ = Document::class();
+        enable_concurrent_document_reading();
         let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
         // Every document gets a window of its own, so the tab items AppKit adds to the Window
         // menu would control something this application does not have.
@@ -846,4 +1056,30 @@ fn main() {
         let _: () = msg_send![application, run];
         let _: () = msg_send![delegate, release];
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    #[test]
+    fn coordinated_load_reads_and_classifies_an_image() {
+        autoreleasepool(|_| {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/qoi_logo.qoi");
+            // SAFETY: path names an existing image and the autorelease pool keeps its URL alive.
+            let (media, kind) = unsafe {
+                let url = file_url(&path);
+                load_document(url).expect("example image should load")
+            };
+            assert!(matches!(media, DecodedMedia::Image(_)));
+            // SAFETY: kind owns a live NSString for this scope.
+            let identifier: *const std::ffi::c_char =
+                unsafe { msg_send![kind.as_ptr(), UTF8String] };
+            // SAFETY: NSString keeps its UTF-8 representation alive while kind is alive.
+            let identifier = unsafe { std::ffi::CStr::from_ptr(identifier) };
+            assert_eq!(identifier.to_bytes(), b"org.qoiformat.qoi");
+        });
+    }
 }

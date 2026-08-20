@@ -12,11 +12,12 @@ mod cocoa;
 
 use std::ffi::c_void;
 use std::ptr::null_mut;
+use std::sync::Mutex;
 
 use block2::{Block, RcBlock};
 use macview_appkit::{
-    Media, Point, Rect, Size, extension_main, fill_white_background, load_media, make_error,
-    ns_string, render_tinyvg,
+    Media, Point, Rect, Size, dispatch_async, extension_main, fill_white_background, load_media,
+    make_error, ns_string, render_tinyvg,
 };
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
@@ -38,50 +39,95 @@ define_class!(
     }
 );
 
+struct ThumbnailCompletion(RcBlock<dyn Fn(*mut Object, *mut Object)>);
+
+// SAFETY: Quick Look completion blocks are escaping blocks intended for asynchronous use. This
+// wrapper moves its owned copy to a GCD worker and invokes it there exactly once.
+unsafe impl Send for ThumbnailCompletion {}
+
+impl ThumbnailCompletion {
+    fn call(&self, reply: *mut Object, error: *mut Object) {
+        self.0.call((reply, error));
+    }
+}
+
 fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object, *mut Object)>) {
-    let domain = ns_string!("nl.bplaat.MacView.Thumbnail");
-    // SAFETY: Quick Look supplies a valid request with a file URL and maximum size.
-    let (url, maximum_size, scale): (*mut Object, Size, f64) = unsafe {
+    // SAFETY: Quick Look supplies a valid request with a file URL and size constraints.
+    let (url, minimum_size, maximum_size, scale): (*mut Object, Size, Size, f64) = unsafe {
         (
             msg_send![request, fileURL],
+            msg_send![request, minimumSize],
             msg_send![request, maximumSize],
             msg_send![request, scale],
         )
     };
-    // SAFETY: Quick Look supplied url as a valid file NSURL for this callback.
-    let media = match unsafe { load_media(url) } {
-        Ok(media) => media,
-        Err(description) => {
-            // SAFETY: The error domain is a constant string.
-            let error = unsafe { make_error(domain, &description) };
-            completion.call((null_mut(), error));
-            return;
-        }
+    // SAFETY: Keep the Quick Look URL alive after this callback returns.
+    let (url, completion) = unsafe {
+        let url: *mut Object = msg_send![url, retain];
+        let completion = ThumbnailCompletion(completion.copy());
+        (url as usize, completion)
     };
-
-    let context_size = aspect_fit(media.size(), maximum_size);
-    let drawing_size = scaled(context_size, scale);
-    let drawing = RcBlock::new_ret::<*mut c_void, bool>(move |context| {
-        // SAFETY: Quick Look owns the drawing context for this call. The copied drawing block
-        // owns the media and drawing is synchronous within the block invocation.
+    dispatch_async(move || {
+        // SAFETY: url remains retained throughout the synchronous load.
+        let media = unsafe { load_media(url as *mut Object) };
+        // SAFETY: This balances the retain before dispatching the load.
         unsafe {
-            fill_white_background(context, drawing_size);
-            match &media {
-                Media::Image(image) => draw_image(context, image.as_ptr(), drawing_size),
-                Media::TinyVg(document) => render_tinyvg(context, document, drawing_size, 1.0),
-            }
+            let _: () = msg_send![url as *mut Object, release];
         }
-        true
-    });
+        let media = match media {
+            Ok(media) => media,
+            Err(description) => {
+                // SAFETY: Foundation error creation is safe on this worker queue.
+                let error =
+                    unsafe { make_error(ns_string!("nl.bplaat.MacView.Thumbnail"), &description) };
+                completion.call(null_mut(), error);
+                return;
+            }
+        };
 
-    // SAFETY: QLThumbnailReply copies the drawing block and invokes it while producing the reply.
-    let reply: *mut Object = unsafe {
-        msg_send![class!(QLThumbnailReply),
-            replyWithContextSize: context_size,
-            drawingBlock: &*drawing
-        ]
-    };
-    completion.call((reply, null_mut()));
+        let context_size = thumbnail_context_size(media.size(), minimum_size, maximum_size);
+        let drawing_size = scaled(context_size, scale);
+        let fitted_size = scaled(aspect_fit(media.size(), context_size), scale);
+        let fitted_origin = Point {
+            x: (drawing_size.width - fitted_size.width) / 2.0,
+            y: (drawing_size.height - fitted_size.height) / 2.0,
+        };
+        let media = Mutex::new(media);
+        let drawing = RcBlock::new_ret::<*mut c_void, bool>(move |context| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // SAFETY: Quick Look owns the drawing context for this call. The copied drawing
+                // block owns media and drawing is synchronous within the block invocation.
+                unsafe {
+                    fill_white_background(context, drawing_size);
+                    let media = media.lock().unwrap_or_else(|error| error.into_inner());
+                    match &*media {
+                        Media::Image(image) => draw_image(
+                            context,
+                            image.as_ptr(),
+                            Rect {
+                                origin: fitted_origin,
+                                size: fitted_size,
+                            },
+                        ),
+                        Media::TinyVg(document) => {
+                            render_tinyvg(context, document, drawing_size, 1.0);
+                        }
+                    }
+                }
+                true
+            }))
+            .unwrap_or(false)
+        });
+
+        // SAFETY: QLThumbnailReply copies the drawing block for deferred rendering.
+        let reply: *mut Object = unsafe {
+            msg_send![class!(QLThumbnailReply),
+                replyWithContextSize: context_size,
+                drawingBlock: &*drawing
+            ]
+        };
+        completion.call(reply, null_mut());
+    });
 }
 
 /// Draws an image over the whole thumbnail.
@@ -92,7 +138,7 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
 /// # Safety
 ///
 /// `context` must be a valid `CGContext` and `image` a valid `NSImage` for this call.
-unsafe fn draw_image(context: *mut c_void, image: *mut Object, size: Size) {
+unsafe fn draw_image(context: *mut c_void, image: *mut Object, frame: Rect) {
     // SAFETY: The caller guarantees both objects are valid, and the graphics state is restored
     // before returning.
     unsafe {
@@ -102,13 +148,20 @@ unsafe fn draw_image(context: *mut c_void, image: *mut Object, size: Size) {
         ];
         let _: () = msg_send![class!(NSGraphicsContext), saveGraphicsState];
         let _: () = msg_send![class!(NSGraphicsContext), setCurrentContext: graphics_context];
-        let _: () = msg_send![image,
-            drawInRect: Rect {
-                origin: Point { x: 0.0, y: 0.0 },
-                size,
-            }
-        ];
+        let _: () = msg_send![image, drawInRect: frame];
         let _: () = msg_send![class!(NSGraphicsContext), restoreGraphicsState];
+    }
+}
+
+/// Returns a reply context within Quick Look's accepted range.
+///
+/// Expanding a fitted dimension to the minimum can change the context's aspect ratio. Drawing is
+/// fitted and centered separately so extreme media is letterboxed instead of stretched.
+fn thumbnail_context_size(image: Size, minimum: Size, maximum: Size) -> Size {
+    let fitted = aspect_fit(image, maximum);
+    Size {
+        width: fitted.width.max(minimum.width).min(maximum.width),
+        height: fitted.height.max(minimum.height).min(maximum.height),
     }
 }
 
@@ -150,10 +203,14 @@ mod tests {
 
     #[test]
     fn thumbnail_context_uses_the_image_aspect_ratio() {
-        let size = aspect_fit(
+        let size = thumbnail_context_size(
             Size {
                 width: 400.0,
                 height: 200.0,
+            },
+            Size {
+                width: 0.0,
+                height: 0.0,
             },
             Size {
                 width: 100.0,
@@ -162,6 +219,26 @@ mod tests {
         );
         assert_eq!(size.width, 100.0);
         assert_eq!(size.height, 50.0);
+    }
+
+    #[test]
+    fn thumbnail_context_honors_the_minimum_without_exceeding_the_maximum() {
+        let size = thumbnail_context_size(
+            Size {
+                width: 1000.0,
+                height: 10.0,
+            },
+            Size {
+                width: 32.0,
+                height: 32.0,
+            },
+            Size {
+                width: 256.0,
+                height: 256.0,
+            },
+        );
+        assert_eq!(size.width, 256.0);
+        assert_eq!(size.height, 32.0);
     }
 
     #[test]

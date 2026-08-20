@@ -35,6 +35,7 @@ workspace = true
 
 [dependencies]
 base64 = "0.22"
+block2 = "0.6"
 objc2 = "0.6"
 macview-appkit = { path = "../../lib/macview-appkit" }
 tinyvg = { path = "../../lib/tinyvg" }

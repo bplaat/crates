@@ -7,7 +7,7 @@
 use std::ptr::null_mut;
 
 use base64::prelude::*;
-use macview_appkit::{Point, Rect, Size, ns_string};
+use macview_appkit::{OwnedString, Point, Rect, Size, ns_string};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
@@ -25,7 +25,7 @@ pub(crate) struct Svg {
     /// The intrinsic size in display units.
     pub size: Size,
     /// A page that draws the document centered and scaled to fit.
-    pub html: String,
+    pub html: OwnedString,
 }
 
 /// Returns whether the bytes are an SVG document.
@@ -39,13 +39,13 @@ pub(crate) fn parse_svg(bytes: &[u8]) -> Svg {
         size: root_tag(bytes).and_then(tag_size).unwrap_or(DEFAULT_SIZE),
         // The document is embedded as an image so that any script or external reference it
         // contains stays inert.
-        html: format!(
+        html: OwnedString::new(&format!(
             "<!doctype html><meta charset=\"utf-8\"><style>\
              html,body{{margin:0;height:100%;overflow:hidden;background:transparent}}\
              img{{width:100%;height:100%;object-fit:contain}}\
              </style><img src=\"data:image/svg+xml;base64,{}\">",
             BASE64_STANDARD.encode(bytes)
-        ),
+        )),
     }
 }
 
@@ -90,7 +90,7 @@ pub(crate) fn create_svg_view(frame: Rect, svg: &Svg) -> *mut Object {
         let opaque: *mut Object = msg_send![class!(NSNumber), numberWithBool: Bool::NO];
         let _: () = msg_send![view, setValue: opaque, forKey: ns_string!("drawsBackground")];
         let _: *mut Object = msg_send![view,
-            loadHTMLString: ns_string(&svg.html),
+            loadHTMLString: svg.html.as_ptr(),
             baseURL: null_mut::<Object>()
         ];
         view
@@ -288,6 +288,11 @@ mod tests {
     #[test]
     fn embeds_the_document_as_an_image() {
         let svg = parse_svg(b"<svg/>");
-        assert!(svg.html.contains("data:image/svg+xml;base64,PHN2Zy8+"));
+        // SAFETY: svg owns an immutable NSString whose UTF-8 view remains valid for this scope.
+        let source = unsafe {
+            let bytes: *const std::ffi::c_char = msg_send![svg.html.as_ptr(), UTF8String];
+            std::ffi::CStr::from_ptr(bytes).to_string_lossy()
+        };
+        assert!(source.contains("data:image/svg+xml;base64,PHN2Zy8+"));
     }
 }

@@ -8,12 +8,14 @@
 
 #![allow(unsafe_code)]
 
-use std::ffi::{CString, c_char};
+use std::ffi::{CStr, CString, OsStr, c_char, c_void};
 use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
 use std::ptr::null;
+use std::sync::Arc;
 
 use objc2::runtime::{AnyObject as Object, Bool};
-use objc2::{class, msg_send};
+use objc2::{class, msg_send, sel};
 
 mod cocoa;
 mod tinyvg_renderer;
@@ -25,10 +27,70 @@ pub use cocoa::{
 };
 pub use tinyvg_renderer::{create_tinyvg_view, fill_white_background, render_tinyvg};
 
+/// An owned immutable `NSString` that can be transferred between queues.
+pub struct OwnedString {
+    string: *mut Object,
+}
+
+impl OwnedString {
+    /// Creates a native string by copying `value` once.
+    pub fn new(value: &str) -> Self {
+        // SAFETY: NSString copies the valid UTF-8 bytes and returns an owned immutable object.
+        let string: *mut Object = unsafe {
+            let string: *mut Object = msg_send![class!(NSString), alloc];
+            msg_send![string,
+                initWithBytes: value.as_ptr().cast::<c_void>(),
+                length: value.len(),
+                encoding: NS_UTF8_STRING_ENCODING
+            ]
+        };
+        assert!(!string.is_null(), "failed to create NSString");
+        Self { string }
+    }
+
+    /// Returns the string pointer, which remains valid while this value is alive.
+    pub const fn as_ptr(&self) -> *mut Object {
+        self.string
+    }
+
+    /// Retains an existing immutable string.
+    ///
+    /// # Safety
+    ///
+    /// `string` must point to a valid `NSString`.
+    pub unsafe fn retain(string: *mut Object) -> Self {
+        assert!(!string.is_null(), "cannot retain a null NSString");
+        // SAFETY: The caller guarantees string is a live NSString.
+        let string: *mut Object = unsafe { msg_send![string, retain] };
+        Self { string }
+    }
+}
+
+impl Drop for OwnedString {
+    fn drop(&mut self) {
+        // SAFETY: This value owns the non-null string returned by initWithBytes:length:encoding:.
+        unsafe {
+            let _: () = msg_send![self.string, release];
+        }
+    }
+}
+
+// SAFETY: NSString is immutable and may be transferred between threads.
+unsafe impl Send for OwnedString {}
+// SAFETY: NSString is immutable and may be read concurrently from multiple threads.
+unsafe impl Sync for OwnedString {}
+
 /// An owned `NSImage` that is released when it is dropped.
 pub struct Image {
     image: *mut Object,
     size: Size,
+    backing: ImageBacking,
+}
+
+enum ImageBacking {
+    None,
+    Bytes { _bytes: Box<[u8]> },
+    Data(*mut Object),
 }
 
 impl Image {
@@ -36,28 +98,42 @@ impl Image {
     pub const fn as_ptr(&self) -> *mut Object {
         self.image
     }
+
+    /// Returns the natural image size in points.
+    pub const fn size(&self) -> Size {
+        self.size
+    }
 }
 
 impl Drop for Image {
     fn drop(&mut self) {
-        // SAFETY: The value owns the retained NSImage returned by decode_image.
+        // SAFETY: The value owns the image and any native data retained for lazy image access.
+        // Release the image before its backing bytes.
         unsafe {
             let _: () = msg_send![self.image, release];
+            if let ImageBacking::Data(data) = &self.backing {
+                let _: () = msg_send![*data, release];
+            }
         }
     }
 }
+
+// SAFETY: MacView only transfers ownership of a fully initialized image between queues. It does
+// not access the image from both queues at once, and drawing remains on the queue chosen by
+// AppKit or Quick Look.
+unsafe impl Send for Image {}
 
 /// An image in one of the formats the viewer and its Quick Look extensions display.
 pub enum Media {
     /// An image AppKit can draw, which covers QOI, SVG and every built-in format.
     Image(Image),
     /// A parsed TinyVG document.
-    TinyVg(tinyvg::Document),
+    TinyVg(Arc<tinyvg::Document>),
 }
 
 impl Media {
     /// Returns the natural size of the image in points.
-    pub const fn size(&self) -> Size {
+    pub fn size(&self) -> Size {
         match self {
             Self::Image(image) => image.size,
             Self::TinyVg(document) => Size {
@@ -93,53 +169,79 @@ pub fn preferred_content_size(media_size: Size) -> Size {
     }
 }
 
+/// Runs `work` asynchronously on a user-initiated global GCD queue.
+pub fn dispatch_async<F>(work: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    // SAFETY: The system user-initiated global queue exists for the process lifetime.
+    let queue = unsafe { dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0) };
+    dispatch_to(queue, work);
+}
+
+/// Runs `work` asynchronously on the main GCD queue.
+pub fn dispatch_async_main<F>(work: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    // SAFETY: The exported system main queue exists for the process lifetime. Apple's
+    // dispatch_get_main_queue is an inline C function, so bind its backing object directly.
+    let queue = std::ptr::addr_of_mut!(DISPATCH_MAIN_QUEUE).cast::<c_void>();
+    dispatch_to(queue, work);
+}
+
+fn dispatch_to<F>(queue: *mut c_void, work: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    extern "C" fn invoke<F>(context: *mut c_void)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        // SAFETY: dispatch_to created this allocation for this one GCD invocation.
+        let work = unsafe { Box::from_raw(context.cast::<Option<F>>()) }
+            .take()
+            .expect("GCD work was already invoked");
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            objc2::rc::autoreleasepool(|_| work());
+        }));
+        if result.is_err() {
+            std::process::abort();
+        }
+    }
+
+    let context = Box::into_raw(Box::new(Some(work))).cast();
+    // SAFETY: The context stays allocated until GCD invokes the function exactly once.
+    unsafe {
+        dispatch_async_f(queue, context, invoke::<F>);
+    }
+}
+
+const QOS_CLASS_USER_INITIATED: isize = 0x19;
+
+#[link(name = "System")]
+unsafe extern "C" {
+    fn dispatch_get_global_queue(identifier: isize, flags: usize) -> *mut c_void;
+    fn dispatch_async_f(queue: *mut c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
+    #[link_name = "_dispatch_main_q"]
+    static mut DISPATCH_MAIN_QUEUE: u8;
+}
+
 /// Loads a supported image from a file URL.
 ///
 /// # Safety
 ///
 /// `url` must point to a valid `NSURL` for the duration of this call.
 pub unsafe fn load_media(url: *mut Object) -> Result<Media, String> {
-    // SAFETY: The caller supplies a valid file URL and decoding consumes data synchronously.
-    unsafe { load_file(url, "Could not read the image", decode_media) }
-}
-
-/// Decodes a supported image from an `NSData` object.
-///
-/// # Safety
-///
-/// `data` must point to a valid `NSData` for the duration of this call.
-unsafe fn decode_media(data: *mut Object) -> Result<Media, String> {
-    // SAFETY: NSData keeps its immutable byte buffer alive for the duration of this function.
-    let bytes = unsafe {
-        let length: usize = msg_send![data, length];
-        let bytes: *const std::ffi::c_void = msg_send![data, bytes];
-        std::slice::from_raw_parts(bytes.cast::<u8>(), length)
-    };
-    if tinyvg::is_tinyvg(bytes) {
-        // SAFETY: data is a live NSData for the duration of this call.
-        return unsafe { decode_tinyvg(data) }.map(Media::TinyVg);
-    }
-    // SAFETY: data is a live NSData for the duration of this call.
-    let (image, size) = unsafe { decode_image(data) }?;
-    Ok(Media::Image(Image { image, size }))
-}
-
-unsafe fn load_file<T>(
-    url: *mut Object,
-    read_error: &str,
-    decode: unsafe fn(*mut Object) -> Result<T, String>,
-) -> Result<T, String> {
     // SAFETY: url is valid. Quick Look passes security-scoped URLs, and ordinary URLs simply
     // return false without changing their access state.
     let scoped: Bool = unsafe { msg_send![url, startAccessingSecurityScopedResource] };
-    // SAFETY: url is valid and NSData reads the file synchronously.
-    let data: *mut Object = unsafe { msg_send![class!(NSData), dataWithContentsOfURL: url] };
-    let result = if data.is_null() {
-        Err(String::from(read_error))
-    } else {
-        // SAFETY: data is a live NSData for the duration of this call.
-        unsafe { decode(data) }
-    };
+    // SAFETY: The caller supplies a live file URL.
+    let path = unsafe { file_path(url) };
+    let result = path
+        .ok_or_else(|| String::from("Could not read the image"))
+        .and_then(|path| std::fs::read(path).map_err(|_| String::from("Could not read the image")))
+        .and_then(decode_media);
     if scoped.as_bool() {
         // SAFETY: This balances the successful start call above.
         unsafe {
@@ -149,54 +251,125 @@ unsafe fn load_file<T>(
     result
 }
 
-/// Parses a TinyVG document from an `NSData` object.
+fn decode_media(bytes: Vec<u8>) -> Result<Media, String> {
+    if tinyvg::is_tinyvg(&bytes) {
+        return decode_tinyvg(&bytes).map(Arc::new).map(Media::TinyVg);
+    }
+    decode_image(bytes).map(Media::Image)
+}
+
+/// Returns the Rust path represented by a file URL.
 ///
 /// # Safety
 ///
-/// `data` must point to a valid `NSData` for the duration of this call.
-pub unsafe fn decode_tinyvg(data: *mut Object) -> Result<tinyvg::Document, String> {
-    // SAFETY: NSData keeps its immutable byte buffer alive for the duration of this function.
-    let bytes = unsafe {
-        let length: usize = msg_send![data, length];
-        let bytes: *const std::ffi::c_void = msg_send![data, bytes];
-        std::slice::from_raw_parts(bytes.cast::<u8>(), length)
-    };
+/// `url` must point to a valid file `NSURL` for this call.
+unsafe fn file_path(url: *mut Object) -> Option<PathBuf> {
+    // SAFETY: NSURL owns the representation, which is copied into the Rust path before return.
+    let representation: *const c_char = unsafe { msg_send![url, fileSystemRepresentation] };
+    if representation.is_null() {
+        return None;
+    }
+    // SAFETY: NSURL returns a null-terminated file-system representation.
+    let bytes = unsafe { CStr::from_ptr(representation) }.to_bytes();
+    Some(PathBuf::from(OsStr::from_bytes(bytes)))
+}
+
+/// Parses a TinyVG document from bytes.
+pub fn decode_tinyvg(bytes: &[u8]) -> Result<tinyvg::Document, String> {
     tinyvg::parse_auto(bytes).map_err(|error| error.to_string())
 }
 
-/// Decodes QOI or an AppKit-supported image format into an owned `NSImage`.
-///
-/// The caller owns the returned object and must send it `release`.
+/// Decodes QOI or an AppKit-supported image format from an owned Rust buffer.
+pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
+    if bytes.starts_with(b"qoif") {
+        let decoded = qoi::decode(&bytes).map_err(|error| error.to_string())?;
+        let image =
+            make_image(&decoded).ok_or_else(|| String::from("Could not create the image"))?;
+        // SAFETY: make_image returned an owned, initialized NSImage.
+        return unsafe { finish_image(image, ImageBacking::None) };
+    }
+
+    let bytes = bytes.into_boxed_slice();
+    // SAFETY: NSData borrows the stable boxed allocation, which ImageBacking keeps alive until
+    // after NSImage is released. NSData must not free Rust's allocation.
+    let data: *mut Object = unsafe {
+        msg_send![class!(NSData),
+            dataWithBytesNoCopy: bytes.as_ptr().cast::<c_void>(),
+            length: bytes.len(),
+            freeWhenDone: Bool::NO
+        ]
+    };
+    // SAFETY: data remains valid through the owned backing buffer.
+    unsafe { decode_native_image(data, ImageBacking::Bytes { _bytes: bytes }) }
+}
+
+/// Decodes an AppKit-supported image while retaining its existing native data buffer.
 ///
 /// # Safety
 ///
-/// `data` must point to a valid `NSData` for the duration of this call.
-pub unsafe fn decode_image(data: *mut Object) -> Result<(*mut Object, Size), String> {
-    // SAFETY: NSData keeps its immutable byte buffer alive for the duration of this function.
+/// `data` must point to a valid `NSData` for this call.
+pub unsafe fn decode_image_data(data: *mut Object) -> Result<Image, String> {
+    // SAFETY: data remains valid for this call and exposes immutable bytes.
     let bytes = unsafe {
         let length: usize = msg_send![data, length];
-        let bytes: *const std::ffi::c_void = msg_send![data, bytes];
+        let bytes: *const c_void = msg_send![data, bytes];
         std::slice::from_raw_parts(bytes.cast::<u8>(), length)
     };
-
-    let image = if bytes.starts_with(b"qoif") {
+    if bytes.starts_with(b"qoif") {
         let decoded = qoi::decode(bytes).map_err(|error| error.to_string())?;
-        make_image(&decoded).ok_or_else(|| String::from("Could not create the image"))?
-    } else {
-        // SAFETY: data is a valid NSData instance. NSImage's initializer either returns an
-        // owned image or null when AppKit does not support the contents.
-        let image: *mut Object = unsafe {
-            let image: *mut Object = msg_send![class!(NSImage), alloc];
-            msg_send![image, initWithData: data]
-        };
-        if image.is_null() {
-            return Err(String::from("Unsupported or invalid image"));
-        }
-        image
+        let image =
+            make_image(&decoded).ok_or_else(|| String::from("Could not create the image"))?;
+        // SAFETY: make_image returned an owned, initialized NSImage.
+        return unsafe { finish_image(image, ImageBacking::None) };
+    }
+    // SAFETY: Retaining data keeps lazy AppKit access valid for the image lifetime.
+    let retained: *mut Object = unsafe { msg_send![data, retain] };
+    // SAFETY: data is live and retained as the image backing.
+    unsafe { decode_native_image(data, ImageBacking::Data(retained)) }
+}
+
+unsafe fn decode_native_image(data: *mut Object, backing: ImageBacking) -> Result<Image, String> {
+    // SAFETY: data is valid and its backing outlives the returned image.
+    let image: *mut Object = unsafe {
+        let image: *mut Object = msg_send![class!(NSImage), alloc];
+        msg_send![image, initWithData: data]
     };
+    if image.is_null() {
+        if let ImageBacking::Data(data) = backing {
+            // SAFETY: This balances the retain in decode_image_data.
+            unsafe {
+                let _: () = msg_send![data, release];
+            }
+        }
+        return Err(String::from("Unsupported or invalid image"));
+    }
+    // SAFETY: image is owned and initialized.
+    unsafe { finish_image(image, backing) }
+}
+
+unsafe fn finish_image(image: *mut Object, backing: ImageBacking) -> Result<Image, String> {
     // SAFETY: image is a valid, initialized NSImage.
     let size = unsafe { msg_send![image, size] };
-    Ok((image, size))
+    // SAFETY: image owns its representations. Asking representations that expose CGImage for it
+    // realizes their existing pixel storage on this worker without creating an application-owned
+    // copy. Other representation types are left lazy.
+    unsafe {
+        let representations: *mut Object = msg_send![image, representations];
+        let count: usize = msg_send![representations, count];
+        for index in 0..count {
+            let representation: *mut Object = msg_send![representations, objectAtIndex: index];
+            let exposes_cg_image: Bool =
+                msg_send![representation, respondsToSelector: sel!(CGImage)];
+            if exposes_cg_image.as_bool() {
+                let _: *const c_void = msg_send![representation, CGImage];
+            }
+        }
+    }
+    Ok(Image {
+        image,
+        size,
+        backing,
+    })
 }
 
 /// Creates an owned `NSImageView` that scales `image` to fit `frame`.
@@ -324,9 +497,21 @@ fn make_image(image: &qoi::Image) -> Option<*mut Object> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
     use objc2::rc::autoreleasepool;
 
     use super::*;
+
+    #[test]
+    fn gcd_worker_runs_dispatched_work() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        dispatch_async(move || sender.send(()).expect("receiver should remain alive"));
+        receiver
+            .recv_timeout(Duration::from_secs(2))
+            .expect("GCD work should run");
+    }
 
     #[test]
     fn decodes_an_appkit_image_format() {
@@ -339,22 +524,9 @@ mod tests {
         ];
 
         autoreleasepool(|_| {
-            // SAFETY: NSData copies the bytes and remains alive while decode_image uses it.
-            let data: *mut Object = unsafe {
-                msg_send![class!(NSData),
-                    dataWithBytes: PNG.as_ptr().cast::<std::ffi::c_void>(),
-                    length: PNG.len()
-                ]
-            };
-            // SAFETY: data is a valid NSData that lives for the duration of this call.
-            let (image, size) =
-                unsafe { decode_image(data) }.expect("PNG should be decoded by AppKit");
-            assert_eq!(size.width, 1.0);
-            assert_eq!(size.height, 1.0);
-            // SAFETY: decode_image returns an owned NSImage.
-            unsafe {
-                let _: () = msg_send![image, release];
-            }
+            let image = decode_image(PNG.to_vec()).expect("PNG should be decoded by AppKit");
+            assert_eq!(image.size().width, 1.0);
+            assert_eq!(image.size().height, 1.0);
         });
     }
 
