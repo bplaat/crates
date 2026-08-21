@@ -58,15 +58,36 @@ macro_rules! sel {
 pub trait MessageSend {
     /// # Safety
     /// Caller must ensure `obj` is a valid ObjC object and `sel` is a valid selector.
-    unsafe fn invoke<R: crate::Encode>(obj: *mut AnyObject, sel: Sel, args: Self) -> R;
+    unsafe fn invoke<R: crate::Encode>(obj: *mut AnyObject, sel: Sel, args: Self, owned: bool)
+    -> R;
+
+    /// # Safety
+    /// Caller must ensure the receiver and superclass describe a valid super dispatch.
+    unsafe fn invoke_super<R: crate::Encode>(
+        receiver: *mut AnyObject,
+        superclass: *const crate::runtime::AnyClass,
+        sel: Sel,
+        args: Self,
+        owned: bool,
+    ) -> R;
 }
 macro_rules! message_send_impl {
     ($($a:ident : $t:ident),*) => (
         impl<$($t: crate::Encode),*> MessageSend for ($($t,)*) {
             #[inline(always)]
-            unsafe fn invoke<R: crate::Encode>(obj: *mut AnyObject, sel: Sel, ($($a,)*): Self) -> R {
+            #[allow(clippy::undocumented_unsafe_blocks)]
+            unsafe fn invoke<R: crate::Encode>(obj: *mut AnyObject, sel: Sel, ($($a,)*): Self, owned: bool) -> R {
                 #[cfg(debug_assertions)]
                 crate::verify::verify_send(obj, sel, &[$($t::ENCODING),*], &R::ENCODING);
+                if R::IS_OBJECT_OWNERSHIP {
+                    // SAFETY: Ownership wrappers use the Objective-C object pointer return ABI.
+                    let imp: unsafe extern "C-unwind" fn(*mut AnyObject, *const c_void, $($t,)*) -> *mut c_void =
+                        unsafe { std::mem::transmute(objc_msgSend as *const c_void) };
+                    // SAFETY: The caller guarantees the receiver, selector and arguments match.
+                    let pointer = unsafe { imp(obj, sel.0, $($a,)*) };
+                    // SAFETY: The wrapper declared that it accepts an Objective-C object return.
+                    return unsafe { R::from_object_return(pointer, owned) };
+                }
                 cfg_select! {
                     target_arch = "x86_64" => unsafe {
                         // SAFETY: `objc_msgSend`/`objc_msgSend_stret` are C variadics that accept any
@@ -76,26 +97,151 @@ macro_rules! message_send_impl {
                         // and `sel` is a registered selector, as documented on `MessageSend::invoke`.
                         if const { size_of::<R>() > 16 } {
                             let mut ret = std::mem::zeroed();
-                            let imp: unsafe extern "C" fn (*mut R, *mut AnyObject, *const c_void, $($t,)*) =
+                            let imp: unsafe extern "C-unwind" fn (*mut R, *mut AnyObject, *const c_void, $($t,)*) =
                                 std::mem::transmute(crate::ffi::objc_msgSend_stret as *const c_void);
                             imp(&mut ret, obj, sel.0, $($a,)*);
                             ret
                         } else {
-                            let imp: unsafe extern "C" fn (*mut AnyObject, *const c_void, $($t,)*) -> R =
+                            let imp: unsafe extern "C-unwind" fn (*mut AnyObject, *const c_void, $($t,)*) -> R =
                                 std::mem::transmute(objc_msgSend as *const c_void);
                             imp(obj, sel.0, $($a,)*)
                         }
                     }
                     _ => unsafe {
                         // SAFETY: see the x86_64 branch above for the full justification.
-                        let imp: unsafe extern "C" fn (*mut AnyObject, *const c_void, $($t,)*) -> R =
+                        let imp: unsafe extern "C-unwind" fn (*mut AnyObject, *const c_void, $($t,)*) -> R =
                             std::mem::transmute(objc_msgSend as *const c_void);
                         imp(obj, sel.0, $($a,)*)
                     }
                 }
             }
+
+            #[inline(always)]
+            #[allow(clippy::undocumented_unsafe_blocks)]
+            unsafe fn invoke_super<R: crate::Encode>(receiver: *mut AnyObject, superclass: *const crate::runtime::AnyClass, sel: Sel, ($($a,)*): Self, owned: bool) -> R {
+                #[cfg(debug_assertions)]
+                crate::verify::verify_super_send(
+                    superclass,
+                    sel,
+                    &[$($t::ENCODING),*],
+                    &R::ENCODING,
+                );
+                let super_info = crate::ffi::objc_super {
+                    receiver,
+                    super_class: superclass,
+                };
+                if R::IS_OBJECT_OWNERSHIP {
+                    let imp: unsafe extern "C-unwind" fn(*const crate::ffi::objc_super, *const c_void, $($t,)*) -> *mut c_void =
+                        unsafe { std::mem::transmute(crate::ffi::objc_msgSendSuper as *const c_void) };
+                    let pointer = unsafe { imp(&super_info, sel.0, $($a,)*) };
+                    return unsafe { R::from_object_return(pointer, owned) };
+                }
+                cfg_select! {
+                    target_arch = "x86_64" => unsafe {
+                        if const { size_of::<R>() > 16 } {
+                            let mut ret = std::mem::zeroed();
+                            let imp: unsafe extern "C-unwind" fn(*mut R, *const crate::ffi::objc_super, *const c_void, $($t,)*) =
+                                std::mem::transmute(crate::ffi::objc_msgSendSuper_stret as *const c_void);
+                            imp(&mut ret, &super_info, sel.0, $($a,)*);
+                            ret
+                        } else {
+                            let imp: unsafe extern "C-unwind" fn(*const crate::ffi::objc_super, *const c_void, $($t,)*) -> R =
+                                std::mem::transmute(crate::ffi::objc_msgSendSuper as *const c_void);
+                            imp(&super_info, sel.0, $($a,)*)
+                        }
+                    }
+                    _ => unsafe {
+                        let imp: unsafe extern "C-unwind" fn(*const crate::ffi::objc_super, *const c_void, $($t,)*) -> R =
+                            std::mem::transmute(crate::ffi::objc_msgSendSuper as *const c_void);
+                        imp(&super_info, sel.0, $($a,)*)
+                    }
+                }
+            }
         }
     );
+}
+
+/// Converts a receiver expression into the raw object pointer used by objc_msgSend.
+#[doc(hidden)]
+pub trait MessageReceiver {
+    /// Converts the receiver, consuming ownership wrappers when required by initialization.
+    fn into_raw(self) -> *mut AnyObject;
+}
+
+impl<T> MessageReceiver for *mut T {
+    fn into_raw(self) -> *mut AnyObject {
+        self.cast::<AnyObject>()
+    }
+}
+
+impl<T> MessageReceiver for *const T {
+    fn into_raw(self) -> *mut AnyObject {
+        self.cast_mut().cast::<AnyObject>()
+    }
+}
+
+impl<T: crate::runtime::Message> MessageReceiver for &T {
+    fn into_raw(self) -> *mut AnyObject {
+        (self as *const T).cast_mut().cast::<AnyObject>()
+    }
+}
+
+impl<T: crate::runtime::Message> MessageReceiver for &crate::rc::Retained<T> {
+    fn into_raw(self) -> *mut AnyObject {
+        self.as_ptr().cast::<AnyObject>()
+    }
+}
+
+impl<T: crate::runtime::Message> MessageReceiver for crate::rc::Allocated<T> {
+    fn into_raw(self) -> *mut AnyObject {
+        crate::rc::Allocated::into_raw(self).cast::<AnyObject>()
+    }
+}
+
+impl<T: crate::runtime::Message> MessageReceiver for crate::rc::PartialInit<T> {
+    fn into_raw(self) -> *mut AnyObject {
+        crate::rc::PartialInit::into_raw(self).cast::<AnyObject>()
+    }
+}
+
+/// Converts a partially initialized object into the receiver and class for super dispatch.
+#[doc(hidden)]
+pub trait SuperReceiver {
+    fn into_super(self) -> (*mut AnyObject, *const crate::runtime::AnyClass);
+}
+
+impl<T: crate::runtime::DefinedClass> SuperReceiver for crate::rc::PartialInit<T> {
+    fn into_super(self) -> (*mut AnyObject, *const crate::runtime::AnyClass) {
+        (
+            crate::rc::PartialInit::into_raw(self).cast::<AnyObject>(),
+            T::__superclass(),
+        )
+    }
+}
+
+impl<T: crate::runtime::ClassType> SuperReceiver for &T {
+    fn into_super(self) -> (*mut AnyObject, *const crate::runtime::AnyClass) {
+        (
+            (self as *const T).cast_mut().cast::<AnyObject>(),
+            T::__superclass(),
+        )
+    }
+}
+
+#[doc(hidden)]
+pub fn selector_returns_retained(selector: &str) -> bool {
+    fn is_family(selector: &str, family: &str) -> bool {
+        selector.starts_with(family)
+            && selector[family.len()..]
+                .chars()
+                .next()
+                .is_none_or(|character| !character.is_ascii_lowercase())
+    }
+
+    selector == "retain"
+        || ["alloc", "init", "new", "copy", "mutableCopy"]
+            .iter()
+            .any(|family| is_family(selector, family))
 }
 message_send_impl!();
 message_send_impl!(a: A);
@@ -114,11 +260,41 @@ message_send_impl!(a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H, i: I, j: J, k
 /// Send message to object
 #[macro_export]
 macro_rules! msg_send {
+    (super($receiver:expr), $sel:ident) => ({
+        let (__receiver, __superclass) = $crate::macros::SuperReceiver::into_super($receiver);
+        $crate::macros::MessageSend::invoke_super(
+            __receiver,
+            __superclass,
+            $crate::sel!($sel),
+            (),
+            $crate::macros::selector_returns_retained(stringify!($sel)),
+        )
+    });
+    (super($receiver:expr) $(,$sel:ident : $arg:expr)+) => ({
+        let (__receiver, __superclass) = $crate::macros::SuperReceiver::into_super($receiver);
+        $crate::macros::MessageSend::invoke_super(
+            __receiver,
+            __superclass,
+            $crate::sel!($($sel:)+),
+            ($($arg,)+),
+            $crate::macros::selector_returns_retained(stringify!($($sel)*)),
+        )
+    });
     ($receiver:expr, $sel:ident) => (
-        $crate::macros::MessageSend::invoke($receiver, $crate::sel!($sel), ())
+        $crate::macros::MessageSend::invoke(
+            $crate::macros::MessageReceiver::into_raw($receiver),
+            $crate::sel!($sel),
+            (),
+            $crate::macros::selector_returns_retained(stringify!($sel)),
+        )
     );
     ($receiver:expr $(,$sel:ident : $arg:expr)+) => (
-        $crate::macros::MessageSend::invoke($receiver, $crate::sel!($($sel:)+), ($($arg,)+))
+        $crate::macros::MessageSend::invoke(
+            $crate::macros::MessageReceiver::into_raw($receiver),
+            $crate::sel!($($sel:)+),
+            ($($arg,)+),
+            $crate::macros::selector_returns_retained(stringify!($($sel)*)),
+        )
     );
 }
 

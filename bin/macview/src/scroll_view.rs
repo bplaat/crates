@@ -9,8 +9,8 @@ use std::ffi::c_void;
 use std::ptr::null_mut;
 
 use macview_appkit::{NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size};
-use objc2::ffi::{objc_msgSendSuper, objc_super};
-use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
+use objc2::rc::{Allocated, Retained};
+use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
 use crate::cocoa::*;
@@ -52,7 +52,6 @@ fn scroll_to(scroll_view: *mut Object, clip_view: *mut Object, point: Point) {
 struct ClipViewIvars {
     /// Whether the media is being dragged around with the mouse.
     ///
-    /// AppKit zeroes the instance variables of a new object, which reads as no drag going on.
     panning: Cell<bool>,
     /// Where the pointer was at the previous step of the drag, in window coordinates.
     pointer: Cell<Point>,
@@ -116,17 +115,11 @@ define_class!(
 impl ClipView {
     /// Centers media that is smaller than the visible area instead of pinning it to a corner.
     fn constrain_bounds_rect(&self, proposed: Rect) -> Rect {
-        // SAFETY: objc_msgSendSuper invokes NSClipView's own constraining with the exact
-        // Objective-C ABI, and the document view is the one the scroll view installed.
+        // SAFETY: NSClipView implements `constrainBoundsRect:` with this argument and return type,
+        // and the document view is the one the scroll view installed.
         unsafe {
             let this = self as *const Self as *mut Object;
-            let super_info = objc_super {
-                receiver: this,
-                super_class: class!(NSClipView).cast::<AnyClass>(),
-            };
-            let send: unsafe extern "C" fn(*const objc_super, *const c_void, Rect) -> Rect =
-                std::mem::transmute(objc_msgSendSuper as *const c_void);
-            let mut rect = send(&super_info, sel!(constrainBoundsRect:).0, proposed);
+            let mut rect: Rect = msg_send![super(self), constrainBoundsRect: proposed];
 
             let document: *mut Object = msg_send![this, documentView];
             if document.is_null() {
@@ -280,7 +273,7 @@ impl ClipView {
             if responder.is_null() {
                 return;
             }
-            let send: unsafe extern "C" fn(*mut Object, objc2::runtime::Sel, *mut Object) =
+            let send: unsafe extern "C-unwind" fn(*mut Object, objc2::runtime::Sel, *mut Object) =
                 std::mem::transmute(objc2::ffi::objc_msgSend as *const c_void);
             send(responder, selector, event);
         }
@@ -356,16 +349,9 @@ impl ScrollView {
 
     /// Sets the scroller style, past the override of the setter.
     fn set_scroller_style(&self, style: i64) {
-        // SAFETY: objc_msgSendSuper invokes NSScrollView's own setter with the exact Objective-C
-        // ABI, and a scroller style is an NSInteger.
+        // SAFETY: NSScrollView implements `setScrollerStyle:` and its argument is an NSInteger.
         unsafe {
-            let super_info = objc_super {
-                receiver: self as *const Self as *mut Object,
-                super_class: class!(NSScrollView).cast::<AnyClass>(),
-            };
-            let send: unsafe extern "C" fn(*const objc_super, *const c_void, i64) =
-                std::mem::transmute(objc_msgSendSuper as *const c_void);
-            send(&super_info, sel!(setScrollerStyle:).0, style);
+            let _: () = msg_send![super(self), setScrollerStyle: style];
         }
     }
 
@@ -432,20 +418,14 @@ impl ScrollView {
     /// instead of the middle of the window. The direction follows the scroll direction the system
     /// is set to, because AppKit reports the scroll the way the media is meant to follow it.
     fn scroll_wheel(&self, event: *mut Object) {
-        // SAFETY: AppKit passes a valid NSEvent, and objc_msgSendSuper invokes NSScrollView's own
-        // scrolling with the exact Objective-C ABI.
+        // SAFETY: AppKit passes a valid NSEvent and NSScrollView implements `scrollWheel:` with
+        // this argument type.
         unsafe {
             let this = self as *const Self as *mut Object;
             let modifiers: u64 = msg_send![event, modifierFlags];
             let delta: f64 = msg_send![event, scrollingDeltaY];
             if modifiers & NS_EVENT_MODIFIER_FLAG_COMMAND == 0 || delta == 0.0 {
-                let super_info = objc_super {
-                    receiver: this,
-                    super_class: class!(NSScrollView).cast::<AnyClass>(),
-                };
-                let send: unsafe extern "C" fn(*const objc_super, *const c_void, *mut Object) =
-                    std::mem::transmute(objc_msgSendSuper as *const c_void);
-                send(&super_info, sel!(scrollWheel:).0, event);
+                let _: () = msg_send![super(self), scrollWheel: event];
                 return;
             }
 
@@ -493,33 +473,37 @@ impl ScrollView {
 /// Creates an owned scroll view that scrolls and magnifies `document` inside `frame`.
 ///
 /// Scrolling, panning, pinching, smart magnifying, the elastic edges and the scrollers all come
-/// from `NSScrollView` itself. The caller owns the returned view and must send it `release`.
-pub(crate) fn create_scroll_view(frame: Rect, document: *mut Object) -> *mut Object {
+/// from `NSScrollView` itself. The returned view owns one retain count.
+pub(crate) fn create_scroll_view(frame: Rect, document: *mut Object) -> Retained<Object> {
     // SAFETY: All objects are valid AppKit instances, and the clip view is released after the
     // scroll view retains it.
     unsafe {
-        let scroll_view: *mut Object = msg_send![ScrollView::class(), alloc];
-        let scroll_view: *mut Object = msg_send![scroll_view, initWithFrame: frame];
-        assert!(!scroll_view.is_null(), "failed to create scroll view");
+        let scroll_view: Allocated<Object> = msg_send![ScrollView::class(), alloc];
+        let scroll_view: Retained<Object> = msg_send![scroll_view, initWithFrame: frame];
 
-        let clip_view: *mut Object = msg_send![ClipView::class(), alloc];
-        let clip_view: *mut Object = msg_send![clip_view, initWithFrame: frame];
+        let clip_view: Allocated<ClipView> = msg_send![ClipView::class(), alloc];
+        let clip_view: Retained<ClipView> = msg_send![
+            super(clip_view.set_ivars(ClipViewIvars {
+                panning: Cell::new(false),
+                pointer: Cell::new(Point { x: 0.0, y: 0.0 }),
+            })),
+            initWithFrame: frame
+        ];
         // The checkerboard behind the scroll view is the background of the window.
-        let _: () = msg_send![clip_view, setDrawsBackground: Bool::NO];
-        let _: () = msg_send![scroll_view, setContentView: clip_view];
-        let _: () = msg_send![clip_view, release];
+        let _: () = msg_send![&*clip_view, setDrawsBackground: Bool::NO];
+        let _: () = msg_send![&*scroll_view, setContentView: clip_view.as_ptr()];
 
-        let _: () = msg_send![scroll_view, setDrawsBackground: Bool::NO];
-        let _: () = msg_send![scroll_view, setBorderType: NS_NO_BORDER];
-        let _: () = msg_send![scroll_view, setHasHorizontalScroller: Bool::YES];
-        let _: () = msg_send![scroll_view, setHasVerticalScroller: Bool::YES];
-        let _: () = msg_send![scroll_view, setAutohidesScrollers: Bool::YES];
-        let _: () = msg_send![scroll_view, setScrollerStyle: NS_SCROLLER_STYLE_OVERLAY];
-        let _: () = msg_send![scroll_view, setAllowsMagnification: Bool::YES];
-        let _: () = msg_send![scroll_view, setMinMagnification: MINIMUM_MAGNIFICATION];
-        let _: () = msg_send![scroll_view, setMaxMagnification: MAXIMUM_MAGNIFICATION];
-        let _: () = msg_send![scroll_view, setDocumentView: document];
-        let _: () = msg_send![scroll_view,
+        let _: () = msg_send![&*scroll_view, setDrawsBackground: Bool::NO];
+        let _: () = msg_send![&*scroll_view, setBorderType: NS_NO_BORDER];
+        let _: () = msg_send![&*scroll_view, setHasHorizontalScroller: Bool::YES];
+        let _: () = msg_send![&*scroll_view, setHasVerticalScroller: Bool::YES];
+        let _: () = msg_send![&*scroll_view, setAutohidesScrollers: Bool::YES];
+        let _: () = msg_send![&*scroll_view, setScrollerStyle: NS_SCROLLER_STYLE_OVERLAY];
+        let _: () = msg_send![&*scroll_view, setAllowsMagnification: Bool::YES];
+        let _: () = msg_send![&*scroll_view, setMinMagnification: MINIMUM_MAGNIFICATION];
+        let _: () = msg_send![&*scroll_view, setMaxMagnification: MAXIMUM_MAGNIFICATION];
+        let _: () = msg_send![&*scroll_view, setDocumentView: document];
+        let _: () = msg_send![&*scroll_view,
             setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
         ];
         scroll_view

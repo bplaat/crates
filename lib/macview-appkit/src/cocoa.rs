@@ -8,6 +8,7 @@
 
 use std::ffi::{c_char, c_void};
 
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject as Object;
 use objc2::{Encode, Encoding, class, msg_send};
 
@@ -42,13 +43,13 @@ unsafe extern "C" {
 pub fn ns_string(value: &str) -> *mut Object {
     // SAFETY: NSString copies the valid UTF-8 bytes before the returned object is autoreleased.
     unsafe {
-        let string: *mut Object = msg_send![class!(NSString), alloc];
-        let string: *mut Object = msg_send![string,
+        let string: Allocated<Object> = msg_send![class!(NSString), alloc];
+        let string: Retained<Object> = msg_send![string,
             initWithBytes: value.as_ptr().cast::<c_void>(),
             length: value.len(),
             encoding: NS_UTF8_STRING_ENCODING
         ];
-        msg_send![string, autorelease]
+        Retained::autorelease_ptr(string)
     }
 }
 

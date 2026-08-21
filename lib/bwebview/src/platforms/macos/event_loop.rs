@@ -4,13 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::cell::Cell;
-use std::ffi::c_void;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::ptr::null;
 
-use objc2::rc::autoreleasepool;
-use objc2::runtime::{AnyObject as Object, Bool};
+use objc2::rc::{Allocated, Retained, autoreleasepool};
+use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
 use super::cocoa::*;
@@ -18,9 +17,25 @@ use super::menu::create_menu_bar;
 use super::webkit::*;
 use crate::{CloseRequest, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WindowEvent};
 
+thread_local! {
+    static PENDING_EVENTS: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
+}
+
+type EventHandler = Box<dyn FnMut(Event) + 'static>;
+
+struct QueuedEventIvars {
+    event: RefCell<Option<Event>>,
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[ivars = QueuedEventIvars]
+    struct QueuedEvent;
+);
+
 // MARK: AppDelegate
 struct AppDelegateIvars {
-    event_loop: Cell<*mut PlatformEventLoop>,
+    event_handler: RefCell<Option<EventHandler>>,
     allow_termination: Cell<bool>,
 }
 
@@ -30,6 +45,19 @@ define_class!(
     struct AppDelegate;
 
     impl AppDelegate {
+        #[unsafe(method_id(init))]
+        fn _init(this: Allocated<Self>) -> Option<Retained<Self>> {
+            unsafe {
+                msg_send![
+                    super(this.set_ivars(AppDelegateIvars {
+                        event_handler: RefCell::new(None),
+                        allow_termination: Cell::new(false),
+                    })),
+                    init
+                ]
+            }
+        }
+
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn _did_finish_launching(&self, notification: *mut Object) { self.did_finish_launching(notification); }
 
@@ -43,7 +71,7 @@ define_class!(
         fn _open_urls(&self, _: *mut Object, urls: *mut Object) { self.open_urls(urls); }
 
         #[unsafe(method(sendEvent:))]
-        fn _send_event(&self, value: *mut Object) { self.send_event(value); }
+        fn _send_event(&self, value: &QueuedEvent) { self.send_event(value); }
 
         #[unsafe(method(openAboutDialog:))]
         fn _open_about_dialog(&self, _: *mut Object) { self.open_about_dialog(); }
@@ -69,7 +97,7 @@ impl AppDelegate {
         unsafe {
             let application: *mut Object = msg_send![notification, object];
             let _: Bool = msg_send![application, setActivationPolicy:NS_APPLICATION_ACTIVATION_POLICY_REGULAR];
-            let _: () = msg_send![application, activateIgnoringOtherApps:true];
+            let _: () = msg_send![application, activateIgnoringOtherApps:Bool::YES];
 
             let windows: *mut Object = msg_send![application, windows];
             let windows_count: usize = msg_send![windows, count];
@@ -81,10 +109,11 @@ impl AppDelegate {
         }
     }
 
-    fn send_event(&self, value: *mut Object) {
-        let ptr: *mut c_void = unsafe { msg_send![value, pointerValue] };
-        let event = unsafe { Box::from_raw(ptr as *mut Event) };
-        send_event(*event);
+    fn send_event(&self, value: &QueuedEvent) {
+        let Some(event) = value.ivars().event.borrow_mut().take() else {
+            return;
+        };
+        send_event(event);
     }
 
     fn open_urls(&self, urls: *mut Object) {
@@ -118,30 +147,58 @@ impl AppDelegate {
 
 // MARK: EventLoop
 pub(crate) struct PlatformEventLoop {
-    application: *mut Object,
+    application: Retained<Object>,
+    delegate: Retained<AppDelegate>,
     theme: Theme,
-    event_handler: Option<Box<dyn FnMut(Event) + 'static>>,
 }
 
 impl PlatformEventLoop {
     pub(crate) fn new(mut builder: EventLoopBuilder) -> Self {
         // Create AppDelegate instance (registers class lazily on first call)
-        let app_delegate: *mut Object = unsafe { msg_send![AppDelegate::class(), new] };
+        let app_delegate: Retained<AppDelegate> = unsafe { msg_send![AppDelegate::class(), new] };
 
         // Get application
         let application = unsafe {
-            let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
-            let _: () = msg_send![application, setDelegate:app_delegate];
+            let application: Retained<Object> = msg_send![class!(NSApplication), sharedApplication];
+            let _: () = msg_send![&application, setDelegate:&*app_delegate];
             application
         };
 
         // Create menu
-        unsafe { create_menu_bar(application, app_delegate, &mut builder) };
+        unsafe {
+            create_menu_bar(
+                application.as_ptr(),
+                app_delegate.as_ptr().cast::<Object>(),
+                &mut builder,
+            );
+        }
 
         Self {
             application,
+            delegate: app_delegate,
             theme: system_theme(),
-            event_handler: None,
+        }
+    }
+}
+
+impl Drop for PlatformEventLoop {
+    fn drop(&mut self) {
+        // Menu targets and NSApplication.delegate are non-owning. Clear the application-owned
+        // references before our retained delegate is dropped.
+        let current: *mut Object = unsafe { msg_send![&self.application, delegate] };
+        if current == self.delegate.as_ptr().cast::<Object>() {
+            unsafe {
+                let _: () =
+                    msg_send![&self.application, setMainMenu:std::ptr::null_mut::<Object>()];
+                let _: () =
+                    msg_send![&self.application, setWindowsMenu:std::ptr::null_mut::<Object>()];
+                let _: () =
+                    msg_send![&self.application, setHelpMenu:std::ptr::null_mut::<Object>()];
+                let _: () =
+                    msg_send![&self.application, setServicesMenu:std::ptr::null_mut::<Object>()];
+                let _: () =
+                    msg_send![&self.application, setDelegate:std::ptr::null_mut::<Object>()];
+            }
         }
     }
 }
@@ -185,39 +242,65 @@ impl crate::EventLoopInterface for PlatformEventLoop {
         monitors
     }
 
-    fn run(mut self, event_handler: impl FnMut(Event) + 'static) -> ! {
-        self.event_handler = Some(Box::new(event_handler));
+    fn run(self, event_handler: impl FnMut(Event) + 'static) -> ! {
+        *self.delegate.ivars().event_handler.borrow_mut() = Some(Box::new(event_handler));
         autoreleasepool(|_| unsafe {
-            let delegate: *mut Object = msg_send![self.application, delegate];
-            let delegate_ref = &*(delegate as *const AppDelegate);
-            delegate_ref
-                .ivars()
-                .event_loop
-                .set(&mut self as *mut PlatformEventLoop);
-            let _: () = msg_send![self.application, run];
+            let pending = PENDING_EVENTS.with(|events| std::mem::take(&mut *events.borrow_mut()));
+            for event in pending {
+                send_event(event);
+            }
+            let _: () = msg_send![&self.application, run];
         });
         unreachable!()
     }
 
     fn create_proxy(&self) -> PlatformEventLoopProxy {
-        PlatformEventLoopProxy::new()
+        PlatformEventLoopProxy::new(self.delegate.clone())
     }
 }
 
 pub(crate) fn send_event(event: Event) {
-    let _self = unsafe {
+    let app_delegate = unsafe {
         let app_delegate: *mut Object = msg_send![NSApp, delegate];
-        let delegate_ref = &*(app_delegate as *const AppDelegate);
-        &mut *delegate_ref.ivars().event_loop.get()
+        if app_delegate.is_null() {
+            PENDING_EVENTS.with(|events| events.borrow_mut().push(event));
+            return;
+        }
+        let app_delegate_class = AppDelegate::class().cast::<AnyClass>();
+        let is_ours: Bool = msg_send![app_delegate, isKindOfClass:app_delegate_class];
+        if is_ours == Bool::NO {
+            PENDING_EVENTS.with(|events| events.borrow_mut().push(event));
+            return;
+        }
+        &*(app_delegate as *const AppDelegate)
     };
-
-    if let Some(handler) = _self.event_handler.as_mut() {
+    let Ok(mut event_handler) = app_delegate.ivars().event_handler.try_borrow_mut() else {
+        PENDING_EVENTS.with(|events| events.borrow_mut().push(event));
+        return;
+    };
+    if let Some(handler) = event_handler.as_mut() {
         handler(event);
+    } else {
+        PENDING_EVENTS.with(|events| events.borrow_mut().push(event));
+        return;
+    }
+    drop(event_handler);
+    let pending = PENDING_EVENTS.with(|events| std::mem::take(&mut *events.borrow_mut()));
+    for event in pending {
+        send_event(event);
     }
 }
 
 pub(super) fn allow_termination_if_last_window(closing_window: *mut Object) {
     let app_delegate: *mut Object = unsafe { msg_send![NSApp, delegate] };
+    if app_delegate.is_null() {
+        return;
+    }
+    let app_delegate_class = AppDelegate::class().cast::<AnyClass>();
+    let is_ours: Bool = unsafe { msg_send![app_delegate, isKindOfClass:app_delegate_class] };
+    if is_ours == Bool::NO {
+        return;
+    }
     let app_delegate = unsafe { &*(app_delegate as *const AppDelegate) };
     let windows: *mut Object = unsafe { msg_send![NSApp, windows] };
     let count: usize = unsafe { msg_send![windows, count] };
@@ -232,22 +315,34 @@ pub(super) fn allow_termination_if_last_window(closing_window: *mut Object) {
 }
 
 // MARK: EventLoopProxy
-pub(crate) struct PlatformEventLoopProxy;
+pub(crate) struct PlatformEventLoopProxy {
+    delegate: Retained<AppDelegate>,
+}
+
+// SAFETY: The proxy only sends performSelectorOnMainThread: to its retained delegate. Objective-C
+// retain/release and that scheduling API are thread-safe; delegate ivars are only read on main.
+unsafe impl Send for PlatformEventLoopProxy {}
+// SAFETY: Sending through a shared proxy has the same thread-safe behavior as an owned proxy.
+unsafe impl Sync for PlatformEventLoopProxy {}
 
 impl PlatformEventLoopProxy {
-    pub(crate) const fn new() -> Self {
-        Self
+    const fn new(delegate: Retained<AppDelegate>) -> Self {
+        Self { delegate }
     }
 }
 
 impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
     fn send_user_event(&self, data: String) {
         unsafe {
-            let ptr = Box::leak(Box::new(Event::UserEvent(data))) as *mut Event as *mut c_void;
-            let value: *mut Object = msg_send![class!(NSValue), valueWithPointer:ptr];
-            let app_delegate: *mut Object = msg_send![NSApp, delegate];
-            let _: () = msg_send![app_delegate, performSelectorOnMainThread:sel!(sendEvent:),
-                       withObject:value,
+            let value: Allocated<QueuedEvent> = msg_send![QueuedEvent::class(), alloc];
+            let value: Retained<QueuedEvent> = msg_send![
+                super(value.set_ivars(QueuedEventIvars {
+                    event: RefCell::new(Some(Event::UserEvent(data))),
+                })),
+                init
+            ];
+            let _: () = msg_send![&*self.delegate, performSelectorOnMainThread:sel!(sendEvent:),
+                       withObject:&*value,
                     waitUntilDone:Bool::NO];
         }
     }
@@ -255,38 +350,41 @@ impl crate::EventLoopProxyInterface for PlatformEventLoopProxy {
 
 // MARK: Monitor
 pub(crate) struct PlatformMonitor {
-    pub(crate) screen: *mut Object,
+    pub(crate) screen: Retained<Object>,
 }
 
 impl PlatformMonitor {
-    pub(crate) const fn new(screen: *mut Object) -> Self {
-        Self { screen }
+    pub(crate) fn new(screen: *mut Object) -> Self {
+        Self {
+            // SAFETY: NSScreen APIs returned a live object which is retained for this handle.
+            screen: unsafe { Retained::retain(screen) }.expect("NSScreen returned null"),
+        }
     }
 }
 
 impl crate::MonitorInterface for PlatformMonitor {
     fn name(&self) -> String {
-        let name: NSString = unsafe { msg_send![self.screen, localizedName] };
+        let name: NSString = unsafe { msg_send![&self.screen, localizedName] };
         name.to_string()
     }
 
     fn position(&self) -> LogicalPoint {
-        let frame: NSRect = unsafe { msg_send![self.screen, frame] };
+        let frame: NSRect = unsafe { msg_send![&self.screen, frame] };
         LogicalPoint::new(frame.origin.x as f32, frame.origin.y as f32)
     }
 
     fn size(&self) -> LogicalSize {
-        let frame: NSRect = unsafe { msg_send![self.screen, frame] };
+        let frame: NSRect = unsafe { msg_send![&self.screen, frame] };
         LogicalSize::new(frame.size.width as f32, frame.size.height as f32)
     }
 
     fn scale_factor(&self) -> f32 {
-        let backing_scale_factor: f64 = unsafe { msg_send![self.screen, backingScaleFactor] };
+        let backing_scale_factor: f64 = unsafe { msg_send![&self.screen, backingScaleFactor] };
         backing_scale_factor as f32
     }
 
     fn is_primary(&self) -> bool {
         let main_screen: *mut Object = unsafe { msg_send![class!(NSScreen), mainScreen] };
-        self.screen == main_screen
+        self.screen.as_ptr() == main_screen
     }
 }

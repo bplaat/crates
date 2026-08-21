@@ -11,6 +11,7 @@
 
 pub use encode::{Encode, Encoding};
 pub use objc2_proc_macros::{define_class, extern_class};
+pub use runtime::{ClassType, DefinedClass, Message};
 
 /// Encode
 pub mod encode;

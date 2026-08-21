@@ -5,10 +5,9 @@
  */
 
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
-use objc2::runtime::{AnyObject as Object, Bool, ClassBuilder, Sel};
-use objc2::{class, msg_send, sel};
+use objc2::runtime::{AnyObject as Object, Bool};
+use objc2::{class, define_class, msg_send};
 
 use super::cocoa::{NS_DRAG_OPERATION_COPY, NSFilenamesPboardType, NSString};
 use super::event_loop::send_event;
@@ -41,44 +40,35 @@ pub(super) unsafe fn register_dragged_types(view: *mut Object) {
     let _: () = unsafe { msg_send![view, registerForDraggedTypes:dragged_types] };
 }
 
-const extern "C" fn webview_dragging_entered(_: *mut Object, _: Sel, _: *mut Object) -> u64 {
-    NS_DRAG_OPERATION_COPY
-}
+define_class!(
+    #[unsafe(super(WKWebView))]
+    #[name = "BWebviewDroppableWebview"]
+    struct DroppableWebview;
 
-const extern "C" fn webview_prepare_for_drag_operation(
-    _: *mut Object,
-    _: Sel,
-    _: *mut Object,
-) -> Bool {
-    Bool::YES
-}
+    impl DroppableWebview {
+        #[unsafe(method(draggingEntered:))]
+        const fn _dragging_entered(&self, _: *mut Object) -> u64 {
+            NS_DRAG_OPERATION_COPY
+        }
 
-extern "C" fn webview_perform_drag_operation(_: *mut Object, _: Sel, sender: *mut Object) -> Bool {
-    perform_file_drop(sender)
-}
+        #[unsafe(method(draggingUpdated:))]
+        const fn _dragging_updated(&self, _: *mut Object) -> u64 {
+            NS_DRAG_OPERATION_COPY
+        }
+
+        #[unsafe(method(prepareForDragOperation:))]
+        const fn _prepare_for_drag_operation(&self, _: *mut Object) -> Bool {
+            Bool::YES
+        }
+
+        #[unsafe(method(performDragOperation:))]
+        fn _perform_drag_operation(&self, sender: *mut Object) -> Bool {
+            perform_file_drop(sender)
+        }
+    }
+);
 
 /// A WKWebView subclass that reports native file drags instead of navigating to them
 pub(super) fn droppable_webview_class() -> *mut Object {
-    static CLASS: OnceLock<usize> = OnceLock::new();
-    *CLASS.get_or_init(|| {
-        let mut builder = ClassBuilder::new(c"BWebviewDroppableWebview", class!(WKWebView))
-            .expect("Failed to create droppable webview class");
-        assert!(builder.add_method(
-            sel!(draggingEntered:),
-            webview_dragging_entered as extern "C" fn(_, _, _) -> _
-        ));
-        assert!(builder.add_method(
-            sel!(draggingUpdated:),
-            webview_dragging_entered as extern "C" fn(_, _, _) -> _
-        ));
-        assert!(builder.add_method(
-            sel!(prepareForDragOperation:),
-            webview_prepare_for_drag_operation as extern "C" fn(_, _, _) -> _
-        ));
-        assert!(builder.add_method(
-            sel!(performDragOperation:),
-            webview_perform_drag_operation as extern "C" fn(_, _, _) -> _
-        ));
-        builder.register() as usize
-    }) as *mut Object
+    DroppableWebview::class()
 }

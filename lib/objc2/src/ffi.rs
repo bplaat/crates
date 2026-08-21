@@ -17,13 +17,20 @@ pub struct objc_super {
 }
 
 #[link(name = "objc", kind = "dylib")]
-unsafe extern "C" {
+unsafe extern "C-unwind" {
     pub fn objc_getClass(name: *const c_char) -> *mut c_void;
     pub fn sel_registerName(name: *const c_char) -> *mut c_void;
     pub fn objc_msgSend(receiver: *mut Object, sel: *const c_void, ...) -> *mut c_void;
     #[cfg(target_arch = "x86_64")]
     pub fn objc_msgSend_stret(ret: *mut c_void, receiver: *mut Object, sel: *const c_void, ...);
     pub fn objc_msgSendSuper(receiver: *const objc_super, sel: *const c_void, ...) -> *mut c_void;
+    #[cfg(target_arch = "x86_64")]
+    pub fn objc_msgSendSuper_stret(
+        ret: *mut c_void,
+        receiver: *const objc_super,
+        sel: *const c_void,
+        ...
+    );
 
     pub fn object_getClass(obj: *const Object) -> *mut c_void;
     pub fn objc_getProtocol(name: *const c_char) -> *const AnyProtocol;
@@ -45,16 +52,19 @@ unsafe extern "C" {
         size: usize,
         alignment: u8,
         types: *const c_char,
-    ) -> bool;
+    ) -> Bool;
     pub fn class_addMethod(
         class: *mut c_void,
         sel: *const c_void,
         imp: *const c_void,
         types: *const c_char,
-    ) -> bool;
+    ) -> Bool;
     pub fn class_addProtocol(class: *mut AnyClass, protocol: *const AnyProtocol) -> Bool;
     pub fn objc_registerClassPair(class: *mut c_void);
 
     pub fn objc_autoreleasePoolPush() -> *mut c_void;
     pub fn objc_autoreleasePoolPop(pool: *mut c_void);
+    pub fn objc_retain(object: *mut Object) -> *mut Object;
+    pub fn objc_release(object: *mut Object);
+    pub fn objc_autorelease(object: *mut Object) -> *mut Object;
 }

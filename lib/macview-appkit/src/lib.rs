@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use std::ptr::null;
 use std::sync::Arc;
 
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send, sel};
 
@@ -29,28 +30,27 @@ pub use tinyvg_renderer::{create_tinyvg_view, fill_white_background, render_tiny
 
 /// An owned immutable `NSString` that can be transferred between queues.
 pub struct OwnedString {
-    string: *mut Object,
+    string: Retained<Object>,
 }
 
 impl OwnedString {
     /// Creates a native string by copying `value` once.
     pub fn new(value: &str) -> Self {
         // SAFETY: NSString copies the valid UTF-8 bytes and returns an owned immutable object.
-        let string: *mut Object = unsafe {
-            let string: *mut Object = msg_send![class!(NSString), alloc];
+        let string: Retained<Object> = unsafe {
+            let string: Allocated<Object> = msg_send![class!(NSString), alloc];
             msg_send![string,
                 initWithBytes: value.as_ptr().cast::<c_void>(),
                 length: value.len(),
                 encoding: NS_UTF8_STRING_ENCODING
             ]
         };
-        assert!(!string.is_null(), "failed to create NSString");
         Self { string }
     }
 
     /// Returns the string pointer, which remains valid while this value is alive.
     pub const fn as_ptr(&self) -> *mut Object {
-        self.string
+        self.string.as_ptr()
     }
 
     /// Retains an existing immutable string.
@@ -59,19 +59,9 @@ impl OwnedString {
     ///
     /// `string` must point to a valid `NSString`.
     pub unsafe fn retain(string: *mut Object) -> Self {
-        assert!(!string.is_null(), "cannot retain a null NSString");
         // SAFETY: The caller guarantees string is a live NSString.
-        let string: *mut Object = unsafe { msg_send![string, retain] };
+        let string = unsafe { Retained::retain(string) }.expect("cannot retain a null NSString");
         Self { string }
-    }
-}
-
-impl Drop for OwnedString {
-    fn drop(&mut self) {
-        // SAFETY: This value owns the non-null string returned by initWithBytes:length:encoding:.
-        unsafe {
-            let _: () = msg_send![self.string, release];
-        }
     }
 }
 
@@ -82,39 +72,26 @@ unsafe impl Sync for OwnedString {}
 
 /// An owned `NSImage` that is released when it is dropped.
 pub struct Image {
-    image: *mut Object,
+    image: Retained<Object>,
     size: Size,
-    backing: ImageBacking,
+    _backing: ImageBacking,
 }
 
 enum ImageBacking {
     None,
     Bytes { _bytes: Box<[u8]> },
-    Data(*mut Object),
+    Data { _data: Retained<Object> },
 }
 
 impl Image {
     /// Returns the image, which stays alive for as long as this value does.
     pub const fn as_ptr(&self) -> *mut Object {
-        self.image
+        self.image.as_ptr()
     }
 
     /// Returns the natural image size in points.
     pub const fn size(&self) -> Size {
         self.size
-    }
-}
-
-impl Drop for Image {
-    fn drop(&mut self) {
-        // SAFETY: The value owns the image and any native data retained for lazy image access.
-        // Release the image before its backing bytes.
-        unsafe {
-            let _: () = msg_send![self.image, release];
-            if let ImageBacking::Data(data) = &self.backing {
-                let _: () = msg_send![*data, release];
-            }
-        }
     }
 }
 
@@ -313,7 +290,12 @@ pub unsafe fn decode_image_data(data: *mut Object) -> Result<Image, String> {
     let bytes = unsafe {
         let length: usize = msg_send![data, length];
         let bytes: *const c_void = msg_send![data, bytes];
-        std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+        if length == 0 {
+            &[]
+        } else {
+            assert!(!bytes.is_null(), "non-empty NSData returned null bytes");
+            std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+        }
     };
     if bytes.starts_with(b"qoif") {
         let decoded = qoi::decode(bytes).map_err(|error| error.to_string())?;
@@ -323,38 +305,32 @@ pub unsafe fn decode_image_data(data: *mut Object) -> Result<Image, String> {
         return unsafe { finish_image(image, ImageBacking::None) };
     }
     // SAFETY: Retaining data keeps lazy AppKit access valid for the image lifetime.
-    let retained: *mut Object = unsafe { msg_send![data, retain] };
+    let retained = unsafe { Retained::retain(data) }.expect("cannot retain a null NSData");
     // SAFETY: data is live and retained as the image backing.
-    unsafe { decode_native_image(data, ImageBacking::Data(retained)) }
+    unsafe { decode_native_image(data, ImageBacking::Data { _data: retained }) }
 }
 
 unsafe fn decode_native_image(data: *mut Object, backing: ImageBacking) -> Result<Image, String> {
     // SAFETY: data is valid and its backing outlives the returned image.
-    let image: *mut Object = unsafe {
-        let image: *mut Object = msg_send![class!(NSImage), alloc];
+    let image: Option<Retained<Object>> = unsafe {
+        let image: Allocated<Object> = msg_send![class!(NSImage), alloc];
         msg_send![image, initWithData: data]
     };
-    if image.is_null() {
-        if let ImageBacking::Data(data) = backing {
-            // SAFETY: This balances the retain in decode_image_data.
-            unsafe {
-                let _: () = msg_send![data, release];
-            }
-        }
+    let Some(image) = image else {
         return Err(String::from("Unsupported or invalid image"));
-    }
+    };
     // SAFETY: image is owned and initialized.
     unsafe { finish_image(image, backing) }
 }
 
-unsafe fn finish_image(image: *mut Object, backing: ImageBacking) -> Result<Image, String> {
+unsafe fn finish_image(image: Retained<Object>, backing: ImageBacking) -> Result<Image, String> {
     // SAFETY: image is a valid, initialized NSImage.
-    let size = unsafe { msg_send![image, size] };
+    let size = unsafe { msg_send![&*image, size] };
     // SAFETY: image owns its representations. Asking representations that expose CGImage for it
     // realizes their existing pixel storage on this worker without creating an application-owned
     // copy. Other representation types are left lazy.
     unsafe {
-        let representations: *mut Object = msg_send![image, representations];
+        let representations: *mut Object = msg_send![&*image, representations];
         let count: usize = msg_send![representations, count];
         for index in 0..count {
             let representation: *mut Object = msg_send![representations, objectAtIndex: index];
@@ -368,26 +344,26 @@ unsafe fn finish_image(image: *mut Object, backing: ImageBacking) -> Result<Imag
     Ok(Image {
         image,
         size,
-        backing,
+        _backing: backing,
     })
 }
 
 /// Creates an owned `NSImageView` that scales `image` to fit `frame`.
 ///
 /// An image that holds more than one frame, such as an animated GIF or APNG, plays instead of
-/// showing its first frame. The caller owns the returned view and must send it `release`.
+/// showing its first frame. The returned view owns one retain count.
 ///
 /// # Safety
 ///
 /// `image` must point to a valid `NSImage` for the duration of this call.
-pub unsafe fn create_image_view(frame: Rect, image: *mut Object) -> *mut Object {
+pub unsafe fn create_image_view(frame: Rect, image: *mut Object) -> Retained<Object> {
     // SAFETY: The caller guarantees the image is valid, and NSImageView retains it.
     unsafe {
-        let view: *mut Object = msg_send![class!(NSImageView), alloc];
-        let view: *mut Object = msg_send![view, initWithFrame: frame];
-        let _: () = msg_send![view, setImage: image];
-        let _: () = msg_send![view, setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN];
-        let _: () = msg_send![view, setAnimates: Bool::YES];
+        let view: Allocated<Object> = msg_send![class!(NSImageView), alloc];
+        let view: Retained<Object> = msg_send![view, initWithFrame: frame];
+        let _: () = msg_send![&*view, setImage: image];
+        let _: () = msg_send![&*view, setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN];
+        let _: () = msg_send![&*view, setAnimates: Bool::YES];
         view
     }
 }
@@ -432,8 +408,8 @@ pub fn extension_main() -> ! {
 
 /// Creates an owned `NSImage` from a decoded QOI image.
 ///
-/// The caller owns the returned object and must send it `release`.
-fn make_image(image: &qoi::Image) -> Option<*mut Object> {
+/// The returned object owns one retain count.
+fn make_image(image: &qoi::Image) -> Option<Retained<Object>> {
     // SAFETY: Core Foundation copies the decoded bytes. Each create call is checked, and every
     // owned Core Foundation/Core Graphics object is released after ownership is transferred.
     unsafe {
@@ -482,8 +458,8 @@ fn make_image(image: &qoi::Image) -> Option<*mut Object> {
             return None;
         }
 
-        let native_image: *mut Object = msg_send![class!(NSImage), alloc];
-        let native_image: *mut Object = msg_send![native_image,
+        let native_image: Allocated<Object> = msg_send![class!(NSImage), alloc];
+        let native_image: Option<Retained<Object>> = msg_send![native_image,
             initWithCGImage: cg_image,
             size: Size {
                 width: f64::from(image.width()),
@@ -491,7 +467,7 @@ fn make_image(image: &qoi::Image) -> Option<*mut Object> {
             }
         ];
         CGImageRelease(cg_image);
-        (!native_image.is_null()).then_some(native_image)
+        native_image
     }
 }
 
@@ -527,6 +503,18 @@ mod tests {
             let image = decode_image(PNG.to_vec()).expect("PNG should be decoded by AppKit");
             assert_eq!(image.size().width, 1.0);
             assert_eq!(image.size().height, 1.0);
+        });
+    }
+
+    #[test]
+    fn rejects_empty_nsdata_without_dereferencing_its_null_bytes() {
+        autoreleasepool(|_| {
+            // SAFETY: NSData's data constructor returns a live empty data object.
+            let result = unsafe {
+                let data: *mut Object = msg_send![class!(NSData), data];
+                decode_image_data(data)
+            };
+            assert!(result.is_err());
         });
     }
 

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 
 use block2::Block;
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
@@ -19,6 +19,19 @@ use super::file_drop::{droppable_webview_class, register_dragged_types};
 use super::webkit::*;
 use super::window::PlatformWindow;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent};
+
+fn title_key_path() -> *mut Object {
+    ns_string!("title")
+}
+
+fn ipc_handler_name() -> *mut Object {
+    ns_string!("ipc")
+}
+
+#[cfg(feature = "log")]
+fn console_handler_name() -> *mut Object {
+    ns_string!("console")
+}
 
 // MARK: WebviewDelegate
 define_class!(
@@ -39,7 +52,7 @@ define_class!(
         fn _did_fail_navigation(&self, webview: *mut Object, _: *mut Object, _: *mut Object) { self.finish_navigation(webview); }
 
         #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
-        fn _observe_value(&self, key_path: NSString, _: *mut Object, change: *mut Object, _: *mut c_void) {
+        fn _observe_value(&self, key_path: &Object, _: *mut Object, change: *mut Object, _: *mut c_void) {
             self.observe_value(key_path, change);
         }
 
@@ -67,7 +80,8 @@ impl WebviewDelegate {
         send_event(crate::Event::Webview(WebviewEvent::PageLoadFinish));
     }
 
-    fn observe_value(&self, key_path: NSString, change: *mut Object) {
+    fn observe_value(&self, key_path: &Object, change: *mut Object) {
+        let key_path: NSString = unsafe { msg_send![key_path, copy] };
         if key_path.to_string() == "title" {
             let change: NSString =
                 unsafe { msg_send![change, objectForKey:NSKeyValueChangeNewKey] };
@@ -100,14 +114,18 @@ impl WebviewDelegate {
 
         #[cfg(feature = "log")]
         if name == "console" {
-            let (level, message) = body.split_at(1);
+            let mut body = body.chars();
+            let Some(level) = body.next() else {
+                return;
+            };
+            let message = body.as_str();
             match level {
-                "e" => log::error!("{message}"),
-                "w" => log::warn!("{message}"),
-                "i" | "l" => log::info!("{message}"),
-                "d" => log::debug!("{message}"),
-                "t" => log::trace!("{message}"),
-                _ => unimplemented!(),
+                'e' => log::error!("{message}"),
+                'w' => log::warn!("{message}"),
+                'i' | 'l' => log::info!("{message}"),
+                'd' => log::debug!("{message}"),
+                't' => log::trace!("{message}"),
+                _ => return,
             }
         }
         if name == "ipc" {
@@ -117,11 +135,14 @@ impl WebviewDelegate {
 }
 
 pub(super) struct WebviewData {
-    pub(super) window: *mut Object,
+    pub(super) window: Retained<Object>,
     pub(super) background_color: Option<u32>,
     #[cfg(feature = "file_drop")]
     pub(super) allow_file_drop: bool,
-    pub(super) webview: *mut Object,
+    pub(super) webview: Option<Retained<Object>>,
+    delegate: Option<Retained<Object>>,
+    #[cfg(feature = "custom_protocol")]
+    protocol_delegates: Vec<Retained<Object>>,
 }
 
 pub(crate) struct PlatformWebview(pub(super) Box<WebviewData>);
@@ -129,42 +150,51 @@ pub(crate) struct PlatformWebview(pub(super) Box<WebviewData>);
 impl PlatformWebview {
     pub(crate) fn new(window: &PlatformWindow) -> Self {
         PlatformWebview(Box::new(WebviewData {
-            window: window.0.window,
+            window: window.0.window.clone(),
             background_color: window.0.background_color,
             #[cfg(feature = "file_drop")]
             allow_file_drop: window.0.allow_file_drop,
-            webview: null_mut(),
+            webview: None,
+            delegate: None,
+            #[cfg(feature = "custom_protocol")]
+            protocol_delegates: Vec::new(),
         }))
+    }
+
+    fn webview(&self) -> &Retained<Object> {
+        self.0.webview.as_ref().expect("webview is not initialized")
     }
 }
 
 impl PlatformWebview {
     pub(crate) fn init_webview(&mut self, builder: WebviewBuilder<'_>) {
         // Create WebviewDelegate instance (registers class lazily on first call)
-        let webview_delegate: *mut Object = unsafe { msg_send![WebviewDelegate::class(), new] };
+        let webview_delegate: Retained<Object> =
+            unsafe { msg_send![WebviewDelegate::class(), new] };
 
         // Create webview
         let webview = unsafe {
             // Create webview configuration
-            let webview_config: *mut Object = msg_send![class!(WKWebViewConfiguration), new];
-            let webview_config: *mut Object = msg_send![webview_config, autorelease];
+            let webview_config: Retained<Object> = msg_send![class!(WKWebViewConfiguration), new];
             let website_data_store: *mut Object =
                 msg_send![class!(WKWebsiteDataStore), defaultDataStore];
-            let _: () = msg_send![webview_config, setWebsiteDataStore:website_data_store];
+            let _: () = msg_send![&webview_config, setWebsiteDataStore:website_data_store];
 
             #[cfg(feature = "custom_protocol")]
             for custom_protocol in builder.custom_protocols {
                 let url_scheme = NSString::from_str(&custom_protocol.scheme);
-                let delegate: *mut Object = msg_send![CustomProtocolDelegate::class(), new];
-                (*(delegate as *const CustomProtocolDelegate))
-                    .ivars()
-                    .custom_protocol
-                    .set(Box::leak(Box::new(custom_protocol)));
-                let _: () = msg_send![webview_config, setURLSchemeHandler:delegate, forURLScheme:url_scheme];
+                let delegate: Allocated<CustomProtocolDelegate> =
+                    msg_send![CustomProtocolDelegate::class(), alloc];
+                let delegate: Retained<CustomProtocolDelegate> = msg_send![
+                    super(delegate.set_ivars(CustomProtocolDelegateIvars { custom_protocol })),
+                    init
+                ];
+                let _: () = msg_send![&webview_config, setURLSchemeHandler:delegate.as_ptr(), forURLScheme:&*url_scheme];
+                self.0.protocol_delegates.push(Retained::into_any(delegate));
             }
 
             // Get content view rect
-            let content_view: *mut Object = msg_send![self.0.window, contentView];
+            let content_view: *mut Object = msg_send![&self.0.window, contentView];
             let webview_rect: NSRect = msg_send![content_view, bounds];
 
             // Create webview
@@ -176,49 +206,49 @@ impl PlatformWebview {
             };
             #[cfg(not(feature = "file_drop"))]
             let webview_class = class!(WKWebView);
-            let webview: *mut Object = msg_send![webview_class, alloc];
-            let webview: *mut Object =
-                msg_send![webview, initWithFrame:webview_rect, configuration:webview_config];
+            let webview: Allocated<Object> = msg_send![webview_class, alloc];
+            let webview: Retained<Object> = msg_send![webview, initWithFrame:webview_rect, configuration:webview_config.as_ptr()];
             #[cfg(feature = "file_drop")]
             if self.0.allow_file_drop {
-                register_dragged_types(webview);
+                register_dragged_types(webview.as_ptr());
             }
-            let _: () = msg_send![webview, setHidden:Bool::YES];
-            let _: () = msg_send![webview, setNavigationDelegate:webview_delegate];
-            let _: () = msg_send![content_view, addSubview:webview, positioned:NS_WINDOW_BELOW, relativeTo:null_mut::<Object>()];
-            let _: () = msg_send![webview, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
-            if unsafe { self.0.background_color }.is_some() {
-                let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
+            let _: () = msg_send![&webview, setHidden:Bool::YES];
+            let _: () = msg_send![&webview, setNavigationDelegate:webview_delegate.as_ptr()];
+            let _: () = msg_send![content_view, addSubview:webview.as_ptr(), positioned:NS_WINDOW_BELOW, relativeTo:null_mut::<Object>()];
+            let _: () = msg_send![&webview, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
+            if self.0.background_color.is_some() {
+                let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:Bool::NO];
                 let _: () =
-                    msg_send![webview, setValue:value, forKey:ns_string!("drawsBackground")];
+                    msg_send![&webview, setValue:value, forKey:ns_string!("drawsBackground")];
             }
             let useragent = format!(
                 "Mozilla/5.0 (Macintosh; {}) bwebview/{}",
                 std::env::consts::ARCH,
                 env!("CARGO_PKG_VERSION"),
             );
-            let _: () = msg_send![webview, setCustomUserAgent:NSString::from_str(&useragent)];
+            let _: () = msg_send![&webview, setCustomUserAgent:&*NSString::from_str(&useragent)];
             let _: () = msg_send![
-                webview,
-                addObserver:webview_delegate,
+                &webview,
+                addObserver:webview_delegate.as_ptr(),
                 forKeyPath:ns_string!("title"),
                 options:NS_KEY_VALUE_OBSERVING_OPTION_NEW,
                 context:null::<c_void>()
             ];
             if let Some(url) = builder.should_load_url {
                 let url: *mut Object =
-                    msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
+                    msg_send![class!(NSURL), URLWithString:&*NSString::from_str(url)];
                 let request: *mut Object = msg_send![class!(NSURLRequest), requestWithURL:url];
-                let _: *mut Object = msg_send![webview, loadRequest:request];
+                let _: *mut Object = msg_send![&webview, loadRequest:request];
             }
             if let Some(html) = builder.should_load_html {
-                let _: *mut Object = msg_send![webview, loadHTMLString:NSString::from_str(html), baseURL:null::<Object>()];
+                let _: *mut Object = msg_send![&webview, loadHTMLString:&*NSString::from_str(html), baseURL:null::<Object>()];
             }
             if cfg!(debug_assertions) {
-                let webview_configuration: *mut Object = msg_send![webview, configuration];
+                let webview_configuration: *mut Object = msg_send![&webview, configuration];
                 let webview_preferences: *mut Object =
                     msg_send![webview_configuration, preferences];
-                let ns_bool_yes: *mut Object = msg_send![class!(NSNumber), numberWithBool:true];
+                let ns_bool_yes: *mut Object =
+                    msg_send![class!(NSNumber), numberWithBool:Bool::YES];
                 let _: () = msg_send![webview_preferences, setValue:ns_bool_yes, forKey:ns_string!("developerExtrasEnabled")];
             }
             webview
@@ -228,28 +258,29 @@ impl PlatformWebview {
         unsafe {
             let script = super::super::IPC_SCRIPT;
 
-            let webview_configuration: *mut Object = msg_send![webview, configuration];
+            let webview_configuration: *mut Object = msg_send![&webview, configuration];
             let user_content_controller: *mut Object =
                 msg_send![webview_configuration, userContentController];
-            let user_script: *mut Object = msg_send![class!(WKUserScript), alloc];
-            let user_script: *mut Object = msg_send![user_script,
-                    initWithSource:NSString::from_str(script),
+            let user_script: Allocated<Object> = msg_send![class!(WKUserScript), alloc];
+            let user_script: Retained<Object> = msg_send![user_script,
+                    initWithSource:&*NSString::from_str(script),
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
-                    forMainFrameOnly:true];
-            let _: () = msg_send![user_content_controller, addUserScript:user_script];
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate, name:ns_string!("ipc")];
+                    forMainFrameOnly:Bool::YES];
+            let _: () = msg_send![user_content_controller, addUserScript:user_script.as_ptr()];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate.as_ptr(), name:ns_string!("ipc")];
             #[cfg(feature = "log")]
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate, name:ns_string!("console")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate.as_ptr(), name:ns_string!("console")];
         }
 
-        self.0.webview = webview;
+        self.0.webview = Some(webview);
+        self.0.delegate = Some(webview_delegate);
     }
 }
 
 impl crate::WebviewInterface for PlatformWebview {
     fn url(&self) -> Option<String> {
         unsafe {
-            let url: *mut Object = msg_send![self.0.webview, URL];
+            let url: *mut Object = msg_send![self.webview(), URL];
             if !url.is_null() {
                 let url: NSString = msg_send![url, absoluteString];
                 Some(url.to_string())
@@ -261,58 +292,81 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
-            let url: *mut Object = msg_send![class!(NSURL), URLWithString:NSString::from_str(url)];
+            let url: *mut Object =
+                msg_send![class!(NSURL), URLWithString:&*NSString::from_str(url)];
             let request: *mut Object = msg_send![class!(NSURLRequest), requestWithURL:url];
-            msg_send![self.0.webview, loadRequest:request]
+            msg_send![self.webview(), loadRequest:request]
         }
     }
 
     fn load_html(&mut self, html: impl AsRef<str>) {
         unsafe {
-            msg_send![self.0.webview, loadHTMLString:NSString::from_str(html), baseURL:null::<c_void>()]
+            msg_send![self.webview(), loadHTMLString:&*NSString::from_str(html), baseURL:null::<c_void>()]
         }
     }
 
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         let script = script.as_ref();
         let _: () = unsafe {
-            msg_send![self.0.webview, evaluateJavaScript:NSString::from_str(script), completionHandler:null::<Object>()]
+            msg_send![self.webview(), evaluateJavaScript:&*NSString::from_str(script), completionHandler:null::<Object>()]
         };
     }
 
     fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime) {
         let script = script.as_ref();
         unsafe {
-            let webview_configuration: *mut Object = msg_send![self.0.webview, configuration];
+            let webview_configuration: *mut Object = msg_send![self.webview(), configuration];
             let user_content_controller: *mut Object =
                 msg_send![webview_configuration, userContentController];
-            let user_script: *mut Object = msg_send![class!(WKUserScript), alloc];
-            let user_script: *mut Object = msg_send![user_script,
-                    initWithSource:NSString::from_str(script),
+            let user_script: Allocated<Object> = msg_send![class!(WKUserScript), alloc];
+            let user_script: Retained<Object> = msg_send![user_script,
+                    initWithSource:&*NSString::from_str(script),
                     injectionTime: match injection_time {
                         InjectionTime::DocumentStart => WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
                         InjectionTime::DocumentLoaded => WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_END,
                     },
-                    forMainFrameOnly:true];
-            let _: () = msg_send![user_content_controller, addUserScript:user_script];
+                    forMainFrameOnly:Bool::YES];
+            let _: () = msg_send![user_content_controller, addUserScript:user_script.as_ptr()];
         }
     }
 
     fn set_background_color(&mut self, color: u32) {
         self.0.background_color = Some(color);
-        if !self.0.webview.is_null() {
+        if let Some(webview) = &self.0.webview {
             unsafe {
-                let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:false];
+                let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:Bool::NO];
                 let _: () =
-                    msg_send![self.0.webview, setValue:value, forKey:ns_string!("drawsBackground")];
+                    msg_send![webview, setValue:value, forKey:ns_string!("drawsBackground")];
             }
+        }
+    }
+}
+
+impl Drop for PlatformWebview {
+    fn drop(&mut self) {
+        let Some(webview) = &self.0.webview else {
+            return;
+        };
+        let title = title_key_path();
+        let ipc = ipc_handler_name();
+        #[cfg(feature = "log")]
+        let console = console_handler_name();
+        unsafe {
+            let _: () = msg_send![webview, removeObserver:self.0.delegate.as_ref().expect("webview delegate is missing").as_ptr(), forKeyPath:title];
+            let configuration: *mut Object = msg_send![webview, configuration];
+            let controller: *mut Object = msg_send![configuration, userContentController];
+            let _: () = msg_send![controller, removeScriptMessageHandlerForName:ipc];
+            #[cfg(feature = "log")]
+            let _: () = msg_send![controller, removeScriptMessageHandlerForName:console];
+            let _: () = msg_send![webview, setNavigationDelegate:null_mut::<Object>()];
+            let _: () = msg_send![webview, removeFromSuperview];
         }
     }
 }
 
 #[cfg(feature = "custom_protocol")]
 struct CustomProtocolDelegateIvars {
-    custom_protocol: Cell<*mut crate::CustomProtocol>,
+    custom_protocol: crate::CustomProtocol,
 }
 
 #[cfg(feature = "custom_protocol")]
@@ -332,14 +386,14 @@ define_class!(
 #[cfg(feature = "custom_protocol")]
 impl CustomProtocolDelegate {
     fn start_url_scheme_task(&self, url_scheme_task: *mut Object) {
-        let custom_protocol = unsafe { &mut *self.ivars().custom_protocol.get() };
+        let custom_protocol = &self.ivars().custom_protocol;
         let ns_request: *mut Object = unsafe { msg_send![url_scheme_task, request] };
         let req = ns_request_to_http_request(ns_request);
         let res = (custom_protocol.handler)(&req);
         let (ns_response, ns_data) = http_response_to_ns_response(&res, &req);
         unsafe {
-            let _: () = msg_send![url_scheme_task, didReceiveResponse:ns_response];
-            let _: () = msg_send![url_scheme_task, didReceiveData:ns_data];
+            let _: () = msg_send![url_scheme_task, didReceiveResponse:ns_response.as_ptr()];
+            let _: () = msg_send![url_scheme_task, didReceiveData:ns_data.as_ptr()];
             let _: () = msg_send![url_scheme_task, didFinish];
         }
     }
@@ -364,7 +418,7 @@ fn ns_request_to_http_request(ns_request: *mut Object) -> small_http::Request {
     let count: usize = unsafe { msg_send![keys, count] };
     for i in 0..count {
         let key: NSString = unsafe { msg_send![keys, objectAtIndex:i] };
-        let value: NSString = unsafe { msg_send![headers, objectForKey:key.0] };
+        let value: NSString = unsafe { msg_send![headers, objectForKey:&*key] };
         req = req.header(key.to_string(), value.to_string());
     }
 
@@ -373,8 +427,15 @@ fn ns_request_to_http_request(ns_request: *mut Object) -> small_http::Request {
         let length: usize = unsafe { msg_send![body, length] };
         let bytes: *const c_void = unsafe { msg_send![body, bytes] };
         let mut post_data = Vec::with_capacity(length);
-        post_data
-            .extend_from_slice(unsafe { std::slice::from_raw_parts(bytes as *const u8, length) });
+        if length != 0 {
+            assert!(
+                !bytes.is_null(),
+                "NSData returned null bytes for non-empty data"
+            );
+            post_data.extend_from_slice(unsafe {
+                std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+            });
+        }
         req = req.body(post_data)
     }
     req
@@ -384,28 +445,27 @@ fn ns_request_to_http_request(ns_request: *mut Object) -> small_http::Request {
 fn http_response_to_ns_response(
     res: &small_http::Response,
     req: &small_http::Request,
-) -> (*mut Object, *mut Object) {
-    let ns_response: *mut Object = unsafe {
+) -> (Retained<Object>, Retained<Object>) {
+    let ns_response: Retained<Object> = unsafe {
         let url: *mut Object =
-            msg_send![class!(NSURL), URLWithString:NSString::from_str(req.url.to_string())];
+            msg_send![class!(NSURL), URLWithString:&*NSString::from_str(req.url.to_string())];
 
         let headers: *mut Object = msg_send![class!(NSMutableDictionary), dictionary];
         for (key, value) in &res.headers {
-            let _: () = msg_send![headers, setObject:NSString::from_str(value), forKey:NSString::from_str(key)];
+            let _: () = msg_send![headers, setObject:&*NSString::from_str(value), forKey:&*NSString::from_str(key)];
         }
 
-        let ns_response: *mut Object = msg_send![class!(NSHTTPURLResponse), alloc];
-        let ns_response: *mut Object = msg_send![ns_response, autorelease];
-        let ns_response: *mut Object = msg_send![
+        let ns_response: Allocated<Object> = msg_send![class!(NSHTTPURLResponse), alloc];
+        let ns_response: Retained<Object> = msg_send![
             ns_response,
             initWithURL:url,
             statusCode:res.status as i64,
-            HTTPVersion:NSString::from_str(req.version.to_string()),
+            HTTPVersion:&*NSString::from_str(req.version.to_string()),
             headerFields:headers
         ];
         ns_response
     };
-    let ns_data: *mut Object = unsafe {
+    let ns_data: Retained<Object> = unsafe {
         msg_send![class!(NSData), dataWithBytes:res.body.as_ptr() as *const c_void, length:res.body.len()]
     };
     (ns_response, ns_data)

@@ -7,6 +7,7 @@
 use std::ffi::c_void;
 
 use macview_appkit::{CGContextFillRect, CGContextSetRGBFillColor, Point, Rect, Size};
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
@@ -64,11 +65,11 @@ impl CheckerboardView {
 
 /// Creates an opaque checkerboard view that follows the effective light or dark appearance.
 ///
-/// The caller owns the returned view and must send it `release`.
-pub(crate) fn create_checkerboard_view(frame: Rect) -> *mut Object {
+/// The returned view owns one retain count.
+pub(crate) fn create_checkerboard_view(frame: Rect) -> Retained<Object> {
     // SAFETY: CheckerboardView is a registered NSView subclass initialized with a valid frame.
     unsafe {
-        let view: *mut Object = msg_send![CheckerboardView::class(), alloc];
+        let view: Allocated<Object> = msg_send![CheckerboardView::class(), alloc];
         msg_send![view, initWithFrame: frame]
     }
 }

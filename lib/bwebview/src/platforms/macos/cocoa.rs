@@ -6,7 +6,9 @@
 
 use std::ffi::{c_char, c_void};
 use std::fmt::{self, Display, Formatter};
+use std::ops::Deref;
 
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject as Object;
 use objc2::{Encode, Encoding, class, msg_send};
 
@@ -106,28 +108,49 @@ pub(crate) const NS_ALERT_FIRST_BUTTON_RETURN: i64 = 1000;
 pub(crate) const NS_DRAG_OPERATION_COPY: u64 = 1;
 
 #[repr(transparent)]
-pub(crate) struct NSString(pub *mut Object);
+pub(crate) struct NSString(Retained<Object>);
 
 unsafe impl Encode for NSString {
     const ENCODING: Encoding = Encoding::Object;
+    const IS_OBJECT_OWNERSHIP: bool = true;
+
+    unsafe fn from_object_return(pointer: *mut c_void, owned: bool) -> Self {
+        Self(unsafe { <Retained<Object> as Encode>::from_object_return(pointer, owned) })
+    }
 }
 
 impl NSString {
     pub(crate) fn from_str(str: impl AsRef<str>) -> Self {
         let str = str.as_ref();
         unsafe {
-            let ns_string: *mut Object = msg_send![class!(NSString), alloc];
-            let ns_string: *mut Object = msg_send![ns_string, initWithBytes:str.as_ptr().cast::<c_void>(), length:str.len(), encoding:NS_UTF8_STRING_ENCODING];
-            msg_send![ns_string, autorelease]
+            let ns_string: Allocated<Object> = msg_send![class!(NSString), alloc];
+            let ns_string: Retained<Object> = msg_send![ns_string, initWithBytes:str.as_ptr().cast::<c_void>(), length:str.len(), encoding:NS_UTF8_STRING_ENCODING];
+            Self(ns_string)
         }
+    }
+}
+impl Deref for NSString {
+    type Target = Object;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 impl Display for NSString {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", unsafe {
-            let bytes: *const c_char = msg_send![self.0, UTF8String];
-            let len: usize = msg_send![self.0, lengthOfBytesUsingEncoding:NS_UTF8_STRING_ENCODING];
-            String::from_utf8_lossy(std::slice::from_raw_parts(bytes as *const u8, len))
+            let bytes: *const c_char = msg_send![&*self.0, UTF8String];
+            let len: usize =
+                msg_send![&*self.0, lengthOfBytesUsingEncoding:NS_UTF8_STRING_ENCODING];
+            if len == 0 {
+                String::new().into()
+            } else {
+                assert!(
+                    !bytes.is_null(),
+                    "NSString returned null UTF8String for non-empty data"
+                );
+                String::from_utf8_lossy(std::slice::from_raw_parts(bytes.cast::<u8>(), len))
+            }
         })
     }
 }
@@ -152,9 +175,10 @@ unsafe impl Sync for CFConstString {}
 // Creates a zero-cost NSString literal equivalent to Clang's @"..." syntax.
 // The string must be ASCII with no interior NUL bytes; this is checked at compile time.
 // Returns *mut Object pointing to a static CFConstString in __DATA,__cfstring.
-// NOTE: Do not call inside closures - rustc may split the static definition into a
-// separate CGU with internal linkage, making it invisible to the linker. Hoist the
-// call to the enclosing function scope instead (known rustc bug: madsmtm/objc2#258).
+// NOTE: Do not call inside closures or trait methods - rustc may split the static
+// definition into a separate CGU with internal linkage, making it invisible to the
+// linker. Hoist the call to an ordinary free function instead (known rustc bug:
+// madsmtm/objc2#258).
 macro_rules! ns_string {
     ($s:expr) => {{
         const INPUT: &str = $s;
@@ -196,3 +220,34 @@ macro_rules! ns_string {
     }};
 }
 pub(crate) use ns_string;
+
+#[cfg(test)]
+mod tests {
+    use objc2::msg_send;
+    use objc2::rc::autoreleasepool;
+
+    use super::NSString;
+
+    #[test]
+    fn owned_string_outlives_the_pool_where_it_was_created() {
+        let string = autoreleasepool(|_| NSString::from_str("safe string"));
+        autoreleasepool(|_| assert_eq!(string.to_string(), "safe string"));
+    }
+
+    #[test]
+    fn owned_string_preserves_utf8() {
+        autoreleasepool(|_| {
+            let string = NSString::from_str("caf\u{e9}");
+            assert_eq!(string.to_string(), "caf\u{e9}");
+        });
+    }
+
+    #[test]
+    fn string_return_values_are_retained() {
+        let description: NSString = autoreleasepool(|_| unsafe {
+            let string = NSString::from_str("retained return");
+            msg_send![&*string, description]
+        });
+        autoreleasepool(|_| assert_eq!(description.to_string(), "retained return"));
+    }
+}

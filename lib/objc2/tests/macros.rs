@@ -14,9 +14,13 @@
 #![allow(unsafe_code, clippy::undocumented_unsafe_blocks)]
 
 use std::cell::Cell;
+use std::ffi::c_void;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use objc2::runtime::AnyObject;
-use objc2::{class, define_class, extern_class, msg_send};
+use objc2::ffi::{objc_msgSendSuper, objc_super};
+use objc2::rc::{Allocated, Retained};
+use objc2::runtime::{AnyClass, AnyObject};
+use objc2::{class, define_class, extern_class, msg_send, sel};
 
 #[link(name = "Foundation", kind = "framework")]
 unsafe extern "C" {}
@@ -116,6 +120,11 @@ define_class!(
     struct CounterClass;
 
     impl CounterClass {
+        #[unsafe(method_id(init))]
+        fn _init(this: Allocated<Self>) -> Option<Retained<Self>> {
+            unsafe { msg_send![super(this.set_ivars(CounterIvars { count: Cell::new(0) })), init] }
+        }
+
         #[unsafe(method(increment))]
         fn _increment(&self) {
             let c = self.ivars().count.get();
@@ -130,7 +139,7 @@ define_class!(
 );
 
 #[test]
-fn test_define_class_ivars_zero_initialized() {
+fn test_define_class_ivars_explicitly_initialized() {
     let obj: *mut AnyObject = unsafe { msg_send![CounterClass::class(), alloc] };
     let obj: *mut AnyObject = unsafe { msg_send![obj, init] };
     let count: i64 = unsafe { msg_send![obj, count] };
@@ -138,6 +147,123 @@ fn test_define_class_ivars_zero_initialized() {
     unsafe {
         let _: () = msg_send![obj, release];
     }
+}
+
+static IVARS_DROPPED: AtomicBool = AtomicBool::new(false);
+static FAILED_IVARS_DROPPED: AtomicBool = AtomicBool::new(false);
+
+struct DropMarker;
+
+impl Drop for DropMarker {
+    fn drop(&mut self) {
+        IVARS_DROPPED.store(true, Ordering::SeqCst);
+    }
+}
+
+struct DropIvars {
+    _marker: DropMarker,
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "TestDropIvarsClass"]
+    #[ivars = DropIvars]
+    struct DropIvarsClass;
+
+    impl DropIvarsClass {
+        #[unsafe(method_id(init))]
+        fn _init(this: Allocated<Self>) -> Option<Retained<Self>> {
+            unsafe {
+                msg_send![
+                    super(this.set_ivars(DropIvars {
+                        _marker: DropMarker,
+                    })),
+                    init
+                ]
+            }
+        }
+    }
+);
+
+#[test]
+fn test_define_class_drops_initialized_ivars() {
+    IVARS_DROPPED.store(false, Ordering::SeqCst);
+    let object: Retained<DropIvarsClass> = unsafe { msg_send![DropIvarsClass::class(), new] };
+    assert!(!IVARS_DROPPED.load(Ordering::SeqCst));
+    drop(object);
+    assert!(IVARS_DROPPED.load(Ordering::SeqCst));
+}
+
+struct FailedDropMarker;
+
+impl Drop for FailedDropMarker {
+    fn drop(&mut self) {
+        FAILED_IVARS_DROPPED.store(true, Ordering::SeqCst);
+    }
+}
+
+struct FailedIvars {
+    _marker: FailedDropMarker,
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "TestFailedIvarsClass"]
+    #[ivars = FailedIvars]
+    struct FailedIvarsClass;
+
+    impl FailedIvarsClass {
+        #[unsafe(method_id(init))]
+        fn _init(this: Allocated<Self>) -> Option<Retained<Self>> {
+            drop(this.set_ivars(FailedIvars {
+                _marker: FailedDropMarker,
+            }));
+            None
+        }
+    }
+);
+
+#[test]
+fn test_define_class_drops_ivars_when_initialization_fails() {
+    FAILED_IVARS_DROPPED.store(false, Ordering::SeqCst);
+    let object: Option<Retained<FailedIvarsClass>> =
+        unsafe { msg_send![FailedIvarsClass::class(), new] };
+    assert!(object.is_none());
+    assert!(FAILED_IVARS_DROPPED.load(Ordering::SeqCst));
+}
+
+struct ValueIvars {
+    value: i64,
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "TestValueIvarsClass"]
+    #[ivars = ValueIvars]
+    struct ValueIvarsClass;
+
+    impl ValueIvarsClass {
+        #[unsafe(method_id(initWithValue:))]
+        fn _init_with_value(
+            this: Allocated<Self>,
+            value: i64,
+        ) -> Option<Retained<Self>> {
+            unsafe { msg_send![super(this.set_ivars(ValueIvars { value })), init] }
+        }
+
+        #[unsafe(method(value))]
+        fn _value(&self) -> i64 {
+            self.ivars().value
+        }
+    }
+);
+
+#[test]
+fn test_define_class_initializer_argument_is_not_an_objective_c_argument() {
+    let object: Allocated<ValueIvarsClass> = unsafe { msg_send![ValueIvarsClass::class(), alloc] };
+    let object: Retained<ValueIvarsClass> = unsafe { msg_send![object, initWithValue: 42_i64] };
+    let value: i64 = unsafe { msg_send![&object, value] };
+    assert_eq!(value, 42);
 }
 
 #[test]
@@ -188,6 +314,44 @@ fn test_define_class_ivars_independent_per_instance() {
     unsafe {
         let _: () = msg_send![b, release];
     }
+}
+
+// MARK: define_class! - dealloc
+
+static DEALLOCATED: AtomicBool = AtomicBool::new(false);
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "TestDeallocClass"]
+    struct DeallocClass;
+
+    impl DeallocClass {
+        #[unsafe(method(dealloc))]
+        fn _dealloc(this: *mut Self) {
+            DEALLOCATED.store(true, Ordering::SeqCst);
+            // SAFETY: this is the object currently being deallocated, and NSObject is its super.
+            unsafe {
+                let super_info = objc_super {
+                    receiver: this.cast::<AnyObject>(),
+                    super_class: class!(NSObject).cast::<AnyClass>(),
+                };
+                let send: unsafe extern "C-unwind" fn(*const objc_super, *const c_void) =
+                    std::mem::transmute(objc_msgSendSuper as *const c_void);
+                send(&super_info, sel!(dealloc).0);
+            }
+        }
+    }
+);
+
+#[test]
+fn test_define_class_dealloc_uses_raw_receiver() {
+    DEALLOCATED.store(false, Ordering::SeqCst);
+    // SAFETY: DeallocClass inherits NSObject's new and release methods.
+    unsafe {
+        let object: *mut AnyObject = msg_send![DeallocClass::class(), new];
+        let _: () = msg_send![object, release];
+    }
+    assert!(DEALLOCATED.load(Ordering::SeqCst));
 }
 
 // MARK: extern_class!

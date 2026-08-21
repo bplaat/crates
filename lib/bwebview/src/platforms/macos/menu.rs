@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use objc2::rc::Retained;
 use objc2::runtime::AnyObject as Object;
 use objc2::{class, msg_send, sel};
 
@@ -195,73 +196,73 @@ impl NativeMenuItem {
     }
 
     /// Creates the NSMenuItem carrying this item's title, accelerator and target action
-    unsafe fn create_native(self, app_delegate: *mut Object) -> *mut Object {
-        let native_item: *mut Object = unsafe { msg_send![class!(NSMenuItem), new] };
-        let _: () = unsafe { msg_send![native_item, setTitle:NSString::from_str(self.title)] };
+    unsafe fn create_native(self, app_delegate: *mut Object) -> Retained<Object> {
+        let native_item: Retained<Object> = unsafe { msg_send![class!(NSMenuItem), new] };
+        let _: () = unsafe { msg_send![&native_item, setTitle:&*NSString::from_str(self.title)] };
         if let Some(accelerator) = self.accelerator {
             let _: () = unsafe {
-                msg_send![native_item, setKeyEquivalent:NSString::from_str(accelerator.key)]
+                msg_send![&native_item, setKeyEquivalent:&*NSString::from_str(accelerator.key)]
             };
             let _: () = unsafe {
-                msg_send![native_item, setKeyEquivalentModifierMask:accelerator.modifiers]
+                msg_send![&native_item, setKeyEquivalentModifierMask:accelerator.modifiers]
             };
         }
         // Items left without a target travel the responder chain to whatever view has focus
         match self.action {
             MenuItemAction::About => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(openAboutDialog:)] };
-                let _: () = unsafe { msg_send![native_item, setTarget:app_delegate] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(openAboutDialog:)] };
+                let _: () = unsafe { msg_send![&native_item, setTarget:app_delegate] };
             }
             MenuItemAction::Hide => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(hide:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(hide:)] };
             }
             MenuItemAction::HideOthers => {
                 let _: () =
-                    unsafe { msg_send![native_item, setAction:sel!(hideOtherApplications:)] };
+                    unsafe { msg_send![&native_item, setAction:sel!(hideOtherApplications:)] };
             }
             MenuItemAction::ShowAll => {
                 let _: () =
-                    unsafe { msg_send![native_item, setAction:sel!(unhideAllApplications:)] };
+                    unsafe { msg_send![&native_item, setAction:sel!(unhideAllApplications:)] };
             }
             MenuItemAction::Terminate => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(terminate:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(terminate:)] };
             }
             MenuItemAction::Close => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(performClose:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(performClose:)] };
             }
             MenuItemAction::Undo => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(undo:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(undo:)] };
             }
             MenuItemAction::Redo => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(redo:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(redo:)] };
             }
             MenuItemAction::Cut => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(cut:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(cut:)] };
             }
             MenuItemAction::Copy => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(copy:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(copy:)] };
             }
             MenuItemAction::Paste => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(paste:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(paste:)] };
             }
             MenuItemAction::Delete => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(delete:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(delete:)] };
             }
             MenuItemAction::SelectAll => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(selectAll:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(selectAll:)] };
             }
             MenuItemAction::Minimize => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(performMiniaturize:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(performMiniaturize:)] };
             }
             MenuItemAction::Zoom => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(performZoom:)] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(performZoom:)] };
             }
             #[cfg(feature = "menu")]
             MenuItemAction::Custom(action) => {
-                let _: () = unsafe { msg_send![native_item, setAction:sel!(menuItemSelected:)] };
-                let _: () = unsafe { msg_send![native_item, setTarget:app_delegate] };
+                let _: () = unsafe { msg_send![&native_item, setAction:sel!(menuItemSelected:)] };
+                let _: () = unsafe { msg_send![&native_item, setTarget:app_delegate] };
                 let _: () = unsafe {
-                    msg_send![native_item, setRepresentedObject:NSString::from_str(action)]
+                    msg_send![&native_item, setRepresentedObject:&*NSString::from_str(action)]
                 };
             }
         }
@@ -284,19 +285,19 @@ impl MenuEntry {
         application: *mut Object,
         app_delegate: *mut Object,
     ) {
-        let native_item: *mut Object = match self {
+        let native_item: Retained<Object> = match self {
             MenuEntry::Separator => unsafe { msg_send![class!(NSMenuItem), separatorItem] },
             MenuEntry::ServicesMenu(title) => unsafe {
-                let native_item: *mut Object = msg_send![class!(NSMenuItem), new];
-                let _: () = msg_send![native_item, setTitle:NSString::from_str(title)];
-                let services_menu: *mut Object = msg_send![class!(NSMenu), new];
-                let _: () = msg_send![native_item, setSubmenu:services_menu];
-                let _: () = msg_send![application, setServicesMenu:services_menu];
+                let native_item: Retained<Object> = msg_send![class!(NSMenuItem), new];
+                let _: () = msg_send![&native_item, setTitle:&*NSString::from_str(title)];
+                let services_menu: Retained<Object> = msg_send![class!(NSMenu), new];
+                let _: () = msg_send![&native_item, setSubmenu:services_menu.as_ptr()];
+                let _: () = msg_send![application, setServicesMenu:services_menu.as_ptr()];
                 native_item
             },
             MenuEntry::Item(item) => unsafe { item.create_native(app_delegate) },
         };
-        let _: () = unsafe { msg_send![native_menu, addItem:native_item] };
+        let _: () = unsafe { msg_send![native_menu, addItem:native_item.as_ptr()] };
     }
 }
 
@@ -335,27 +336,27 @@ impl Menu {
         self,
         application: *mut Object,
         app_delegate: *mut Object,
-    ) -> *mut Object {
-        let menu_item: *mut Object = unsafe { msg_send![class!(NSMenuItem), new] };
+    ) -> Retained<Object> {
+        let menu_item: Retained<Object> = unsafe { msg_send![class!(NSMenuItem), new] };
         // The application menu takes its title from the process name, so never set one
         if !matches!(self.role, MenuRole::Application) {
-            let _: () = unsafe { msg_send![menu_item, setTitle:NSString::from_str(self.title)] };
+            let _: () = unsafe { msg_send![&menu_item, setTitle:&*NSString::from_str(self.title)] };
         }
 
-        let native_menu: *mut Object = unsafe { msg_send![class!(NSMenu), new] };
-        let _: () = unsafe { msg_send![menu_item, setSubmenu:native_menu] };
+        let native_menu: Retained<Object> = unsafe { msg_send![class!(NSMenu), new] };
+        let _: () = unsafe { msg_send![&menu_item, setSubmenu:native_menu.as_ptr()] };
         match self.role {
             MenuRole::Window => {
-                let _: () = unsafe { msg_send![application, setWindowsMenu:native_menu] };
+                let _: () = unsafe { msg_send![application, setWindowsMenu:native_menu.as_ptr()] };
             }
             MenuRole::Help => {
-                let _: () = unsafe { msg_send![application, setHelpMenu:native_menu] };
+                let _: () = unsafe { msg_send![application, setHelpMenu:native_menu.as_ptr()] };
             }
             MenuRole::Application | MenuRole::Normal => {}
         }
 
         for entry in self.entries {
-            unsafe { entry.add_to(native_menu, application, app_delegate) };
+            unsafe { entry.add_to(native_menu.as_ptr(), application, app_delegate) };
         }
         menu_item
     }
@@ -423,11 +424,11 @@ impl MenuBar {
 
     /// Installs this menu bar as the application's main menu
     unsafe fn create_native(self, application: *mut Object, app_delegate: *mut Object) {
-        let menubar: *mut Object = unsafe { msg_send![class!(NSMenu), new] };
-        let _: () = unsafe { msg_send![application, setMainMenu:menubar] };
+        let menubar: Retained<Object> = unsafe { msg_send![class!(NSMenu), new] };
+        let _: () = unsafe { msg_send![application, setMainMenu:menubar.as_ptr()] };
         for menu in self.0 {
             let menu_item = unsafe { menu.create_native(application, app_delegate) };
-            let _: () = unsafe { msg_send![menubar, addItem:menu_item] };
+            let _: () = unsafe { msg_send![&menubar, addItem:menu_item.as_ptr()] };
         }
     }
 }

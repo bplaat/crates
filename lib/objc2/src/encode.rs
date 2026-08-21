@@ -102,6 +102,19 @@ impl std::fmt::Display for Encoding {
 pub unsafe trait Encode {
     /// The encoding of the type
     const ENCODING: Encoding;
+
+    /// Whether this type is an Objective-C ownership wrapper returned through a pointer ABI.
+    #[doc(hidden)]
+    const IS_OBJECT_OWNERSHIP: bool = false;
+
+    /// Builds an ownership wrapper from an Objective-C object return value.
+    #[doc(hidden)]
+    unsafe fn from_object_return(_: *mut c_void, _: bool) -> Self
+    where
+        Self: Sized,
+    {
+        unreachable!("non-object return converted as an Objective-C object")
+    }
 }
 
 // Implementations for primitive types.
@@ -241,7 +254,12 @@ mod test {
         assert_eq!(<*mut c_void>::ENCODING.to_string(), "^v");
         assert_eq!(<*const c_char>::ENCODING.to_string(), "*");
         assert_eq!(<*mut c_char>::ENCODING.to_string(), "*");
-        assert_eq!(Bool::ENCODING.to_string(), "B");
+        let bool_encoding = if cfg!(target_arch = "aarch64") {
+            "B"
+        } else {
+            "c"
+        };
+        assert_eq!(Bool::ENCODING.to_string(), bool_encoding);
         assert_eq!(i8::ENCODING.to_string(), "c");
         assert_eq!(i16::ENCODING.to_string(), "s");
         assert_eq!(u8::ENCODING.to_string(), "C");

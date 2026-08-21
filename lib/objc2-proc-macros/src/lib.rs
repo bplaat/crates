@@ -97,7 +97,7 @@ fn extract_selector(attr: &Attribute) -> Option<String> {
         let result = ml.parse_args_with(|input: ParseStream| -> syn::Result<Option<String>> {
             if input.peek(Ident) {
                 let kw: Ident = input.call(IdentExt::parse_any)?;
-                if kw == "method" {
+                if kw == "method" || kw == "method_id" {
                     let content;
                     syn::parenthesized!(content in input);
                     let mut sel = String::new();
@@ -178,6 +178,9 @@ pub fn extern_class(input: TokenStream) -> TokenStream {
             _super: ::objc2::runtime::AnyObject,
         }
 
+        #[allow(clippy::undocumented_unsafe_blocks)]
+        unsafe impl ::objc2::runtime::Message for #struct_name {}
+
         impl #struct_name {
             fn class() -> *mut ::objc2::runtime::AnyObject {
                 ::objc2::class!(#class_ident)
@@ -195,18 +198,22 @@ pub fn extern_class(input: TokenStream) -> TokenStream {
 /// define_class!(
 ///     #[unsafe(super(SuperClass))]
 ///     #[name = "ObjCClassName"]   // optional, defaults to struct ident
-///     #[ivars = IvarsType]        // optional
+///     #[ivars = IvarsType]        // optional; initialize with Allocated::set_ivars
 ///     struct MyClass;
 ///
 ///     impl MyClass {
 ///         #[unsafe(method(selector:parts:))]
 ///         fn my_method(&self, arg: Type) -> RetType { ... }
+///
+///         #[unsafe(method(dealloc))]
+///         fn dealloc(this: *mut Self) { ... }
 ///     }
 /// );
 /// ```
 ///
 /// Generates a `#[repr(C)]` struct, `extern "C"` trampolines, a lazy `class()` registration
-/// method, and an `ivars()` accessor (when `#[ivars]` is present).
+/// method, and an `ivars()` accessor (when `#[ivars]` is present). `dealloc` uses a raw receiver
+/// because the Objective-C object may cease to exist before the method returns.
 #[proc_macro]
 pub fn define_class(input: TokenStream) -> TokenStream {
     let DefineClassInput {
@@ -242,6 +249,7 @@ pub fn define_class(input: TokenStream) -> TokenStream {
     let mut trampolines = Vec::new();
     let mut user_methods = Vec::new();
     let mut registrations = Vec::new();
+    let mut has_custom_dealloc = false;
 
     if let Some(ref impl_block) = impl_item {
         for item in &impl_block.items {
@@ -276,10 +284,104 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                     let cfg_attrs: Vec<&Attribute> =
                         method.attrs.iter().filter(|a| is_cfg(a)).collect();
 
+                    if sel_str == "dealloc" {
+                        has_custom_dealloc = true;
+                        if method.sig.receiver().is_some() || typed_args.len() != 1 {
+                            return syn::Error::new_spanned(
+                                &method.sig,
+                                "dealloc must be an associated function taking `*mut Self`",
+                            )
+                            .into_compile_error()
+                            .into();
+                        }
+
+                        trampolines.push(quote! {
+                            #(#cfg_attrs)*
+                            extern "C-unwind" fn #trampoline_name(
+                                __this: *mut ::objc2::runtime::AnyObject,
+                                __sel: ::objc2::runtime::Sel,
+                            ) {
+                                Self::#fn_name(__this.cast::<Self>())
+                            }
+                        });
+                        registrations.push(quote! {
+                            #(#cfg_attrs)*
+                            assert!(builder.add_method(
+                                #sel_mac,
+                                Self::#trampoline_name as extern "C-unwind" fn(_, _),
+                            ));
+                        });
+
+                        let filtered_attrs: Vec<&Attribute> = method
+                            .attrs
+                            .iter()
+                            .filter(|a| extract_selector(a).is_none())
+                            .collect();
+                        let vis = &method.vis;
+                        let sig = &method.sig;
+                        let body = &method.block;
+                        user_methods.push(quote! {
+                            #(#filtered_attrs)*
+                            #vis #sig #body
+                        });
+                        continue;
+                    }
+
+                    if method.sig.receiver().is_none() {
+                        if typed_args.is_empty() {
+                            return syn::Error::new_spanned(
+                                &method.sig,
+                                "an initializer must take `Allocated<Self>` as its first argument",
+                            )
+                            .into_compile_error()
+                            .into();
+                        }
+                        let objc_arg_names = &arg_names[1..];
+                        let objc_arg_types = &arg_types[1..];
+                        trampolines.push(quote! {
+                            #(#cfg_attrs)*
+                            #[allow(clippy::undocumented_unsafe_blocks)]
+                            extern "C-unwind" fn #trampoline_name(
+                                __this: *mut ::objc2::runtime::AnyObject,
+                                __sel: ::objc2::runtime::Sel,
+                                #(#objc_arg_names: #objc_arg_types,)*
+                            ) #ret {
+                                Self::#fn_name(
+                                    unsafe { ::objc2::rc::Allocated::from_raw(__this.cast::<Self>()) },
+                                    #(#objc_arg_names,)*
+                                )
+                            }
+                        });
+
+                        let wildcards: Vec<_> =
+                            objc_arg_types.iter().map(|_| quote! { _ }).collect();
+                        registrations.push(quote! {
+                            #(#cfg_attrs)*
+                            assert!(builder.add_method(
+                                #sel_mac,
+                                Self::#trampoline_name as extern "C-unwind" fn(_, _, #(#wildcards,)*) #ret,
+                            ));
+                        });
+
+                        let filtered_attrs: Vec<&Attribute> = method
+                            .attrs
+                            .iter()
+                            .filter(|a| extract_selector(a).is_none())
+                            .collect();
+                        let vis = &method.vis;
+                        let sig = &method.sig;
+                        let body = &method.block;
+                        user_methods.push(quote! {
+                            #(#filtered_attrs)*
+                            #vis #sig #body
+                        });
+                        continue;
+                    }
+
                     trampolines.push(quote! {
                         #(#cfg_attrs)*
                         #[allow(clippy::undocumented_unsafe_blocks)]
-                        extern "C" fn #trampoline_name(
+                        extern "C-unwind" fn #trampoline_name(
                             __this: *mut ::objc2::runtime::AnyObject,
                             __sel: ::objc2::runtime::Sel,
                             #(#arg_names: #arg_types,)*
@@ -292,10 +394,10 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                     let wildcards: Vec<_> = (0..n_args).map(|_| quote! { _ }).collect();
                     registrations.push(quote! {
                         #(#cfg_attrs)*
-                        builder.add_method(
+                        assert!(builder.add_method(
                             #sel_mac,
-                            Self::#trampoline_name as extern "C" fn(_, _, #(#wildcards,)*) #ret,
-                        );
+                            Self::#trampoline_name as extern "C-unwind" fn(_, _, #(#wildcards,)*) #ret,
+                        ));
                     });
 
                     let filtered_attrs: Vec<&Attribute> = method
@@ -315,29 +417,101 @@ pub fn define_class(input: TokenStream) -> TokenStream {
         }
     }
 
+    if ivars_expr.is_some() && has_custom_dealloc {
+        return syn::Error::new_spanned(
+            struct_name,
+            "classes with Rust ivars use automatic deallocation; store owned resources in the ivars instead of defining dealloc",
+        )
+        .into_compile_error()
+        .into();
+    }
+
     let ivar_reg = ivars_expr.as_ref().map(|ivars| {
         quote! {
-            builder.add_ivar_raw::<#ivars>(c"__ivars");
+            assert!(builder.add_ivar_raw::<#ivars>(c"__ivars"));
+            assert!(builder.add_ivar::<u8>(c"__ivars_initialized"));
+            if ::std::mem::needs_drop::<#ivars>() {
+                assert!(builder.add_method(
+                    ::objc2::sel!(dealloc),
+                    Self::__trampoline_destroy_ivars as extern "C-unwind" fn(_, _),
+                ));
+            }
         }
     });
 
     let ivars_method = ivars_expr.as_ref().map(|ivars| {
         quote! {
-            #[allow(clippy::undocumented_unsafe_blocks)]
             fn ivars(&self) -> &#ivars {
-                static OFFSET: ::std::sync::OnceLock<usize> = ::std::sync::OnceLock::new();
-                let offset = *OFFSET.get_or_init(|| unsafe {
-                    let ivar = ::objc2::ffi::class_getInstanceVariable(
-                        Self::class() as *const _,
-                        c"__ivars".as_ptr(),
+                ::objc2::runtime::ivars(self)
+            }
+
+            #[allow(clippy::undocumented_unsafe_blocks)]
+            extern "C-unwind" fn __trampoline_destroy_ivars(
+                __this: *mut ::objc2::runtime::AnyObject,
+                __sel: ::objc2::runtime::Sel,
+            ) {
+                unsafe {
+                    let this = ::std::ptr::NonNull::new(__this.cast::<Self>())
+                        .expect("Objective-C called dealloc with null self");
+                    ::objc2::runtime::destroy_ivars::<Self>(this);
+                    let super_info = ::objc2::ffi::objc_super {
+                        receiver: __this,
+                        super_class: <Self as ::objc2::runtime::ClassType>::__superclass(),
+                    };
+                    let send: unsafe extern "C-unwind" fn(
+                        *const ::objc2::ffi::objc_super,
+                        *const ::std::ffi::c_void,
+                    ) = ::std::mem::transmute(
+                        ::objc2::ffi::objc_msgSendSuper as *const ::std::ffi::c_void,
                     );
-                    assert!(!ivar.is_null(), "__ivars ivar not found on class");
-                    ::objc2::ffi::ivar_getOffset(ivar) as usize
-                });
-                unsafe { &*((self as *const Self as *const u8).add(offset) as *const #ivars) }
+                    send(&super_info, __sel.0);
+                }
             }
         }
     });
+
+    let defined_class_impl = ivars_expr.as_ref().map(|ivars| {
+        quote! {
+            #[allow(clippy::undocumented_unsafe_blocks)]
+            unsafe impl ::objc2::runtime::DefinedClass for #struct_name {
+                type Ivars = #ivars;
+
+                fn __ivars_offset() -> usize {
+                    static OFFSET: ::std::sync::OnceLock<usize> = ::std::sync::OnceLock::new();
+                    *OFFSET.get_or_init(|| unsafe {
+                        let ivar = ::objc2::ffi::class_getInstanceVariable(
+                            Self::class() as *const _,
+                            c"__ivars".as_ptr(),
+                        );
+                        assert!(!ivar.is_null(), "__ivars ivar not found on class");
+                        ::objc2::ffi::ivar_getOffset(ivar) as usize
+                    })
+                }
+
+                fn __ivars_initialized_offset() -> usize {
+                    static OFFSET: ::std::sync::OnceLock<usize> = ::std::sync::OnceLock::new();
+                    *OFFSET.get_or_init(|| unsafe {
+                        let ivar = ::objc2::ffi::class_getInstanceVariable(
+                            Self::class() as *const _,
+                            c"__ivars_initialized".as_ptr(),
+                        );
+                        assert!(!ivar.is_null(), "__ivars_initialized ivar not found on class");
+                        ::objc2::ffi::ivar_getOffset(ivar) as usize
+                    })
+                }
+
+            }
+        }
+    });
+
+    let class_type_impl = quote! {
+        #[allow(clippy::undocumented_unsafe_blocks)]
+        unsafe impl ::objc2::runtime::ClassType for #struct_name {
+            fn __superclass() -> *const ::objc2::runtime::AnyClass {
+                ::objc2::class!(#super_path).cast::<::objc2::runtime::AnyClass>()
+            }
+        }
+    };
 
     let class_method = quote! {
         #[allow(clippy::undocumented_unsafe_blocks)]
@@ -361,6 +535,12 @@ pub fn define_class(input: TokenStream) -> TokenStream {
         #struct_vis struct #struct_name {
             _super: ::objc2::runtime::AnyObject,
         }
+
+        #[allow(clippy::undocumented_unsafe_blocks)]
+        unsafe impl ::objc2::runtime::Message for #struct_name {}
+
+        #class_type_impl
+        #defined_class_impl
 
         impl #struct_name {
             #(#trampolines)*

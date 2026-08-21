@@ -8,6 +8,7 @@ use std::cell::Cell;
 use std::ptr::null_mut;
 
 use macview_appkit::{Size, ns_string};
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
@@ -110,7 +111,7 @@ impl WindowController {
         }
         // SAFETY: Both zoom messages of the scroll view take one double and return nothing.
         unsafe {
-            let send: unsafe extern "C" fn(*mut Object, objc2::runtime::Sel, f64) =
+            let send: unsafe extern "C-unwind" fn(*mut Object, objc2::runtime::Sel, f64) =
                 std::mem::transmute(objc2::ffi::objc_msgSend as *const std::ffi::c_void);
             send(scroll_view, selector, value);
         }
@@ -148,17 +149,19 @@ pub(crate) unsafe fn show_media(controller: *mut Object, view: *mut Object, size
 
 /// Creates an owned `NSWindowController` that shows the media size in its window title.
 ///
-/// The caller owns the returned controller and must send it `release`.
-pub(crate) fn create_window_controller(window: *mut Object, size: Size) -> *mut Object {
+/// The returned controller owns one retain count.
+pub(crate) fn create_window_controller(window: *mut Object, size: Size) -> Retained<Object> {
     // SAFETY: WindowController is a registered NSWindowController subclass and window is a live
-    // NSWindow. The zero initialized ivars are filled in before AppKit asks for a window title.
+    // NSWindow. Its Rust ivars are initialized before AppKit can ask for a window title.
     unsafe {
-        let controller: *mut Object = msg_send![WindowController::class(), alloc];
-        let controller: *mut Object = msg_send![controller, initWithWindow: window];
-        assert!(!controller.is_null(), "failed to create window controller");
-        let controller_ref = &*(controller.cast::<WindowController>());
-        controller_ref.ivars().size.set(size);
+        let controller: Allocated<WindowController> = msg_send![WindowController::class(), alloc];
+        let controller: Retained<WindowController> = msg_send![
+            super(controller.set_ivars(WindowControllerIvars {
+                size: Cell::new(size),
+            })),
+            initWithWindow: window
+        ];
 
-        controller
+        Retained::into_any(controller)
     }
 }

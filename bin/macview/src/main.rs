@@ -15,7 +15,7 @@ mod scroll_view;
 mod svg;
 mod window_controller;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::ptr::null_mut;
 
@@ -28,26 +28,57 @@ use macview_appkit::{
     create_image_view, create_tinyvg_view, decode_image, decode_image_data, decode_tinyvg,
     dispatch_async, dispatch_async_main, make_error, ns_string, preferred_content_size,
 };
-use objc2::ffi::{class_addMethod, objc_msgSendSuper, objc_super, object_getClass};
-use objc2::rc::autoreleasepool;
-use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
+use objc2::ffi::{class_addMethod, object_getClass};
+use objc2::rc::{Allocated, Retained, autoreleasepool};
+use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 use scroll_view::create_scroll_view;
 use svg::{Svg, create_svg_view, is_svg, parse_svg};
 use window_controller::{create_window_controller, show_media};
 
 struct DocumentIvars {
-    image: Cell<*mut Image>,
-    tinyvg: Cell<*mut std::sync::Arc<tinyvg::Document>>,
-    svg: Cell<*mut Svg>,
-    svg_view: Cell<*mut Object>,
+    media: RefCell<Option<DecodedMedia>>,
+    svg_view: RefCell<Option<Retained<Object>>>,
     browse_generation: Cell<u64>,
+}
+
+impl DocumentIvars {
+    const fn new() -> Self {
+        Self {
+            media: RefCell::new(None),
+            svg_view: RefCell::new(None),
+            browse_generation: Cell::new(0),
+        }
+    }
 }
 
 enum DecodedMedia {
     Image(Image),
     TinyVg(std::sync::Arc<tinyvg::Document>),
     Svg(Box<Svg>),
+}
+
+struct MainQueueObject(Retained<Object>);
+
+// SAFETY: This wrapper only transports an AppKit object without accessing it. The pointer is only
+// exposed after the value reaches a main-queue continuation.
+unsafe impl Send for MainQueueObject {}
+
+impl MainQueueObject {
+    const fn as_ptr_on_main(&self) -> *mut Object {
+        self.0.as_ptr()
+    }
+}
+
+struct SendableUrl(Retained<Object>);
+
+// SAFETY: NSURL is immutable and safe to read while this uniquely owned wrapper is on a worker.
+unsafe impl Send for SendableUrl {}
+
+impl SendableUrl {
+    const fn as_ptr(&self) -> *mut Object {
+        self.0.as_ptr()
+    }
 }
 
 define_class!(
@@ -57,6 +88,13 @@ define_class!(
     struct Document;
 
     impl Document {
+        #[unsafe(method_id(init))]
+        fn _init(this: Allocated<Self>) -> Option<Retained<Self>> {
+            // SAFETY: `this` is allocated as Document and NSObject implements `init` with this
+            // return type.
+            unsafe { msg_send![super(this.set_ivars(DocumentIvars::new())), init] }
+        }
+
         #[unsafe(method(readFromData:ofType:error:))]
         fn _read_from_data(
             &self,
@@ -90,11 +128,6 @@ define_class!(
         ) -> *mut Object {
             self.print_operation(settings)
         }
-
-        #[unsafe(method(dealloc))]
-        fn _dealloc(&self) {
-            self.dealloc();
-        }
     }
 );
 
@@ -114,17 +147,8 @@ impl Document {
     }
 
     fn install_media(&self, media: DecodedMedia) {
-        match media {
-            DecodedMedia::Image(image) => {
-                self.set_media(Box::into_raw(Box::new(image)), null_mut(), null_mut());
-            }
-            DecodedMedia::TinyVg(document) => {
-                self.set_media(null_mut(), Box::into_raw(Box::new(document)), null_mut());
-            }
-            DecodedMedia::Svg(document) => {
-                self.set_media(null_mut(), null_mut(), Box::into_raw(document));
-            }
-        }
+        self.ivars().media.replace(Some(media));
+        self.ivars().svg_view.replace(None);
     }
 
     fn next_browse_generation(&self) -> u64 {
@@ -147,8 +171,9 @@ impl Document {
                 return;
             };
             let generation = self.next_browse_generation();
-            let retained: *mut Object = msg_send![this, retain];
-            (path, generation, retained as usize, Self::class() as usize)
+            let retained =
+                MainQueueObject(Retained::retain(this).expect("cannot retain a null document"));
+            (path, generation, retained, Self::class() as usize)
         };
 
         dispatch_async(move || {
@@ -157,31 +182,32 @@ impl Document {
             dispatch_async_main(move || {
                 // SAFETY: retained owns a live document until this continuation releases it.
                 unsafe {
-                    let this = retained as *mut Object;
+                    let this = retained.as_ptr_on_main();
                     let document = &*this.cast::<Document>();
                     if !document.is_current_browse(generation) {
-                        let _: () = msg_send![this, release];
                         return;
                     }
                     let Some(path) = neighbour else {
-                        let _: () = msg_send![this, release];
                         return;
                     };
-                    document.load_sibling(path, generation);
+                    document.load_sibling(path, generation, retained);
                 }
             });
         });
     }
 
     /// Starts loading a neighbouring file after its folder scan has completed.
-    unsafe fn load_sibling(&self, path: std::path::PathBuf, generation: u64) {
+    unsafe fn load_sibling(
+        &self,
+        path: std::path::PathBuf,
+        generation: u64,
+        retained_document: MainQueueObject,
+    ) {
         let error_domain = ns_string!("nl.bplaat.MacView") as usize;
         // SAFETY: This runs on the main queue with a retained document from show_sibling.
         let prepared = unsafe {
-            let this = self as *const Self as *mut Object;
             let url = file_url(&path);
             if url.is_null() {
-                let _: () = msg_send![this, release];
                 None
             } else {
                 let controller: *mut Object =
@@ -189,27 +215,28 @@ impl Document {
                 let open: *mut Object = msg_send![controller, documentForURL: url];
                 if !open.is_null() {
                     let _: () = msg_send![open, showWindows];
-                    let _: () = msg_send![this, release];
                     None
                 } else {
-                    let url: *mut Object = msg_send![url, retain];
-                    Some((url as usize, this as usize))
+                    let url = SendableUrl(
+                        Retained::retain(url).expect("cannot retain a null document URL"),
+                    );
+                    Some((url, retained_document))
                 }
             }
         };
-        let Some((url_address, this_address)) = prepared else {
+        let Some((url, retained_document)) = prepared else {
             return;
         };
 
         dispatch_async(move || {
             // SAFETY: The URL is retained until the main-queue continuation releases it.
-            let result = unsafe { load_document(url_address as *mut Object) };
+            let result = unsafe { load_document(url.as_ptr()) };
             dispatch_async_main(move || {
                 // SAFETY: All Objective-C objects were retained for this continuation.
                 unsafe {
-                    let this = this_address as *mut Object;
+                    let this = retained_document.as_ptr_on_main();
                     let document = &*this.cast::<Document>();
-                    let url = url_address as *mut Object;
+                    let url = url.as_ptr();
                     if document.is_current_browse(generation) {
                         match result {
                             Ok((media, kind)) => {
@@ -229,97 +256,53 @@ impl Document {
                             }
                         }
                     }
-                    let _: () = msg_send![url, release];
-                    let _: () = msg_send![this, release];
                 }
             });
         });
     }
 
-    /// Replaces the loaded media, releasing whatever the document held before.
-    ///
-    /// The web view of the previous media goes with it, because it draws a page that belongs to
-    /// media the document no longer holds.
-    fn set_media(
-        &self,
-        image: *mut Image,
-        tinyvg: *mut std::sync::Arc<tinyvg::Document>,
-        svg: *mut Svg,
-    ) {
-        let old_image = self.ivars().image.replace(image);
-        let old_tinyvg = self.ivars().tinyvg.replace(tinyvg);
-        let old_svg = self.ivars().svg.replace(svg);
-        let old_svg_view = self.ivars().svg_view.replace(null_mut());
-        // SAFETY: The ivars own the retained objects and the Boxes converted into these pointers.
-        unsafe {
-            if !old_image.is_null() {
-                drop(Box::from_raw(old_image));
-            }
-            if !old_svg_view.is_null() {
-                let _: () = msg_send![old_svg_view, release];
-            }
-            if !old_tinyvg.is_null() {
-                drop(Box::from_raw(old_tinyvg));
-            }
-            if !old_svg.is_null() {
-                drop(Box::from_raw(old_svg));
-            }
-        }
-    }
-
     /// Returns the natural size of the loaded media, or `None` when the document is empty.
     fn media_size(&self) -> Option<Size> {
-        let tinyvg = self.ivars().tinyvg.get();
-        if !tinyvg.is_null() {
-            // SAFETY: The ivar owns the TinyVG document until dealloc.
-            let document = unsafe { &*tinyvg };
-            return Some(Size {
+        match self.ivars().media.borrow().as_ref()? {
+            DecodedMedia::TinyVg(document) => Some(Size {
                 width: document.size.width,
                 height: document.size.height,
-            });
+            }),
+            DecodedMedia::Svg(document) => Some(document.size),
+            DecodedMedia::Image(image) => Some(image.size()),
         }
-        let svg = self.ivars().svg.get();
-        if !svg.is_null() {
-            // SAFETY: The ivar owns the SVG document until dealloc.
-            return Some(unsafe { &*svg }.size);
-        }
-        let image = self.ivars().image.get();
-        // SAFETY: The ivar owns a live NSImage when it is not null.
-        (!image.is_null()).then(|| unsafe { &*image }.size())
     }
 
     /// Creates an owned view that draws the loaded media inside `frame`.
     ///
-    /// The caller owns the returned view and must send it `release`.
-    fn create_media_view(&self, frame: Rect) -> *mut Object {
-        let tinyvg = self.ivars().tinyvg.get();
-        let svg = self.ivars().svg.get();
-        // SAFETY: The ivars own the media, and NSImageView retains the image it is given. The web
-        // view is retained a second time because printing draws the loaded page again.
-        unsafe {
-            if !tinyvg.is_null() {
-                return create_tinyvg_view(frame, (*tinyvg).clone());
+    /// The returned view owns one retain count.
+    fn create_media_view(&self, frame: Rect) -> Retained<Object> {
+        let media = self.ivars().media.borrow();
+        match media
+            .as_ref()
+            .expect("cannot create a view without loaded media")
+        {
+            DecodedMedia::TinyVg(document) => create_tinyvg_view(frame, document.clone()),
+            DecodedMedia::Svg(document) => {
+                let view = create_svg_view(frame, document);
+                self.ivars().svg_view.replace(Some(view.clone()));
+                view
             }
-            if !svg.is_null() {
-                let view = create_svg_view(frame, &*svg);
-                let old_view = self.ivars().svg_view.replace(msg_send![view, retain]);
-                if !old_view.is_null() {
-                    let _: () = msg_send![old_view, release];
-                }
-                return view;
+            DecodedMedia::Image(image) => {
+                // SAFETY: The ivar owns a live NSImage for the duration of this call.
+                unsafe { create_image_view(frame, image.as_ptr()) }
             }
-            create_image_view(frame, (&*self.ivars().image.get()).as_ptr())
         }
     }
 
     /// Returns the size the window title shows, which is the stored size of a bitmap.
     fn title_size(&self, media_size: Size) -> Size {
-        let image = self.ivars().image.get();
-        if image.is_null() {
-            media_size
-        } else {
+        let media = self.ivars().media.borrow();
+        if let Some(DecodedMedia::Image(image)) = media.as_ref() {
             // SAFETY: The ivar owns a live NSImage that keeps its representations alive.
-            unsafe { image_pixel_size((&*image).as_ptr(), media_size) }
+            unsafe { image_pixel_size(image.as_ptr(), media_size) }
+        } else {
+            media_size
         }
     }
 
@@ -341,8 +324,7 @@ impl Document {
                     origin: Point { x: 0.0, y: 0.0 },
                     size: media_size,
                 });
-                show_media(controller, view, title_size);
-                let _: () = msg_send![view, release];
+                show_media(controller, view.as_ptr(), title_size);
             }
         }
     }
@@ -365,21 +347,22 @@ impl Document {
                 | NS_WINDOW_STYLE_MASK_CLOSABLE
                 | NS_WINDOW_STYLE_MASK_MINIATURIZABLE
                 | NS_WINDOW_STYLE_MASK_RESIZABLE;
-            let window: *mut Object = msg_send![class!(NSWindow), alloc];
-            let window: *mut Object = msg_send![window,
+            let window: Allocated<Object> = msg_send![class!(NSWindow), alloc];
+            let window: Retained<Object> = msg_send![window,
                 initWithContentRect: rect,
                 styleMask: style,
                 backing: NS_BACKING_STORE_BUFFERED,
                 defer: Bool::NO
             ];
-            let _: () = msg_send![window, setContentMinSize: Size { width: 240.0, height: 180.0 }];
+            let _: () =
+                msg_send![&*window, setContentMinSize: Size { width: 240.0, height: 180.0 }];
             // A window that is created in code takes no part in full screen until it says so,
             // which leaves the green button of the title bar zooming only.
-            let behavior: u64 = msg_send![window, collectionBehavior];
-            let _: () = msg_send![window,
+            let behavior: u64 = msg_send![&*window, collectionBehavior];
+            let _: () = msg_send![&*window,
                 setCollectionBehavior: behavior | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_PRIMARY
             ];
-            let _: () = msg_send![window, center];
+            let _: () = msg_send![&*window, center];
 
             // The media keeps its own size and the scroll view magnifies it, so that zooming
             // redraws the vector formats instead of scaling a picture of them.
@@ -388,24 +371,19 @@ impl Document {
                 origin: Point { x: 0.0, y: 0.0 },
                 size: media_size,
             });
-            let scroll_view = create_scroll_view(rect, media_view);
-            let _: () = msg_send![media_view, release];
+            let scroll_view = create_scroll_view(rect, media_view.as_ptr());
             // A window opens on the zoom the Zoom to Fit item sets, so that the media is shown
             // the same way however it got there.
-            let _: () = msg_send![scroll_view, zoomToFit];
-            let _: () = msg_send![checkerboard, addSubview: scroll_view];
-            let _: () = msg_send![scroll_view, release];
-            let _: () = msg_send![checkerboard,
+            let _: () = msg_send![&*scroll_view, zoomToFit];
+            let _: () = msg_send![&*checkerboard, addSubview: scroll_view.as_ptr()];
+            let _: () = msg_send![&*checkerboard,
                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
             ];
-            let _: () = msg_send![window, setContentView: checkerboard];
-            let _: () = msg_send![checkerboard, release];
+            let _: () = msg_send![&*window, setContentView: checkerboard.as_ptr()];
 
-            let controller = create_window_controller(window, title_size);
+            let controller = create_window_controller(window.as_ptr(), title_size);
             let this = self as *const Self as *mut Object;
-            let _: () = msg_send![this, addWindowController: controller];
-            let _: () = msg_send![controller, release];
-            let _: () = msg_send![window, release];
+            let _: () = msg_send![this, addWindowController: controller.as_ptr()];
         }
     }
 
@@ -419,23 +397,22 @@ impl Document {
         unsafe {
             let this = self as *const Self as *mut Object;
             let print_info: *mut Object = msg_send![this, printInfo];
-            let print_info: *mut Object = msg_send![print_info, copy];
-            let attributes: *mut Object = msg_send![print_info, dictionary];
+            let print_info: Retained<Object> = msg_send![print_info, copy];
+            let attributes: *mut Object = msg_send![&*print_info, dictionary];
             let _: () = msg_send![attributes, addEntriesFromDictionary: settings];
-            let _: () = msg_send![print_info,
+            let _: () = msg_send![&*print_info,
                 setHorizontalPagination: NS_PRINTING_PAGINATION_MODE_FIT
             ];
             let _: () =
-                msg_send![print_info, setVerticalPagination: NS_PRINTING_PAGINATION_MODE_FIT];
-            let _: () = msg_send![print_info, setHorizontallyCentered: Bool::YES];
-            let _: () = msg_send![print_info, setVerticallyCentered: Bool::YES];
+                msg_send![&*print_info, setVerticalPagination: NS_PRINTING_PAGINATION_MODE_FIT];
+            let _: () = msg_send![&*print_info, setHorizontallyCentered: Bool::YES];
+            let _: () = msg_send![&*print_info, setVerticallyCentered: Bool::YES];
 
             // WebKit paginates the loaded page itself, and only the view in the window has it.
-            let svg_view = self.ivars().svg_view.get();
-            if !svg_view.is_null() {
+            let svg_view = self.ivars().svg_view.borrow();
+            if let Some(svg_view) = svg_view.as_ref() {
                 let operation: *mut Object =
-                    msg_send![svg_view, printOperationWithPrintInfo: print_info];
-                let _: () = msg_send![print_info, release];
+                    msg_send![svg_view, printOperationWithPrintInfo: print_info.as_ptr()];
                 return operation;
             }
 
@@ -444,27 +421,10 @@ impl Document {
                 size: media_size,
             });
             let operation: *mut Object = msg_send![class!(NSPrintOperation),
-                printOperationWithView: view,
-                printInfo: print_info
+                printOperationWithView: view.as_ptr(),
+                printInfo: print_info.as_ptr()
             ];
-            let _: () = msg_send![view, release];
-            let _: () = msg_send![print_info, release];
             operation
-        }
-    }
-
-    fn dealloc(&self) {
-        self.set_media(null_mut(), null_mut(), null_mut());
-        // SAFETY: objc_msgSendSuper invokes NSDocument's dealloc with the exact Objective-C
-        // deallocation ABI.
-        unsafe {
-            let super_info = objc_super {
-                receiver: self as *const Self as *mut Object,
-                super_class: class!(NSDocument).cast::<AnyClass>(),
-            };
-            let send: unsafe extern "C" fn(*const objc_super, *const c_void) =
-                std::mem::transmute(objc_msgSendSuper as *const c_void);
-            send(&super_info, sel!(dealloc).0);
         }
     }
 }
@@ -479,7 +439,12 @@ unsafe fn decode_document(data: *mut Object) -> Result<DecodedMedia, String> {
     let bytes = unsafe {
         let length: usize = msg_send![data, length];
         let bytes: *const c_void = msg_send![data, bytes];
-        std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+        if length == 0 {
+            &[]
+        } else {
+            assert!(!bytes.is_null(), "non-empty NSData returned null bytes");
+            std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+        }
     };
     if tinyvg::is_tinyvg(bytes) {
         return decode_tinyvg(bytes)
@@ -532,17 +497,16 @@ unsafe fn load_document(url: *mut Object) -> Result<(DecodedMedia, OwnedString),
     // returning, and it coordinates the read against file presenters and writers.
     unsafe {
         let scoped: Bool = msg_send![url, startAccessingSecurityScopedResource];
-        let coordinator: *mut Object = msg_send![class!(NSFileCoordinator), alloc];
-        let coordinator: *mut Object = msg_send![coordinator,
+        let coordinator: Allocated<Object> = msg_send![class!(NSFileCoordinator), alloc];
+        let coordinator: Retained<Object> = msg_send![coordinator,
             initWithFilePresenter: null_mut::<Object>()
         ];
-        let _: () = msg_send![coordinator,
+        let _: () = msg_send![&*coordinator,
             coordinateReadingItemAtURL: url,
             options: 0usize,
             error: null_mut::<c_void>(),
             byAccessor: &*accessor
         ];
-        let _: () = msg_send![coordinator, release];
         if scoped.as_bool() {
             let _: () = msg_send![url, stopAccessingSecurityScopedResource];
         }
@@ -605,7 +569,7 @@ unsafe fn type_identifier(extension: &str) -> Result<OwnedString, String> {
     }
 }
 
-const extern "C" fn can_concurrently_read_documents(
+const extern "C-unwind" fn can_concurrently_read_documents(
     _: *mut Object,
     _: objc2::runtime::Sel,
     _: *mut Object,
@@ -619,13 +583,21 @@ unsafe fn enable_concurrent_document_reading() {
     // signature matches +canConcurrentlyReadDocumentsOfType: (BOOL, Class, SEL, NSString *).
     unsafe {
         let metaclass = object_getClass(Document::class());
+        let encoding = if cfg!(target_arch = "aarch64") {
+            c"B@:@"
+        } else {
+            c"c@:@"
+        };
         let added = class_addMethod(
             metaclass,
             sel!(canConcurrentlyReadDocumentsOfType:).0,
             can_concurrently_read_documents as *const c_void,
-            c"c@:@".as_ptr(),
+            encoding.as_ptr(),
         );
-        assert!(added, "failed to enable concurrent document reading");
+        assert!(
+            added.as_bool(),
+            "failed to enable concurrent document reading"
+        );
     }
 }
 
@@ -713,52 +685,50 @@ fn menu_item(
     key: &str,
     modifiers: u64,
     target: *mut Object,
-) -> *mut Object {
+) -> Retained<Object> {
     // SAFETY: NSMenuItem's designated initializer accepts these NSStrings and selector.
     unsafe {
-        let item: *mut Object = msg_send![class!(NSMenuItem), alloc];
-        let item: *mut Object = msg_send![item,
+        let item: Allocated<Object> = msg_send![class!(NSMenuItem), alloc];
+        let item: Retained<Object> = msg_send![item,
             initWithTitle: ns_string(title),
             action: action,
             keyEquivalent: ns_string(key)
         ];
-        let _: () = msg_send![item, setKeyEquivalentModifierMask: modifiers];
+        let _: () = msg_send![&*item, setKeyEquivalentModifierMask: modifiers];
         if !target.is_null() {
-            let _: () = msg_send![item, setTarget: target];
+            let _: () = msg_send![&*item, setTarget: target];
         }
-        msg_send![item, autorelease]
+        item
     }
 }
 
-fn add_menu(main_menu: *mut Object, title: &str) -> *mut Object {
+fn add_menu(main_menu: &Object, title: &str) -> Retained<Object> {
     // SAFETY: main_menu is a valid NSMenu. It retains the item, which retains the submenu.
     unsafe {
-        let item: *mut Object = msg_send![class!(NSMenuItem), new];
+        let item: Retained<Object> = msg_send![class!(NSMenuItem), new];
         if !title.is_empty() {
-            let _: () = msg_send![item, setTitle: ns_string(title)];
+            let _: () = msg_send![&*item, setTitle: ns_string(title)];
         }
-        let menu: *mut Object = msg_send![class!(NSMenu), alloc];
-        let menu: *mut Object = msg_send![menu, initWithTitle: ns_string(title)];
-        let _: () = msg_send![item, setSubmenu: menu];
-        let _: () = msg_send![main_menu, addItem: item];
-        let _: () = msg_send![item, release];
+        let menu: Allocated<Object> = msg_send![class!(NSMenu), alloc];
+        let menu: Retained<Object> = msg_send![menu, initWithTitle: ns_string(title)];
+        let _: () = msg_send![&*item, setSubmenu: menu.as_ptr()];
+        let _: () = msg_send![main_menu, addItem: item.as_ptr()];
         menu
     }
 }
 
 fn add_item(
-    menu: *mut Object,
+    menu: &Object,
     title: &str,
     action: objc2::runtime::Sel,
     key: &str,
     modifiers: u64,
     target: *mut Object,
 ) {
-    // SAFETY: menu is a valid NSMenu and retains the autoreleased menu item.
+    // SAFETY: menu is a valid NSMenu and retains the item before its Rust owner is dropped.
     unsafe {
-        let _: () = msg_send![menu,
-            addItem: menu_item(title, action, key, modifiers, target)
-        ];
+        let item = menu_item(title, action, key, modifiers, target);
+        let _: () = msg_send![menu, addItem: item.as_ptr()];
     }
 }
 
@@ -774,34 +744,32 @@ fn function_key(code: u16) -> String {
 /// A menu says what it is by its name, which is how the document controller finds this one and
 /// keeps it up to date. The name is set through a method AppKit does not document, so the menu
 /// stays an ordinary one when a future release drops it.
-fn add_open_recent_menu(menu: *mut Object) {
+fn add_open_recent_menu(menu: &Object) {
     // SAFETY: menu is a valid NSMenu that retains the item, which retains the submenu.
     unsafe {
-        let item: *mut Object = msg_send![class!(NSMenuItem), new];
-        let _: () = msg_send![item, setTitle: ns_string!("Open Recent")];
-        let recent_menu: *mut Object = msg_send![class!(NSMenu), alloc];
-        let recent_menu: *mut Object =
+        let item: Retained<Object> = msg_send![class!(NSMenuItem), new];
+        let _: () = msg_send![&*item, setTitle: ns_string!("Open Recent")];
+        let recent_menu: Allocated<Object> = msg_send![class!(NSMenu), alloc];
+        let recent_menu: Retained<Object> =
             msg_send![recent_menu, initWithTitle: ns_string!("Open Recent")];
-        let named: Bool = msg_send![recent_menu, respondsToSelector: sel!(_setMenuName:)];
+        let named: Bool = msg_send![&*recent_menu, respondsToSelector: sel!(_setMenuName:)];
         if named.as_bool() {
-            let _: () = msg_send![recent_menu, _setMenuName: ns_string!("NSRecentDocumentsMenu")];
+            let _: () = msg_send![&*recent_menu, _setMenuName: ns_string!("NSRecentDocumentsMenu")];
         }
         add_item(
-            recent_menu,
+            &recent_menu,
             "Clear Menu",
             sel!(clearRecentDocuments:),
             "",
             0,
             null_mut(),
         );
-        let _: () = msg_send![item, setSubmenu: recent_menu];
-        let _: () = msg_send![recent_menu, release];
-        let _: () = msg_send![menu, addItem: item];
-        let _: () = msg_send![item, release];
+        let _: () = msg_send![&*item, setSubmenu: recent_menu.as_ptr()];
+        let _: () = msg_send![menu, addItem: item.as_ptr()];
     }
 }
 
-fn add_separator(menu: *mut Object) {
+fn add_separator(menu: &Object) {
     // SAFETY: menu is a valid NSMenu and separatorItem returns a valid shared menu item.
     unsafe {
         let separator: *mut Object = msg_send![class!(NSMenuItem), separatorItem];
@@ -813,29 +781,27 @@ fn create_menu(application: *mut Object) {
     // SAFETY: application is the shared NSApplication and all menu ownership transfers follow
     // AppKit's retain conventions.
     unsafe {
-        let main_menu: *mut Object = msg_send![class!(NSMenu), new];
+        let main_menu: Retained<Object> = msg_send![class!(NSMenu), new];
 
-        let app_menu = add_menu(main_menu, "");
+        let app_menu = add_menu(&main_menu, "");
         add_item(
-            app_menu,
+            &app_menu,
             "About MacView",
             sel!(orderFrontStandardAboutPanel:),
             "",
             0,
             application,
         );
-        add_separator(app_menu);
-        let services_item: *mut Object = msg_send![class!(NSMenuItem), new];
-        let _: () = msg_send![services_item, setTitle: ns_string!("Services")];
-        let services_menu: *mut Object = msg_send![class!(NSMenu), new];
-        let _: () = msg_send![services_item, setSubmenu: services_menu];
-        let _: () = msg_send![app_menu, addItem: services_item];
-        let _: () = msg_send![application, setServicesMenu: services_menu];
-        let _: () = msg_send![services_menu, release];
-        let _: () = msg_send![services_item, release];
-        add_separator(app_menu);
+        add_separator(&app_menu);
+        let services_item: Retained<Object> = msg_send![class!(NSMenuItem), new];
+        let _: () = msg_send![&*services_item, setTitle: ns_string!("Services")];
+        let services_menu: Retained<Object> = msg_send![class!(NSMenu), new];
+        let _: () = msg_send![&*services_item, setSubmenu: services_menu.as_ptr()];
+        let _: () = msg_send![&*app_menu, addItem: services_item.as_ptr()];
+        let _: () = msg_send![application, setServicesMenu: services_menu.as_ptr()];
+        add_separator(&app_menu);
         add_item(
-            app_menu,
+            &app_menu,
             "Hide MacView",
             sel!(hide:),
             "h",
@@ -843,7 +809,7 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(
-            app_menu,
+            &app_menu,
             "Hide Others",
             sel!(hideOtherApplications:),
             "h",
@@ -851,57 +817,53 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(
-            app_menu,
+            &app_menu,
             "Show All",
             sel!(unhideAllApplications:),
             "",
             0,
             null_mut(),
         );
-        add_separator(app_menu);
+        add_separator(&app_menu);
         add_item(
-            app_menu,
+            &app_menu,
             "Quit MacView",
             sel!(terminate:),
             "q",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        let _: () = msg_send![app_menu, release];
-
-        let file_menu = add_menu(main_menu, "File");
+        let file_menu = add_menu(&main_menu, "File");
         add_item(
-            file_menu,
+            &file_menu,
             "Open...",
             sel!(openDocument:),
             "o",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        add_open_recent_menu(file_menu);
-        add_separator(file_menu);
+        add_open_recent_menu(&file_menu);
+        add_separator(&file_menu);
         add_item(
-            file_menu,
+            &file_menu,
             "Print...",
             sel!(printDocument:),
             "p",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        add_separator(file_menu);
+        add_separator(&file_menu);
         add_item(
-            file_menu,
+            &file_menu,
             "Close Window",
             sel!(performClose:),
             "w",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        let _: () = msg_send![file_menu, release];
-
-        let edit_menu = add_menu(main_menu, "Edit");
+        let edit_menu = add_menu(&main_menu, "Edit");
         add_item(
-            edit_menu,
+            &edit_menu,
             "Undo",
             sel!(undo:),
             "z",
@@ -909,16 +871,16 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(
-            edit_menu,
+            &edit_menu,
             "Redo",
             sel!(redo:),
             "z",
             NS_EVENT_MODIFIER_FLAG_COMMAND | NS_EVENT_MODIFIER_FLAG_SHIFT,
             null_mut(),
         );
-        add_separator(edit_menu);
+        add_separator(&edit_menu);
         add_item(
-            edit_menu,
+            &edit_menu,
             "Cut",
             sel!(cut:),
             "x",
@@ -926,7 +888,7 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(
-            edit_menu,
+            &edit_menu,
             "Copy",
             sel!(copy:),
             "c",
@@ -934,27 +896,25 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(
-            edit_menu,
+            &edit_menu,
             "Paste",
             sel!(paste:),
             "v",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        add_item(edit_menu, "Delete", sel!(delete:), "", 0, null_mut());
+        add_item(&edit_menu, "Delete", sel!(delete:), "", 0, null_mut());
         add_item(
-            edit_menu,
+            &edit_menu,
             "Select All",
             sel!(selectAll:),
             "a",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        let _: () = msg_send![edit_menu, release];
-
-        let view_menu = add_menu(main_menu, "View");
+        let view_menu = add_menu(&main_menu, "View");
         add_item(
-            view_menu,
+            &view_menu,
             "Zoom In",
             sel!(zoomIn:),
             "+",
@@ -962,16 +922,16 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(
-            view_menu,
+            &view_menu,
             "Zoom Out",
             sel!(zoomOut:),
             "-",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        add_separator(view_menu);
+        add_separator(&view_menu);
         add_item(
-            view_menu,
+            &view_menu,
             "Actual Size",
             sel!(actualSize:),
             "0",
@@ -979,16 +939,16 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(
-            view_menu,
+            &view_menu,
             "Zoom to Fit",
             sel!(zoomToFit:),
             "9",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        add_separator(view_menu);
+        add_separator(&view_menu);
         add_item(
-            view_menu,
+            &view_menu,
             "Previous Image",
             sel!(previousImage:),
             &function_key(NS_LEFT_ARROW_FUNCTION_KEY),
@@ -996,44 +956,39 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(
-            view_menu,
+            &view_menu,
             "Next Image",
             sel!(nextImage:),
             &function_key(NS_RIGHT_ARROW_FUNCTION_KEY),
             0,
             null_mut(),
         );
-        add_separator(view_menu);
+        add_separator(&view_menu);
         // AppKit renames the item to Exit Full Screen while a window is in full screen itself.
         add_item(
-            view_menu,
+            &view_menu,
             "Enter Full Screen",
             sel!(toggleFullScreen:),
             "f",
             NS_EVENT_MODIFIER_FLAG_COMMAND | NS_EVENT_MODIFIER_FLAG_CONTROL,
             null_mut(),
         );
-        let _: () = msg_send![view_menu, release];
-
-        let window_menu = add_menu(main_menu, "Window");
+        let window_menu = add_menu(&main_menu, "Window");
         add_item(
-            window_menu,
+            &window_menu,
             "Minimize",
             sel!(performMiniaturize:),
             "m",
             NS_EVENT_MODIFIER_FLAG_COMMAND,
             null_mut(),
         );
-        add_item(window_menu, "Zoom", sel!(performZoom:), "", 0, null_mut());
-        let _: () = msg_send![application, setWindowsMenu: window_menu];
-        let _: () = msg_send![window_menu, release];
+        add_item(&window_menu, "Zoom", sel!(performZoom:), "", 0, null_mut());
+        let _: () = msg_send![application, setWindowsMenu: window_menu.as_ptr()];
 
-        let help_menu = add_menu(main_menu, "Help");
-        let _: () = msg_send![application, setHelpMenu: help_menu];
-        let _: () = msg_send![help_menu, release];
+        let help_menu = add_menu(&main_menu, "Help");
+        let _: () = msg_send![application, setHelpMenu: help_menu.as_ptr()];
 
-        let _: () = msg_send![application, setMainMenu: main_menu];
-        let _: () = msg_send![main_menu, release];
+        let _: () = msg_send![application, setMainMenu: main_menu.as_ptr()];
     }
 }
 
@@ -1050,11 +1005,10 @@ fn main() {
         let _: Bool = msg_send![application,
             setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_REGULAR
         ];
-        let delegate: *mut Object = msg_send![AppDelegate::class(), new];
-        let _: () = msg_send![application, setDelegate: delegate];
+        let delegate: Retained<Object> = msg_send![AppDelegate::class(), new];
+        let _: () = msg_send![application, setDelegate: delegate.as_ptr()];
         create_menu(application);
         let _: () = msg_send![application, run];
-        let _: () = msg_send![delegate, release];
     });
 }
 
@@ -1080,6 +1034,38 @@ mod tests {
             // SAFETY: NSString keeps its UTF-8 representation alive while kind is alive.
             let identifier = unsafe { std::ffi::CStr::from_ptr(identifier) };
             assert_eq!(identifier.to_bytes(), b"org.qoiformat.qoi");
+        });
+    }
+
+    #[test]
+    fn document_convenience_initializer_initializes_ivars_once() {
+        let kind = ns_string!("org.qoiformat.qoi");
+        autoreleasepool(|_| {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/qoi_logo.qoi");
+            // SAFETY: The URL and type describe an existing image. NSDocument's inherited
+            // convenience initializer calls Document's init, which initializes the Rust ivars.
+            let document: Option<Retained<Document>> = unsafe {
+                let url = file_url(&path);
+                let document: Allocated<Document> = msg_send![Document::class(), alloc];
+                msg_send![document,
+                    initWithContentsOfURL: url,
+                    ofType: kind,
+                    error: null_mut::<c_void>()
+                ]
+            };
+            assert!(document.is_some());
+        });
+    }
+
+    #[test]
+    fn rejects_empty_document_data_without_dereferencing_null_bytes() {
+        autoreleasepool(|_| {
+            // SAFETY: NSData's data constructor returns a live empty data object.
+            let result = unsafe {
+                let data: *mut Object = msg_send![class!(NSData), data];
+                decode_document(data)
+            };
+            assert!(result.is_err());
         });
     }
 }

@@ -19,6 +19,7 @@ use macview_appkit::{
     make_error, ns_string, preferred_content_size,
 };
 use objc2::ffi::class_addProtocol;
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject as Object, AnyProtocol};
 use objc2::{class, define_class, msg_send};
 
@@ -46,6 +47,29 @@ define_class!(
 
 struct PreviewCompletion(RcBlock<dyn Fn(*mut Object)>);
 
+struct MainQueueObject(Retained<Object>);
+
+// SAFETY: This wrapper only transports an AppKit object without accessing it. The pointer is only
+// exposed after the value reaches a main-queue continuation.
+unsafe impl Send for MainQueueObject {}
+
+impl MainQueueObject {
+    const fn as_ptr_on_main(&self) -> *mut Object {
+        self.0.as_ptr()
+    }
+}
+
+struct SendableUrl(Retained<Object>);
+
+// SAFETY: NSURL is immutable and safe to read while this uniquely owned wrapper is on a worker.
+unsafe impl Send for SendableUrl {}
+
+impl SendableUrl {
+    const fn as_ptr(&self) -> *mut Object {
+        self.0.as_ptr()
+    }
+}
+
 // SAFETY: Quick Look completion blocks are escaping blocks intended for asynchronous use. This
 // wrapper moves its owned copy to the main queue and invokes it there exactly once.
 unsafe impl Send for PreviewCompletion {}
@@ -60,16 +84,15 @@ impl PreviewViewController {
     fn load_view(&self) {
         // SAFETY: The controller owns the placeholder view after setView:.
         unsafe {
-            let view: *mut Object = msg_send![class!(NSView), alloc];
-            let view: *mut Object = msg_send![view,
+            let view: Allocated<Object> = msg_send![class!(NSView), alloc];
+            let view: Retained<Object> = msg_send![view,
                 initWithFrame: Rect {
                     origin: Point { x: 0.0, y: 0.0 },
                     size: Size { width: 640.0, height: 480.0 },
                 }
             ];
             let this = self as *const Self as *mut Object;
-            let _: () = msg_send![this, setView: view];
-            let _: () = msg_send![view, release];
+            let _: () = msg_send![this, setView: view.as_ptr()];
         }
     }
 
@@ -78,36 +101,32 @@ impl PreviewViewController {
         // load and main-queue UI continuation have finished.
         let (this, url, completion) = unsafe {
             let this = self as *const Self as *mut Object;
-            let this: *mut Object = msg_send![this, retain];
-            let url: *mut Object = msg_send![url, retain];
+            let this = MainQueueObject(
+                Retained::retain(this).expect("cannot retain a null preview controller"),
+            );
+            let url = SendableUrl(Retained::retain(url).expect("cannot retain a null URL"));
             let completion = PreviewCompletion(completion.copy());
-            (this as usize, url as usize, completion)
+            (this, url, completion)
         };
 
         dispatch_async(move || {
             // SAFETY: url is retained until this load completes.
-            let media = unsafe { load_media(url as *mut Object) };
-            // SAFETY: This balances the retain before dispatching the load.
-            unsafe {
-                let _: () = msg_send![url as *mut Object, release];
-            }
+            let media = unsafe { load_media(url.as_ptr()) };
             dispatch_async_main(move || {
                 // SAFETY: this is retained and all AppKit view work happens on the main queue.
                 unsafe {
-                    let this = this as *mut Object;
+                    let this = this.as_ptr_on_main();
                     match media {
                         Ok(media) => {
                             let size = preferred_content_size(media.size());
                             let root: *mut Object = msg_send![this, view];
                             let bounds: Rect = msg_send![root, bounds];
                             let view = create_media_view(bounds, media);
-                            let _: () = msg_send![view,
-                                setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE
-                                    | NS_VIEW_HEIGHT_SIZABLE
+                            let _: () = msg_send![&*view,
+                                setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
                             ];
-                            let _: () = msg_send![root, addSubview: view];
+                            let _: () = msg_send![root, addSubview: view.as_ptr()];
                             let _: () = msg_send![this, setPreferredContentSize: size];
-                            let _: () = msg_send![view, release];
                             completion.call(null_mut());
                         }
                         Err(description) => {
@@ -116,7 +135,6 @@ impl PreviewViewController {
                             completion.call(error);
                         }
                     }
-                    let _: () = msg_send![this, release];
                 }
             });
         });
@@ -125,8 +143,8 @@ impl PreviewViewController {
 
 /// Creates an owned view that draws `media` inside `frame`.
 ///
-/// The caller owns the returned view and must send it `release`.
-fn create_media_view(frame: Rect, media: Media) -> *mut Object {
+/// The returned view owns one retain count.
+fn create_media_view(frame: Rect, media: Media) -> Retained<Object> {
     match media {
         Media::TinyVg(document) => create_tinyvg_view(frame, document),
         // SAFETY: NSImageView retains the image, which stays alive until this function returns.

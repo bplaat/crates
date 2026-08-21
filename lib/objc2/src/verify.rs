@@ -10,7 +10,7 @@ use std::ffi::CStr;
 
 use crate::encode::Encoding;
 use crate::ffi::{class_getInstanceMethod, class_getName, method_getTypeEncoding, object_getClass};
-use crate::runtime::{AnyObject, Sel};
+use crate::runtime::{AnyClass, AnyObject, Sel};
 
 /// Consume one complete ObjC type token from `s`, skipping trailing digits (offset).
 /// Returns `(token, remaining)` or `None` if empty.
@@ -89,24 +89,20 @@ fn strip_modifiers(s: &str) -> &str {
 /// - Exact match (after stripping) always passes.
 /// - `^v` matches any pointer (`^...`) and vice versa.
 /// - Signed/unsigned variants of same-width integers are interchangeable.
-/// - Structs/unions are compared by name only.
 fn enc_match(actual: &str, expected: &str) -> bool {
     let actual = strip_modifiers(actual);
     let expected = strip_modifiers(expected);
     if actual == expected {
         return true;
     }
-    // Relax block vs object: @? (block) and @ (object) are both pointer-sized; null is valid for either
+    // Blocks and objects share a pointer ABI. Keep this leniency for untyped Cocoa APIs that
+    // expose blocks as objects.
     if (actual == "@?" || actual == "@") && (expected == "@?" || expected == "@") {
         return true;
     }
     // Relax void-pointer: ^v matches any ^T and vice versa
     if (actual == "^v" || expected == "^v") && actual.starts_with('^') && expected.starts_with('^')
     {
-        return true;
-    }
-    // Relax ObjC BOOL: arm64 encodes it as 'B' (bool), x86_64 as 'c' (signed char)
-    if (actual == "B" || actual == "c") && (expected == "B" || expected == "c") {
         return true;
     }
     // Relax sign for integer types
@@ -123,29 +119,10 @@ fn enc_match(actual: &str, expected: &str) -> bool {
     if sign_relax(actual) == sign_relax(expected) {
         return true;
     }
-    // Relax structs: compare name part only
-    if actual.starts_with('{') && expected.starts_with('{') {
-        let a_name = actual[1..]
-            .split('=')
-            .next()
-            .unwrap_or("")
-            .trim_end_matches('}');
-        let e_name = expected[1..]
-            .split('=')
-            .next()
-            .unwrap_or("")
-            .trim_end_matches('}');
-        return a_name == e_name;
-    }
     false
 }
 
-/// Verify that sending `sel` to `obj` with Rust types `args`/`ret` matches the ObjC method
-/// signature. Panics with a descriptive message on any mismatch.
-/// Called by `msg_send!` in debug builds only; zero overhead in release.
-pub(crate) fn verify_send(obj: *mut AnyObject, sel: Sel, args: &[Encoding], ret: &Encoding) {
-    // SAFETY: `obj` is a valid ObjC object pointer passed by `msg_send!`.
-    let cls = unsafe { object_getClass(obj as *const AnyObject) };
+fn verify_method(cls: *const std::ffi::c_void, sel: Sel, args: &[Encoding], ret: &Encoding) {
     if cls.is_null() {
         return;
     }
@@ -155,7 +132,7 @@ pub(crate) fn verify_send(obj: *mut AnyObject, sel: Sel, args: &[Encoding], ret:
     if method.is_null() {
         panic!(
             "invalid message send to -[{} {}]: method not found",
-            class_name(cls),
+            class_name(cls.cast_mut()),
             sel_name(sel),
         );
     }
@@ -178,7 +155,7 @@ pub(crate) fn verify_send(obj: *mut AnyObject, sel: Sel, args: &[Encoding], ret:
     if !enc_match(actual_ret, &expected_ret) {
         panic!(
             "invalid message send to -[{} {}]: expected return type '{}' but found '{}'",
-            class_name(cls),
+            class_name(cls.cast_mut()),
             sel_name(sel),
             expected_ret,
             actual_ret,
@@ -200,7 +177,7 @@ pub(crate) fn verify_send(obj: *mut AnyObject, sel: Sel, args: &[Encoding], ret:
             None => {
                 panic!(
                     "invalid message send to -[{} {}]: too many arguments (method has {}, got {})",
-                    class_name(cls),
+                    class_name(cls.cast_mut()),
                     sel_name(sel),
                     i,
                     args.len(),
@@ -212,7 +189,7 @@ pub(crate) fn verify_send(obj: *mut AnyObject, sel: Sel, args: &[Encoding], ret:
                 if !enc_match(actual_arg, &expected_arg) {
                     panic!(
                         "invalid message send to -[{} {}]: argument {} expected '{}' but found '{}'",
-                        class_name(cls),
+                        class_name(cls.cast_mut()),
                         sel_name(sel),
                         i,
                         expected_arg,
@@ -227,11 +204,30 @@ pub(crate) fn verify_send(obj: *mut AnyObject, sel: Sel, args: &[Encoding], ret:
     if next_enc_type(rest).is_some() {
         panic!(
             "invalid message send to -[{} {}]: too few arguments (got {}, method expects more)",
-            class_name(cls),
+            class_name(cls.cast_mut()),
             sel_name(sel),
             args.len(),
         );
     }
+}
+
+/// Verify that sending `sel` to `obj` with Rust types `args`/`ret` matches the ObjC method
+/// signature. Panics with a descriptive message on any mismatch.
+/// Called by `msg_send!` in debug builds only; zero overhead in release.
+pub(crate) fn verify_send(obj: *mut AnyObject, sel: Sel, args: &[Encoding], ret: &Encoding) {
+    // SAFETY: `obj` is a valid ObjC object pointer passed by `msg_send!`.
+    let cls = unsafe { object_getClass(obj as *const AnyObject) };
+    verify_method(cls, sel, args, ret);
+}
+
+/// Verify a super send starting lookup at `superclass`, matching `objc_msgSendSuper` semantics.
+pub(crate) fn verify_super_send(
+    superclass: *const AnyClass,
+    sel: Sel,
+    args: &[Encoding],
+    ret: &Encoding,
+) {
+    verify_method(superclass.cast(), sel, args, ret);
 }
 
 // MARK: Tests
@@ -280,13 +276,14 @@ mod test {
         assert!(enc_match("r^i", "^v"));
         assert!(enc_match("@?", "@"));
         assert!(enc_match("Q", "q"));
-        assert!(enc_match("{CGPoint=dd}", "{CGPoint=ff}"));
-        assert!(!enc_match("{CGPoint=dd}", "{CGSize=dd}"));
         assert!(!enc_match("i", "d"));
-        // BOOL: 'B' (arm64) and 'c' (x86_64) are both used for ObjC BOOL
-        assert!(enc_match("B", "c"));
-        assert!(enc_match("c", "B"));
+        // BOOL must match the current target. Rust bool cannot accept every i8 bit pattern.
+        assert!(!enc_match("B", "c"));
+        assert!(!enc_match("c", "B"));
         assert!(enc_match("B", "B"));
+        assert!(enc_match("{CGPoint=dd}", "{CGPoint=dd}"));
+        assert!(!enc_match("{CGPoint=dd}", "{CGPoint=ff}"));
+        assert!(!enc_match("{CGPoint=dd}", "{CGSize=dd}"));
     }
 
     #[test]
@@ -297,6 +294,16 @@ mod test {
     #[test]
     fn test_class_name_known_class() {
         assert_eq!(class_name(class!(NSObject) as *mut _), "NSObject");
+    }
+
+    #[test]
+    fn test_verify_super_send_uses_superclass() {
+        verify_super_send(
+            class!(NSObject).cast::<AnyClass>(),
+            crate::sel!(description),
+            &[],
+            &Encoding::Object,
+        );
     }
 
     #[test]

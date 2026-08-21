@@ -6,6 +6,7 @@
 
 use std::ptr::null_mut;
 
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
@@ -58,10 +59,10 @@ define_class!(
         fn _window_did_exit_fullscreen(&self, notification: *mut Object) { self.window_did_exit_fullscreen(notification); }
 
         #[unsafe(method(windowDidFailToEnterFullScreen:))]
-        fn _window_did_fail_to_enter_fullscreen(&self, window: *mut Object) { self.window_did_fail_to_enter_fullscreen(window); }
+        fn _window_did_fail_to_enter_fullscreen(&self, notification: *mut Object) { self.window_did_fail_to_enter_fullscreen(notification); }
 
         #[unsafe(method(windowDidFailToExitFullScreen:))]
-        fn _window_did_fail_to_exit_fullscreen(&self, window: *mut Object) { self.window_did_fail_to_exit_fullscreen(window); }
+        fn _window_did_fail_to_exit_fullscreen(&self, notification: *mut Object) { self.window_did_fail_to_exit_fullscreen(notification); }
 
         #[cfg(feature = "file_drop")]
         #[unsafe(method(draggingEntered:))]
@@ -133,14 +134,16 @@ impl WindowDelegate {
         set_drag_view_hidden(window, false);
     }
 
-    fn window_did_fail_to_enter_fullscreen(&self, window: *mut Object) {
+    fn window_did_fail_to_enter_fullscreen(&self, notification: *mut Object) {
+        let window: *mut Object = unsafe { msg_send![notification, object] };
         set_drag_view_hidden(window, false);
         send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
             false,
         )));
     }
 
-    fn window_did_fail_to_exit_fullscreen(&self, window: *mut Object) {
+    fn window_did_fail_to_exit_fullscreen(&self, notification: *mut Object) {
+        let window: *mut Object = unsafe { msg_send![notification, object] };
         set_drag_view_hidden(window, true);
         send_event(crate::Event::Window(WindowEvent::MacosFullscreenChange(
             true,
@@ -164,7 +167,7 @@ fn set_drag_view_hidden(window: *mut Object, hidden: bool) {
 }
 
 fn add_drag_view(window: *mut Object, content_view: *mut Object) {
-    let drag_view: *mut Object = unsafe { msg_send![DraggableView::class(), new] };
+    let drag_view: Retained<Object> = unsafe { msg_send![DraggableView::class(), new] };
     let bounds: NSRect = unsafe { msg_send![content_view, bounds] };
     let content_layout_rect: NSRect = unsafe { msg_send![window, contentLayoutRect] };
     let content_layout_rect: NSRect = unsafe {
@@ -173,19 +176,20 @@ fn add_drag_view(window: *mut Object, content_view: *mut Object) {
     let titlebar_height =
         bounds.size.height - content_layout_rect.origin.y - content_layout_rect.size.height;
     let _: () = unsafe {
-        msg_send![drag_view, setFrame:NSRect::new(
+        msg_send![&drag_view, setFrame:NSRect::new(
             NSPoint::new(bounds.origin.x, bounds.origin.y + bounds.size.height - titlebar_height),
             NSSize::new(bounds.size.width, titlebar_height),
         )]
     };
     let _: () = unsafe {
-        msg_send![drag_view, setAutoresizingMask:NS_VIEW_WIDTH_SIZABLE | NS_VIEW_MIN_Y_MARGIN]
+        msg_send![&drag_view, setAutoresizingMask:NS_VIEW_WIDTH_SIZABLE | NS_VIEW_MIN_Y_MARGIN]
     };
-    let _: () = unsafe { msg_send![content_view, addSubview:drag_view] };
+    let _: () = unsafe { msg_send![content_view, addSubview:drag_view.as_ptr()] };
 }
 
 pub(super) struct PlatformWindowData {
-    pub(super) window: *mut Object,
+    pub(super) window: Retained<Object>,
+    _delegate: Retained<Object>,
     pub(super) background_color: Option<u32>,
     #[cfg(feature = "file_drop")]
     pub(super) allow_file_drop: bool,
@@ -199,20 +203,12 @@ impl PlatformWindow {
         let _: () =
             unsafe { msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing:Bool::NO] };
 
-        // Allocate window data box first so we have a stable ptr
-        let mut window_data = Box::new(PlatformWindowData {
-            window: null_mut(),
-            background_color: builder.background_color,
-            #[cfg(feature = "file_drop")]
-            allow_file_drop: builder.allow_file_drop,
-        });
-
         // Create WindowDelegate instance
-        let window_delegate: *mut Object = unsafe { msg_send![WindowDelegate::class(), new] };
+        let window_delegate: Retained<Object> = unsafe { msg_send![WindowDelegate::class(), new] };
 
         // Create window
         let screen_rect: NSRect = if let Some(monitor) = builder.monitor {
-            unsafe { msg_send![monitor.screen, frame] }
+            unsafe { msg_send![&monitor.screen, frame] }
         } else {
             let screen: *mut Object = unsafe { msg_send![class!(NSScreen), mainScreen] };
             unsafe { msg_send![screen, frame] }
@@ -256,109 +252,122 @@ impl PlatformWindow {
         }
 
         let window = unsafe {
-            let window: *mut Object = msg_send![class!(NSWindow), alloc];
-            let window: *mut Object = msg_send![window, initWithContentRect:NSRect::new(NSPoint::new(0.0, 0.0), window_rect.size),
-                styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:false];
-            let _: () = msg_send![window, setFrameOrigin:window_rect.origin];
-            let _: () = msg_send![window, setTitle:NSString::from_str(&builder.title)];
+            let window: Allocated<Object> = msg_send![class!(NSWindow), alloc];
+            let window: Retained<Object> = msg_send![window, initWithContentRect:NSRect::new(NSPoint::new(0.0, 0.0), window_rect.size),
+                styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:Bool::NO];
+            let _: () = msg_send![&window, setFrameOrigin:window_rect.origin];
+            let _: () = msg_send![&window, setTitle:&*NSString::from_str(&builder.title)];
             if builder.should_fullscreen {
-                let _: () = msg_send![window, setLevel: 25i64];
+                let _: () = msg_send![&window, setLevel: 25i64];
             }
             if let Some(color) = builder.background_color {
                 let color: *mut Object = msg_send![class!(NSColor), colorWithRed:((color >> 16) & 0xFF) as f64 / 255.0,
                     green:((color >> 8) & 0xFF) as f64 / 255.0,
                     blue:(color & 0xFF) as f64 / 255.0, alpha:1.0];
-                let _: () = msg_send![window, setBackgroundColor:color];
+                let _: () = msg_send![&window, setBackgroundColor:color];
             }
             if builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
                 || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden
             {
-                let _: () = msg_send![window, setTitlebarAppearsTransparent:Bool::YES];
+                let _: () = msg_send![&window, setTitlebarAppearsTransparent:Bool::YES];
             }
             if builder.macos_titlebar_style == MacosTitlebarStyle::Hidden {
-                let _: () = msg_send![window, setTitleVisibility:NS_WINDOW_TITLE_VISIBILITY_HIDDEN];
+                let _: () =
+                    msg_send![&window, setTitleVisibility:NS_WINDOW_TITLE_VISIBILITY_HIDDEN];
             }
             if let Some(theme) = builder.theme {
                 let appearance: *mut Object = msg_send![class!(NSAppearance), appearanceNamed:match theme {
                     Theme::Light => NSAppearanceNameAqua,
                     Theme::Dark => NSAppearanceNameDarkAqua,
                 }];
-                let _: () = msg_send![window, setAppearance:appearance];
+                let _: () = msg_send![&window, setAppearance:appearance];
             }
             if let Some(min_size) = builder.min_size {
-                let _: () = msg_send![window, setContentMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
+                let _: () = msg_send![&window, setContentMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)];
             }
             #[cfg(feature = "remember_window_state")]
             if builder.remember_window_state {
-                let _: Bool = msg_send![window, setFrameAutosaveName:ns_string!("window")];
+                let _: Bool = msg_send![&window, setFrameAutosaveName:ns_string!("window")];
             }
-            let _: () = msg_send![window, setDelegate:window_delegate];
+            let _: () = msg_send![&window, setDelegate:window_delegate.as_ptr()];
             #[cfg(feature = "file_drop")]
             if builder.allow_file_drop {
-                register_dragged_types(window);
+                register_dragged_types(window.as_ptr());
             }
             window
         };
 
-        window_data.window = window;
         if !builder.should_fullscreen
             && (builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
                 || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden)
         {
-            let content_view: *mut Object = unsafe { msg_send![window, contentView] };
-            add_drag_view(window, content_view);
+            let content_view: *mut Object = unsafe { msg_send![&window, contentView] };
+            add_drag_view(window.as_ptr(), content_view);
         }
-        PlatformWindow(window_data)
+        PlatformWindow(Box::new(PlatformWindowData {
+            window,
+            _delegate: window_delegate,
+            background_color: builder.background_color,
+            #[cfg(feature = "file_drop")]
+            allow_file_drop: builder.allow_file_drop,
+        }))
+    }
+}
+
+impl Drop for PlatformWindow {
+    fn drop(&mut self) {
+        // NSWindow.delegate is non-owning, so clear it before the retained delegate is dropped.
+        let _: () = unsafe { msg_send![&self.0.window, setDelegate:null_mut::<Object>()] };
     }
 }
 
 impl crate::WindowInterface for PlatformWindow {
     fn close(&mut self) {
-        allow_termination_if_last_window(self.0.window);
-        let _: () = unsafe { msg_send![self.0.window, close] };
+        allow_termination_if_last_window(self.0.window.as_ptr());
+        let _: () = unsafe { msg_send![&self.0.window, close] };
     }
 
     fn set_title(&mut self, title: impl AsRef<str>) {
-        unsafe { msg_send![self.0.window, setTitle:NSString::from_str(title)] }
+        unsafe { msg_send![&self.0.window, setTitle:&*NSString::from_str(title)] }
     }
 
     fn position(&self) -> LogicalPoint {
-        let frame: NSRect = unsafe { msg_send![self.0.window, frame] };
+        let frame: NSRect = unsafe { msg_send![&self.0.window, frame] };
         LogicalPoint::new(frame.origin.x as f32, frame.origin.y as f32)
     }
 
     fn size(&self) -> LogicalSize {
-        let content_view: *mut Object = unsafe { msg_send![self.0.window, contentView] };
+        let content_view: *mut Object = unsafe { msg_send![&self.0.window, contentView] };
         let frame: NSRect = unsafe { msg_send![content_view, frame] };
         LogicalSize::new(frame.size.width as f32, frame.size.height as f32)
     }
 
     fn set_position(&mut self, point: LogicalPoint) {
         unsafe {
-            msg_send![self.0.window, setFrameTopLeftPoint:NSPoint::new(point.x as f64, point.y as f64)]
+            msg_send![&self.0.window, setFrameTopLeftPoint:NSPoint::new(point.x as f64, point.y as f64)]
         }
     }
 
     fn set_size(&mut self, size: LogicalSize) {
         unsafe {
-            msg_send![self.0.window, setContentSize:NSSize::new(size.width as f64, size.height as f64)]
+            msg_send![&self.0.window, setContentSize:NSSize::new(size.width as f64, size.height as f64)]
         }
     }
 
     fn set_min_size(&mut self, min_size: LogicalSize) {
         unsafe {
-            msg_send![self.0.window, setContentMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)]
+            msg_send![&self.0.window, setContentMinSize:NSSize::new(min_size.width as f64, min_size.height as f64)]
         }
     }
 
     fn set_resizable(&mut self, resizable: bool) {
-        let mut style_mask: u64 = unsafe { msg_send![self.0.window, styleMask] };
+        let mut style_mask: u64 = unsafe { msg_send![&self.0.window, styleMask] };
         if resizable {
             style_mask |= NS_WINDOW_STYLE_MASK_RESIZABLE;
         } else {
             style_mask &= !NS_WINDOW_STYLE_MASK_RESIZABLE;
         }
-        unsafe { msg_send![self.0.window, setStyleMask:style_mask] }
+        unsafe { msg_send![&self.0.window, setStyleMask:style_mask] }
     }
 
     fn set_theme(&mut self, theme: Theme) {
@@ -367,7 +376,7 @@ impl crate::WindowInterface for PlatformWindow {
                 Theme::Light => NSAppearanceNameAqua,
                 Theme::Dark => NSAppearanceNameDarkAqua,
             }];
-            let _: () = msg_send![self.0.window, setAppearance:appearance];
+            let _: () = msg_send![&self.0.window, setAppearance:appearance];
         }
     }
 
@@ -377,13 +386,13 @@ impl crate::WindowInterface for PlatformWindow {
             let color_obj: *mut Object = msg_send![class!(NSColor), colorWithRed:((color >> 16) & 0xFF) as f64 / 255.0,
                 green:((color >> 8) & 0xFF) as f64 / 255.0,
                 blue:(color & 0xFF) as f64 / 255.0, alpha:1.0];
-            let _: () = msg_send![self.0.window, setBackgroundColor:color_obj];
+            let _: () = msg_send![&self.0.window, setBackgroundColor:color_obj];
         }
     }
 
     fn macos_titlebar_size(&self) -> LogicalSize {
-        let window_frame: NSRect = unsafe { msg_send![self.0.window, frame] };
-        let content_layout_rect: NSRect = unsafe { msg_send![self.0.window, contentLayoutRect] };
+        let window_frame: NSRect = unsafe { msg_send![&self.0.window, frame] };
+        let content_layout_rect: NSRect = unsafe { msg_send![&self.0.window, contentLayoutRect] };
         LogicalSize::new(
             window_frame.size.width as f32,
             (window_frame.size.height - content_layout_rect.size.height) as f32,
@@ -391,6 +400,6 @@ impl crate::WindowInterface for PlatformWindow {
     }
 
     fn macos_set_document_edited(&mut self, edited: bool) {
-        let _: () = unsafe { msg_send![self.0.window, setDocumentEdited:edited] };
+        let _: () = unsafe { msg_send![&self.0.window, setDocumentEdited:edited] };
     }
 }

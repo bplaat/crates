@@ -8,6 +8,7 @@ use std::ptr::null_mut;
 
 use base64::prelude::*;
 use macview_appkit::{OwnedString, Point, Rect, Size, ns_string};
+use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
@@ -70,26 +71,24 @@ define_class!(
 
 /// Creates an owned view that draws an SVG document with WebKit.
 ///
-/// The caller owns the returned view and must send it `release`.
-pub(crate) fn create_svg_view(frame: Rect, svg: &Svg) -> *mut Object {
+/// The returned view owns one retain count.
+pub(crate) fn create_svg_view(frame: Rect, svg: &Svg) -> Retained<Object> {
     // SAFETY: All objects are valid WebKit instances and the configuration is released after the
     // web view retains its own copy. The page is loaded from memory without a base URL.
     unsafe {
-        let configuration: *mut Object = msg_send![class!(WKWebViewConfiguration), new];
-        let preferences: *mut Object = msg_send![configuration, defaultWebpagePreferences];
+        let configuration: Retained<Object> = msg_send![class!(WKWebViewConfiguration), new];
+        let preferences: *mut Object = msg_send![&*configuration, defaultWebpagePreferences];
         let _: () = msg_send![preferences, setAllowsContentJavaScript: Bool::NO];
-        let view: *mut Object = msg_send![SvgView::class(), alloc];
-        let view: *mut Object = msg_send![view,
+        let view: Allocated<Object> = msg_send![SvgView::class(), alloc];
+        let view: Retained<Object> = msg_send![view,
             initWithFrame: frame,
-            configuration: configuration
+            configuration: configuration.as_ptr()
         ];
-        let _: () = msg_send![configuration, release];
-        assert!(!view.is_null(), "failed to create SVG view");
 
         // A web view paints an opaque background of its own, which would hide the checkerboard.
         let opaque: *mut Object = msg_send![class!(NSNumber), numberWithBool: Bool::NO];
-        let _: () = msg_send![view, setValue: opaque, forKey: ns_string!("drawsBackground")];
-        let _: *mut Object = msg_send![view,
+        let _: () = msg_send![&*view, setValue: opaque, forKey: ns_string!("drawsBackground")];
+        let _: *mut Object = msg_send![&*view,
             loadHTMLString: svg.html.as_ptr(),
             baseURL: null_mut::<Object>()
         ];

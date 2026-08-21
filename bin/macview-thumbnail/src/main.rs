@@ -19,6 +19,7 @@ use macview_appkit::{
     Media, Point, Rect, Size, dispatch_async, extension_main, fill_white_background, load_media,
     make_error, ns_string, render_tinyvg,
 };
+use objc2::rc::Retained;
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
@@ -40,6 +41,17 @@ define_class!(
 );
 
 struct ThumbnailCompletion(RcBlock<dyn Fn(*mut Object, *mut Object)>);
+
+struct SendableUrl(Retained<Object>);
+
+// SAFETY: NSURL is immutable and this wrapper only carries it to the worker that reads it.
+unsafe impl Send for SendableUrl {}
+
+impl SendableUrl {
+    const fn as_ptr(&self) -> *mut Object {
+        self.0.as_ptr()
+    }
+}
 
 // SAFETY: Quick Look completion blocks are escaping blocks intended for asynchronous use. This
 // wrapper moves its owned copy to a GCD worker and invokes it there exactly once.
@@ -63,17 +75,13 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
     };
     // SAFETY: Keep the Quick Look URL alive after this callback returns.
     let (url, completion) = unsafe {
-        let url: *mut Object = msg_send![url, retain];
+        let url = SendableUrl(Retained::retain(url).expect("cannot retain a null URL"));
         let completion = ThumbnailCompletion(completion.copy());
-        (url as usize, completion)
+        (url, completion)
     };
     dispatch_async(move || {
         // SAFETY: url remains retained throughout the synchronous load.
-        let media = unsafe { load_media(url as *mut Object) };
-        // SAFETY: This balances the retain before dispatching the load.
-        unsafe {
-            let _: () = msg_send![url as *mut Object, release];
-        }
+        let media = unsafe { load_media(url.as_ptr()) };
         let media = match media {
             Ok(media) => media,
             Err(description) => {

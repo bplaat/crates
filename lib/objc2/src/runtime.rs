@@ -5,6 +5,7 @@
  */
 
 use std::ffi::{CStr, CString, c_void};
+use std::ptr::NonNull;
 
 use crate::encode::{Encode, Encoding};
 use crate::ffi::*;
@@ -12,6 +13,16 @@ use crate::ffi::*;
 /// Class type (opaque).
 #[repr(C)]
 pub struct AnyClass([u8; 0]);
+
+// SAFETY: Objective-C Class values are pointers with the `#` type encoding.
+unsafe impl Encode for *const AnyClass {
+    const ENCODING: Encoding = Encoding::Class;
+}
+
+// SAFETY: Objective-C Class values are pointers with the `#` type encoding.
+unsafe impl Encode for *mut AnyClass {
+    const ENCODING: Encoding = Encoding::Class;
+}
 
 impl AnyClass {
     /// Get a class by name, returning `None` if not found.
@@ -63,12 +74,116 @@ unsafe impl Encode for Sel {
 #[repr(C)]
 pub struct AnyObject([u8; 0]);
 
+/// Marker trait for types represented by Objective-C object pointers.
+///
+/// # Safety
+///
+/// Implementors must be Objective-C object types with pointer-compatible representations.
+pub unsafe trait Message {}
+
+// SAFETY: AnyObject is the erased Objective-C object type.
+unsafe impl Message for AnyObject {}
+
+/// An Objective-C class defined in Rust.
+///
+/// # Safety
+///
+/// The hidden superclass must be the superclass used when registering this class.
+pub unsafe trait ClassType: Message {
+    #[doc(hidden)]
+    fn __superclass() -> *const AnyClass;
+}
+
+/// A Rust-defined Objective-C class with explicitly initialized instance variables.
+///
+/// # Safety
+///
+/// The hidden offsets must identify storage registered for exactly `Ivars` and its initialization
+/// flag on every instance of the class.
+pub unsafe trait DefinedClass: ClassType {
+    /// Rust instance-variable storage initialized by `Allocated::set_ivars`.
+    type Ivars;
+
+    #[doc(hidden)]
+    fn __ivars_offset() -> usize;
+    #[doc(hidden)]
+    fn __ivars_initialized_offset() -> usize;
+}
+
+unsafe fn ivars_initialized_ptr<T: DefinedClass>(object: NonNull<T>) -> *mut u8 {
+    // SAFETY: DefinedClass guarantees that the offset identifies the initialization flag.
+    unsafe {
+        object
+            .cast::<u8>()
+            .as_ptr()
+            .add(T::__ivars_initialized_offset())
+    }
+}
+
+unsafe fn ivars_ptr<T: DefinedClass>(object: NonNull<T>) -> *mut T::Ivars {
+    // SAFETY: DefinedClass guarantees that the offset identifies aligned storage for T::Ivars.
+    unsafe {
+        object
+            .cast::<u8>()
+            .as_ptr()
+            .add(T::__ivars_offset())
+            .cast::<T::Ivars>()
+    }
+}
+
+#[doc(hidden)]
+pub unsafe fn initialize_ivars<T: DefinedClass>(object: NonNull<T>, ivars: T::Ivars) {
+    // SAFETY: the caller supplies a valid newly allocated T.
+    let initialized = unsafe { ivars_initialized_ptr(object) };
+    // SAFETY: the flag is allocated as a u8 and Objective-C zero-initializes object storage.
+    let state = unsafe { initialized.read() };
+    assert_eq!(state, 0, "ivars were already initialized");
+    // SAFETY: the caller guarantees exclusive initialization access to this object.
+    unsafe { ivars_ptr(object).write(ivars) };
+    // SAFETY: mark initialized only after the complete value was written.
+    unsafe { initialized.write(1) };
+}
+
+#[doc(hidden)]
+pub fn ivars<T: DefinedClass>(object: &T) -> &T::Ivars {
+    let object = NonNull::from(object);
+    // SAFETY: `object` came from a live shared reference to `T`.
+    let initialized = unsafe { ivars_initialized_ptr(object) };
+    // SAFETY: the flag remains allocated for the object's lifetime.
+    let state = unsafe { initialized.read() };
+    assert_eq!(state, 1, "ivars are not initialized");
+    // SAFETY: the initialized flag proves set_ivars wrote a valid value. The returned reference
+    // is tied to the input object's lifetime.
+    unsafe { &*ivars_ptr(object) }
+}
+
+#[doc(hidden)]
+pub unsafe fn destroy_ivars<T: DefinedClass>(object: NonNull<T>) {
+    // SAFETY: the caller supplies the live object currently being deallocated.
+    let initialized = unsafe { ivars_initialized_ptr(object) };
+    // SAFETY: the flag remains allocated until the superclass dealloc runs.
+    match unsafe { initialized.read() } {
+        0 => {}
+        1 => {
+            // SAFETY: clear the flag first so unwinding cannot cause a second drop.
+            unsafe { initialized.write(0) };
+            // SAFETY: flag value 1 proves set_ivars fully initialized this value exactly once.
+            unsafe { ivars_ptr(object).drop_in_place() };
+        }
+        _ => panic!("invalid ivar initialization flag"),
+    }
+}
+
 // SAFETY: an ObjC object pointer has encoding `@` as defined by the Apple ABI.
-unsafe impl Encode for *const AnyObject {
+unsafe impl<T: Message> Encode for *const T {
     const ENCODING: Encoding = Encoding::Object;
 }
 // SAFETY: an ObjC object pointer has encoding `@` as defined by the Apple ABI.
-unsafe impl Encode for *mut AnyObject {
+unsafe impl<T: Message> Encode for *mut T {
+    const ENCODING: Encoding = Encoding::Object;
+}
+// SAFETY: a reference to a Message type is passed to Objective-C as an object pointer.
+unsafe impl<T: Message> Encode for &T {
     const ENCODING: Encoding = Encoding::Object;
 }
 
@@ -132,30 +247,54 @@ impl AnyObject {
 
 /// Objective-C boolean type.
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Bool {
-    value: u8,
+    #[cfg(target_arch = "aarch64")]
+    value: bool,
+    #[cfg(not(target_arch = "aarch64"))]
+    value: i8,
 }
 impl Bool {
     /// `YES`
-    pub const YES: Self = Self { value: 1 };
+    pub const YES: Self = Self {
+        #[cfg(target_arch = "aarch64")]
+        value: true,
+        #[cfg(not(target_arch = "aarch64"))]
+        value: 1,
+    };
     /// `NO`
-    pub const NO: Self = Self { value: 0 };
+    pub const NO: Self = Self {
+        #[cfg(target_arch = "aarch64")]
+        value: false,
+        #[cfg(not(target_arch = "aarch64"))]
+        value: 0,
+    };
 
     /// Convert the Objective-C boolean to a Rust boolean.
     pub const fn as_bool(&self) -> bool {
-        self.value != 0
+        #[cfg(target_arch = "aarch64")]
+        {
+            self.value
+        }
+        #[cfg(not(target_arch = "aarch64"))]
+        {
+            self.value != 0
+        }
     }
 }
-// SAFETY: `Bool` is a transparent `u8`; ObjC encodes it as `B`.
+// SAFETY: Apple's Objective-C BOOL is C _Bool on aarch64 and signed char elsewhere.
 unsafe impl Encode for Bool {
-    const ENCODING: Encoding = Encoding::Bool;
+    const ENCODING: Encoding = if cfg!(target_arch = "aarch64") {
+        Encoding::Bool
+    } else {
+        Encoding::Char
+    };
 }
 
-/// Trait for `extern "C"` function pointers usable as ObjC method implementations.
+/// Trait for `extern "C-unwind"` function pointers usable as ObjC method implementations.
 ///
 /// Automatically derives the ObjC type encoding from the Rust function signature.
-/// Implemented for `extern "C" fn(*mut AnyObject, Sel, ...) -> R` at all supported arities.
+/// Implemented for `extern "C-unwind" fn(*mut AnyObject, Sel, ...) -> R` at supported arities.
 ///
 /// # Safety
 ///
@@ -175,7 +314,7 @@ macro_rules! impl_method_impl {
         // SAFETY: `type_encoding()` is derived mechanically from the same generic bounds
         // that constrain `imp_ptr()`, so the encoding always matches the function signature.
         unsafe impl<Ret: Encode, $($t: Encode,)*> MethodImpl
-            for extern "C" fn(*mut AnyObject, Sel $(, $t)*) -> Ret
+            for extern "C-unwind" fn(*mut AnyObject, Sel $(, $t)*) -> Ret
         {
             fn imp_ptr(self) -> *const c_void {
                 self as *const c_void
@@ -206,10 +345,12 @@ pub struct ClassBuilder(*mut c_void);
 impl ClassBuilder {
     /// Create a new class with the given name and superclass.
     /// Note: unlike the real `objc2`, `superclass` here is `*mut AnyObject` (as returned by `class!`).
-    pub fn new(name: &CStr, superclass: *mut AnyObject) -> Option<Self> {
-        // SAFETY: `name` is a valid null-terminated C string; `superclass` is a valid class
-        // pointer (from `class!`). `objc_allocateClassPair` returns null on failure (e.g.,
-        // duplicate class name), which we check before use.
+    ///
+    /// # Safety
+    ///
+    /// `superclass` must be a valid Objective-C class pointer or null.
+    pub unsafe fn new(name: &CStr, superclass: *mut AnyObject) -> Option<Self> {
+        // SAFETY: The caller guarantees that superclass is null or a valid class pointer.
         let class =
             unsafe { objc_allocateClassPair(superclass as *const c_void, name.as_ptr(), 0) };
         if class.is_null() {
@@ -219,10 +360,10 @@ impl ClassBuilder {
         }
     }
 
-    /// Add an instance variable of any type without requiring `T: Encode`.
+    /// Add opaque storage that `Allocated::set_ivars` initializes before it is read.
     ///
-    /// Stores `T` as a single opaque ivar with size/alignment derived from its layout.
-    /// Used internally by `define_class!`-generated code; prefer `add_ivar` for typed ivars.
+    /// Stores `T` as a single opaque ivar with size/alignment derived from its layout. Used
+    /// internally by `define_class!`-generated code; prefer `add_ivar` for typed ivars.
     #[doc(hidden)]
     pub fn add_ivar_raw<T>(&mut self, name: &CStr) -> bool {
         // SAFETY: `self.0` is a valid not-yet-registered class pair; `name` is null-terminated;
@@ -231,10 +372,11 @@ impl ClassBuilder {
             class_addIvar(
                 self.0,
                 name.as_ptr(),
-                size_of::<T>(),
+                size_of::<T>().max(1),
                 align_of::<T>().trailing_zeros() as u8,
                 c"?".as_ptr(),
             )
+            .as_bool()
         }
     }
 
@@ -251,6 +393,7 @@ impl ClassBuilder {
                 align_of::<T>().trailing_zeros() as u8,
                 types.as_ptr(),
             )
+            .as_bool()
         }
     }
 
@@ -263,7 +406,7 @@ impl ClassBuilder {
         // SAFETY: `self.0` is a valid class pair not yet registered; `sel.0` is a registered
         // selector; `imp_ptr` is a valid `extern "C"` function pointer whose signature matches
         // `encoding` by the `MethodImpl` safety contract.
-        unsafe { class_addMethod(self.0, sel.0, imp_ptr, encoding.as_ptr()) }
+        unsafe { class_addMethod(self.0, sel.0, imp_ptr, encoding.as_ptr()).as_bool() }
     }
 
     /// Make the class conform to the given protocol.
@@ -314,28 +457,31 @@ mod test {
     #[test]
     fn test_class_add_protocol() {
         let protocol = AnyProtocol::get(c"NSCopying").expect("NSCopying should exist");
-        let mut builder =
-            ClassBuilder::new(c"TestProtocolClass", class!(NSObject)).expect("create class");
+        // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
+        let mut builder = unsafe { ClassBuilder::new(c"TestProtocolClass", class!(NSObject)) }
+            .expect("create class");
         assert!(builder.add_protocol(protocol));
         builder.register();
     }
 
     #[test]
     fn test_class_declaration() {
-        extern "C" fn test_method(_self: *mut AnyObject, _cmd: Sel) {}
+        extern "C-unwind" fn test_method(_self: *mut AnyObject, _cmd: Sel) {}
 
-        let mut builder =
-            ClassBuilder::new(c"TestClass2", class!(NSObject)).expect("Failed to create class");
+        // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
+        let mut builder = unsafe { ClassBuilder::new(c"TestClass2", class!(NSObject)) }
+            .expect("Failed to create class");
         assert!(builder.add_ivar::<i32>(c"test_ivar"));
-        assert!(builder.add_method(sel!(testMethod), test_method as extern "C" fn(_, _)));
+        assert!(builder.add_method(sel!(testMethod), test_method as extern "C-unwind" fn(_, _)));
         let class = builder.register();
         assert!(!class.is_null());
     }
 
     #[test]
     fn test_ivar_read_write() {
+        // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
         let mut builder =
-            ClassBuilder::new(c"TestIvarClass", class!(NSObject)).expect("create class");
+            unsafe { ClassBuilder::new(c"TestIvarClass", class!(NSObject)) }.expect("create class");
         assert!(builder.add_ivar::<i64>(c"value"));
         let class = builder.register();
 
@@ -361,7 +507,7 @@ mod test {
 
     #[test]
     fn test_method_impl_type_encoding_zero_args() {
-        type Method = extern "C" fn(*mut AnyObject, Sel) -> i32;
+        type Method = extern "C-unwind" fn(*mut AnyObject, Sel) -> i32;
         assert_eq!(
             <Method as MethodImpl>::type_encoding()
                 .to_str()
@@ -372,24 +518,27 @@ mod test {
 
     #[test]
     fn test_method_impl_type_encoding_with_args() {
-        type Method = extern "C" fn(*mut AnyObject, Sel, i32, Bool) -> ();
+        type Method = extern "C-unwind" fn(*mut AnyObject, Sel, i32, Bool) -> ();
+        let expected = format!("v@:i{}", Bool::ENCODING);
         assert_eq!(
             <Method as MethodImpl>::type_encoding()
                 .to_str()
                 .expect("valid encoding"),
-            "v@:iB"
+            expected
         );
     }
 
     #[test]
     fn test_classbuilder_duplicate_name_returns_none() {
-        extern "C" fn noop(_this: *mut AnyObject, _cmd: Sel) {}
-        let mut builder =
-            ClassBuilder::new(c"DupTestClass", class!(NSObject)).expect("first registration ok");
-        assert!(builder.add_method(sel!(noop), noop as extern "C" fn(_, _)));
+        extern "C-unwind" fn noop(_this: *mut AnyObject, _cmd: Sel) {}
+        // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
+        let mut builder = unsafe { ClassBuilder::new(c"DupTestClass", class!(NSObject)) }
+            .expect("first registration ok");
+        assert!(builder.add_method(sel!(noop), noop as extern "C-unwind" fn(_, _)));
         builder.register();
         assert!(
-            ClassBuilder::new(c"DupTestClass", class!(NSObject)).is_none(),
+            // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
+            unsafe { ClassBuilder::new(c"DupTestClass", class!(NSObject)) }.is_none(),
             "re-registering an existing class name must return None"
         );
     }

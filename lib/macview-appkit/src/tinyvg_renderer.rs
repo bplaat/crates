@@ -4,19 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::cell::Cell;
 use std::ffi::c_void;
 use std::sync::Arc;
 
-use objc2::ffi::{objc_msgSendSuper, objc_super};
-use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
-use objc2::{class, define_class, msg_send, sel};
+use objc2::rc::{Allocated, Retained};
+use objc2::runtime::{AnyObject as Object, Bool};
+use objc2::{class, define_class, msg_send};
 use tinyvg::{Color, ColorSpace, Command, Document, Path, PathOperation, Point, Style};
 
 use crate::cocoa::*;
 
 struct TinyVgViewIvars {
-    document: Cell<*mut Arc<Document>>,
+    document: Arc<Document>,
 }
 
 define_class!(
@@ -40,20 +39,12 @@ define_class!(
         const fn _is_opaque(&self) -> Bool {
             Bool::NO
         }
-
-        #[unsafe(method(dealloc))]
-        fn _dealloc(&self) {
-            self.dealloc();
-        }
     }
 );
 
 impl TinyVgView {
     fn draw(&self) {
-        let document = self.ivars().document.get();
-        if document.is_null() {
-            return;
-        }
+        let document = &self.ivars().document;
         // SAFETY: The view owns document until dealloc and drawing happens on AppKit's main
         // thread. NSGraphicsContext supplies a valid CGContext for the active draw pass.
         unsafe {
@@ -76,25 +67,7 @@ impl TinyVgView {
                 msg_send![window, backingScaleFactor]
             };
 
-            render_fitted(context, &*document, bounds.size, backing_scale);
-        }
-    }
-
-    fn dealloc(&self) {
-        let document = self.ivars().document.replace(std::ptr::null_mut());
-        // SAFETY: The ivar owns document when non-null. objc_msgSendSuper invokes NSView's
-        // dealloc with the exact Objective-C deallocation ABI.
-        unsafe {
-            if !document.is_null() {
-                drop(Box::from_raw(document));
-            }
-            let super_info = objc_super {
-                receiver: self as *const Self as *mut Object,
-                super_class: class!(NSView).cast::<AnyClass>(),
-            };
-            let send: unsafe extern "C" fn(*const objc_super, *const c_void) =
-                std::mem::transmute(objc_msgSendSuper as *const c_void);
-            send(&super_info, sel!(dealloc).0);
+            render_fitted(context, document, bounds.size, backing_scale);
         }
     }
 }
@@ -102,20 +75,17 @@ impl TinyVgView {
 /// Creates an owned, resize-aware `NSView` that displays a TinyVG document.
 ///
 /// The document is drawn to the edges of the view, which is what the scroll view of the viewer and
-/// the panel of a preview both want. The caller owns the returned view and must send it `release`.
-pub fn create_tinyvg_view(frame: Rect, document: Arc<Document>) -> *mut Object {
-    // SAFETY: TinyVgView is a registered NSView subclass. The zero-initialized pointer ivar is
-    // replaced with ownership of document before the view can draw.
+/// the panel of a preview both want. The returned view owns one retain count.
+pub fn create_tinyvg_view(frame: Rect, document: Arc<Document>) -> Retained<Object> {
+    // SAFETY: TinyVgView is a registered NSView subclass. Its Rust ivars are initialized before
+    // NSView's initializer can call an overridden method.
     unsafe {
-        let view: *mut Object = msg_send![TinyVgView::class(), alloc];
-        let view: *mut Object = msg_send![view, initWithFrame: frame];
-        assert!(!view.is_null(), "failed to create TinyVG view");
-        let view_ref = &*(view.cast::<TinyVgView>());
-        view_ref
-            .ivars()
-            .document
-            .set(Box::into_raw(Box::new(document)));
-        view
+        let view: Allocated<TinyVgView> = msg_send![TinyVgView::class(), alloc];
+        let view: Retained<TinyVgView> = msg_send![
+            super(view.set_ivars(TinyVgViewIvars { document })),
+            initWithFrame: frame
+        ];
+        Retained::into_any(view)
     }
 }
 
