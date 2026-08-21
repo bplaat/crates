@@ -25,7 +25,7 @@ pub(crate) fn to_snake_case(camel_case: &str) -> String {
     }
 }
 
-pub(crate) fn find_matching_close(text: &str, start: usize) -> usize {
+pub(crate) const fn find_matching_close(text: &str, start: usize) -> usize {
     let bytes = text.as_bytes();
     let open_char = bytes[start];
     let close_char = if open_char == b'{' { b'}' } else { b')' };
