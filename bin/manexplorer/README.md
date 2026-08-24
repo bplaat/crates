@@ -1,6 +1,6 @@
 # ManExplorer
 
-A simple man page explorer tool
+A simple man page explorer tool.
 
 ## Screenshot
 

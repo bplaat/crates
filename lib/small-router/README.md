@@ -1,10 +1,10 @@
 # Small-Router Rust library
 
-A simple and small router for the [small-http](https://crates.io/crates/small-http) library
+A simple and small router for the [small-http](https://crates.io/crates/small-http) library.
 
 ## Getting Started
 
-A simple example the opens a http server on serves a simple response:
+A simple example that opens an HTTP server and serves a response:
 
 ```rs
 use std::net::{Ipv4Addr, TcpListener};

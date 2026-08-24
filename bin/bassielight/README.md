@@ -7,7 +7,7 @@
 <br/>
 
 <p>
-    A simple DMX512 lights controller GUI compatible with the <a href="https://www.anyma.ch/research/udmx/">uDMX</a> and various fixtures
+    A simple DMX512 lights controller GUI compatible with the <a href="https://www.anyma.ch/research/udmx/">uDMX</a> and various fixtures.
 </p>
 
 <br/>

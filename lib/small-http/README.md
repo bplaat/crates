@@ -1,10 +1,10 @@
 # Small-HTTP Rust library
 
-A simple and small HTTP/1.1 server/client library
+A simple and small HTTP/1.1 server/client library.
 
 ## Getting Started
 
-A simple example the opens a http server on serves a simple response:
+A simple example that opens an HTTP server and serves a response:
 
 ```rs
 use std::net::{Ipv4Addr, TcpListener};
@@ -21,7 +21,7 @@ fn main() {
 }
 ```
 
-A simple example the of a https client that fetches a JSON response, this needs the `tls` feature:
+A simple example of an HTTPS client that fetches a JSON response. This needs the `tls` feature:
 
 ```rs
 #[derive(serde::Deserialize)]

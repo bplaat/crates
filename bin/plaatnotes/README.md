@@ -1,6 +1,6 @@
 # PlaatNotes
 
-A self-hosted note taking web app with rich markdown support
+A self-hosted note-taking web app with rich Markdown support.
 
 ## Features
 

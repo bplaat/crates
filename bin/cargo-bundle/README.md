@@ -1,6 +1,6 @@
 # cargo-bundle
 
-A simple Cargo plugin the builds macOS app bundles
+A simple Cargo plugin that builds macOS app bundles.
 
 ## Usage
 
@@ -20,7 +20,9 @@ Then run `cargo bundle` with the path argument, when using a Cargo workspace run
 cargo bundle --path path/to/your/crate
 ```
 
-This will build your crate for x86_64 and arm64 link it together as a Universal binary. Create a `.icns` file from you optional iconset. And create a macOS app bundle in the `target/bundle` directory.
+This builds your crate for x86_64 and arm64, links both architectures into a universal binary,
+creates an `.icns` file from the optional iconset, and creates a macOS app bundle in the
+`target/bundle` directory.
 
 ## License
 

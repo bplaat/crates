@@ -1,6 +1,6 @@
 # Bassie Webview Rust library
 
-A cross-platform webview library for Rust with minimal dependencies
+A cross-platform webview library for Rust with minimal dependencies.
 
 ## Linux runtime dependencies
 
@@ -63,31 +63,31 @@ The Linux backend automatically selects the best available WebKitGTK version at 
 <td align="center">
 <img src="docs/images/screenshots/windows.png" alt="ipc example running on Windows" width="300">
 <br>
-<a href="examples/ipc/">IPC example</a> running on Windows
+<a href="examples/bwebview-ipc.rs">IPC example</a> running on Windows
 </td>
 <td align="center">
 <img src="docs/images/screenshots/macos.png" alt="ipc example running on macOS" width="300">
 <br>
-<a href="examples/ipc/">IPC example</a> running on macOS
+<a href="examples/bwebview-ipc.rs">IPC example</a> running on macOS
 </td>
 <td align="center">
 <img src="docs/images/screenshots/gtk.png" alt="ipc example running on Linux (GTK)" width="300">
 <br>
-<a href="examples/ipc/">IPC example</a> running on Linux (GTK)
+<a href="examples/bwebview-ipc.rs">IPC example</a> running on Linux (GTK)
 </td>
 </tr>
 </table>
 
 ## Features
 
-- **log** Enables logging support by forwarding `console.*` calls to the `log` crate (default).
-- **remember_window_state** Adds remembers window position and size between launches options (default).
-- **custom_protocol** Adds support for custom protocols, allowing you to serve content from custom URL schemes.
-- **dialog** Adds support for native message and file dialogs.
-- **file_drop** Adds support for dropping files onto the window, reported as `WindowEvent::DroppedFile`.
-- **menu** Adds support for custom macOS menu bar entries, selections are reported as `Event::MacosMenuItem`.
-- **progress_bar** Adds support for the Windows taskbar and GTK application launcher progress bars.
-- **rust-embed** Adds support for serving embedded assets using the `rust-embed` crate.
+- **log** - Enables logging support by forwarding `console.*` calls to the `log` crate (default).
+- **remember_window_state** - Adds options for remembering the window position and size between launches (default).
+- **custom_protocol** - Adds support for serving content from custom URL schemes.
+- **dialog** - Adds support for native message and file dialogs.
+- **file_drop** - Adds support for dropping files onto the window, reported as `WindowEvent::DroppedFile`.
+- **menu** - Adds support for custom macOS menu bar entries, reported as `Event::MacosMenuItem`.
+- **progress_bar** - Adds support for Windows taskbar and GTK application launcher progress bars.
+- **rust-embed** - Adds support for serving embedded assets using the `rust-embed` crate.
 
 ## Sources binary blobs
 

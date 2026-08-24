@@ -49,4 +49,10 @@ music-dl download --artist "Snail's House"
 
 ## macOS Entitlements
 
-The `com.apple.security.app-sandbox` entitlement is not used because random files need to be written to user Music directory.
+The `com.apple.security.app-sandbox` entitlement is not used because files need to be written to the user's Music directory.
+
+## License
+
+Copyright © 2024-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
+
+Licensed under the [MIT](../../LICENSE) license.

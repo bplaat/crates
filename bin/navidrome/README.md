@@ -1,6 +1,6 @@
 # Navidrome
 
-A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
+A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper.
 
 ## Screenshot
 

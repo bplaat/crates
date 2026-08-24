@@ -1,6 +1,6 @@
 # cContinue Transpiler
 
-_A transpiler that translates an OOP-extension for the C programming language back to C_
+_A transpiler that translates an OOP extension for the C programming language back to C._
 
 I like C and I like C++, both are powerful languages in their own right. But C++ is quite complicated and sometimes I just want to create some classes with inheritance in my C project. So I've created this weird hacky Rust transpiler that translates a C++ like syntax with a Java like class system back to C code 🤓.
 
@@ -341,6 +341,6 @@ usize              // size_t
 
 ## License
 
-Copyright © 2021-2026 Bastiaan van der Plaat
+Copyright © 2021-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](LICENSE) license.
+Licensed under the [MIT](../../LICENSE) license.

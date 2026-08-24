@@ -1,10 +1,10 @@
 # Bassie SQLight crate
 
-A simple and minimal Rust SQLite library with an ergonomic API
+A simple and minimal Rust SQLite library with an ergonomic API.
 
 ## Example
 
-A example that inserts and reads rows from and too structs:
+An example that inserts and reads rows to and from structs:
 
 ```rs
 use bsqlite::{Connection, FromRow};
@@ -34,7 +34,7 @@ fn main() {
         (),
     );
 
-    // Insert a rows
+    // Insert rows
     let persons = [
         NewPerson {
             name: "Alice".to_string(),
@@ -71,7 +71,7 @@ See the [examples](examples/) for many more examples.
 - Connect and execute queries on a SQLite database
 - Have a generic `Value` enum type to represent SQLite values
 - Bind and read `Value` types to and from SQLite statements
-- Have `FromRow` and `FromValue` derive macros to convert between Rust types to SQLite `Value`'s
+- Have `FromRow` and `FromValue` derive macros to convert between Rust types and SQLite values
 - Work well and efficient with popular crates like `uuid` and `chrono`
 - Have helpful error messages on query errors
 

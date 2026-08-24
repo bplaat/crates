@@ -16,3 +16,9 @@ A simple SQLite database GUI viewer built with [bwebview](../../lib/bwebview) an
 ## macOS Entitlements
 
 The `com.apple.security.app-sandbox` entitlement is not used because `com.apple.security.files.user-selected.read-only` only permits reading the selected file, not the accompanying `*-shm` and `*-wal` files next to the `.db` file.
+
+## License
+
+Copyright © 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
+
+Licensed under the [MIT](../../LICENSE) license.

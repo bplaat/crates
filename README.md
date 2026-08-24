@@ -1,22 +1,22 @@
 # Bassie's Rust crates
 
-A collection of minimal Rust crates and tools that I created for myself and others
+A collection of minimal Rust crates and tools that I created for myself and others.
 
 ## Crates
 
 ### Published libraries
 
-These crates are published to [crates.io](https://crates.io) and are more polished and documented
+These crates are published to [crates.io](https://crates.io) and are more polished and documented.
 
 - [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
-- [bsqlite_derive](lib/bsqlite_derive) The derive macro's for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
+- [bsqlite_derive](lib/bsqlite_derive) The derive macros for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
 - [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
 - [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library **([crates.io](https://crates.io/crates/small-http))**
 - [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library **([crates.io](https://crates.io/crates/small-router))**
 
 ### Libraries
 
-These libraries are not published to [crates.io](https://crates.io) and are more intended for personal use but can still be useful
+These libraries are not published to [crates.io](https://crates.io) and are intended primarily for personal use, but can still be useful.
 
 - [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
@@ -27,13 +27,13 @@ These libraries are not published to [crates.io](https://crates.io) and are more
 - [qoi](lib/qoi) A small decoder for the Quite OK Image format
 - [tinyvg](lib/tinyvg) A TinyVG vector image parser (binary and text formats)
 - [macview-appkit](lib/macview-appkit) Shared AppKit image loading for MacView
-- [small-websocket](lib/small-websocket) A simple and small websocket library for the [small-http](lib/small-http) library
+- [small-websocket](lib/small-websocket) A simple and small WebSocket library for the [small-http](lib/small-http) library
 - [validate](lib/validate) A simple struct validation library
-- [validate_derive](lib/validate_derive) Validation derive macro's library
+- [validate_derive](lib/validate_derive) Validation derive macros library
 
 ### Apps
 
-Some desktop apps written with the [bwebview](lib/bwebview) library
+Some desktop apps written with the [bwebview](lib/bwebview) library.
 
 <table>
 <tr>
@@ -93,17 +93,17 @@ Some desktop apps written with the [bwebview](lib/bwebview) library
 
 ### Tools / Websites
 
-Various tools and websites, for the live deployed sites go to [crates.bplaat.nl](https://crates.bplaat.nl/)
+Various tools and websites. For the deployed sites, go to [crates.bplaat.nl](https://crates.bplaat.nl/).
 
-- [baksteen](bin/baksteen/) A brick laying robot simulator
+- [baksteen](bin/baksteen/) A brick-laying robot simulator
 - [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
-- [ccontinue](bin/ccontinue) A transpiler that translates an OOP-extension for the C programming language back to C
-- [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin the builds macOS app bundles
-- [plaatnotes](bin/plaatnotes) A self-hosted note taking web app with rich markdown support
+- [ccontinue](bin/ccontinue) A transpiler that translates an OOP extension for the C programming language back to C
+- [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin that builds macOS app bundles
+- [plaatnotes](bin/plaatnotes) A self-hosted note-taking web app with rich Markdown support
 
 ### Replacement libraries
 
-These libraries are created as minimal / smaller replacements for common used crates
+These libraries are minimal replacements for commonly used crates.
 
 - [base64](lib/base64) A minimal replacement for the [base64](https://crates.io/crates/base64) crate
 - [block2](lib/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
