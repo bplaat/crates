@@ -296,9 +296,9 @@ impl Xtask {
             "nextest",
             "--all-features",
             "--locked",
+            "--config-file",
+            "nextest.toml",
             "--no-fail-fast",
-            "--retries",
-            "2",
             "--workspace",
         ]);
         add_excludes(&mut command, &excludes);
