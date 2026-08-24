@@ -3,6 +3,9 @@ target/
 node_modules/
 dist/
 src-gen/
+playwright/
+playwright-report/
+test-results/
 *.db*
 *.jks
 !android-dummy-keystore.jks

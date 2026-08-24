@@ -275,15 +275,18 @@ impl Xtask {
     pub(crate) fn check_e2e(&self) -> Result<()> {
         println!("Running end-to-end tests...");
         self.ensure_npm_deps()?;
-        run(Command::new("cargo").args(["build", "-p", "plaatnotes", "--locked"]))?;
         run(Command::new(npx_program(self.os)).args([
             "--no-install",
             "--workspace",
-            "plaatnotes",
+            "plaatui-showcase",
             "playwright",
             "install",
             "--with-deps",
         ]))?;
+
+        run(Command::new(npm_program(self.os)).args(["test", "--workspace", "plaatui-showcase"]))?;
+
+        run(Command::new("cargo").args(["build", "-p", "plaatnotes", "--locked"]))?;
         run(Command::new(npm_program(self.os)).args(["test", "--workspace", "plaatnotes"]))
     }
 
