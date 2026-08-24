@@ -188,7 +188,7 @@ pub fn decode(data: &[u8]) -> Result<Image, DecodeError> {
     })
 }
 
-fn take(data: &[u8], cursor: &mut usize, end: usize) -> Result<u8, DecodeError> {
+const fn take(data: &[u8], cursor: &mut usize, end: usize) -> Result<u8, DecodeError> {
     if *cursor >= end {
         return Err(DecodeError::InvalidData);
     }
@@ -293,8 +293,10 @@ mod tests {
             assert!(
                 image
                     .pixels()
-                    .chunks_exact(4)
-                    .all(|pixel| pixel == [0, 0, 0, 255])
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|pixel| *pixel == [0, 0, 0, 255])
             );
         }
     }
