@@ -23,16 +23,80 @@ define_class!(
     pub(super) struct DraggableView;
 
     impl DraggableView {
+        #[unsafe(method(acceptsFirstMouse:))]
+        const fn _accepts_first_mouse(&self, _: *mut Object) -> Bool { Bool::YES }
+
         #[unsafe(method(mouseDown:))]
         fn _mouse_down(&self, event: *mut Object) {
             let this = self as *const DraggableView as *mut Object;
             let window: *mut Object = unsafe { msg_send![this, window] };
-            if !window.is_null() {
+            if window.is_null() || event.is_null() {
+                return;
+            }
+
+            let click_count: isize = unsafe { msg_send![event, clickCount] };
+            if click_count == 2 {
+                perform_titlebar_double_click(window);
+            } else {
                 let _: () = unsafe { msg_send![window, performWindowDragWithEvent:event] };
             }
         }
     }
 );
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TitlebarDoubleClickAction {
+    Zoom,
+    Minimize,
+    None,
+}
+
+impl TitlebarDoubleClickAction {
+    fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("Minimize") => Self::Minimize,
+            Some("None") => Self::None,
+            // AppKit has no public API for the newer Fill action. Zoom is the closest system
+            // action and is also the default for missing or unknown preference values.
+            Some("Fill" | "Maximize") | None | Some(_) => Self::Zoom,
+        }
+    }
+}
+
+fn titlebar_double_click_action() -> TitlebarDoubleClickAction {
+    let defaults: *mut Object = unsafe { msg_send![class!(NSUserDefaults), standardUserDefaults] };
+    let global_domain: *mut Object =
+        unsafe { msg_send![defaults, persistentDomainForName:ns_string!("NSGlobalDomain")] };
+    if global_domain.is_null() {
+        return TitlebarDoubleClickAction::Zoom;
+    }
+
+    let action: *mut Object =
+        unsafe { msg_send![global_domain, objectForKey:ns_string!("AppleActionOnDoubleClick")] };
+    if action.is_null() {
+        return TitlebarDoubleClickAction::Zoom;
+    }
+
+    let action: NSString = unsafe { msg_send![action, copy] };
+    TitlebarDoubleClickAction::from_preference(Some(&action.to_string()))
+}
+
+fn perform_titlebar_double_click(window: *mut Object) {
+    let style_mask: u64 = unsafe { msg_send![window, styleMask] };
+    match titlebar_double_click_action() {
+        TitlebarDoubleClickAction::Zoom if style_mask & NS_WINDOW_STYLE_MASK_RESIZABLE != 0 => {
+            let _: () = unsafe { msg_send![window, zoom:null_mut::<Object>()] };
+        }
+        TitlebarDoubleClickAction::Minimize
+            if style_mask & NS_WINDOW_STYLE_MASK_MINIATURIZABLE != 0 =>
+        {
+            let _: () = unsafe { msg_send![window, miniaturize:null_mut::<Object>()] };
+        }
+        TitlebarDoubleClickAction::Zoom
+        | TitlebarDoubleClickAction::Minimize
+        | TitlebarDoubleClickAction::None => {}
+    }
+}
 
 // MARK: WindowDelegate
 define_class!(
@@ -401,5 +465,34 @@ impl crate::WindowInterface for PlatformWindow {
 
     fn macos_set_document_edited(&mut self, edited: bool) {
         let _: () = unsafe { msg_send![&self.0.window, setDocumentEdited:edited] };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TitlebarDoubleClickAction;
+
+    #[test]
+    fn parses_titlebar_double_click_preferences() {
+        assert_eq!(
+            TitlebarDoubleClickAction::from_preference(Some("Minimize")),
+            TitlebarDoubleClickAction::Minimize
+        );
+        assert_eq!(
+            TitlebarDoubleClickAction::from_preference(Some("None")),
+            TitlebarDoubleClickAction::None
+        );
+        assert_eq!(
+            TitlebarDoubleClickAction::from_preference(Some("Maximize")),
+            TitlebarDoubleClickAction::Zoom
+        );
+        assert_eq!(
+            TitlebarDoubleClickAction::from_preference(Some("Fill")),
+            TitlebarDoubleClickAction::Zoom
+        );
+        assert_eq!(
+            TitlebarDoubleClickAction::from_preference(None),
+            TitlebarDoubleClickAction::Zoom
+        );
     }
 }
