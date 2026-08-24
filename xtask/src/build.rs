@@ -198,9 +198,9 @@ impl Xtask {
                 }
             }
             Os::Windows => {
-                let desktop =
-                    PathBuf::from(env::var("USERPROFILE").context("USERPROFILE is not set")?)
-                        .join("Desktop");
+                let desktop = env::home_dir()
+                    .context("home directory is not available")?
+                    .join("Desktop");
                 for app in apps {
                     run(Command::new("cargo").args(["build", "--release", "--bin", &app.package]))?;
                     fs::copy(
@@ -211,7 +211,7 @@ impl Xtask {
                 }
             }
             Os::Linux => {
-                let home = PathBuf::from(env::var("HOME").context("HOME is not set")?);
+                let home = env::home_dir().context("home directory is not available")?;
                 let data = env::var_os("XDG_DATA_HOME")
                     .filter(|data| !data.is_empty())
                     .map(PathBuf::from)
