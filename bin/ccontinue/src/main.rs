@@ -180,11 +180,11 @@ fn link_and_run(
 ) {
     let exe_path = output.clone().unwrap_or_else(|| {
         let base = &files[0];
-        if cfg!(windows) {
-            base.replace(".cc", ".exe")
-        } else {
-            base.replace(".cc", "")
-        }
+        format!(
+            "{}{}",
+            base.strip_suffix(".cc").unwrap_or(base),
+            std::env::consts::EXE_SUFFIX
+        )
     });
 
     let mut link_cmd = Command::new(cc);

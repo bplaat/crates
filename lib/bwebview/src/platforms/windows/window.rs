@@ -496,11 +496,8 @@ pub(super) fn config_dir() -> PathBuf {
             directories::ProjectDirs::from_path(PathBuf::from(
                 env::current_exe()
                     .expect("Can't get current process name")
-                    .file_name()
-                    .expect("Can't get current process name")
-                    .to_string_lossy()
-                    .strip_suffix(".exe")
-                    .expect("Should strip .exe"),
+                    .file_stem()
+                    .expect("Can't get current process name"),
             ))
         }
     }

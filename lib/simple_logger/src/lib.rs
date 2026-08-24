@@ -7,6 +7,7 @@
 //! A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
 
 use std::env;
+use std::io::{self, IsTerminal};
 
 use chrono::Utc;
 use log::{Level, LevelFilter, Metadata, Record};
@@ -22,7 +23,9 @@ impl Default for SimpleLogger {
     fn default() -> Self {
         Self {
             max_level: LevelFilter::Info,
-            use_colors: env::var("NO_COLOR").is_err() && env::var("CI").is_err(),
+            use_colors: io::stdout().is_terminal()
+                && env::var_os("NO_COLOR").is_none()
+                && env::var_os("CI").is_none(),
         }
     }
 }

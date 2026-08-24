@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::env;
 use std::fmt::{self, Display};
+use std::io::{self, IsTerminal};
 use std::sync::Mutex;
 use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use log::{info, trace, warn};
 use rusb::{Context, DeviceHandle};
@@ -138,11 +140,14 @@ pub(crate) fn dmx_thread(config: Config) {
 
     let mut dmx = vec![0u8; config.dmx_length];
     let mut previous_toggle_speed = None;
-    let mut toggle_color_time = SystemTime::now();
+    let mut toggle_color_time = Instant::now();
     let mut is_toggle_color = false;
-    let mut strobe_time = SystemTime::now();
+    let mut strobe_time = Instant::now();
     let mut is_strobe = false;
     let mut consecutive_errors: u32 = 0;
+    let use_colors = io::stdout().is_terminal()
+        && env::var_os("NO_COLOR").is_none()
+        && env::var_os("CI").is_none();
 
     loop {
         let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
@@ -155,26 +160,20 @@ pub(crate) fn dmx_thread(config: Config) {
         // Update timers
         if previous_toggle_speed != dmx_state.toggle_speed {
             previous_toggle_speed = dmx_state.toggle_speed;
-            toggle_color_time = SystemTime::now();
+            toggle_color_time = Instant::now();
             is_toggle_color = false;
         }
         if let Some(toggle_speed) = dmx_state.toggle_speed
-            && SystemTime::now()
-                .duration_since(toggle_color_time)
-                .expect("Time went backwards")
-                > toggle_speed
+            && toggle_color_time.elapsed() > toggle_speed
         {
             is_toggle_color = !is_toggle_color;
-            toggle_color_time = SystemTime::now();
+            toggle_color_time = Instant::now();
         }
         if let Some(strobe_speed) = dmx_state.strobe_speed
-            && SystemTime::now()
-                .duration_since(strobe_time)
-                .expect("Time went backwards")
-                > strobe_speed
+            && strobe_time.elapsed() > strobe_speed
         {
             is_strobe = !is_strobe;
-            strobe_time = SystemTime::now();
+            strobe_time = Instant::now();
         }
 
         // Update DMX data
@@ -200,10 +199,7 @@ pub(crate) fn dmx_thread(config: Config) {
                             }
                             ToggleTween::Linear => {
                                 let t = if let Some(toggle_speed) = dmx_state.toggle_speed {
-                                    SystemTime::now()
-                                        .duration_since(toggle_color_time)
-                                        .expect("Time went backwards")
-                                        .as_secs_f32()
+                                    toggle_color_time.elapsed().as_secs_f32()
                                         / toggle_speed.as_secs_f32()
                                 } else {
                                     0.0
@@ -216,10 +212,7 @@ pub(crate) fn dmx_thread(config: Config) {
                             }
                             ToggleTween::Ease => {
                                 let t = if let Some(toggle_speed) = dmx_state.toggle_speed {
-                                    SystemTime::now()
-                                        .duration_since(toggle_color_time)
-                                        .expect("Time went backwards")
-                                        .as_secs_f32()
+                                    toggle_color_time.elapsed().as_secs_f32()
                                         / toggle_speed.as_secs_f32()
                                 } else {
                                     0.0
@@ -236,13 +229,17 @@ pub(crate) fn dmx_thread(config: Config) {
                     let color_with_intensity = color.apply_intensity(dmx_state.intensity);
                     if !dump_color_state {
                         dump_color_state = true;
-                        trace!(
-                            "Color: \x1b[38;2;{};{};{}m{}\x1b[0m",
-                            color_with_intensity.r,
-                            color_with_intensity.g,
-                            color_with_intensity.b,
-                            color_with_intensity
-                        );
+                        if use_colors {
+                            trace!(
+                                "Color: \x1b[38;2;{};{};{}m{}\x1b[0m",
+                                color_with_intensity.r,
+                                color_with_intensity.g,
+                                color_with_intensity.b,
+                                color_with_intensity
+                            );
+                        } else {
+                            trace!("Color: {color_with_intensity}");
+                        }
                     }
 
                     // American DJ P56 LED

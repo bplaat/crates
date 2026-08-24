@@ -505,6 +505,7 @@ dependencies = [
  "anyhow",
  "bwebview",
  "directories",
+ "enable-ansi-support",
  "mp4ameta",
  "percent-encoding",
  "rust-embed",

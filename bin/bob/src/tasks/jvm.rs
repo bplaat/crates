@@ -218,17 +218,8 @@ pub(crate) fn download_extract_jar_tasks(
         executor.add_task_cp(path.clone(), downloaded_jar.clone());
     }
     if let Some(url) = &jar.url {
-        executor.add_task_cmd(
-            format!(
-                "while [ -f {lock_file} ]; do \
-                    sleep 0.1; \
-                done; \
-                touch {lock_file}; \
-                if [ ! -f {downloaded_jar} ]; then \
-                    wget {url} -O {downloaded_jar} 2> /dev/null; \
-                fi; \
-                rm -f {lock_file}"
-            ),
+        executor.add_task(
+            TaskAction::Download(url.clone(), downloaded_jar.clone(), lock_file),
             vec![],
             vec![downloaded_jar.clone()],
         );
@@ -341,13 +332,7 @@ pub(crate) fn run_jar(bobje: &Bobje) -> ! {
 // MARK: Utils
 pub(crate) fn jdk_bin(bin: &str) -> String {
     env::var("JAVA_HOME")
-        .map(|home| {
-            if cfg!(windows) {
-                format!("{home}/bin/{bin}.exe")
-            } else {
-                format!("{home}/bin/{bin}")
-            }
-        })
+        .map(|home| format!("{home}/bin/{bin}{}", env::consts::EXE_SUFFIX))
         .unwrap_or_else(|_| bin.to_string())
 }
 
@@ -419,7 +404,10 @@ pub(crate) fn find_jdk_home(version: u32) -> Option<String> {
                         || name_lower.starts_with(&format!("zulu-{v}"))
                     {
                         let path = entry.path();
-                        if path.join(r"bin\java.exe").exists() {
+                        if path
+                            .join(format!("bin/java{}", env::consts::EXE_SUFFIX))
+                            .exists()
+                        {
                             return Some(path.display().to_string());
                         }
                     }

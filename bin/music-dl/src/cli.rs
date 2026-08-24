@@ -53,6 +53,10 @@ fn subcommand_download(args: &Args) {
 
     let (tx, rx) = mpsc::channel::<ProgressEvent>();
     let is_tty = io::stdout().is_terminal();
+    #[cfg(windows)]
+    {
+        _ = enable_ansi_support::enable_ansi_support();
+    }
     let renderer_handle = thread::spawn(move || run_renderer(rx, is_tty));
 
     let mut downloader = Downloader::new();

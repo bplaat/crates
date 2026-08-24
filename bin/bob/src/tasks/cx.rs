@@ -17,16 +17,6 @@ use crate::executor::ExecutorBuilder;
 use crate::manifest::{Dependency, LibraryType};
 use crate::utils::write_file_when_different;
 
-// MARK: Constants
-const DYLIB_EXT: &str = if cfg!(target_os = "macos") {
-    "dylib"
-} else if cfg!(windows) {
-    "dll"
-} else {
-    "so"
-};
-const EXECUTABLE_EXT: &str = if cfg!(windows) { ".exe" } else { "" };
-
 // MARK: Cx vars
 struct CxVars {
     asflags: String,
@@ -380,7 +370,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                 bobje.name,
                 match r#type {
                     LibraryType::Static => "a",
-                    LibraryType::Dynamic => DYLIB_EXT,
+                    LibraryType::Dynamic => std::env::consts::DLL_EXTENSION,
                 }
             ));
         }
@@ -418,7 +408,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                     "{}/lib{}.{}",
                     bobje.out_dir_with_target(),
                     bobje.name,
-                    DYLIB_EXT
+                    std::env::consts::DLL_EXTENSION
                 );
                 executor.add_task_cmd(
                     format!(
@@ -433,7 +423,11 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                         input_objects,
                         vars.libs,
                         if cfg!(target_os = "macos") {
-                            format!("-install_name @rpath/lib{}.{}", bobje.name, DYLIB_EXT)
+                            format!(
+                                "-install_name @rpath/lib{}.{}",
+                                bobje.name,
+                                std::env::consts::DLL_EXTENSION
+                            )
                         } else {
                             String::new()
                         },
@@ -457,7 +451,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
             .join(" ");
         let mut libs = vars.libs.clone();
         for input in &inputs {
-            if input.ends_with(DYLIB_EXT) {
+            if input.ends_with(std::env::consts::DLL_EXTENSION) {
                 libs.push_str(&format!(
                     " -l{}",
                     input
@@ -466,7 +460,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                         .1
                         .strip_prefix("lib")
                         .expect("Failed to strip prefix")
-                        .strip_suffix(&format!(".{DYLIB_EXT}"))
+                        .strip_suffix(&format!(".{}", std::env::consts::DLL_EXTENSION))
                         .expect("Failed to strip suffix")
                 ));
             }
@@ -481,8 +475,11 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
         };
 
         if bobje.profile == Profile::Release {
-            let unstripped_path = format!("{executable_file}-unstripped{EXECUTABLE_EXT}");
-            let stripped_path = format!("{executable_file}{EXECUTABLE_EXT}");
+            let unstripped_path = format!(
+                "{executable_file}-unstripped{}",
+                std::env::consts::EXE_SUFFIX
+            );
+            let stripped_path = format!("{executable_file}{}", std::env::consts::EXE_SUFFIX);
             executor.add_task_cmd(
                 format!(
                     "{} {} {} {} {} -o {}",
@@ -497,7 +494,7 @@ pub(crate) fn generate_ld_tasks(bobje: &Bobje, executor: &mut ExecutorBuilder) {
                 vec![stripped_path],
             );
         } else {
-            let out_path = format!("{executable_file}{EXECUTABLE_EXT}");
+            let out_path = format!("{executable_file}{}", std::env::consts::EXE_SUFFIX);
             executor.add_task_cmd(
                 format!(
                     "{} {} {} {} {} -o {}",
@@ -532,7 +529,7 @@ pub(crate) fn generate_ld_cunit_tests(bobje: &Bobje, executor: &mut ExecutorBuil
         libs.push_str(" -lc++");
     }
 
-    let out_path = format!("{executable_file}{EXECUTABLE_EXT}");
+    let out_path = format!("{executable_file}{}", std::env::consts::EXE_SUFFIX);
     executor.add_task_cmd(
         format!(
             "{} {} {} {} -o {}",
@@ -558,7 +555,7 @@ pub(crate) fn run_ld(bobje: &Bobje) -> ! {
         "{}/{}{}",
         bobje.out_dir_with_target(),
         bobje.name,
-        EXECUTABLE_EXT
+        std::env::consts::EXE_SUFFIX
     ))
     .status()
     .expect("Failed to execute executable");
@@ -570,7 +567,7 @@ pub(crate) fn run_ld_cunit_tests(bobje: &Bobje) -> ! {
         "{}/test_{}{}",
         bobje.out_dir_with_target(),
         bobje.name,
-        EXECUTABLE_EXT
+        std::env::consts::EXE_SUFFIX
     ))
     .status()
     .expect("Failed to execute executable");
@@ -694,7 +691,21 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
 
     let mut s = String::new();
     _ = writeln!(s, "// This file is generated by bob, do not edit!");
-    _ = writeln!(s, "\n#include <CUnit/Basic.h>\n");
+    _ = writeln!(
+        s,
+        r#"
+#include <CUnit/Basic.h>
+#include <stdio.h>
+#include <stdlib.h>
+#ifdef _WIN32
+#include <io.h>
+#define BOB_STDOUT_IS_TTY() _isatty(_fileno(stdout))
+#else
+#include <unistd.h>
+#define BOB_STDOUT_IS_TTY() isatty(STDOUT_FILENO)
+#endif
+"#
+    );
     for test_function in &test_functions {
         for function in &test_function.functions {
             _ = writeln!(s, "extern void {function}(void);");
@@ -740,10 +751,11 @@ pub(crate) fn generate_cx_test_main(bobje: &mut Bobje) {
 #define ANSI_COLOR_GREEN "\x1b[32m"
 #define ANSI_COLOR_RESET "\x1b[0m"
     int number_of_failures = CU_get_number_of_failures();
+    int use_colors = BOB_STDOUT_IS_TTY() && getenv("NO_COLOR") == NULL && getenv("CI") == NULL;
     if (number_of_failures == 0) {{
-        printf(ANSI_COLOR_GREEN "All tests passed!" ANSI_COLOR_RESET "\n");
+        printf("%sAll tests passed!%s\n", use_colors ? ANSI_COLOR_GREEN : "", use_colors ? ANSI_COLOR_RESET : "");
     }} else {{
-        printf(ANSI_COLOR_RED "%d tests failed!" ANSI_COLOR_RESET "\n", number_of_failures);
+        printf("%s%d tests failed!%s\n", use_colors ? ANSI_COLOR_RED : "", number_of_failures, use_colors ? ANSI_COLOR_RESET : "");
     }}
 
     CU_cleanup_registry();

@@ -7,8 +7,10 @@
 #![allow(unused_variables)]
 
 use std::collections::HashSet;
+use std::fs::OpenOptions;
+use std::io::{self, IsTerminal};
 use std::path::Path;
-use std::process::{Command, exit};
+use std::process::{Command, Stdio, exit};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -33,6 +35,7 @@ pub(crate) struct Task {
 pub(crate) enum TaskAction {
     Phony(String),
     Copy(String, String),
+    Download(String, String, String),
     Command(String),
     Multiple(Vec<TaskAction>),
 }
@@ -201,6 +204,45 @@ impl TaskAction {
                     exit(1)
                 });
                 format!("cp {src} {dst}")
+            }
+            TaskAction::Download(url, destination, lock_file) => {
+                let lock = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .truncate(false)
+                    .open(lock_file)
+                    .unwrap_or_else(|error| {
+                        eprintln!("Failed to open download lock {lock_file}: {error}");
+                        exit(1)
+                    });
+                lock.lock().unwrap_or_else(|error| {
+                    eprintln!("Failed to lock {lock_file}: {error}");
+                    exit(1)
+                });
+
+                if !Path::new(destination).exists() {
+                    let temporary = format!("{destination}.part");
+                    let status = Command::new("wget")
+                        .args([url, "-O", &temporary])
+                        .stderr(Stdio::null())
+                        .status()
+                        .unwrap_or_else(|error| {
+                            eprintln!("Failed to download {url}: {error}");
+                            exit(1)
+                        });
+                    if !status.success() {
+                        _ = fs::remove_file(&temporary);
+                        eprintln!("Failed to download {url}: {status}");
+                        exit(1);
+                    }
+                    fs::rename(&temporary, destination).unwrap_or_else(|error| {
+                        _ = fs::remove_file(&temporary);
+                        eprintln!("Failed to store download at {destination}: {error}");
+                        exit(1)
+                    });
+                }
+                format!("wget {url} -O {destination}")
             }
             TaskAction::Command(command) => {
                 let status = if cfg!(windows) {
@@ -450,7 +492,10 @@ impl Executor {
                 println!("{:#?}", self.tasks);
             }
 
-            let pretty_print = !verbose && env::var("NO_COLOR").is_err() && env::var("CI").is_err();
+            let pretty_print = !verbose
+                && io::stdout().is_terminal()
+                && env::var_os("NO_COLOR").is_none()
+                && env::var_os("CI").is_none();
             if pretty_print {
                 println!();
             }
@@ -533,5 +578,35 @@ impl Executor {
                 done_ids.push(task.id);
             }
         });
+    }
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn download_reuses_existing_file_while_holding_lock() {
+        let directory = env::temp_dir().join(format!("bob-download-test-{}", std::process::id()));
+        _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).expect("create test directory");
+        let destination = directory.join("dependency.jar");
+        let lock_file = directory.join("download.lock");
+        fs::write(&destination, "existing").expect("write existing download");
+
+        let action = TaskAction::Download(
+            "invalid://unused".to_owned(),
+            destination.to_string_lossy().into_owned(),
+            lock_file.to_string_lossy().into_owned(),
+        );
+        action.execute();
+
+        assert_eq!(
+            fs::read_to_string(destination).expect("read existing download"),
+            "existing"
+        );
+        assert!(lock_file.exists());
+        fs::remove_dir_all(directory).expect("remove test directory");
     }
 }
