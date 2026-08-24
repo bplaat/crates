@@ -6,12 +6,13 @@
 
 #include "canvas.h"
 
-void canvas_init(canvas_t* canvas, int32_t width, int32_t height, uint32_t* pixels, float scale) {
+void canvas_init(canvas_t* canvas, int32_t width, int32_t height, int32_t phys_width, int32_t phys_height,
+                 uint32_t* pixels, float scale) {
     canvas->width = width;
     canvas->height = height;
     canvas->scale = scale > 0.0f ? scale : 1.0f;
-    canvas->phys_width = (int32_t)((float)width * canvas->scale + 0.5f);
-    canvas->phys_height = (int32_t)((float)height * canvas->scale + 0.5f);
+    canvas->phys_width = phys_width;
+    canvas->phys_height = phys_height;
     canvas->pixels = pixels;
 }
 

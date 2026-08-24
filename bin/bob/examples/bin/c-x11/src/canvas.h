@@ -19,7 +19,8 @@ typedef struct canvas_t {
     uint32_t* pixels;
 } canvas_t;
 
-void canvas_init(canvas_t* canvas, int32_t width, int32_t height, uint32_t* pixels, float scale);
+void canvas_init(canvas_t* canvas, int32_t width, int32_t height, int32_t phys_width, int32_t phys_height,
+                 uint32_t* pixels, float scale);
 
 void canvas_fill_rect(canvas_t* canvas, float x, float y, float w, float h, uint32_t color);
 

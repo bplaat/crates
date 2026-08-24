@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-// A simple pure C X11 client example that uses a canvas software renderer and blits to the window
-// FIXME: Fix issues on XQuartz and XWayland resizing
+// A pure C X11 software-framebuffer example with a time-based game loop.
 
 #define _POSIX_C_SOURCE 200112L
 
@@ -15,12 +14,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "canvas.h"
 #include "x11.h"
 
-static void render(canvas_t* canvas) {
+static void render(canvas_t* canvas, double time_seconds) {
     // Clear to white
     canvas_fill_rect(canvas, 0.0f, 0.0f, (float)canvas->width, (float)canvas->height, CANVAS_COLOR(255, 255, 255));
 
@@ -39,6 +39,23 @@ static void render(canvas_t* canvas) {
         canvas_stroke_rect(canvas, 40.0f + i * 12.0f, 280.0f + i * 8.0f, 200.0f - i * 24.0f, 120.0f - i * 16.0f, 1.0f,
                            CANVAS_COLOR(80 + i * 30, 80 + i * 20, 200 - i * 30));
     }
+
+    // A time-based animation makes it clear that rendering is independent of
+    // X11 event delivery. Use design units so it stays correct at every DPI.
+    float travel = (float)canvas->width - 80.0f;
+    float phase = (float)(time_seconds * 120.0);
+    int32_t period = travel > 1.0f ? (int32_t)(travel * 2.0f) : 1;
+    float x = (float)((int32_t)phase % period);
+    if (x > travel)
+        x = (float)period - x;
+    canvas_fill_rect(canvas, x, (float)canvas->height - 48.0f, 80.0f, 24.0f, CANVAS_COLOR(32, 32, 32));
+}
+
+static int64_t monotonic_ns(void) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+        return 0;
+    return (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
 }
 
 // Find the monitor with the greatest overlap with the window rect.
@@ -204,11 +221,6 @@ int main(void) {
                             32, &sync_counter, sizeof(sync_counter));
     }
 
-    x11_map_window(&conn, window);
-
-    // Subscribe to screen-layout change events (monitor hot-plug, DPI changes)
-    x11_randr_select_input(&conn, window);
-
     // Create image and canvas backed by it
     x11_image_t img;
     if (!x11_create_image(&conn, &img, window, window_width, window_height)) {
@@ -219,20 +231,52 @@ int main(void) {
         return EXIT_FAILURE;
     }
 
-    // Allocate XDBE back buffer; render into it and swap atomically to eliminate tearing.
-    // Falls back to direct window rendering if XDBE is unavailable.
-    uint32_t back_buffer = conn.has_xdbe ? x11_xdbe_alloc_back_buffer(&conn, window) : 0;
+    // XDBE is useful on traditional Xorg, but XQuartz implements it through an
+    // additional full-window copy that makes interactive resizing much slower.
+    // The native macOS window is already composited, so direct presentation is
+    // both faster and tear-free there.
+    bool use_xdbe = conn.has_xdbe;
+#ifdef __APPLE__
+    use_xdbe = false;
+#endif
+    uint32_t back_buffer = use_xdbe ? x11_xdbe_alloc_back_buffer(&conn, window) : 0;
     uint32_t render_target = back_buffer ? back_buffer : window;
 
     canvas_t canvas;
-    canvas_init(&canvas, logical_w, logical_h, img.pixels, scale);
+    canvas_init(&canvas, logical_w, logical_h, img.width, img.height, img.pixels, scale);
 
-    // Event loop
+    // Finish all synchronous capability checks before mapping. Once mapped,
+    // ordinary window events may be interleaved with round-trip replies.
+    x11_randr_select_input(&conn, window);
+    x11_map_window(&conn, window);
+
+    // Game loop. poll() sleeps until either X11 has work or the next frame is
+    // due, so the loop is responsive without spinning. Simulation is based on
+    // monotonic time and is therefore independent of rendering speed.
     x11_event_t event;
     bool running = true;
+    bool needs_render = true;
+    bool frame_in_flight = false;
+    int32_t pending_resize_w = 0;
+    int32_t pending_resize_h = 0;
     bool has_pending_sync = false;
     int32_t pending_sync_lo = 0, pending_sync_hi = 0;
-    while (running && x11_wait_for_event(&conn, &event)) {
+    const int64_t frame_ns = 1000000000LL / 60;
+    int64_t start_ns = monotonic_ns();
+    int64_t next_frame_ns = start_ns;
+    while (running) {
+        int64_t now_ns = monotonic_ns();
+        int64_t wait_ns = next_frame_ns - now_ns;
+        int32_t timeout_ms = wait_ns > 0 ? (int32_t)((wait_ns + 999999) / 1000000) : 0;
+        int poll_result = x11_poll_event(&conn, &event, timeout_ms);
+        if (poll_result < 0)
+            break;
+        if (poll_result == 0)
+            event.type = 0;
+
+        if (event.type == X11_SHM_COMPLETION)
+            frame_in_flight = false;
+
         if (event.type == X11_CLIENT_MESSAGE_SYNC_REQUEST) {
             has_pending_sync = true;
             pending_sync_lo = event.sync_value_lo;
@@ -277,6 +321,13 @@ int main(void) {
                 x11_configure_window(&conn, window, X11_CONFIG_WINDOW_WIDTH | X11_CONFIG_WINDOW_HEIGHT, size_vals,
                                      sizeof(size_vals));
             } else if (new_w != img.width || new_h != img.height) {
+                // MIT-SHM ownership remains with the server until Completion.
+                // Defer reallocating or drawing into that memory until then.
+                if (frame_in_flight) {
+                    pending_resize_w = new_w;
+                    pending_resize_h = new_h;
+                    continue;
+                }
                 // User resize: derive logical dimensions from the new physical size.
                 logical_w = (int32_t)(new_w / scale);
                 logical_h = (int32_t)(new_h / scale);
@@ -285,17 +336,9 @@ int main(void) {
                     running = false;
                     break;
                 }
-                canvas_init(&canvas, logical_w, logical_h, img.pixels, scale);
-                // Coalesce: if more events are already queued (common during a
-                // live resize drag), skip rendering this intermediate frame -
-                // the next ConfigureNotify will render at the final size.
-                // Always ack the sync so the compositor can send the next step.
-                if (!x11_has_event_pending(&conn)) {
-                    render(&canvas);
-                    x11_put_image(&conn, render_target, &img);
-                    if (back_buffer)
-                        x11_xdbe_swap_buffers(&conn, window);
-                }
+                canvas_init(&canvas, logical_w, logical_h, img.width, img.height, img.pixels, scale);
+                frame_in_flight = false;
+                needs_render = true;
                 if (has_pending_sync && sync_counter) {
                     x11_sync_set_counter(&conn, sync_counter, pending_sync_lo, pending_sync_hi);
                     has_pending_sync = false;
@@ -309,10 +352,7 @@ int main(void) {
 
         // Expose (count == 0 means no more expose events pending): render and blit.
         if (event.type == X11_EXPOSE && event.expose_count == 0) {
-            render(&canvas);
-            x11_put_image(&conn, render_target, &img);
-            if (back_buffer)
-                x11_xdbe_swap_buffers(&conn, window);
+            needs_render = true;
         }
 
         if (event.type == X11_RANDR_SCREEN_CHANGE_NOTIFY) {
@@ -331,24 +371,51 @@ int main(void) {
                 scale = new_scale;
                 int32_t phys_w = (int32_t)(logical_w * scale);
                 int32_t phys_h = (int32_t)(logical_h * scale);
-                if (!x11_resize_image(&conn, &img, phys_w, phys_h)) {
-                    fprintf(stderr, "Can't resize image\n");
-                    running = false;
-                    break;
-                }
                 uint32_t size_vals[] = {(uint32_t)phys_w, (uint32_t)phys_h};
                 x11_configure_window(&conn, window, X11_CONFIG_WINDOW_WIDTH | X11_CONFIG_WINDOW_HEIGHT, size_vals,
                                      sizeof(size_vals));
-                canvas_init(&canvas, logical_w, logical_h, img.pixels, scale);
-                render(&canvas);
-                x11_put_image(&conn, render_target, &img);
-                if (back_buffer)
-                    x11_xdbe_swap_buffers(&conn, window);
             }
         }
 
         if (event.type == X11_CLIENT_MESSAGE_CLOSE) {
             running = false;
+        }
+
+        if (!frame_in_flight && pending_resize_w > 0 && pending_resize_h > 0) {
+            logical_w = (int32_t)(pending_resize_w / scale);
+            logical_h = (int32_t)(pending_resize_h / scale);
+            if (!x11_resize_image(&conn, &img, pending_resize_w, pending_resize_h)) {
+                fprintf(stderr, "Can't resize image\n");
+                running = false;
+            } else {
+                canvas_init(&canvas, logical_w, logical_h, img.width, img.height, img.pixels, scale);
+                needs_render = true;
+            }
+            pending_resize_w = 0;
+            pending_resize_h = 0;
+        }
+
+        now_ns = monotonic_ns();
+        if (now_ns >= next_frame_ns)
+            needs_render = true;
+        // Drain queued ConfigureNotify events before drawing. This turns a burst
+        // of live-resize sizes into one framebuffer resize and one final blit.
+        if (needs_render && !frame_in_flight && !x11_has_event_pending(&conn) && running) {
+            render(&canvas, (double)(now_ns - start_ns) / 1000000000.0);
+            x11_put_image(&conn, render_target, &img);
+            if (back_buffer)
+                x11_xdbe_swap_buffers(&conn, window);
+            frame_in_flight = conn.has_shm && img.shmseg != 0;
+            needs_render = false;
+            if (has_pending_sync && sync_counter) {
+                x11_sync_set_counter(&conn, sync_counter, pending_sync_lo, pending_sync_hi);
+                has_pending_sync = false;
+            }
+        }
+        if (now_ns >= next_frame_ns) {
+            next_frame_ns += frame_ns;
+            if (next_frame_ns <= now_ns)
+                next_frame_ns = now_ns + frame_ns;
         }
     }
 

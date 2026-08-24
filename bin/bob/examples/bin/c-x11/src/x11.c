@@ -80,21 +80,7 @@ static bool x11_skip(int fd, size_t len) {
     return true;
 }
 
-// Minimal round-trip (GetInputFocus) used to drain the server's request queue.
-static bool x11_sync(int fd) {
-    typedef struct X11_PACKED {
-        uint8_t op;
-        uint8_t pad;
-        uint16_t len;
-    } x11_get_input_focus_t;
-    x11_get_input_focus_t req = {43, 0, 1};
-    if (!x11_write_all(fd, &req, sizeof(req)))
-        return false;
-    uint8_t reply[32];
-    return x11_read_all(fd, reply, 32);
-}
-
-// Like x11_sync, but returns false if the server replied with an error to the
+// A round-trip that returns false if the server replied with an error to the
 // preceding request (e.g. BadAlloc from AllocBackBuffer on XQuartz).
 // Consumes one leading error event, then reads the GetInputFocus reply.
 static bool x11_sync_check_error(int fd) {
@@ -336,6 +322,16 @@ bool x11_connect(x11_connection_t* conn) {
     } else if (host[0] != '\0' && strcmp(host, "localhost") != 0) {
         use_tcp = true;
     }
+
+#ifdef __APPLE__
+    // XQuartz can expose :0 only through localhost TCP when its launchd socket
+    // service is unavailable. It still writes the matching cookie to
+    // ~/.Xauthority, so this is equivalent to the normal local connection.
+    if (host[0] == '\0' && socket_path[0] == '\0') {
+        snprintf(host, sizeof(host), "127.0.0.1");
+        use_tcp = true;
+    }
+#endif
 
     // Try to read and parse .Xauthority
     char xauth_path[512];
@@ -887,10 +883,19 @@ bool x11_create_image(x11_connection_t* conn, x11_image_t* img, uint32_t window,
                 .read_only = 0,
             };
             x11_write_all(conn->fd, &attach, sizeof(attach));
-            // Sync to confirm the server has attached, then mark for auto-cleanup on crash.
-            // The segment persists until all processes (client + server) detach.
-            x11_sync(conn->fd);
-            shmctl(img->shmid, IPC_RMID, NULL);
+            // XQuartz can advertise MIT-SHM but reject Attach. Check the request
+            // before using the segment and fall back to regular PutImage.
+            if (!x11_sync_check_error(conn->fd)) {
+                shmdt(img->pixels);
+                shmctl(img->shmid, IPC_RMID, NULL);
+                img->pixels = NULL;
+                img->shmid = -1;
+                img->shmseg = 0;
+                conn->has_shm = false;
+            } else {
+                // The segment persists until both client and server detach.
+                shmctl(img->shmid, IPC_RMID, NULL);
+            }
         } else {
             conn->has_shm = false;
         }
@@ -970,7 +975,9 @@ bool x11_resize_image(x11_connection_t* conn, x11_image_t* img, int32_t new_w, i
                 .read_only = 0,
             };
             x11_write_all(conn->fd, &attach, sizeof(attach));
-            x11_sync(conn->fd);
+            // The initial image already verified that Attach works. Do not do a
+            // synchronous round-trip here because normal window events may be
+            // queued while a live resize is in progress.
             shmctl(img->shmid, IPC_RMID, NULL);
         } else {
             conn->has_shm = false;
@@ -1010,7 +1017,8 @@ void x11_put_image(x11_connection_t* conn, uint32_t window, x11_image_t* img) {
             .dst_y = 0,
             .depth = depth,
             .format = X11_IMAGE_FORMAT_Z_PIXMAP,
-            .send_event = 0,
+            // The client must not modify the shared buffer until this arrives.
+            .send_event = 1,
             .shmseg = img->shmseg,
             .offset = 0,
         };
@@ -1445,7 +1453,23 @@ bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event) {
         event->type = X11_RANDR_SCREEN_CHANGE_NOTIFY;
     }
 
+    if (conn->has_shm && conn->shm_first_event != 0 && event->type == conn->shm_first_event)
+        event->type = X11_SHM_COMPLETION;
+
     return true;
+}
+
+int x11_poll_event(x11_connection_t* conn, x11_event_t* event, int32_t timeout_ms) {
+    struct pollfd pfd = {.fd = conn->fd, .events = POLLIN};
+    int result;
+    do {
+        result = poll(&pfd, 1, timeout_ms);
+    } while (result < 0 && errno == EINTR);
+    if (result == 0)
+        return 0;
+    if (result < 0 || (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0)
+        return -1;
+    return x11_wait_for_event(conn, event) ? 1 : -1;
 }
 
 bool x11_has_event_pending(x11_connection_t* conn) {

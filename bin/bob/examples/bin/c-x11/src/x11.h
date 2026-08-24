@@ -71,6 +71,8 @@
 #define X11_CLIENT_MESSAGE_CLOSE 255
 // Synthetic event for _NET_WM_SYNC_REQUEST ClientMessage
 #define X11_CLIENT_MESSAGE_SYNC_REQUEST 253
+// Synthetic event emitted after the server has finished reading an MIT-SHM image.
+#define X11_SHM_COMPLETION 252
 // Synthetic event emitted by x11_wait_for_event when an RRScreenChangeNotify arrives
 #define X11_RANDR_SCREEN_CHANGE_NOTIFY 254
 
@@ -737,6 +739,10 @@ void x11_put_image(x11_connection_t* conn, uint32_t window, x11_image_t* img);
 void x11_destroy_image(x11_connection_t* conn, x11_image_t* img);
 
 bool x11_wait_for_event(x11_connection_t* conn, x11_event_t* event);
+
+// Wait up to timeout_ms for one event. Returns 1 for an event, 0 for a
+// timeout/interrupted wait, and -1 when the connection is lost.
+int x11_poll_event(x11_connection_t* conn, x11_event_t* event, int32_t timeout_ms);
 
 // Returns true if at least one event is waiting in the socket buffer (non-blocking).
 bool x11_has_event_pending(x11_connection_t* conn);
