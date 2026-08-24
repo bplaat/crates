@@ -1,6 +1,6 @@
 [package]
 name = "base64"
-version = "0.22.1+patch"
+version = "0.23.1+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

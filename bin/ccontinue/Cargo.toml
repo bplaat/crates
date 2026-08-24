@@ -16,5 +16,5 @@ workspace = true
 regex = { version = "1.13", default-features = false, features = [
     "unicode-perl",
 ] }
-indexmap = "2.12"
-rust-embed = "8.7.0"
+indexmap = "2.14"
+rust-embed = "8.12"

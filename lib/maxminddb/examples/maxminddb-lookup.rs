@@ -34,7 +34,7 @@ fn main() {
         process::exit(1);
     });
 
-    println!("Database:   {}", reader.metadata.database_type);
+    println!("Database:   {}", reader.metadata().database_type);
     println!("IP address: {ip}");
     println!();
 

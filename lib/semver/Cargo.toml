@@ -1,6 +1,6 @@
 [package]
 name = "semver"
-version = "1.0.27+patch"
+version = "1.0.28+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

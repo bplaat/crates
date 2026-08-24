@@ -12,6 +12,6 @@ platforms = ["macos"]
 workspace = true
 
 [dependencies]
-block2 = "0.6"
+block2 = "0.6.2"
 macview-appkit = { path = "../../lib/macview-appkit" }
-objc2 = "0.6"
+objc2 = "0.6.4"

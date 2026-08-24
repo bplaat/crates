@@ -34,8 +34,8 @@ entitlements = "../macview-thumbnail/Entitlements.plist"
 workspace = true
 
 [dependencies]
-base64 = "0.22"
-block2 = "0.6"
-objc2 = "0.6"
+base64 = "0.23.1"
+block2 = "0.6.2"
+objc2 = "0.6.4"
 macview-appkit = { path = "../../lib/macview-appkit" }
 tinyvg = { path = "../../lib/tinyvg" }

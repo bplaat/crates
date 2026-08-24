@@ -174,7 +174,7 @@ These libraries are minimal replacements for commonly used crates.
 
     ```sh
     rustup target add wasm32-unknown-unknown
-    cargo binstall -y --locked wasm-bindgen-cli --version 0.2.104
+    cargo binstall -y --locked wasm-bindgen-cli --version 0.2.127
     cargo xtask build-pages
     ```
 

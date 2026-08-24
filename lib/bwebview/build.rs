@@ -251,18 +251,18 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
     use std::fmt::Write as _;
 
     use windows_metadata::Value;
-    use windows_metadata::reader::{HasAttributes, Index, TypeCategory};
+    use windows_metadata::reader::{HasAttributes, TypeCategory, TypeIndex};
 
     let winmd_path = PathBuf::from(manifest_dir)
         .join("webview2")
         .join("Microsoft.Web.WebView2.Win32.winmd");
     println!("cargo:rerun-if-changed={}", winmd_path.display());
 
-    let index = Index::read(&winmd_path).expect("Failed to read WebView2 winmd");
+    let index = TypeIndex::read(&winmd_path).expect("Failed to read WebView2 winmd");
 
     // Pre-compute WebView2 enum underlying types (name → rust type)
     let enum_types: HashMap<String, String> = index
-        .all()
+        .types()
         .filter(|t| {
             t.namespace() == "Microsoft.Web.WebView2.Win32" && t.category() == TypeCategory::Enum
         })
@@ -287,7 +287,7 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
 
     // Pre-compute struct type names (for value-type pass-by-value detection)
     let struct_types: HashSet<String> = index
-        .all()
+        .types()
         .filter(|t| {
             t.namespace() == "Microsoft.Web.WebView2.Win32" && t.category() == TypeCategory::Struct
         })
@@ -296,7 +296,7 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
 
     // Pre-compute interface inheritance: interface_name -> parent_interface_name (WebView2 only)
     let interface_parent: HashMap<String, String> = index
-        .all()
+        .types()
         .filter(|t| {
             t.namespace() == "Microsoft.Web.WebView2.Win32"
                 && t.category() == TypeCategory::Interface
@@ -320,7 +320,7 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
     // Format: "MethodName: unsafe extern \"system\" fn(This: *mut OwnerType, ...) -> Ret,"
     let interface_vtbl_entries: HashMap<String, Vec<String>> = {
         let mut map = HashMap::new();
-        for t in index.all().filter(|t| {
+        for t in index.types().filter(|t| {
             t.namespace() == "Microsoft.Web.WebView2.Win32"
                 && t.category() == TypeCategory::Interface
         }) {
@@ -359,7 +359,7 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
     // Pre-compute impl method data per interface (own methods only)
     let interface_impl_methods: HashMap<String, Vec<ImplMethodData>> = {
         let mut map = HashMap::new();
-        for t in index.all().filter(|t| {
+        for t in index.types().filter(|t| {
             t.namespace() == "Microsoft.Web.WebView2.Win32"
                 && t.category() == TypeCategory::Interface
         }) {
@@ -407,7 +407,7 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
     _ = writeln!(code);
 
     // Struct value types
-    for t in index.all().filter(|t| {
+    for t in index.types().filter(|t| {
         t.namespace() == "Microsoft.Web.WebView2.Win32" && t.category() == TypeCategory::Struct
     }) {
         _ = writeln!(code, "#[repr(C)]");
@@ -422,7 +422,7 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
     }
 
     // Extern function block (Apis class = PInvoke methods)
-    for t in index.all().filter(|t| {
+    for t in index.types().filter(|t| {
         t.namespace() == "Microsoft.Web.WebView2.Win32"
             && t.category() == TypeCategory::Class
             && t.name() == "Apis"
@@ -458,7 +458,7 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
     }
 
     // Enum constants
-    for t in index.all().filter(|t| {
+    for t in index.types().filter(|t| {
         t.namespace() == "Microsoft.Web.WebView2.Win32" && t.category() == TypeCategory::Enum
     }) {
         let underlying = enum_types
@@ -491,7 +491,7 @@ fn generate_webview2_bindings(manifest_dir: &str, out_dir: &str) {
     _ = writeln!(code);
 
     // COM interfaces
-    for t in index.all().filter(|t| {
+    for t in index.types().filter(|t| {
         t.namespace() == "Microsoft.Web.WebView2.Win32" && t.category() == TypeCategory::Interface
     }) {
         let is_handler = t.name().ends_with("Handler");

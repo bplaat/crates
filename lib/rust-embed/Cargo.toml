@@ -1,6 +1,6 @@
 [package]
 name = "rust-embed"
-version = "8.7.0+patch"
+version = "8.12.0+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

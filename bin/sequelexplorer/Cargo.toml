@@ -17,8 +17,8 @@ hardened_runtime = true
 workspace = true
 
 [dependencies]
-anyhow = "1"
-base64 = "0.22"
+anyhow = "1.0"
+base64 = "0.23.1"
 bsqlite = "0.1.2"
 bwebview = { path = "../../lib/bwebview", features = [
     "rust-embed",
@@ -26,7 +26,7 @@ bwebview = { path = "../../lib/bwebview", features = [
     "file_drop",
     "menu",
 ] }
-rust-embed = "8.7"
+rust-embed = "8.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.1"
@@ -34,10 +34,10 @@ small-http = { version = "0.2.1", default-features = false, features = [
     "json",
 ] }
 small-router = { version = "0.2.1" }
-url = { version = "2.0" }
+url = { version = "2.5" }
 
 [target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
 bsqlite = { version = "0.1.2", features = ["bundled"] }
 
 [build-dependencies]
-winresource = "0.1.29"
+winresource = "0.1.31"

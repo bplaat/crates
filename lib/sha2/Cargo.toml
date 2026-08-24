@@ -6,7 +6,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-digest = "0.11.0"
+digest = "0.11.3"
 
 [lints]
 workspace = true

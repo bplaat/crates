@@ -47,10 +47,10 @@ mod tests {
     #[test]
     fn test_open_readfile() {
         let reader = Reader::open_readfile(test_db_path()).expect("failed to open database");
-        assert!(reader.metadata.node_count > 0);
-        assert_eq!(reader.metadata.ip_version, 6);
-        assert_eq!(reader.metadata.record_size, 28);
-        assert!(reader.metadata.database_type.contains("City"));
+        assert!(reader.metadata().node_count > 0);
+        assert_eq!(reader.metadata().ip_version, 6);
+        assert_eq!(reader.metadata().record_size, 28);
+        assert!(reader.metadata().database_type.contains("City"));
     }
 
     #[test]
@@ -101,13 +101,13 @@ mod tests {
     fn test_from_source() {
         let buf = std::fs::read(test_db_path()).expect("failed to read file");
         let reader = Reader::from_source(buf).expect("failed to parse database");
-        assert!(reader.metadata.node_count > 0);
+        assert!(reader.metadata().node_count > 0);
     }
 
     #[test]
     fn test_metadata_build_epoch() {
         let reader = Reader::open_readfile(test_db_path()).expect("failed to open database");
         // Build epoch should be a reasonable Unix timestamp (after 2010).
-        assert!(reader.metadata.build_epoch > 1_262_304_000);
+        assert!(reader.metadata().build_epoch > 1_262_304_000);
     }
 }

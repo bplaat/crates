@@ -1,6 +1,6 @@
 [package]
 name = "threadpool"
-version = "1.8.0+patch"
+version = "1.8.1+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

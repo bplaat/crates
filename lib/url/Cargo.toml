@@ -1,6 +1,6 @@
 [package]
 name = "url"
-version = "2.5.0+patch"
+version = "2.5.8+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

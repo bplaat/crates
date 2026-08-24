@@ -1,6 +1,6 @@
 [package]
 name = "subtle"
-version = "2.6.0+patch"
+version = "2.6.1+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

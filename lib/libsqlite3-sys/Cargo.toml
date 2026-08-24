@@ -1,6 +1,6 @@
 [package]
 name = "libsqlite3-sys"
-version = "0.31.0+patch"
+version = "0.38.2+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [build-dependencies]
-cc = { version = "1.2", optional = true }
+cc = { version = "1.4", optional = true }
 
 [features]
 bundled = ["dep:cc"]

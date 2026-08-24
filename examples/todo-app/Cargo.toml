@@ -14,7 +14,7 @@ bwebview = { path = "../../lib/bwebview", default-features = false, features = [
     "remember_window_state",
 ] }
 directories = "6.0"
-rust-embed = { version = "8.7", features = ["interpolate-folder-path"] }
+rust-embed = { version = "8.12", features = ["interpolate-folder-path"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-uuid = { version = "1.0", features = ["serde"] }
+uuid = { version = "1.25", features = ["serde"] }

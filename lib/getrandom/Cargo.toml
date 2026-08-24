@@ -1,6 +1,6 @@
 [package]
 name = "getrandom"
-version = "0.3.0+patch"
+version = "0.4.3+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

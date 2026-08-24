@@ -17,7 +17,7 @@ entitlements = "meta/macos/Entitlements.plist"
 
 [dependencies]
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
-rust-embed = "8.7"
+rust-embed = "8.12"
 
 [build-dependencies]
-winresource = "0.1.29"
+winresource = "0.1.31"

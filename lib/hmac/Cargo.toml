@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-digest = "0.11.0"
+digest = "0.11.3"
 
 [dev-dependencies]
 sha2 = "0.11.0"

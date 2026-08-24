@@ -19,4 +19,4 @@ workspace = true
 bwebview = { path = "../../lib/bwebview" }
 
 [build-dependencies]
-winresource = "0.1.29"
+winresource = "0.1.31"

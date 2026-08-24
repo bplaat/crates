@@ -1,6 +1,6 @@
 [package]
 name = "local-ip-address"
-version = "0.6.5+patch"
+version = "0.6.13+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
@@ -10,4 +10,4 @@ workspace = true
 
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc = "0.2.189"

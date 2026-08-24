@@ -18,7 +18,7 @@ use crate::metadata::Metadata;
 /// A reader for the MaxMind DB format.
 pub struct Reader<S: AsRef<[u8]>> {
     /// Metadata about the database.
-    pub metadata: Metadata,
+    metadata: Metadata,
     buf: S,
     data_offset: usize,
 }
@@ -52,6 +52,13 @@ impl<S: AsRef<[u8]>> Reader<S> {
             buf,
             data_offset,
         })
+    }
+
+    /// Returns database metadata.
+    #[inline]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn metadata(&self) -> &Metadata {
+        &self.metadata
     }
 
     /// Look up an IP address in the database.

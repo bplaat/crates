@@ -89,7 +89,7 @@ enum Container<'de> {
 }
 
 fn scalar_tag(tag: Option<&Cow<'_, Tag>>) -> ScalarTag {
-    match tag.map(|tag| tag.suffix.as_str()) {
+    match tag.map(|tag| tag.suffix()) {
         Some("str") => ScalarTag::String,
         Some("bool") => ScalarTag::Bool,
         Some("int") => ScalarTag::Integer,
@@ -107,8 +107,7 @@ fn parse(input: &str) -> Result<Node<'_>, Error> {
     for next in Parser::new_from_str(input) {
         let (event, _) = next.map_err(|error| Error::custom(error.to_string()))?;
         match event {
-            Event::Nothing
-            | Event::StreamStart
+            Event::StreamStart
             | Event::StreamEnd
             | Event::DocumentStart(_, _)
             | Event::DocumentEnd
@@ -173,6 +172,7 @@ fn parse(input: &str) -> Result<Node<'_>, Error> {
                     .ok_or_else(|| Error::custom(format!("unknown YAML anchor {anchor}")))?;
                 finish_node(node, 0, &mut stack, &mut anchors, &mut root)?;
             }
+            _ => return Err(Error::custom("unsupported YAML parser event")),
         }
     }
 

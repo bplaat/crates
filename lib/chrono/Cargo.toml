@@ -1,6 +1,6 @@
 [package]
 name = "chrono"
-version = "0.4.0+patch"
+version = "0.4.45+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

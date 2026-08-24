@@ -1,6 +1,6 @@
 [package]
 name = "plist"
-version = "1.9.0+patch"
+version = "1.10.0+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

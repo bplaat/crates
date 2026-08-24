@@ -12,6 +12,6 @@ platforms = ["macos"]
 workspace = true
 
 [dependencies]
-objc2 = "0.6"
+objc2 = "0.6.4"
 qoi = { path = "../qoi" }
 tinyvg = { path = "../tinyvg" }
