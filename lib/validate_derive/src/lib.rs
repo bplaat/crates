@@ -32,11 +32,13 @@ enum RuleType {
 #[proc_macro_derive(Validate, attributes(validate))]
 pub fn validate_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
+    let generics = &input.generics;
+    let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
     // Parse context type
     let mut context = None;
-    for attr in input.attrs {
+    for attr in &input.attrs {
         if attr.path().is_ident("validate") {
             let list = attr
                 .parse_args_with(
@@ -61,9 +63,17 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     }
 
     // Parse fields with #[validate] attribute
-    let fields = if let syn::Data::Struct(data) = input.data {
+    let fields = if let syn::Data::Struct(data) = &input.data {
+        if !matches!(data.fields, syn::Fields::Named(_)) {
+            return syn::Error::new_spanned(
+                name,
+                "Validate only supports structs with named fields",
+            )
+            .into_compile_error()
+            .into();
+        }
         let mut fields = Vec::new();
-        for field in data.fields {
+        for field in &data.fields {
             let is_option = field.ty.to_token_stream().to_string().starts_with("Option");
             let mut rules = Vec::new();
             for attr in &field.attrs {
@@ -166,7 +176,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
                     }
                 }
             }
-            fields.push((field, rules));
+            fields.push((field.clone(), rules));
         }
         fields
     } else {
@@ -276,7 +286,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
     });
 
     TokenStream::from(quote! {
-        impl validate::Validate for #name {
+        impl #impl_generics validate::Validate for #name #type_generics #where_clause {
             type Context = #context_type;
             fn validate_with(&self, context: &Self::Context) -> std::result::Result<(), validate::Report> {
                 let mut report = validate::Report::new();

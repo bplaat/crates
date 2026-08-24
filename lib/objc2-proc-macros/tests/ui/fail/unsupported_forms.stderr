@@ -1,0 +1,11 @@
+error: Objective-C class declarations do not support generics
+ --> tests/ui/fail/unsupported_forms.rs:9:29
+  |
+9 | extern_class!(struct Generic<T>;);
+  |                             ^^^
+
+error: Objective-C class declarations must be unit structs
+  --> tests/ui/fail/unsupported_forms.rs:11:29
+   |
+11 | define_class!(struct Fields { value: usize });
+   |                             ^^^^^^^^^^^^^^^^

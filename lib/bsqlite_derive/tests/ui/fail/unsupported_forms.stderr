@@ -1,0 +1,21 @@
+error: FromRow only supports structs with named fields
+  --> tests/ui/fail/unsupported_forms.rs:10:8
+   |
+10 | struct Row(String);
+   |        ^^^
+
+error: proc-macro derive panicked
+  --> tests/ui/fail/unsupported_forms.rs:12:10
+   |
+12 | #[derive(FromValue)]
+   |          ^^^^^^^^^
+   |
+   = help: message: Enum variants must have discriminants
+
+error: proc-macro derive panicked
+  --> tests/ui/fail/unsupported_forms.rs:17:10
+   |
+17 | #[derive(FromValue)]
+   |          ^^^^^^^^^
+   |
+   = help: message: FromValue can only be used on enums

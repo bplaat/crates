@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+ --> tests/ui/fail/malformed_attribute.rs:9:10
+  |
+9 | #[derive(Validate)]
+  |          ^^^^^^^^
+  |
+  = help: message: Invalid attribute: Error("unexpected end of input, expected an expression")

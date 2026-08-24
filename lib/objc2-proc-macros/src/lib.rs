@@ -140,6 +140,22 @@ fn sel_tokens(selector: &str) -> impl quote::ToTokens {
     }
 }
 
+fn validate_class_struct(struct_item: &ItemStruct) -> syn::Result<()> {
+    if !struct_item.generics.params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &struct_item.generics,
+            "Objective-C class declarations do not support generics",
+        ));
+    }
+    if !matches!(struct_item.fields, syn::Fields::Unit) {
+        return Err(syn::Error::new_spanned(
+            &struct_item.fields,
+            "Objective-C class declarations must be unit structs",
+        ));
+    }
+    Ok(())
+}
+
 /// Declares a Rust type for an existing Objective-C class, matching upstream objc2 0.6 syntax.
 ///
 /// # Syntax
@@ -156,6 +172,10 @@ fn sel_tokens(selector: &str) -> impl quote::ToTokens {
 #[proc_macro]
 pub fn extern_class(input: TokenStream) -> TokenStream {
     let struct_item: ItemStruct = parse_macro_input!(input as ItemStruct);
+
+    if let Err(error) = validate_class_struct(&struct_item) {
+        return error.into_compile_error().into();
+    }
 
     let struct_name = &struct_item.ident;
     let struct_vis = &struct_item.vis;
@@ -220,6 +240,10 @@ pub fn define_class(input: TokenStream) -> TokenStream {
         struct_item,
         impl_item,
     } = parse_macro_input!(input as DefineClassInput);
+
+    if let Err(error) = validate_class_struct(&struct_item) {
+        return error.into_compile_error().into();
+    }
 
     let struct_name = &struct_item.ident;
     let struct_vis = &struct_item.vis;

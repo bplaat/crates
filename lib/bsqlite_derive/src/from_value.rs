@@ -10,13 +10,24 @@ use syn::{parse_macro_input, DeriveInput};
 
 pub(crate) fn from_value_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
+    let generics = &input.generics;
+    let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
-    let variants = if let syn::Data::Enum(data) = input.data {
-        data.variants
+    let variants = if let syn::Data::Enum(data) = &input.data {
+        &data.variants
     } else {
         panic!("FromValue can only be used on enums");
     };
+
+    if let Some(variant) = variants
+        .iter()
+        .find(|variant| !matches!(variant.fields, syn::Fields::Unit))
+    {
+        return syn::Error::new_spanned(variant, "FromValue only supports unit variants")
+            .into_compile_error()
+            .into();
+    }
 
     let from_impls = variants.iter().map(|variant| {
         let variant_name = &variant.ident;
@@ -43,14 +54,14 @@ pub(crate) fn from_value_derive(input: TokenStream) -> TokenStream {
     });
 
     TokenStream::from(quote! {
-        impl From<#name> for bsqlite::Value {
-            fn from(value: #name) -> Self {
+        impl #impl_generics From<#name #type_generics> for bsqlite::Value #where_clause {
+            fn from(value: #name #type_generics) -> Self {
                 match value {
                     #( #to_impls )*
                 }
             }
         }
-        impl TryFrom<bsqlite::Value> for #name {
+        impl #impl_generics TryFrom<bsqlite::Value> for #name #type_generics #where_clause {
             type Error = bsqlite::ValueError;
             fn try_from(value: bsqlite::Value) -> Result<Self, Self::Error> {
                 match value {

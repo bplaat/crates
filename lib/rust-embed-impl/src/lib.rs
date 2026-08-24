@@ -17,11 +17,23 @@ use syn::{DeriveInput, Expr, Lit, Meta, parse_macro_input};
 #[proc_macro_derive(Embed, attributes(folder))]
 pub fn validate_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
+
+    if !input.generics.params.is_empty() {
+        return syn::Error::new_spanned(&input.generics, "Embed does not support generic types")
+            .into_compile_error()
+            .into();
+    }
+    if !matches!(input.data, syn::Data::Struct(ref data) if matches!(data.fields, syn::Fields::Unit))
+    {
+        return syn::Error::new_spanned(name, "Embed can only be derived for unit structs")
+            .into_compile_error()
+            .into();
+    }
 
     // Extract the #[folder = "..."] attribute
     let mut folder_path = None;
-    for attr in input.attrs {
+    for attr in &input.attrs {
         if attr.path().is_ident("folder") {
             if let Meta::NameValue(meta) = &attr.meta
                 && let Expr::Lit(expr) = &meta.value

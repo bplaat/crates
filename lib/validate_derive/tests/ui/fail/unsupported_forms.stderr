@@ -1,0 +1,13 @@
+error: proc-macro derive panicked
+ --> tests/ui/fail/unsupported_forms.rs:9:10
+  |
+9 | #[derive(Validate)]
+  |          ^^^^^^^^
+  |
+  = help: message: Validate can only be used on structs
+
+error: Validate only supports structs with named fields
+  --> tests/ui/fail/unsupported_forms.rs:15:8
+   |
+15 | struct Tuple(String);
+   |        ^^^^^

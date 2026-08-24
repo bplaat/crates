@@ -67,6 +67,7 @@ sha2 = { path = "lib/sha2" }
 simple_logger = { path = "lib/simple_logger" }
 terminal_size = { path = "lib/terminal_size" }
 threadpool = { path = "lib/threadpool" }
+trybuild = { path = "lib/trybuild" }
 url = { path = "lib/url" }
 uuid = { path = "lib/uuid" }
 winresource = { path = "lib/winresource" }

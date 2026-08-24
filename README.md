@@ -136,6 +136,7 @@ These libraries are minimal replacements for commonly used crates.
 - [subtle](lib/subtle) A minimal replacement for the [subtle](https://crates.io/crates/subtle) crate
 - [terminal_size](lib/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
 - [threadpool](lib/threadpool) A minimal replacement for the [threadpool](https://crates.io/crates/threadpool) crate
+- [trybuild](lib/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
 - [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 - [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 - [winresource](lib/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate

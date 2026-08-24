@@ -10,15 +10,25 @@ use syn::{parse_macro_input, DeriveInput};
 
 pub(crate) fn from_row_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
+    let generics = &input.generics;
+    let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
     // Parse fields and handle #[sqlite(skip)] and #[sqlite(rename = "example")] attributes
-    let (fields, has_skipped) = match input.data {
+    let (fields, has_skipped) = match &input.data {
         syn::Data::Struct(data) => {
+            if !matches!(data.fields, syn::Fields::Named(_)) {
+                return syn::Error::new_spanned(
+                    name,
+                    "FromRow only supports structs with named fields",
+                )
+                .into_compile_error()
+                .into();
+            }
             let fields_len = data.fields.len();
             let fields = data
                 .fields
-                .into_iter()
+                .iter()
                 .filter_map(|field| {
                     let mut field_name = field
                         .ident
@@ -55,7 +65,7 @@ pub(crate) fn from_row_derive(input: TokenStream) -> TokenStream {
                             }
                         }
                     }
-                    Some((field, field_name))
+                    Some((field.clone(), field_name))
                 })
                 .collect::<Vec<_>>();
             let has_skipped = fields.len() != fields_len;
@@ -95,7 +105,7 @@ pub(crate) fn from_row_derive(input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(quote! {
-        impl #name {
+        impl #impl_generics #name #type_generics #where_clause {
             pub const fn columns() -> &'static str {
                 #columns
             }
@@ -103,13 +113,13 @@ pub(crate) fn from_row_derive(input: TokenStream) -> TokenStream {
                 #values
             }
         }
-        impl bsqlite::Bind for #name {
+        impl #impl_generics bsqlite::Bind for #name #type_generics #where_clause {
             fn bind(self, statement: &mut bsqlite::RawStatement) -> Result<(), bsqlite::StatementError> {
                 #( #binds )*
                 Ok(())
             }
         }
-        impl bsqlite::FromRow for #name {
+        impl #impl_generics bsqlite::FromRow for #name #type_generics #where_clause {
             fn from_row(statement: &mut bsqlite::RawStatement) -> Result<Self, bsqlite::ValueError> {
                 Ok(Self {
                     #( #from_rows, )*

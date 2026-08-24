@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+ --> tests/ui/fail/malformed_attribute.rs:9:10
+  |
+9 | #[derive(Embed)]
+  |          ^^^^^
+  |
+  = help: message: Invalid #[folder = "..."] attribute

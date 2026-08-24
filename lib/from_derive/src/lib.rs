@@ -15,16 +15,18 @@ use syn::{DeriveInput, Meta, parse_macro_input};
 #[proc_macro_derive(FromEnum, attributes(from_enum))]
 pub fn from_enum_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
+    let generics = &input.generics;
+    let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
-    let data = match input.data {
+    let data = match &input.data {
         syn::Data::Enum(data) => data,
         _ => panic!("FromEnum can only be derived for enums"),
     };
 
     // Parse from_enum other enum name
     let mut other_name = None;
-    for attr in input.attrs {
+    for attr in &input.attrs {
         if attr.path().is_ident("from_enum") {
             let list = attr
                 .parse_args_with(
@@ -41,6 +43,16 @@ pub fn from_enum_derive(input: TokenStream) -> TokenStream {
     let other_name = other_name.expect("Missing from_enum attribute");
 
     // Generate code
+    if let Some(variant) = data
+        .variants
+        .iter()
+        .find(|variant| !matches!(variant.fields, syn::Fields::Unit))
+    {
+        return syn::Error::new_spanned(variant, "FromEnum only supports unit variants")
+            .into_compile_error()
+            .into();
+    }
+
     let variants = data.variants.iter().map(|variant| {
         let variant_name = &variant.ident;
         quote! {
@@ -54,15 +66,15 @@ pub fn from_enum_derive(input: TokenStream) -> TokenStream {
         }
     });
     TokenStream::from(quote! {
-        impl From<#name> for #other_name {
-            fn from(value: #name) -> Self {
+        impl #impl_generics From<#name #type_generics> for #other_name #type_generics #where_clause {
+            fn from(value: #name #type_generics) -> Self {
                 match value {
                     #(#variants)*
                 }
             }
         }
-        impl From<#other_name> for #name {
-            fn from(value: #other_name) -> Self {
+        impl #impl_generics From<#other_name #type_generics> for #name #type_generics #where_clause {
+            fn from(value: #other_name #type_generics) -> Self {
                 match value {
                     #(#variants_reverse)*
                 }
@@ -76,16 +88,24 @@ pub fn from_enum_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(FromStruct, attributes(from_struct))]
 pub fn from_struct_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
+    let generics = &input.generics;
+    let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
 
-    let data = match input.data {
+    let data = match &input.data {
         syn::Data::Struct(data) => data,
         _ => panic!("FromStruct can only be derived for structs"),
     };
 
+    if !matches!(data.fields, syn::Fields::Named(_)) {
+        return syn::Error::new_spanned(name, "FromStruct only supports structs with named fields")
+            .into_compile_error()
+            .into();
+    }
+
     // Parse from_struct other struct name
     let mut other_name = None;
-    for attr in input.attrs {
+    for attr in &input.attrs {
         if attr.path().is_ident("from_struct") {
             let list = attr
                 .parse_args_with(
@@ -115,15 +135,15 @@ pub fn from_struct_derive(input: TokenStream) -> TokenStream {
         }
     });
     TokenStream::from(quote! {
-        impl From<#name> for #other_name {
-            fn from(value: #name) -> Self {
+        impl #impl_generics From<#name #type_generics> for #other_name #type_generics #where_clause {
+            fn from(value: #name #type_generics) -> Self {
                 #other_name {
                     #(#fields)*
                 }
             }
         }
-        impl From<#other_name> for #name {
-            fn from(value: #other_name) -> Self {
+        impl #impl_generics From<#other_name #type_generics> for #name #type_generics #where_clause {
+            fn from(value: #other_name #type_generics) -> Self {
                 #name {
                     #(#fields_reverse)*
                 }

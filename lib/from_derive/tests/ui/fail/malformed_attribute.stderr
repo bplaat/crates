@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+  --> tests/ui/fail/malformed_attribute.rs:13:10
+   |
+13 | #[derive(FromStruct)]
+   |          ^^^^^^^^^^
+   |
+   = help: message: Invalid attribute: Error("expected parentheses: #[from_struct(...)]")

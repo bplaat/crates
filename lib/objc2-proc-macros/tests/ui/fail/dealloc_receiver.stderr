@@ -1,0 +1,5 @@
+error: dealloc must be an associated function taking `*mut Self`
+  --> tests/ui/fail/dealloc_receiver.rs:14:9
+   |
+14 |         fn dealloc(&self) {}
+   |         ^^^^^^^^^^^^^^^^^

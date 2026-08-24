@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+ --> tests/ui/fail/missing_attribute.rs:9:10
+  |
+9 | #[derive(FromEnum)]
+  |          ^^^^^^^^
+  |
+  = help: message: Missing from_enum attribute
