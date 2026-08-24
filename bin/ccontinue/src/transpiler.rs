@@ -753,7 +753,7 @@ impl Transpiler {
                     current_class_name = method.origin_class.clone();
                 }
                 c += &format!("    {} (*{})(", method.return_type, method.name);
-                c += &std::iter::once(format!("{}* this", method.class_))
+                c += &std::iter::once("void* this".to_owned())
                     .chain(
                         method
                             .arguments
@@ -824,21 +824,28 @@ impl Transpiler {
         if !class_.interface_names.is_empty() {
             for iface_name in &class_.interface_names {
                 let iface = &self.interfaces[iface_name];
-                c += &format!(
-                    "static const {}Vtbl _{}{}Vtbl = {{\n",
-                    iface_name, class_.name, iface_name
-                );
                 for method in iface.methods.values() {
-                    c += &format!("    ({} (*)(void*", method.return_type);
+                    let adapter_name = format!(
+                        "_{}_{}_{}_vcall",
+                        class_.snake_name, iface.snake_name, method.name
+                    );
+                    c += &format!("static {} {adapter_name}(void* this", method.return_type);
                     for argument in &method.arguments {
-                        c += &format!(", {}", argument.type_);
+                        c += &format!(", {} {}", argument.type_, argument.name);
                     }
-                    c += "))";
-                    if class_.methods.contains_key(&method.name) {
-                        let impl_class = to_snake_case(&class_.methods[&method.name].class_);
-                        c += &format!("&_{}_{},\n", impl_class, method.name);
+                    c += ") {\n    ";
+                    if method.return_type.trim() != "void" {
+                        c += "return ";
+                    }
+                    if let Some(implementation) = class_.methods.get(&method.name) {
+                        c += &format!(
+                            "_{}_{}(({}*)this",
+                            to_snake_case(&implementation.class_),
+                            method.name,
+                            implementation.class_
+                        );
                     } else if iface.default_bodies.contains_key(&method.name) {
-                        c += &format!("&_{}_{},\n", iface.snake_name, method.name);
+                        c += &format!("_{}_{}(this", iface.snake_name, method.name);
                     } else {
                         eprintln!(
                             "[ERROR] Class {} implements {} but does not provide '{}' and there is no default",
@@ -846,6 +853,20 @@ impl Transpiler {
                         );
                         std::process::exit(1);
                     }
+                    for argument in &method.arguments {
+                        c += &format!(", {}", argument.name);
+                    }
+                    c += ");\n}\n\n";
+                }
+                c += &format!(
+                    "static const {}Vtbl _{}{}Vtbl = {{\n",
+                    iface_name, class_.name, iface_name
+                );
+                for method in iface.methods.values() {
+                    c += &format!(
+                        "    &_{}_{}_{}_vcall,\n",
+                        class_.snake_name, iface.snake_name, method.name
+                    );
                 }
                 c += "};\n\n";
             }
@@ -864,6 +885,30 @@ impl Transpiler {
             c += "};\n\n";
         }
 
+        for method in class_.methods.values().filter(|method| method.is_virtual) {
+            c += &format!(
+                "static {} _{}_{}_vcall(void* this",
+                method.return_type, class_.snake_name, method.name
+            );
+            for argument in &method.arguments {
+                c += &format!(", {} {}", argument.type_, argument.name);
+            }
+            c += ") {\n    ";
+            if method.return_type.trim() != "void" {
+                c += "return ";
+            }
+            c += &format!(
+                "_{}_{}(({}*)this",
+                to_snake_case(&method.class_),
+                method.name,
+                method.class_
+            );
+            for argument in &method.arguments {
+                c += &format!(", {}", argument.name);
+            }
+            c += ");\n}\n\n";
+        }
+
         c += &format!("{}Vtbl _{}Vtbl = {{\n", class_.name, class_.name);
         if !class_.interface_names.is_empty() {
             c += &format!("    _{}Interfaces,\n", class_.name);
@@ -877,7 +922,7 @@ impl Transpiler {
                     c += &format!("    // {}\n", method.origin_class);
                     current_class_name = method.origin_class.clone();
                 }
-                c += &format!("    &_{}_{},\n", to_snake_case(&method.class_), method.name);
+                c += &format!("    &_{}_{}_vcall,\n", class_.snake_name, method.name);
             }
         }
         c += "};\n\n";
@@ -910,7 +955,12 @@ impl Transpiler {
                 .chain(method.arguments.iter().map(|a| a.name.clone()))
                 .collect::<Vec<_>>()
                 .join(", ");
-            c += &format!(") {}{target}(({}*)(this)", return_cast, method.class_);
+            let receiver_type = if method.is_virtual {
+                "void"
+            } else {
+                method.class_.as_str()
+            };
+            c += &format!(") {return_cast}{target}(({receiver_type}*)(this)");
             for argument in &method.arguments {
                 let found_class = self
                     .classes

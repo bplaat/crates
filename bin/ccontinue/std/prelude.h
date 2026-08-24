@@ -33,7 +33,11 @@ typedef double f64;
 typedef size_t usize;
 typedef ptrdiff_t isize;
 
+#ifdef _WIN32
+#define strdup _strdup
+#else
 char* strdup(const char* s);
+#endif
 
 u32 fnv1a_32(const void* data, usize length);
 

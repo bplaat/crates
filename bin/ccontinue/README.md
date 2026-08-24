@@ -11,14 +11,16 @@ cargo install --path .
 ccc [options] <file.cc>
 ```
 
-| Flag        | Description                                        |
-| ----------- | -------------------------------------------------- |
-| `-o <file>` | Output file                                        |
-| `-I <path>` | Add include search path                            |
-| `-S`        | Only run the transpile step (emit `.c` source)     |
-| `-c`        | Only transpile and compile (emit `.o` object)      |
-| `-r`        | Run the linked binary after building               |
-| `-R`        | Run with memory leak checks (`leaks` / `valgrind`) |
+| Flag        | Description                                    |
+| ----------- | ---------------------------------------------- |
+| `-o <file>` | Output file                                    |
+| `-I <path>` | Add include search path                        |
+| `-S`        | Only run the transpile step (emit `.c` source) |
+| `-c`        | Only transpile and compile (emit `.o` object)  |
+| `-r`        | Run the linked binary after building           |
+
+`ccc` uses Clang by default. Set `CC` to select another C compiler, `CFLAGS` to
+add compile flags, and `LDFLAGS` to add linker flags.
 
 ## Syntax
 

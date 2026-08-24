@@ -14,7 +14,6 @@ pub(crate) struct Args {
     pub(crate) flag_source: bool,
     pub(crate) flag_compile: bool,
     pub(crate) flag_run: bool,
-    pub(crate) flag_run_leaks: bool,
 }
 
 pub(crate) fn parse_args() -> Args {
@@ -25,7 +24,6 @@ pub(crate) fn parse_args() -> Args {
     let mut flag_source = false;
     let mut flag_compile = false;
     let mut flag_run = false;
-    let mut flag_run_leaks = false;
 
     let mut i = 1;
     while i < raw.len() {
@@ -44,7 +42,6 @@ pub(crate) fn parse_args() -> Args {
             "-S" | "--source" => flag_source = true,
             "-c" | "--compile" => flag_compile = true,
             "-r" | "--run" => flag_run = true,
-            "-R" | "--run-leaks" => flag_run_leaks = true,
             arg if !arg.starts_with('-') => files.push(arg.to_owned()),
             _ => {
                 eprintln!("Unknown argument: {}", raw[i]);
@@ -55,7 +52,7 @@ pub(crate) fn parse_args() -> Args {
     }
 
     if files.is_empty() {
-        eprintln!("Usage: ccc <file> [-o output] [-I include] [-S] [-c] [-r] [-R]");
+        eprintln!("Usage: ccc <file> [-o output] [-I include] [-S] [-c] [-r]");
         std::process::exit(1);
     }
 
@@ -66,6 +63,5 @@ pub(crate) fn parse_args() -> Args {
         flag_source,
         flag_compile,
         flag_run,
-        flag_run_leaks,
     }
 }

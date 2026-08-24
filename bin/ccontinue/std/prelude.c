@@ -6,11 +6,13 @@
 
 #include "prelude.h"
 
+#ifndef _WIN32
 char* strdup(const char* s) {
     char* n = malloc(strlen(s) + 1);
     strcpy(n, s);
     return n;
 }
+#endif
 
 u32 fnv1a_32(const void* data, usize length) {
     u32 hash = 2166136261u;

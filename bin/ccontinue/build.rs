@@ -18,13 +18,6 @@ fn main() {
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR must be set by cargo");
     let dest = Path::new(&out_dir).join("generated_tests.rs");
 
-    // On Windows there is no C compiler or leak checker available; skip all integration tests
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
-    if target_os == "windows" {
-        fs::write(&dest, "").expect("write generated tests file");
-        return;
-    }
-
     let mut test_fns = String::new();
     let mut entries: Vec<_> = fs::read_dir(tests_dir)
         .expect("tests/ dir should exist")

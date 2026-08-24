@@ -100,6 +100,7 @@ fn transpile_and_compile_sources(
     flag_source: bool,
     flag_compile: bool,
     cc: &str,
+    cflags: &[String],
 ) -> Vec<String> {
     let mut object_paths: Vec<String> = Vec::new();
 
@@ -148,6 +149,7 @@ fn transpile_and_compile_sources(
 
         let mut cmd = Command::new(cc);
         cmd.args(["--std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror"]);
+        cmd.args(cflags);
         for inc in include_paths {
             cmd.arg(format!("-I{inc}"));
         }
@@ -174,7 +176,7 @@ fn link_and_run(
     files: &[String],
     cc: &str,
     flag_run: bool,
-    flag_run_leaks: bool,
+    ldflags: &[String],
 ) {
     let exe_path = output.clone().unwrap_or_else(|| {
         let base = &files[0];
@@ -187,6 +189,7 @@ fn link_and_run(
 
     let mut link_cmd = Command::new(cc);
     link_cmd.args(object_paths);
+    link_cmd.args(ldflags);
     link_cmd.args(["-o", &exe_path]);
     let status = link_cmd.status().unwrap_or_else(|e| {
         eprintln!("[ERROR] Failed to run linker: {e}");
@@ -203,38 +206,20 @@ fn link_and_run(
                 .map(|s| s.code().unwrap_or(0))
                 .unwrap_or(1),
         );
-    } else if flag_run_leaks {
-        if cfg!(target_os = "macos") {
-            std::process::exit(
-                Command::new("leaks")
-                    .args(["--atExit", "--", &format!("./{exe_path}")])
-                    .status()
-                    .map(|s| s.code().unwrap_or(0))
-                    .unwrap_or(1),
-            );
-        } else if cfg!(target_os = "linux") {
-            std::process::exit(
-                Command::new("valgrind")
-                    .args([
-                        "--leak-check=full",
-                        "--show-leak-kinds=all",
-                        "--track-origins=yes",
-                        &format!("./{exe_path}"),
-                    ])
-                    .status()
-                    .map(|s| s.code().unwrap_or(0))
-                    .unwrap_or(1),
-            );
-        } else {
-            eprintln!("[ERROR] Memory leak checks are not supported on this platform");
-            std::process::exit(1);
-        }
     }
+}
+
+fn env_flags(name: &str) -> Vec<String> {
+    std::env::var(name)
+        .map(|flags| flags.split_whitespace().map(str::to_owned).collect())
+        .unwrap_or_default()
 }
 
 fn main() {
     let args = parse_args();
-    let cc = std::env::var("CC").unwrap_or_else(|_| "gcc".to_owned());
+    let cc = std::env::var("CC").unwrap_or_else(|_| "clang".to_owned());
+    let cflags = env_flags("CFLAGS");
+    let ldflags = env_flags("LDFLAGS");
     let temp_mgr = TempFileManager::new();
 
     // Build include paths
@@ -267,6 +252,7 @@ fn main() {
         args.flag_source,
         args.flag_compile,
         &cc,
+        &cflags,
     );
 
     // Link and optionally run
@@ -276,6 +262,6 @@ fn main() {
         &args.files,
         &cc,
         args.flag_run,
-        args.flag_run_leaks,
+        &ldflags,
     );
 }

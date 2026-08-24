@@ -8,24 +8,21 @@
 
 #![allow(dead_code)]
 
-use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::{env, fs};
 
-const ENTITLEMENTS_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.get-task-allow</key>
-    <true/>
-</dict>
-</plist>
-"#;
+const SANITIZER_CFLAGS: &str =
+    "-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all";
+const SANITIZER_LDFLAGS: &str = "-fsanitize=address,undefined";
+const OPTIMIZED_CFLAGS: &str = "-O1 -g";
 
-fn get_entitlements_path() -> String {
-    let path = std::env::temp_dir().join("ccc_test.entitlements");
-    fs::write(&path, ENTITLEMENTS_XML).expect("write entitlements");
-    path.to_str().expect("temp path is valid UTF-8").to_owned()
+const fn compiler_flags() -> (&'static str, &'static str) {
+    if cfg!(target_os = "windows") {
+        (OPTIMIZED_CFLAGS, "")
+    } else {
+        (SANITIZER_CFLAGS, SANITIZER_LDFLAGS)
+    }
 }
 
 fn parse_test_meta(filepath: &str) -> (i32, String) {
@@ -53,24 +50,32 @@ fn parse_test_meta(filepath: &str) -> (i32, String) {
     (expected_exit, expected_stdout)
 }
 
+fn normalize_newlines(text: &str) -> String {
+    text.replace("\r\n", "\n")
+}
+
 fn build_test(test_file: &str) -> Result<String, String> {
     let ccc_bin = env!("CARGO_BIN_EXE_ccc");
     let stem = Path::new(test_file)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("ccc_test");
-    let exe_path = std::env::temp_dir()
-        .join(format!("ccc_test_{stem}"))
+    let exe_path = env::temp_dir()
+        .join(format!("ccc_test_{stem}{}", env::consts::EXE_SUFFIX))
         .to_str()
         .expect("temp path is valid UTF-8")
         .to_owned();
     let std_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/std");
+    let (cflags, ldflags) = compiler_flags();
     let result = Command::new(ccc_bin)
         .arg(test_file)
         .arg("-o")
         .arg(&exe_path)
         .arg("-I")
         .arg(std_dir)
+        .env("CC", "clang")
+        .env("CFLAGS", cflags)
+        .env("LDFLAGS", ldflags)
         .output()
         .map_err(|e| format!("failed to run ccc: {e}"))?;
 
@@ -86,34 +91,25 @@ fn build_test(test_file: &str) -> Result<String, String> {
         });
     }
 
-    // On macOS codesign with get-task-allow so leaks can attach
-    if cfg!(target_os = "macos") {
-        let _ = Command::new("codesign")
-            .args([
-                "--force",
-                "--sign",
-                "-",
-                "--entitlements",
-                &get_entitlements_path(),
-                &exe_path,
-            ])
-            .output();
-    }
-
     Ok(exe_path)
 }
 
 fn run_normal(exe_path: &str, expected_exit: i32, expected_stdout: &str) -> Result<(), String> {
-    let result = Command::new(exe_path)
+    let mut command = Command::new(exe_path);
+    command
+        .env("ASAN_OPTIONS", "halt_on_error=1")
+        .env("UBSAN_OPTIONS", "halt_on_error=1:print_stacktrace=1");
+    let result = command
         .output()
         .map_err(|e| format!("failed to run {exe_path}: {e}"))?;
     let actual_exit = result.status.code().unwrap_or(-1);
     if actual_exit != expected_exit {
+        let stderr = String::from_utf8_lossy(&result.stderr).trim().to_owned();
         return Err(format!(
-            "exit code {actual_exit} (expected {expected_exit})"
+            "exit code {actual_exit} (expected {expected_exit})\n{stderr}"
         ));
     }
-    let actual_stdout = String::from_utf8_lossy(&result.stdout).into_owned();
+    let actual_stdout = normalize_newlines(&String::from_utf8_lossy(&result.stdout));
     if actual_stdout != expected_stdout {
         let exp_repr = format!("{:?}", &expected_stdout[..expected_stdout.len().min(300)]);
         let got_repr = format!("{:?}", &actual_stdout[..actual_stdout.len().min(300)]);
@@ -122,61 +118,6 @@ fn run_normal(exe_path: &str, expected_exit: i32, expected_stdout: &str) -> Resu
         ));
     }
     Ok(())
-}
-
-fn run_leaks(exe_path: &str) -> Result<(), String> {
-    if cfg!(target_os = "macos") {
-        let result = Command::new("leaks")
-            .args(["--atExit", "--", exe_path])
-            .output()
-            .map_err(|e| format!("leaks failed: {e}"))?;
-        let combined = format!(
-            "{}{}",
-            String::from_utf8_lossy(&result.stdout),
-            String::from_utf8_lossy(&result.stderr)
-        );
-        if combined.contains("0 leaks for 0 total leaked bytes") {
-            return Ok(());
-        }
-        if !result.status.success() {
-            let tail: String = combined
-                .chars()
-                .rev()
-                .take(800)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
-            return Err(format!("leaks detected\n{tail}"));
-        }
-        Ok(())
-    } else if cfg!(target_os = "linux") {
-        let result = Command::new("valgrind")
-            .args([
-                "--leak-check=full",
-                "--show-leak-kinds=all",
-                "--track-origins=yes",
-                "--error-exitcode=1",
-                exe_path,
-            ])
-            .output()
-            .map_err(|e| format!("valgrind failed: {e}"))?;
-        if !result.status.success() {
-            let stderr = String::from_utf8_lossy(&result.stderr);
-            let tail: String = stderr
-                .chars()
-                .rev()
-                .take(800)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
-            return Err(format!("valgrind errors\n{tail}"));
-        }
-        Ok(())
-    } else {
-        Ok(()) // unsupported platform: skip
-    }
 }
 
 fn run_test(test_file: &str) {
@@ -189,17 +130,17 @@ fn run_test(test_file: &str) {
 
     let run_result = run_normal(&exe_path, expected_exit, &expected_stdout);
 
-    let leaks_result = run_leaks(&exe_path);
-
     // Clean up binary
     let _ = fs::remove_file(&exe_path);
 
     if let Err(e) = run_result {
         panic!("{}", e);
     }
-    if let Err(e) = leaks_result {
-        panic!("[leaks] {e}");
-    }
+}
+
+#[test]
+fn normalizes_windows_newlines() {
+    assert_eq!(normalize_newlines("first\r\nsecond\r\n"), "first\nsecond\n");
 }
 
 include!(concat!(env!("OUT_DIR"), "/generated_tests.rs"));
