@@ -45,11 +45,19 @@ Some desktop apps written with the [bwebview](lib/bwebview) library.
     </a>
 </td>
 <td width="100" align="center">
+    <a href="bin/binman">
+        <img src="bin/binman/docs/images/icon.svg" alt="Binman icon" width="48" height="48"/><br/>
+        Binman
+    </a>
+</td>
+<td width="100" align="center">
     <a href="bin/manexplorer">
         <img src="bin/manexplorer/docs/images/icon.svg" alt="ManExplorer icon" width="48" height="48"/><br/>
         ManExplorer
     </a>
 </td>
+</tr>
+<tr>
 <td width="100" align="center">
     <a href="bin/navidrome">
         <img src="bin/navidrome/docs/images/icon.svg" alt="Navidrome icon" width="48" height="48"/><br/>

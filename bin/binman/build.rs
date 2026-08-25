@@ -47,6 +47,7 @@ fn main() {
     res.set("ProductName", "Binman")
         .set("FileDescription", "Binman")
         .set("LegalCopyright", "Copyright © 2026 Bastiaan van der Plaat")
+        .set_icon("meta/windows/icon.ico")
         .set_manifest(&manifest);
     res.compile().expect("Failed to compile Windows resources");
 }
