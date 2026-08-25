@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -8,7 +8,7 @@
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
@@ -17,8 +17,9 @@ use base64::prelude::BASE64_STANDARD;
 use sha1::Sha1;
 use small_http::{Request, Response, Status};
 
-// Maximum allowed WebSocket frame payload in bytes (64 KiB)
-const MAX_FRAME_PAYLOAD: usize = 64 * 1024;
+// Maximum allowed WebSocket frame and reassembled message payload in bytes (64 KiB)
+const MAX_PAYLOAD: usize = 64 * 1024;
+const READ_BUFFER_SIZE: usize = 8 * 1024;
 
 /// WebSocket message
 #[derive(Debug, Clone)]
@@ -38,20 +39,50 @@ pub enum Message {
 /// WebSocket connection
 #[derive(Clone)]
 pub struct WebSocket {
-    stream: Arc<Mutex<TcpStream>>,
+    state: Arc<Mutex<ConnectionState>>,
+    role: Role,
 }
 
 impl PartialEq for WebSocket {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.stream, &other.stream)
+        Arc::ptr_eq(&self.state, &other.state)
     }
 }
 impl Eq for WebSocket {}
 
+#[derive(Clone, Copy)]
+enum Role {
+    Server,
+    #[cfg(any(feature = "client", test))]
+    Client,
+}
+
+struct ConnectionState {
+    stream: TcpStream,
+    read_buffer: Vec<u8>,
+    fragmented: Option<FragmentedMessage>,
+}
+
+struct FragmentedMessage {
+    opcode: u8,
+    payload: Vec<u8>,
+}
+
+struct Frame {
+    fin: bool,
+    opcode: u8,
+    payload: Vec<u8>,
+}
+
 impl WebSocket {
-    fn new(stream: TcpStream) -> Self {
-        WebSocket {
-            stream: Arc::new(Mutex::new(stream)),
+    fn new(stream: TcpStream, role: Role) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(ConnectionState {
+                stream,
+                read_buffer: Vec::new(),
+                fragmented: None,
+            })),
+            role,
         }
     }
 
@@ -59,15 +90,16 @@ impl WebSocket {
     #[cfg(feature = "client")]
     pub fn connect(url: impl AsRef<str>) -> Result<Self, ConnectError> {
         let parsed_url = url::Url::parse(url.as_ref()).map_err(|_| ConnectError)?;
-        let mut stream = TcpStream::connect(format!(
-            "{}:{}",
-            parsed_url.host().expect("URL should have a host"),
-            parsed_url.port().unwrap_or(80)
-        ))
-        .map_err(|_| ConnectError)?;
+        if parsed_url.scheme() != "ws" {
+            return Err(ConnectError);
+        }
+        let host = parsed_url.host().ok_or(ConnectError)?;
+        let mut stream =
+            TcpStream::connect(format!("{}:{}", host, parsed_url.port().unwrap_or(80)))
+                .map_err(|_| ConnectError)?;
 
         let mut random_key = [0u8; 16];
-        getrandom::fill(&mut random_key).expect("Can't generate random key");
+        getrandom::fill(&mut random_key).map_err(|_| ConnectError)?;
         let random_key = BASE64_STANDARD.encode(random_key);
         let req = Request::get(url.as_ref())
             .header("Upgrade", "websocket")
@@ -77,7 +109,13 @@ impl WebSocket {
         req.write_to_stream(&mut stream, false);
 
         let res = Response::read_from_stream(&mut stream).map_err(|_| ConnectError)?;
-        if res.status != Status::SwitchingProtocols {
+        if res.status != Status::SwitchingProtocols
+            || !res
+                .headers
+                .get("Upgrade")
+                .is_some_and(|value| value.eq_ignore_ascii_case("websocket"))
+            || !header_contains_token(res.headers.get("Connection"), "upgrade")
+        {
             return Err(ConnectError);
         }
         let websocket_accept = res
@@ -92,191 +130,350 @@ impl WebSocket {
             return Err(ConnectError);
         }
 
-        Ok(WebSocket::new(stream))
+        Ok(WebSocket::new(stream, Role::Client))
     }
 
     /// Get the underlying TCP stream peer address
-    pub fn peer_addr(&self) -> std::io::Result<std::net::SocketAddr> {
-        self.stream.lock().expect("Can't get lock").peer_addr()
+    pub fn peer_addr(&self) -> io::Result<std::net::SocketAddr> {
+        self.state
+            .lock()
+            .map_err(|_| io::Error::other("WebSocket lock is poisoned"))?
+            .stream
+            .peer_addr()
     }
 
     /// Receive WebSocket message
-    pub fn recv(&mut self) -> std::io::Result<Message> {
-        let mut stream = self.stream.lock().expect("Can't get lock");
-        let mut buf = [0; 1024];
-        match stream.read(&mut buf) {
-            Ok(0) => Ok(Message::Close(None, Some("Connection closed".to_string()))),
-            Ok(_) => Self::parse_message(&buf).ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid WebSocket frame")
-            }),
-            Err(e) => Err(e),
-        }
+    pub fn recv(&mut self) -> io::Result<Message> {
+        self.receive(false)?.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "blocking WebSocket receive returned no message",
+            )
+        })
     }
 
     /// Receive WebSocket message without blocking
-    pub fn recv_non_blocking(&mut self) -> std::io::Result<Option<Message>> {
-        let mut stream = self.stream.lock().expect("Can't get lock");
-        stream.set_nonblocking(true)?;
-        let mut buf = [0; 1024];
-        match stream.read(&mut buf) {
-            Ok(0) => Ok(Some(Message::Close(
-                None,
-                Some("Connection closed".to_string()),
-            ))),
-            Ok(_) => Self::parse_message(&buf).map(Some).ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid WebSocket frame")
-            }),
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-            Err(e) => Err(e),
-        }
+    pub fn recv_non_blocking(&mut self) -> io::Result<Option<Message>> {
+        self.receive(true)
     }
 
-    fn parse_message(buf: &[u8]) -> Option<Message> {
-        // Need at least 2 bytes for the frame header
-        if buf.len() < 2 {
-            return None;
-        }
-
-        // Parse WebSocket frame
-        let opcode = buf[0] & 0x0F;
-        let masked = (buf[1] & 0x80) != 0;
-        let payload_len = (buf[1] & 0x7F) as usize;
-
-        // Handle payload length
-        let (payload_offset, payload_len) = match payload_len {
-            126 => {
-                if buf.len() < 4 {
-                    return None;
+    fn receive(&self, nonblocking: bool) -> io::Result<Option<Message>> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| io::Error::other("WebSocket lock is poisoned"))?;
+        loop {
+            if let Some((frame, consumed)) = parse_frame(&state.read_buffer, self.role)? {
+                state.read_buffer.drain(..consumed);
+                if let Some(message) = process_frame(&mut state.fragmented, frame)? {
+                    return Ok(Some(message));
                 }
-                let len = u16::from_be_bytes([buf[2], buf[3]]) as usize;
-                (4, len)
+                continue;
             }
-            127 => {
-                if buf.len() < 10 {
-                    return None;
+
+            let read_result = if nonblocking {
+                state.stream.set_nonblocking(true)?;
+                let result = read_into_buffer(&mut state);
+                let restore_result = state.stream.set_nonblocking(false);
+                restore_result?;
+                result
+            } else {
+                read_into_buffer(&mut state)
+            };
+
+            match read_result {
+                Ok(0) if state.read_buffer.is_empty() && state.fragmented.is_none() => {
+                    return Ok(Some(Message::Close(
+                        None,
+                        Some("Connection closed".to_string()),
+                    )));
                 }
-                let len = u64::from_be_bytes([
-                    buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9],
-                ]) as usize;
-                (10, len)
+                Ok(0) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "connection closed during WebSocket frame",
+                    ));
+                }
+                Ok(_) => {}
+                Err(error) if nonblocking && error.kind() == io::ErrorKind::WouldBlock => {
+                    return Ok(None);
+                }
+                Err(error) => return Err(error),
             }
-            len => (2, len),
-        };
-
-        // Reject frames larger than the maximum allowed payload
-        if payload_len > MAX_FRAME_PAYLOAD {
-            return None;
-        }
-
-        // Get masking key if present
-        let (mask_offset, mask) = if masked {
-            if buf.len() < payload_offset + 4 {
-                return None;
-            }
-            (
-                payload_offset + 4,
-                [
-                    buf[payload_offset],
-                    buf[payload_offset + 1],
-                    buf[payload_offset + 2],
-                    buf[payload_offset + 3],
-                ],
-            )
-        } else {
-            (payload_offset, [0; 4])
-        };
-
-        // Bounds check before slicing the buffer
-        if mask_offset + payload_len > buf.len() {
-            return None;
-        }
-
-        // Unmask and collect payload
-        let mut payload = buf[mask_offset..mask_offset + payload_len].to_vec();
-        if masked {
-            for (byte, &key) in payload.iter_mut().zip(mask.iter().cycle()) {
-                *byte ^= key;
-            }
-        }
-
-        // Return appropriate message type
-        match opcode {
-            0x1 => Some(Message::Text(
-                String::from_utf8_lossy(&payload).into_owned(),
-            )),
-            0x2 => Some(Message::Binary(payload)),
-            0x8 => {
-                let code = if payload.len() >= 2 {
-                    Some(u16::from_be_bytes([payload[0], payload[1]]))
-                } else {
-                    None
-                };
-                let reason = if payload.len() > 2 {
-                    Some(String::from_utf8_lossy(&payload[2..]).into_owned())
-                } else {
-                    None
-                };
-                Some(Message::Close(code, reason))
-            }
-            0x9 => Some(Message::Ping(payload)),
-            0xA => Some(Message::Pong(payload)),
-            _ => None,
         }
     }
 
     /// Write a WebSocket message
-    pub fn send(&mut self, message: Message) -> std::io::Result<()> {
-        let mut frame = Vec::new();
-        match message {
-            Message::Text(text) => {
-                frame.push(0x81); // Text frame
-                let payload = text.into_bytes();
-                self.write_frame(&mut frame, &payload)?;
-            }
-            Message::Binary(data) => {
-                frame.push(0x82); // Binary frame
-                self.write_frame(&mut frame, &data)?;
-            }
-            Message::Ping(data) => {
-                frame.push(0x89); // Ping frame
-                self.write_frame(&mut frame, &data)?;
-            }
-            Message::Pong(data) => {
-                frame.push(0x8A); // Pong frame
-                self.write_frame(&mut frame, &data)?;
-            }
+    pub fn send(&mut self, message: Message) -> io::Result<()> {
+        let (opcode, payload) = match message {
+            Message::Text(text) => (0x1, text.into_bytes()),
+            Message::Binary(data) => (0x2, data),
+            Message::Ping(data) => (0x9, data),
+            Message::Pong(data) => (0xa, data),
             Message::Close(code, reason) => {
-                frame.push(0x88); // Close frame
                 let mut payload = Vec::new();
-                if let Some(c) = code {
-                    payload.extend_from_slice(&c.to_be_bytes());
+                if reason.is_some() && code.is_none() {
+                    return Err(invalid_input("a close reason requires a close code"));
                 }
-                if let Some(r) = reason {
-                    payload.extend_from_slice(r.as_bytes());
+                if let Some(code) = code {
+                    payload.extend_from_slice(&code.to_be_bytes());
                 }
-                self.write_frame(&mut frame, &payload)?;
+                if let Some(reason) = reason {
+                    payload.extend_from_slice(reason.as_bytes());
+                }
+                (0x8, payload)
             }
+        };
+        if payload.len() > MAX_PAYLOAD {
+            return Err(invalid_input("WebSocket message exceeds maximum size"));
         }
-        self.stream
+        if opcode >= 0x8 && payload.len() > 125 {
+            return Err(invalid_input("WebSocket control frame exceeds 125 bytes"));
+        }
+
+        let frame = build_frame(opcode, &payload, self.role)?;
+        self.state
             .lock()
-            .expect("Can't get lock")
+            .map_err(|_| io::Error::other("WebSocket lock is poisoned"))?
+            .stream
             .write_all(&frame)
     }
+}
 
-    fn write_frame(&self, frame: &mut Vec<u8>, payload: &[u8]) -> std::io::Result<()> {
-        let payload_len = payload.len();
-        if payload_len <= 125 {
-            frame.push(payload_len as u8);
-        } else if payload_len <= 65535 {
-            frame.push(126);
-            frame.extend_from_slice(&(payload_len as u16).to_be_bytes());
-        } else {
-            frame.push(127);
-            frame.extend_from_slice(&(payload_len as u64).to_be_bytes());
-        }
-        frame.extend_from_slice(payload);
-        Ok(())
+fn read_into_buffer(state: &mut ConnectionState) -> io::Result<usize> {
+    let mut buffer = [0; READ_BUFFER_SIZE];
+    let read = state.stream.read(&mut buffer)?;
+    state.read_buffer.extend_from_slice(&buffer[..read]);
+    Ok(read)
+}
+
+fn parse_frame(buffer: &[u8], role: Role) -> io::Result<Option<(Frame, usize)>> {
+    if buffer.len() < 2 {
+        return Ok(None);
     }
+    if buffer[0] & 0x70 != 0 {
+        return Err(invalid_data("reserved WebSocket bits are set"));
+    }
+
+    let fin = buffer[0] & 0x80 != 0;
+    let opcode = buffer[0] & 0x0f;
+    if !matches!(opcode, 0x0 | 0x1 | 0x2 | 0x8 | 0x9 | 0xa) {
+        return Err(invalid_data("unsupported WebSocket opcode"));
+    }
+
+    let masked = buffer[1] & 0x80 != 0;
+    let expects_mask = matches!(role, Role::Server);
+    if masked != expects_mask {
+        return Err(invalid_data(if expects_mask {
+            "client WebSocket frames must be masked"
+        } else {
+            "server WebSocket frames must not be masked"
+        }));
+    }
+
+    let mut offset = 2;
+    let length_marker = buffer[1] & 0x7f;
+    let payload_len = match length_marker {
+        126 => {
+            if buffer.len() < offset + 2 {
+                return Ok(None);
+            }
+            let len = u16::from_be_bytes([buffer[offset], buffer[offset + 1]]) as usize;
+            offset += 2;
+            if len < 126 {
+                return Err(invalid_data("non-minimal WebSocket payload length"));
+            }
+            len
+        }
+        127 => {
+            if buffer.len() < offset + 8 {
+                return Ok(None);
+            }
+            let len = u64::from_be_bytes(
+                buffer[offset..offset + 8]
+                    .try_into()
+                    .map_err(|_| invalid_data("invalid WebSocket payload length"))?,
+            );
+            offset += 8;
+            if len <= u16::MAX as u64 || len > usize::MAX as u64 {
+                return Err(invalid_data("invalid WebSocket payload length"));
+            }
+            len as usize
+        }
+        len => len as usize,
+    };
+    if payload_len > MAX_PAYLOAD {
+        return Err(invalid_data("WebSocket frame exceeds maximum size"));
+    }
+    if opcode >= 0x8 && (!fin || payload_len > 125) {
+        return Err(invalid_data(
+            "invalid fragmented or oversized control frame",
+        ));
+    }
+
+    let mask = if masked {
+        if buffer.len() < offset + 4 {
+            return Ok(None);
+        }
+        let mask: [u8; 4] = buffer[offset..offset + 4]
+            .try_into()
+            .map_err(|_| invalid_data("invalid WebSocket mask"))?;
+        offset += 4;
+        Some(mask)
+    } else {
+        None
+    };
+    let frame_end = offset
+        .checked_add(payload_len)
+        .ok_or_else(|| invalid_data("WebSocket frame length overflow"))?;
+    if buffer.len() < frame_end {
+        return Ok(None);
+    }
+
+    let mut payload = buffer[offset..frame_end].to_vec();
+    if let Some(mask) = mask {
+        for (index, byte) in payload.iter_mut().enumerate() {
+            *byte ^= mask[index % mask.len()];
+        }
+    }
+    Ok(Some((
+        Frame {
+            fin,
+            opcode,
+            payload,
+        },
+        frame_end,
+    )))
+}
+
+fn process_frame(
+    fragmented: &mut Option<FragmentedMessage>,
+    frame: Frame,
+) -> io::Result<Option<Message>> {
+    match frame.opcode {
+        0x0 => {
+            let message = fragmented
+                .as_mut()
+                .ok_or_else(|| invalid_data("unexpected WebSocket continuation frame"))?;
+            if message.payload.len().saturating_add(frame.payload.len()) > MAX_PAYLOAD {
+                return Err(invalid_data(
+                    "fragmented WebSocket message exceeds maximum size",
+                ));
+            }
+            message.payload.extend(frame.payload);
+            if frame.fin {
+                let message = fragmented
+                    .take()
+                    .ok_or_else(|| invalid_data("missing fragmented WebSocket message"))?;
+                message_from_data_frame(message.opcode, message.payload).map(Some)
+            } else {
+                Ok(None)
+            }
+        }
+        0x1 | 0x2 => {
+            if fragmented.is_some() {
+                return Err(invalid_data(
+                    "new WebSocket data frame during fragmented message",
+                ));
+            }
+            if frame.fin {
+                message_from_data_frame(frame.opcode, frame.payload).map(Some)
+            } else {
+                *fragmented = Some(FragmentedMessage {
+                    opcode: frame.opcode,
+                    payload: frame.payload,
+                });
+                Ok(None)
+            }
+        }
+        0x8 => parse_close_message(frame.payload).map(Some),
+        0x9 => Ok(Some(Message::Ping(frame.payload))),
+        0xa => Ok(Some(Message::Pong(frame.payload))),
+        _ => Err(invalid_data("unsupported WebSocket opcode")),
+    }
+}
+
+fn message_from_data_frame(opcode: u8, payload: Vec<u8>) -> io::Result<Message> {
+    match opcode {
+        0x1 => String::from_utf8(payload)
+            .map(Message::Text)
+            .map_err(|_| invalid_data("WebSocket text message is not valid UTF-8")),
+        0x2 => Ok(Message::Binary(payload)),
+        _ => Err(invalid_data("invalid WebSocket data opcode")),
+    }
+}
+
+fn parse_close_message(payload: Vec<u8>) -> io::Result<Message> {
+    if payload.len() == 1 {
+        return Err(invalid_data(
+            "WebSocket close payload has an invalid length",
+        ));
+    }
+    let code = (payload.len() >= 2).then(|| u16::from_be_bytes([payload[0], payload[1]]));
+    let reason = if payload.len() > 2 {
+        Some(
+            String::from_utf8(payload[2..].to_vec())
+                .map_err(|_| invalid_data("WebSocket close reason is not valid UTF-8"))?,
+        )
+    } else {
+        None
+    };
+    Ok(Message::Close(code, reason))
+}
+
+fn build_frame(opcode: u8, payload: &[u8], role: Role) -> io::Result<Vec<u8>> {
+    let masked = !matches!(role, Role::Server);
+    let mut frame = Vec::with_capacity(payload.len() + 14);
+    frame.push(0x80 | opcode);
+    let mask_bit = if masked { 0x80 } else { 0 };
+    match payload.len() {
+        0..=125 => frame.push(mask_bit | payload.len() as u8),
+        126..=65535 => {
+            frame.push(mask_bit | 126);
+            frame.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+        }
+        _ => {
+            frame.push(mask_bit | 127);
+            frame.extend_from_slice(&(payload.len() as u64).to_be_bytes());
+        }
+    }
+
+    if masked {
+        #[cfg(feature = "client")]
+        {
+            let mut mask = [0; 4];
+            getrandom::fill(&mut mask)
+                .map_err(|error| io::Error::other(format!("failed to generate mask: {error}")))?;
+            frame.extend_from_slice(&mask);
+            frame.extend(
+                payload
+                    .iter()
+                    .enumerate()
+                    .map(|(index, byte)| byte ^ mask[index % mask.len()]),
+            );
+        }
+        #[cfg(not(feature = "client"))]
+        return Err(invalid_input("client support is disabled"));
+    } else {
+        frame.extend_from_slice(payload);
+    }
+    Ok(frame)
+}
+
+fn header_contains_token(value: Option<&str>, expected: &str) -> bool {
+    value.is_some_and(|value| {
+        value
+            .split(',')
+            .any(|token| token.trim().eq_ignore_ascii_case(expected))
+    })
+}
+
+fn invalid_data(message: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+fn invalid_input(message: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, message)
 }
 
 /// ConnectError
@@ -299,10 +496,7 @@ pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'stat
         .headers
         .get("Upgrade")
         .is_some_and(|v| v.eq_ignore_ascii_case("websocket"));
-    let connection_ok = request
-        .headers
-        .get("Connection")
-        .is_some_and(|v| v.to_ascii_lowercase().contains("upgrade"));
+    let connection_ok = header_contains_token(request.headers.get("Connection"), "upgrade");
     let version_ok = request
         .headers
         .get("Sec-WebSocket-Version")
@@ -323,23 +517,26 @@ pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'stat
         "Sec-WebSocket-Accept",
         BASE64_STANDARD.encode(hasher.finalize()),
     );
-    res = res.takeover(|stream| handler(WebSocket::new(stream)));
+    res = res.takeover(|stream| handler(WebSocket::new(stream, Role::Server)));
     res
 }
 
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use std::net::{Ipv4Addr, TcpListener};
+    use std::net::{Ipv4Addr, Shutdown, TcpListener};
+    use std::thread;
+    use std::time::Duration;
 
     use super::*;
 
+    #[cfg(feature = "client")]
     #[test]
     fn test_websocket_server_client() {
         // Create WebSocket server
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let addr = listener.local_addr().unwrap();
-        std::thread::spawn(move || {
+        thread::spawn(move || {
             small_http::serve(listener, |req| {
                 upgrade(req, |mut ws| {
                     loop {
@@ -359,31 +556,55 @@ mod test {
         }
     }
 
+    fn parse_message(buf: &[u8], role: Role) -> Option<Message> {
+        let (frame, consumed) = parse_frame(buf, role).ok()??;
+        if consumed != buf.len() {
+            return None;
+        }
+        let mut fragmented = None;
+        process_frame(&mut fragmented, frame).ok()?
+    }
+
     // Build a minimal unmasked WebSocket frame: FIN + opcode, then length, then payload
     fn make_frame(opcode: u8, payload: &[u8]) -> Vec<u8> {
-        let mut frame = vec![0x80 | opcode];
-        let len = payload.len();
-        if len <= 125 {
-            frame.push(len as u8);
-        } else {
-            frame.push(126);
-            frame.extend_from_slice(&(len as u16).to_be_bytes());
+        make_frame_with_fin(opcode, payload, true)
+    }
+
+    fn make_frame_with_fin(opcode: u8, payload: &[u8], fin: bool) -> Vec<u8> {
+        let mut frame = vec![if fin { 0x80 | opcode } else { opcode }];
+        match payload.len() {
+            0..=125 => frame.push(payload.len() as u8),
+            126..=65535 => {
+                frame.push(126);
+                frame.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+            }
+            _ => {
+                frame.push(127);
+                frame.extend_from_slice(&(payload.len() as u64).to_be_bytes());
+            }
         }
         frame.extend_from_slice(payload);
         frame
     }
 
+    fn connected_pair() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (server, _) = listener.accept().unwrap();
+        (client, server)
+    }
+
     #[test]
     fn test_parse_text_frame() {
         let frame = make_frame(0x1, b"Hello");
-        let msg = WebSocket::parse_message(&frame).unwrap();
+        let msg = parse_message(&frame, Role::Client).unwrap();
         assert!(matches!(msg, Message::Text(t) if t == "Hello"));
     }
 
     #[test]
     fn test_parse_binary_frame() {
         let frame = make_frame(0x2, &[0xDE, 0xAD, 0xBE, 0xEF]);
-        let msg = WebSocket::parse_message(&frame).unwrap();
+        let msg = parse_message(&frame, Role::Client).unwrap();
         assert!(matches!(msg, Message::Binary(b) if b == [0xDE, 0xAD, 0xBE, 0xEF]));
     }
 
@@ -391,12 +612,12 @@ mod test {
     fn test_parse_ping_pong_frames() {
         let ping = make_frame(0x9, b"ping-data");
         assert!(
-            matches!(WebSocket::parse_message(&ping).unwrap(), Message::Ping(b) if b == b"ping-data")
+            matches!(parse_message(&ping, Role::Client).unwrap(), Message::Ping(b) if b == b"ping-data")
         );
 
         let pong = make_frame(0xA, b"pong-data");
         assert!(
-            matches!(WebSocket::parse_message(&pong).unwrap(), Message::Pong(b) if b == b"pong-data")
+            matches!(parse_message(&pong, Role::Client).unwrap(), Message::Pong(b) if b == b"pong-data")
         );
     }
 
@@ -406,7 +627,7 @@ mod test {
         let mut payload = vec![0x03u8, 0xE8]; // 1000
         payload.extend_from_slice(b"bye");
         let frame = make_frame(0x8, &payload);
-        match WebSocket::parse_message(&frame).unwrap() {
+        match parse_message(&frame, Role::Client).unwrap() {
             Message::Close(code, reason) => {
                 assert_eq!(code, Some(1000));
                 assert_eq!(reason.as_deref(), Some("bye"));
@@ -418,7 +639,7 @@ mod test {
     #[test]
     fn test_parse_close_frame_no_payload() {
         let frame = make_frame(0x8, &[]);
-        match WebSocket::parse_message(&frame).unwrap() {
+        match parse_message(&frame, Role::Client).unwrap() {
             Message::Close(code, reason) => {
                 assert_eq!(code, None);
                 assert_eq!(reason, None);
@@ -441,7 +662,7 @@ mod test {
         frame.extend_from_slice(&mask);
         frame.extend_from_slice(&masked);
 
-        let msg = WebSocket::parse_message(&frame).unwrap();
+        let msg = parse_message(&frame, Role::Server).unwrap();
         assert!(matches!(msg, Message::Text(t) if t == "Hello"));
     }
 
@@ -452,21 +673,130 @@ mod test {
         let frame = make_frame(0x2, &payload);
         assert_eq!(frame[1], 126); // extended length marker
         assert_eq!(u16::from_be_bytes([frame[2], frame[3]]), 200);
-        let msg = WebSocket::parse_message(&frame).unwrap();
+        let msg = parse_message(&frame, Role::Client).unwrap();
         assert!(matches!(msg, Message::Binary(b) if b.len() == 200));
     }
 
     #[test]
     fn test_parse_unknown_opcode_returns_none() {
         let frame = make_frame(0x3, b"data"); // 0x3 is reserved/unknown
-        assert!(WebSocket::parse_message(&frame).is_none());
+        assert!(parse_message(&frame, Role::Client).is_none());
     }
 
     #[test]
     fn test_parse_truncated_frame_returns_none() {
         // Frame header says 10 bytes but buffer has only 3
         let frame = vec![0x82u8, 10u8, 0x01]; // binary, 10 bytes, only 1 provided
-        assert!(WebSocket::parse_message(&frame).is_none());
+        assert!(parse_message(&frame, Role::Client).is_none());
+    }
+
+    #[test]
+    fn test_recv_buffers_partial_frame() {
+        let (mut sender, receiver) = connected_pair();
+        let mut websocket = WebSocket::new(receiver, Role::Client);
+        let frame = make_frame(0x1, b"split message");
+        let split = 4;
+        sender.write_all(&frame[..split]).unwrap();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(10));
+            sender.write_all(&frame[split..]).unwrap();
+        });
+
+        assert!(matches!(
+            websocket.recv().unwrap(),
+            Message::Text(text) if text == "split message"
+        ));
+    }
+
+    #[test]
+    fn test_recv_preserves_coalesced_frames() {
+        let (mut sender, receiver) = connected_pair();
+        let mut websocket = WebSocket::new(receiver, Role::Client);
+        let mut frames = make_frame(0x1, b"first");
+        frames.extend(make_frame(0x1, b"second"));
+        sender.write_all(&frames).unwrap();
+
+        assert!(matches!(
+            websocket.recv().unwrap(),
+            Message::Text(text) if text == "first"
+        ));
+        assert!(matches!(
+            websocket.recv().unwrap(),
+            Message::Text(text) if text == "second"
+        ));
+    }
+
+    #[test]
+    fn test_recv_large_frame_across_multiple_reads() {
+        let (mut sender, receiver) = connected_pair();
+        let mut websocket = WebSocket::new(receiver, Role::Client);
+        let payload = vec![0xab; 32 * 1024];
+        sender.write_all(&make_frame(0x2, &payload)).unwrap();
+
+        assert!(matches!(
+            websocket.recv().unwrap(),
+            Message::Binary(data) if data == payload
+        ));
+    }
+
+    #[test]
+    fn test_recv_reassembles_fragmented_message() {
+        let (mut sender, receiver) = connected_pair();
+        let mut websocket = WebSocket::new(receiver, Role::Client);
+        let mut frames = make_frame_with_fin(0x1, b"frag", false);
+        frames.extend(make_frame(0x9, b"ping"));
+        frames.extend(make_frame(0x0, b"mented"));
+        sender.write_all(&frames).unwrap();
+
+        assert!(matches!(
+            websocket.recv().unwrap(),
+            Message::Ping(data) if data == b"ping"
+        ));
+        assert!(matches!(
+            websocket.recv().unwrap(),
+            Message::Text(text) if text == "fragmented"
+        ));
+    }
+
+    #[cfg(feature = "client")]
+    #[test]
+    fn test_client_send_masks_frame() {
+        let (sender, mut receiver) = connected_pair();
+        let mut websocket = WebSocket::new(sender, Role::Client);
+        websocket.send(Message::Text("masked".to_string())).unwrap();
+
+        let mut frame = [0; 12];
+        receiver.read_exact(&mut frame).unwrap();
+        assert_ne!(frame[1] & 0x80, 0);
+        assert!(matches!(
+            parse_message(&frame, Role::Server).unwrap(),
+            Message::Text(text) if text == "masked"
+        ));
+    }
+
+    #[test]
+    fn test_server_rejects_unmasked_client_frame() {
+        let frame = make_frame(0x1, b"unmasked");
+        assert!(parse_frame(&frame, Role::Server).is_err());
+    }
+
+    #[test]
+    fn test_non_blocking_receive_restores_blocking_mode() {
+        let (mut sender, receiver) = connected_pair();
+        let mut websocket = WebSocket::new(receiver, Role::Client);
+        let frame = make_frame(0x1, b"delayed");
+        sender.write_all(&frame[..2]).unwrap();
+        assert!(websocket.recv_non_blocking().unwrap().is_none());
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(10));
+            sender.write_all(&frame[2..]).unwrap();
+            sender.shutdown(Shutdown::Write).unwrap();
+        });
+        assert!(matches!(
+            websocket.recv().unwrap(),
+            Message::Text(text) if text == "delayed"
+        ));
     }
 
     #[test]
