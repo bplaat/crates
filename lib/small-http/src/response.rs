@@ -113,14 +113,19 @@ impl Response {
         serde_json::from_slice(&self.body)
     }
 
-    /// Read response from stream
+    /// Read one response from a stream.
+    ///
+    /// This convenience method creates a temporary buffer. It can read past the end of the
+    /// response and discard those bytes when it returns, so only use it when the connection will
+    /// not carry another response or upgraded protocol data. Use
+    /// [`Self::read_from_buffered_stream`] with a persistent buffered reader otherwise.
     pub fn read_from_stream(stream: &mut dyn Read) -> Result<Self, InvalidResponseError> {
         let mut reader = BufReader::new(stream);
         Self::read_from_buffered_stream(&mut reader)
     }
 
-    /// Read a response from a buffered stream without discarding bytes read ahead for the next
-    /// protocol message.
+    /// Read a response from a persistent buffered stream without discarding bytes read ahead for
+    /// the next response or upgraded protocol message.
     pub fn read_from_buffered_stream(
         reader: &mut dyn BufRead,
     ) -> Result<Self, InvalidResponseError> {
