@@ -67,7 +67,7 @@ unsafe extern "C" {
     pub fn sqlite3_last_insert_rowid(db: *mut sqlite3) -> i64;
     pub fn sqlite3_get_autocommit(db: *mut sqlite3) -> c_int;
     pub fn sqlite3_errmsg(db: *mut sqlite3) -> *const c_char;
-    pub fn sqlite3_close(db: *mut sqlite3) -> c_int;
+    pub fn sqlite3_close_v2(db: *mut sqlite3) -> c_int;
 
     // sqlite3_stmt
     pub fn sqlite3_db_handle(pStmt: *mut sqlite3_stmt) -> *mut sqlite3;

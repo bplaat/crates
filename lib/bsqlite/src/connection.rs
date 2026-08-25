@@ -24,7 +24,7 @@ pub enum OpenMode {
     ReadWrite,
 }
 
-struct InnerConnection(*mut sqlite3);
+pub(crate) struct InnerConnection(*mut sqlite3);
 // SAFETY: InnerConnection exclusively owns its *mut sqlite3 handle and never aliases it, so
 // transferring ownership to another thread is safe.
 unsafe impl Send for InnerConnection {}
@@ -63,7 +63,13 @@ impl InnerConnection {
             } else {
                 // SAFETY: db is non-null (checked above), and sqlite3_errmsg returns a valid
                 // NUL-terminated string that remains valid until the next SQLite API call on db.
-                unsafe { CStr::from_ptr(sqlite3_errmsg(db)) }.to_string_lossy()
+                let error = unsafe { CStr::from_ptr(sqlite3_errmsg(db)) }
+                    .to_string_lossy()
+                    .into_owned();
+                // SAFETY: db is a non-null handle returned by sqlite3_open_v2. close_v2 accepts
+                // handles from failed open attempts and releases them when no statements remain.
+                unsafe { sqlite3_close_v2(db) };
+                error
             };
             return Err(ConnectionError {
                 msg: format!("Failed to open database: {error}"),
@@ -127,7 +133,7 @@ impl InnerConnection {
         }
     }
 
-    fn prepare<T: FromRow>(&self, query: &str) -> Result<Statement<T>, StatementError> {
+    fn prepare<T: FromRow>(self: &Arc<Self>, query: &str) -> Result<Statement<T>, StatementError> {
         let mut statement = ptr::null_mut();
         // SAFETY: self.0 is a valid open db handle, query bytes are valid UTF-8 from a &str with
         // the correct byte length, statement is initialized to null_mut, and the tail pointer is
@@ -149,7 +155,7 @@ impl InnerConnection {
                 msg: format!("Failed to prepare statement '{query}': {error}"),
             });
         }
-        Ok(Statement::new(statement))
+        Ok(Statement::new(statement, Arc::clone(self)))
     }
 
     fn affected_rows(&self) -> i32 {
@@ -165,9 +171,9 @@ impl InnerConnection {
 
 impl Drop for InnerConnection {
     fn drop(&mut self) {
-        // SAFETY: self.0 is the exclusively owned db handle; Drop guarantees no other references
-        // exist, and sqlite3_close frees the handle exactly once.
-        unsafe { sqlite3_close(self.0) };
+        // SAFETY: self.0 is the exclusively owned db handle. close_v2 either closes it immediately
+        // or defers cleanup until all outstanding statements have been finalized.
+        unsafe { sqlite3_close_v2(self.0) };
     }
 }
 
@@ -493,6 +499,17 @@ mod test {
             .query::<i64>("SELECT n FROM nums ORDER BY n", ())?
             .collect::<Result<Vec<_>, _>>()?;
         assert_eq!(rows, vec![1, 2, 3, 4, 5]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_statement_can_outlive_connection() -> Result<(), StatementError> {
+        let mut statement = {
+            let db = Connection::open_memory().unwrap();
+            db.query::<i64>("SELECT 42", ())?
+        };
+
+        assert_eq!(statement.next().transpose()?, Some(42));
         Ok(())
     }
 
