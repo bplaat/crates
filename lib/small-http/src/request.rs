@@ -278,7 +278,7 @@ impl Request {
             let split = line
                 .find(':')
                 .ok_or(InvalidRequestError("Can't parse header line".to_string()))?;
-            headers.insert(
+            headers.append(
                 line[0..split].trim().to_string(),
                 line[split + 1..].trim().to_string(),
             );
@@ -489,7 +489,7 @@ impl Request {
             }
             .to_string(),
         );
-        if self.version == Version::Http1_1 {
+        if self.version == Version::Http1_1 && !self.headers.contains_key("Connection") {
             if keep_alive {
                 self.headers
                     .insert("Connection".to_string(), "keep-alive".to_string());
@@ -653,6 +653,18 @@ mod test {
     }
 
     #[test]
+    fn test_write_to_stream_preserves_connection_header() {
+        let request = Request::get("http://localhost/").header("Connection", "Upgrade");
+        let mut buffer = Vec::new();
+
+        request.write_to_stream(&mut buffer, false);
+
+        let request = String::from_utf8(buffer).unwrap();
+        assert!(request.contains("\r\nConnection: Upgrade\r\n"));
+        assert!(!request.contains("\r\nConnection: close\r\n"));
+    }
+
+    #[test]
     fn test_write_to_stream_with_body() {
         let request = Request::post("http://localhost/")
             .header("Host", "localhost")
@@ -661,6 +673,33 @@ mod test {
         let mut buffer = Vec::new();
         request.write_to_stream(&mut buffer, false);
         assert!(buffer.starts_with(b"POST / HTTP/1.1\r\n"));
+    }
+
+    #[test]
+    fn test_header_builder_uses_last_value() {
+        let request = Request::get("http://localhost/")
+            .header("X-Test", "first")
+            .header("x-test", "second");
+
+        assert_eq!(request.headers.get("X-Test"), Some("second"));
+        assert_eq!(request.headers.get_all("x-test").count(), 1);
+    }
+
+    #[test]
+    fn test_write_to_stream_has_one_automatic_content_length() {
+        let request = Request::post("http://localhost/")
+            .header("content-length", "999")
+            .body("test");
+        let mut buffer = Vec::new();
+
+        request.write_to_stream(&mut buffer, false);
+
+        let request_text = String::from_utf8(buffer).unwrap();
+        let content_lengths = request_text
+            .lines()
+            .filter(|line| line.to_ascii_lowercase().starts_with("content-length:"))
+            .collect::<Vec<_>>();
+        assert_eq!(content_lengths, ["Content-Length: 4"]);
     }
 
     #[test]

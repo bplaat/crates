@@ -84,12 +84,18 @@ impl Client {
         self
     }
 
+    fn apply_default_headers(&self, request: &mut Request) {
+        for (name, value) in &self.headers {
+            if !request.headers.contains_key(name) {
+                request.headers.insert(name.clone(), value.clone());
+            }
+        }
+    }
+
     /// Fetch a request
     pub fn fetch(&mut self, mut request: Request) -> Result<Response, FetchError> {
         // Add client headers to request
-        for (name, value) in &self.headers {
-            request = request.header(name, value);
-        }
+        self.apply_default_headers(&mut request);
 
         // Build connection key and address
         let host = request.url.host().ok_or(FetchError)?.to_string();
@@ -182,6 +188,17 @@ mod test {
     use std::thread;
 
     use super::*;
+
+    #[test]
+    fn test_request_headers_override_client_defaults() {
+        let client = Client::new().header("X-Test", "default");
+        let mut request = Request::get("http://localhost/").header("x-test", "request");
+
+        client.apply_default_headers(&mut request);
+
+        assert_eq!(request.headers.get("X-Test"), Some("request"));
+        assert_eq!(request.headers.get_all("x-test").count(), 1);
+    }
 
     #[test]
     fn test_client_multiple_requests() {

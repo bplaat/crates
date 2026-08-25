@@ -144,7 +144,7 @@ impl Response {
                 break;
             }
             let split = line.find(':').ok_or(InvalidResponseError)?;
-            res.headers.insert(
+            res.headers.append(
                 line[0..split].trim().to_string(),
                 line[split + 1..].trim().to_string(),
             );
@@ -255,7 +255,7 @@ impl Response {
                         format!("timeout={}", KEEP_ALIVE_TIMEOUT.as_secs()),
                     );
                 }
-            } else {
+            } else if self.headers.get("Connection").is_none() {
                 self.headers
                     .insert("Connection".to_string(), "close".to_string());
             }
@@ -306,11 +306,37 @@ mod test {
     }
 
     #[test]
+    fn test_parse_response_preserves_repeated_set_cookie_headers() {
+        let mut response_stream = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nSet-Cookie: one=1\r\nset-cookie: two=2\r\n\r\n".as_bytes();
+
+        let response = Response::read_from_stream(&mut response_stream).unwrap();
+
+        assert_eq!(
+            response.headers.get_all("SET-COOKIE").collect::<Vec<_>>(),
+            ["one=1", "two=2"]
+        );
+    }
+
+    #[test]
     fn test_parse_response_invalid() {
         let mut response_stream = "INVALID RESPONSE".as_bytes();
         let result = Response::read_from_stream(&mut response_stream);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_to_stream_preserves_connection_header() {
+        let request = Request::get("http://localhost/");
+        let mut response =
+            Response::with_status(Status::SwitchingProtocols).header("Connection", "Upgrade");
+        let mut buffer = Vec::new();
+
+        response.write_to_stream(&mut buffer, &request, false);
+
+        let response = String::from_utf8(buffer).unwrap();
+        assert!(response.contains("\r\nConnection: Upgrade\r\n"));
+        assert!(!response.contains("\r\nConnection: close\r\n"));
     }
 
     #[test]
@@ -378,6 +404,22 @@ mod test {
         assert!(response_text.contains("Content-Length: 0"));
         assert!(response_text.contains("X-Custom-Header: Value"));
         assert!(response_text.contains("\r\n\r\n"));
+    }
+
+    #[test]
+    fn test_write_response_has_one_automatic_content_length() {
+        let mut response = Response::with_body("test").header("content-length", "999");
+        let mut response_stream = Vec::new();
+        let request = Request::default();
+
+        response.write_to_stream(&mut response_stream, &request, false);
+
+        let response_text = String::from_utf8(response_stream).unwrap();
+        let content_lengths = response_text
+            .lines()
+            .filter(|line| line.to_ascii_lowercase().starts_with("content-length:"))
+            .collect::<Vec<_>>();
+        assert_eq!(content_lengths, ["Content-Length: 4"]);
     }
 
     #[test]

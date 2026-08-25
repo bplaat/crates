@@ -24,9 +24,47 @@ impl HeaderMap {
             .map(|(_, v)| v.as_str())
     }
 
-    /// Insert header
+    /// Get all header values
+    pub fn get_all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+        self.0.iter().filter_map(move |(header_name, value)| {
+            header_name
+                .eq_ignore_ascii_case(name)
+                .then_some(value.as_str())
+        })
+    }
+
+    /// Insert or replace a header case-insensitively
     pub fn insert(&mut self, name: String, value: String) {
+        self.remove(&name);
+        self.append(name, value);
+    }
+
+    /// Append a header without replacing existing values
+    pub fn append(&mut self, name: String, value: String) {
         self.0.push((name, value));
+    }
+
+    /// Remove all values for a header case-insensitively
+    pub fn remove(&mut self, name: &str) -> Option<String> {
+        let mut first_value = None;
+        self.0.retain(|(header_name, value)| {
+            if header_name.eq_ignore_ascii_case(name) {
+                if first_value.is_none() {
+                    first_value = Some(value.clone());
+                }
+                false
+            } else {
+                true
+            }
+        });
+        first_value
+    }
+
+    /// Check whether a header exists case-insensitively
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.0
+            .iter()
+            .any(|(header_name, _)| header_name.eq_ignore_ascii_case(name))
     }
 
     /// Get number of headers
@@ -69,5 +107,50 @@ impl<'a> IntoIterator for &'a mut HeaderMap {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter_mut()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_replaces_values_case_insensitively() {
+        let mut headers = HeaderMap::new();
+        headers.append("Content-Type".to_string(), "text/plain".to_string());
+        headers.append("content-type".to_string(), "text/html".to_string());
+
+        headers.insert("CONTENT-TYPE".to_string(), "application/json".to_string());
+
+        assert_eq!(headers.get("content-type"), Some("application/json"));
+        assert_eq!(
+            headers.get_all("Content-Type").collect::<Vec<_>>(),
+            ["application/json"]
+        );
+        assert_eq!(headers.len(), 1);
+    }
+
+    #[test]
+    fn append_preserves_repeated_values() {
+        let mut headers = HeaderMap::new();
+        headers.append("Set-Cookie".to_string(), "one=1".to_string());
+        headers.append("set-cookie".to_string(), "two=2".to_string());
+
+        assert_eq!(
+            headers.get_all("SET-COOKIE").collect::<Vec<_>>(),
+            ["one=1", "two=2"]
+        );
+    }
+
+    #[test]
+    fn remove_and_contains_key_are_case_insensitive() {
+        let mut headers = HeaderMap::new();
+        headers.append("X-Test".to_string(), "first".to_string());
+        headers.append("x-test".to_string(), "second".to_string());
+
+        assert!(headers.contains_key("X-TEST"));
+        assert_eq!(headers.remove("x-Test"), Some("first".to_string()));
+        assert!(!headers.contains_key("X-Test"));
+        assert!(headers.is_empty());
     }
 }
