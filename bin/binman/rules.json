@@ -1,0 +1,1176 @@
+{
+    "version": 1,
+    "groups": [
+        {
+            "id": "applications",
+            "name": "Applications",
+            "rules": [
+                {
+                    "id": "adobe-acrobat-cache",
+                    "name": "Adobe Acrobat Reader",
+                    "description": "Document rendering and search caches; documents and recent-file lists are preserved.",
+                    "processNames": ["acrord32.exe", "acrobat.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Adobe/Acrobat/*/Cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "discord-cache",
+                    "name": "Discord",
+                    "description": "Discord web, code and GPU caches.",
+                    "processNames": ["discord.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "discord/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "discord/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "discord/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "ea-app-cache",
+                    "name": "EA app",
+                    "description": "Launcher web and graphics caches; installed games, saves and account data are preserved.",
+                    "processNames": ["EADesktop.exe", "EABackgroundService.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Electronic Arts/EA Desktop/CEF/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Electronic Arts/EA Desktop/CEF/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Electronic Arts/EA Desktop/CEF/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "epic-games-cache",
+                    "name": "Epic Games Launcher",
+                    "description": "Launcher web caches; installed games and account data are preserved.",
+                    "processNames": ["EpicGamesLauncher.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "EpicGamesLauncher/Saved/webcache*"
+                        }
+                    ]
+                },
+                {
+                    "id": "gimp-temp",
+                    "name": "GIMP",
+                    "description": "Temporary image-processing files; preferences and recent files are preserved.",
+                    "processNames": ["gimp-2.10.exe", "gimp-3.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "GIMP/*/tmp"
+                        }
+                    ]
+                },
+                {
+                    "id": "github-desktop-cache",
+                    "name": "GitHub Desktop",
+                    "description": "Web, code and GPU caches; repositories and authentication are preserved.",
+                    "processNames": ["githubdesktop.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "GitHub Desktop/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "GitHub Desktop/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "GitHub Desktop/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "libreoffice-cache",
+                    "name": "LibreOffice",
+                    "description": "Regenerable profile cache; documents, templates and preferences are preserved.",
+                    "processNames": ["soffice.exe", "soffice.bin"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "LibreOffice/*/cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "office-diagnostics",
+                    "name": "Microsoft Office diagnostics",
+                    "description": "Office diagnostic logs; documents and recent-file lists are preserved.",
+                    "processNames": ["winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Office/OffDiag"
+                        }
+                    ]
+                },
+                {
+                    "id": "teams-cache",
+                    "name": "Microsoft Teams",
+                    "description": "Teams webview caches without removing accounts or conversations.",
+                    "processNames": ["ms-teams.exe", "teams.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Teams/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Teams/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Teams/GPUCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Packages/MSTeams_8wekyb3d8bbwe/LocalCache/Microsoft/MSTeams/EBWebView/*/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Packages/MSTeams_8wekyb3d8bbwe/LocalCache/Microsoft/MSTeams/EBWebView/*/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Packages/MSTeams_8wekyb3d8bbwe/LocalCache/Microsoft/MSTeams/EBWebView/*/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "notion-cache",
+                    "name": "Notion",
+                    "description": "Web, code and GPU caches; workspaces and offline data are preserved.",
+                    "processNames": ["notion.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "Notion/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Notion/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Notion/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "obsidian-cache",
+                    "name": "Obsidian",
+                    "description": "Web, code and GPU caches; vaults, plugins and settings are preserved.",
+                    "processNames": ["obsidian.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "obsidian/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "obsidian/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "obsidian/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "postman-cache",
+                    "name": "Postman",
+                    "description": "Web, code and GPU caches; workspaces and account data are preserved.",
+                    "processNames": ["postman.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "Postman/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Postman/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Postman/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "riot-client-cache",
+                    "name": "Riot Client",
+                    "description": "Launcher web and graphics caches; installed games, saves and account data are preserved.",
+                    "processNames": ["RiotClientServices.exe", "RiotClientUx.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Riot Games/Riot Client/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Riot Games/Riot Client/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Riot Games/Riot Client/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "slack-cache",
+                    "name": "Slack",
+                    "description": "Slack web, code and GPU caches; workspaces and sign-ins are preserved.",
+                    "processNames": ["slack.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "Slack/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Slack/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Slack/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "spotify-cache",
+                    "name": "Spotify",
+                    "description": "Spotify browser and graphics caches; downloaded music is preserved.",
+                    "processNames": ["spotify.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Spotify/Browser/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Spotify/Browser/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Spotify/Browser/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "steam-cache",
+                    "name": "Steam",
+                    "description": "Steam web caches; installed games and active downloads are preserved.",
+                    "processNames": ["steam.exe", "steamwebhelper.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "programFilesX86",
+                            "path": "Steam/config/htmlcache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Steam/htmlcache"
+                        }
+                    ]
+                },
+                {
+                    "id": "steam-shader-cache",
+                    "name": "Steam shader cache",
+                    "description": "Downloaded and compiled game shaders; Steam rebuilds them, which can briefly increase loading time or stutter.",
+                    "impact": "medium",
+                    "sideEffect": "Games may stutter or take longer to start while shaders are rebuilt.",
+                    "processNames": ["steam.exe", "steamwebhelper.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "programFilesX86",
+                            "path": "Steam/steamapps/shadercache"
+                        }
+                    ]
+                },
+                {
+                    "id": "ubisoft-connect-cache",
+                    "name": "Ubisoft Connect",
+                    "description": "Launcher cache; installed games, saves and account data are preserved.",
+                    "processNames": ["UbisoftConnect.exe", "upc.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "programFilesX86",
+                            "path": "Ubisoft/Ubisoft Game Launcher/cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "vscode-cache",
+                    "name": "Visual Studio Code",
+                    "description": "Editor, code and GPU caches; projects and settings are preserved.",
+                    "processNames": ["code.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "Code/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Code/CachedData"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Code/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Code/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "vlc-art-cache",
+                    "name": "VLC media artwork",
+                    "description": "Downloaded album and media artwork; playlists and preferences are preserved.",
+                    "processNames": ["vlc.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "vlc/art"
+                        }
+                    ]
+                },
+                {
+                    "id": "whatsapp-cache",
+                    "name": "WhatsApp",
+                    "description": "Desktop webview caches; messages, media and account data are preserved.",
+                    "processNames": ["whatsapp.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Packages/5319275A.WhatsAppDesktop_*/LocalCache/Roaming/WhatsApp/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Packages/5319275A.WhatsAppDesktop_*/LocalCache/Roaming/WhatsApp/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Packages/5319275A.WhatsAppDesktop_*/LocalCache/Roaming/WhatsApp/GPUCache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "WhatsApp/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "WhatsApp/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "WhatsApp/GPUCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "zoom-cache",
+                    "name": "Zoom",
+                    "description": "Embedded web cache; meetings, recordings, account data and settings are preserved.",
+                    "processNames": ["Zoom.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "Zoom/data/WebviewCache"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "browsers",
+            "name": "Browsers",
+            "rules": [
+                {
+                    "id": "brave-cache",
+                    "name": "Brave",
+                    "description": "Web, code, GPU and shader caches; browsing data and sign-ins are preserved.",
+                    "processNames": ["brave.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "BraveSoftware/Brave-Browser/User Data/*/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "BraveSoftware/Brave-Browser/User Data/*/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "BraveSoftware/Brave-Browser/User Data/*/GPUCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "BraveSoftware/Brave-Browser/User Data/ShaderCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "BraveSoftware/Brave-Browser/User Data/GrShaderCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "BraveSoftware/Brave-Browser/User Data/GraphiteDawnCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "chromium-cache",
+                    "name": "Chromium",
+                    "description": "Web, code, GPU and shader caches; browsing data and sign-ins are preserved.",
+                    "processNames": ["chromium.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Chromium/User Data/*/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Chromium/User Data/*/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Chromium/User Data/*/GPUCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Chromium/User Data/ShaderCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "chrome-cache",
+                    "name": "Google Chrome",
+                    "description": "Web, code and GPU caches; browsing data and sign-ins are preserved.",
+                    "processNames": ["chrome.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Google/Chrome/User Data/*/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Google/Chrome/User Data/*/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Google/Chrome/User Data/*/GPUCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Google/Chrome/User Data/ShaderCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Google/Chrome/User Data/GrShaderCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Google/Chrome/User Data/GraphiteDawnCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "edge-cache",
+                    "name": "Microsoft Edge",
+                    "description": "Web, code and GPU caches; browsing data and sign-ins are preserved.",
+                    "processNames": ["msedge.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Edge/User Data/*/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Edge/User Data/*/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Edge/User Data/*/GPUCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Edge/User Data/ShaderCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Edge/User Data/GrShaderCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Edge/User Data/GraphiteDawnCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "firefox-cache",
+                    "name": "Mozilla Firefox",
+                    "description": "Profile web and startup caches; browsing data and sign-ins are preserved.",
+                    "processNames": ["firefox.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Mozilla/Firefox/Profiles/*/cache2"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Mozilla/Firefox/Profiles/*/startupCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "thunderbird-cache",
+                    "name": "Mozilla Thunderbird",
+                    "description": "Web and startup caches; mail, accounts and saved credentials are preserved.",
+                    "processNames": ["thunderbird.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Thunderbird/Profiles/*/cache2"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Thunderbird/Profiles/*/startupCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "opera-cache",
+                    "name": "Opera",
+                    "description": "Web, code and GPU caches for stable and preview installations.",
+                    "processNames": ["opera.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "roamingAppData",
+                            "path": "Opera Software/Opera*/Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Opera Software/Opera*/Code Cache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Opera Software/Opera*/GPUCache"
+                        },
+                        {
+                            "root": "roamingAppData",
+                            "path": "Opera Software/Opera*/ShaderCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "vivaldi-cache",
+                    "name": "Vivaldi",
+                    "description": "Web, code, GPU and shader caches; browsing data and sign-ins are preserved.",
+                    "processNames": ["vivaldi.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Vivaldi/User Data/*/Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Vivaldi/User Data/*/Code Cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Vivaldi/User Data/*/GPUCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Vivaldi/User Data/ShaderCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Vivaldi/User Data/GrShaderCache"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "developer",
+            "name": "Developer",
+            "rules": [
+                {
+                    "id": "android-cache",
+                    "name": "Android tooling",
+                    "description": "Android SDK metadata and emulator download caches; SDKs and virtual devices are preserved.",
+                    "processNames": ["studio64.exe", "emulator.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "userProfile",
+                            "path": ".android/cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "bun-cache",
+                    "name": "Bun",
+                    "description": "Downloaded Bun package cache; projects and globally installed packages are preserved.",
+                    "processNames": ["bun.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "userProfile",
+                            "path": ".bun/install/cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "cargo-cache",
+                    "name": "Cargo",
+                    "description": "Downloaded Rust registry archives and source checkouts; installed tools are preserved.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "userProfile",
+                            "path": ".cargo/registry/cache"
+                        },
+                        {
+                            "root": "userProfile",
+                            "path": ".cargo/registry/src"
+                        },
+                        {
+                            "root": "userProfile",
+                            "path": ".cargo/registry/index"
+                        },
+                        {
+                            "root": "userProfile",
+                            "path": ".cargo/git/checkouts"
+                        },
+                        {
+                            "root": "userProfile",
+                            "path": ".cargo/git/db"
+                        }
+                    ]
+                },
+                {
+                    "id": "composer-cache",
+                    "name": "Composer",
+                    "description": "Downloaded PHP packages and repository metadata; projects and credentials are preserved.",
+                    "processNames": ["php.exe", "composer.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Composer/files"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Composer/repo"
+                        }
+                    ]
+                },
+                {
+                    "id": "cypress-cache",
+                    "name": "Cypress browsers",
+                    "description": "Downloaded Cypress test runners; Cypress downloads them again when required.",
+                    "processNames": ["Cypress.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Cypress/Cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "deno-cache",
+                    "name": "Deno",
+                    "description": "Downloaded dependencies in Deno's default global cache; projects and source files are preserved.",
+                    "impact": "medium",
+                    "recovery": "redownload",
+                    "sideEffect": "The next Deno run may need to download dependencies again.",
+                    "processNames": ["deno.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "deno"
+                        }
+                    ]
+                },
+                {
+                    "id": "docker-build-cache",
+                    "name": "Docker build cache",
+                    "description": "Unused BuildKit build cache reported and removed by Docker; images, containers and volumes are preserved.",
+                    "impact": "medium",
+                    "sideEffect": "Subsequent Docker builds may take longer while build layers are recreated.",
+                    "kind": "dockerBuildCache"
+                },
+                {
+                    "id": "go-build-cache",
+                    "name": "Go build cache",
+                    "description": "Compiled Go build artifacts; source code and downloaded modules are preserved.",
+                    "processNames": ["go.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "go-build"
+                        }
+                    ]
+                },
+                {
+                    "id": "gradle-cache",
+                    "name": "Gradle",
+                    "description": "Downloaded build dependencies and transformed artifact caches.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "userProfile",
+                            "path": ".gradle/caches"
+                        },
+                        {
+                            "root": "userProfile",
+                            "path": ".gradle/wrapper/dists"
+                        }
+                    ]
+                },
+                {
+                    "id": "jetbrains-cache",
+                    "name": "JetBrains IDEs",
+                    "description": "IDE indexes and caches; projects, plugins and settings are preserved.",
+                    "processNames": ["idea64.exe", "clion64.exe", "pycharm64.exe", "rider64.exe", "webstorm64.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "JetBrains/*/caches"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "JetBrains/*/index"
+                        }
+                    ]
+                },
+                {
+                    "id": "maven-cache",
+                    "name": "Maven",
+                    "description": "Downloaded Maven artifacts; project configuration and credentials are preserved.",
+                    "processNames": ["mvn.exe", "mvn.cmd"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "userProfile",
+                            "path": ".m2/repository"
+                        }
+                    ]
+                },
+                {
+                    "id": "npm-cache",
+                    "name": "npm",
+                    "description": "Downloaded npm package cache.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "npm-cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "nuget-cache",
+                    "name": "NuGet",
+                    "description": "Downloaded NuGet packages; projects restore them when needed.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "userProfile",
+                            "path": ".nuget/packages"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "NuGet/v3-cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "NuGet/plugins-cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "NuGet/Scratch"
+                        }
+                    ]
+                },
+                {
+                    "id": "rust-toolchains",
+                    "name": "Old Rust toolchains",
+                    "description": "Uninstalls older, beta, custom, or alternate-host Rust toolchains; the latest stable and nightly plus active, default, and project-pinned toolchains are kept.",
+                    "impact": "high",
+                    "recovery": "permanent",
+                    "sideEffect": "Unreferenced beta, custom, and alternate-host toolchains are uninstalled and may need manual restoration.",
+                    "processNames": ["cargo.exe", "rustc.exe", "rustup.exe"],
+                    "kind": "rustToolchains"
+                },
+                {
+                    "id": "pip-cache",
+                    "name": "pip",
+                    "description": "Downloaded Python package and wheel cache.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "pip/Cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "playwright-cache",
+                    "name": "Playwright browsers",
+                    "description": "Downloaded test browsers; Playwright downloads them again when required.",
+                    "impact": "medium",
+                    "recovery": "redownload",
+                    "sideEffect": "Playwright must download its test browsers again before they can run.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "ms-playwright"
+                        }
+                    ]
+                },
+                {
+                    "id": "pnpm-cache",
+                    "name": "pnpm",
+                    "description": "Downloaded pnpm metadata and package cache.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "pnpm-cache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "pnpm/store"
+                        }
+                    ]
+                },
+                {
+                    "id": "rustup-cache",
+                    "name": "Rustup downloads",
+                    "description": "Incomplete and cached toolchain downloads; installed Rust toolchains are preserved.",
+                    "processNames": ["rustup.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "userProfile",
+                            "path": ".rustup/downloads"
+                        },
+                        {
+                            "root": "userProfile",
+                            "path": ".rustup/tmp"
+                        }
+                    ]
+                },
+                {
+                    "id": "unity-cache",
+                    "name": "Unity asset cache",
+                    "description": "Downloaded and generated Unity asset cache; projects are preserved and missing data is regenerated.",
+                    "impact": "medium",
+                    "sideEffect": "Unity may spend significant time importing or downloading assets again.",
+                    "processNames": ["Unity.exe", "Unity Hub.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Unity/cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "unreal-engine-cache",
+                    "name": "Unreal Engine derived data",
+                    "description": "Shared derived asset data; Unreal Engine recompiles it, so the next editor or game launch can be slower.",
+                    "impact": "medium",
+                    "sideEffect": "Unreal Engine must rebuild derived data, which can make the next launch significantly slower.",
+                    "processNames": ["UnrealEditor.exe", "UE4Editor.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "UnrealEngine/Common/DerivedDataCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "uv-cache",
+                    "name": "uv",
+                    "description": "Downloaded Python packages and build artifacts managed by uv; environments and projects are preserved.",
+                    "processNames": ["uv.exe"],
+                    "kind": "uvCache"
+                },
+                {
+                    "id": "visual-studio-cache",
+                    "name": "Visual Studio",
+                    "description": "MEF, component, image and embedded web caches; extensions and settings are preserved.",
+                    "processNames": ["devenv.exe", "ServiceHub.Host.dotnet.x64.exe"],
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/VisualStudio/*/ComponentModelCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/VisualStudio/*/MEFCacheBackup"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/VisualStudio/*/ImageLibrary"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/VisualStudio/WebView2Cache"
+                        }
+                    ]
+                },
+                {
+                    "id": "yarn-cache",
+                    "name": "Yarn",
+                    "description": "Downloaded Yarn package cache.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Yarn/Cache"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "windows",
+            "name": "Windows",
+            "rules": [
+                {
+                    "id": "windows-crash-dumps",
+                    "name": "Crash dumps",
+                    "description": "Application crash dumps and Windows minidumps used for diagnostics.",
+                    "requiresAdministrator": true,
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "CrashDumps"
+                        },
+                        {
+                            "root": "windows",
+                            "path": "Minidump"
+                        },
+                        {
+                            "root": "windows",
+                            "path": "memory.dmp"
+                        }
+                    ]
+                },
+                {
+                    "id": "windows-delivery-optimization",
+                    "name": "Delivery Optimization cache",
+                    "description": "Locally cached Windows update delivery data.",
+                    "requiresAdministrator": true,
+                    "kind": "deliveryOptimization"
+                },
+                {
+                    "id": "windows-directx-cache",
+                    "name": "DirectX shader cache",
+                    "description": "Compiled graphics shaders that Windows recreates when needed.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "D3DSCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "windows-error-reports",
+                    "name": "Error reports",
+                    "description": "Archived and queued Windows Error Reporting data.",
+                    "requiresAdministrator": true,
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "programData",
+                            "path": "Microsoft/Windows/WER/ReportArchive"
+                        },
+                        {
+                            "root": "programData",
+                            "path": "Microsoft/Windows/WER/ReportQueue"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Windows/WER"
+                        }
+                    ]
+                },
+                {
+                    "id": "gpu-shader-caches",
+                    "name": "GPU shader caches",
+                    "description": "NVIDIA, AMD and Intel compiled shader caches; graphics drivers recreate them.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "NVIDIA/DXCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "NVIDIA/GLCache"
+                        },
+                        {
+                            "root": "userProfile",
+                            "path": ".nv/ComputeCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "AMD/DxCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "AMD/GLCache"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Intel/ShaderCache"
+                        }
+                    ]
+                },
+                {
+                    "id": "windows-app-temp-state",
+                    "name": "Microsoft Store app temporary files",
+                    "description": "Temporary-state folders from Store apps; local settings and offline data are preserved.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Packages/*/TempState"
+                        }
+                    ]
+                },
+                {
+                    "id": "windows-recycle-bin",
+                    "name": "Recycle Bin",
+                    "description": "Permanently removes files currently stored in the Recycle Bin.",
+                    "impact": "high",
+                    "recovery": "permanent",
+                    "sideEffect": "Files in the Recycle Bin cannot be restored after cleaning.",
+                    "kind": "recycleBin"
+                },
+                {
+                    "id": "windows-user-temp",
+                    "name": "Temporary files",
+                    "description": "Temporary files created by your account and applications.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Temp"
+                        }
+                    ]
+                },
+                {
+                    "id": "windows-thumbnail-cache",
+                    "name": "Thumbnail and icon cache",
+                    "description": "Explorer previews and icons that are regenerated automatically.",
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Windows/Explorer/thumbcache_*.db"
+                        },
+                        {
+                            "root": "localAppData",
+                            "path": "Microsoft/Windows/Explorer/iconcache_*.db"
+                        }
+                    ]
+                },
+                {
+                    "id": "windows-component-store",
+                    "name": "Windows component cleanup",
+                    "description": "Microsoft DISM cleanup that preserves update uninstall support.",
+                    "requiresAdministrator": true,
+                    "kind": "dismComponentStore"
+                },
+                {
+                    "id": "windows-system-temp",
+                    "name": "Windows temporary files",
+                    "description": "Temporary working files created by Windows services.",
+                    "requiresAdministrator": true,
+                    "kind": "paths",
+                    "rules": [
+                        {
+                            "root": "windows",
+                            "path": "Temp"
+                        }
+                    ]
+                },
+                {
+                    "id": "windows-update-downloads",
+                    "name": "Windows Update downloads",
+                    "description": "Downloaded update installers; Windows downloads them again if required.",
+                    "impact": "medium",
+                    "recovery": "redownload",
+                    "sideEffect": "Windows may need to download update files again.",
+                    "requiresAdministrator": true,
+                    "kind": "windowsUpdate"
+                }
+            ]
+        }
+    ]
+}

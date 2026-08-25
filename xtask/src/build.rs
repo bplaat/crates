@@ -50,6 +50,22 @@ fn cargo_install_path(path: &str, force: bool) -> Result<()> {
     run(&mut online)
 }
 
+fn freedesktop_identity(path: &Path) -> Result<Option<(String, String)>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let contents = fs::read_to_string(path)?;
+    let executable = contents.lines().find_map(|line| {
+        let value = line.strip_prefix("Exec=")?.trim().trim_start_matches('"');
+        let value = value.strip_prefix("$BIN_DIR/")?;
+        value.split(['"', ' ']).next().map(str::to_owned)
+    });
+    let identifier = contents
+        .lines()
+        .find_map(|line| line.strip_prefix("Icon=").map(str::to_owned));
+    Ok(executable.zip(identifier))
+}
+
 impl Xtask {
     pub(crate) fn clean(&self) -> Result<()> {
         if self.os == Os::Windows {
@@ -142,7 +158,7 @@ impl Xtask {
     }
 
     pub(crate) fn build_bundle(&self) -> Result<()> {
-        let apps = self.installable_apps()?;
+        let apps = self.installable_apps(true)?;
         self.build_bundles(&apps)
     }
 
@@ -156,7 +172,7 @@ impl Xtask {
 
     pub(crate) fn install(&self, selected: Option<&str>) -> Result<()> {
         let apps: Vec<_> = self
-            .installable_apps()?
+            .installable_apps(false)?
             .into_iter()
             .filter(|app| selected.is_none_or(|selected| app.package == selected))
             .collect();
@@ -271,31 +287,61 @@ impl Xtask {
         Ok(())
     }
 
-    fn installable_apps(&self) -> Result<Vec<InstallableApp>> {
+    fn installable_apps(&self, bundle_only: bool) -> Result<Vec<InstallableApp>> {
         let metadata = self.cargo_metadata()?;
         let mut apps = Vec::new();
         for package in packages(&metadata)? {
             if !supports_os(package, self.os) {
                 continue;
             }
-            let Some(bundle) = package.pointer("/metadata/bundle") else {
+            let manifest = package
+                .get("manifest_path")
+                .and_then(Value::as_str)
+                .context("Cargo package has no manifest path")?;
+            if !Path::new(manifest).starts_with(self.root.join("bin")) {
                 continue;
-            };
-            let Some(identifier) = bundle.get("identifier").and_then(Value::as_str) else {
+            }
+            let bundle = package.pointer("/metadata/bundle");
+            let uses_bwebview = package
+                .get("dependencies")
+                .and_then(Value::as_array)
+                .is_some_and(|dependencies| {
+                    dependencies.iter().any(|dependency| {
+                        dependency.get("name").and_then(Value::as_str) == Some("bwebview")
+                    })
+                });
+            if bundle_only && bundle.is_none() || bundle.is_none() && !uses_bwebview {
                 continue;
-            };
+            }
             let package_name = package
                 .get("name")
                 .and_then(Value::as_str)
                 .context("Cargo package has no name")?;
+            let mut name_characters = package_name.chars();
+            let default_name = name_characters
+                .next()
+                .map(|first| first.to_uppercase().chain(name_characters).collect())
+                .unwrap_or_default();
+            let package_directory = Path::new(manifest)
+                .parent()
+                .context("Cargo manifest has no parent directory")?;
+            let identity =
+                freedesktop_identity(&package_directory.join("meta/freedesktop/.desktop"))?;
+            let (mut name, identifier) = identity.unwrap_or_else(|| {
+                let identifier = package_name.to_owned();
+                (default_name, identifier)
+            });
+            if let Some(app_name) = package
+                .pointer("/metadata/app/name")
+                .and_then(Value::as_str)
+                .filter(|name| !name.trim().is_empty())
+            {
+                name = app_name.to_owned();
+            }
             apps.push(InstallableApp {
                 package: package_name.to_owned(),
-                identifier: identifier.to_owned(),
-                name: identifier
-                    .rsplit('.')
-                    .next()
-                    .context("bundle identifier is empty")?
-                    .to_owned(),
+                identifier,
+                name,
             });
         }
         Ok(apps)
