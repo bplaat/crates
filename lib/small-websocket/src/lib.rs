@@ -99,9 +99,13 @@ impl WebSocket {
             return Err(ConnectError);
         }
         let host = parsed_url.host().ok_or(ConnectError)?;
-        let mut stream =
-            TcpStream::connect(format!("{}:{}", host, parsed_url.port().unwrap_or(80)))
-                .map_err(|_| ConnectError)?;
+        let port = parsed_url.port().unwrap_or(80);
+        let address = if host.contains(':') {
+            format!("[{host}]:{port}")
+        } else {
+            format!("{host}:{port}")
+        };
+        let mut stream = TcpStream::connect(address).map_err(|_| ConnectError)?;
 
         let mut random_key = [0u8; 16];
         getrandom::fill(&mut random_key).map_err(|_| ConnectError)?;
