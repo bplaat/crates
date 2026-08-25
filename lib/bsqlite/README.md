@@ -56,6 +56,20 @@ fn main() {
         );
     }
 
+    // Group related writes atomically
+    db.transaction(|transaction| -> Result<(), bsqlite::StatementError> {
+        transaction.execute(
+            "UPDATE persons SET age = age + 1 WHERE name = ?",
+            "Alice".to_string(),
+        )?;
+        transaction.execute(
+            "UPDATE persons SET age = age + 1 WHERE name = ?",
+            "Bob".to_string(),
+        )?;
+        Ok(())
+    })
+    .expect("Can't update persons");
+
     // Read rows back
     let persons = db.query::<Person>(format!("SELECT {} FROM persons", Person::columns()), ());
     for person in persons {

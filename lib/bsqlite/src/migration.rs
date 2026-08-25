@@ -90,38 +90,15 @@ impl Connection {
             if version as i64 <= applied {
                 continue;
             }
-            self.execute("BEGIN IMMEDIATE", ())?;
-            let result = (|| -> Result<(), MigrationError> {
+            self.transaction(|db| -> Result<(), MigrationError> {
                 let sql = preprocess_migration_sql(migration.sql)?;
-                self.execute_script(&sql)?;
-                self.execute(
+                db.execute_script(&sql)?;
+                db.execute(
                     "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, unixepoch())",
                     (version as i64, migration.name.to_string()),
                 )?;
                 Ok(())
-            })();
-            if let Err(e) = result {
-                if let Err(rollback_error) = self.execute("ROLLBACK", ()) {
-                    return Err(MigrationError {
-                        msg: format!(
-                            "{e}; additionally failed to roll back migration '{}': {rollback_error}",
-                            migration.name
-                        ),
-                    });
-                }
-                return Err(e);
-            }
-            if let Err(e) = self.execute("COMMIT", ()) {
-                if let Err(rollback_error) = self.execute("ROLLBACK", ()) {
-                    return Err(MigrationError {
-                        msg: format!(
-                            "{e}; additionally failed to roll back migration '{}': {rollback_error}",
-                            migration.name
-                        ),
-                    });
-                }
-                return Err(e.into());
-            }
+            })?;
         }
         Ok(())
     }

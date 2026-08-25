@@ -55,32 +55,34 @@ impl DatabaseHelpers for Connection {
 }
 
 fn database_seed(database: &Connection) -> Result<()> {
-    // Insert persons
-    if database.query_some::<i64>("SELECT COUNT(id) FROM persons", ())? == 0 {
-        database.insert_person(Person {
-            name: "Bastiaan".to_string(),
-            age_in_years: 20,
-            relation: Relation::Me,
-            ..Default::default()
-        })?;
-        database.insert_person(Person {
-            name: "Sander".to_string(),
-            age_in_years: 19,
-            relation: Relation::Brother,
-            ..Default::default()
-        })?;
-        database.insert_person(Person {
-            name: "Leonard".to_string(),
-            age_in_years: 16,
-            relation: Relation::Brother,
-            ..Default::default()
-        })?;
-        database.insert_person(Person {
-            name: "Jiska".to_string(),
-            age_in_years: 14,
-            relation: Relation::Sister,
-            ..Default::default()
-        })?;
-    }
-    Ok(())
+    database.transaction(|database| {
+        // Insert persons
+        if database.query_some::<i64>("SELECT COUNT(id) FROM persons", ())? == 0 {
+            database.insert_person(Person {
+                name: "Bastiaan".to_string(),
+                age_in_years: 20,
+                relation: Relation::Me,
+                ..Default::default()
+            })?;
+            database.insert_person(Person {
+                name: "Sander".to_string(),
+                age_in_years: 19,
+                relation: Relation::Brother,
+                ..Default::default()
+            })?;
+            database.insert_person(Person {
+                name: "Leonard".to_string(),
+                age_in_years: 16,
+                relation: Relation::Brother,
+                ..Default::default()
+            })?;
+            database.insert_person(Person {
+                name: "Jiska".to_string(),
+                age_in_years: 14,
+                relation: Relation::Sister,
+                ..Default::default()
+            })?;
+        }
+        Ok(())
+    })
 }

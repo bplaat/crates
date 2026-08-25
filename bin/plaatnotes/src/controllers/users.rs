@@ -216,23 +216,16 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
         && auth_user.role == UserRole::Admin
     {
         user.password = password_hash(&password);
-        execute_args!(
-            ctx.database,
-            "UPDATE users SET password = :password WHERE id = :id",
-            Args {
-                password: user.password.clone(),
-                id: user.id
-            }
-        )?;
     }
     user.updated_at = Utc::now();
     execute_args!(
         ctx.database,
-        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, theme = :theme, language = :language, role = :role, updated_at = :updated_at WHERE id = :id",
+        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, password = :password, theme = :theme, language = :language, role = :role, updated_at = :updated_at WHERE id = :id",
         Args {
             first_name: user.first_name.clone(),
             last_name: user.last_name.clone(),
             email: user.email.clone(),
+            password: user.password.clone(),
             theme: user.theme,
             language: user.language.clone(),
             role: user.role,

@@ -144,74 +144,77 @@ pub(crate) fn notes_update(req: &Request, ctx: &Context) -> Result<Response> {
     note.is_archived = body.is_archived;
     note.is_trashed = body.is_trashed;
     note.updated_at = Utc::now();
-    execute_args!(
-        ctx.database,
-        "UPDATE notes SET user_id = :user_id, title = :title, body = :body, is_pinned = :is_pinned, is_archived = :is_archived, is_trashed = :is_trashed, updated_at = :updated_at WHERE id = :id",
-        Args {
-            user_id: note.user_id,
-            title: note.title.clone(),
-            body: note.body.clone(),
-            is_pinned: note.is_pinned,
-            is_archived: note.is_archived,
-            is_trashed: note.is_trashed,
-            updated_at: note.updated_at,
-            id: note.id
+    ctx.database.transaction(|db| -> Result<()> {
+        execute_args!(
+            db,
+            "UPDATE notes SET user_id = :user_id, title = :title, body = :body, is_pinned = :is_pinned, is_archived = :is_archived, is_trashed = :is_trashed, updated_at = :updated_at WHERE id = :id",
+            Args {
+                user_id: note.user_id,
+                title: note.title.clone(),
+                body: note.body.clone(),
+                is_pinned: note.is_pinned,
+                is_archived: note.is_archived,
+                is_trashed: note.is_trashed,
+                updated_at: note.updated_at,
+                id: note.id
+            }
+        )?;
+
+        // When archiving or unarchiving, put the note first and shift all others
+        if note.is_archived != prev_is_archived && !note.is_trashed {
+            let filter = if note.is_archived {
+                FILTER_ARCHIVED
+            } else {
+                FILTER_NORMAL
+            };
+            execute_args!(
+                db,
+                &format!(
+                    "UPDATE notes SET position = position + 1 WHERE id != :id AND {filter} AND user_id = :user_id"
+                ),
+                Args {
+                    id: note.id,
+                    user_id: note.user_id
+                }
+            )?;
+            execute_args!(
+                db,
+                "UPDATE notes SET position = 0 WHERE id = :id",
+                Args { id: note.id }
+            )?;
+            note.position = 0;
         }
-    )?;
 
-    // When archiving or unarchiving, put the note first and shift all others
-    if note.is_archived != prev_is_archived && !note.is_trashed {
-        let filter = if note.is_archived {
-            FILTER_ARCHIVED
-        } else {
-            FILTER_NORMAL
-        };
-        execute_args!(
-            ctx.database,
-            &format!(
-                "UPDATE notes SET position = position + 1 WHERE id != :id AND {filter} AND user_id = :user_id"
-            ),
-            Args {
-                id: note.id,
-                user_id: note.user_id
-            }
-        )?;
-        execute_args!(
-            ctx.database,
-            "UPDATE notes SET position = 0 WHERE id = :id",
-            Args { id: note.id }
-        )?;
-        note.position = 0;
-    }
-
-    // When trashing or untrashing, reset position in the destination category
-    if note.is_trashed != prev_is_trashed {
-        let filter = if note.is_trashed {
-            FILTER_TRASHED
-        } else if note.is_pinned {
-            FILTER_PINNED
-        } else if note.is_archived {
-            FILTER_ARCHIVED
-        } else {
-            FILTER_NORMAL
-        };
-        execute_args!(
-            ctx.database,
-            &format!(
-                "UPDATE notes SET position = position + 1 WHERE id != :id AND {filter} AND user_id = :user_id"
-            ),
-            Args {
-                id: note.id,
-                user_id: note.user_id
-            }
-        )?;
-        execute_args!(
-            ctx.database,
-            "UPDATE notes SET position = 0 WHERE id = :id",
-            Args { id: note.id }
-        )?;
-        note.position = 0;
-    }
+        // When trashing or untrashing, reset position in the destination category
+        if note.is_trashed != prev_is_trashed {
+            let filter = if note.is_trashed {
+                FILTER_TRASHED
+            } else if note.is_pinned {
+                FILTER_PINNED
+            } else if note.is_archived {
+                FILTER_ARCHIVED
+            } else {
+                FILTER_NORMAL
+            };
+            execute_args!(
+                db,
+                &format!(
+                    "UPDATE notes SET position = position + 1 WHERE id != :id AND {filter} AND user_id = :user_id"
+                ),
+                Args {
+                    id: note.id,
+                    user_id: note.user_id
+                }
+            )?;
+            execute_args!(
+                db,
+                "UPDATE notes SET position = 0 WHERE id = :id",
+                Args { id: note.id }
+            )?;
+            note.position = 0;
+        }
+        Ok(())
+    })?;
 
     // Return updated note
     Ok(Response::with_json(api::Note::from(note)))
@@ -376,47 +379,49 @@ pub(crate) fn notes_reorder_for(
     ids: &[Uuid],
     filter: &str,
 ) -> Result<()> {
-    let provided_ids: Vec<Uuid> = ids.to_vec();
+    ctx.database.transaction(|db| -> Result<()> {
+        let provided_ids: Vec<Uuid> = ids.to_vec();
 
-    // Fetch all note IDs in this category ordered by current position
-    let all_ids: Vec<Uuid> = query_args!(
-        Note,
-        ctx.database,
-        format!(
-            "SELECT {} FROM notes WHERE {filter} AND user_id = :user_id ORDER BY position ASC, updated_at DESC",
-            Note::columns()
-        ),
-        Args { user_id: user.id }
-    )?
-    .filter_map(|r| r.ok())
-    .map(|n| n.id)
-    .collect();
-
-    // Filter provided IDs to only include notes that belong to this user/filter
-    let provided_ids: Vec<Uuid> = provided_ids
-        .into_iter()
-        .filter(|id| all_ids.contains(id))
+        // Fetch all note IDs in this category ordered by current position
+        let all_ids: Vec<Uuid> = query_args!(
+            Note,
+            db,
+            format!(
+                "SELECT {} FROM notes WHERE {filter} AND user_id = :user_id ORDER BY position ASC, updated_at DESC",
+                Note::columns()
+            ),
+            Args { user_id: user.id }
+        )?
+        .filter_map(|r| r.ok())
+        .map(|n| n.id)
         .collect();
 
-    // Notes not in the provided list follow in their existing relative order
-    let rest_ids: Vec<Uuid> = all_ids
-        .into_iter()
-        .filter(|id| !provided_ids.contains(id))
-        .collect();
+        // Filter provided IDs to only include notes that belong to this user/filter
+        let provided_ids: Vec<Uuid> = provided_ids
+            .into_iter()
+            .filter(|id| all_ids.contains(id))
+            .collect();
 
-    // Final sequence: provided notes first (in given order), then the rest
-    for (position, note_id) in provided_ids.into_iter().chain(rest_ids).enumerate() {
-        execute_args!(
-            ctx.database,
-            "UPDATE notes SET position = :position WHERE id = :note_id AND user_id = :user_id",
-            Args {
-                position: position as i64,
-                note_id: note_id,
-                user_id: user.id,
-            }
-        )?;
-    }
-    Ok(())
+        // Notes not in the provided list follow in their existing relative order
+        let rest_ids: Vec<Uuid> = all_ids
+            .into_iter()
+            .filter(|id| !provided_ids.contains(id))
+            .collect();
+
+        // Final sequence: provided notes first (in given order), then the rest
+        for (position, note_id) in provided_ids.into_iter().chain(rest_ids).enumerate() {
+            execute_args!(
+                db,
+                "UPDATE notes SET position = :position WHERE id = :note_id AND user_id = :user_id",
+                Args {
+                    position: position as i64,
+                    note_id: note_id,
+                    user_id: user.id,
+                }
+            )?;
+        }
+        Ok(())
+    })
 }
 
 pub(crate) fn insert_note(
@@ -442,15 +447,18 @@ pub(crate) fn insert_note(
     } else {
         FILTER_NORMAL
     };
-    execute_args!(
-        ctx.database,
-        &format!(
-            "UPDATE notes SET position = position + 1 WHERE {position_filter} AND user_id = :user_id"
-        ),
-        Args { user_id: user_id }
-    )?;
+    ctx.database.transaction(|db| -> Result<()> {
+        execute_args!(
+            db,
+            &format!(
+                "UPDATE notes SET position = position + 1 WHERE {position_filter} AND user_id = :user_id"
+            ),
+            Args { user_id: user_id }
+        )?;
 
-    ctx.database.insert_note(note.clone())?;
+        db.insert_note(note.clone())?;
+        Ok(())
+    })?;
     Ok(note)
 }
 

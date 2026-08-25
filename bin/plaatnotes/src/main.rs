@@ -162,7 +162,8 @@ fn main() {
             eprintln!("Error: --email <email> is required for import-google-keep");
             exit(1);
         });
-        imports::google_keep::run(&path, &email, &context);
+        imports::google_keep::run(&path, &email, &context)
+            .unwrap_or_else(|error| panic!("Google Keep import failed: {error}"));
         return;
     }
 

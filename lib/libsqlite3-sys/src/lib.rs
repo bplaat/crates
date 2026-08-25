@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2025 Bastiaan van der Plaat
+ * Copyright (c) 2024-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -65,6 +65,7 @@ unsafe extern "C" {
     ) -> c_int;
     pub fn sqlite3_changes(db: *mut sqlite3) -> i32;
     pub fn sqlite3_last_insert_rowid(db: *mut sqlite3) -> i64;
+    pub fn sqlite3_get_autocommit(db: *mut sqlite3) -> c_int;
     pub fn sqlite3_errmsg(db: *mut sqlite3) -> *const c_char;
     pub fn sqlite3_close(db: *mut sqlite3) -> c_int;
 

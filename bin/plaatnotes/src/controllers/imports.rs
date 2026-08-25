@@ -20,7 +20,7 @@ pub(crate) fn imports_google_keep(req: &Request, ctx: &Context) -> Result<Respon
         _ => return Ok(Response::with_status(Status::BadRequest)),
     };
 
-    let count = google_keep::import_from_zip_bytes(zip_bytes, ctx, user.id);
+    let count = google_keep::import_from_zip_bytes(zip_bytes, ctx, user.id)?;
 
     Ok(Response::with_json(crate::api::ImportGoogleKeepResponse {
         count: count as i64,
@@ -82,6 +82,31 @@ mod test {
         assert_eq!(res.status, Status::Ok);
         let resp = serde_json::from_slice::<api::ImportGoogleKeepResponse>(&res.body).unwrap();
         assert_eq!(resp.count, 1);
+    }
+
+    #[test]
+    fn test_imports_google_keep_rolls_back_database_error() {
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session(&ctx);
+        ctx.database
+            .execute_script(
+                "CREATE TRIGGER reject_second_note BEFORE INSERT ON notes
+                WHEN NEW.title = 'Second'
+                BEGIN
+                    SELECT RAISE(FAIL, 'rejected note');
+                END;",
+            )
+            .unwrap();
+
+        let res = post_import(&router, &token, TWO_NOTES_ZIP);
+
+        assert_eq!(res.status, Status::InternalServerError);
+        let count = ctx
+            .database
+            .query_some::<i64>("SELECT COUNT(*) FROM notes", ())
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[test]

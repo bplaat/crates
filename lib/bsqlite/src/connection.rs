@@ -76,11 +76,14 @@ impl InnerConnection {
         let c_sql = CString::new(sql).map_err(|_| StatementError {
             msg: "SQL script contains null byte".to_string(),
         })?;
+        self.execute_cstr(&c_sql)
+    }
+
+    fn execute_cstr(&self, sql: &CStr) -> Result<(), StatementError> {
         let mut errmsg: *mut c_char = ptr::null_mut();
-        // SAFETY: self.0 is a valid open db handle; c_sql is a valid NUL-terminated string;
+        // SAFETY: self.0 is a valid open db handle; sql is a valid NUL-terminated string;
         // errmsg receives a sqlite3-allocated string that must be freed with sqlite3_free.
-        let rc =
-            unsafe { sqlite3_exec(self.0, c_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
+        let rc = unsafe { sqlite3_exec(self.0, sql.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
         if rc != SQLITE_OK {
             let msg = if errmsg.is_null() {
                 "unknown error".to_string()
@@ -98,6 +101,30 @@ impl InnerConnection {
             });
         }
         Ok(())
+    }
+
+    fn execute_static(&self, sql: &'static [u8]) -> Result<(), StatementError> {
+        self.execute_cstr(CStr::from_bytes_with_nul(sql).expect("valid static SQL"))
+    }
+
+    fn is_autocommit(&self) -> bool {
+        // SAFETY: self.0 is a valid open db handle.
+        unsafe { sqlite3_get_autocommit(self.0) != 0 }
+    }
+
+    fn rollback_after_error<E>(&self, error: E) -> E
+    where
+        E: From<StatementError> + Display,
+    {
+        if self.is_autocommit() {
+            return error;
+        }
+        match self.execute_static(b"ROLLBACK\0") {
+            Ok(()) => error,
+            Err(rollback_error) => E::from(StatementError::new(format!(
+                "{error}; additionally failed to roll back transaction: {rollback_error}"
+            ))),
+        }
     }
 
     fn prepare<T: FromRow>(&self, query: &str) -> Result<Statement<T>, StatementError> {
@@ -159,18 +186,45 @@ impl Display for ConnectionError {
 
 impl Error for ConnectionError {}
 
+struct RollbackOnDrop<'a> {
+    connection: &'a InnerConnection,
+    armed: bool,
+}
+
+impl<'a> RollbackOnDrop<'a> {
+    const fn new(connection: &'a InnerConnection) -> Self {
+        Self {
+            connection,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for RollbackOnDrop<'_> {
+    fn drop(&mut self) {
+        if self.armed && !self.connection.is_autocommit() {
+            _ = self.connection.execute_static(b"ROLLBACK\0");
+        }
+    }
+}
+
 // MARK: Connection
 /// A SQLite connection
 #[derive(Clone)]
-pub struct Connection(Arc<InnerConnection>);
+pub struct Connection {
+    inner: Arc<InnerConnection>,
+}
 
 impl Connection {
     /// Open a connection to a SQLite database
     pub fn open(path: impl AsRef<Path>, mode: OpenMode) -> Result<Self, ConnectionError> {
-        Ok(Connection(Arc::new(InnerConnection::open(
-            path.as_ref(),
-            mode,
-        )?)))
+        Ok(Self {
+            inner: Arc::new(InnerConnection::open(path.as_ref(), mode)?),
+        })
     }
 
     /// Open a memory database
@@ -210,7 +264,7 @@ impl Connection {
         &self,
         query: impl AsRef<str>,
     ) -> Result<Statement<T>, StatementError> {
-        self.0.prepare(query.as_ref())
+        self.inner.prepare(query.as_ref())
     }
 
     /// Run a query
@@ -240,7 +294,7 @@ impl Connection {
 
     /// Execute a SQL script (multiple statements separated by semicolons)
     pub fn execute_script(&self, sql: &str) -> Result<(), StatementError> {
-        self.0.execute_script(sql)
+        self.inner.execute_script(sql)
     }
 
     /// Execute a query
@@ -253,12 +307,43 @@ impl Connection {
 
     /// Get the number of affected rows
     pub fn affected_rows(&self) -> i32 {
-        self.0.affected_rows()
+        self.inner.affected_rows()
     }
 
     /// Get the last inserted row id
     pub fn last_insert_row_id(&self) -> i64 {
-        self.0.last_insert_row_id()
+        self.inner.last_insert_row_id()
+    }
+
+    /// Run a closure in an immediate transaction
+    pub fn transaction<T, E>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, E>,
+    ) -> Result<T, E>
+    where
+        E: From<StatementError> + Display,
+    {
+        self.inner
+            .execute_static(b"BEGIN IMMEDIATE\0")
+            .map_err(E::from)?;
+        let mut rollback = RollbackOnDrop::new(&self.inner);
+
+        match operation(self) {
+            Ok(value) => match self.inner.execute_static(b"COMMIT\0") {
+                Ok(()) => {
+                    rollback.disarm();
+                    Ok(value)
+                }
+                Err(commit_error) => {
+                    rollback.disarm();
+                    Err(self.inner.rollback_after_error(E::from(commit_error)))
+                }
+            },
+            Err(error) => {
+                rollback.disarm();
+                Err(self.inner.rollback_after_error(error))
+            }
+        }
     }
 }
 
@@ -296,6 +381,8 @@ macro_rules! execute_args {
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use std::panic::{self, AssertUnwindSafe};
+
     use super::*;
 
     #[test]
@@ -406,6 +493,91 @@ mod test {
             .query::<i64>("SELECT n FROM nums ORDER BY n", ())?
             .collect::<Result<Vec<_>, _>>()?;
         assert_eq!(rows, vec![1, 2, 3, 4, 5]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_transaction_commits_on_success() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        db.execute("CREATE TABLE values_table (value INTEGER NOT NULL)", ())?;
+
+        db.transaction(|transaction| -> Result<(), StatementError> {
+            transaction.execute("INSERT INTO values_table VALUES (1)", ())?;
+            transaction.execute("INSERT INTO values_table VALUES (2)", ())?;
+            Ok(())
+        })?;
+
+        assert_eq!(
+            db.query_some::<i64>("SELECT COUNT(*) FROM values_table", ())?,
+            2
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_transaction_rolls_back_on_error() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        db.execute("CREATE TABLE values_table (value INTEGER NOT NULL)", ())?;
+
+        let result: Result<(), StatementError> = db.transaction(|transaction| {
+            transaction.execute("INSERT INTO values_table VALUES (1)", ())?;
+            Err(StatementError::new("stop transaction"))
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            db.query_some::<i64>("SELECT COUNT(*) FROM values_table", ())?,
+            0
+        );
+
+        db.execute("INSERT INTO values_table VALUES (2)", ())?;
+        assert_eq!(
+            db.query_some::<i64>("SELECT value FROM values_table", ())?,
+            2
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_transaction_preserves_error_after_sqlite_rollback() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        db.execute("CREATE TABLE values_table (value INTEGER UNIQUE)", ())?;
+
+        let result: Result<(), StatementError> = db.transaction(|transaction| {
+            transaction.execute("INSERT INTO values_table VALUES (1)", ())?;
+            transaction.execute("INSERT OR ROLLBACK INTO values_table VALUES (1)", ())?;
+            Ok(())
+        });
+
+        let error = match result {
+            Ok(()) => panic!("duplicate insert unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert!(error.msg.contains("UNIQUE constraint failed"));
+        assert_eq!(
+            db.query_some::<i64>("SELECT COUNT(*) FROM values_table", ())?,
+            0
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_transaction_rolls_back_on_panic() -> Result<(), StatementError> {
+        let db = Connection::open_memory().unwrap();
+        db.execute("CREATE TABLE values_table (value INTEGER NOT NULL)", ())?;
+
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {
+            let _: Result<(), StatementError> = db.transaction(|transaction| {
+                transaction.execute("INSERT INTO values_table VALUES (1)", ())?;
+                panic!("stop transaction");
+            });
+        }));
+
+        assert!(result.is_err());
+        assert_eq!(
+            db.query_some::<i64>("SELECT COUNT(*) FROM values_table", ())?,
+            0
+        );
         Ok(())
     }
 
