@@ -475,7 +475,13 @@ impl Request {
         let host = self.url.host().expect("No host in URL");
         self.headers.insert(
             "Host".to_string(),
-            if let Some(port) = self.url.port() {
+            if host.contains(':') {
+                if let Some(port) = self.url.port() {
+                    format!("[{host}]:{port}")
+                } else {
+                    format!("[{host}]")
+                }
+            } else if let Some(port) = self.url.port() {
                 format!("{host}:{port}")
             } else {
                 host.to_string()
@@ -529,7 +535,12 @@ impl Request {
         let is_https = self.url.scheme() == "https";
         let port = self.url.port().unwrap_or(if is_https { 443 } else { 80 });
 
-        let tcp = TcpStream::connect(format!("{host}:{port}")).map_err(|_| FetchError)?;
+        let tcp_address = if host.contains(':') {
+            format!("[{host}]:{port}")
+        } else {
+            format!("{host}:{port}")
+        };
+        let tcp = TcpStream::connect(tcp_address).map_err(|_| FetchError)?;
 
         #[cfg(feature = "tls")]
         if is_https {

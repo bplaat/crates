@@ -105,7 +105,7 @@ impl Client {
             .port()
             .unwrap_or(if is_https { 443 } else { 80 });
         let conn_key = format!("{}://{}:{}", request.url.scheme(), host, port);
-        let tcp_addr = format!("{host}:{port}");
+        let tcp_addr = socket_address(&host, port);
 
         // Get or create connection
         let mut stream = self
@@ -129,6 +129,14 @@ impl Client {
             .expect("Can't lock connection pool")
             .return_connection(&conn_key, stream);
         Ok(res)
+    }
+}
+
+fn socket_address(host: &str, port: u16) -> String {
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
     }
 }
 
