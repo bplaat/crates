@@ -66,7 +66,6 @@ enum RoutePart {
 
 struct Route<T> {
     methods: Vec<Method>,
-    route: String,
     parts: Vec<RoutePart>,
     handler: Handler<T>,
 }
@@ -76,7 +75,6 @@ impl<T> Route<T> {
         let parts = Self::route_parse_parts(&route);
         Self {
             methods,
-            route,
             parts,
             handler,
         }
@@ -135,6 +133,19 @@ impl<T> Route<T> {
             }
         }
         params
+    }
+
+    fn has_same_shape(&self, other: &Self) -> bool {
+        self.parts.len() == other.parts.len()
+            && self
+                .parts
+                .iter()
+                .zip(&other.parts)
+                .all(|(left, right)| match (left, right) {
+                    (RoutePart::Static(left), RoutePart::Static(right)) => left == right,
+                    (RoutePart::Param(_), RoutePart::Param(_)) => true,
+                    _ => false,
+                })
     }
 }
 
@@ -433,21 +444,21 @@ impl<T: Clone> InnerRouter<T> {
     fn handle_inner(&self, req: &Request, ctx: &mut T) -> Result<Response> {
         // Match routes
         let path = req.url.path();
-        for route in self.routes.iter() {
-            if route.is_match(path) {
+        if let Some(first_match) = self.routes.iter().find(|route| route.is_match(path)) {
+            // Find a matching method among routes with the same parsed path shape. Parameter names
+            // may differ between method-specific route registrations.
+            if let Some(route) = self.routes.iter().find(|route| {
+                route.has_same_shape(first_match) && route.methods.contains(&req.method)
+            }) {
                 let mut req = req.clone();
                 req.params = route.match_path(path);
-
-                // Find matching route by method
-                for route in self.routes.iter().filter(|r| r.route == route.route) {
-                    if route.methods.contains(&req.method) {
-                        return route.handler.call(&req, ctx);
-                    }
-                }
-
-                // Or run not allowed method handler
-                return self.not_allowed_method_handler.call(&req, ctx);
+                return route.handler.call(&req, ctx);
             }
+
+            // Or run not allowed method handler
+            let mut req = req.clone();
+            req.params = first_match.match_path(path);
+            return self.not_allowed_method_handler.call(&req, ctx);
         }
 
         // Or run fallback handler
@@ -562,5 +573,36 @@ mod test {
         assert_eq!(res.status, Status::InternalServerError);
         assert_eq!(res.body, b"Layer failed: blocked by pre-layer");
         assert_eq!(pre_layer_calls.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn test_equivalent_route_shapes_support_different_parameter_names() {
+        let router = RouterBuilder::new()
+            .get("/users/:id", |req, _| {
+                Ok(Response::with_body(req.params["id"].clone()))
+            })
+            .post("/users/:user_id", |req, _| {
+                Ok(Response::with_body(req.params["user_id"].clone()))
+            })
+            .build();
+
+        let get = router.handle(&Request::get("http://localhost/users/10"));
+        assert_eq!(get.status, Status::Ok);
+        assert_eq!(get.body, b"10");
+
+        let post = router.handle(&Request::post("http://localhost/users/20"));
+        assert_eq!(post.status, Status::Ok);
+        assert_eq!(post.body, b"20");
+    }
+
+    #[test]
+    fn test_static_route_keeps_precedence_over_parameter_route() {
+        let router = RouterBuilder::new()
+            .get("/users/current", |_, _| Ok(Response::with_body("current")))
+            .post("/users/:id", |_, _| Ok(Response::with_body("parameter")))
+            .build();
+
+        let response = router.handle(&Request::post("http://localhost/users/current"));
+        assert_eq!(response.status, Status::MethodNotAllowed);
     }
 }
