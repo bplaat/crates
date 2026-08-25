@@ -4,30 +4,25 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 ## Crates
 
-### Published libraries
-
-These crates are published to [crates.io](https://crates.io) and are more polished and documented.
-
-- [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API **([crates.io](https://crates.io/crates/bsqlite))**
-- [bsqlite_derive](lib/bsqlite_derive) The derive macros for the [bsqlite](lib/bsqlite) crate **([crates.io](https://crates.io/crates/bsqlite_derive))**
-- [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
-- [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library **([crates.io](https://crates.io/crates/small-http))**
-- [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library **([crates.io](https://crates.io/crates/small-router))**
-
 ### Libraries
 
-These libraries are not published to [crates.io](https://crates.io) and are intended primarily for personal use, but can still be useful.
+Most of these libraries are intended primarily for personal use, but can still be useful.
 
+- [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API
+- [bsqlite_derive](lib/bsqlite_derive) The derive macros for the [bsqlite](lib/bsqlite) crate
 - [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
 - [js](lib/js) A WIP JavaScript interpreter
+- [macview-appkit](lib/macview-appkit) Shared AppKit image loading for MacView
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 - [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [plaatui](npm-lib/plaatui) A Preact web components ui library for my own services
 - [qoi](lib/qoi) A small decoder for the Quite OK Image format
-- [tinyvg](lib/tinyvg) A TinyVG vector image parser (binary and text formats)
-- [macview-appkit](lib/macview-appkit) Shared AppKit image loading for MacView
+- [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
+- [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library
+- [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library
 - [small-websocket](lib/small-websocket) A simple and small WebSocket library for the [small-http](lib/small-http) library
+- [tinyvg](lib/tinyvg) A TinyVG vector image parser (binary and text formats)
 - [validate](lib/validate) A simple struct validation library
 - [validate_derive](lib/validate_derive) Validation derive macros library
 

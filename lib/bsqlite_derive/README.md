@@ -1,10 +1,6 @@
 # Bassie SQLight crate derive macros
 
-The derive macros for the [bsqlite](https://crates.io/crates/bsqlite) crate.
-
-## Documentation
-
-See the [documentation](https://docs.rs/bsqlite_derive) for more information.
+The derive macros for the [bsqlite](../bsqlite) crate.
 
 ## License
 

@@ -1,6 +1,6 @@
 # Small-Router Rust library
 
-A simple and small router for the [small-http](https://crates.io/crates/small-http) library.
+A simple and small router for the [small-http](../small-http) library.
 
 ## Getting Started
 
@@ -36,10 +36,6 @@ fn main() {
 ```
 
 See the [examples](examples/) for many more examples.
-
-## Documentation
-
-See the [documentation](https://docs.rs/small-router) for more information.
 
 ## License
 

@@ -49,10 +49,6 @@ You can greatly reduce the dependencies of the [url](https://crates.io/crates/ur
 cargo update -p idna_adapter --precise 1.0.0
 ```
 
-## Documentation
-
-See the [documentation](https://docs.rs/small-http) for more information.
-
 ## License
 
 Copyright © 2023-2025 [Bastiaan van der Plaat](https://github.com/bplaat)

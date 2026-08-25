@@ -89,10 +89,6 @@ See the [examples](examples/) for many more examples.
 - Work well and efficient with popular crates like `uuid` and `chrono`
 - Have helpful error messages on query errors
 
-## Documentation
-
-See the [documentation](https://docs.rs/bsqlite) for more information.
-
 ## License
 
 Copyright © 2024-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
