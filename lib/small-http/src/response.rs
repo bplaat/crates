@@ -126,12 +126,12 @@ impl Response {
     ) -> Result<Self, InvalidResponseError> {
         // Read first line
         let mut res = {
-            let mut line = String::new();
-            reader
-                .read_line(&mut line)
-                .map_err(|_| InvalidResponseError)?;
+            let line = read_http_line(reader)?;
             let mut parts = line.splitn(3, ' ');
-            let _http_version = parts.next().ok_or(InvalidResponseError)?;
+            let http_version = parts.next().ok_or(InvalidResponseError)?;
+            if !matches!(http_version, "HTTP/1.0" | "HTTP/1.1") {
+                return Err(InvalidResponseError);
+            }
             let status_code = parts
                 .next()
                 .ok_or(InvalidResponseError)?
@@ -143,12 +143,12 @@ impl Response {
 
         // Read headers
         loop {
-            let mut line = String::new();
-            reader
-                .read_line(&mut line)
-                .map_err(|_| InvalidResponseError)?;
+            let line = read_http_line(reader)?;
             if line == "\r\n" {
                 break;
+            }
+            if res.headers.len() >= crate::MAX_HEADERS {
+                return Err(InvalidResponseError);
             }
             let split = line.find(':').ok_or(InvalidResponseError)?;
             res.headers.append(
@@ -157,45 +157,51 @@ impl Response {
             );
         }
 
+        if res.headers.get_all("Content-Length").count() > 1
+            || res.headers.get_all("Transfer-Encoding").count() > 1
+            || res.headers.contains_key("Transfer-Encoding")
+                && res.headers.contains_key("Content-Length")
+        {
+            return Err(InvalidResponseError);
+        }
+
         // Read body
         if let Some(transfer_encoding) = res.headers.get("Transfer-Encoding") {
-            if transfer_encoding.eq_ignore_ascii_case("chunked") {
-                let mut body = Vec::new();
-                loop {
-                    // Read chunk size line; strip optional chunk extensions (;...)
-                    let mut size_line = String::new();
-                    reader
-                        .read_line(&mut size_line)
-                        .map_err(|_| InvalidResponseError)?;
-                    let hex = size_line.split(';').next().unwrap_or("").trim();
-                    let size = usize::from_str_radix(hex, 16).map_err(|_| InvalidResponseError)?;
-                    if size == 0 {
-                        read_trailers(reader, &mut res.headers)?;
-                        break;
-                    }
-                    if body.len().saturating_add(size) > crate::MAX_RESPONSE_BODY {
-                        return Err(InvalidResponseError);
-                    }
-
-                    // Read chunk data
-                    let prev_len = body.len();
-                    body.resize(prev_len + size, 0);
-                    reader
-                        .read_exact(&mut body[prev_len..])
-                        .map_err(|_| InvalidResponseError)?;
-
-                    // Read trailing CRLF after chunk data
-                    let mut crlf = [0; 2];
-                    reader
-                        .read_exact(&mut crlf)
-                        .map_err(|_| InvalidResponseError)?;
-                    if crlf != *b"\r\n" {
-                        return Err(InvalidResponseError);
-                    }
-                }
-                res.body = body;
-                return Ok(res);
+            if !transfer_encoding.eq_ignore_ascii_case("chunked") {
+                return Err(InvalidResponseError);
             }
+            let mut body = Vec::new();
+            loop {
+                // Read chunk size line; strip optional chunk extensions (;...)
+                let size_line = read_http_line(reader)?;
+                let hex = size_line.split(';').next().unwrap_or("").trim();
+                let size = usize::from_str_radix(hex, 16).map_err(|_| InvalidResponseError)?;
+                if size == 0 {
+                    read_trailers(reader, &mut res.headers)?;
+                    break;
+                }
+                if body.len().saturating_add(size) > crate::MAX_RESPONSE_BODY {
+                    return Err(InvalidResponseError);
+                }
+
+                // Read chunk data
+                let prev_len = body.len();
+                body.resize(prev_len + size, 0);
+                reader
+                    .read_exact(&mut body[prev_len..])
+                    .map_err(|_| InvalidResponseError)?;
+
+                // Read trailing CRLF after chunk data
+                let mut crlf = [0; 2];
+                reader
+                    .read_exact(&mut crlf)
+                    .map_err(|_| InvalidResponseError)?;
+                if crlf != *b"\r\n" {
+                    return Err(InvalidResponseError);
+                }
+            }
+            res.body = body;
+            return Ok(res);
         }
         if let Some(content_length) = res.headers.get("Content-Length") {
             let content_length = content_length.parse().map_err(|_| InvalidResponseError)?;
@@ -274,10 +280,7 @@ fn read_trailers(
     headers: &mut HeaderMap,
 ) -> Result<(), InvalidResponseError> {
     loop {
-        let mut line = String::new();
-        reader
-            .read_line(&mut line)
-            .map_err(|_| InvalidResponseError)?;
+        let line = read_http_line(reader)?;
         if line == "\r\n" {
             return Ok(());
         }
@@ -285,11 +288,26 @@ fn read_trailers(
             return Err(InvalidResponseError);
         }
         let split = line.find(':').ok_or(InvalidResponseError)?;
-        headers.append(
-            line[..split].trim().to_string(),
-            line[split + 1..].trim().to_string(),
-        );
+        let name = line[..split].trim();
+        if name.eq_ignore_ascii_case("Content-Length")
+            || name.eq_ignore_ascii_case("Transfer-Encoding")
+        {
+            return Err(InvalidResponseError);
+        }
+        headers.append(name.to_string(), line[split + 1..].trim().to_string());
     }
+}
+
+fn read_http_line(reader: &mut dyn BufRead) -> Result<String, InvalidResponseError> {
+    let mut line = String::new();
+    let bytes_read = reader
+        .take(crate::MAX_HEADER_LINE + 1)
+        .read_line(&mut line)
+        .map_err(|_| InvalidResponseError)?;
+    if bytes_read == 0 || bytes_read as u64 > crate::MAX_HEADER_LINE || !line.ends_with("\r\n") {
+        return Err(InvalidResponseError);
+    }
+    Ok(line)
 }
 
 // MARK: InvalidResponseError
@@ -352,6 +370,32 @@ mod test {
         let result = Response::read_from_stream(&mut response_stream);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_response_rejects_ambiguous_framing() {
+        for input in [
+            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\n\r\n",
+        ] {
+            assert!(Response::read_from_stream(&mut input.as_bytes()).is_err());
+        }
+    }
+
+    #[test]
+    fn test_parse_response_rejects_overlong_or_unterminated_lines() {
+        let overlong = format!("HTTP/1.1 200 OK\r\nX-Test: {}\r\n\r\n", "a".repeat(8192));
+        assert!(Response::read_from_stream(&mut overlong.as_bytes()).is_err());
+        assert!(Response::read_from_stream(&mut b"HTTP/1.1 200 OK".as_slice()).is_err());
+    }
+
+    #[test]
+    fn test_parse_response_rejects_framing_headers_in_trailers() {
+        let mut input =
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nContent-Length: 0\r\n\r\n"
+                .as_slice();
+        assert!(Response::read_from_stream(&mut input).is_err());
     }
 
     #[test]
