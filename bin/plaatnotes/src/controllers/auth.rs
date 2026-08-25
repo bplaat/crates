@@ -48,7 +48,9 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
     let body = parse_body!(req, api::LoginBody, LoginBody);
 
     // Check login rate limit
-    let ip_address = req.ip().to_string();
+    let ip_address = req
+        .ip_from_trusted_proxies(&ctx.trusted_proxies)
+        .to_string();
     if !ctx.is_e2e {
         let mut attempts = ctx.login_attempts.lock().unwrap_or_else(|p| p.into_inner());
         let now = std::time::Instant::now();
@@ -158,7 +160,9 @@ pub(crate) fn create_session(req: &Request, ctx: &Context, user_id: Uuid) -> Res
     };
 
     // Get IP information
-    let ip_address = req.ip().to_string();
+    let ip_address = req
+        .ip_from_trusted_proxies(&ctx.trusted_proxies)
+        .to_string();
     let (ip_latitude, ip_longitude, ip_country, ip_city) = {
         if let Some(reader) = ctx.maxminddb_reader.get() {
             // Use local MaxMind DB

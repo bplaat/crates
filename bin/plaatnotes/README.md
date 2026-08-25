@@ -16,6 +16,10 @@ PlaatNotes resolves visitor IPs to city/country using a local [DB-IP City Lite](
 
 On first startup the app automatically downloads the current month's DB-IP City Lite MMDB file from `download.db-ip.com` and stores it in the data directory (`DATA_PATH`). If the download fails, it transparently falls back to ipinfo.io for every login request.
 
+When PlaatNotes runs behind a reverse proxy, set `TRUSTED_PROXIES` to a comma-separated list of
+proxy IP addresses. Forwarded client IP headers are ignored unless the direct connection comes from
+one of these addresses.
+
 ## Docker image
 
 Example command to build the Docker image for PlaatNotes locally (from the root of the repository):

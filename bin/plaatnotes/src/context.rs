@@ -5,11 +5,12 @@
  */
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use bsqlite::{Connection, OpenMode, run_migrations};
 use uuid::Uuid;
 
@@ -25,6 +26,7 @@ pub(crate) struct Context {
     pub update_target_user_id: Option<Uuid>,
     pub login_attempts: Arc<Mutex<HashMap<String, (u32, Instant)>>>,
     pub maxminddb_reader: Arc<OnceLock<maxminddb::Reader<Vec<u8>>>>,
+    pub trusted_proxies: Arc<[IpAddr]>,
     pub is_e2e: bool,
 }
 
@@ -46,6 +48,7 @@ impl Context {
             update_target_user_id: None,
             login_attempts: Arc::new(Mutex::new(HashMap::new())),
             maxminddb_reader: Arc::new(OnceLock::new()),
+            trusted_proxies: trusted_proxies_from_env()?,
             is_e2e: false,
         })
     }
@@ -63,6 +66,7 @@ impl Context {
             update_target_user_id: None,
             login_attempts: Arc::new(Mutex::new(HashMap::new())),
             maxminddb_reader: Arc::new(OnceLock::new()),
+            trusted_proxies: Arc::from([]),
             is_e2e: false,
         })
     }
@@ -80,9 +84,27 @@ impl Context {
             update_target_user_id: None,
             login_attempts: Arc::new(Mutex::new(HashMap::new())),
             maxminddb_reader: Arc::new(OnceLock::new()),
+            trusted_proxies: Arc::from([]),
             is_e2e: true,
         })
     }
+}
+
+fn trusted_proxies_from_env() -> Result<Arc<[IpAddr]>> {
+    let Some(value) = std::env::var("TRUSTED_PROXIES").ok() else {
+        return Ok(Arc::from([]));
+    };
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            value
+                .parse()
+                .with_context(|| format!("invalid trusted proxy IP address: {value}"))
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(Arc::from)
 }
 
 // MARK: Database helpers

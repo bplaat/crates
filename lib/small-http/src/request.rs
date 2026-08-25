@@ -13,10 +13,10 @@ use std::str::{self, FromStr};
 
 use url::Url;
 
+use crate::KEEP_ALIVE_TIMEOUT;
 use crate::enums::{Method, Version};
 use crate::header_map::HeaderMap;
 use crate::response::Response;
-use crate::KEEP_ALIVE_TIMEOUT;
 
 // MARK: Request
 /// HTTP request
@@ -458,14 +458,28 @@ impl Request {
         })
     }
 
-    /// Get client IP address, respecting X-Forwarded-For and X-Real-IP proxy headers
+    /// Get the direct client IP address.
+    ///
+    /// Proxy forwarding headers are intentionally ignored because they can be supplied by any
+    /// client. Use [`Self::ip_from_trusted_proxies`] when the server runs behind a trusted proxy.
     pub fn ip(&self) -> IpAddr {
+        self.client_addr.ip()
+    }
+
+    /// Get the forwarded client IP address when the direct peer is a trusted proxy.
+    ///
+    /// The first valid `X-Forwarded-For` value is preferred over `X-Real-IP`. Forwarding headers
+    /// are ignored unless the direct peer address appears in `trusted_proxies`.
+    pub fn ip_from_trusted_proxies(&self, trusted_proxies: &[IpAddr]) -> IpAddr {
+        if !trusted_proxies.contains(&self.client_addr.ip()) {
+            return self.ip();
+        }
         self.headers
             .get("X-Forwarded-For")
-            .and_then(|v| v.split(',').next())
+            .and_then(|value| value.split(',').next())
             .or_else(|| self.headers.get("X-Real-IP"))
-            .and_then(|ip_str| ip_str.trim().parse::<IpAddr>().ok())
-            .unwrap_or_else(|| self.client_addr.ip())
+            .and_then(|value| value.trim().parse().ok())
+            .unwrap_or_else(|| self.ip())
     }
 
     /// Write request to TCP stream
@@ -683,6 +697,29 @@ mod test {
 
         assert_eq!(request.headers.get("X-Test"), Some("second"));
         assert_eq!(request.headers.get_all("x-test").count(), 1);
+    }
+
+    #[test]
+    fn test_ip_ignores_untrusted_forwarding_headers() {
+        let request = Request::new()
+            .header("X-Forwarded-For", "203.0.113.10")
+            .header("X-Real-IP", "203.0.113.11");
+
+        assert_eq!(request.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+        assert_eq!(
+            request.ip_from_trusted_proxies(&[]),
+            IpAddr::V4(Ipv4Addr::LOCALHOST)
+        );
+    }
+
+    #[test]
+    fn test_ip_uses_forwarding_header_from_trusted_proxy() {
+        let request = Request::new().header("X-Forwarded-For", "203.0.113.10, 198.51.100.20");
+
+        assert_eq!(
+            request.ip_from_trusted_proxies(&[IpAddr::V4(Ipv4Addr::LOCALHOST)]),
+            "203.0.113.10".parse::<IpAddr>().unwrap()
+        );
     }
 
     #[test]
