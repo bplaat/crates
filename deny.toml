@@ -202,8 +202,8 @@ deny = [
 
 # Certain crates/versions that will be skipped when doing duplicate detection.
 skip = [
-    #"ansi_term@0.11.0",
-    #{ crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },
+    { crate = "getrandom@0.2.17", reason = "ring has not migrated to getrandom 0.4" },
+    { crate = "syn@2.0.119", reason = "wasm-bindgen has not migrated to syn 3" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
