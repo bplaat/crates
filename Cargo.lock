@@ -125,7 +125,6 @@ dependencies = [
  "serde",
  "serde_json",
  "small-http",
- "windows-metadata",
  "winresource",
 ]
 
@@ -1108,12 +1107,6 @@ checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
 dependencies = [
  "rustls-pki-types",
 ]
-
-[[package]]
-name = "windows-metadata"
-version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3433ff56dde0408f2549eb155235c9991023d8c2a13608afa384d2681a6c3ad5"
 
 [[package]]
 name = "windows-sys"

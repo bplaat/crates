@@ -532,7 +532,7 @@ pub(crate) struct IDataObjectVtbl {
     pub(crate) AddRef: unsafe extern "system" fn(*mut IDataObject) -> u32,
     pub(crate) Release: unsafe extern "system" fn(*mut IDataObject) -> u32,
     pub(crate) GetData:
-        unsafe extern "system" fn(*mut IDataObject, *const FORMATETC, *mut STGMEDIUM) -> HRESULT,
+        unsafe extern "system" fn(*mut IDataObject, *mut FORMATETC, *mut STGMEDIUM) -> HRESULT,
 }
 
 #[repr(C)]
@@ -591,7 +591,7 @@ pub(crate) struct IStream {
 }
 
 impl IStream {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 
@@ -611,8 +611,8 @@ pub(crate) struct IStream_Vtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut IStream) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut IStream) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut IStream) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut IStream) -> u32,
     pub(crate) Read: unsafe extern "system" fn(
         This: *mut IStream,
         pv: *mut c_void,
@@ -718,7 +718,7 @@ pub(crate) const FOS_NOCHANGEDIR: u32 = 0x00000008;
 pub(crate) const FOS_ALLOWMULTISELECT: u32 = 0x00000200;
 pub(crate) const FOS_PATHMUSTEXIST: u32 = 0x00000800;
 pub(crate) const FOS_FILEMUSTEXIST: u32 = 0x00001000;
-pub(crate) const SIGDN_FILESYSPATH: u32 = 0x80058000;
+pub(crate) const SIGDN_FILESYSPATH: i32 = 0x80058000u32 as i32;
 pub(crate) const CLSCTX_INPROC_SERVER: u32 = 1;
 
 pub(crate) const CLSID_FileOpenDialog: GUID = GUID {
@@ -769,7 +769,7 @@ impl IShellItem {
         unsafe { ((*self.vtbl).Release)(self as *const _ as *mut _) }
     }
 
-    pub(crate) unsafe fn GetDisplayName(&self, sigdn: u32, ppszName: *mut *mut u16) -> HRESULT {
+    pub(crate) unsafe fn GetDisplayName(&self, sigdn: i32, ppszName: *mut *mut u16) -> HRESULT {
         unsafe { ((*self.vtbl).GetDisplayName)(self as *const _ as *mut _, sigdn, ppszName) }
     }
 }
@@ -780,7 +780,7 @@ pub(crate) struct IShellItemVtbl {
     pub(crate) Release: unsafe extern "system" fn(*mut c_void) -> u32,
     _bind_parent: [usize; 2], // BindToHandler, GetParent
     pub(crate) GetDisplayName:
-        unsafe extern "system" fn(*mut c_void, u32, *mut *mut u16) -> HRESULT,
+        unsafe extern "system" fn(*mut c_void, i32, *mut *mut u16) -> HRESULT,
     // GetAttributes, Compare
 }
 
@@ -843,7 +843,7 @@ impl IFileOpenDialog {
     }
 
     pub(crate) unsafe fn SetFolder(&self, psi: *mut IShellItem) -> HRESULT {
-        unsafe { ((*self.vtbl).SetFolder)(self as *const _ as *mut _, psi as *mut c_void) }
+        unsafe { ((*self.vtbl).SetFolder)(self as *const _ as *mut _, psi) }
     }
 
     pub(crate) unsafe fn SetTitle(&self, pszTitle: *const u16) -> HRESULT {
@@ -871,7 +871,7 @@ pub(crate) struct IFileOpenDialogVtbl {
     _type_idx: [usize; 4], // SetFileTypeIndex, GetFileTypeIndex, Advise, Unadvise
     pub(crate) SetOptions: unsafe extern "system" fn(*mut c_void, u32) -> HRESULT,
     _get_opts_def: [usize; 2], // GetOptions, SetDefaultFolder
-    pub(crate) SetFolder: unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
+    pub(crate) SetFolder: unsafe extern "system" fn(*mut c_void, *mut IShellItem) -> HRESULT,
     _get_folder_sel: [usize; 2], // GetFolder, GetCurrentSelection
     _set_filename: usize,        // SetFileName
     _get_filename: usize,        // GetFileName
@@ -915,7 +915,7 @@ impl IFileSaveDialog {
     }
 
     pub(crate) unsafe fn SetFolder(&self, psi: *mut IShellItem) -> HRESULT {
-        unsafe { ((*self.vtbl).SetFolder)(self as *const _ as *mut _, psi as *mut c_void) }
+        unsafe { ((*self.vtbl).SetFolder)(self as *const _ as *mut _, psi) }
     }
 
     pub(crate) unsafe fn SetFileName(&self, pszName: *const u16) -> HRESULT {
@@ -949,7 +949,7 @@ pub(crate) struct IFileSaveDialogVtbl {
     _type_idx: [usize; 4], // SetFileTypeIndex, GetFileTypeIndex, Advise, Unadvise
     pub(crate) SetOptions: unsafe extern "system" fn(*mut c_void, u32) -> HRESULT,
     _get_opts_def: [usize; 2], // GetOptions, SetDefaultFolder
-    pub(crate) SetFolder: unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
+    pub(crate) SetFolder: unsafe extern "system" fn(*mut c_void, *mut IShellItem) -> HRESULT,
     _get_folder_sel: [usize; 2], // GetFolder, GetCurrentSelection
     pub(crate) SetFileName: unsafe extern "system" fn(*mut c_void, *const u16) -> HRESULT,
     _get_filename: usize, // GetFileName
@@ -994,5 +994,5 @@ pub(crate) struct TaskbarList3Vtable {
     pub(crate) set_progress_value:
         unsafe extern "system" fn(*mut TaskbarList3, HWND, u64, u64) -> HRESULT,
     pub(crate) set_progress_state:
-        unsafe extern "system" fn(*mut TaskbarList3, HWND, u32) -> HRESULT,
+        unsafe extern "system" fn(*mut TaskbarList3, HWND, i32) -> HRESULT,
 }
