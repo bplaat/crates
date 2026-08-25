@@ -10,7 +10,4 @@
 #![allow(clippy::upper_case_acronyms)]
 #![allow(unused)]
 
-#[cfg_attr(target_env = "msvc", link(name = "advapi32"))]
-unsafe extern "system" {}
-
 include!(concat!(env!("OUT_DIR"), "/webview2_bindings.rs"));

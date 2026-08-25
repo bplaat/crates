@@ -20,7 +20,10 @@ pub(crate) type w_char = u16;
 pub(crate) type HANDLE = *mut c_void;
 pub(crate) type HKEY = HANDLE;
 pub(crate) const HKEY_CURRENT_USER: HKEY = 0x80000001usize as HKEY;
+pub(crate) const HKEY_LOCAL_MACHINE: HKEY = 0x80000002usize as HKEY;
 pub(crate) const RRF_RT_REG_DWORD: u32 = 0x00000018;
+pub(crate) const RRF_RT_REG_SZ: u32 = 0x00000002;
+pub(crate) const RRF_SUBKEY_WOW6432KEY: u32 = 0x00020000;
 pub(crate) const ERROR_SUCCESS: i32 = 0;
 
 #[repr(C)]
@@ -37,7 +40,9 @@ pub(crate) const ERROR_ALREADY_EXISTS: u32 = 183;
 #[link(name = "kernel32")]
 unsafe extern "system" {
     pub(crate) fn GetModuleHandleW(lpModuleName: *const w_char) -> HMODULE;
+    pub(crate) fn LoadLibraryW(lpLibFileName: *const u16) -> HMODULE;
     pub(crate) fn GetProcAddress(hModule: HMODULE, lpProcName: *const c_char) -> *const c_void;
+    pub(crate) fn FreeLibrary(hLibModule: HMODULE) -> BOOL;
     pub(crate) fn GetLastError() -> u32;
     pub(crate) fn CreateMutexW(
         lpMutexAttributes: *mut c_void,
@@ -491,6 +496,7 @@ pub(crate) struct STATSTG {
 pub(crate) const S_OK: HRESULT = 0;
 pub(crate) const E_NOINTERFACE: HRESULT = 0x80004002u32 as HRESULT;
 pub(crate) const E_NOTIMPL: HRESULT = 0x80004001u32 as HRESULT;
+pub(crate) const E_POINTER: HRESULT = 0x80004003u32 as HRESULT;
 pub(crate) const DRAGDROP_E_INVALIDHWND: HRESULT = 0x80040102u32 as HRESULT;
 pub(crate) const CF_HDROP: u16 = 15;
 pub(crate) const DVASPECT_CONTENT: u32 = 1;

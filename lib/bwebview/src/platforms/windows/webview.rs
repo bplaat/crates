@@ -11,6 +11,7 @@ use std::{env, mem};
 use super::event_loop::send_event;
 #[cfg(feature = "file_drop")]
 use super::file_drop::{FileDropTarget, install_file_drop_targets};
+use super::loader::*;
 use super::webview2::*;
 use super::win32::*;
 use super::window::{PlatformWindow, WindowData, config_dir};
@@ -71,39 +72,40 @@ impl PlatformWebview {
 
         // Init Webview2 creation
         unsafe {
-            if let Some(color) = self.webview_data.background_color {
-                env::set_var(
-                    "WEBVIEW2_DEFAULT_BACKGROUND_COLOR",
-                    format!("0xFF{:06X}", color & 0xFFFFFF),
-                );
-            }
-
             static VTBL: ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl =
-                ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl {
-                    QueryInterface: unimplemented_query_interface,
-                    AddRef: unimplemented_add_ref,
-                    Release: unimplemented_release,
-                    Invoke: environment_created,
-                };
+                environment_handler_vtable(environment_created);
             let completed_handler = Box::into_raw(Box::new(
                 ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler {
                     lpVtbl: &VTBL,
                     user_data: self.webview_data.as_mut() as *mut WebviewData as *mut _,
                 },
             ));
-            if CreateCoreWebView2EnvironmentWithOptions(
-                null_mut(),
+            let result = create_core_webview2_environment(
                 config_dir().display().to_string().to_wide_string().as_ptr() as *mut _,
-                null_mut(),
                 completed_handler,
-            ) != S_OK
-            {
-                MessageBoxW(
-                    null_mut(),
-                    wide!("Failed to create WebView2 environment").as_ptr(),
-                    wide!("Error").as_ptr(),
-                    MB_OK,
-                );
+            );
+            if result != S_OK {
+                if result == WEBVIEW2_RUNTIME_NOT_FOUND {
+                    if MessageBoxW(
+                        self.webview_data.hwnd,
+                        wide!("Microsoft Edge WebView2 Runtime is required to run this application.\n\nDownload it now?").as_ptr(),
+                        wide!("WebView2 Runtime Required").as_ptr(),
+                        MB_YESNO | MB_ICONWARNING,
+                    ) == IDYES
+                    {
+                        ShellExecuteW(
+                            self.webview_data.hwnd,
+                            wide!("open").as_ptr(),
+                            wide!("https://developer.microsoft.com/microsoft-edge/webview2/#download-section")
+                                .as_ptr(),
+                            null(),
+                            null(),
+                            SW_SHOWNORMAL,
+                        );
+                    }
+                } else {
+                    show_webview_error(self.webview_data.hwnd, "environment", result);
+                }
                 std::process::exit(1);
             }
         }
@@ -217,6 +219,14 @@ extern "system" fn environment_created(
 ) -> HRESULT {
     unsafe {
         let _self = &mut *((*_this).user_data as *mut WebviewData);
+        if _result != S_OK || environment.is_null() {
+            show_webview_error(
+                _self.hwnd,
+                "environment",
+                if _result == S_OK { E_POINTER } else { _result },
+            );
+            std::process::exit(1);
+        }
 
         (*environment).AddRef();
         _self.environment = Some(environment);
@@ -234,7 +244,49 @@ extern "system" fn environment_created(
                 user_data: (*_this).user_data,
             },
         ));
-        (*environment).CreateCoreWebView2Controller(_self.hwnd, creation_completed_handler);
+        let mut controller_creation_started = false;
+        if _self.background_color.is_some() {
+            let mut environment10: *mut ICoreWebView2Environment10 = null_mut();
+            if (*environment).QueryInterface(
+                &IID_ICoreWebView2Environment10,
+                &mut environment10 as *mut _ as *mut *mut c_void,
+            ) == S_OK
+            {
+                let mut options: *mut ICoreWebView2ControllerOptions = null_mut();
+                if (*environment10).CreateCoreWebView2ControllerOptions(&mut options) == S_OK {
+                    let mut options3: *mut ICoreWebView2ControllerOptions3 = null_mut();
+                    if (*options).QueryInterface(
+                        &IID_ICoreWebView2ControllerOptions3,
+                        &mut options3 as *mut _ as *mut *mut c_void,
+                    ) == S_OK
+                    {
+                        // Start transparent so the native window background is visible from the
+                        // first WebView2 frame, without a process-global environment variable.
+                        if (*options3).put_DefaultBackgroundColor(COREWEBVIEW2_COLOR {
+                            A: 0,
+                            R: 0,
+                            G: 0,
+                            B: 0,
+                        }) == S_OK
+                        {
+                            controller_creation_started =
+                                (*environment10).CreateCoreWebView2ControllerWithOptions(
+                                    _self.hwnd,
+                                    options,
+                                    creation_completed_handler,
+                                ) == S_OK;
+                        }
+                        (*options3).Release();
+                    }
+                    (*options).Release();
+                }
+                (*environment10).Release();
+            }
+        }
+
+        if !controller_creation_started {
+            (*environment).CreateCoreWebView2Controller(_self.hwnd, creation_completed_handler);
+        }
 
         S_OK
     }
@@ -247,6 +299,14 @@ extern "system" fn controller_created(
 ) -> HRESULT {
     unsafe {
         let _self = &mut *((*_this).user_data as *mut WebviewData);
+        if _result != S_OK || controller.is_null() {
+            show_webview_error(
+                _self.hwnd,
+                "controller",
+                if _result == S_OK { E_POINTER } else { _result },
+            );
+            std::process::exit(1);
+        }
         (*controller).AddRef();
         _self.controller = Some(controller);
 
@@ -445,6 +505,22 @@ extern "system" fn controller_created(
         }
 
         S_OK
+    }
+}
+
+fn show_webview_error(hwnd: HWND, component: &str, result: HRESULT) {
+    let message = format!(
+        "Failed to create the WebView2 {component} (HRESULT 0x{:08X}).",
+        result as u32
+    )
+    .to_wide_string();
+    unsafe {
+        MessageBoxW(
+            hwnd,
+            message.as_ptr(),
+            wide!("WebView2 Error").as_ptr(),
+            MB_OK | MB_ICONERROR,
+        );
     }
 }
 
