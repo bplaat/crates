@@ -9,8 +9,7 @@ use std::mem::{self, size_of};
 use std::process::exit;
 use std::ptr::{null, null_mut};
 
-use super::webview2::*;
-use super::win32::*;
+use super::headers::*;
 use crate::{AppId, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme};
 
 pub(super) static mut APP_ID: Option<AppId> = None;

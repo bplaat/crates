@@ -7,7 +7,7 @@
 use std::ffi::c_void;
 use std::ptr::null_mut;
 
-use super::win32::*;
+use super::headers::*;
 use crate::WindowsProgressBarState;
 
 /// The progress a window asked for, applied once its taskbar button exists

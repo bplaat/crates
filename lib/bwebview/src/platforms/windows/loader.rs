@@ -14,13 +14,12 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::PathBuf;
 use std::ptr::null_mut;
 
-use super::webview2::{
+use super::headers::{
     ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
     ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl,
     ICoreWebView2EnvironmentOptions,
-    IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
+    IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, *,
 };
-use super::win32::*;
 
 const STABLE_RUNTIME_KEY: &str =
     "SOFTWARE\\Microsoft\\EdgeUpdate\\ClientState\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
@@ -192,7 +191,7 @@ pub(super) const fn environment_handler_vtable(
     invoke: unsafe extern "system" fn(
         *mut ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
         HRESULT,
-        *mut super::webview2::ICoreWebView2Environment,
+        *mut ICoreWebView2Environment,
     ) -> HRESULT,
 ) -> ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl {
     ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl {

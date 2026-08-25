@@ -9,12 +9,11 @@ mod dialog;
 mod event_loop;
 #[cfg(feature = "file_drop")]
 mod file_drop;
+mod headers;
 mod loader;
 #[cfg(feature = "progress_bar")]
 mod progress_bar;
 mod webview;
-mod webview2;
-mod win32;
 mod window;
 #[cfg(feature = "remember_window_state")]
 mod window_state;

@@ -10,10 +10,10 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
-use super::cocoa::*;
 use super::event_loop::{allow_termination_if_last_window, send_event};
 #[cfg(feature = "file_drop")]
 use super::file_drop::{perform_file_drop, register_dragged_types};
+use super::headers::*;
 use crate::{
     CloseRequest, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent,
 };
