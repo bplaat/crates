@@ -10,9 +10,10 @@ use std::ffi::c_void;
 
 pub(super) const TOKEN_QUERY: u32 = 0x0008;
 pub(super) const TOKEN_ELEVATION_CLASS: u32 = 20;
+pub(super) const SYNCHRONIZE: u32 = 0x0010_0000;
 pub(super) const SEE_MASK_NOCLOSEPROCESS: u32 = 0x0000_0040;
 pub(super) const SW_SHOWNORMAL: i32 = 1;
-pub(super) const WAIT_OBJECT_0: u32 = 0;
+pub(super) const INFINITE: u32 = 0xffff_ffff;
 
 #[repr(C)]
 pub(super) struct TokenElevation {
@@ -42,7 +43,13 @@ pub(super) struct ShellExecuteInfoW {
 unsafe extern "system" {
     pub(super) fn CloseHandle(object: *mut c_void) -> i32;
     pub(super) fn GetCurrentProcess() -> *mut c_void;
+    pub(super) fn GetCurrentProcessId() -> u32;
     pub(super) fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
+    pub(super) fn OpenProcess(
+        desired_access: u32,
+        inherit_handle: i32,
+        process_id: u32,
+    ) -> *mut c_void;
     pub(super) fn WaitForSingleObject(handle: *mut c_void, milliseconds: u32) -> u32;
 }
 
@@ -65,9 +72,4 @@ unsafe extern "system" {
 #[link(name = "shell32")]
 unsafe extern "system" {
     pub(super) fn ShellExecuteExW(info: *mut ShellExecuteInfoW) -> i32;
-}
-
-#[link(name = "user32")]
-unsafe extern "system" {
-    pub(super) fn WaitForInputIdle(process: *mut c_void, milliseconds: u32) -> u32;
 }

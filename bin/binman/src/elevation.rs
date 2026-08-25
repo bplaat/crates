@@ -41,11 +41,42 @@ pub(crate) fn is_process_elevated() -> bool {
     success && elevation.token_is_elevated != 0
 }
 
+pub(crate) fn wait_for_parent_if_requested() {
+    let mut arguments = std::env::args_os().skip(1);
+    while let Some(argument) = arguments.next() {
+        if argument == "--elevated-from" {
+            let Some(process_id) = arguments
+                .next()
+                .and_then(|value| value.to_string_lossy().parse::<u32>().ok())
+            else {
+                return;
+            };
+
+            // SAFETY: OpenProcess returns either a valid owned handle or null. Waiting with
+            // SYNCHRONIZE access is valid, and the handle is closed exactly once afterward.
+            let parent = unsafe { OpenProcess(SYNCHRONIZE, 0, process_id) };
+            if !parent.is_null() {
+                // SAFETY: `parent` is a valid process handle opened with SYNCHRONIZE access.
+                _ = unsafe { WaitForSingleObject(parent, INFINITE) };
+                // SAFETY: `parent` is an owned handle and is closed exactly once.
+                _ = unsafe { CloseHandle(parent) };
+            }
+            return;
+        }
+    }
+}
+
 pub(crate) fn restart() -> io::Result<()> {
     let executable = std::env::current_exe()?;
     let operation: Vec<u16> = OsStr::new("runas").encode_wide().chain(Some(0)).collect();
     let executable: Vec<u16> = executable
         .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    // SAFETY: GetCurrentProcessId has no preconditions.
+    let parameters = format!("--elevated-from {}", unsafe { GetCurrentProcessId() });
+    let parameters: Vec<u16> = OsStr::new(&parameters)
         .encode_wide()
         .chain(Some(0))
         .collect();
@@ -56,7 +87,7 @@ pub(crate) fn restart() -> io::Result<()> {
         hwnd: null::<c_void>().cast_mut(),
         verb: operation.as_ptr(),
         file: executable.as_ptr(),
-        parameters: null(),
+        parameters: parameters.as_ptr(),
         directory: null(),
         show: SW_SHOWNORMAL,
         instance: null::<c_void>().cast_mut(),
@@ -79,18 +110,9 @@ pub(crate) fn restart() -> io::Result<()> {
         ));
     }
 
+    // The elevated child waits for this process to exit before initializing its WebView2
+    // environment, so release the launch handle and let the caller close the window now.
     // SAFETY: `process` is an owned process handle returned by ShellExecuteExW.
-    _ = unsafe { WaitForInputIdle(info.process, 5_000) };
-    // SAFETY: A zero-timeout wait only checks whether the owned process has exited.
-    let exited = unsafe { WaitForSingleObject(info.process, 0) } == WAIT_OBJECT_0;
-    // SAFETY: The owned process handle is closed exactly once after the checks.
     _ = unsafe { CloseHandle(info.process) };
-
-    if exited {
-        Err(io::Error::other(
-            "The elevated Binman process exited before opening its window",
-        ))
-    } else {
-        Ok(())
-    }
+    Ok(())
 }
