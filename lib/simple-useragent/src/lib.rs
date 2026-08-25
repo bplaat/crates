@@ -261,6 +261,10 @@ mod test {
         assert_eq!(ua.os.family, "Windows");
         assert_eq!(ua.os.version.as_deref(), Some("10"));
 
+        let ua = parser.parse("Telegram-Android/11.4.2");
+        assert_eq!(ua.client.family, "Telegram");
+        assert_eq!(ua.client.version.as_deref(), Some("11.4.2"));
+
         let ua = parser.parse("UnknownUserAgent/1.0");
         assert_eq!(ua.client.family, "Other");
         assert_eq!(ua.client.version, None);

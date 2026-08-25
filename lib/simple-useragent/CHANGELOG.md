@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 _Placeholder_
 
+## [0.1.3] - 2026-08-25
+
+### Changed
+
+- Update the `regex` dependency baseline to 1.13.
+- Update the bundled uap-core user-agent and operating-system rules.
+- Clean up build-time rule generation without changing parser behavior.
+
 ## [0.1.2] - 2025-02-11
 
 ### Fixed
@@ -31,7 +39,8 @@ _Placeholder_
 
 _Initial release_
 
-[Unreleased]: https://github.com/bplaat/crates/compare/simple-useragent%2Fv0.1.2...HEAD
+[Unreleased]: https://github.com/bplaat/crates/compare/simple-useragent%2Fv0.1.3...HEAD
+[0.1.3]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.3
 [0.1.2]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.2
 [0.1.1]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.1
 [0.1.0]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.0
