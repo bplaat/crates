@@ -174,7 +174,7 @@ unsafe fn file_drop_paths(data: *mut IDataObject) -> Option<Vec<PathBuf>> {
     if data.is_null() {
         return None;
     }
-    let format = FORMATETC {
+    let mut format = FORMATETC {
         cfFormat: CF_HDROP,
         ptd: null_mut(),
         dwAspect: DVASPECT_CONTENT,
@@ -182,7 +182,7 @@ unsafe fn file_drop_paths(data: *mut IDataObject) -> Option<Vec<PathBuf>> {
         tymed: TYMED_HGLOBAL,
     };
     let mut medium: STGMEDIUM = unsafe { mem::zeroed() };
-    if unsafe { ((*(*data).lpVtbl).GetData)(data, &format, &mut medium) } != S_OK {
+    if unsafe { ((*(*data).lpVtbl).GetData)(data, &mut format, &mut medium) } != S_OK {
         return None;
     }
 

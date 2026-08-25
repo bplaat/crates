@@ -89,10 +89,6 @@ The Linux backend automatically selects the best available WebKitGTK version at 
 - **progress_bar** - Adds support for Windows taskbar and GTK application launcher progress bars.
 - **rust-embed** - Adds support for serving embedded assets using the `rust-embed` crate.
 
-## Binary blob sources
-
-- `webview2/*.winmd` [webview2-rs Win32 metadata](https://github.com/wravery/webview2-rs/blob/12be1a54bf4dae4958efc09289ae05f3caa94616/crates/update-bindings/winmd/Microsoft.Web.WebView2.Win32.winmd) generated from WebView2 SDK 1.0.3800.47
-
 ## License
 
 Copyright © 2025-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
