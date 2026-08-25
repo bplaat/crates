@@ -5,7 +5,8 @@
  */
 
 use anyhow::Result;
-use bsqlite::{preprocess_fts_query, query_args};
+use bsqlite::{execute_args, preprocess_fts_query, query_args};
+use chrono::Utc;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
 
@@ -14,7 +15,7 @@ use crate::context::Context;
 use crate::controllers::users::{get_user, parse_user_id};
 use crate::controllers::{not_found, parse_index_query, require_auth};
 use crate::models::session::policies;
-use crate::models::{IndexQuery, Session};
+use crate::models::{IndexQuery, Session, UserRole};
 
 // MARK: Handlers
 pub(crate) fn sessions_index(req: &Request, ctx: &Context) -> Result<Response> {
@@ -77,9 +78,20 @@ pub(crate) fn sessions_delete(req: &Request, ctx: &Context) -> Result<Response> 
         return Ok(Response::with_status(Status::Forbidden));
     }
 
-    // Delete session
-    ctx.database
-        .execute("DELETE FROM sessions WHERE id = ?", session.id)?;
+    if auth_user.role == UserRole::Admin {
+        ctx.database
+            .execute("DELETE FROM sessions WHERE id = ?", session.id)?;
+    } else {
+        let now = Utc::now();
+        execute_args!(
+            ctx.database,
+            "UPDATE sessions SET expires_at = :now, updated_at = :now WHERE id = :id",
+            Args {
+                now: now,
+                id: session.id
+            }
+        )?;
+    }
 
     // Success response
     Ok(Response::with_status(Status::NoContent))
@@ -95,7 +107,7 @@ fn list_sessions(
     user_id: Uuid,
     query: &IndexQuery,
 ) -> Result<(i64, Vec<api::Session>)> {
-    let now = chrono::Utc::now();
+    let now = Utc::now();
     let offset = (query.page - 1) * query.limit;
     if let Some(q) = query.query.as_deref().filter(|s| !s.is_empty()) {
         let fts_query = preprocess_fts_query(q);
@@ -219,8 +231,6 @@ fn get_session(session_id: Uuid, ctx: &Context) -> Result<Option<Session>> {
 #[cfg(test)]
 mod test {
     use std::time::Duration;
-
-    use chrono::Utc;
 
     use super::*;
     use crate::context::DatabaseHelpers;
@@ -362,11 +372,11 @@ mod test {
     }
 
     #[test]
-    fn test_sessions_delete() {
+    fn test_sessions_delete_revokes_session() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
         let (user, token) = create_test_user_with_session_and_role(&ctx, UserRole::Normal);
-        let session = insert_test_session(&ctx, user.id, "token-to-delete");
+        let session = insert_test_session(&ctx, user.id, "token-to-revoke");
 
         let res = router.handle(
             &Request::delete(format!("http://localhost/api/sessions/{}", session.id))
@@ -374,8 +384,8 @@ mod test {
         );
         assert_eq!(res.status, Status::NoContent);
 
-        // Verify session is deleted
-        let deleted = query_args!(
+        // Verify session is retained but expired
+        let revoked = query_args!(
             Session,
             ctx.database,
             format!(
@@ -387,7 +397,25 @@ mod test {
         .unwrap()
         .next()
         .map(|r| r.unwrap());
-        assert!(deleted.is_none());
+        let revoked = revoked.expect("Session history should be retained");
+        assert!(revoked.expires_at.timestamp() <= Utc::now().timestamp());
+        assert!(revoked.updated_at.timestamp() >= session.updated_at.timestamp());
+    }
+
+    #[test]
+    fn test_sessions_delete_admin_deletes_session() {
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        let router = router(ctx.clone());
+        let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
+        let user = insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
+        let session = insert_test_session(&ctx, user.id, "token-to-delete");
+
+        let res = router.handle(
+            &Request::delete(format!("http://localhost/api/sessions/{}", session.id))
+                .header("Authorization", format!("Bearer {token}")),
+        );
+        assert_eq!(res.status, Status::NoContent);
+        assert!(get_session(session.id, &ctx).unwrap().is_none());
     }
 
     #[test]

@@ -145,7 +145,8 @@ paths:
           description: Session not found
     delete:
       tags: [Sessions]
-      summary: Delete (revoke) a session
+      summary: Delete or revoke a session
+      description: Admins delete sessions permanently. Normal users revoke their own sessions by expiring them while retaining their history.
       security:
         - BearerAuth: []
       parameters:
@@ -157,7 +158,7 @@ paths:
             format: uuid
       responses:
         '204':
-          description: Session deleted
+          description: Session deleted by an admin or revoked by a normal user
         '400':
           description: Invalid request
         '401':
@@ -253,6 +254,7 @@ paths:
     put:
       tags: [Users]
       summary: Update a user by ID
+      description: If an admin supplies a new password, all sessions for the user are revoked and retained as history.
       security:
         - BearerAuth: []
       parameters:
@@ -303,7 +305,6 @@ paths:
           description: Forbidden
         '404':
           description: User not found
-
   /api/users/{userId}/change-password:
     post:
       tags: [Users]
@@ -323,7 +324,7 @@ paths:
               $ref: '#/components/schemas/UserChangePasswordBody'
       responses:
         '204':
-          description: Password changed successfully
+          description: Password changed successfully; all sessions for the user are revoked and retained as history
         '400':
           description: Invalid request. Invalid path UUID returns an empty body; validation errors return a Report.
           content:
@@ -1168,7 +1169,7 @@ components:
           description: >
             Optional new ASCII-only password. Only processed when the authenticated user has the admin role;
             silently ignored for normal users. Must contain uppercase, lowercase, digit, and special character.
-            Use `/change-password` to change your own password.
+            Supplying a password revokes all sessions for the user and retains them as history. Use `/change-password` to change your own password.
         theme:
           $ref: '#/components/schemas/UserTheme'
         language:

@@ -5,7 +5,7 @@
  */
 
 use anyhow::Result;
-use bsqlite::{execute_args, preprocess_fts_query, query_args};
+use bsqlite::{Connection, execute_args, preprocess_fts_query, query_args};
 use chrono::Utc;
 use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
@@ -212,27 +212,34 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
     if auth_user.role == UserRole::Admin {
         user.role = body.role;
     }
+    let password_changed = body.password.is_some() && auth_user.role == UserRole::Admin;
     if let Some(password) = body.password
-        && auth_user.role == UserRole::Admin
+        && password_changed
     {
         user.password = password_hash(&password);
     }
     user.updated_at = Utc::now();
-    execute_args!(
-        ctx.database,
-        "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, password = :password, theme = :theme, language = :language, role = :role, updated_at = :updated_at WHERE id = :id",
-        Args {
-            first_name: user.first_name.clone(),
-            last_name: user.last_name.clone(),
-            email: user.email.clone(),
-            password: user.password.clone(),
-            theme: user.theme,
-            language: user.language.clone(),
-            role: user.role,
-            updated_at: user.updated_at,
-            id: user.id
+    ctx.database.transaction(|database| -> Result<()> {
+        execute_args!(
+            database,
+            "UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, password = :password, theme = :theme, language = :language, role = :role, updated_at = :updated_at WHERE id = :id",
+            Args {
+                first_name: user.first_name.clone(),
+                last_name: user.last_name.clone(),
+                email: user.email.clone(),
+                password: user.password.clone(),
+                theme: user.theme,
+                language: user.language.clone(),
+                role: user.role,
+                updated_at: user.updated_at,
+                id: user.id
+            }
+        )?;
+        if password_changed {
+            revoke_user_sessions(database, user.id)?;
         }
-    )?;
+        Ok(())
+    })?;
 
     // Return updated user
     Ok(Response::with_json(api::User::from(user)))
@@ -275,15 +282,19 @@ pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Resp
     // Update password
     user.password = password_hash(&body.new_password);
     user.updated_at = Utc::now();
-    execute_args!(
-        ctx.database,
-        "UPDATE users SET password = :password, updated_at = :updated_at WHERE id = :id",
-        Args {
-            password: user.password.clone(),
-            updated_at: user.updated_at,
-            id: user.id
-        }
-    )?;
+    ctx.database.transaction(|database| -> Result<()> {
+        execute_args!(
+            database,
+            "UPDATE users SET password = :password, updated_at = :updated_at WHERE id = :id",
+            Args {
+                password: user.password.clone(),
+                updated_at: user.updated_at,
+                id: user.id
+            }
+        )?;
+        revoke_user_sessions(database, user.id)?;
+        Ok(())
+    })?;
 
     // Success response
     Ok(Response::with_status(Status::NoContent))
@@ -474,6 +485,19 @@ pub(crate) fn get_user(user_id: Uuid, ctx: &Context) -> Result<Option<User>> {
         .transpose()?)
 }
 
+fn revoke_user_sessions(database: &Connection, user_id: Uuid) -> Result<()> {
+    let now = Utc::now();
+    execute_args!(
+        database,
+        "UPDATE sessions SET expires_at = :now, updated_at = :now WHERE user_id = :user_id",
+        Args {
+            now: now,
+            user_id: user_id
+        }
+    )?;
+    Ok(())
+}
+
 fn users_notes_filtered(req: &Request, ctx: &Context, filter: &str) -> Result<Response> {
     let auth_user = require_auth!(ctx);
 
@@ -511,8 +535,29 @@ mod test {
     use crate::router;
     use crate::test_utils::{
         create_test_user_with_session, create_test_user_with_session_and_role, insert_test_note,
-        insert_test_user,
+        insert_test_session, insert_test_user,
     };
+
+    fn assert_user_session_counts(
+        ctx: &Context,
+        user_id: Uuid,
+        expected_total: i64,
+        expected_active: i64,
+    ) {
+        let total = ctx
+            .database
+            .query_some::<i64>("SELECT COUNT(*) FROM sessions WHERE user_id = ?", user_id)
+            .unwrap();
+        let active = ctx
+            .database
+            .query_some::<i64>(
+                "SELECT COUNT(*) FROM sessions WHERE user_id = ? AND expires_at > ?",
+                (user_id, Utc::now()),
+            )
+            .unwrap();
+        assert_eq!(total, expected_total);
+        assert_eq!(active, expected_active);
+    }
 
     #[test]
     fn test_users_index() {
@@ -839,6 +884,7 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
         let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+        insert_test_session(&ctx, user.id, "john-session");
 
         let res = router.handle(
             &Request::post(format!(
@@ -863,6 +909,7 @@ mod test {
             .map(|r| r.unwrap())
             .unwrap();
         assert!(pbkdf2::password_verify("NewP@ssw0rd!", &stored_user.password).unwrap());
+        assert_user_session_counts(&ctx, user.id, 1, 0);
     }
 
     #[test]
@@ -871,6 +918,7 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
         let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+        insert_test_session(&ctx, user.id, "john-session");
 
         let res = router.handle(
             &Request::post(format!(
@@ -882,6 +930,7 @@ mod test {
             .body(r#"{"oldPassword":"wrongpassword","newPassword":"Anoth3rP@ss!"}"#),
         );
         assert_eq!(res.status, Status::Unauthorized);
+        assert_user_session_counts(&ctx, user.id, 1, 1);
     }
 
     #[test]
@@ -1325,6 +1374,7 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
         let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+        insert_test_session(&ctx, user.id, "john-session");
 
         let res = router.handle(
             &Request::put(format!("http://localhost/api/users/{}", user.id))
@@ -1345,6 +1395,7 @@ mod test {
             .map(|r| r.unwrap())
             .unwrap();
         assert!(pbkdf2::password_verify("NewP@ssw0rd9!", &stored.password).unwrap());
+        assert_user_session_counts(&ctx, user.id, 1, 0);
     }
 
     #[test]
