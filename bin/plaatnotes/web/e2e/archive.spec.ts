@@ -23,11 +23,13 @@ async function createArchivedNote(page: Page, body: string): Promise<{ id: strin
         headers,
         data: JSON.stringify({ body }),
     });
+    expect(createRes.ok()).toBeTruthy();
     const note = await createRes.json();
-    await page.request.put(`${API_URL}/notes/${note.id}`, {
+    const updateRes = await page.request.put(`${API_URL}/notes/${note.id}`, {
         headers,
         data: JSON.stringify({ body, isPinned: false, isArchived: true, isTrashed: false }),
     });
+    expect(updateRes.ok()).toBeTruthy();
     return note;
 }
 
@@ -64,7 +66,7 @@ test.describe('Archive', () => {
         const note = await createArchivedNote(page, 'Archived note content test');
 
         await page.goto('/archive');
-        await expect(page.getByText('Archived note content test')).toBeVisible();
+        await expect(page.locator(`a[href="/notes/${note.id}"]`)).toContainText('Archived note content test');
 
         // Cleanup
         const { headers } = await authState(page);
@@ -75,10 +77,11 @@ test.describe('Archive', () => {
         const note = await createArchivedNote(page, 'Unarchive test note');
 
         await page.goto('/archive');
-        await expect(page.getByText('Unarchive test note')).toBeVisible();
+        const noteLink = page.locator(`a[href="/notes/${note.id}"]`);
+        await expect(noteLink).toContainText('Unarchive test note');
 
         // Click on the note to open it, then unarchive
-        await page.getByText('Unarchive test note').click();
+        await noteLink.click();
         await expect(page).toHaveURL(`/notes/${note.id}`);
         await page.getByTitle('Unarchive').click();
         await expect(page).toHaveURL('/');
@@ -92,7 +95,7 @@ test.describe('Archive', () => {
         const note = await createArchivedNote(page, 'Trash from archive test');
 
         await page.goto('/archive');
-        await page.getByText('Trash from archive test').click();
+        await page.locator(`a[href="/notes/${note.id}"]`).click();
         await expect(page).toHaveURL(`/notes/${note.id}`);
         await page.getByTitle('Move to trash').click();
         await expect(page).toHaveURL('/trash');
