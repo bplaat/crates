@@ -39,7 +39,7 @@ pub fn serve_single_threaded(
 
                 // If the response has a takeover function, start thread and move tcp stream
                 if let Some(takeover) = response.takeover.take() {
-                    std::thread::spawn(move || takeover(reader.into_inner()));
+                    std::thread::spawn(move || takeover(reader));
                 }
             }
             Err(err) => {
@@ -108,7 +108,7 @@ pub fn serve(
 
                         // If the response has a takeover function, start thread and move tcp stream
                         if let Some(takeover) = response.takeover.take() {
-                            std::thread::spawn(move || takeover(reader.into_inner()));
+                            std::thread::spawn(move || takeover(reader));
                             return;
                         }
 
@@ -156,6 +156,7 @@ pub fn serve_cgi(handler: impl Fn(&Request) -> Response) {
 mod test {
     use std::io::Read;
     use std::net::{Ipv4Addr, TcpStream};
+    use std::sync::mpsc;
     use std::thread;
 
     use super::*;
@@ -181,6 +182,34 @@ mod test {
             .read_to_end(&mut response)
             .expect("Failed to read from stream");
         assert!(response.starts_with(b"HTTP/1.1 200 OK"));
+    }
+
+    #[test]
+    fn test_takeover_preserves_buffered_bytes() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("Failed to bind address");
+        let addr = listener.local_addr().unwrap();
+        let (sender, receiver) = mpsc::channel();
+
+        thread::spawn(move || {
+            serve_single_threaded(listener, move |_req| {
+                let sender = sender.clone();
+                Response::with_status(Status::SwitchingProtocols).takeover(move |mut reader| {
+                    let mut protocol_data = [0; 5];
+                    reader.read_exact(&mut protocol_data).unwrap();
+                    sender.send(protocol_data).unwrap();
+                })
+            });
+        });
+
+        let mut stream = TcpStream::connect(addr).expect("Failed to connect to server");
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\nhello")
+            .expect("Failed to write to stream");
+
+        assert_eq!(
+            receiver.recv_timeout(Duration::from_secs(1)).unwrap(),
+            *b"hello"
+        );
     }
 
     #[test]

@@ -75,6 +75,7 @@ struct Frame {
 }
 
 impl WebSocket {
+    #[cfg(test)]
     fn new(stream: TcpStream, role: Role) -> Self {
         Self::new_with_buffer(stream, role, Vec::new())
     }
@@ -527,7 +528,14 @@ pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'stat
         "Sec-WebSocket-Accept",
         BASE64_STANDARD.encode(hasher.finalize()),
     );
-    res = res.takeover(|stream| handler(WebSocket::new(stream, Role::Server)));
+    res = res.takeover(|reader| {
+        let read_buffer = reader.buffer().to_vec();
+        handler(WebSocket::new_with_buffer(
+            reader.into_inner(),
+            Role::Server,
+            read_buffer,
+        ));
+    });
     res
 }
 

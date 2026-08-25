@@ -35,7 +35,7 @@ fn handler(req: &Request) -> Response {
         res = res.takeover(|mut stream| {
             println!(
                 "Client connected: {}",
-                stream.peer_addr().expect("Can't get client addr")
+                stream.get_ref().peer_addr().expect("Can't get client addr")
             );
             loop {
                 let mut buf = [0; 1024];
@@ -74,9 +74,13 @@ fn handler(req: &Request) -> Response {
                         payload_len as u8, // Payload length
                     ];
                     stream
+                        .get_mut()
                         .write_all(&response_frame)
                         .expect("Failed to write to stream");
-                    stream.write_all(&payload).expect("Failed to write payload");
+                    stream
+                        .get_mut()
+                        .write_all(&payload)
+                        .expect("Failed to write payload");
                 }
             }
             println!("Client disconnected");
