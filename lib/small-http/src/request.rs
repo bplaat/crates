@@ -223,35 +223,17 @@ impl Request {
     ) -> Result<Request, InvalidRequestError> {
         // Read first line
         let (method, path, version) = {
-            let mut line = String::new();
-            reader
-                .take(crate::MAX_HEADER_LINE)
-                .read_line(&mut line)
-                .map_err(|_| InvalidRequestError("Can't read first line".to_string()))?;
-            let mut parts = line.split(' ');
+            let line = read_http_line(reader, "first line")?;
+            let parts = line.trim_end_matches("\r\n").split(' ').collect::<Vec<_>>();
+            let [method, path, version] = parts.as_slice() else {
+                return Err(InvalidRequestError("Invalid request line".to_string()));
+            };
             (
-                parts
-                    .next()
-                    .ok_or(InvalidRequestError(
-                        "Can't read 1st part of first line".to_string(),
-                    ))?
-                    .trim()
+                method
                     .parse()
                     .map_err(|_| InvalidRequestError("Can't parse method".to_string()))?,
-                parts
-                    .next()
-                    .ok_or(InvalidRequestError(
-                        "Can't read 2st part of first line".to_string(),
-                    ))?
-                    .trim()
-                    .to_string(),
-                parts
-                    .next()
-                    .ok_or(InvalidRequestError(
-                        "Can't read 3st part of first line".to_string(),
-                    ))?
-                    .trim()
-                    .to_string()
+                (*path).to_string(),
+                version
                     .parse()
                     .map_err(|_| InvalidRequestError("Can't parse HTTP version".to_string()))?,
             )
@@ -260,11 +242,7 @@ impl Request {
         // Read headers
         let mut headers = HeaderMap::new();
         loop {
-            let mut line = String::new();
-            reader
-                .take(crate::MAX_HEADER_LINE)
-                .read_line(&mut line)
-                .map_err(|_| InvalidRequestError("Can't read header line".to_string()))?;
+            let line = read_http_line(reader, "header line")?;
             if line == "\r\n" {
                 break;
             }
@@ -280,17 +258,25 @@ impl Request {
             );
         }
 
+        if headers.get_all("Content-Length").count() > 1
+            || headers.get_all("Transfer-Encoding").count() > 1
+            || headers.get_all("Host").count() > 1
+        {
+            return Err(InvalidRequestError("Duplicate framing header".to_string()));
+        }
+        if headers.contains_key("Transfer-Encoding") && headers.contains_key("Content-Length") {
+            return Err(InvalidRequestError(
+                "Transfer-Encoding conflicts with Content-Length".to_string(),
+            ));
+        }
+
         // Read body
         let mut body = None;
         let transfer_encoding = headers.get("Transfer-Encoding").map(|s| s.to_lowercase());
         if transfer_encoding.as_deref() == Some("chunked") {
             let mut chunks: Vec<u8> = Vec::new();
             loop {
-                let mut size_line = String::new();
-                reader
-                    .take(crate::MAX_HEADER_LINE)
-                    .read_line(&mut size_line)
-                    .map_err(|_| InvalidRequestError("Can't read chunk size".to_string()))?;
+                let size_line = read_http_line(reader, "chunk size")?;
                 // Strip optional chunk extensions (;...) and whitespace
                 let hex = size_line.split(';').next().unwrap_or("").trim();
                 let chunk_size = usize::from_str_radix(hex, 16)
@@ -565,11 +551,7 @@ fn read_trailers(
     headers: &mut HeaderMap,
 ) -> Result<(), InvalidRequestError> {
     loop {
-        let mut line = String::new();
-        reader
-            .take(crate::MAX_HEADER_LINE)
-            .read_line(&mut line)
-            .map_err(|_| InvalidRequestError("Can't read chunk trailer".to_string()))?;
+        let line = read_http_line(reader, "chunk trailer")?;
         if line == "\r\n" {
             return Ok(());
         }
@@ -579,11 +561,32 @@ fn read_trailers(
         let split = line
             .find(':')
             .ok_or_else(|| InvalidRequestError("Can't parse chunk trailer".to_string()))?;
-        headers.append(
-            line[..split].trim().to_string(),
-            line[split + 1..].trim().to_string(),
-        );
+        let name = line[..split].trim();
+        if name.eq_ignore_ascii_case("Content-Length")
+            || name.eq_ignore_ascii_case("Transfer-Encoding")
+            || name.eq_ignore_ascii_case("Host")
+        {
+            return Err(InvalidRequestError(
+                "Framing header is not allowed in trailers".to_string(),
+            ));
+        }
+        headers.append(name.to_string(), line[split + 1..].trim().to_string());
     }
+}
+
+fn read_http_line(
+    reader: &mut dyn BufRead,
+    description: &str,
+) -> Result<String, InvalidRequestError> {
+    let mut line = String::new();
+    let bytes_read = reader
+        .take(crate::MAX_HEADER_LINE + 1)
+        .read_line(&mut line)
+        .map_err(|_| InvalidRequestError(format!("Can't read {description}")))?;
+    if bytes_read == 0 || bytes_read as u64 > crate::MAX_HEADER_LINE || !line.ends_with("\r\n") {
+        return Err(InvalidRequestError(format!("Invalid {description}")));
+    }
+    Ok(line)
 }
 
 // MARK: InvalidRequestError
@@ -697,6 +700,48 @@ mod test {
         let mut stream = &b"INVALID REQUEST"[..];
         let result = Request::read_from_reader(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rejects_ambiguous_request_framing() {
+        for input in [
+            "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n",
+            "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: localhost\r\nHost: example.com\r\n\r\n",
+        ] {
+            let mut stream = input.as_bytes();
+            assert!(
+                Request::read_from_reader(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into())
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn test_rejects_overlong_or_unterminated_request_lines() {
+        let overlong = format!(
+            "GET /{} HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            "a".repeat(8192)
+        );
+        assert!(Request::read_from_reader(
+            &mut overlong.as_bytes(),
+            (Ipv4Addr::LOCALHOST, 12345).into()
+        )
+        .is_err());
+
+        let mut unterminated = &b"GET / HTTP/1.1"[..];
+        assert!(
+            Request::read_from_reader(&mut unterminated, (Ipv4Addr::LOCALHOST, 12345).into())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_rejects_framing_headers_in_trailers() {
+        let mut stream = &b"POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nContent-Length: 0\r\n\r\n"[..];
+        assert!(
+            Request::read_from_reader(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).is_err()
+        );
     }
 
     #[test]
