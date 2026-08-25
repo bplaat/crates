@@ -61,6 +61,9 @@ fn main() {
         exit(1);
     }
 
+    #[cfg(windows)]
+    elevation::wait_for_parent_if_requested();
+
     let is_administrator = is_process_elevated();
     let event_loop = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "Binman")
