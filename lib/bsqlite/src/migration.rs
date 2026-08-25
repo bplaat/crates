@@ -59,12 +59,6 @@ impl Connection {
             (),
         )?;
 
-        // Upgrade from old two-column schema that lacked the name column
-        let _ = self.execute(
-            "ALTER TABLE schema_migrations ADD COLUMN name TEXT NOT NULL DEFAULT ''",
-            (),
-        );
-
         let applied = self
             .query::<i64>(
                 "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
