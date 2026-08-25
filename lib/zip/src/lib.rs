@@ -12,6 +12,7 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom};
 const MAX_UNCOMPRESSED_SIZE: usize = 128 * 1024 * 1024;
 const MAX_COMPRESSED_SIZE: usize = 128 * 1024 * 1024;
 const MAX_TOTAL_UNCOMPRESSED_SIZE: usize = 256 * 1024 * 1024;
+const MAX_ARCHIVE_SIZE: usize = 512 * 1024 * 1024;
 
 // MARK: Entry metadata
 struct CdEntry {
@@ -65,8 +66,7 @@ impl<R: Read + Seek> ZipArchive<R> {
     /// Open a ZIP archive from a reader.
     pub fn new(mut reader: R) -> Result<Self, ZipError> {
         // Read all bytes for parsing
-        let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes)?;
+        let bytes = read_limited(&mut reader, MAX_ARCHIVE_SIZE)?;
 
         // Find End of Central Directory (EOCD) record by scanning backward for PK\x05\x06
         let eocd_offset = (0..bytes.len().saturating_sub(21))
@@ -263,6 +263,17 @@ impl<R: Read + Seek> ZipArchive<R> {
     }
 }
 
+fn read_limited(reader: &mut impl Read, limit: usize) -> Result<Vec<u8>, ZipError> {
+    let mut bytes = Vec::new();
+    reader
+        .take(limit.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > limit {
+        return Err(ZipError::InvalidZip("archive size exceeds limit"));
+    }
+    Ok(bytes)
+}
+
 fn crc32(data: &[u8]) -> u32 {
     let mut crc = u32::MAX;
     for byte in data {
@@ -423,6 +434,14 @@ mod tests {
         assert!(matches!(
             ZipArchive::new(Cursor::new(b"not a zip file")),
             Err(ZipError::InvalidZip(_))
+        ));
+    }
+
+    #[test]
+    fn test_rejects_archive_larger_than_limit() {
+        assert!(matches!(
+            read_limited(&mut Cursor::new([0; 5]), 4),
+            Err(ZipError::InvalidZip("archive size exceeds limit"))
         ));
     }
 
