@@ -8,7 +8,7 @@
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::io::{self, Read, Write};
+use std::io::{self, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
@@ -76,10 +76,14 @@ struct Frame {
 
 impl WebSocket {
     fn new(stream: TcpStream, role: Role) -> Self {
+        Self::new_with_buffer(stream, role, Vec::new())
+    }
+
+    fn new_with_buffer(stream: TcpStream, role: Role, read_buffer: Vec<u8>) -> Self {
         Self {
             state: Arc::new(Mutex::new(ConnectionState {
                 stream,
-                read_buffer: Vec::new(),
+                read_buffer,
                 fragmented: None,
             })),
             role,
@@ -108,7 +112,8 @@ impl WebSocket {
             .header("Sec-WebSocket-Key", &random_key);
         req.write_to_stream(&mut stream, false);
 
-        let res = Response::read_from_stream(&mut stream).map_err(|_| ConnectError)?;
+        let mut reader = BufReader::new(stream);
+        let res = Response::read_from_buffered_stream(&mut reader).map_err(|_| ConnectError)?;
         if res.status != Status::SwitchingProtocols
             || !res
                 .headers
@@ -130,7 +135,12 @@ impl WebSocket {
             return Err(ConnectError);
         }
 
-        Ok(WebSocket::new(stream, Role::Client))
+        let read_buffer = reader.buffer().to_vec();
+        Ok(WebSocket::new_with_buffer(
+            reader.into_inner(),
+            Role::Client,
+            read_buffer,
+        ))
     }
 
     /// Get the underlying TCP stream peer address
@@ -524,6 +534,7 @@ pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'stat
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use std::io::BufRead;
     use std::net::{Ipv4Addr, Shutdown, TcpListener};
     use std::thread;
     use std::time::Duration;
@@ -592,6 +603,45 @@ mod test {
         let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
         let (server, _) = listener.accept().unwrap();
         (client, server)
+    }
+
+    #[cfg(feature = "client")]
+    #[test]
+    fn test_connect_preserves_frame_read_with_handshake() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream);
+            let mut key = None;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.strip_prefix("Sec-WebSocket-Key:") {
+                    key = Some(value.trim().to_string());
+                }
+            }
+
+            let mut hasher = Sha1::new();
+            hasher.update(key.unwrap().as_bytes());
+            hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+            let accept = BASE64_STANDARD.encode(hasher.finalize());
+            let mut response = format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+            .into_bytes();
+            response.extend(make_frame(0x1, b"ready"));
+            reader.get_mut().write_all(&response).unwrap();
+        });
+
+        let mut websocket = WebSocket::connect(format!("ws://{address}/")).unwrap();
+        assert!(matches!(
+            websocket.recv().unwrap(),
+            Message::Text(text) if text == "ready"
+        ));
     }
 
     #[test]

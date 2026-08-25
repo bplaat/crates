@@ -7,16 +7,16 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::str::{self, FromStr};
 
 use url::Url;
 
-use crate::KEEP_ALIVE_TIMEOUT;
 use crate::enums::{Method, Version};
 use crate::header_map::HeaderMap;
 use crate::response::Response;
+use crate::KEEP_ALIVE_TIMEOUT;
 
 // MARK: Request
 /// HTTP request
@@ -217,17 +217,14 @@ impl Request {
 }
 
 impl Request {
-    pub(crate) fn read_from_stream(
-        stream: &mut dyn Read,
+    pub(crate) fn read_from_reader(
+        reader: &mut dyn BufRead,
         client_addr: SocketAddr,
     ) -> Result<Request, InvalidRequestError> {
-        let mut reader = BufReader::new(stream);
-
         // Read first line
         let (method, path, version) = {
             let mut line = String::new();
             reader
-                .by_ref()
                 .take(crate::MAX_HEADER_LINE)
                 .read_line(&mut line)
                 .map_err(|_| InvalidRequestError("Can't read first line".to_string()))?;
@@ -265,7 +262,6 @@ impl Request {
         loop {
             let mut line = String::new();
             reader
-                .by_ref()
                 .take(crate::MAX_HEADER_LINE)
                 .read_line(&mut line)
                 .map_err(|_| InvalidRequestError("Can't read header line".to_string()))?;
@@ -292,7 +288,6 @@ impl Request {
             loop {
                 let mut size_line = String::new();
                 reader
-                    .by_ref()
                     .take(crate::MAX_HEADER_LINE)
                     .read_line(&mut size_line)
                     .map_err(|_| InvalidRequestError("Can't read chunk size".to_string()))?;
@@ -301,6 +296,7 @@ impl Request {
                 let chunk_size = usize::from_str_radix(hex, 16)
                     .map_err(|_| InvalidRequestError("Can't parse chunk size".to_string()))?;
                 if chunk_size == 0 {
+                    read_trailers(reader, &mut headers)?;
                     break;
                 }
                 if chunks.len().saturating_add(chunk_size) > crate::MAX_REQUEST_BODY {
@@ -316,6 +312,11 @@ impl Request {
                 reader.read_exact(&mut crlf).map_err(|_| {
                     InvalidRequestError("Can't read chunk trailing CRLF".to_string())
                 })?;
+                if crlf != *b"\r\n" {
+                    return Err(InvalidRequestError(
+                        "Invalid chunk trailing CRLF".to_string(),
+                    ));
+                }
             }
             body = Some(chunks);
         } else if transfer_encoding.is_some() {
@@ -559,6 +560,32 @@ impl Request {
     }
 }
 
+fn read_trailers(
+    reader: &mut dyn BufRead,
+    headers: &mut HeaderMap,
+) -> Result<(), InvalidRequestError> {
+    loop {
+        let mut line = String::new();
+        reader
+            .take(crate::MAX_HEADER_LINE)
+            .read_line(&mut line)
+            .map_err(|_| InvalidRequestError("Can't read chunk trailer".to_string()))?;
+        if line == "\r\n" {
+            return Ok(());
+        }
+        if headers.len() >= crate::MAX_HEADERS {
+            return Err(InvalidRequestError("Too many headers".to_string()));
+        }
+        let split = line
+            .find(':')
+            .ok_or_else(|| InvalidRequestError("Can't parse chunk trailer".to_string()))?;
+        headers.append(
+            line[..split].trim().to_string(),
+            line[split + 1..].trim().to_string(),
+        );
+    }
+}
+
 // MARK: InvalidRequestError
 #[derive(Debug)]
 pub(crate) struct InvalidRequestError(String);
@@ -617,7 +644,7 @@ mod test {
     fn test_read_from_stream() {
         let mut stream = &b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n"[..];
         let request =
-            Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
+            Request::read_from_reader(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
         assert_eq!(request.method, Method::Get);
         assert_eq!(request.url.to_string(), "http://localhost/");
         assert_eq!(request.version, Version::Http1_1);
@@ -629,7 +656,7 @@ mod test {
         let mut stream =
             &b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 13\r\n\r\nHello, world!"[..];
         let request =
-            Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
+            Request::read_from_reader(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
         assert_eq!(request.method, Method::Post);
         assert_eq!(request.url.to_string(), "http://localhost/");
         assert_eq!(request.version, Version::Http1_1);
@@ -642,7 +669,7 @@ mod test {
         let mut stream =
             &b"POST / HTTP/1.1\r\nhost: localhost\r\ncontent-Length: 13\r\n\r\nHello, world!"[..];
         let request =
-            Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
+            Request::read_from_reader(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into()).unwrap();
         assert_eq!(request.method, Method::Post);
         assert_eq!(request.url.to_string(), "http://localhost/");
         assert_eq!(request.version, Version::Http1_1);
@@ -651,9 +678,24 @@ mod test {
     }
 
     #[test]
+    fn test_read_chunked_request_trailers_before_pipelined_request() {
+        let input = b"POST /first HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n4\r\ntest\r\n0\r\nX-Checksum: valid\r\n\r\nGET /second HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut reader = std::io::BufReader::new(&input[..]);
+        let client_addr = (Ipv4Addr::LOCALHOST, 12345).into();
+
+        let first = Request::read_from_reader(&mut reader, client_addr).unwrap();
+        assert_eq!(first.url.path(), "/first");
+        assert_eq!(first.body.as_deref(), Some(b"test".as_slice()));
+        assert_eq!(first.headers.get("X-Checksum"), Some("valid"));
+
+        let second = Request::read_from_reader(&mut reader, client_addr).unwrap();
+        assert_eq!(second.url.path(), "/second");
+    }
+
+    #[test]
     fn test_invalid_request_error() {
         let mut stream = &b"INVALID REQUEST"[..];
-        let result = Request::read_from_stream(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into());
+        let result = Request::read_from_reader(&mut stream, (Ipv4Addr::LOCALHOST, 12345).into());
         assert!(result.is_err());
     }
 

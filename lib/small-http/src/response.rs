@@ -116,7 +116,14 @@ impl Response {
     /// Read response from stream
     pub fn read_from_stream(stream: &mut dyn Read) -> Result<Self, InvalidResponseError> {
         let mut reader = BufReader::new(stream);
+        Self::read_from_buffered_stream(&mut reader)
+    }
 
+    /// Read a response from a buffered stream without discarding bytes read ahead for the next
+    /// protocol message.
+    pub fn read_from_buffered_stream(
+        reader: &mut dyn BufRead,
+    ) -> Result<Self, InvalidResponseError> {
         // Read first line
         let mut res = {
             let mut line = String::new();
@@ -163,11 +170,7 @@ impl Response {
                     let hex = size_line.split(';').next().unwrap_or("").trim();
                     let size = usize::from_str_radix(hex, 16).map_err(|_| InvalidResponseError)?;
                     if size == 0 {
-                        // Consume the trailing CRLF that terminates the trailer section
-                        let mut crlf = [0; 2];
-                        reader
-                            .read_exact(&mut crlf)
-                            .map_err(|_| InvalidResponseError)?;
+                        read_trailers(reader, &mut res.headers)?;
                         break;
                     }
                     if body.len().saturating_add(size) > crate::MAX_RESPONSE_BODY {
@@ -186,6 +189,9 @@ impl Response {
                     reader
                         .read_exact(&mut crlf)
                         .map_err(|_| InvalidResponseError)?;
+                    if crlf != *b"\r\n" {
+                        return Err(InvalidResponseError);
+                    }
                 }
                 res.body = body;
                 return Ok(res);
@@ -260,6 +266,29 @@ impl Response {
                     .insert("Connection".to_string(), "close".to_string());
             }
         }
+    }
+}
+
+fn read_trailers(
+    reader: &mut dyn BufRead,
+    headers: &mut HeaderMap,
+) -> Result<(), InvalidResponseError> {
+    loop {
+        let mut line = String::new();
+        reader
+            .read_line(&mut line)
+            .map_err(|_| InvalidResponseError)?;
+        if line == "\r\n" {
+            return Ok(());
+        }
+        if headers.len() >= crate::MAX_HEADERS {
+            return Err(InvalidResponseError);
+        }
+        let split = line.find(':').ok_or(InvalidResponseError)?;
+        headers.append(
+            line[..split].trim().to_string(),
+            line[split + 1..].trim().to_string(),
+        );
     }
 }
 
@@ -350,6 +379,27 @@ mod test {
             "chunked"
         );
         assert_eq!(response.body, b"Bastiaan");
+    }
+
+    #[test]
+    fn test_parse_chunked_response_trailers_before_pipelined_response() {
+        let input = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\ntest\r\n0\r\nX-Checksum: valid\r\n\r\nHTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n";
+        let mut reader = BufReader::new(&input[..]);
+
+        let first = Response::read_from_buffered_stream(&mut reader).unwrap();
+        assert_eq!(first.body, b"test");
+        assert_eq!(first.headers.get("X-Checksum"), Some("valid"));
+
+        let second = Response::read_from_buffered_stream(&mut reader).unwrap();
+        assert_eq!(second.status, Status::NoContent);
+    }
+
+    #[test]
+    fn test_parse_chunked_response_rejects_invalid_chunk_terminator() {
+        let mut response_stream =
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\ntestXX0\r\n\r\n".as_bytes();
+
+        assert!(Response::read_from_stream(&mut response_stream).is_err());
     }
 
     #[test]

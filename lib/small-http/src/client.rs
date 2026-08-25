@@ -5,7 +5,7 @@
  */
 
 use std::collections::HashMap;
-use std::io::{self, Read, Write};
+use std::io::{self, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -115,12 +115,13 @@ impl Client {
             .take_connection(&conn_key, &tcp_addr, is_https, &host)
             .ok_or(FetchError)?;
         stream
+            .get_ref()
             .set_read_timeout(Some(KEEP_ALIVE_TIMEOUT))
             .map_err(|_| FetchError)?;
 
         // Send request and read response
-        request.write_to_stream(&mut stream, true);
-        let res = Response::read_from_stream(&mut stream).map_err(|_| FetchError)?;
+        request.write_to_stream(stream.get_mut(), true);
+        let res = Response::read_from_buffered_stream(&mut stream).map_err(|_| FetchError)?;
 
         // Return connection
         self.connection_pool
@@ -134,7 +135,7 @@ impl Client {
 // MARK: ConnectionPool
 #[derive(Default)]
 struct ConnectionPool {
-    connections: HashMap<String, Vec<MaybeHttpsStream>>,
+    connections: HashMap<String, Vec<BufReader<MaybeHttpsStream>>>,
 }
 
 impl ConnectionPool {
@@ -144,7 +145,7 @@ impl ConnectionPool {
         tcp_addr: &str,
         is_https: bool,
         host: &str,
-    ) -> Option<MaybeHttpsStream> {
+    ) -> Option<BufReader<MaybeHttpsStream>> {
         if !self.connections.contains_key(key) {
             self.connections.insert(key.to_string(), Vec::new());
         }
@@ -161,19 +162,19 @@ impl ConnectionPool {
                 use native_tls::TlsConnector;
                 let connector = TlsConnector::new().ok()?;
                 let tls = connector.connect(host, tcp).ok()?;
-                return Some(MaybeHttpsStream::Tls(tls));
+                return Some(BufReader::new(MaybeHttpsStream::Tls(tls)));
             }
             // Suppress unused warnings when tls feature is disabled
             let _ = is_https;
             let _ = host;
 
-            return Some(MaybeHttpsStream::Plain(tcp));
+            return Some(BufReader::new(MaybeHttpsStream::Plain(tcp)));
         }
 
         None
     }
 
-    fn return_connection(&mut self, key: &str, conn: MaybeHttpsStream) {
+    fn return_connection(&mut self, key: &str, conn: BufReader<MaybeHttpsStream>) {
         if let Some(connections) = self.connections.get_mut(key) {
             connections.push(conn);
         }

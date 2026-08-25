@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::io::Write;
+#[cfg(feature = "multi-threaded")]
+use std::io::BufRead;
+use std::io::{BufReader, Write};
 use std::net::TcpListener;
 use std::time::Duration;
 
@@ -18,29 +20,31 @@ pub fn serve_single_threaded(
 ) {
     // Listen for incoming tcp clients
     for stream in listener.incoming() {
-        let mut stream = stream.expect("Failed to accept connection");
+        let stream = stream.expect("Failed to accept connection");
         stream
             .set_read_timeout(Some(Duration::from_secs(1)))
             .expect("Can't set read timeout");
 
         // Read incoming request
-        let client_addr = stream
+        let mut reader = BufReader::new(stream);
+        let client_addr = reader
+            .get_ref()
             .peer_addr()
             .expect("Can't get tcp stream client addr");
-        match Request::read_from_stream(&mut stream, client_addr) {
+        match Request::read_from_reader(&mut reader, client_addr) {
             Ok(request) => {
                 // Handle request and write response
                 let mut response = handler(&request);
-                response.write_to_stream(&mut stream, &request, false);
+                response.write_to_stream(reader.get_mut(), &request, false);
 
                 // If the response has a takeover function, start thread and move tcp stream
                 if let Some(takeover) = response.takeover.take() {
-                    std::thread::spawn(move || takeover(stream));
+                    std::thread::spawn(move || takeover(reader.into_inner()));
                 }
             }
             Err(err) => {
                 // Invalid request received
-                _ = write!(stream, "HTTP/1.0 400 Bad Request\r\n\r\n");
+                _ = write!(reader.get_mut(), "HTTP/1.0 400 Bad Request\r\n\r\n");
                 cfg_select! {
                     feature = "log" => log::error!("Invalid http request: {err:?}"),
                     _ => eprintln!("[small-http] Error invalid http request: {err:?}"),
@@ -63,64 +67,67 @@ pub fn serve(
 
     // Listen for incoming tcp clients
     for stream in listener.incoming() {
-        let mut stream = stream.expect("Failed to accept connection");
+        let stream = stream.expect("Failed to accept connection");
         stream
             .set_read_timeout(Some(crate::KEEP_ALIVE_TIMEOUT))
             .expect("Can't set read timeout");
 
         let handler = handler.clone();
-        pool.execute(move || loop {
-            // Wait for data to be available
-            let mut buffer = [0; 1];
-            match stream.peek(&mut buffer) {
-                Ok(0) => {
-                    return;
+        pool.execute(move || {
+            let mut reader = BufReader::new(stream);
+            loop {
+                // Wait for data to be available
+                match reader.fill_buf() {
+                    Ok([]) => {
+                        return;
+                    }
+                    Ok(_) => {} // Data available continue
+                    Err(err) => {
+                        if err.kind() != std::io::ErrorKind::WouldBlock
+                            && err.kind() != std::io::ErrorKind::TimedOut
+                        {
+                            cfg_select! {
+                                feature = "log" => log::error!("Peeking tcp stream: {err:?}"),
+                                _ => eprintln!("[small-http] Error peeking tcp stream: {err:?}"),
+                            }
+                        }
+                        return;
+                    }
                 }
-                Ok(_) => {} // Data available continue
-                Err(err) => {
-                    if err.kind() != std::io::ErrorKind::WouldBlock
-                        && err.kind() != std::io::ErrorKind::TimedOut
-                    {
-                        cfg_select! {
-                            feature = "log" => log::error!("Peeking tcp stream: {err:?}"),
-                            _ => eprintln!("[small-http] Error peeking tcp stream: {err:?}"),
+
+                // Read incoming request
+                let client_addr = reader
+                    .get_ref()
+                    .peer_addr()
+                    .expect("Can't get tcp stream client addr");
+                match Request::read_from_reader(&mut reader, client_addr) {
+                    Ok(request) => {
+                        // Handle request and write response
+                        let mut response = handler(&request);
+                        response.write_to_stream(reader.get_mut(), &request, true);
+
+                        // If the response has a takeover function, start thread and move tcp stream
+                        if let Some(takeover) = response.takeover.take() {
+                            std::thread::spawn(move || takeover(reader.into_inner()));
+                            return;
+                        }
+
+                        // Close connection if HTTP/1.0 or Connection: close
+                        if request.version == crate::enums::Version::Http1_0
+                            || request.headers.get("Connection") == Some("close")
+                        {
+                            return;
                         }
                     }
-                    return;
-                }
-            }
-
-            // Read incoming request
-            let client_addr = stream
-                .peer_addr()
-                .expect("Can't get tcp stream client addr");
-            match Request::read_from_stream(&mut stream, client_addr) {
-                Ok(request) => {
-                    // Handle request and write response
-                    let mut response = handler(&request);
-                    response.write_to_stream(&mut stream, &request, true);
-
-                    // If the response has a takeover function, start thread and move tcp stream
-                    if let Some(takeover) = response.takeover.take() {
-                        std::thread::spawn(move || takeover(stream));
+                    Err(err) => {
+                        // Invalid request received
+                        _ = write!(reader.get_mut(), "HTTP/1.0 400 Bad Request\r\n\r\n");
+                        cfg_select! {
+                            feature = "log" => log::error!("Invalid http request: {err:?}"),
+                            _ => eprintln!("[small-http] Error invalid http request: {err:?}"),
+                        }
                         return;
                     }
-
-                    // Close connection if HTTP/1.0 or Connection: close
-                    if request.version == crate::enums::Version::Http1_0
-                        || request.headers.get("Connection") == Some("close")
-                    {
-                        return;
-                    }
-                }
-                Err(err) => {
-                    // Invalid request received
-                    _ = write!(stream, "HTTP/1.0 400 Bad Request\r\n\r\n");
-                    cfg_select! {
-                        feature = "log" => log::error!("Invalid http request: {err:?}"),
-                        _ => eprintln!("[small-http] Error invalid http request: {err:?}"),
-                    }
-                    return;
                 }
             }
         });
@@ -198,6 +205,31 @@ mod test {
                 .expect("Failed to read from stream");
             assert!(response.starts_with(b"HTTP/1.1 200 OK"));
         }
+    }
+
+    #[test]
+    #[cfg(feature = "multi-threaded")]
+    fn test_serve_pipelined_requests() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("Failed to bind address");
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            serve(listener, |request| {
+                Response::with_status(Status::Ok).body(request.url.path())
+            });
+        });
+
+        let mut stream = TcpStream::connect(addr).expect("Failed to connect to server");
+        stream
+            .write_all(
+                b"GET /first HTTP/1.1\r\nHost: localhost\r\n\r\nGET /second HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            )
+            .expect("Failed to write pipelined requests");
+        let mut reader = BufReader::new(stream);
+
+        let first = Response::read_from_buffered_stream(&mut reader).unwrap();
+        assert_eq!(first.body, b"/first");
+        let second = Response::read_from_buffered_stream(&mut reader).unwrap();
+        assert_eq!(second.body, b"/second");
     }
 
     #[test]
