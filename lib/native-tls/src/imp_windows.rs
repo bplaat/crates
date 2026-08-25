@@ -226,7 +226,7 @@ fn do_handshake<S: Read + Write>(
     cred: &mut CredHandle,
     domain: &[u16],
     stream: &mut S,
-) -> Result<CtxtHandle, Error> {
+) -> Result<(CtxtHandle, Vec<u8>), Error> {
     let mut ctx = CtxtHandle::INVALID;
     let mut in_data: Vec<u8> = Vec::new();
     let mut first_call = true;
@@ -330,7 +330,7 @@ fn do_handshake<S: Read + Write>(
         }
 
         match status {
-            SEC_E_OK => return Ok(ctx),
+            SEC_E_OK => return Ok((ctx, in_data)),
             SEC_I_CONTINUE_NEEDED => {
                 // Only read from the network when there is no leftover data from
                 // SECBUFFER_EXTRA; if there is, loop immediately with that data.
@@ -424,7 +424,7 @@ impl TlsConnector {
         let mut cred = acquire_cred(self.accept_invalid_certs)?;
         let domain = to_utf16(domain);
         let mut stream = stream;
-        let ctx = do_handshake(&mut cred, &domain, &mut stream)?;
+        let (ctx, enc_buf) = do_handshake(&mut cred, &domain, &mut stream)?;
         let mut ctx = ctx;
         let sizes = query_stream_sizes(&mut ctx)?;
         Ok(TlsStream {
@@ -432,7 +432,7 @@ impl TlsConnector {
             ctx,
             stream,
             sizes,
-            enc_buf: Vec::new(),
+            enc_buf,
             dec_buf: Vec::new(),
         })
     }

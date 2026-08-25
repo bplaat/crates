@@ -255,6 +255,37 @@ mod tests {
     }
 
     #[test]
+    fn test_preserves_application_data_after_handshake() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind failed");
+        let server_addr = listener.local_addr().expect("local_addr failed");
+        let server = thread::spawn(move || {
+            let (mut tcp, _) = listener.accept().expect("accept failed");
+            let config = Arc::new(local_tls_server_config(
+                LOCALHOST_CERT_PEM,
+                LOCALHOST_KEY_PEM,
+            ));
+            let mut conn = rustls::ServerConnection::new(config).unwrap();
+            while conn.is_handshaking() {
+                conn.complete_io(&mut tcp).expect("TLS handshake failed");
+            }
+            let mut tls = rustls::Stream::new(&mut conn, &mut tcp);
+            tls.write_all(b"hello").expect("write greeting failed");
+            tls.flush().expect("flush greeting failed");
+        });
+
+        let tcp = TcpStream::connect(server_addr).expect("TCP connect failed");
+        let connector =
+            TlsConnector::new_danger_accept_invalid_certs().expect("TlsConnector::new failed");
+        let mut tls = connector
+            .connect("localhost", tcp)
+            .expect("TLS handshake failed");
+        let mut greeting = [0; 5];
+        tls.read_exact(&mut greeting).expect("read greeting failed");
+        assert_eq!(&greeting, b"hello");
+        server.join().expect("test TLS server thread panicked");
+    }
+
+    #[test]
     fn test_https_get_returns_http_response() {
         let (server_addr, server) = spawn_local_https_server(b"test", 1);
         let response = local_https_get(server_addr, "/");
