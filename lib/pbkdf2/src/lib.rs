@@ -10,14 +10,23 @@ use hmac::hmac;
 use sha2::Sha256;
 
 pub use crate::utils::{
-    DEFAULT_SAFE_ITERATIONS, PasswordHashDecodeError, password_hash, password_hash_customized,
-    password_verify,
+    DEFAULT_SAFE_ITERATIONS, MAX_PASSWORD_HASH_ITERATIONS, PasswordHashDecodeError, password_hash,
+    password_hash_customized, password_verify,
 };
 
 mod utils;
 
 /// PBKDF2-HMAC-SHA256 key derivation function
 pub fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32, dklen: usize) -> Vec<u8> {
+    assert!(
+        iterations > 0,
+        "PBKDF2 iterations must be greater than zero"
+    );
+    assert!(
+        dklen.div_ceil(32) <= u32::MAX as usize,
+        "PBKDF2 derived key is too large"
+    );
+
     fn f(password: &[u8], salt: &[u8], iterations: u32, block_index: u32) -> [u8; 32] {
         let mut u_input = Vec::with_capacity(salt.len() + 4);
         u_input.extend_from_slice(salt);
