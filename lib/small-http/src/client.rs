@@ -104,8 +104,8 @@ impl Client {
             .url
             .port()
             .unwrap_or(if is_https { 443 } else { 80 });
-        let conn_key = format!("{}://{}:{}", request.url.scheme(), host, port);
         let tcp_addr = socket_address(&host, port);
+        let conn_key = format!("{}://{tcp_addr}", request.url.scheme());
 
         // Get or create connection
         let mut stream = self
@@ -207,6 +207,16 @@ mod test {
 
         assert_eq!(request.headers.get("X-Test"), Some("request"));
         assert_eq!(request.headers.get_all("x-test").count(), 1);
+    }
+
+    #[test]
+    fn test_ipv6_connection_keys_are_unambiguous() {
+        let first = format!("https://{}", socket_address("::1", 443));
+        let second = format!("https://{}", socket_address("::1:443", 443));
+
+        assert_eq!(first, "https://[::1]:443");
+        assert_eq!(second, "https://[::1:443]:443");
+        assert_ne!(first, second);
     }
 
     #[test]
