@@ -26,6 +26,8 @@ use crate::models::{Session, User};
 
 // MARK: Handlers
 static USER_AGENT_PARSER: LazyLock<UserAgentParser> = LazyLock::new(UserAgentParser::new);
+static DUMMY_PASSWORD_HASH: LazyLock<String> =
+    LazyLock::new(|| crate::utils::password_hash("invalid account password"));
 
 #[derive(Deserialize)]
 struct IpInfo {
@@ -86,7 +88,10 @@ pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {
         .transpose()?
     {
         Some(user) => user,
-        None => return Ok(Response::with_status(Status::Unauthorized)),
+        None => {
+            _ = verify_password(&body.password, &DUMMY_PASSWORD_HASH)?;
+            return Ok(Response::with_status(Status::Unauthorized));
+        }
     };
 
     // Verify password
