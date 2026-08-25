@@ -12,8 +12,8 @@ use std::ptr::null_mut;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use super::event_loop::send_event;
+use super::headers::*;
 use super::webview::WebviewData;
-use super::win32::*;
 use crate::WindowEvent;
 
 /// The COM drop target registered on each WebView2 child window

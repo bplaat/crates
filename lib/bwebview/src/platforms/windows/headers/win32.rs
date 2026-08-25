@@ -650,7 +650,7 @@ pub(crate) const fn wide_ascii<const N: usize>(value: &str) -> [w_char; N] {
 macro_rules! wide {
     ($value:literal) => {{
         const WIDE: &[w_char] =
-            &$crate::platforms::windows::win32::wide_ascii::<{ $value.len() + 1 }>($value);
+            &$crate::platforms::windows::headers::wide_ascii::<{ $value.len() + 1 }>($value);
         WIDE
     }};
 }

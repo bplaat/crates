@@ -12,9 +12,8 @@ use objc2::rc::{Allocated, Retained, autoreleasepool};
 use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
-use super::cocoa::*;
+use super::headers::*;
 use super::menu::create_menu_bar;
-use super::webkit::*;
 use crate::{CloseRequest, Event, EventLoopBuilder, LogicalPoint, LogicalSize, Theme, WindowEvent};
 
 thread_local! {

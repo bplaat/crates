@@ -14,10 +14,9 @@ use super::event_loop::TASKBAR_BUTTON_CREATED;
 use super::event_loop::{APP_ID, FIRST_HWND, WM_SEND_MESSAGE, send_event, system_theme};
 #[cfg(feature = "file_drop")]
 use super::file_drop::handle_file_drop;
+use super::headers::*;
 #[cfg(feature = "progress_bar")]
 use super::progress_bar::ProgressBar;
-use super::webview2::*;
-use super::win32::*;
 #[cfg(feature = "remember_window_state")]
 use super::window_state::{restore_window_state, save_window_state};
 #[cfg(feature = "progress_bar")]

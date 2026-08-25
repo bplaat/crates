@@ -11,9 +11,8 @@ use std::{env, mem};
 use super::event_loop::send_event;
 #[cfg(feature = "file_drop")]
 use super::file_drop::{FileDropTarget, install_file_drop_targets};
+use super::headers::*;
 use super::loader::*;
-use super::webview2::*;
-use super::win32::*;
 use super::window::{PlatformWindow, WindowData, config_dir};
 #[cfg(feature = "custom_protocol")]
 use crate::CustomProtocol;

@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-mod cocoa;
 #[cfg(feature = "dialog")]
 mod dialog;
 mod event_loop;
 #[cfg(feature = "file_drop")]
 mod file_drop;
+mod headers;
 mod menu;
-mod webkit;
 mod webview;
 mod window;
 

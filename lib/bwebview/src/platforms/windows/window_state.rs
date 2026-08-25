@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::Read;
 use std::mem;
 
-use super::win32::*;
+use super::headers::*;
 use super::window::config_dir;
 
 /// Restores the window placement saved by [`save_window_state`], returns whether one was applied

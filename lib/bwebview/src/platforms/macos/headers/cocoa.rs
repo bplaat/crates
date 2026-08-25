@@ -203,9 +203,9 @@ macro_rules! ns_string {
             arr
         };
         #[unsafe(link_section = "__DATA,__cfstring")]
-        static CFSTRING: $crate::platforms::macos::cocoa::CFConstString = unsafe {
-            $crate::platforms::macos::cocoa::CFConstString {
-                isa: &$crate::platforms::macos::cocoa::__CFConstantStringClassReference
+        static CFSTRING: $crate::platforms::macos::headers::CFConstString = unsafe {
+            $crate::platforms::macos::headers::CFConstString {
+                isa: &$crate::platforms::macos::headers::__CFConstantStringClassReference
                     as *const objc2::runtime::AnyObject
                     as *const ::std::ffi::c_void,
                 cfinfo: 0x07C8,
@@ -215,7 +215,7 @@ macro_rules! ns_string {
                 len: BYTES.len(),
             }
         };
-        &CFSTRING as *const $crate::platforms::macos::cocoa::CFConstString
+        &CFSTRING as *const $crate::platforms::macos::headers::CFConstString
             as *mut objc2::runtime::AnyObject
     }};
 }

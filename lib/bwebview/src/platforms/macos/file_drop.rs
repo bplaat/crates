@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
-use super::cocoa::{NS_DRAG_OPERATION_COPY, NSFilenamesPboardType, NSString};
 use super::event_loop::send_event;
+use super::headers::{NS_DRAG_OPERATION_COPY, NSFilenamesPboardType, NSString};
 use crate::WindowEvent;
 
 /// Sends a `DroppedFile` event for every file in a completed drag operation

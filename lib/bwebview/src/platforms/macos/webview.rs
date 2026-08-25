@@ -12,11 +12,10 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
-use super::cocoa::*;
 use super::event_loop::send_event;
 #[cfg(feature = "file_drop")]
 use super::file_drop::{droppable_webview_class, register_dragged_types};
-use super::webkit::*;
+use super::headers::*;
 use super::window::PlatformWindow;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent};
 

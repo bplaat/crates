@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 
 use super::event_loop::FIRST_HWND;
-use super::win32::*;
+use super::headers::*;
 
 const FIRST_CUSTOM_BUTTON_ID: i32 = 1000;
 

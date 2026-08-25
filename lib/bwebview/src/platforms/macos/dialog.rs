@@ -9,7 +9,7 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send, sel};
 
-use super::cocoa::*;
+use super::headers::*;
 
 const ESCAPE_KEY_EQUIVALENT: &str = "\u{1b}";
 

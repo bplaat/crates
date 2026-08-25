@@ -8,7 +8,7 @@ use objc2::rc::Retained;
 use objc2::runtime::AnyObject as Object;
 use objc2::{class, msg_send, sel};
 
-use super::cocoa::*;
+use super::headers::*;
 use crate::EventLoopBuilder;
 
 // MARK: NativeAccelerator
