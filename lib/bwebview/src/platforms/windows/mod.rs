@@ -9,6 +9,7 @@ mod dialog;
 mod event_loop;
 #[cfg(feature = "file_drop")]
 mod file_drop;
+mod loader;
 #[cfg(feature = "progress_bar")]
 mod progress_bar;
 mod webview;
