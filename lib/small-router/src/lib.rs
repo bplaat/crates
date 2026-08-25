@@ -17,10 +17,10 @@ use small_http::{Method, Request, Response, Status};
 // MARK: Handler
 
 // Parsed path parameters
-type HandlerFn<T> = fn(&Request, &T) -> Result<Response>;
-type PreLayerFn<T> = fn(&Request, &mut T) -> Option<Result<Response>>;
-type PostLayerFn<T> = fn(&Request, &T, Response) -> Result<Response>;
-type ErrorHandlerFn<T> = fn(&Request, &T, &dyn Error) -> Response;
+type HandlerFn<T> = Arc<dyn Fn(&Request, &T) -> Result<Response> + Send + Sync>;
+type PreLayerFn<T> = Arc<dyn Fn(&Request, &mut T) -> Result<Option<Response>> + Send + Sync>;
+type PostLayerFn<T> = Arc<dyn Fn(&Request, &T, Response) -> Result<Response> + Send + Sync>;
+type ErrorHandlerFn<T> = Arc<dyn Fn(&Request, &T, &dyn Error) -> Response + Send + Sync>;
 
 struct Handler<T> {
     handler: HandlerFn<T>,
@@ -43,8 +43,7 @@ impl<T> Handler<T> {
 
     fn call(&self, req: &Request, ctx: &mut T) -> Result<Response> {
         for pre_layer in &self.pre_layers {
-            if let Some(res) = pre_layer(req, ctx) {
-                let mut res = res?;
+            if let Some(mut res) = pre_layer(req, ctx)? {
                 for post_layer in &self.post_layers {
                     res = post_layer(req, ctx, res)?;
                 }
@@ -179,29 +178,48 @@ impl<T: Clone> RouterBuilder<T> {
     }
 
     /// Add pre layer
-    pub fn pre_layer(mut self, layer: PreLayerFn<T>) -> Self {
-        self.pre_layers.push(layer);
+    pub fn pre_layer(
+        mut self,
+        layer: impl Fn(&Request, &mut T) -> Result<Option<Response>> + Send + Sync + 'static,
+    ) -> Self {
+        self.pre_layers.push(Arc::new(layer));
         self
     }
 
     /// Add post layer
-    pub fn post_layer(mut self, layer: PostLayerFn<T>) -> Self {
-        self.post_layers.push(layer);
+    pub fn post_layer(
+        mut self,
+        layer: impl Fn(&Request, &T, Response) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.post_layers.push(Arc::new(layer));
         self
     }
 
     /// Add route
-    pub fn route(mut self, methods: &[Method], route: String, handler: HandlerFn<T>) -> Self {
+    pub fn route(
+        mut self,
+        methods: &[Method],
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
         self.routes.push(Route::new(
             methods.to_vec(),
-            route,
-            Handler::new(handler, self.pre_layers.clone(), self.post_layers.clone()),
+            route.into(),
+            Handler::new(
+                Arc::new(handler),
+                self.pre_layers.clone(),
+                self.post_layers.clone(),
+            ),
         ));
         self
     }
 
     /// Add route for any method
-    pub fn any(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
+    pub fn any(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
         self.route(
             &[
                 Method::Get,
@@ -214,59 +232,98 @@ impl<T: Clone> RouterBuilder<T> {
                 Method::Trace,
                 Method::Patch,
             ],
-            route.into(),
+            route,
             handler,
         )
     }
     /// Add route for GET method
-    pub fn get(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Get], route.into(), handler)
+    pub fn get(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Get], route, handler)
     }
 
     /// Add route for HEAD method
-    pub fn head(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Head], route.into(), handler)
+    pub fn head(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Head], route, handler)
     }
 
     /// Add route for POST method
-    pub fn post(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Post], route.into(), handler)
+    pub fn post(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Post], route, handler)
     }
 
     /// Add route for PUT method
-    pub fn put(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Put], route.into(), handler)
+    pub fn put(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Put], route, handler)
     }
 
     /// Add route for DELETE method
-    pub fn delete(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Delete], route.into(), handler)
+    pub fn delete(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Delete], route, handler)
     }
 
     /// Add route for CONNECT method
-    pub fn connect(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Connect], route.into(), handler)
+    pub fn connect(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Connect], route, handler)
     }
 
     /// Add route for OPTIONS method
-    pub fn options(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Options], route.into(), handler)
+    pub fn options(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Options], route, handler)
     }
 
     /// Add route for TRACE method
-    pub fn trace(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Trace], route.into(), handler)
+    pub fn trace(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Trace], route, handler)
     }
 
     /// Add route for PATCH method
-    pub fn patch(self, route: impl Into<String>, handler: HandlerFn<T>) -> Self {
-        self.route(&[Method::Patch], route.into(), handler)
+    pub fn patch(
+        self,
+        route: impl Into<String>,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
+        self.route(&[Method::Patch], route, handler)
     }
 
     /// Set not allowed method handler (called when a route matches but method doesn't)
-    pub fn not_allowed_method(mut self, handler: HandlerFn<T>) -> Self {
+    pub fn not_allowed_method(
+        mut self,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
         self.not_allowed_method_handler = Some(Handler::new(
-            handler,
+            Arc::new(handler),
             self.pre_layers.clone(),
             self.post_layers.clone(),
         ));
@@ -274,9 +331,12 @@ impl<T: Clone> RouterBuilder<T> {
     }
 
     /// Set fallback handler
-    pub fn fallback(mut self, handler: HandlerFn<T>) -> Self {
+    pub fn fallback(
+        mut self,
+        handler: impl Fn(&Request, &T) -> Result<Response> + Send + Sync + 'static,
+    ) -> Self {
         self.fallback_handler = Some(Handler::new(
-            handler,
+            Arc::new(handler),
             self.pre_layers.clone(),
             self.post_layers.clone(),
         ));
@@ -284,8 +344,11 @@ impl<T: Clone> RouterBuilder<T> {
     }
 
     /// Set error handler (called when a handler returns an error)
-    pub fn error(mut self, handler: ErrorHandlerFn<T>) -> Self {
-        self.error_handler = Some(handler);
+    pub fn error(
+        mut self,
+        handler: impl Fn(&Request, &T, &dyn Error) -> Response + Send + Sync + 'static,
+    ) -> Self {
+        self.error_handler = Some(Arc::new(handler));
         self
     }
 
@@ -313,23 +376,25 @@ impl<T: Clone> RouterBuilder<T> {
             routes,
             not_allowed_method_handler: self.not_allowed_method_handler.unwrap_or_else(|| {
                 Handler::new(
-                    |_, _| {
+                    Arc::new(|_, _| {
                         Ok(Response::with_status(Status::MethodNotAllowed)
                             .body("405 Method Not Allowed"))
-                    },
+                    }),
                     self.pre_layers.clone(),
                     self.post_layers.clone(),
                 )
             }),
             fallback_handler: self.fallback_handler.unwrap_or_else(|| {
                 Handler::new(
-                    |_, _| Ok(Response::with_status(Status::NotFound).body("404 Not Found")),
+                    Arc::new(|_, _| {
+                        Ok(Response::with_status(Status::NotFound).body("404 Not Found"))
+                    }),
                     self.pre_layers.clone(),
                     self.post_layers.clone(),
                 )
             }),
-            error_handler: self.error_handler.unwrap_or({
-                |req, _, err| {
+            error_handler: self.error_handler.unwrap_or_else(|| {
+                Arc::new(|req: &Request, _: &T, err: &dyn Error| {
                     cfg_select! {
                         feature = "log" => {
                             log::error!("Handling request {} {}: {}", req.method, req.url, err)
@@ -341,7 +406,7 @@ impl<T: Clone> RouterBuilder<T> {
                     }
                     Response::with_status(Status::InternalServerError)
                         .body("500 Internal Server Error")
-                }
+                })
             }),
         }))
     }
@@ -405,6 +470,8 @@ impl<T: Clone> Router<T> {
 // MARK: Tests
 #[cfg(test)]
 mod test {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use small_http::Status;
 
     use super::*;
@@ -461,5 +528,39 @@ mod test {
         let res = router.handle(&Request::get("http://localhost/error"));
         assert_eq!(res.status, Status::InternalServerError);
         assert_eq!(res.body, b"500 Internal Server Error");
+    }
+
+    #[test]
+    fn test_capturing_closures_and_pre_layer_errors() {
+        let pre_layer_calls = Arc::new(AtomicUsize::new(0));
+        let calls = pre_layer_calls.clone();
+        let blocked_path = "/blocked".to_string();
+        let greeting = "Hello from a closure".to_string();
+        let error_prefix = "Layer failed".to_string();
+
+        let router = RouterBuilder::new()
+            .pre_layer(move |req, _| {
+                calls.fetch_add(1, Ordering::Relaxed);
+                if req.url.path() == blocked_path {
+                    anyhow::bail!("blocked by pre-layer");
+                }
+                Ok(None)
+            })
+            .get("/", move |_, _| Ok(Response::with_body(greeting.clone())))
+            .get("/blocked", |_, _| Ok(Response::new()))
+            .error(move |_, _, err| {
+                Response::with_status(Status::InternalServerError)
+                    .body(format!("{error_prefix}: {err}"))
+            })
+            .build();
+
+        let res = router.handle(&Request::get("http://localhost/"));
+        assert_eq!(res.status, Status::Ok);
+        assert_eq!(res.body, b"Hello from a closure");
+
+        let res = router.handle(&Request::get("http://localhost/blocked"));
+        assert_eq!(res.status, Status::InternalServerError);
+        assert_eq!(res.body, b"Layer failed: blocked by pre-layer");
+        assert_eq!(pre_layer_calls.load(Ordering::Relaxed), 2);
     }
 }

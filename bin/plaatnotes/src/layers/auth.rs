@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use bsqlite::Connection;
 use chrono::Utc;
 use small_http::{Request, Response, Status};
@@ -19,75 +19,76 @@ use crate::models::{Session, User};
 pub(crate) fn auth_optional_pre_layer(
     req: &Request,
     ctx: &mut Context,
-) -> Option<Result<Response>> {
-    let authorization = req
-        .headers
-        .get("Authorization")
-        .or(req.headers.get("authorization"))?;
-    let token = authorization.strip_prefix("Bearer ")?.trim();
+) -> Result<Option<Response>> {
+    let Some(authorization) = req.headers.get("Authorization") else {
+        return Ok(None);
+    };
+    let Some(token) = authorization.strip_prefix("Bearer ") else {
+        return Ok(None);
+    };
 
-    if let Some((session, user)) = lookup_session_and_user(token, &ctx.database) {
+    if let Some((session, user)) = lookup_session_and_user(token.trim(), &ctx.database)? {
         ctx.auth_session = Some(session);
         ctx.auth_user = Some(user);
     }
 
-    None
+    Ok(None)
 }
 
 // MARK: Auth required
 pub(crate) fn auth_required_pre_layer(
     req: &Request,
     ctx: &mut Context,
-) -> Option<Result<Response>> {
-    let authorization = match req
-        .headers
-        .get("Authorization")
-        .or(req.headers.get("authorization"))
-    {
+) -> Result<Option<Response>> {
+    let authorization = match req.headers.get("Authorization") {
         Some(authorization) => authorization,
         None => {
-            return Some(Ok(Response::new().status(Status::Unauthorized)));
+            return Ok(Some(Response::new().status(Status::Unauthorized)));
         }
     };
     let token = match authorization.strip_prefix("Bearer ") {
         Some(t) => t.trim(),
         None => {
-            return Some(Ok(Response::new().status(Status::Unauthorized)));
+            return Ok(Some(Response::new().status(Status::Unauthorized)));
         }
     };
 
-    match lookup_session_and_user(token, &ctx.database) {
+    match lookup_session_and_user(token, &ctx.database)? {
         Some((session, user)) => {
             ctx.auth_session = Some(session);
             ctx.auth_user = Some(user);
-            None
+            Ok(None)
         }
-        None => Some(Ok(Response::new().status(Status::Unauthorized))),
+        None => Ok(Some(Response::new().status(Status::Unauthorized))),
     }
 }
 
 // MARK: Utils
-fn lookup_session_and_user(token: &str, db: &Connection) -> Option<(Session, User)> {
-    let session = db
+fn lookup_session_and_user(token: &str, db: &Connection) -> Result<Option<(Session, User)>> {
+    let Some(session) = db
         .query::<Session>(
             format!(
                 "SELECT {} FROM sessions WHERE token = ? AND expires_at > ? LIMIT 1",
                 Session::columns()
             ),
             (token.to_string(), Utc::now()),
-        )
-        .expect("Database error")
+        )?
         .next()
-        .map(|r| r.expect("Database error"))?;
+        .transpose()?
+    else {
+        return Ok(None);
+    };
 
-    let user = db
+    let Some(user) = db
         .query::<User>(
             format!("SELECT {} FROM users WHERE id = ? LIMIT 1", User::columns()),
             session.user_id,
-        )
-        .expect("Database error")
+        )?
         .next()
-        .map(|r| r.expect("Database error"))?;
+        .transpose()?
+    else {
+        return Ok(None);
+    };
 
     // Sliding-window refresh: extend expiry when less than SESSION_REFRESH_THRESHOLD_SECONDS remain
     let refresh_threshold = Utc::now() + Duration::from_secs(SESSION_REFRESH_THRESHOLD_SECONDS);
@@ -96,11 +97,10 @@ fn lookup_session_and_user(token: &str, db: &Connection) -> Option<(Session, Use
         db.execute(
             "UPDATE sessions SET expires_at = ? WHERE token = ?",
             (new_expires_at, token.to_string()),
-        )
-        .expect("Database error");
+        )?;
     }
 
-    Some((session, user))
+    Ok(Some((session, user)))
 }
 
 // MARK: Tests
@@ -181,5 +181,20 @@ mod test {
             updated_session.expires_at.timestamp() > min_expected.timestamp(),
             "expires_at should have been extended beyond 80 days"
         );
+    }
+
+    #[test]
+    fn test_database_error_returns_internal_server_error() {
+        let ctx = Context::with_test_database().expect("Can't create test database");
+        let router = router(ctx.clone());
+        ctx.database
+            .execute("DROP TABLE sessions", ())
+            .expect("Can't remove sessions table");
+
+        let req = Request::with_url("http://localhost/api/auth/validate")
+            .header("Authorization", "Bearer test-token");
+        let res = router.handle(&req);
+
+        assert_eq!(res.status, Status::InternalServerError);
     }
 }

@@ -33,13 +33,13 @@ const CSP_VALUE: &str = concat!(
 pub(crate) fn spa_file_server_pre_layer(
     req: &Request,
     _: &mut Context,
-) -> Option<Result<Response>> {
+) -> Result<Option<Response>> {
     let path = req.url.path();
     if path.starts_with("/api") {
-        return None;
+        return Ok(None);
     }
     if path == "/swagger-ui" {
-        return Some(Ok(Response::with_redirect("/swagger-ui/index.html")));
+        return Ok(Some(Response::with_redirect("/swagger-ui/index.html")));
     }
 
     let mut path = path.to_string();
@@ -48,15 +48,18 @@ pub(crate) fn spa_file_server_pre_layer(
     }
     if let Some(file) = WebAssets::get(path.trim_start_matches('/')) {
         let mime = mime_guess::from_path(&path).first_or_octet_stream();
-        Some(Ok(Response::with_header("Content-Type", mime.to_string())
-            .header("Content-Security-Policy", CSP_VALUE)
-            .body(file.data)))
-    } else {
-        Some(match WebAssets::get("index.html") {
-            Some(file) => Ok(Response::with_header("Content-Type", "text/html")
+        Ok(Some(
+            Response::with_header("Content-Type", mime.to_string())
                 .header("Content-Security-Policy", CSP_VALUE)
-                .body(file.data)),
-            None => Err(anyhow::anyhow!("index.html not found in embedded assets")),
-        })
+                .body(file.data),
+        ))
+    } else {
+        let file = WebAssets::get("index.html")
+            .ok_or_else(|| anyhow::anyhow!("index.html not found in embedded assets"))?;
+        Ok(Some(
+            Response::with_header("Content-Type", "text/html")
+                .header("Content-Security-Policy", CSP_VALUE)
+                .body(file.data),
+        ))
     }
 }

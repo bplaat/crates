@@ -11,24 +11,26 @@ use small_http::{Method, Request, Response, Status};
 use crate::context::Context;
 
 // MARK: Log
-pub(crate) fn log_pre_layer(req: &Request, _: &mut Context) -> Option<Result<Response>> {
+pub(crate) fn log_pre_layer(req: &Request, _: &mut Context) -> Result<Option<Response>> {
     info!("{} {}", req.method, req.url.path());
-    None
+    Ok(None)
 }
 
 // MARK: CORS
-pub(crate) fn cors_pre_layer(req: &Request, _: &mut Context) -> Option<Result<Response>> {
+pub(crate) fn cors_pre_layer(req: &Request, _: &mut Context) -> Result<Option<Response>> {
     if req.method == Method::Options && req.headers.get("Access-Control-Request-Method").is_some() {
-        Some(Ok(Response::with_status(Status::NoContent)
-            .header("Access-Control-Allow-Origin", "*")
-            .header(
-                "Access-Control-Allow-Methods",
-                "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-            )
-            .header("Access-Control-Allow-Headers", "Content-Type")
-            .header("Access-Control-Max-Age", "86400")))
+        Ok(Some(
+            Response::with_status(Status::NoContent)
+                .header("Access-Control-Allow-Origin", "*")
+                .header(
+                    "Access-Control-Allow-Methods",
+                    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                )
+                .header("Access-Control-Allow-Headers", "Content-Type")
+                .header("Access-Control-Max-Age", "86400"),
+        ))
     } else {
-        None
+        Ok(None)
     }
 }
 

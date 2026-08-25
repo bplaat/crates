@@ -8,25 +8,25 @@ A simple example that opens an HTTP server and serves a response:
 
 ```rs
 use std::net::{Ipv4Addr, TcpListener};
+use anyhow::Result;
 use small_http::{Request, Response, Status};
 use small_router::RouterBuilder;
 
-fn home(_req: &Request, _ctx: &()) -> Response {
-    Response::with_body("Home")
-}
-fn hello(req: &Request, _ctx: &()) -> Response {
-    let name = req.params.get("name").unwrap_or(&"World".to_string());
-    Response::with_body(format!("Hello, {name}!"))
-}
-fn not_found(_req: &Request, _ctx: &()) -> Response {
-    Response::with_status(Status::NotFound).body("404 Not Found")
+fn home(_req: &Request, _ctx: &()) -> Result<Response> {
+    Ok(Response::with_body("Home"))
 }
 
 fn main() {
+    let greeting = "Hello".to_string();
     let router = RouterBuilder::new()
         .get("/", home)
-        .get("/hello/:name", hello)
-        .fallback(not_found)
+        .get("/hello/:name", move |req, _| {
+            let name = &req.params["name"];
+            Ok(Response::with_body(format!("{greeting}, {name}!")))
+        })
+        .fallback(|_, _| {
+            Ok(Response::with_status(Status::NotFound).body("404 Not Found"))
+        })
         .build();
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 8080))
