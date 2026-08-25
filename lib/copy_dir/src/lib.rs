@@ -11,7 +11,24 @@ use std::{fs, io};
 
 /// Recursively copies all files and directories from `from` to `to`.
 pub fn copy_dir(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
+    let src = from.as_ref();
     let dst = to.as_ref();
+    let source_type = fs::symlink_metadata(src)?.file_type();
+    if !source_type.is_dir() || source_type.is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "source must be a directory and not a symbolic link",
+        ));
+    }
+    let canonical_src = fs::canonicalize(src)?;
+    let resolved_dst = resolve_destination(dst)?;
+    if resolved_dst == canonical_src || resolved_dst.starts_with(&canonical_src) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "destination must not be the source or inside it",
+        ));
+    }
+
     if dst.exists() {
         fs::remove_dir_all(dst)?;
     }
@@ -22,16 +39,38 @@ pub fn copy_dir(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> 
         for entry in fs::read_dir(src)? {
             let entry = entry?;
             let dst_path = dst.join(entry.file_name());
-            if entry.file_type()?.is_dir() {
+            let file_type = entry.file_type()?;
+            if file_type.is_symlink() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "symbolic links are not supported: {}",
+                        entry.path().display()
+                    ),
+                ));
+            }
+            if file_type.is_dir() {
                 copy_dir(&entry.path(), &dst_path)?;
-            } else {
+            } else if file_type.is_file() {
                 fs::copy(entry.path(), dst_path)?;
             }
         }
         Ok(())
     }
-    copy_dir(from.as_ref(), dst)?;
+    copy_dir(src, dst)?;
     Ok(())
+}
+
+fn resolve_destination(path: &Path) -> io::Result<std::path::PathBuf> {
+    let absolute = std::path::absolute(path)?;
+    let existing = absolute
+        .ancestors()
+        .find(|ancestor| ancestor.exists())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "destination has no ancestor"))?;
+    let suffix = absolute
+        .strip_prefix(existing)
+        .expect("existing ancestor must prefix destination");
+    Ok(fs::canonicalize(existing)?.join(suffix))
 }
 
 // MARK: Tests
@@ -108,5 +147,63 @@ mod test {
 
         let _ = fs::remove_dir_all(&src);
         let _ = fs::remove_dir_all(&dst);
+    }
+
+    #[test]
+    fn test_rejects_destination_inside_source() {
+        let src = temp("nested_destination_src");
+        let _ = fs::remove_dir_all(&src);
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("keep.txt"), "keep").unwrap();
+
+        assert_eq!(
+            copy_dir(&src, src.join("copy")).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(fs::read_to_string(src.join("keep.txt")).unwrap(), "keep");
+
+        let _ = fs::remove_dir_all(&src);
+    }
+
+    #[test]
+    fn test_rejects_source_as_destination() {
+        let src = temp("same_destination_src");
+        let _ = fs::remove_dir_all(&src);
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("keep.txt"), "keep").unwrap();
+
+        assert_eq!(
+            copy_dir(&src, &src).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert_eq!(fs::read_to_string(src.join("keep.txt")).unwrap(), "keep");
+
+        let _ = fs::remove_dir_all(&src);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_rejects_source_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let src = temp("symlink_src");
+        let dst = temp("symlink_dst");
+        let outside = temp("symlink_outside");
+        let _ = fs::remove_dir_all(&src);
+        let _ = fs::remove_dir_all(&dst);
+        let _ = fs::remove_file(&outside);
+        fs::create_dir(&src).unwrap();
+        fs::write(&outside, "secret").unwrap();
+        symlink(&outside, src.join("secret.txt")).unwrap();
+
+        assert_eq!(
+            copy_dir(&src, &dst).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(!dst.join("secret.txt").exists());
+
+        let _ = fs::remove_dir_all(&src);
+        let _ = fs::remove_dir_all(&dst);
+        let _ = fs::remove_file(&outside);
     }
 }
