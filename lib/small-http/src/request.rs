@@ -627,8 +627,8 @@ impl Error for FetchError {}
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use std::io::{Read, Write};
-    use std::net::{Ipv4Addr, Shutdown, TcpListener};
+    use std::io::Write;
+    use std::net::{Ipv4Addr, TcpListener};
     use std::thread;
 
     use super::*;
@@ -638,13 +638,12 @@ mod test {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let server_addr = listener.local_addr().unwrap();
         let server = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut request = [0; 1024];
-            let bytes_read = stream.read(&mut request).unwrap();
-            assert!(bytes_read > 0);
+            let (stream, client_addr) = listener.accept().unwrap();
+            let mut reader = std::io::BufReader::new(stream);
+            Request::read_from_reader(&mut reader, client_addr).unwrap();
+            let mut stream = reader.into_inner();
             stream.write_all(response).unwrap();
             stream.flush().unwrap();
-            stream.shutdown(Shutdown::Write).unwrap();
         });
 
         let res = Request::get(format!("http://{server_addr}/"))
