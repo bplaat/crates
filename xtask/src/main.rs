@@ -19,6 +19,7 @@ mod checks;
 mod metadata;
 mod process;
 mod utils;
+mod vscode;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Os {
@@ -77,6 +78,7 @@ impl Xtask {
             "check-shared" => self.check_shared(),
             "check-rust" => self.check_rust(),
             "check-e2e" => self.check_e2e(),
+            "configure-vscode" => self.configure_vscode(),
             "coverage" => self.coverage(),
             "install" => self.install(package),
             "help" | "--help" | "-h" => {
@@ -96,15 +98,16 @@ impl Xtask {
         println!("Usage: cargo xtask <task> [package]");
         println!();
         println!("Tasks:");
-        println!("  check          Run every check");
-        println!("  check-shared   Run platform-independent checks");
-        println!("  check-rust     Format, lint, and test Rust code");
-        println!("  check-e2e      Run PlaatNotes browser tests");
-        println!("  coverage       Generate Rust coverage");
-        println!("  build-pages    Build GitHub Pages artifacts");
-        println!("  build-bundle   Build native application bundles");
-        println!("  clean          Remove generated files");
-        println!("  install [name] Install all applications or only the named package");
+        println!("  check            Run every check");
+        println!("  check-shared     Run platform-independent checks");
+        println!("  check-rust       Format, lint, and test Rust code");
+        println!("  check-e2e        Run PlaatNotes browser tests");
+        println!("  configure-vscode Configure VS Code for the current platform");
+        println!("  coverage         Generate Rust coverage");
+        println!("  build-pages      Build GitHub Pages artifacts");
+        println!("  build-bundle     Build native application bundles");
+        println!("  clean            Remove generated files");
+        println!("  install [name]   Install all applications or only the named package");
     }
 
     fn ensure_npm_deps(&self) -> Result<()> {

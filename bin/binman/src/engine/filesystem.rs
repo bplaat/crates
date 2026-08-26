@@ -251,14 +251,8 @@ fn is_safe_resolved_path(base: &Path, candidate: &Path) -> bool {
         .all(|path| fs::symlink_metadata(path).is_ok_and(|metadata| !is_reparse(&metadata)))
 }
 
-#[cfg(windows)]
 pub(super) fn is_reparse(metadata: &fs::Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
     metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-#[cfg(not(windows))]
-pub(super) fn is_reparse(metadata: &fs::Metadata) -> bool {
-    metadata.file_type().is_symlink()
 }

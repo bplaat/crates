@@ -5,18 +5,15 @@
  */
 
 #![doc = include_str!("../README.md")]
-#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod catalog;
-#[cfg(windows)]
 mod elevation;
 mod engine;
 mod ipc;
-#[cfg(windows)]
 mod win32;
 mod worker;
 
-use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
@@ -32,39 +29,10 @@ use worker::{OPERATION_CLEAN, OPERATION_IDLE, OPERATION_SCAN, WorkerCommand};
 #[folder = "web"]
 struct WebAssets;
 
-#[cfg(windows)]
-fn is_process_elevated() -> bool {
-    elevation::is_process_elevated()
-}
-
-#[cfg(not(windows))]
-fn is_process_elevated() -> bool {
-    false
-}
-
-#[cfg(windows)]
-fn restart_elevated() -> std::io::Result<()> {
-    elevation::restart()
-}
-
-#[cfg(not(windows))]
-fn restart_elevated() -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "Administrator restart is only available on Windows",
-    ))
-}
-
 fn main() {
-    if !cfg!(target_os = "windows") {
-        eprintln!("Binman can only be run on Windows");
-        exit(1);
-    }
-
-    #[cfg(windows)]
     elevation::wait_for_parent_if_requested();
 
-    let is_administrator = is_process_elevated();
+    let is_administrator = elevation::is_process_elevated();
     let event_loop = EventLoopBuilder::new()
         .app_id("nl", "bplaat", "Binman")
         .build();
@@ -128,7 +96,7 @@ fn main() {
                     }
                     IpcRequest::RestartElevated => {
                         let result = if operation_state.load(Ordering::Acquire) == OPERATION_IDLE {
-                            restart_elevated()
+                            elevation::restart()
                         } else {
                             Err(std::io::Error::other(
                                 "Wait for the current operation before restarting",

@@ -30,11 +30,6 @@ fn read_manifest(path: &str) -> Manifest {
 }
 
 fn main() -> ExitCode {
-    if !cfg!(target_os = "macos") {
-        eprintln!("cargo-bundle can only be run on macOS");
-        return ExitCode::FAILURE;
-    }
-
     let args = args::parse_args();
     if args.help {
         args::help();

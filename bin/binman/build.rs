@@ -7,10 +7,6 @@
 #![doc = include_str!("README.md")]
 
 fn main() {
-    if std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set") != "windows" {
-        return;
-    }
-
     let manifest = format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3" manifestVersion="1.0">

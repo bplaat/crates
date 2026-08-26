@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use serde_json::Value;
 
 use crate::Os;
-use crate::utils::normalize_path;
+use crate::utils::{normalize_path, relative_slash};
 
 pub(crate) struct InstallableApp {
     pub(crate) package: String,
@@ -38,6 +38,28 @@ pub(crate) fn platform_excludes(metadata: &Value, os: Os) -> BTreeSet<String> {
                 .get("name")
                 .and_then(Value::as_str)
                 .map(str::to_owned)
+        })
+        .collect()
+}
+
+pub(crate) fn platform_exclude_paths(
+    metadata: &Value,
+    os: Os,
+    root: &Path,
+) -> Result<BTreeSet<String>> {
+    packages(metadata)?
+        .iter()
+        .filter(|package| !supports_os(package, os))
+        .map(|package| {
+            let manifest = package
+                .get("manifest_path")
+                .and_then(Value::as_str)
+                .context("Cargo package has no manifest path")?;
+            let directory = normalize_path(Path::new(manifest), root)
+                .parent()
+                .context("Cargo package manifest has no parent directory")?
+                .to_owned();
+            Ok(relative_slash(root, &directory))
         })
         .collect()
 }
@@ -173,6 +195,30 @@ mod tests {
         assert!(excludes.contains("unix-only"));
         assert!(!excludes.contains("everywhere"));
         assert!(!excludes.contains("win-only"));
+    }
+
+    #[test]
+    fn platform_exclude_paths_lists_unsupported_package_directories() -> Result<()> {
+        let root = env::temp_dir().join("workspace");
+        let metadata = json!({
+            "packages": [
+                {
+                    "manifest_path": root.join("bin/macos-app/Cargo.toml"),
+                    "metadata": { "platforms": ["macos"] }
+                },
+                {
+                    "manifest_path": "bin/windows-app/Cargo.toml",
+                    "metadata": { "platforms": ["windows"] }
+                }
+            ]
+        });
+        assert_eq!(
+            platform_exclude_paths(&metadata, Os::Linux, &root)?,
+            ["bin/macos-app".to_owned(), "bin/windows-app".to_owned()]
+                .into_iter()
+                .collect()
+        );
+        Ok(())
     }
 
     #[test]

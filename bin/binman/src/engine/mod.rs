@@ -29,14 +29,10 @@ use system::{
 use tools::{clean_docker_build_cache, clean_uv_cache, scan_docker_build_cache, scan_uv_cache};
 
 pub(crate) fn command(program: impl AsRef<OsStr>) -> Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let mut command = Command::new(program);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
+    command.creation_flags(CREATE_NO_WINDOW);
     command
 }
 

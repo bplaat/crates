@@ -13,7 +13,6 @@ use super::filesystem::{clean_roots, is_reparse};
 use super::{CleanupResult, cancellable_output, command};
 use crate::catalog::PathRoot;
 
-#[cfg(windows)]
 #[allow(unsafe_code)]
 fn system_directory() -> Option<PathBuf> {
     use std::ffi::OsString;
@@ -34,13 +33,6 @@ fn system_directory() -> Option<PathBuf> {
         }
         buffer.resize(length as usize + 1, 0);
     }
-}
-
-#[cfg(not(windows))]
-fn system_directory() -> Option<PathBuf> {
-    PathRoot::Windows
-        .resolve()
-        .map(|path| path.join("System32"))
 }
 
 pub(super) fn clean_windows_update(result: &mut CleanupResult) {

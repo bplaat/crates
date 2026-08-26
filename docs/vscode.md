@@ -1,5 +1,7 @@
 # VSCode configuration
 
+## settings.json
+
 ```json
 {
     "recommendations": [
@@ -90,5 +92,30 @@
         "editor.defaultFormatter": "xaver.clang-format",
         "editor.formatOnSave": true
     }
+}
+```
+
+## tasks.json
+
+```json
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Configure VS Code",
+            "type": "process",
+            "command": "cargo",
+            "args": ["xtask", "configure-vscode"],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "never",
+                "panel": "dedicated",
+                "close": true
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
 }
 ```

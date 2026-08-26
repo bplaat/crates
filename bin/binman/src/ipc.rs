@@ -6,9 +6,7 @@
 
 use std::sync::Arc;
 
-#[cfg(windows)]
-use bwebview::WindowsProgressBarState;
-use bwebview::{EventLoopProxy, Window};
+use bwebview::{EventLoopProxy, Window, WindowsProgressBarState};
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::Catalog;
@@ -91,7 +89,6 @@ pub(crate) fn send_progress(proxy: &EventLoopProxy, state: ProgressBarState) {
 }
 
 pub(crate) fn update_progress(window: &mut Window, state: ProgressBarState) {
-    #[cfg(windows)]
     match state {
         ProgressBarState::None => {
             window.windows_set_progress_bar(None, WindowsProgressBarState::Normal);
@@ -105,24 +102,6 @@ pub(crate) fn update_progress(window: &mut Window, state: ProgressBarState) {
         ProgressBarState::Error(progress) => {
             window.windows_set_progress_bar(Some(progress), WindowsProgressBarState::Error);
         }
-    };
-
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    ))]
-    window.gtk_set_progress_bar(match state {
-        ProgressBarState::None => None,
-        ProgressBarState::Indeterminate => Some(2.0),
-        ProgressBarState::Normal(progress) | ProgressBarState::Error(progress) => Some(progress),
-    });
-
-    #[cfg(target_os = "macos")]
-    {
-        _ = (window, state);
     }
 }
 
