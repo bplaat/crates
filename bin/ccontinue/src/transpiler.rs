@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use indexmap::IndexMap;
@@ -21,7 +21,7 @@ pub struct Transpiler {
     classes: IndexMap<String, Class>,
     interfaces: IndexMap<String, Interface>,
     next_interface_id: usize,
-    processed_includes: Vec<String>,
+    processed_includes: HashSet<String>,
 }
 
 impl Transpiler {
@@ -33,7 +33,7 @@ impl Transpiler {
             classes: IndexMap::new(),
             interfaces: IndexMap::new(),
             next_interface_id: 1,
-            processed_includes: Vec::new(),
+            processed_includes: HashSet::new(),
         }
     }
 
@@ -45,9 +45,9 @@ impl Transpiler {
     /// Clears state collected while transpiling the previous source file.
     pub fn reset(&mut self) {
         self.next_interface_id = 1;
-        self.interfaces = IndexMap::new();
-        self.classes = IndexMap::new();
-        self.processed_includes = Vec::new();
+        self.interfaces.clear();
+        self.classes.clear();
+        self.processed_includes.clear();
     }
 
     // MARK: Helpers
@@ -131,10 +131,9 @@ impl Transpiler {
     // MARK: Convert includes
     fn convert_include(&mut self, current_path: &str, include_name: &str) -> String {
         let base_path = format!("{include_name}.hh");
-        if self.processed_includes.contains(&base_path) {
+        if !self.processed_includes.insert(base_path.clone()) {
             return String::new();
         }
-        self.processed_includes.push(base_path.clone());
 
         // Determine is_header by comparing stems: a .hh file is a "companion header"
         // (not an independent header) only when its stem matches the current file's stem.
@@ -148,7 +147,7 @@ impl Transpiler {
             .unwrap_or("");
         let is_header = include_stem != current_stem;
 
-        for include_path in self.include_paths.clone() {
+        for include_path in &self.include_paths {
             let complete_path = format!("{include_path}/{base_path}");
             if Path::new(&complete_path).exists() {
                 let text = std::fs::read_to_string(&complete_path).unwrap_or_else(|_| {
@@ -1181,28 +1180,44 @@ impl Transpiler {
     }
 
     fn step_prescan_default_bodies(&mut self, text: &str) {
-        let iface_names: Vec<String> = self.interfaces.keys().cloned().collect();
-        for iface_name in &iface_names {
-            let pattern = format!(
-                r"[_A-Za-z][_A-Za-z0-9 ]*[\**|\s+]\s*{}::([_A-Za-z][_A-Za-z0-9]*)\(",
-                regex::escape(iface_name)
-            );
-            let re = Regex::new(&pattern).expect("valid prescan regex");
-            let method_names: Vec<String> =
-                re.captures_iter(text).map(|c| c[1].to_owned()).collect();
-            for method_name in method_names {
-                if self.interfaces[iface_name]
-                    .methods
-                    .contains_key(&method_name)
-                {
-                    self.interfaces
-                        .get_mut(iface_name)
-                        .expect("interface exists")
-                        .default_bodies
-                        .insert(method_name.clone(), String::new());
-                }
+        let re_default_method = regex!(
+            r"[_A-Za-z][_A-Za-z0-9 ]*[\**|\s+]\s*([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\("
+        );
+        let default_methods: Vec<(String, String)> = re_default_method
+            .captures_iter(text)
+            .filter_map(|caps| {
+                let iface_name = &caps[1];
+                let method_name = &caps[2];
+                self.interfaces
+                    .get(iface_name)
+                    .filter(|iface| iface.methods.contains_key(method_name))?;
+                Some((iface_name.to_owned(), method_name.to_owned()))
+            })
+            .collect();
+        for (iface_name, method_name) in default_methods {
+            self.interfaces
+                .get_mut(&iface_name)
+                .expect("interface exists")
+                .default_bodies
+                .insert(method_name, String::new());
+        }
+    }
+
+    fn replace_default_body_calls(interface: &Interface, body: &str, re_call: &Regex) -> String {
+        let mut result = String::with_capacity(body.len());
+        let mut last = 0;
+        for caps in re_call.captures_iter(body) {
+            let match_ = caps.get(0).expect("group 0 always present");
+            let method_name = &caps[1];
+            if interface.methods.contains_key(method_name) {
+                result.push_str(&body[last..match_.start()]);
+                result.push_str("_vtbl->");
+                result.push_str(match_.as_str());
+                last = match_.end();
             }
         }
+        result.push_str(&body[last..]);
+        result
     }
 
     fn step_classes(&mut self, text: &str, is_header: bool) -> String {
@@ -1240,111 +1255,79 @@ impl Transpiler {
     }
 
     fn step_default_body_implementations(&mut self, text: &str) -> String {
+        let re_default_method = regex!(
+            r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{"
+        );
+        let re_call = regex!(r"\b([_A-Za-z][_A-Za-z0-9]*)\(this\b");
         let mut text = text.to_owned();
-        // Build regex cache once to avoid recompiling per-interface patterns in each outer iteration
-        let iface_names: Vec<String> = self.interfaces.keys().cloned().collect();
-        let re_cache: HashMap<String, Regex> = iface_names
-            .iter()
-            .map(|name| {
-                let pattern = format!(
-                    r"([_A-Za-z][_A-Za-z0-9 ]*[\**|\s+])\s*{}::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*\{{",
-                    regex::escape(name)
-                );
-                (
-                    name.clone(),
-                    Regex::new(&pattern).expect("valid per-interface regex"),
-                )
-            })
-            .collect();
         loop {
-            let mut found = false;
-            let iface_names: Vec<String> = self.interfaces.keys().cloned().collect();
-            for cur_iface_name in iface_names {
-                let re = &re_cache[&cur_iface_name];
-                let Some((dm_start, dm_end, ret_type, method_name, arguments_str)) = (|| {
-                    let caps = re.captures(&text)?;
-                    let m0 = caps.get(0)?;
-                    Some((
-                        m0.start(),
-                        m0.end(),
-                        caps[1].to_owned(),
-                        caps[2].to_owned(),
-                        caps[3].to_owned(),
-                    ))
-                })(
-                ) else {
-                    continue;
-                };
-                {
-                    if !self.interfaces[&cur_iface_name]
-                        .methods
-                        .contains_key(&method_name)
-                    {
-                        eprintln!(
-                            "[ERROR] Interface {cur_iface_name} has no method '{method_name}'"
-                        );
-                        std::process::exit(1);
-                    }
-                    let dstart = dm_end - 1;
-                    let dpos = find_matching_close(&text, dstart);
-                    let dend = dpos + 1;
-                    let body_text = text[dstart + 1..dpos].to_owned();
-                    let def_arguments = parse_arguments(&arguments_str);
-
-                    let snake_iface = self.interfaces[&cur_iface_name].snake_name.clone();
-                    let mut fn_code = format!(
-                        "static {} _{}_{}(void* this",
-                        ret_type.trim(),
-                        snake_iface,
-                        method_name
-                    );
-                    for arg in &def_arguments {
-                        fn_code += &format!(", {} {}", arg.type_, arg.name);
-                    }
-                    fn_code += ") {\n";
-                    fn_code += &format!("    const {cur_iface_name}Vtbl* _vtbl;\n");
-                    fn_code += "    {\n";
-                    fn_code += "        const _InterfaceSlot* _s = *(const _InterfaceSlot* const*)*(void* const*)this;\n";
-                    fn_code += "        _vtbl = NULL;\n";
-                    fn_code += "        if (_s) for (; _s->id; _s++) {\n";
-                    fn_code += &format!(
-                        "            if (_s->id == _{cur_iface_name}_ID) {{ _vtbl = (const {cur_iface_name}Vtbl*)_s->vtbl; break; }}\n"
-                    );
-                    fn_code += "        }\n";
-                    fn_code += "    }\n";
-                    let mut transformed_body = body_text.clone();
-                    let method_names: Vec<String> = self.interfaces[&cur_iface_name]
-                        .methods
-                        .keys()
-                        .cloned()
-                        .collect();
-                    for m_name in &method_names {
-                        let sub_re = Regex::new(&format!(r"\b{}\(this\b", regex::escape(m_name)))
-                            .expect("valid regex");
-                        transformed_body = sub_re
-                            .replace_all(
-                                &transformed_body,
-                                format!("_vtbl->{m_name}(this").as_str(),
-                            )
-                            .into_owned();
-                    }
-                    fn_code += &transformed_body;
-                    fn_code += "}\n\n";
-
-                    self.interfaces
-                        .get_mut(&cur_iface_name)
-                        .expect("interface exists")
-                        .default_bodies
-                        .insert(method_name.clone(), fn_code.clone());
-                    text = format!("{}{}{}", &text[..dm_start], fn_code, &text[dend..]);
-                    found = true;
-                }
-                if found {
-                    break;
-                }
-            }
-            if !found {
+            let Some((dm_start, dm_end, ret_type, cur_iface_name, method_name, arguments_str)) =
+                re_default_method.captures_iter(&text).find_map(|caps| {
+                    let iface_name = &caps[2];
+                    self.interfaces.contains_key(iface_name).then(|| {
+                        let match_ = caps.get(0).expect("group 0 always present");
+                        (
+                            match_.start(),
+                            match_.end(),
+                            caps[1].to_owned(),
+                            iface_name.to_owned(),
+                            caps[3].to_owned(),
+                            caps[4].to_owned(),
+                        )
+                    })
+                })
+            else {
                 break;
+            };
+            {
+                if !self.interfaces[&cur_iface_name]
+                    .methods
+                    .contains_key(&method_name)
+                {
+                    eprintln!("[ERROR] Interface {cur_iface_name} has no method '{method_name}'");
+                    std::process::exit(1);
+                }
+                let dstart = dm_end - 1;
+                let dpos = find_matching_close(&text, dstart);
+                let dend = dpos + 1;
+                let body_text = text[dstart + 1..dpos].to_owned();
+                let def_arguments = parse_arguments(&arguments_str);
+
+                let snake_iface = self.interfaces[&cur_iface_name].snake_name.clone();
+                let mut fn_code = format!(
+                    "static {} _{}_{}(void* this",
+                    ret_type.trim(),
+                    snake_iface,
+                    method_name
+                );
+                for arg in &def_arguments {
+                    fn_code += &format!(", {} {}", arg.type_, arg.name);
+                }
+                fn_code += ") {\n";
+                fn_code += &format!("    const {cur_iface_name}Vtbl* _vtbl;\n");
+                fn_code += "    {\n";
+                fn_code += "        const _InterfaceSlot* _s = *(const _InterfaceSlot* const*)*(void* const*)this;\n";
+                fn_code += "        _vtbl = NULL;\n";
+                fn_code += "        if (_s) for (; _s->id; _s++) {\n";
+                fn_code += &format!(
+                    "            if (_s->id == _{cur_iface_name}_ID) {{ _vtbl = (const {cur_iface_name}Vtbl*)_s->vtbl; break; }}\n"
+                );
+                fn_code += "        }\n";
+                fn_code += "    }\n";
+                let transformed_body = Self::replace_default_body_calls(
+                    &self.interfaces[&cur_iface_name],
+                    &body_text,
+                    re_call,
+                );
+                fn_code += &transformed_body;
+                fn_code += "}\n\n";
+
+                self.interfaces
+                    .get_mut(&cur_iface_name)
+                    .expect("interface exists")
+                    .default_bodies
+                    .insert(method_name.clone(), fn_code.clone());
+                text = format!("{}{}{}", &text[..dm_start], fn_code, &text[dend..]);
             }
         }
         text
@@ -1356,7 +1339,7 @@ impl Transpiler {
         );
         let re_super_call =
             regex!(r"([_A-Za-z][_A-Za-z0-9]*)::([_A-Za-z][_A-Za-z0-9]*)\(([^\)]*)\)\s*;");
-        // replace_all with closure needs shared ref; clone self data via closure capture
+        // Build both replacements in one pass per pattern.
         let text = {
             let mut result = String::new();
             let mut last = 0;
@@ -1372,7 +1355,7 @@ impl Transpiler {
         {
             let mut result = String::new();
             let mut last = 0;
-            for caps in re_super_call.captures_iter(&text.clone()) {
+            for caps in re_super_call.captures_iter(&text) {
                 let m = caps.get(0).expect("group 0 always present");
                 result.push_str(&text[last..m.start()]);
                 result.push_str(&self.convert_super_call(&caps));
@@ -1424,7 +1407,7 @@ impl Transpiler {
         let re_insert_after_close = regex!(r"(}\n\n)([a-zA-Z#])");
         let mut text = text.to_owned();
         let mut ifaces_used: Vec<String> = Vec::new();
-        for caps in re_cast_scan.captures_iter(&text.clone()) {
+        for caps in re_cast_scan.captures_iter(&text) {
             let name = caps[1].to_owned();
             if self.interfaces.contains_key(&name) && !ifaces_used.contains(&name) {
                 ifaces_used.push(name);
@@ -1448,9 +1431,9 @@ impl Transpiler {
                     &format!("    return ({lk_iface_name}){{ .obj = _obj, .vtbl = vtbl }};\n");
                 lookup_code += "}\n\n";
             }
-            let ins_pos = if let Some(m) = re_main.find(&text.clone()) {
+            let ins_pos = if let Some(m) = re_main.find(&text) {
                 m.start()
-            } else if let Some(m) = re_insert_after_close.find(&text.clone()) {
+            } else if let Some(m) = re_insert_after_close.find(&text) {
                 m.end() - 1
             } else {
                 text.len()
@@ -1493,7 +1476,7 @@ impl Transpiler {
         let re_func_impl = regex!(r"\n[_A-Za-z*][_A-Za-z0-9*\s]*\s+\**[_A-Za-z][_A-Za-z0-9]*\s*\(");
         let mut text = text.to_owned();
         let mut types_for_instanceof: Vec<String> = Vec::new();
-        for caps in re_instanceof_scan.captures_iter(&text.clone()) {
+        for caps in re_instanceof_scan.captures_iter(&text) {
             let type_name = caps[1].to_owned();
             if !types_for_instanceof.contains(&type_name) {
                 types_for_instanceof.push(type_name);
@@ -1551,9 +1534,9 @@ impl Transpiler {
                 }
             }
 
-            let ins_pos2 = if let Some(m) = re_main.find(&text.clone()) {
+            let ins_pos2 = if let Some(m) = re_main.find(&text) {
                 m.start()
-            } else if let Some(fm) = re_func_marker.find(&text.clone()) {
+            } else if let Some(fm) = re_func_marker.find(&text) {
                 let rest = &text[fm.end()..];
                 if let Some(fi) = re_func_impl.find(rest) {
                     fm.end() + fi.start()
