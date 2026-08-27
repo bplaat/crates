@@ -75,6 +75,7 @@ impl Xtask {
             "build-bundle" => self.build_bundle(),
             "clean" => self.clean(),
             "check" => self.check(),
+            "check-editor" => self.check_editor(),
             "check-shared" => self.check_shared(),
             "check-rust" => self.check_rust(),
             "check-e2e" => self.check_e2e(),
@@ -99,6 +100,7 @@ impl Xtask {
         println!();
         println!("Tasks:");
         println!("  check            Run every check");
+        println!("  check-editor     Check Rust code for the editor");
         println!("  check-shared     Run platform-independent checks");
         println!("  check-rust       Format, lint, and test Rust code");
         println!("  check-e2e        Run PlaatNotes browser tests");

@@ -4,13 +4,6 @@
 
 ```json
 {
-    "recommendations": [
-        "EditorConfig.EditorConfig",
-        "rust-lang.rust-analyzer",
-        "tamasfe.even-better-toml",
-        "esbenp.prettier-vscode",
-        "xaver.clang-format"
-    ],
     "search.exclude": {
         "**/target/**": true,
         "**/sqlite3/**": true,
@@ -30,8 +23,7 @@
         "editor.formatOnSave": true
     },
     "rust-analyzer.rustfmt.extraArgs": ["+nightly"],
-    "rust-analyzer.check.command": "clippy",
-    "rust-analyzer.check.extraArgs": ["--all-features"],
+    "rust-analyzer.check.overrideCommand": ["cargo", "xtask", "check-editor"],
 
     // Web extensions settings
     "[html]": {
@@ -54,7 +46,7 @@
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.formatOnSave": true
     },
-    "[typescripttreact]": {
+    "[typescriptreact]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.formatOnSave": true
     },
@@ -92,6 +84,20 @@
         "editor.defaultFormatter": "xaver.clang-format",
         "editor.formatOnSave": true
     }
+}
+```
+
+## extensions.json
+
+```json
+{
+    "recommendations": [
+        "EditorConfig.EditorConfig",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "esbenp.prettier-vscode",
+        "xaver.clang-format"
+    ]
 }
 ```
 

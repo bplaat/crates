@@ -38,6 +38,17 @@ impl Xtask {
         self.check_rust_deps()
     }
 
+    pub(crate) fn check_editor(&self) -> Result<()> {
+        let metadata = self.cargo_metadata()?;
+        let excludes = platform_excludes(&metadata, self.os);
+        let mut command = editor_check_command(&excludes);
+        let status = command.status().context("failed to start cargo check")?;
+        if !status.success() {
+            bail!("cargo check failed with {status}");
+        }
+        Ok(())
+    }
+
     pub(crate) fn check_copyright(&self) -> Result<()> {
         println!("Checking copyright headers...");
         let extensions = ["rs", "html", "css", "js", "jsx", "ts", "tsx", "cc", "hh"];
@@ -309,6 +320,53 @@ impl Xtask {
     }
 }
 
+fn editor_check_command(excludes: &std::collections::BTreeSet<String>) -> Command {
+    let mut command = Command::new("cargo");
+    command.args([
+        "check",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--locked",
+        "--message-format=json",
+    ]);
+    add_excludes(&mut command, excludes);
+    command
+}
+
 fn contains_unsafe_block(contents: &str) -> bool {
     regex!(r"unsafe\s*\{").is_match(contents)
+}
+
+// MARK: Tests
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+
+    #[test]
+    fn editor_check_emits_cargo_json_and_excludes_unsupported_packages() {
+        let excludes = ["unsupported".to_owned()]
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let command = editor_check_command(&excludes);
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            args,
+            [
+                "check",
+                "--workspace",
+                "--all-targets",
+                "--all-features",
+                "--locked",
+                "--message-format=json",
+                "--exclude",
+                "unsupported",
+            ]
+        );
+    }
 }

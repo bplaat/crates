@@ -7,6 +7,7 @@
 use std::fs;
 
 use anyhow::{Context, Result};
+use regex::{Captures, regex};
 use serde::Serialize;
 use serde_json::ser::PrettyFormatter;
 use serde_json::{Serializer, Value};
@@ -21,7 +22,7 @@ impl Xtask {
         let settings_path = self.root.join(".vscode/settings.json");
         let contents = fs::read_to_string(&settings_path)
             .with_context(|| format!("failed to read {}", settings_path.display()))?;
-        let mut settings: Value = serde_json::from_str(&contents)
+        let mut settings = parse_json_with_comments(&contents)
             .with_context(|| format!("failed to parse {}", settings_path.display()))?;
         set_rust_analyzer_excludes(&mut settings, excludes)?;
 
@@ -38,6 +39,16 @@ impl Xtask {
         }
         Ok(())
     }
+}
+
+fn parse_json_with_comments(contents: &str) -> Result<Value, serde_json::Error> {
+    let comments = regex!(r#"(?s)("(?:\\.|[^"\\])*")|//[^\r\n]*|/\*.*?\*/"#);
+    let json = comments.replace_all(contents, |captures: &Captures<'_>| {
+        captures
+            .get(1)
+            .map_or_else(String::new, |string| string.as_str().to_owned())
+    });
+    serde_json::from_str(&json)
 }
 
 fn set_rust_analyzer_excludes(
@@ -60,6 +71,26 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn json_with_comments_is_parsed_without_changing_strings() -> Result<()> {
+        let settings = parse_json_with_comments(
+            r#"{
+                // Line comment
+                "url": "https://example.com/path/*-literal",
+                /* Block comment */
+                "enabled": true
+            }"#,
+        )?;
+        assert_eq!(
+            settings,
+            json!({
+                "url": "https://example.com/path/*-literal",
+                "enabled": true
+            })
+        );
+        Ok(())
+    }
 
     #[test]
     fn rust_analyzer_excludes_are_added_without_changing_other_settings() -> Result<()> {
