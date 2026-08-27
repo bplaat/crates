@@ -33,25 +33,25 @@ Some desktop apps written with the [bwebview](lib/bwebview) library.
 <table>
 <tr>
 <td width="100" align="center">
-    <a href="bin/game2048">
+    <a href="./bin/game2048">
         <img src="bin/game2048/docs/images/icon.svg" alt="2048 icon" width="48" height="48"/><br/>
         2048
     </a>
 </td>
 <td width="100" align="center">
-    <a href="bin/bassielight">
+    <a href="./bin/bassielight">
         <img src="bin/bassielight/docs/images/icon.svg" alt="BassieLight icon" width="48" height="48"/><br/>
         BassieLight
     </a>
 </td>
 <td width="100" align="center">
-    <a href="bin/binman">
+    <a href="./bin/binman">
         <img src="bin/binman/docs/images/icon.svg" alt="Binman icon" width="48" height="48"/><br/>
         Binman
     </a>
 </td>
 <td width="100" align="center">
-    <a href="bin/manexplorer">
+    <a href="./bin/manexplorer">
         <img src="bin/manexplorer/docs/images/icon.svg" alt="ManExplorer icon" width="48" height="48"/><br/>
         ManExplorer
     </a>
@@ -59,25 +59,25 @@ Some desktop apps written with the [bwebview](lib/bwebview) library.
 </tr>
 <tr>
 <td width="100" align="center">
-    <a href="bin/navidrome">
+    <a href="./bin/navidrome">
         <img src="bin/navidrome/docs/images/icon.svg" alt="Navidrome icon" width="48" height="48"/><br/>
         Navidrome
     </a>
 </td>
 <td width="100" align="center">
-    <a href="bin/music-dl">
+    <a href="./bin/music-dl">
         <img src="bin/music-dl/docs/images/icon.svg" alt="Music Downloader icon" width="48" height="48"/><br/>
         Music Downloader
     </a>
 </td>
 <td width="100" align="center">
-    <a href="bin/pixelfont">
+    <a href="./bin/pixelfont">
         <img src="bin/pixelfont/docs/images/icon.svg" alt="Pixel Font Editor icon" width="48" height="48"/><br/>
         Pixel Font Editor
     </a>
 </td>
 <td width="100" align="center">
-    <a href="bin/sequelexplorer">
+    <a href="./bin/sequelexplorer">
         <img src="bin/sequelexplorer/docs/images/icon.svg" alt="Sequel Explorer icon" width="48" height="48"/><br/>
         Sequel Explorer
     </a>

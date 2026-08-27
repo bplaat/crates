@@ -63,17 +63,17 @@ The Linux backend automatically selects the best available WebKitGTK version at 
 <td align="center">
 <img src="docs/images/screenshots/windows.png" alt="ipc example running on Windows" width="300">
 <br>
-<a href="examples/bwebview-ipc.rs">IPC example</a> running on Windows
+<a href="./examples/bwebview-ipc.rs">IPC example</a> running on Windows
 </td>
 <td align="center">
 <img src="docs/images/screenshots/macos.png" alt="ipc example running on macOS" width="300">
 <br>
-<a href="examples/bwebview-ipc.rs">IPC example</a> running on macOS
+<a href="./examples/bwebview-ipc.rs">IPC example</a> running on macOS
 </td>
 <td align="center">
 <img src="docs/images/screenshots/gtk.png" alt="ipc example running on Linux (GTK)" width="300">
 <br>
-<a href="examples/bwebview-ipc.rs">IPC example</a> running on Linux (GTK)
+<a href="./examples/bwebview-ipc.rs">IPC example</a> running on Linux (GTK)
 </td>
 </tr>
 </table>
