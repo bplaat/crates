@@ -45,10 +45,7 @@ fn main() {
         let mut res = winresource::WindowsResource::new();
         res.set("ProductName", "Music Downloader")
             .set("FileDescription", "Music Downloader")
-            .set(
-                "LegalCopyright",
-                "Copyright (c) 2026 Bastiaan van der Plaat",
-            )
+            .set("LegalCopyright", "Copyright © 2026 Bastiaan van der Plaat")
             .set_icon("meta/windows/icon.ico")
             .set_manifest(&manifest);
         res.compile().expect("Failed to compile Windows resources.");
