@@ -15,7 +15,7 @@ function ipcSend(type, data = {}) {
     window.ipc.postMessage(JSON.stringify({ type, ...data }));
 }
 
-PetiteVue.createApp({
+const app = PetiteVue.createApp({
     catalog: null,
     items: [],
     activeGroup: 'all',
@@ -71,7 +71,8 @@ PetiteVue.createApp({
                 if (item) {
                     item.result = message.result;
                     const hasWork = message.result.bytes > 0 || message.result.files > 0 || message.result.unknownSize;
-                    item.selected = message.result.available && hasWork && !this.cleanDisabled(item);
+                    item.selected =
+                        message.result.available && hasWork && item.impact !== 'high' && !this.cleanDisabled(item);
                 }
                 break;
             }
@@ -274,4 +275,14 @@ PetiteVue.createApp({
     cleanDisabled(item) {
         return item.requiresAdministrator && !this.isAdministrator;
     },
-}).mount('#app');
+});
+
+app.directive('title', ({ el, get, effect }) => {
+    effect(() => {
+        const value = get();
+        if (value) el.setAttribute('title', value);
+        else el.removeAttribute('title');
+    });
+});
+
+app.mount('#app');

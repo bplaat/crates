@@ -31,13 +31,8 @@
                         </div>
                     </div>
 
-                    <nav class="nav" aria-label="Binman cleanup categories">
-                        <button
-                            type="button"
-                            :class="{ active: activeGroup === 'all' }"
-                            :aria-current="activeGroup === 'all' ? 'page' : null"
-                            @click="activeGroup = 'all'"
-                        >
+                    <nav class="nav">
+                        <button type="button" :class="{ active: activeGroup === 'all' }" @click="activeGroup = 'all'">
                             <span>All categories</span><em>{{ availableItems.length }}</em>
                         </button>
                         <button
@@ -45,7 +40,6 @@
                             :key="group.id"
                             type="button"
                             :class="{ active: activeGroup === group.id }"
-                            :aria-current="activeGroup === group.id ? 'page' : null"
                             @click="activeGroup = group.id"
                         >
                             <span>{{ group.name }}</span><em>{{ group.availableCount }}</em>
@@ -54,7 +48,7 @@
 
                     <div class="admin-panel" :class="{ elevated: isAdministrator }">
                         <div class="admin-note">
-                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <svg class="icon" viewBox="0 0 24 24">
                                 <path
                                     d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M17.13,17C15.92,18.85 14.11,20.24 12,20.92C9.89,20.24 8.08,18.85 6.87,17C6.53,16.5 6.24,16 6,15.47C6,13.82 8.71,12.47 12,12.47C15.29,12.47 18,13.79 18,15.47C17.76,16 17.47,16.5 17.13,17Z"
                                 />
@@ -105,8 +99,8 @@
 
                     <div class="app-error" v-if="appError" role="alert">
                         <span>{{ appError }}</span>
-                        <button class="button is-icon" type="button" aria-label="Dismiss error" @click="appError = ''">
-                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <button class="button is-icon" type="button" title="Dismiss error" @click="appError = ''">
+                            <svg class="icon" viewBox="0 0 24 24">
                                 <path
                                     d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
                                 />
@@ -118,10 +112,10 @@
                         <article class="summary-card accent">
                             <span>Potential savings</span>
                             <strong>{{ formatBytes(selectedBytes) }}</strong>
-                            <small
-                                >{{ selectedItems.length }} selected categor{{ selectedItems.length === 1 ? 'y' : 'ies'
-                                }}</small
-                            >
+                            <small>
+                                {{ selectedItems.length }} selected categor{{ selectedItems.length === 1 ? 'y' : 'ies'
+                                }}
+                            </small>
                         </article>
                         <article class="summary-card">
                             <span>Found</span>
@@ -135,15 +129,15 @@
                         </article>
                     </section>
 
-                    <div class="operation-result" v-if="!busy && completionMessage" role="status" aria-live="polite">
+                    <div class="operation-result" v-if="!busy && completionMessage" role="status">
                         {{ completionMessage }}
                     </div>
 
-                    <section class="progress-panel" v-if="busy" aria-live="polite" aria-atomic="true">
+                    <section class="progress-panel" v-if="busy">
                         <div class="progress-copy">
-                            <strong
-                                >{{ operation === 'scan' ? 'Scanning' : 'Cleaning' }} {{ currentCleanupName }}</strong
-                            >
+                            <strong>
+                                {{ operation === 'scan' ? 'Scanning' : 'Cleaning' }} {{ currentCleanupName }}
+                            </strong>
                             <span>{{ progressIndex }} of {{ progressTotal }}</span>
                         </div>
                         <div class="progress-track"><div :style="{ width: progressPercent + '%' }"></div></div>
@@ -152,7 +146,7 @@
                     <section class="cleanup-panel">
                         <div class="list-toolbar">
                             <label class="search">
-                                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <svg class="icon" viewBox="0 0 24 24">
                                     <path
                                         d="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z"
                                     />
@@ -162,7 +156,6 @@
                                     type="search"
                                     v-model="search"
                                     placeholder="Filter categories"
-                                    aria-label="Filter cleanup categories"
                                     autocomplete="off"
                                     spellcheck="false"
                                 />
@@ -179,7 +172,7 @@
                         </div>
 
                         <div class="empty" v-if="!hasScanned && !busy">
-                            <div class="empty-icon" aria-hidden="true">
+                            <div class="empty-icon">
                                 <svg class="icon" viewBox="0 0 24 24">
                                     <path
                                         d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"
@@ -204,7 +197,7 @@
                                 v-for="item in filteredItems"
                                 :key="item.id"
                                 :class="{ selected: item.selected, locked: cleanDisabled(item) }"
-                                :title="cleanDisabled(item) ? 'Administrator access required' : item.result?.errors?.join('\n') || null"
+                                v-title="cleanDisabled(item) ? 'Administrator access required' : item.result?.errors?.join('\n')"
                             >
                                 <input
                                     type="checkbox"
@@ -217,9 +210,9 @@
                                         <strong>{{ item.name }}</strong>
                                         <em v-if="activeGroup === 'all'">{{ groupName(item.groupId) }}</em>
                                         <em class="impact-badge high" v-if="item.impact === 'high'">High impact</em>
-                                        <em class="impact-badge medium" v-else-if="item.impact === 'medium'"
-                                            >Slower recovery</em
-                                        >
+                                        <em class="impact-badge medium" v-else-if="item.impact === 'medium'">
+                                            Medium impact
+                                        </em>
                                         <em class="admin-badge" v-if="cleanDisabled(item)">Administrator</em>
                                     </span>
                                     <small>{{ item.description }}</small>
@@ -232,10 +225,10 @@
                                     </span>
                                 </span>
                                 <span class="cleanup-size">
-                                    <strong
-                                        >{{ item.result?.unknownSize ? 'Not estimated' : formatBytes(item.result?.bytes
-                                        || 0) }}</strong
-                                    >
+                                    <strong>
+                                        {{ item.result?.unknownSize ? 'Not estimated' : formatBytes(item.result?.bytes
+                                        || 0) }}
+                                    </strong>
                                     <small v-if="item.result?.unknownSize && item.result?.files">
                                         {{ item.result.files.toLocaleString() }} item{{ item.result.files === 1 ? '' :
                                         's' }}
@@ -250,8 +243,8 @@
             </main>
 
             <div class="modal-backdrop" v-if="showConfirm" @click.self="showConfirm = false">
-                <section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-                    <div class="modal-icon" aria-hidden="true">
+                <section class="modal" role="dialog">
+                    <div class="modal-icon">
                         <svg class="icon" viewBox="0 0 24 24">
                             <path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z" />
                         </svg>
@@ -265,10 +258,10 @@
                         Some selected categories have no fast size estimate and may recover additional space.
                     </p>
                     <p class="modal-warning" v-if="selectedHighImpactItems.length">
-                        <strong
-                            >{{ selectedHighImpactItems.length }} high-impact selection{{ selectedHighImpactItems.length
-                            === 1 ? '' : 's' }}:</strong
-                        >
+                        <strong>
+                            {{ selectedHighImpactItems.length }} high-impact selection{{ selectedHighImpactItems.length
+                            === 1 ? '' : 's' }}:
+                        </strong>
                         {{ selectedHighImpactItems.map((item) => item.name).join(', ') }}. Review their consequences in
                         the cleanup list.
                     </p>

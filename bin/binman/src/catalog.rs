@@ -82,6 +82,8 @@ pub(crate) enum CleanupKind {
 pub(crate) struct PathRule {
     pub(crate) root: PathRoot,
     pub(crate) path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) minimum_age_days: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -166,6 +168,15 @@ impl Catalog {
                     for rule in rules {
                         validate_relative_pattern(&rule.path)
                             .map_err(|error| anyhow!("{}: {error}", cleanup.id))?;
+                        if rule
+                            .minimum_age_days
+                            .is_some_and(|days| days == 0 || days > 3650)
+                        {
+                            bail!(
+                                "Path cleanup {} must use a minimum age between 1 and 3650 days",
+                                cleanup.id
+                            );
+                        }
                     }
                 }
             }

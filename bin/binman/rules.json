@@ -649,6 +649,7 @@
                     "id": "android-cache",
                     "name": "Android tooling",
                     "description": "Android SDK metadata and emulator download caches; SDKs and virtual devices are preserved.",
+                    "recovery": "redownload",
                     "processNames": ["studio64.exe", "emulator.exe"],
                     "kind": "paths",
                     "rules": [
@@ -662,6 +663,7 @@
                     "id": "bun-cache",
                     "name": "Bun",
                     "description": "Downloaded Bun package cache; projects and globally installed packages are preserved.",
+                    "recovery": "redownload",
                     "processNames": ["bun.exe"],
                     "kind": "paths",
                     "rules": [
@@ -674,7 +676,10 @@
                 {
                     "id": "cargo-cache",
                     "name": "Cargo",
-                    "description": "Downloaded Rust registry archives and source checkouts; installed tools are preserved.",
+                    "description": "Downloaded Rust registry archives, indexes and dependency source checkouts; installed tools are preserved.",
+                    "impact": "medium",
+                    "recovery": "redownload",
+                    "sideEffect": "Dependencies must be downloaded again; local edits made directly inside Cargo dependency checkouts are lost.",
                     "kind": "paths",
                     "rules": [
                         {
@@ -703,6 +708,7 @@
                     "id": "composer-cache",
                     "name": "Composer",
                     "description": "Downloaded PHP packages and repository metadata; projects and credentials are preserved.",
+                    "recovery": "redownload",
                     "processNames": ["php.exe", "composer.exe"],
                     "kind": "paths",
                     "rules": [
@@ -720,6 +726,7 @@
                     "id": "cypress-cache",
                     "name": "Cypress browsers",
                     "description": "Downloaded Cypress test runners; Cypress downloads them again when required.",
+                    "recovery": "redownload",
                     "processNames": ["Cypress.exe"],
                     "kind": "paths",
                     "rules": [
@@ -770,6 +777,7 @@
                     "id": "gradle-cache",
                     "name": "Gradle",
                     "description": "Downloaded build dependencies and transformed artifact caches.",
+                    "recovery": "redownload",
                     "kind": "paths",
                     "rules": [
                         {
@@ -802,7 +810,10 @@
                 {
                     "id": "maven-cache",
                     "name": "Maven",
-                    "description": "Downloaded Maven artifacts; project configuration and credentials are preserved.",
+                    "description": "The complete Maven local repository, including downloaded and locally installed artifacts; project configuration and credentials are preserved.",
+                    "impact": "high",
+                    "recovery": "permanent",
+                    "sideEffect": "Locally installed or unpublished artifacts may not be downloadable and can be permanently lost.",
                     "processNames": ["mvn.exe", "mvn.cmd"],
                     "kind": "paths",
                     "rules": [
@@ -816,6 +827,7 @@
                     "id": "npm-cache",
                     "name": "npm",
                     "description": "Downloaded npm package cache.",
+                    "recovery": "redownload",
                     "kind": "paths",
                     "rules": [
                         {
@@ -828,6 +840,7 @@
                     "id": "nuget-cache",
                     "name": "NuGet",
                     "description": "Downloaded NuGet packages; projects restore them when needed.",
+                    "recovery": "redownload",
                     "kind": "paths",
                     "rules": [
                         {
@@ -862,6 +875,7 @@
                     "id": "pip-cache",
                     "name": "pip",
                     "description": "Downloaded Python package and wheel cache.",
+                    "recovery": "redownload",
                     "kind": "paths",
                     "rules": [
                         {
@@ -889,6 +903,7 @@
                     "id": "pnpm-cache",
                     "name": "pnpm",
                     "description": "Downloaded pnpm metadata and package cache.",
+                    "recovery": "redownload",
                     "kind": "paths",
                     "rules": [
                         {
@@ -984,6 +999,7 @@
                     "id": "yarn-cache",
                     "name": "Yarn",
                     "description": "Downloaded Yarn package cache.",
+                    "recovery": "redownload",
                     "kind": "paths",
                     "rules": [
                         {
@@ -1002,6 +1018,8 @@
                     "id": "windows-crash-dumps",
                     "name": "Crash dumps",
                     "description": "Application crash dumps and Windows minidumps used for diagnostics.",
+                    "impact": "medium",
+                    "sideEffect": "Existing crash dumps cannot be recreated and will no longer be available for troubleshooting.",
                     "requiresAdministrator": true,
                     "kind": "paths",
                     "rules": [
@@ -1042,6 +1060,8 @@
                     "id": "windows-error-reports",
                     "name": "Error reports",
                     "description": "Archived and queued Windows Error Reporting data.",
+                    "impact": "medium",
+                    "sideEffect": "Existing reports cannot be recreated and will no longer be available for troubleshooting.",
                     "requiresAdministrator": true,
                     "kind": "paths",
                     "rules": [
@@ -1095,6 +1115,8 @@
                     "id": "windows-app-temp-state",
                     "name": "Microsoft Store app temporary files",
                     "description": "Temporary-state folders from Store apps; local settings and offline data are preserved.",
+                    "impact": "medium",
+                    "sideEffect": "Store apps may lose in-progress temporary state and need to recreate it.",
                     "kind": "paths",
                     "rules": [
                         {
@@ -1116,11 +1138,14 @@
                     "id": "windows-user-temp",
                     "name": "Temporary files",
                     "description": "Temporary files created by your account and applications.",
+                    "impact": "medium",
+                    "sideEffect": "Applications may lose recovery or in-progress files stored in the temporary folder; locked files are skipped.",
                     "kind": "paths",
                     "rules": [
                         {
                             "root": "localAppData",
-                            "path": "Temp"
+                            "path": "Temp",
+                            "minimumAgeDays": 7
                         }
                     ]
                 },
@@ -1151,12 +1176,15 @@
                     "id": "windows-system-temp",
                     "name": "Windows temporary files",
                     "description": "Temporary working files created by Windows services.",
+                    "impact": "medium",
+                    "sideEffect": "Services or installers may need to recreate temporary working files; locked files are skipped.",
                     "requiresAdministrator": true,
                     "kind": "paths",
                     "rules": [
                         {
                             "root": "windows",
-                            "path": "Temp"
+                            "path": "Temp",
+                            "minimumAgeDays": 7
                         }
                     ]
                 },

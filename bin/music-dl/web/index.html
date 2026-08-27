@@ -118,9 +118,9 @@
                             <div class="track-label">{{ track ? trackTitle(track.label) : '' }}</div>
                             <div class="track-status" :class="'status-' + (track ? track.status : 'queued')">
                                 <span v-if="!track || track.status === 'queued'">Queued</span>
-                                <span v-if="track && track.status === 'searching'"
-                                    >Searching ({{ Math.floor((now - track.searchStart) / 1000) }}s)</span
-                                >
+                                <span v-if="track && track.status === 'searching'">
+                                    Searching ({{ Math.floor((now - track.searchStart) / 1000) }}s)
+                                </span>
                                 <div v-if="track && track.status === 'downloading'" class="progress-wrap">
                                     <div class="progress-bar">
                                         <div class="progress-fill" :style="{ width: track.percent + '%' }"></div>
