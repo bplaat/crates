@@ -86,7 +86,7 @@ See the [examples](examples/) for many more examples.
 - Have a generic `Value` enum type to represent SQLite values
 - Bind and read `Value` types to and from SQLite statements
 - Have `FromRow` and `FromValue` derive macros to convert between Rust types and SQLite values
-- Work well and efficient with popular crates like `uuid` and `chrono`
+- Work well and efficient with popular crates like `jiff` and `uuid`
 - Have helpful error messages on query errors
 
 ## License

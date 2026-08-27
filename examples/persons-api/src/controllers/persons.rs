@@ -6,8 +6,8 @@
 
 use anyhow::Result;
 use bsqlite::{execute_args, preprocess_fts_query, query_args};
-use chrono::Utc;
 use from_derive::FromStruct;
+use jiff::Timestamp;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
 use validate::Validate;
@@ -161,7 +161,7 @@ pub(crate) fn persons_update(req: &Request, ctx: &Context) -> Result<Response> {
     person.name = body.name;
     person.age_in_years = body.age_in_years;
     person.relation = body.relation;
-    person.updated_at = Utc::now();
+    person.updated_at = Timestamp::now();
     execute_args!(
         ctx.database,
         "UPDATE persons SET name = :name, age = :age, relation = :relation, updated_at = :updated_at WHERE id = :id",

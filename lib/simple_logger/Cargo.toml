@@ -9,7 +9,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-chrono = { version = "0.4.45", default-features = false, features = ["now"] }
+jiff = "0.2.35"
 log = { version = "0.4.34", features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]

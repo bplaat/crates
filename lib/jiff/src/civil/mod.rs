@@ -4,5 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-pub(crate) mod date;
-pub(crate) mod datetime;
+pub use date::Date;
+pub use datetime::DateTime;
+
+mod date;
+mod datetime;

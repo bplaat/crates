@@ -402,34 +402,32 @@ mod uuid_impls {
     }
 }
 
-// MARK: Chrono
-#[cfg(feature = "chrono")]
-mod chrono_impls {
-    use chrono::{DateTime, NaiveDate, Utc};
+// MARK: Jiff
+#[cfg(feature = "jiff")]
+mod jiff_impls {
+    use jiff::civil::Date;
+    use jiff::tz::Offset;
+    use jiff::Timestamp;
 
     use super::*;
 
-    // MARK: From NaiveDate
-    impl From<NaiveDate> for Value {
-        fn from(value: NaiveDate) -> Self {
-            Value::Integer(
-                value
-                    .and_hms_opt(0, 0, 0)
-                    .expect("Should be some")
-                    .and_utc()
-                    .timestamp(),
-            )
+    // MARK: From Date
+    impl From<Date> for Value {
+        fn from(value: Date) -> Self {
+            let timestamp = Offset::UTC
+                .to_timestamp(value.at(0, 0, 0, 0))
+                .expect("date is in the timestamp range");
+            Value::Integer(timestamp.as_second())
         }
     }
-    impl TryFrom<Value> for NaiveDate {
+    impl TryFrom<Value> for Date {
         type Error = ValueError;
         fn try_from(value: Value) -> Result<Self> {
             match value {
-                Value::Integer(i) => Ok(DateTime::<Utc>::from_timestamp_secs(i)
-                    .ok_or_else(|| ValueError {
+                Value::Integer(i) => Ok(Offset::UTC
+                    .to_datetime(Timestamp::from_second(i).map_err(|_| ValueError {
                         msg: format!("invalid timestamp: {i}"),
-                    })?
-                    .naive_utc()
+                    })?)
                     .date()),
                 _ => Err(ValueError {
                     msg: "expected integer".to_string(),
@@ -438,31 +436,19 @@ mod chrono_impls {
         }
     }
 
-    impl From<Option<NaiveDate>> for Value {
-        fn from(value: Option<NaiveDate>) -> Self {
+    impl From<Option<Date>> for Value {
+        fn from(value: Option<Date>) -> Self {
             match value {
-                Some(v) => Value::Integer(
-                    v.and_hms_opt(0, 0, 0)
-                        .expect("Should be some")
-                        .and_utc()
-                        .timestamp(),
-                ),
+                Some(value) => Value::from(value),
                 None => Value::Null,
             }
         }
     }
-    impl TryFrom<Value> for Option<NaiveDate> {
+    impl TryFrom<Value> for Option<Date> {
         type Error = ValueError;
         fn try_from(value: Value) -> Result<Self> {
             match value {
-                Value::Integer(i) => Ok(Some(
-                    DateTime::<Utc>::from_timestamp_secs(i)
-                        .ok_or_else(|| ValueError {
-                            msg: format!("invalid timestamp: {i}"),
-                        })?
-                        .naive_utc()
-                        .date(),
-                )),
+                Value::Integer(i) => Ok(Some(Date::try_from(Value::Integer(i))?)),
                 Value::Null => Ok(None),
                 _ => Err(ValueError {
                     msg: "expected integer or null".to_string(),
@@ -471,21 +457,19 @@ mod chrono_impls {
         }
     }
 
-    // MARK: From DateTime<Utc>
-    impl From<DateTime<Utc>> for Value {
-        fn from(value: DateTime<Utc>) -> Self {
-            Value::Integer(value.timestamp())
+    // MARK: From Timestamp
+    impl From<Timestamp> for Value {
+        fn from(value: Timestamp) -> Self {
+            Value::Integer(value.as_second())
         }
     }
-    impl TryFrom<Value> for DateTime<Utc> {
+    impl TryFrom<Value> for Timestamp {
         type Error = ValueError;
         fn try_from(value: Value) -> Result<Self> {
             match value {
-                Value::Integer(i) => {
-                    Ok(Self::from_timestamp_secs(i).ok_or_else(|| ValueError {
-                        msg: format!("invalid timestamp: {i}"),
-                    })?)
-                }
+                Value::Integer(i) => Ok(Self::from_second(i).map_err(|_| ValueError {
+                    msg: format!("invalid timestamp: {i}"),
+                })?),
                 _ => Err(ValueError {
                     msg: "expected integer".to_string(),
                 }),
@@ -493,19 +477,23 @@ mod chrono_impls {
         }
     }
 
-    impl From<Option<DateTime<Utc>>> for Value {
-        fn from(value: Option<DateTime<Utc>>) -> Self {
+    impl From<Option<Timestamp>> for Value {
+        fn from(value: Option<Timestamp>) -> Self {
             match value {
-                Some(v) => Value::Integer(v.timestamp()),
+                Some(v) => Value::Integer(v.as_second()),
                 None => Value::Null,
             }
         }
     }
-    impl TryFrom<Value> for Option<DateTime<Utc>> {
+    impl TryFrom<Value> for Option<Timestamp> {
         type Error = ValueError;
         fn try_from(value: Value) -> Result<Self> {
             match value {
-                Value::Integer(i) => Ok(DateTime::<Utc>::from_timestamp_secs(i)),
+                Value::Integer(i) => {
+                    Ok(Some(Timestamp::from_second(i).map_err(|_| ValueError {
+                        msg: format!("invalid timestamp: {i}"),
+                    })?))
+                }
                 Value::Null => Ok(None),
                 _ => Err(ValueError {
                     msg: "expected integer or null".to_string(),
@@ -623,43 +611,41 @@ mod tests {
         assert!(Uuid::try_from(Value::Blob(vec![1_u8, 2_u8])).is_err());
     }
 
-    #[cfg(feature = "chrono")]
+    #[cfg(feature = "jiff")]
     #[test]
-    fn test_chrono_value_roundtrips_and_type_errors() {
-        use chrono::{DateTime, NaiveDate, Utc};
+    fn test_jiff_value_roundtrips_and_type_errors() {
+        use jiff::civil::Date;
+        use jiff::Timestamp;
 
-        let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
+        let date = Date::new(2024, 6, 15).unwrap();
         let timestamp = 1_700_000_000_i64;
-        let datetime = DateTime::<Utc>::from_timestamp_secs(timestamp).unwrap();
+        let datetime = Timestamp::from_second(timestamp).unwrap();
 
-        assert_eq!(NaiveDate::try_from(Value::from(date)).unwrap(), date);
+        assert_eq!(Date::try_from(Value::from(date)).unwrap(), date);
         assert_eq!(
-            Option::<NaiveDate>::try_from(Value::from(Some(date))).unwrap(),
+            Option::<Date>::try_from(Value::from(Some(date))).unwrap(),
             Some(date)
         );
-        assert_eq!(Option::<NaiveDate>::try_from(Value::Null).unwrap(), None);
+        assert_eq!(Option::<Date>::try_from(Value::Null).unwrap(), None);
 
         assert_eq!(
-            DateTime::<Utc>::try_from(Value::from(datetime)).unwrap(),
+            Timestamp::try_from(Value::from(datetime)).unwrap(),
             datetime
         );
         assert_eq!(
-            Option::<DateTime<Utc>>::try_from(Value::from(Some(datetime))).unwrap(),
+            Option::<Timestamp>::try_from(Value::from(Some(datetime))).unwrap(),
             Some(datetime)
         );
-        assert_eq!(
-            Option::<DateTime<Utc>>::try_from(Value::Null).unwrap(),
-            None
-        );
+        assert_eq!(Option::<Timestamp>::try_from(Value::Null).unwrap(), None);
 
         assert_eq!(
-            NaiveDate::try_from(Value::Text("2024-06-15".to_string()))
+            Date::try_from(Value::Text("2024-06-15".to_string()))
                 .unwrap_err()
                 .to_string(),
             "Value error: expected integer"
         );
         assert_eq!(
-            DateTime::<Utc>::try_from(Value::Text("2024-06-15T00:00:00Z".to_string()))
+            Timestamp::try_from(Value::Text("2024-06-15T00:00:00Z".to_string()))
                 .unwrap_err()
                 .to_string(),
             "Value error: expected integer"

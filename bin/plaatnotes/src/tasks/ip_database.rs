@@ -47,10 +47,11 @@ fn inflate_gzip(data: &[u8]) -> Option<Vec<u8>> {
 }
 
 fn try_download_mmdb(mmdb_path: &str) {
-    let date = chrono::Utc::now().naive_utc().date();
-    let date_str = format!("{date}");
-    let year: u32 = date_str[..4].parse().unwrap_or(2025);
-    let month: u32 = date_str[5..7].parse().unwrap_or(1);
+    let date = jiff::tz::Offset::UTC
+        .to_datetime(jiff::Timestamp::now())
+        .date();
+    let year = date.year();
+    let month = date.month();
     let (prev_year, prev_month) = if month == 1 {
         (year - 1, 12)
     } else {

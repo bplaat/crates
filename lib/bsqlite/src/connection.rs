@@ -642,19 +642,20 @@ mod test {
         Ok(())
     }
 
-    #[cfg(feature = "chrono")]
+    #[cfg(feature = "jiff")]
     #[test]
-    fn test_chrono_roundtrip() -> Result<(), StatementError> {
-        use chrono::{DateTime, NaiveDate, Utc};
+    fn test_jiff_roundtrip() -> Result<(), StatementError> {
+        use jiff::civil::Date;
+        use jiff::Timestamp;
         let db = Connection::open_memory().unwrap();
         db.execute(
             "CREATE TABLE events (day INTEGER NOT NULL, ts INTEGER NOT NULL)",
             (),
         )?;
-        let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
-        let ts = DateTime::<Utc>::from_timestamp_secs(1_700_000_000).unwrap();
+        let date = Date::new(2024, 6, 15).unwrap();
+        let ts = Timestamp::from_second(1_700_000_000).unwrap();
         db.execute("INSERT INTO events (day, ts) VALUES (?, ?)", (date, ts))?;
-        let (fetched_date, fetched_ts): (NaiveDate, DateTime<Utc>) =
+        let (fetched_date, fetched_ts): (Date, Timestamp) =
             db.query_some("SELECT day, ts FROM events", ())?;
         assert_eq!(fetched_date, date);
         assert_eq!(fetched_ts, ts);
