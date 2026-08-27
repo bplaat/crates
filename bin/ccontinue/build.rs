@@ -73,14 +73,16 @@ fn compile_standard_library(
     if archive_path.exists() {
         fs::remove_file(&archive_path).expect("remove old standard library archive");
     }
-    let archiver = if cfg!(target_vendor = "apple") {
-        "ar"
-    } else {
-        "llvm-ar"
-    };
-    let mut command = Command::new(archiver);
+    let archiver = env::var("AR").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "llvm-ar".to_owned()
+        } else {
+            "ar".to_owned()
+        }
+    });
+    let mut command = Command::new(&archiver);
     command.arg("rcs").arg(&archive_path).args(&object_files);
-    run_command(&mut command, archiver);
+    run_command(&mut command, &archiver);
     archive_path
 }
 
@@ -135,6 +137,7 @@ fn generate_tests(manifest_dir: &Path, output_dir: &Path) {
 }
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=AR");
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest dir"));
     let std_dir = manifest_dir.join("std");
     println!("cargo:rerun-if-changed={}", std_dir.display());

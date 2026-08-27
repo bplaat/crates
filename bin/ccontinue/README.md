@@ -19,8 +19,9 @@ ccc [options] <file.cc>
 | `-c`        | Only transpile and compile (emit `.o` object)  |
 | `-r`        | Run the linked binary after building           |
 
-`ccc` uses Clang by default. Set `CC` to select another C compiler, `CFLAGS` to
-add compile flags, and `LDFLAGS` to add linker flags.
+`ccc` uses Clang by default. Set `CC` to select another C compiler, `LD` to
+select the linker used by the compiler, `CFLAGS` to add compile flags, and
+`LDFLAGS` to add linker flags.
 
 ## Syntax
 

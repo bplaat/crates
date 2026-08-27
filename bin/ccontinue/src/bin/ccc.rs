@@ -118,6 +118,7 @@ Options:
 
 Environment:
   CC                          C compiler command (default: clang)
+  LD                          Linker used by the C compiler
   CFLAGS                      Additional C compiler flags
   LDFLAGS                     Additional linker flags"
         );
@@ -252,20 +253,24 @@ fn write_transpiled_sources(
     Ok(())
 }
 
-/// Extracts the prebuilt standard library and C headers for compiler access.
-fn setup_std_files(temp_mgr: &TempFileManager) -> Result<String, String> {
+/// Extracts the standard library C headers for compiler access.
+fn setup_std_headers(temp_mgr: &TempFileManager) -> Result<(), String> {
     for &(filename, content) in STD_FILES {
         let dest = temp_mgr.base_dir().join(filename);
         std::fs::write(&dest, content)
             .map_err(|error| format!("can't write standard library file {filename}: {error}"))?;
     }
+    Ok(())
+}
 
-    let archive_path = temp_mgr.base_dir().join("libccontinue_std.a");
+/// Extracts the prebuilt standard library archive.
+fn setup_std_archive(temp_mgr: &TempFileManager) -> Result<String, String> {
     let archive = if std::env::var_os("CCONTINUE_SANITIZE_STD").is_some() {
         STD_SANITIZED_ARCHIVE.unwrap_or(STD_ARCHIVE)
     } else {
         STD_ARCHIVE
     };
+    let archive_path = temp_mgr.base_dir().join("libccontinue_std.a");
     std::fs::write(&archive_path, archive)
         .map_err(|error| format!("can't write standard library archive: {error}"))?;
 
@@ -314,7 +319,7 @@ fn compile_sources(
             let mut cmd = Command::new(cc);
             add_compiler_flags(&mut cmd, include_paths, cflags);
             cmd.args(["-c", &source_path, "-o", &object_path]);
-            run_compiler(&mut cmd)?;
+            run_tool(&mut cmd, "compiler")?;
             continue;
         }
 
@@ -333,12 +338,12 @@ fn add_compiler_flags(cmd: &mut Command, include_paths: &[String], cflags: &[Str
     }
 }
 
-fn run_compiler(cmd: &mut Command) -> Result<(), String> {
+fn run_tool(cmd: &mut Command, description: &str) -> Result<(), String> {
     let status = cmd
         .status()
-        .map_err(|error| format!("failed to run compiler: {error}"))?;
+        .map_err(|error| format!("failed to run {description}: {error}"))?;
     if !status.success() {
-        return Err(format!("compiler failed with {status}"));
+        return Err(format!("{description} failed with {status}"));
     }
     Ok(())
 }
@@ -351,6 +356,7 @@ fn link_and_run(
     output: &Option<String>,
     files: &[String],
     cc: &str,
+    ld: Option<&str>,
     flag_run: bool,
     include_paths: &[String],
     cflags: &[String],
@@ -366,13 +372,16 @@ fn link_and_run(
     });
 
     let mut link_cmd = Command::new(cc);
+    if let Some(ld) = ld {
+        link_cmd.arg(format!("-fuse-ld={ld}"));
+    }
     if has_sources {
         add_compiler_flags(&mut link_cmd, include_paths, cflags);
     }
     link_cmd.args(linker_inputs);
     link_cmd.args(ldflags);
     link_cmd.args(["-o", &exe_path]);
-    run_compiler(&mut link_cmd)?;
+    run_tool(&mut link_cmd, "linker")?;
 
     if flag_run {
         let executable = std::path::Path::new(&exe_path);
@@ -400,6 +409,7 @@ fn env_flags(name: &str) -> Vec<String> {
 fn run() -> Result<i32, String> {
     let args = parse_args();
     let cc = std::env::var("CC").unwrap_or_else(|_| "clang".to_owned());
+    let ld = std::env::var("LD").ok();
     let cflags = env_flags("CFLAGS");
     let ldflags = env_flags("LDFLAGS");
 
@@ -421,7 +431,7 @@ fn run() -> Result<i32, String> {
     let mut include_paths = vec![".".to_owned(), std_temp_path];
     include_paths.extend(args.include_paths.clone());
 
-    let std_archive_path = setup_std_files(&temp_mgr)?;
+    setup_std_headers(&temp_mgr)?;
 
     let (mut linker_inputs, has_sources) = compile_sources(
         &temp_mgr,
@@ -435,6 +445,7 @@ fn run() -> Result<i32, String> {
     if args.flag_compile {
         return Ok(0);
     }
+    let std_archive_path = setup_std_archive(&temp_mgr)?;
     linker_inputs.push(std_archive_path);
 
     // Link and optionally run
@@ -444,6 +455,7 @@ fn run() -> Result<i32, String> {
         &args.output,
         &args.files,
         &cc,
+        ld.as_deref(),
         args.flag_run,
         &include_paths,
         &cflags,
