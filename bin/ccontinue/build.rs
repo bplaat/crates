@@ -4,46 +4,253 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![doc = include_str!("README.md")]
+//! Generates and compiles the embedded cContinue standard library.
 
-use std::fs;
-use std::path::Path;
+#[path = "src/lib.rs"]
+pub mod ccontinue;
 
-fn main() {
-    println!("cargo:rerun-if-changed=std/");
-    println!("cargo:rerun-if-changed=tests/");
+use std::collections::{HashMap, HashSet};
+use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::{env, fs};
 
-    // Generate test functions for each .cc file in tests/
-    let tests_dir = Path::new("tests");
-    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR must be set by cargo");
-    let dest = Path::new(&out_dir).join("generated_tests.rs");
+use ccontinue::Transpiler;
+use regex::Regex;
 
-    let mut test_fns = String::new();
-    let mut entries: Vec<_> = fs::read_dir(tests_dir)
-        .expect("tests/ dir should exist")
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|x| x == "cc").unwrap_or(false))
+fn sorted_files(directory: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = fs::read_dir(directory)
+        .expect("read standard library directory")
+        .map(|entry| entry.expect("read standard library entry").path())
+        .filter(|path| path.is_file())
         .collect();
-    entries.sort_by_key(|e| e.file_name());
+    files.sort();
+    files
+}
 
-    for entry in &entries {
-        let path = entry.path();
-        let stem = path
-            .file_stem()
-            .expect("path has file stem")
-            .to_str()
-            .expect("stem is valid UTF-8");
-        // Sanitize name: digits and letters only (replace non-alnum with _)
-        let fn_name: String = stem
-            .chars()
-            .map(|c| if c.is_alphanumeric() { c } else { '_' })
-            .collect();
-        let path_str = path.to_str().expect("path is valid UTF-8");
-        test_fns.push_str(&format!(
-            "#[test]\nfn test_{fn_name}() {{\n    run_test({path_str:?});\n}}\n\n"
-        ));
-        println!("cargo:rerun-if-changed={path_str}");
+fn run_command(command: &mut Command, description: &str) {
+    let status = command
+        .status()
+        .unwrap_or_else(|error| panic!("failed to run {description}: {error}"));
+    assert!(status.success(), "{description} failed with {status}");
+}
+
+fn compile_standard_library(
+    generated_dir: &Path,
+    output_dir: &Path,
+    c_files: &[PathBuf],
+    archive_name: &str,
+    extra_flags: &[&str],
+) -> PathBuf {
+    let archive_stem = archive_name.trim_end_matches(".a");
+    let mut object_files = Vec::with_capacity(c_files.len());
+    for (index, c_file) in c_files.iter().enumerate() {
+        let object_file = output_dir.join(format!("{archive_stem}_{index}.o"));
+        let mut command = Command::new("clang");
+        command
+            .arg("-std=c11")
+            .arg("-Wall")
+            .arg("-Wextra")
+            .arg("-Wpedantic")
+            .arg("-Werror")
+            .args(extra_flags)
+            .arg("-I")
+            .arg(generated_dir)
+            .arg("-c")
+            .arg(c_file)
+            .arg("-o")
+            .arg(&object_file);
+        let target = env::var("TARGET").expect("target triple");
+        let host = env::var("HOST").expect("host triple");
+        if target != host {
+            command.arg(format!("--target={target}"));
+        }
+        run_command(&mut command, "clang");
+        object_files.push(object_file);
     }
 
-    fs::write(&dest, test_fns).expect("write generated tests file");
+    let archive_path = output_dir.join(archive_name);
+    if archive_path.exists() {
+        fs::remove_file(&archive_path).expect("remove old standard library archive");
+    }
+    let archiver = if cfg!(target_vendor = "apple") {
+        "ar"
+    } else {
+        "llvm-ar"
+    };
+    let mut command = Command::new(archiver);
+    command.arg("rcs").arg(&archive_path).args(&object_files);
+    run_command(&mut command, archiver);
+    archive_path
+}
+
+fn generate_tests(manifest_dir: &Path, output_dir: &Path) {
+    let tests_dir = manifest_dir.join("tests");
+    println!("cargo:rerun-if-changed={}", tests_dir.display());
+    let test_files = sorted_files(&tests_dir);
+    let declaration_regex = Regex::new(r"\b(?:class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)")
+        .expect("valid declaration regex");
+    let mut groups: Vec<(HashSet<String>, Vec<PathBuf>)> = Vec::new();
+
+    for path in test_files {
+        if path.extension().and_then(|extension| extension.to_str()) != Some("cc") {
+            continue;
+        }
+        println!("cargo:rerun-if-changed={}", path.display());
+        let source = fs::read_to_string(&path).expect("read test source");
+        let declarations: HashSet<String> = declaration_regex
+            .captures_iter(&source)
+            .map(|captures| captures[1].to_owned())
+            .collect();
+        let group_index = groups
+            .iter()
+            .position(|(names, _)| names.is_disjoint(&declarations))
+            .unwrap_or_else(|| {
+                groups.push((HashSet::new(), Vec::new()));
+                groups.len() - 1
+            });
+        groups[group_index].0.extend(declarations);
+        groups[group_index].1.push(path.clone());
+    }
+
+    let mut generated = String::from("// This file is generated by build.rs, do not edit.\n");
+    generated.push_str("const TEST_GROUPS: &[&[&str]] = &[\n");
+    for (_, paths) in &groups {
+        generated.push_str("    &[\n");
+        for path in paths {
+            writeln!(generated, "        {path:?},").expect("write test group path");
+        }
+        generated.push_str("    ],\n");
+    }
+    generated.push_str("];\n");
+
+    for group_index in 0..groups.len() {
+        writeln!(
+            generated,
+            "#[test]\nfn test_group_{group_index}() {{\n    run_group({group_index}, TEST_GROUPS[{group_index}]);\n}}"
+        )
+        .expect("write generated test");
+    }
+    fs::write(output_dir.join("generated_tests.rs"), generated).expect("write generated tests");
+}
+
+fn main() {
+    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest dir"));
+    let std_dir = manifest_dir.join("std");
+    println!("cargo:rerun-if-changed={}", std_dir.display());
+    let output_dir = PathBuf::from(env::var_os("OUT_DIR").expect("output dir"));
+    let generated_dir = output_dir.join("std");
+    generate_tests(&manifest_dir, &output_dir);
+    if generated_dir.exists() {
+        fs::remove_dir_all(&generated_dir).expect("clear generated standard library directory");
+    }
+    fs::create_dir_all(&generated_dir).expect("create generated standard library directory");
+
+    let files = sorted_files(&std_dir);
+    let mut embedded_includes = HashMap::new();
+    for path in &files {
+        println!("cargo:rerun-if-changed={}", path.display());
+        if path.extension().and_then(|extension| extension.to_str()) == Some("hh") {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .expect("standard library filename is valid UTF-8");
+            embedded_includes.insert(
+                name.to_owned(),
+                fs::read_to_string(path).expect("read standard library header"),
+            );
+        }
+    }
+
+    let mut transpiler = Transpiler::new(Vec::new());
+    transpiler.set_embedded_includes(embedded_includes);
+    let mut c_files = Vec::new();
+    let mut embedded_files = Vec::new();
+    let mut embedded_include_files = Vec::new();
+
+    for path in &files {
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("standard library filename is valid UTF-8");
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some("cc") => {
+                transpiler.reset();
+                let source = fs::read_to_string(path).expect("read standard library source");
+                let output = transpiler.transpile(name, false, &source);
+                let output_name = name.replace(".cc", ".c");
+                let output_path = generated_dir.join(&output_name);
+                fs::write(&output_path, output).expect("write generated standard library source");
+                c_files.push(output_path);
+            }
+            Some("hh") => {
+                embedded_include_files.push((name.to_owned(), path.clone()));
+            }
+            Some("c") => {
+                let output_path = generated_dir.join(name);
+                fs::copy(path, &output_path).expect("copy standard library C source");
+                c_files.push(output_path);
+            }
+            Some("h") => {
+                let output_path = generated_dir.join(name);
+                fs::copy(path, &output_path).expect("copy standard library C header");
+                embedded_files.push((name.to_owned(), output_path));
+            }
+            _ => {}
+        }
+    }
+
+    let archive_path = compile_standard_library(
+        &generated_dir,
+        &output_dir,
+        &c_files,
+        "libccontinue_std.a",
+        &["-O2"],
+    );
+    let sanitizer_archive_path = if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        None
+    } else {
+        Some(compile_standard_library(
+            &generated_dir,
+            &output_dir,
+            &c_files,
+            "libccontinue_std_sanitized.a",
+            &[
+                "-O1",
+                "-g",
+                "-fsanitize=address,undefined",
+                "-fno-omit-frame-pointer",
+                "-fno-sanitize-recover=all",
+            ],
+        ))
+    };
+
+    let mut generated = String::from(
+        "// This file is generated by build.rs, do not edit.\n\
+         pub(crate) const STD_ARCHIVE: &[u8] = include_bytes!(",
+    );
+    write!(generated, "{archive_path:?}").expect("write archive path");
+    generated.push_str(");\npub(crate) const STD_SANITIZED_ARCHIVE: Option<&[u8]> = ");
+    if let Some(path) = sanitizer_archive_path {
+        write!(generated, "Some(include_bytes!({path:?}))").expect("write sanitizer archive path");
+    } else {
+        generated.push_str("None");
+    }
+    generated.push_str(
+        ";\n\
+        pub(crate) const STD_FILES: &[(&str, &str)] = &[\n",
+    );
+    for (name, path) in embedded_files {
+        writeln!(generated, "    ({name:?}, include_str!({path:?})),")
+            .expect("write embedded standard library file");
+    }
+    generated.push_str("];\n");
+    generated.push_str("pub(crate) const STD_INCLUDES: &[(&str, &str)] = &[\n");
+    for (name, path) in embedded_include_files {
+        writeln!(generated, "    ({name:?}, include_str!({path:?})),")
+            .expect("write embedded standard library include");
+    }
+    generated.push_str("];\n");
+    fs::write(output_dir.join("embedded_std.rs"), generated)
+        .expect("write embedded standard library manifest");
 }

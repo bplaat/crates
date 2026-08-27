@@ -10,11 +10,12 @@ use std::path::Path;
 use indexmap::IndexMap;
 use regex::{Captures, Regex, regex};
 
-use crate::types::{Argument, Class, Field, Interface, Method};
-use crate::utils::{find_matching_close, parse_arguments, to_snake_case};
+use super::types::{Argument, Class, Field, Interface, Method};
+use super::utils::{find_matching_close, parse_arguments, to_snake_case};
 
 // MARK: Transpiler
-pub(crate) struct Transpiler {
+/// Translates cContinue source code into C11 source code.
+pub struct Transpiler {
     include_paths: Vec<String>,
     embedded_includes: HashMap<String, String>,
     classes: IndexMap<String, Class>,
@@ -24,7 +25,8 @@ pub(crate) struct Transpiler {
 }
 
 impl Transpiler {
-    pub(crate) fn new(include_paths: Vec<String>) -> Self {
+    /// Creates a transpiler with filesystem include search paths.
+    pub fn new(include_paths: Vec<String>) -> Self {
         Transpiler {
             include_paths,
             embedded_includes: HashMap::new(),
@@ -35,11 +37,13 @@ impl Transpiler {
         }
     }
 
-    pub(crate) fn set_embedded_includes(&mut self, map: HashMap<String, String>) {
+    /// Replaces the in-memory include files available to the transpiler.
+    pub fn set_embedded_includes(&mut self, map: HashMap<String, String>) {
         self.embedded_includes = map;
     }
 
-    pub(crate) fn reset(&mut self) {
+    /// Clears state collected while transpiling the previous source file.
+    pub fn reset(&mut self) {
         self.next_interface_id = 1;
         self.interfaces = IndexMap::new();
         self.classes = IndexMap::new();
@@ -1599,7 +1603,8 @@ impl Transpiler {
         text
     }
 
-    pub(crate) fn transpile(&mut self, path: &str, is_header: bool, text: &str) -> String {
+    /// Translates one source or header file into C11 source text.
+    pub fn transpile(&mut self, path: &str, is_header: bool, text: &str) -> String {
         let text = self.step_prelude_and_includes(path, is_header, text);
         let text = self.step_interfaces(&text);
         if !is_header {

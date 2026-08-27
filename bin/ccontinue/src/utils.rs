@@ -6,7 +6,7 @@
 
 use regex::regex;
 
-use crate::types::Argument;
+use super::types::Argument;
 
 pub(crate) fn to_snake_case(camel_case: &str) -> String {
     let mut s = String::new();

@@ -6,7 +6,7 @@
 
 use indexmap::IndexMap;
 
-use crate::utils::to_snake_case;
+use super::utils::to_snake_case;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Field {
