@@ -154,6 +154,14 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(String, Option<
 }
 
 fn main() -> Result<()> {
+    let rustflags = env::var("RUSTFLAGS").unwrap_or_default();
+    let rustflags = format!(
+        "{rustflags}{}-D warnings",
+        if rustflags.is_empty() { "" } else { " " }
+    );
+    // SAFETY: xtask updates the environment before starting any other threads.
+    unsafe { env::set_var("RUSTFLAGS", rustflags) };
+
     let (task, package) = parse_args(env::args().skip(1))?;
     Xtask::new()?.run(&task, package.as_deref())
 }

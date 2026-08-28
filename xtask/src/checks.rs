@@ -267,7 +267,10 @@ impl Xtask {
                 None => vec!["--all-features".to_owned()],
             };
             let mut command = Command::new("cargo");
-            command.env("RUSTFLAGS", "-Zsanitizer=address");
+            command.env(
+                "RUSTFLAGS",
+                format!("{} -Zsanitizer=address", env::var("RUSTFLAGS")?),
+            );
             command.args([
                 "+nightly", "test", "-p", package, "--lib", "--tests", "--locked",
             ]);

@@ -8,7 +8,7 @@
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::io::{self, BufReader, Read, Write};
+use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
@@ -94,6 +94,8 @@ impl WebSocket {
     /// Connect to a WebSocket server
     #[cfg(feature = "client")]
     pub fn connect(url: impl AsRef<str>) -> Result<Self, ConnectError> {
+        use std::io::BufReader;
+
         let parsed_url = url::Url::parse(url.as_ref()).map_err(|_| ConnectError)?;
         if parsed_url.scheme() != "ws" {
             return Err(ConnectError);
@@ -546,7 +548,6 @@ pub fn upgrade(request: &Request, handler: impl FnOnce(WebSocket) + Send + 'stat
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use std::io::BufRead;
     use std::net::{Ipv4Addr, Shutdown, TcpListener};
     use std::thread;
     use std::time::Duration;
@@ -623,6 +624,8 @@ mod test {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let address = listener.local_addr().unwrap();
         thread::spawn(move || {
+            use std::io::{BufRead, BufReader};
+
             let (stream, _) = listener.accept().unwrap();
             let mut reader = BufReader::new(stream);
             let mut key = None;
