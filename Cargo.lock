@@ -107,6 +107,9 @@ dependencies = [
  "bsql_derive",
  "chrono",
  "libsqlite3-sys",
+ "native-tls",
+ "sha1",
+ "sha2",
  "uuid",
 ]
 

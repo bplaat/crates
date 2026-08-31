@@ -10,7 +10,7 @@ use bsql::Connection;
 
 fn main() -> anyhow::Result<()> {
     // Connect and create table
-    let db = Connection::open_sqlite_memory().expect("Can't open database");
+    let db = Connection::open_sqlite_memory()?;
     db.execute(
         "CREATE TABLE IF NOT EXISTS persons (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

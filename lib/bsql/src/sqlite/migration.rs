@@ -50,6 +50,11 @@ impl Connection {
     /// Apply all pending migrations in version order, tracking applied versions in
     /// the `schema_migrations` table
     pub fn migration(&self, migrations: &[Migration]) -> Result<(), MigrationError> {
+        if !self.is_sqlite() {
+            return Err(MigrationError::new(
+                "migrations are currently only supported by the SQLite backend",
+            ));
+        }
         self.execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations (
                 version    INTEGER PRIMARY KEY,

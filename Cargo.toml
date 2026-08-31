@@ -28,29 +28,25 @@ panic = "abort"
 overflow-checks = false
 
 [patch.crates-io]
-# Path published libraries with local versions
-bsql = { path = "lib/bsql" }
-bsql_derive = { path = "lib/bsql_derive" }
-simple-useragent = { path = "lib/simple-useragent" }
-small-http = { path = "lib/small-http" }
-small-router = { path = "lib/small-router" }
-
-# Patch some popular crates with my minimal alternatives
 base64 = { path = "lib/base64" }
 block2 = { path = "lib/block2" }
+bsql = { path = "lib/bsql" }
+bsql_derive = { path = "lib/bsql_derive" }
 chrono = { path = "lib/chrono" }
 copy_dir = { path = "lib/copy_dir" }
+digest = { path = "lib/digest" }
 directories = { path = "lib/directories" }
 dotenv = { path = "lib/dotenv" }
 enable-ansi-support = { path = "lib/enable-ansi-support" }
 form_urlencoded = { path = "lib/form_urlencoded" }
 getrandom = { path = "lib/getrandom" }
+hmac = { path = "lib/hmac" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 local-ip-address = { path = "lib/local-ip-address" }
-native-tls = { path = "lib/native-tls" }
 maxminddb = { path = "lib/maxminddb" }
 mime = { path = "lib/mime" }
 mime_guess = { path = "lib/mime_guess" }
+native-tls = { path = "lib/native-tls" }
 objc2 = { path = "lib/objc2" }
 objc2-proc-macros = { path = "lib/objc2-proc-macros" }
 percent-encoding = { path = "lib/percent-encoding" }
@@ -59,12 +55,13 @@ rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 semver = { path = "lib/semver" }
 serde_yaml = { path = "lib/serde_yaml" }
-digest = { path = "lib/digest" }
-hmac = { path = "lib/hmac" }
-subtle = { path = "lib/subtle" }
 sha1 = { path = "lib/sha1" }
 sha2 = { path = "lib/sha2" }
+simple-useragent = { path = "lib/simple-useragent" }
 simple_logger = { path = "lib/simple_logger" }
+small-http = { path = "lib/small-http" }
+small-router = { path = "lib/small-router" }
+subtle = { path = "lib/subtle" }
 terminal_size = { path = "lib/terminal_size" }
 threadpool = { path = "lib/threadpool" }
 trybuild = { path = "lib/trybuild" }

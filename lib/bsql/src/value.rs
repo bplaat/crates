@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Bastiaan van der Plaat
+ * Copyright (c) 2024-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -7,11 +7,12 @@
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
-/// A SQLite value
+/// A database value.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// A NULL value
     Null,
-    /// An 64-bit integer value
+    /// A signed 64-bit integer value.
     Integer(i64),
     /// A 64-bit floating point value
     Float(f64),
@@ -45,311 +46,83 @@ impl Display for ValueError {
 
 impl Error for ValueError {}
 
-// MARK: From T
-impl From<bool> for Value {
-    fn from(value: bool) -> Self {
-        Value::Integer(if value { 1 } else { 0 })
-    }
-}
-impl TryFrom<Value> for bool {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(v != 0),
-            _ => Err(ValueError {
-                msg: "expected integer".to_string(),
-            }),
+// MARK: Value conversions
+macro_rules! impl_value_conversion {
+    (
+        $type:ty,
+        $variant:ident,
+        $expected:literal,
+        |$input:ident| $encode:expr,
+        |$stored:ident| $decode:expr $(,)?
+    ) => {
+        impl From<$type> for Value {
+            fn from($input: $type) -> Self {
+                Value::$variant($encode)
+            }
         }
+
+        impl TryFrom<Value> for $type {
+            type Error = ValueError;
+
+            fn try_from(value: Value) -> Result<Self> {
+                match value {
+                    Value::$variant($stored) => $decode,
+                    _ => Err(ValueError::new(concat!("expected ", $expected))),
+                }
+            }
+        }
+
+        impl TryFrom<Value> for Option<$type> {
+            type Error = ValueError;
+
+            fn try_from(value: Value) -> Result<Self> {
+                match value {
+                    Value::$variant($stored) => ($decode).map(Some),
+                    Value::Null => Ok(None),
+                    _ => Err(ValueError::new(concat!("expected ", $expected, " or null"))),
+                }
+            }
+        }
+    };
+}
+
+impl<T> From<Option<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Option<T>) -> Self {
+        value.map_or(Value::Null, Into::into)
     }
 }
 
-impl From<i8> for Value {
-    fn from(value: i8) -> Self {
-        Value::Integer(value as i64)
-    }
-}
-impl TryFrom<Value> for i8 {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(v as i8),
-            _ => Err(ValueError {
-                msg: "expected integer".to_string(),
-            }),
-        }
-    }
+impl_value_conversion!(
+    bool,
+    Integer,
+    "integer",
+    |value| if value { 1 } else { 0 },
+    |value| Ok(value != 0),
+);
+
+macro_rules! impl_signed_value_conversions {
+    ($($type:ty),+ $(,)?) => {
+        $(
+            impl_value_conversion!(
+                $type,
+                Integer,
+                "integer",
+                |value| i64::from(value),
+                |value| <$type>::try_from(value)
+                    .map_err(|_| ValueError::new("integer is out of range")),
+            );
+        )+
+    };
 }
 
-impl From<i16> for Value {
-    fn from(value: i16) -> Self {
-        Value::Integer(value as i64)
-    }
-}
-impl TryFrom<Value> for i16 {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(v as i16),
-            _ => Err(ValueError {
-                msg: "expected integer".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<i32> for Value {
-    fn from(value: i32) -> Self {
-        Value::Integer(value as i64)
-    }
-}
-impl TryFrom<Value> for i32 {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(v as i32),
-            _ => Err(ValueError {
-                msg: "expected integer".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<i64> for Value {
-    fn from(value: i64) -> Self {
-        Value::Integer(value)
-    }
-}
-impl TryFrom<Value> for i64 {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(v),
-            _ => Err(ValueError {
-                msg: "expected integer".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<f64> for Value {
-    fn from(value: f64) -> Self {
-        Value::Float(value)
-    }
-}
-impl TryFrom<Value> for f64 {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Float(v) => Ok(v),
-            _ => Err(ValueError {
-                msg: "expected float".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<String> for Value {
-    fn from(value: String) -> Self {
-        Value::Text(value)
-    }
-}
-impl TryFrom<Value> for String {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Text(v) => Ok(v),
-            _ => Err(ValueError {
-                msg: "expected text".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<Vec<u8>> for Value {
-    fn from(value: Vec<u8>) -> Self {
-        Value::Blob(value)
-    }
-}
-impl TryFrom<Value> for Vec<u8> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Blob(v) => Ok(v),
-            _ => Err(ValueError {
-                msg: "expected blob".to_string(),
-            }),
-        }
-    }
-}
-
-// MARK: From Option<T>
-impl From<Option<bool>> for Value {
-    fn from(value: Option<bool>) -> Self {
-        match value {
-            Some(v) => Value::Integer(if v { 1 } else { 0 }),
-            None => Value::Null,
-        }
-    }
-}
-impl TryFrom<Value> for Option<bool> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(Some(v != 0)),
-            Value::Null => Ok(None),
-            _ => Err(ValueError {
-                msg: "expected integer or null".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<Option<i8>> for Value {
-    fn from(value: Option<i8>) -> Self {
-        match value {
-            Some(v) => Value::Integer(v as i64),
-            None => Value::Null,
-        }
-    }
-}
-impl TryFrom<Value> for Option<i8> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(Some(v as i8)),
-            Value::Null => Ok(None),
-            _ => Err(ValueError {
-                msg: "expected integer or null".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<Option<i16>> for Value {
-    fn from(value: Option<i16>) -> Self {
-        match value {
-            Some(v) => Value::Integer(v as i64),
-            None => Value::Null,
-        }
-    }
-}
-impl TryFrom<Value> for Option<i16> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(Some(v as i16)),
-            Value::Null => Ok(None),
-            _ => Err(ValueError {
-                msg: "expected integer or null".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<Option<i32>> for Value {
-    fn from(value: Option<i32>) -> Self {
-        match value {
-            Some(v) => Value::Integer(v as i64),
-            None => Value::Null,
-        }
-    }
-}
-impl TryFrom<Value> for Option<i32> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(Some(v as i32)),
-            Value::Null => Ok(None),
-            _ => Err(ValueError {
-                msg: "expected integer or null".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<Option<i64>> for Value {
-    fn from(value: Option<i64>) -> Self {
-        match value {
-            Some(v) => Value::Integer(v),
-            None => Value::Null,
-        }
-    }
-}
-impl TryFrom<Value> for Option<i64> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Integer(v) => Ok(Some(v)),
-            Value::Null => Ok(None),
-            _ => Err(ValueError {
-                msg: "expected integer or null".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<Option<f64>> for Value {
-    fn from(value: Option<f64>) -> Self {
-        match value {
-            Some(v) => Value::Float(v),
-            None => Value::Null,
-        }
-    }
-}
-impl TryFrom<Value> for Option<f64> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Float(v) => Ok(Some(v)),
-            Value::Null => Ok(None),
-            _ => Err(ValueError {
-                msg: "expected float or null".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<Option<String>> for Value {
-    fn from(value: Option<String>) -> Self {
-        match value {
-            Some(v) => Value::Text(v),
-            None => Value::Null,
-        }
-    }
-}
-impl TryFrom<Value> for Option<String> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Text(v) => Ok(Some(v)),
-            Value::Null => Ok(None),
-            _ => Err(ValueError {
-                msg: "expected text or null".to_string(),
-            }),
-        }
-    }
-}
-
-impl From<Option<Vec<u8>>> for Value {
-    fn from(value: Option<Vec<u8>>) -> Self {
-        match value {
-            Some(v) => Value::Blob(v),
-            None => Value::Null,
-        }
-    }
-}
-impl TryFrom<Value> for Option<Vec<u8>> {
-    type Error = ValueError;
-    fn try_from(value: Value) -> Result<Self> {
-        match value {
-            Value::Blob(v) => Ok(Some(v)),
-            Value::Null => Ok(None),
-            _ => Err(ValueError {
-                msg: "expected blob or null".to_string(),
-            }),
-        }
-    }
-}
+impl_signed_value_conversions!(i8, i16, i32);
+impl_value_conversion!(i64, Integer, "integer", |value| value, |value| Ok(value));
+impl_value_conversion!(f64, Float, "float", |value| value, |value| Ok(value));
+impl_value_conversion!(String, Text, "text", |value| value, |value| Ok(value));
+impl_value_conversion!(Vec<u8>, Blob, "blob", |value| value, |value| Ok(value));
 
 // MARK: Uuid
 #[cfg(feature = "uuid")]
@@ -358,48 +131,13 @@ mod uuid_impls {
 
     use super::*;
 
-    // MARK: From Uuid
-    impl From<Uuid> for Value {
-        fn from(value: Uuid) -> Self {
-            Value::Blob(value.into_bytes().to_vec())
-        }
-    }
-    impl TryFrom<Value> for Uuid {
-        type Error = ValueError;
-        fn try_from(value: Value) -> Result<Self> {
-            match value {
-                Value::Blob(v) => {
-                    Ok(Uuid::from_slice(&v).map_err(|e| ValueError { msg: e.to_string() })?)
-                }
-                _ => Err(ValueError {
-                    msg: "expected blob".to_string(),
-                }),
-            }
-        }
-    }
-
-    impl From<Option<Uuid>> for Value {
-        fn from(value: Option<Uuid>) -> Self {
-            match value {
-                Some(v) => Value::Blob(v.into_bytes().to_vec()),
-                None => Value::Null,
-            }
-        }
-    }
-    impl TryFrom<Value> for Option<Uuid> {
-        type Error = ValueError;
-        fn try_from(value: Value) -> Result<Self> {
-            match value {
-                Value::Blob(v) => Ok(Some(
-                    Uuid::from_slice(&v).map_err(|e| ValueError { msg: e.to_string() })?,
-                )),
-                Value::Null => Ok(None),
-                _ => Err(ValueError {
-                    msg: "expected blob or null".to_string(),
-                }),
-            }
-        }
-    }
+    impl_value_conversion!(
+        Uuid,
+        Blob,
+        "blob",
+        |value| value.into_bytes().to_vec(),
+        |value| Uuid::from_slice(&value).map_err(|error| ValueError::new(error.to_string())),
+    );
 }
 
 // MARK: Chrono
@@ -409,110 +147,28 @@ mod chrono_impls {
 
     use super::*;
 
-    // MARK: From NaiveDate
-    impl From<NaiveDate> for Value {
-        fn from(value: NaiveDate) -> Self {
-            Value::Integer(
-                value
-                    .and_hms_opt(0, 0, 0)
-                    .expect("Should be some")
-                    .and_utc()
-                    .timestamp(),
-            )
-        }
-    }
-    impl TryFrom<Value> for NaiveDate {
-        type Error = ValueError;
-        fn try_from(value: Value) -> Result<Self> {
-            match value {
-                Value::Integer(i) => Ok(DateTime::<Utc>::from_timestamp_secs(i)
-                    .ok_or_else(|| ValueError {
-                        msg: format!("invalid timestamp: {i}"),
-                    })?
-                    .naive_utc()
-                    .date()),
-                _ => Err(ValueError {
-                    msg: "expected integer".to_string(),
-                }),
-            }
-        }
-    }
+    impl_value_conversion!(
+        NaiveDate,
+        Integer,
+        "integer",
+        |value| value
+            .and_hms_opt(0, 0, 0)
+            .expect("midnight is a valid time")
+            .and_utc()
+            .timestamp(),
+        |value| DateTime::<Utc>::from_timestamp_secs(value)
+            .ok_or_else(|| ValueError::new(format!("invalid timestamp: {value}")))
+            .map(|value| value.naive_utc().date()),
+    );
 
-    impl From<Option<NaiveDate>> for Value {
-        fn from(value: Option<NaiveDate>) -> Self {
-            match value {
-                Some(v) => Value::Integer(
-                    v.and_hms_opt(0, 0, 0)
-                        .expect("Should be some")
-                        .and_utc()
-                        .timestamp(),
-                ),
-                None => Value::Null,
-            }
-        }
-    }
-    impl TryFrom<Value> for Option<NaiveDate> {
-        type Error = ValueError;
-        fn try_from(value: Value) -> Result<Self> {
-            match value {
-                Value::Integer(i) => Ok(Some(
-                    DateTime::<Utc>::from_timestamp_secs(i)
-                        .ok_or_else(|| ValueError {
-                            msg: format!("invalid timestamp: {i}"),
-                        })?
-                        .naive_utc()
-                        .date(),
-                )),
-                Value::Null => Ok(None),
-                _ => Err(ValueError {
-                    msg: "expected integer or null".to_string(),
-                }),
-            }
-        }
-    }
-
-    // MARK: From DateTime<Utc>
-    impl From<DateTime<Utc>> for Value {
-        fn from(value: DateTime<Utc>) -> Self {
-            Value::Integer(value.timestamp())
-        }
-    }
-    impl TryFrom<Value> for DateTime<Utc> {
-        type Error = ValueError;
-        fn try_from(value: Value) -> Result<Self> {
-            match value {
-                Value::Integer(i) => {
-                    Ok(Self::from_timestamp_secs(i).ok_or_else(|| ValueError {
-                        msg: format!("invalid timestamp: {i}"),
-                    })?)
-                }
-                _ => Err(ValueError {
-                    msg: "expected integer".to_string(),
-                }),
-            }
-        }
-    }
-
-    impl From<Option<DateTime<Utc>>> for Value {
-        fn from(value: Option<DateTime<Utc>>) -> Self {
-            match value {
-                Some(v) => Value::Integer(v.timestamp()),
-                None => Value::Null,
-            }
-        }
-    }
-    impl TryFrom<Value> for Option<DateTime<Utc>> {
-        type Error = ValueError;
-        fn try_from(value: Value) -> Result<Self> {
-            match value {
-                Value::Integer(i) => Ok(DateTime::<Utc>::from_timestamp_secs(i)),
-                Value::Null => Ok(None),
-                _ => Err(ValueError {
-                    msg: "expected integer or null".to_string(),
-                }),
-            }
-        }
-    }
+    impl_value_conversion!(
+        DateTime<Utc>,
+        Integer,
+        "integer",
+        |value| value.timestamp(),
+        |value| DateTime::<Utc>::from_timestamp_secs(value)
+            .ok_or_else(|| ValueError::new(format!("invalid timestamp: {value}"))),
+    );
 }
 
 // MARK: Tests
@@ -544,6 +200,9 @@ mod tests {
             Some(-64)
         );
         assert_eq!(Option::<i64>::try_from(Value::Null).unwrap(), None);
+
+        assert!(i8::try_from(Value::Integer(128)).is_err());
+        assert!(Option::<i16>::try_from(Value::Integer(65_536)).is_err());
     }
 
     #[test]

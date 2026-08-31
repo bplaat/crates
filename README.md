@@ -8,7 +8,7 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 Most of these libraries are intended primarily for personal use, but can still be useful.
 
-- [bsql](lib/bsql) A simple and minimal Rust SQLite library with an ergonomic API
+- [bsql](lib/bsql) A simple and minimal Rust SQLite and MySQL library with an ergonomic API
 - [bsql_derive](lib/bsql_derive) The derive macros for the [bsql](lib/bsql) crate
 - [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
@@ -94,7 +94,7 @@ Some desktop apps written with the [bwebview](lib/bwebview) library.
 - [Music Downloader](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](bin/pixelfont) An 8x8 pixel font editor
 - [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
-- [Sequel Explorer](bin/sequelexplorer) A simple SQLite database GUI viewer
+- [Sequel Explorer](bin/sequelexplorer) A read-only SQLite and MySQL database GUI viewer
 
 ### Tools / Websites
 
@@ -202,11 +202,11 @@ This project is driven by three main goals:
 
 **1. A self-written minimal crates collection for backend software**
 
-Rather than pulling in large, general-purpose dependencies, this repo grows a curated set of small, focused libraries that cover exactly what is needed - nothing more. This includes an HTTP/1.1 server, a router, a SQLite wrapper, validation, password hashing, UUID generation, and more. Many of these are intentional minimal replacements for well-known crates on [crates.io](https://crates.io), rewritten from scratch to be lean, auditable, and free of transitive dependencies.
+Rather than pulling in large, general-purpose dependencies, this repo grows a curated set of small, focused libraries that cover exactly what is needed - nothing more. This includes an HTTP/1.1 server, a router, a SQLite and MySQL library, validation, password hashing, UUID generation, and more. Many of these are intentional minimal replacements for well-known crates on [crates.io](https://crates.io), rewritten from scratch to be lean, auditable, and free of transitive dependencies.
 
 **2. A minimal Electron/Tauri-like desktop platform**
 
-[bwebview](lib/bwebview) is a cross-platform native webview library that lets you ship desktop applications using web technologies, without the weight of bundling a full browser engine. It uses the system-native webview on each platform (WebKit on macOS/iOS, WebKitGTK on Linux, WebView2 on Windows) and exposes a small, clean Rust API. The [desktop apps](bin/) in this repo: a 2048 game, a SQLite viewer, a pixel font editor, a man page browser, serve as real-world validation of this platform.
+[bwebview](lib/bwebview) is a cross-platform native webview library that lets you ship desktop applications using web technologies, without the weight of bundling a full browser engine. It uses the system-native webview on each platform (WebKit on macOS/iOS, WebKitGTK on Linux, WebView2 on Windows) and exposes a small, clean Rust API. The [desktop apps](bin/) in this repo: a 2048 game, a SQLite and MySQL viewer, a pixel font editor, a man page browser, serve as real-world validation of this platform.
 
 **3. Tools and a custom build system for complex multi-language projects**
 
