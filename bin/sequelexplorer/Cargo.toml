@@ -19,7 +19,7 @@ workspace = true
 [dependencies]
 anyhow = "1.0"
 base64 = "0.23.1"
-bsql = "0.1.2"
+bsql = { version = "0.1.2", features = ["mysql", "mysql-native-password"] }
 bwebview = { path = "../../lib/bwebview", features = [
     "rust-embed",
     "dialog",
