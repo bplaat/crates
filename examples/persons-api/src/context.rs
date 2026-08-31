@@ -5,7 +5,7 @@
  */
 
 use anyhow::Result;
-use bsqlite::{Connection, OpenMode, run_migrations};
+use bsql::{Connection, run_migrations};
 
 use crate::models::{Person, Relation};
 
@@ -17,7 +17,7 @@ pub(crate) struct Context {
 
 impl Context {
     pub(crate) fn with_database(path: &str) -> Result<Self> {
-        let database = Connection::open(path, OpenMode::ReadWrite)?;
+        let database = Connection::open_sqlite(path)?;
         database.enable_wal_logging()?;
         database.apply_various_performance_settings()?;
         log::info!("Running database migrations...");
@@ -28,7 +28,7 @@ impl Context {
 
     #[cfg(test)]
     pub(crate) fn with_test_database() -> Result<Self> {
-        let database = Connection::open_memory()?;
+        let database = Connection::open_sqlite_memory()?;
         log::info!("Running database migrations...");
         run_migrations!(database, "src/migrations")?;
         Ok(Self { database })

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use bsqlite::{FromRow, FromValue};
+use bsql::{FromRow, FromValue};
 use chrono::{DateTime, Utc};
 use from_derive::{FromEnum, FromStruct};
 use uuid::Uuid;
@@ -17,7 +17,7 @@ use crate::api;
 pub(crate) struct Person {
     pub id: Uuid,
     pub name: String,
-    #[sqlite(rename = "age")]
+    #[sql(rename = "age")]
     pub age_in_years: i64,
     pub relation: Relation,
     pub created_at: DateTime<Utc>,

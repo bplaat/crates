@@ -8,8 +8,8 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 Most of these libraries are intended primarily for personal use, but can still be useful.
 
-- [bsqlite](lib/bsqlite) A simple and minimal Rust SQLite library with an ergonomic API
-- [bsqlite_derive](lib/bsqlite_derive) The derive macros for the [bsqlite](lib/bsqlite) crate
+- [bsql](lib/bsql) A simple and minimal Rust SQLite library with an ergonomic API
+- [bsql_derive](lib/bsql_derive) The derive macros for the [bsql](lib/bsql) crate
 - [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
 - [js](lib/js) A WIP JavaScript interpreter

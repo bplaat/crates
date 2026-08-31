@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use base64::prelude::*;
-use bsqlite::execute_args;
+use bsql::execute_args;
 use chrono::Utc;
 use from_derive::FromStruct;
 use serde::Deserialize;
@@ -251,7 +251,7 @@ pub(crate) fn verify_password(plain: &str, hash: &str) -> Result<Option<Response
 // MARK: Tests
 #[cfg(test)]
 mod test {
-    use bsqlite::query_args;
+    use bsql::query_args;
 
     use super::*;
     use crate::consts::LOGIN_RATE_LIMIT_MAX_ATTEMPTS;

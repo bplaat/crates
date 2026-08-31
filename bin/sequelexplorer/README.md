@@ -1,6 +1,6 @@
 # Sequel Explorer
 
-A simple SQLite database GUI viewer built with [bwebview](../../lib/bwebview) and [bsqlite](../../lib/bsqlite).
+A simple SQLite database GUI viewer built with [bwebview](../../lib/bwebview) and [bsql](../../lib/bsql).
 
 ## Features
 

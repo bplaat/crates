@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use bsqlite::FromRow;
+use bsql::FromRow;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 

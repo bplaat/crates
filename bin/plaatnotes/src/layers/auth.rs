@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use bsqlite::Connection;
+use bsql::Connection;
 use chrono::Utc;
 use small_http::{Request, Response, Status};
 
