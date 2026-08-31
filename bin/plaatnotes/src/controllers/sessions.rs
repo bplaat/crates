@@ -5,7 +5,7 @@
  */
 
 use anyhow::Result;
-use bsqlite::{execute_args, preprocess_fts_query, query_args};
+use bsql::{execute_args, preprocess_fts_query, query_args};
 use chrono::Utc;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;

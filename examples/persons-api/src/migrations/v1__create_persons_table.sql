@@ -7,4 +7,4 @@ CREATE TABLE persons(
     updated_at INTEGER NOT NULL
 ) STRICT;
 
--- bsqlite:create_fts5_table persons, name
+-- bsql:create_fts5_table persons, name

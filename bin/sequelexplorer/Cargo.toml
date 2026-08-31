@@ -19,7 +19,7 @@ workspace = true
 [dependencies]
 anyhow = "1.0"
 base64 = "0.23.1"
-bsqlite = "0.1.2"
+bsql = "0.1.2"
 bwebview = { path = "../../lib/bwebview", features = [
     "rust-embed",
     "dialog",
@@ -37,7 +37,7 @@ small-router = { version = "0.2.1" }
 url = { version = "2.5" }
 
 [target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
-bsqlite = { version = "0.1.2", features = ["bundled"] }
+bsql = { version = "0.1.2", features = ["sqlite-bundled"] }
 
 [build-dependencies]
 winresource = "0.1.31"

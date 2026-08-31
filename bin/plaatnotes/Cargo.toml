@@ -11,7 +11,7 @@ workspace = true
 [dependencies]
 anyhow = "1.0"
 base64 = "0.23.1"
-bsqlite = { version = "0.1.2", features = ["uuid", "chrono"] }
+bsql = { version = "0.1.2", features = ["uuid", "chrono"] }
 chrono = { version = "0.4.45", default-features = false, features = [
     "now",
     "serde",
@@ -37,7 +37,7 @@ validate = { path = "../../lib/validate" }
 zip = "8.6"
 
 [target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
-bsqlite = { version = "0.1.2", features = ["uuid", "chrono", "bundled"] }
+bsql = { version = "0.1.2", features = ["uuid", "chrono", "sqlite-bundled"] }
 native-tls = { version = "0.2.18", features = ["vendored"] }
 
 [build-dependencies]

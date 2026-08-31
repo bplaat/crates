@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use bsqlite::{ColumnType, Connection, OpenMode, StatementError, Value};
+use bsql::{ColumnType, Connection, StatementError, Value};
 use bwebview::{
     Event, EventLoopBuilder, FileDialog, LogicalSize, Theme, WebviewBuilder, WebviewEvent,
     WindowBuilder,
@@ -133,7 +133,7 @@ fn get_foreign_key(
 
 // MARK: Statement processing
 fn process_statement(
-    stmt: &mut bsqlite::Statement<()>,
+    stmt: &mut bsql::Statement<()>,
     conn: &Connection,
 ) -> Result<(Vec<ColumnInfo>, Vec<Vec<serde_json::Value>>), StatementError> {
     let mut columns = None;
@@ -475,7 +475,7 @@ fn main() {
                     );
                 }
                 IpcMessage::OpenDatabase { path } => {
-                    let result = Connection::open(&path, OpenMode::ReadOnly);
+                    let result = Connection::open_sqlite_read_only(&path);
                     let (ok, error) = match result {
                         Ok(conn) => {
                             *state.lock().expect("mutex poisoned") = Some(conn);

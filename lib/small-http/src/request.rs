@@ -449,7 +449,7 @@ impl Request {
     ///
     /// Proxy forwarding headers are intentionally ignored because they can be supplied by any
     /// client. Use [`Self::ip_from_trusted_proxies`] when the server runs behind a trusted proxy.
-    pub fn ip(&self) -> IpAddr {
+    pub const fn ip(&self) -> IpAddr {
         self.client_addr.ip()
     }
 

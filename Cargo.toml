@@ -29,8 +29,8 @@ overflow-checks = false
 
 [patch.crates-io]
 # Path published libraries with local versions
-bsqlite = { path = "lib/bsqlite" }
-bsqlite_derive = { path = "lib/bsqlite_derive" }
+bsql = { path = "lib/bsql" }
+bsql_derive = { path = "lib/bsql_derive" }
 simple-useragent = { path = "lib/simple-useragent" }
 small-http = { path = "lib/small-http" }
 small-router = { path = "lib/small-router" }

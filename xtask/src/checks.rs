@@ -19,7 +19,7 @@ use crate::utils::{collect_files, relative_slash};
 use crate::{Os, Xtask};
 
 pub(crate) const BACKEND_SWAP_PAIRS: [(&str, &str); 2] =
-    [("native-tls", "vendored"), ("bsqlite", "bundled")];
+    [("native-tls", "vendored"), ("bsql", "sqlite-bundled")];
 
 impl Xtask {
     pub(crate) fn check(&self) -> Result<()> {
