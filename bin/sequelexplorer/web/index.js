@@ -12,6 +12,7 @@ if (isMacosBwebview) {
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 const PAGE_SIZE = 100;
+const supportsUnixSocket = !navigator.userAgent.includes('Windows');
 
 // Every action the user can trigger, keyed by the action id used in the macOS menu bar.
 // `method` is the app method that performs it, `key`/`shift`/`alt` are the Command-chord
@@ -39,24 +40,79 @@ function ipcSend(type, data = {}) {
     window.ipc.postMessage(JSON.stringify({ type, ...data }));
 }
 
-async function ipcRequest(type, data = {}) {
+let nextRequestId = 1;
+function ipcRequest(type, data = {}) {
+    const requestId = nextRequestId++;
     return new Promise((resolve) => {
         const listener = (event) => {
             const message = JSON.parse(event.data);
-            if (message.type === `${type}Response`) {
+            if (message.type === `${type}Response` && message.requestId === requestId) {
                 window.ipc.removeEventListener('message', listener);
                 resolve(message);
             }
         };
         window.ipc.addEventListener('message', listener);
-        ipcSend(type, data);
+        window.ipc.postMessage(JSON.stringify({ type, requestId, ...data }));
     });
+}
+
+function formatSqlValue(cell) {
+    if (cell.kind === 'null') return 'NULL';
+    if (cell.kind === 'integer' || cell.kind === 'float') return String(cell.value);
+    if (cell.kind === 'blob') {
+        const bytes = Uint8Array.fromBase64(cell.value);
+        const hex = Array.from(bytes)
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join('');
+        return `X'${hex.toUpperCase()}'`;
+    }
+    return `'${String(cell.value).replace(/'/g, "''")}'`;
+}
+
+function formatCellValue(cell, isBlob) {
+    if (cell.kind === 'null') return 'NULL';
+    if (!isBlob && cell.kind !== 'blob') return cell.value;
+
+    try {
+        const bytes = Uint8Array.fromBase64(cell.value);
+        if (bytes.length === 16) {
+            const hex = Array.from(bytes)
+                .map((byte) => byte.toString(16).padStart(2, '0'))
+                .join('');
+            return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        }
+        return Array.from(bytes)
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join('');
+    } catch (_error) {
+        return cell.value;
+    }
 }
 
 PetiteVue.createApp({
     dbPath: '',
     dbFileName: '',
     dbOpened: false,
+    connectionKind: '',
+    connectionLabel: '',
+    connectionTab: 'sqlite',
+    connectionError: '',
+    browserError: '',
+    isConnecting: false,
+    isSelectingDatabase: false,
+    databases: [],
+    currentDatabase: '',
+    activeDatabase: '',
+    supportsUnixSocket,
+    mysql: {
+        transport: 'tcp',
+        host: '127.0.0.1',
+        port: 3306,
+        socket: '/tmp/mysql.sock',
+        user: 'root',
+        password: '',
+        tls: false,
+    },
     tables: [],
     currentTable: null,
     activeTab: 'data',
@@ -73,7 +129,9 @@ PetiteVue.createApp({
     isQueryRunning: false,
     currentOffset: 0,
     currentTotal: 0,
+    currentCursor: null,
     isLoading: false,
+    viewGeneration: 0,
 
     async init() {
         window.ipc.addEventListener('message', (event) => {
@@ -123,6 +181,15 @@ PetiteVue.createApp({
     },
 
     async openDatabase() {
+        this.connectionError = '';
+        this.$refs.connectionDialog.showModal();
+    },
+
+    closeConnectionDialog() {
+        if (this.$refs.connectionDialog.open) this.$refs.connectionDialog.close();
+    },
+
+    async openSqliteDatabase() {
         const { path } = await ipcRequest('openFileDialog');
         if (!path) return;
         await this._openDatabaseByPath(path);
@@ -139,8 +206,15 @@ PetiteVue.createApp({
         }
         this.dbPath = path;
         this.dbFileName = path.replace(/.*[\\/]/, '');
+        this.connectionKind = 'sqlite';
+        this.connectionLabel = this.dbFileName;
+        this.currentDatabase = this.dbFileName;
+        this.activeDatabase = '';
+        this.databases = [];
         localStorage.setItem('lastDbPath', path);
         this.dbOpened = true;
+        this.closeConnectionDialog();
+        this.resetBrowser();
         document.title = `Sequel Explorer - ${this.dbFileName}`;
         await this.loadTables();
         const lastTable = localStorage.getItem('lastTableName');
@@ -149,9 +223,127 @@ PetiteVue.createApp({
         }
     },
 
+    async openMysql() {
+        if (this.isConnecting) return;
+        this.isConnecting = true;
+        this.connectionError = '';
+        let response;
+        try {
+            response = await ipcRequest('openMysql', { ...this.mysql });
+        } finally {
+            this.isConnecting = false;
+        }
+        if (!response.ok) {
+            this.connectionError = response.error || 'Failed to connect';
+            return;
+        }
+
+        localStorage.removeItem('lastDbPath');
+        this.dbPath = '';
+        this.dbFileName = this.mysql.transport === 'tcp' ? this.mysql.host : this.mysql.socket;
+        this.connectionKind = 'mysql';
+        this.connectionLabel =
+            this.mysql.transport === 'tcp'
+                ? `${this.mysql.user}@${this.mysql.host}:${this.mysql.port}`
+                : `${this.mysql.user}@${this.mysql.socket}`;
+        this.dbOpened = true;
+        this.currentDatabase = '';
+        this.activeDatabase = '';
+        this.closeConnectionDialog();
+        this.resetBrowser();
+        document.title = `Sequel Explorer - ${this.connectionLabel}`;
+        await this.loadDatabases();
+
+        const lastDatabase = localStorage.getItem('lastMysqlDatabase');
+        const database = this.databases.includes(lastDatabase) ? lastDatabase : this.databases[0];
+        if (database) await this.selectDatabase(database);
+    },
+
+    async loadDatabases() {
+        const generation = this.viewGeneration;
+        try {
+            const response = await fetch('/api/databases');
+            const data = await response.json();
+            if (generation !== this.viewGeneration) return;
+            if (data.error) {
+                this.browserError = data.error;
+                this.databases = [];
+                return;
+            }
+            this.browserError = '';
+            this.databases = data;
+        } catch (error) {
+            if (generation !== this.viewGeneration) return;
+            this.browserError = `Failed to load databases: ${error.message}`;
+            this.databases = [];
+        }
+    },
+
+    async selectDatabase(database) {
+        if (!database || this.isSelectingDatabase) return;
+        this.isSelectingDatabase = true;
+        let response;
+        try {
+            response = await ipcRequest('selectMysqlDatabase', { database });
+        } finally {
+            this.isSelectingDatabase = false;
+        }
+        if (!response.ok) {
+            this.currentDatabase = this.activeDatabase;
+            alert('Failed to open database:\n' + response.error);
+            return;
+        }
+        this.currentDatabase = database;
+        this.activeDatabase = database;
+        this.dbFileName = database;
+        localStorage.setItem('lastMysqlDatabase', database);
+        this.resetBrowser();
+        document.title = `Sequel Explorer - ${this.connectionLabel} - ${database}`;
+        await this.loadTables();
+        const lastTable = localStorage.getItem('lastTableName');
+        if (lastTable && this.tables.includes(lastTable)) await this.selectTable(lastTable);
+    },
+
+    resetBrowser() {
+        this.viewGeneration += 1;
+        this.isLoading = false;
+        this.isQueryRunning = false;
+        this.tables = [];
+        this.currentTable = null;
+        this.currentOffset = 0;
+        this.currentTotal = 0;
+        this.currentCursor = null;
+        this.columns = [];
+        this.rows = [];
+        this.rowCount = '';
+        this.schemaText = '';
+        this.queryText = '';
+        this.isCustomQuery = false;
+        this.activeTab = 'data';
+        this.showDataTable = false;
+        this.showDataLoading = false;
+        this.showDataEmpty = false;
+        this.browserError = '';
+    },
+
     async loadTables() {
-        const res = await fetch('/api/tables');
-        this.tables = await res.json();
+        const generation = this.viewGeneration;
+        try {
+            const response = await fetch('/api/tables');
+            const data = await response.json();
+            if (generation !== this.viewGeneration) return;
+            if (data.error) {
+                this.browserError = data.error;
+                this.tables = [];
+                return;
+            }
+            this.browserError = '';
+            this.tables = data;
+        } catch (error) {
+            if (generation !== this.viewGeneration) return;
+            this.browserError = `Failed to load tables: ${error.message}`;
+            this.tables = [];
+        }
     },
 
     async selectTable(name) {
@@ -164,10 +356,13 @@ PetiteVue.createApp({
     },
 
     async openTableView(name) {
+        const generation = ++this.viewGeneration;
         document.title = `Sequel Explorer - ${this.dbFileName} - ${name}`;
 
+        this.isLoading = false;
         this.currentOffset = 0;
         this.currentTotal = 0;
+        this.currentCursor = null;
         this.isCustomQuery = false;
         this.columns = [];
         this.rows = [];
@@ -177,81 +372,85 @@ PetiteVue.createApp({
         this.showDataTable = false;
         this.activeTab = 'data';
 
-        await this.loadMoreRows(name);
+        await this.loadMoreRows(name, generation);
+        if (generation !== this.viewGeneration || name !== this.currentTable) return;
 
-        fetch(`/api/table/${encodeURIComponent(name)}/schema`)
-            .then((r) => r.json())
-            .then((data) => {
-                this.schemaText = data.error ? 'Error: ' + data.error : data.sql || '';
-            })
-            .catch((err) => {
-                this.schemaText = 'Error loading schema: ' + err.message;
-            });
+        try {
+            const response = await fetch(`/api/table/${encodeURIComponent(name)}/schema`);
+            const data = await response.json();
+            if (generation !== this.viewGeneration || name !== this.currentTable) return;
+            this.schemaText = data.error ? 'Error: ' + data.error : data.sql || '';
+        } catch (error) {
+            if (generation !== this.viewGeneration || name !== this.currentTable) return;
+            this.schemaText = 'Error loading schema: ' + error.message;
+        }
     },
 
-    async loadMoreRows(tableName) {
+    async loadMoreRows(tableName, generation = this.viewGeneration) {
+        if (generation !== this.viewGeneration || tableName !== this.currentTable) return;
         if (this.isLoading) return;
         if (this.currentOffset > 0 && this.currentOffset >= this.currentTotal) return;
 
+        const offset = this.currentOffset;
         this.isLoading = true;
         this.showDataLoading = true;
 
-        const url = `/api/table/${encodeURIComponent(tableName)}/data?offset=${this.currentOffset}&limit=${PAGE_SIZE}`;
-        const res = await fetch(url);
-        const data = await res.json();
+        try {
+            const params = new URLSearchParams({ offset, limit: PAGE_SIZE });
+            if (this.currentCursor) params.set('cursor', this.currentCursor);
+            const url = `/api/table/${encodeURIComponent(tableName)}/data?${params}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            if (generation !== this.viewGeneration || tableName !== this.currentTable) return;
 
-        this.showDataLoading = false;
-        this.isLoading = false;
-
-        if (data.error) {
-            this.dataEmptyText = 'Error: ' + data.error;
-            this.showDataEmpty = true;
-            return;
-        }
-
-        this.currentTotal = data.total;
-        this.rowCount = `${data.total.toLocaleString()} rows`;
-
-        if (this.currentOffset === 0) {
-            this.columns = data.columns;
-            this.showDataTable = true;
-            if (data.rows.length === 0) {
-                this.dataEmptyText = 'No rows';
+            if (data.error) {
+                this.dataEmptyText = 'Error: ' + data.error;
                 this.showDataEmpty = true;
                 return;
             }
-        }
 
-        this.appendRows(data.rows);
-        this.currentOffset += data.rows.length;
+            if (offset === 0) {
+                this.currentTotal = data.total;
+                this.rowCount = `${data.total.toLocaleString()} rows`;
+                this.columns = data.columns;
+                this.showDataTable = true;
+                if (data.rows.length === 0) {
+                    this.dataEmptyText = 'No rows';
+                    this.showDataEmpty = true;
+                    return;
+                }
+            }
+
+            this.appendRows(data.rows);
+            this.currentOffset = offset + data.rows.length;
+            this.currentCursor = data.next_cursor;
+        } catch (error) {
+            if (generation !== this.viewGeneration || tableName !== this.currentTable) return;
+            this.dataEmptyText = `Failed to load rows: ${error.message}`;
+            this.showDataEmpty = true;
+        } finally {
+            if (generation === this.viewGeneration && tableName === this.currentTable) {
+                this.showDataLoading = false;
+                this.isLoading = false;
+            }
+        }
     },
 
     appendRows(rows) {
         this.rows = this.rows.concat(rows);
     },
 
-    formatSqlValue(val) {
-        if (val === null) {
-            return 'NULL';
-        }
-
-        if (typeof val === 'number') {
-            return String(val);
-        }
-
-        try {
-            const bytes = Uint8Array.fromBase64(val);
-            const hex = Array.from(bytes)
-                .map((b) => b.toString(16).padStart(2, '0'))
-                .join('');
-            return `X'${hex.toUpperCase()}'`;
-        } catch (e) {
-            return `'${String(val).replace(/'/g, "''")}'`;
-        }
+    formatSqlValue(cell) {
+        return formatSqlValue(cell);
     },
 
-    async navigateToForeignKey(table, column, value) {
-        this.queryText = `SELECT * FROM "${table}" WHERE "${column}" = ${this.formatSqlValue(value)}`;
+    quoteIdentifier(identifier) {
+        if (this.connectionKind === 'mysql') return '`' + identifier.replace(/`/g, '``') + '`';
+        return '"' + identifier.replace(/"/g, '""') + '"';
+    },
+
+    async navigateToForeignKey(table, column, cell) {
+        this.queryText = `SELECT * FROM ${this.quoteIdentifier(table)} WHERE ${this.quoteIdentifier(column)} = ${this.formatSqlValue(cell)}`;
         await this.runQuery();
     },
 
@@ -260,11 +459,14 @@ PetiteVue.createApp({
         // Guard against re-entry, the same query can be triggered by the input, the button and a shortcut
         if (!sql || this.isQueryRunning) return;
 
+        const generation = ++this.viewGeneration;
+        this.isLoading = false;
         this.isQueryRunning = true;
         this.isCustomQuery = true;
         this.activeTab = 'data';
         this.currentOffset = 0;
         this.currentTotal = 0;
+        this.currentCursor = null;
         this.columns = [];
         this.rows = [];
         this.rowCount = '';
@@ -272,36 +474,44 @@ PetiteVue.createApp({
         this.showDataLoading = true;
         this.showDataTable = false;
 
-        let data;
         try {
-            const res = await fetch('/api/query', {
+            const response = await fetch('/api/query', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sql }),
             });
-            data = await res.json();
+            const data = await response.json();
+            if (generation !== this.viewGeneration) return;
+
+            if (data.error) {
+                this.dataEmptyText = 'Error: ' + data.error;
+                this.showDataEmpty = true;
+                return;
+            }
+
+            this.rowCount = data.truncated
+                ? `${data.rows.length.toLocaleString()}+ rows`
+                : `${data.rows.length.toLocaleString()} rows`;
+            this.columns = data.columns;
+            this.showDataTable = true;
+
+            if (data.rows.length === 0) {
+                this.dataEmptyText = 'No rows';
+                this.showDataEmpty = true;
+                return;
+            }
+
+            this.appendRows(data.rows);
+        } catch (error) {
+            if (generation !== this.viewGeneration) return;
+            this.dataEmptyText = `Query failed: ${error.message}`;
+            this.showDataEmpty = true;
         } finally {
-            this.isQueryRunning = false;
-            this.showDataLoading = false;
+            if (generation === this.viewGeneration) {
+                this.isQueryRunning = false;
+                this.showDataLoading = false;
+            }
         }
-
-        if (data.error) {
-            this.dataEmptyText = 'Error: ' + data.error;
-            this.showDataEmpty = true;
-            return;
-        }
-
-        this.rowCount = `${data.rows.length.toLocaleString()} rows`;
-        this.columns = data.columns;
-        this.showDataTable = true;
-
-        if (data.rows.length === 0) {
-            this.dataEmptyText = 'No rows';
-            this.showDataEmpty = true;
-            return;
-        }
-
-        this.appendRows(data.rows);
     },
 
     clearQuery() {
@@ -310,28 +520,8 @@ PetiteVue.createApp({
         if (this.currentTable) this.openTableView(this.currentTable);
     },
 
-    formatCellValue(val, colIdx) {
-        if (val === null) return 'NULL';
-
+    formatCellValue(cell, colIdx) {
         const column = this.columns[colIdx];
-        if (column.is_blob) {
-            try {
-                const bytes = Uint8Array.fromBase64(val);
-                if (bytes.length === 16) {
-                    const hex = Array.from(bytes)
-                        .map((b) => b.toString(16).padStart(2, '0'))
-                        .join('');
-                    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-                }
-
-                return Array.from(bytes)
-                    .map((b) => b.toString(16).padStart(2, '0'))
-                    .join('');
-            } catch (e) {
-                return val;
-            }
-        }
-
-        return val;
+        return formatCellValue(cell, column.is_blob);
     },
 }).mount('#app');

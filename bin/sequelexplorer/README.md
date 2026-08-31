@@ -1,13 +1,17 @@
 # Sequel Explorer
 
-A simple SQLite database GUI viewer built with [bwebview](../../lib/bwebview) and [bsql](../../lib/bsql).
+A read-only SQLite and MySQL database GUI viewer built with [bwebview](../../lib/bwebview) and
+[bsql](../../lib/bsql).
 
 ## Features
 
-- Open any SQLite database file
+- Open SQLite database files in read-only mode
+- Connect to MySQL over TCP or a local Unix socket
+- Browse the MySQL databases available to the connected account
 - Browse tables in the sidebar
-- View table schema (CREATE TABLE SQL)
-- Run custom SELECT queries
+- Inspect table rows, declared column types, primary keys, and CREATE TABLE definitions
+- Follow foreign-key references
+- Run SELECT-only custom queries
 
 ## Screenshot
 

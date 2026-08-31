@@ -22,13 +22,43 @@
 
                 <div class="sidebar">
                     <div class="open-db">
-                        <button class="button" @click="openDatabase">Open</button>
-                        <span class="db-path-label">{{ dbPath || 'No database open' }}</span>
+                        <button class="button" @click="openDatabase">Connect</button>
+                        <span class="backend-badge" v-show="dbOpened">{{ connectionKind }}</span>
+                        <span class="db-path-label" :title="connectionLabel">
+                            {{ connectionLabel || 'No database open' }}
+                        </span>
                     </div>
 
                     <div class="sidebar-content">
-                        <div class="placeholder" v-show="!dbOpened">Open a database…</div>
-                        <div class="placeholder" v-show="dbOpened && tables.length === 0">No tables found</div>
+                        <div class="database-picker" v-show="connectionKind === 'mysql'">
+                            <label for="database-select">Database</label>
+                            <select
+                                id="database-select"
+                                class="input"
+                                v-model="currentDatabase"
+                                :disabled="isSelectingDatabase"
+                                @change="selectDatabase(currentDatabase)"
+                            >
+                                <option value="" disabled>Select a database</option>
+                                <option v-for="database in databases" :key="database" :value="database">
+                                    {{ database }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="placeholder" v-show="!dbOpened">Connect to a database</div>
+                        <div class="placeholder is-error" v-show="browserError">{{ browserError }}</div>
+                        <div
+                            class="placeholder"
+                            v-show="dbOpened && !browserError && !currentDatabase && connectionKind === 'mysql'"
+                        >
+                            No databases found
+                        </div>
+                        <div
+                            class="placeholder"
+                            v-show="dbOpened && !browserError && currentDatabase && tables.length === 0"
+                        >
+                            No tables found
+                        </div>
                         <div class="sidebar-section-title" v-show="tables.length > 0">Tables</div>
                         <ul class="tables-list" v-show="tables.length > 0">
                             <li v-for="name in tables" :key="name">
@@ -45,14 +75,25 @@
                 </div>
 
                 <div class="content-area">
-                    <div class="placeholder" v-show="currentTable === null">Select a table…</div>
+                    <div class="placeholder" v-show="!dbOpened">Connect to a database</div>
+                    <div
+                        class="placeholder"
+                        v-show="dbOpened && !browserError && connectionKind === 'mysql' && !currentDatabase"
+                    >
+                        Select a database
+                    </div>
 
-                    <div class="table-view" v-show="currentTable !== null">
+                    <div class="table-view" v-show="dbOpened && (connectionKind === 'sqlite' || currentDatabase)">
                         <div class="tabs">
                             <button class="tab" :class="{ 'is-active': activeTab === 'data' }" @click="showData">
                                 Data
                             </button>
-                            <button class="tab" :class="{ 'is-active': activeTab === 'schema' }" @click="showSchema">
+                            <button
+                                class="tab"
+                                :class="{ 'is-active': activeTab === 'schema' }"
+                                :disabled="currentTable === null"
+                                @click="showSchema"
+                            >
                                 Schema
                             </button>
                             <div class="tab-spacer"></div>
@@ -61,19 +102,27 @@
 
                         <div class="tab-panel" v-show="activeTab === 'data'">
                             <div class="data-table-wrap">
+                                <div class="placeholder" v-show="currentTable === null && !isCustomQuery">
+                                    Select a table or run a SELECT query
+                                </div>
                                 <table class="data-table" v-show="showDataTable">
                                     <thead>
                                         <tr>
-                                            <th v-for="col in columns" :key="col.name">
+                                            <th v-for="(col, colIdx) in columns" :key="colIdx">
                                                 <span class="col-name">{{ col.name }}</span>
                                                 <span class="col-type">{{ col.type }}</span>
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <tr class="empty-table-row" v-if="showDataEmpty">
+                                            <td :colspan="Math.max(columns.length, 1)">
+                                                <span>{{ dataEmptyText }}</span>
+                                            </td>
+                                        </tr>
                                         <tr v-for="(row, rowIdx) in rows" :key="rowIdx">
                                             <td v-for="(val, colIdx) in row" :key="colIdx">
-                                                <span class="cell-value" :class="{ 'is-null': val === null }">
+                                                <span class="cell-value" :class="{ 'is-null': val.kind === 'null' }">
                                                     {{ formatCellValue(val, colIdx) }}
                                                 </span>
                                                 <button
@@ -90,7 +139,9 @@
                                 </table>
                                 <div ref="loadSentinel" class="load-sentinel"></div>
                                 <div class="placeholder" v-show="showDataLoading">Loading…</div>
-                                <div class="placeholder" v-show="showDataEmpty">{{ dataEmptyText }}</div>
+                                <div class="placeholder" v-show="showDataEmpty && !showDataTable">
+                                    {{ dataEmptyText }}
+                                </div>
                             </div>
                         </div>
 
@@ -113,6 +164,132 @@
                         </div>
                     </div>
                 </div>
+
+                <dialog ref="connectionDialog" class="connection-dialog" @click.self="closeConnectionDialog">
+                    <div class="dialog-header">
+                        <div>
+                            <h1>Connect to a database</h1>
+                            <p>Connections are opened for browsing only.</p>
+                        </div>
+                        <button class="button is-icon" aria-label="Close" @click="closeConnectionDialog">x</button>
+                    </div>
+
+                    <div class="connection-tabs" role="tablist" aria-label="Database type">
+                        <button
+                            class="connection-tab"
+                            :class="{ 'is-active': connectionTab === 'sqlite' }"
+                            role="tab"
+                            :aria-selected="connectionTab === 'sqlite'"
+                            @click="connectionTab = 'sqlite'"
+                        >
+                            SQLite
+                        </button>
+                        <button
+                            class="connection-tab"
+                            :class="{ 'is-active': connectionTab === 'mysql' }"
+                            role="tab"
+                            :aria-selected="connectionTab === 'mysql'"
+                            @click="connectionTab = 'mysql'"
+                        >
+                            MySQL
+                        </button>
+                    </div>
+
+                    <section class="connection-panel" v-show="connectionTab === 'sqlite'">
+                        <p>Open an existing SQLite file in read-only mode.</p>
+                        <button class="button is-primary" @click="openSqliteDatabase">Choose SQLite file</button>
+                    </section>
+
+                    <form
+                        class="connection-panel mysql-form"
+                        v-show="connectionTab === 'mysql'"
+                        @submit.prevent="openMysql"
+                    >
+                        <div class="transport-options">
+                            <label>
+                                <input type="radio" value="tcp" v-model="mysql.transport" />
+                                TCP
+                            </label>
+                            <label v-show="supportsUnixSocket">
+                                <input type="radio" value="unix" v-model="mysql.transport" />
+                                Unix socket
+                            </label>
+                        </div>
+
+                        <div class="form-grid" v-show="mysql.transport === 'tcp'">
+                            <label>
+                                <span>Host</span>
+                                <input
+                                    class="input"
+                                    v-model="mysql.host"
+                                    :required="mysql.transport === 'tcp'"
+                                    :disabled="mysql.transport !== 'tcp'"
+                                    autocorrect="off"
+                                    spellcheck="false"
+                                />
+                            </label>
+                            <label>
+                                <span>Port</span>
+                                <input
+                                    class="input"
+                                    v-model.number="mysql.port"
+                                    type="number"
+                                    min="1"
+                                    max="65535"
+                                    :required="mysql.transport === 'tcp'"
+                                    :disabled="mysql.transport !== 'tcp'"
+                                />
+                            </label>
+                        </div>
+
+                        <label v-show="mysql.transport === 'unix'">
+                            <span>Socket path</span>
+                            <input
+                                class="input"
+                                v-model="mysql.socket"
+                                :required="mysql.transport === 'unix'"
+                                :disabled="mysql.transport !== 'unix'"
+                                autocorrect="off"
+                                spellcheck="false"
+                            />
+                        </label>
+
+                        <div class="form-grid">
+                            <label>
+                                <span>User</span>
+                                <input
+                                    class="input"
+                                    v-model="mysql.user"
+                                    required
+                                    autocomplete="username"
+                                    autocorrect="off"
+                                    spellcheck="false"
+                                />
+                            </label>
+                            <label>
+                                <span>Password</span>
+                                <input
+                                    class="input"
+                                    v-model="mysql.password"
+                                    type="password"
+                                    autocomplete="current-password"
+                                />
+                            </label>
+                        </div>
+
+                        <label class="checkbox-field" v-show="mysql.transport === 'tcp'">
+                            <input type="checkbox" v-model="mysql.tls" />
+                            Require verified TLS
+                        </label>
+
+                        <div class="dialog-actions">
+                            <span class="connection-error" role="alert">{{ connectionError }}</span>
+                            <button class="button is-primary" type="submit" :disabled="isConnecting">
+                                {{ isConnecting ? 'Connecting...' : 'Connect' }}
+                            </button>
+                        </div>
+                    </form>
+                </dialog>
             </div>
         </div>
 
