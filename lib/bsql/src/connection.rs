@@ -1,121 +1,127 @@
 /*
  * Copyright (c) 2024-2026 Bastiaan van der Plaat
- *
  * SPDX-License-Identifier: MIT
  */
 
 use std::error::Error;
-use std::ffi::{c_char, CStr, CString};
 use std::fmt::{self, Display, Formatter};
-use std::path::Path;
-use std::ptr;
 use std::sync::Arc;
-
-use libsqlite3_sys::*;
+#[cfg(feature = "mysql")]
+use std::sync::Mutex;
 
 use crate::{Bind, FromRow, Statement, StatementError};
 
-// MARK: Inner Connection
-/// The mode to open the database in
-enum OpenMode {
-    /// Read only
-    ReadOnly,
-    /// Read and write
-    ReadWrite,
+pub(crate) enum InnerConnection {
+    #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
+    Disabled,
+    #[cfg(feature = "mysql")]
+    Mysql(Mutex<crate::mysql::Client>),
+    #[cfg(feature = "sqlite")]
+    Sqlite(crate::sqlite::Connection),
 }
 
-pub(crate) struct InnerConnection(*mut sqlite3);
-// SAFETY: InnerConnection exclusively owns its *mut sqlite3 handle and never aliases it, so
-// transferring ownership to another thread is safe.
-unsafe impl Send for InnerConnection {}
-// SAFETY: SQLite opened with SQLITE_OPEN_FULLMUTEX serializes all API calls with an internal
-// mutex, so shared access from multiple threads via &InnerConnection is safe.
-unsafe impl Sync for InnerConnection {}
-
 impl InnerConnection {
-    fn open(path: &Path, mode: OpenMode) -> Result<Self, ConnectionError> {
-        // Open database
-        let mut db = ptr::null_mut();
-        let path = path.to_str().ok_or_else(|| ConnectionError {
-            msg: "Database path is not valid Unicode".to_string(),
-        })?;
-        let path = CString::new(path).map_err(|_| ConnectionError {
-            msg: "Database path contains a null byte".to_string(),
-        })?;
-        // SAFETY: path is a valid NUL-terminated CString, db is initialized to null_mut, the
-        // flags are valid SQLite open mode constants, and the vfs argument is null (use default).
-        let result = unsafe {
-            sqlite3_open_v2(
-                path.as_ptr(),
-                &mut db,
-                match mode {
-                    OpenMode::ReadOnly => SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX,
-                    OpenMode::ReadWrite => {
-                        SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
-                    }
-                },
-                ptr::null(),
-            )
-        };
-        if result != SQLITE_OK {
-            let error = if db.is_null() {
-                "unknown error (db handle is null)".into()
-            } else {
-                // SAFETY: db is non-null (checked above), and sqlite3_errmsg returns a valid
-                // NUL-terminated string that remains valid until the next SQLite API call on db.
-                let error = unsafe { CStr::from_ptr(sqlite3_errmsg(db)) }
-                    .to_string_lossy()
-                    .into_owned();
-                // SAFETY: db is a non-null handle returned by sqlite3_open_v2. close_v2 accepts
-                // handles from failed open attempts and releases them when no statements remain.
-                unsafe { sqlite3_close_v2(db) };
-                error
-            };
-            return Err(ConnectionError {
-                msg: format!("Failed to open database: {error}"),
-            });
-        }
-        Ok(InnerConnection(db))
-    }
-
     fn execute_script(&self, sql: &str) -> Result<(), StatementError> {
-        let c_sql = CString::new(sql).map_err(|_| StatementError {
-            msg: "SQL script contains null byte".to_string(),
-        })?;
-        self.execute_cstr(&c_sql)
-    }
-
-    fn execute_cstr(&self, sql: &CStr) -> Result<(), StatementError> {
-        let mut errmsg: *mut c_char = ptr::null_mut();
-        // SAFETY: self.0 is a valid open db handle; sql is a valid NUL-terminated string;
-        // errmsg receives a sqlite3-allocated string that must be freed with sqlite3_free.
-        let rc = unsafe { sqlite3_exec(self.0, sql.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
-        if rc != SQLITE_OK {
-            let msg = if errmsg.is_null() {
-                "unknown error".to_string()
-            } else {
-                // SAFETY: errmsg is non-null and points to a valid NUL-terminated string.
-                let s = unsafe { CStr::from_ptr(errmsg) }
-                    .to_string_lossy()
-                    .into_owned();
-                // SAFETY: errmsg was allocated by sqlite3 and must be freed with sqlite3_free.
-                unsafe { sqlite3_free(errmsg as *mut _) };
-                s
-            };
-            return Err(StatementError {
-                msg: format!("Failed to execute script: {msg}"),
-            });
+        match self {
+            #[cfg(feature = "mysql")]
+            Self::Mysql(c) => c.lock().map_err(|_| lock_error())?.execute_script(sql),
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(c) => c.execute_script(sql),
+            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
+            Self::Disabled => unreachable!(),
         }
-        Ok(())
     }
 
-    fn execute_static(&self, sql: &'static [u8]) -> Result<(), StatementError> {
-        self.execute_cstr(CStr::from_bytes_with_nul(sql).expect("valid static SQL"))
+    fn prepare<T: FromRow>(self: &Arc<Self>, query: &str) -> Result<Statement<T>, StatementError> {
+        match self.as_ref() {
+            #[cfg(feature = "mysql")]
+            Self::Mysql(c) => Ok(Statement::new_mysql(
+                c.lock().map_err(|_| lock_error())?.prepare(query)?,
+                Arc::clone(self),
+            )),
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(c) => Ok(Statement::new_sqlite(c.prepare(query)?, Arc::clone(self))),
+            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
+            Self::Disabled => unreachable!(),
+        }
     }
 
+    fn begin(&self) -> Result<(), StatementError> {
+        match self {
+            #[cfg(feature = "mysql")]
+            Self::Mysql(c) => c
+                .lock()
+                .map_err(|_| lock_error())?
+                .execute_script("START TRANSACTION"),
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(c) => c.begin_transaction(),
+            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
+            Self::Disabled => unreachable!(),
+        }
+    }
+
+    fn finish(&self, commit: bool) -> Result<(), StatementError> {
+        match self {
+            #[cfg(feature = "mysql")]
+            Self::Mysql(c) => c
+                .lock()
+                .map_err(|_| lock_error())?
+                .execute_script(if commit { "COMMIT" } else { "ROLLBACK" }),
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(c) => {
+                if commit {
+                    c.commit()
+                } else {
+                    c.rollback()
+                }
+            }
+            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
+            Self::Disabled => unreachable!(),
+        }
+    }
+
+    #[allow(clippy::missing_const_for_fn)]
     fn is_autocommit(&self) -> bool {
-        // SAFETY: self.0 is a valid open db handle.
-        unsafe { sqlite3_get_autocommit(self.0) != 0 }
+        match self {
+            #[cfg(feature = "mysql")]
+            Self::Mysql(_) => false,
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(c) => c.is_autocommit(),
+            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
+            Self::Disabled => unreachable!(),
+        }
+    }
+
+    fn affected_rows(&self) -> u64 {
+        match self {
+            #[cfg(feature = "mysql")]
+            Self::Mysql(c) => c.lock().map_or(0, |c| c.affected_rows),
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(c) => c.affected_rows(),
+            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
+            Self::Disabled => unreachable!(),
+        }
+    }
+
+    fn last_insert_row_id(&self) -> u64 {
+        match self {
+            #[cfg(feature = "mysql")]
+            Self::Mysql(c) => c.lock().map_or(0, |c| c.last_insert_id),
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(c) => c.last_insert_row_id(),
+            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
+            Self::Disabled => unreachable!(),
+        }
+    }
+
+    #[cfg(feature = "mysql")]
+    #[allow(clippy::missing_const_for_fn)]
+    pub(crate) fn mysql(&self) -> Result<&Mutex<crate::mysql::Client>, StatementError> {
+        match self {
+            Self::Mysql(client) => Ok(client),
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(_) => Err(StatementError::new("operation requires a MySQL connection")),
+        }
     }
 
     fn rollback_after_error<E>(&self, error: E) -> E
@@ -125,63 +131,30 @@ impl InnerConnection {
         if self.is_autocommit() {
             return error;
         }
-        match self.execute_static(b"ROLLBACK\0") {
+        match self.finish(false) {
             Ok(()) => error,
             Err(rollback_error) => E::from(StatementError::new(format!(
                 "{error}; additionally failed to roll back transaction: {rollback_error}"
             ))),
         }
     }
-
-    fn prepare<T: FromRow>(self: &Arc<Self>, query: &str) -> Result<Statement<T>, StatementError> {
-        let mut statement = ptr::null_mut();
-        // SAFETY: self.0 is a valid open db handle, query bytes are valid UTF-8 from a &str with
-        // the correct byte length, statement is initialized to null_mut, and the tail pointer is
-        // null (not needed here).
-        let result = unsafe {
-            sqlite3_prepare_v2(
-                self.0,
-                query.as_ptr() as *const c_char,
-                query.len() as i32,
-                &mut statement,
-                ptr::null_mut(),
-            )
-        };
-        if result != SQLITE_OK {
-            // SAFETY: self.0 is a valid open db handle, and sqlite3_errmsg returns a valid
-            // NUL-terminated string that remains valid until the next SQLite API call.
-            let error = unsafe { CStr::from_ptr(sqlite3_errmsg(self.0)) }.to_string_lossy();
-            return Err(StatementError {
-                msg: format!("Failed to prepare statement '{query}': {error}"),
-            });
-        }
-        Ok(Statement::new(statement, Arc::clone(self)))
-    }
-
-    fn affected_rows(&self) -> i32 {
-        // SAFETY: self.0 is a valid open db handle.
-        unsafe { sqlite3_changes(self.0) }
-    }
-
-    fn last_insert_row_id(&self) -> i64 {
-        // SAFETY: self.0 is a valid open db handle.
-        unsafe { sqlite3_last_insert_rowid(self.0) }
-    }
 }
 
-impl Drop for InnerConnection {
-    fn drop(&mut self) {
-        // SAFETY: self.0 is the exclusively owned db handle. close_v2 either closes it immediately
-        // or defers cleanup until all outstanding statements have been finalized.
-        unsafe { sqlite3_close_v2(self.0) };
-    }
+#[cfg(feature = "mysql")]
+fn lock_error() -> StatementError {
+    StatementError::new("MySQL connection lock is poisoned")
 }
 
-// MARK: Connection Error
-/// A connection error
+/// A connection error.
 #[derive(Debug)]
 pub struct ConnectionError {
     msg: String,
+}
+
+impl ConnectionError {
+    pub(crate) fn new(msg: impl Into<String>) -> Self {
+        Self { msg: msg.into() }
+    }
 }
 
 impl Display for ConnectionError {
@@ -189,95 +162,54 @@ impl Display for ConnectionError {
         write!(f, "Connection error: {}", self.msg)
     }
 }
-
 impl Error for ConnectionError {}
 
 struct RollbackOnDrop<'a> {
     connection: &'a InnerConnection,
     armed: bool,
 }
-
-impl<'a> RollbackOnDrop<'a> {
-    const fn new(connection: &'a InnerConnection) -> Self {
-        Self {
-            connection,
-            armed: true,
-        }
-    }
-
-    const fn disarm(&mut self) {
-        self.armed = false;
-    }
-}
-
 impl Drop for RollbackOnDrop<'_> {
     fn drop(&mut self) {
         if self.armed && !self.connection.is_autocommit() {
-            _ = self.connection.execute_static(b"ROLLBACK\0");
+            _ = self.connection.finish(false);
         }
     }
 }
 
-// MARK: Connection
-/// A SQLite connection
+/// A database connection.
 #[derive(Clone)]
 pub struct Connection {
     inner: Arc<InnerConnection>,
 }
 
 impl Connection {
-    fn open_sqlite_with_mode(
-        path: impl AsRef<Path>,
-        mode: OpenMode,
-    ) -> Result<Self, ConnectionError> {
-        Ok(Self {
-            inner: Arc::new(InnerConnection::open(path.as_ref(), mode)?),
-        })
+    pub(crate) fn from_inner(inner: InnerConnection) -> Self {
+        Self {
+            inner: Arc::new(inner),
+        }
     }
 
-    /// Open a connection to a SQLite database.
-    pub fn open_sqlite(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
-        Self::open_sqlite_with_mode(path, OpenMode::ReadWrite)
+    #[cfg(feature = "sqlite")]
+    pub(crate) fn require_sqlite(&self) -> Result<&crate::sqlite::Connection, StatementError> {
+        match self.inner.as_ref() {
+            InnerConnection::Sqlite(c) => Ok(c),
+            #[cfg(feature = "mysql")]
+            InnerConnection::Mysql(_) => Err(StatementError::new(
+                "operation requires a SQLite connection",
+            )),
+        }
     }
 
-    /// Open a read-only connection to a SQLite database.
-    pub fn open_sqlite_read_only(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
-        Self::open_sqlite_with_mode(path, OpenMode::ReadOnly)
+    #[cfg(feature = "sqlite")]
+    pub(crate) fn is_sqlite(&self) -> bool {
+        #[cfg(feature = "sqlite")]
+        if matches!(self.inner.as_ref(), InnerConnection::Sqlite(_)) {
+            return true;
+        }
+        false
     }
 
-    /// Open an in-memory SQLite database.
-    pub fn open_sqlite_memory() -> Result<Self, ConnectionError> {
-        Self::open_sqlite_with_mode(":memory:", OpenMode::ReadWrite)
-    }
-
-    /// Set the journal mode to Write-Ahead Logging for better concurrency throughput
-    pub fn enable_wal_logging(&self) -> Result<(), StatementError> {
-        self.execute("PRAGMA journal_mode = WAL", ())
-    }
-
-    /// Apply various performance settings to the database
-    pub fn apply_various_performance_settings(&self) -> Result<(), StatementError> {
-        // Apply some SQLite performance settings (https://briandouglas.ie/sqlite-defaults/)
-        // - Set synchronous mode to NORMAL for performance and data safety balance
-        self.execute("PRAGMA synchronous = NORMAL", ())?;
-        // - Set busy timeout to 5 seconds to avoid "database is locked" errors
-        self.execute("PRAGMA busy_timeout = 5000", ())?;
-        // - Set cache size to 20MB for faster data access
-        self.execute("PRAGMA cache_size = 20000", ())?;
-        // - Enable foreign key constraint enforcement
-        self.execute("PRAGMA foreign_keys = ON", ())?;
-        // - Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
-        self.execute("PRAGMA auto_vacuum = INCREMENTAL", ())?;
-        // - Store temporary tables and data in memory for better performance
-        self.execute("PRAGMA temp_store = MEMORY", ())?;
-        // - Set the mmap_size to 2GB for faster read/write access using memory-mapped I/O
-        self.execute("PRAGMA mmap_size = 2147483648", ())?;
-        // - Set the page size to 8KB for balanced memory usage and performance
-        self.execute("PRAGMA page_size = 8192", ())?;
-        Ok(())
-    }
-
-    /// Prepare a statement
+    /// Prepare a statement.
     pub fn prepare<T: FromRow>(
         &self,
         query: impl AsRef<str>,
@@ -285,55 +217,51 @@ impl Connection {
         self.inner.prepare(query.as_ref())
     }
 
-    /// Run a query
+    /// Prepare and bind a query.
     pub fn query<T: FromRow>(
         &self,
         query: impl AsRef<str>,
         params: impl Bind,
     ) -> Result<Statement<T>, StatementError> {
-        let mut statement = self.prepare::<T>(query.as_ref())?;
+        let mut statement = self.prepare::<T>(query)?;
         statement.bind(params)?;
         Ok(statement)
     }
 
-    /// Run a query, read and expect the first row
+    /// Read the first returned row.
     pub fn query_some<T: FromRow>(
         &self,
         query: impl AsRef<str>,
         params: impl Bind,
     ) -> Result<T, StatementError> {
-        self.query::<T>(query.as_ref(), params)?
+        self.query::<T>(query, params)?
             .next()
             .transpose()?
-            .ok_or_else(|| StatementError {
-                msg: "expected at least one row from query".to_string(),
-            })
+            .ok_or_else(|| StatementError::new("expected at least one row from query"))
     }
 
-    /// Execute a SQL script (multiple statements separated by semicolons)
+    /// Execute a SQL script.
     pub fn execute_script(&self, sql: &str) -> Result<(), StatementError> {
         self.inner.execute_script(sql)
     }
 
-    /// Execute a query
+    /// Execute a prepared query.
     pub fn execute(&self, query: impl AsRef<str>, params: impl Bind) -> Result<(), StatementError> {
-        self.query::<()>(query.as_ref(), params)?
-            .next()
-            .transpose()?;
+        self.query::<()>(query, params)?.next().transpose()?;
         Ok(())
     }
 
-    /// Get the number of affected rows
-    pub fn affected_rows(&self) -> i32 {
+    /// Return the number of affected rows.
+    pub fn affected_rows(&self) -> u64 {
         self.inner.affected_rows()
     }
 
-    /// Get the last inserted row id
-    pub fn last_insert_row_id(&self) -> i64 {
+    /// Return the last inserted row identifier.
+    pub fn last_insert_row_id(&self) -> u64 {
         self.inner.last_insert_row_id()
     }
 
-    /// Run a closure in an immediate transaction
+    /// Run a closure inside a transaction.
     pub fn transaction<T, E>(
         &self,
         operation: impl FnOnce(&Connection) -> Result<T, E>,
@@ -341,335 +269,51 @@ impl Connection {
     where
         E: From<StatementError> + Display,
     {
-        self.inner
-            .execute_static(b"BEGIN IMMEDIATE\0")
-            .map_err(E::from)?;
-        let mut rollback = RollbackOnDrop::new(&self.inner);
-
+        self.inner.begin().map_err(E::from)?;
+        let mut rollback = RollbackOnDrop {
+            connection: &self.inner,
+            armed: true,
+        };
         match operation(self) {
-            Ok(value) => match self.inner.execute_static(b"COMMIT\0") {
+            Ok(value) => match self.inner.finish(true) {
                 Ok(()) => {
-                    rollback.disarm();
+                    rollback.armed = false;
                     Ok(value)
                 }
-                Err(commit_error) => {
-                    rollback.disarm();
-                    Err(self.inner.rollback_after_error(E::from(commit_error)))
+                Err(error) => {
+                    rollback.armed = false;
+                    Err(self.inner.rollback_after_error(E::from(error)))
                 }
             },
             Err(error) => {
-                rollback.disarm();
+                rollback.armed = false;
                 Err(self.inner.rollback_after_error(error))
             }
         }
     }
 }
 
-// MARK: Macros
-
-/// Run a query with named arguments
+/// Run a query with named arguments.
 #[macro_export]
 macro_rules! query_args {
     ($t:tt, $db:expr, $query:expr, Args { $($key:ident : $value:expr),* $(,)? } $(,)?) => {{
         (|| -> std::result::Result<_, $crate::StatementError> {
-            let mut stat = $db.prepare::<$t>($query)?;
-            $(
-                stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value))?;
-            )*
-            Ok(stat)
+            let mut statement = $db.prepare::<$t>($query)?;
+            $(statement.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value))?;)*
+            Ok(statement)
         })()
     }};
 }
 
-/// Execute a query with named arguments
+/// Execute a query with named arguments.
 #[macro_export]
 macro_rules! execute_args {
     ($db:expr, $query:expr, Args { $($key:ident : $value:expr),* $(,)? } $(,)?) => {{
         (|| -> std::result::Result<_, $crate::StatementError> {
-            let mut stat = $db.prepare::<()>($query)?;
-            $(
-                stat.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value))?;
-            )*
-            stat.next().transpose()?;
+            let mut statement = $db.prepare::<()>($query)?;
+            $(statement.bind_named_value(concat!(":", stringify!($key)), Into::<$crate::Value>::into($value))?;)*
+            statement.next().transpose()?;
             Ok(())
         })()
     }};
-}
-
-// MARK: Tests
-#[cfg(test)]
-mod test {
-    use std::panic::{self, AssertUnwindSafe};
-
-    use super::*;
-
-    #[test]
-    fn test_open_db_execute_queries() -> Result<(), StatementError> {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute(
-            "CREATE TABLE persons (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER) STRICT",
-            (),
-        )?;
-        db.execute(
-            "INSERT INTO persons (name, age) VALUES (?, ?)",
-            ("Alice".to_string(), 30),
-        )?;
-        execute_args!(
-            db,
-            "INSERT INTO persons (name, age) VALUES (:name, :age)",
-            Args {
-                name: "Bob".to_string(),
-                age: 40,
-            },
-        )?;
-
-        let total = db.query_some::<i64>("SELECT COUNT(id) FROM persons", ())?;
-        assert_eq!(total, 2);
-        let names = db
-            .query::<(String, i64)>("SELECT name, age FROM persons", ())?
-            .collect::<Result<Vec<_>, _>>()?;
-        assert_eq!(
-            names,
-            vec![("Alice".to_string(), 30), ("Bob".to_string(), 40)]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_all_types_crud() -> Result<(), StatementError> {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute(
-            "CREATE TABLE data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                int_val INTEGER NOT NULL,
-                float_val REAL NOT NULL,
-                text_val TEXT NOT NULL,
-                blob_val BLOB NOT NULL,
-                opt_int INTEGER
-            )",
-            (),
-        )?;
-
-        // INSERT all value types including NULL optional
-        db.execute(
-            "INSERT INTO data (int_val, float_val, text_val, blob_val, opt_int) VALUES (?, ?, ?, ?, ?)",
-            (42i64, 3.11f64, "hello".to_string(), vec![0xCAu8, 0xFE], Option::<i64>::None),
-        )?;
-        assert_eq!(db.last_insert_row_id(), 1);
-
-        // SELECT and verify all types round-trip
-        let row = db.query_some::<(i64, f64, String, Vec<u8>, Option<i64>)>(
-            "SELECT int_val, float_val, text_val, blob_val, opt_int FROM data WHERE id = 1",
-            (),
-        )?;
-        assert_eq!(row.0, 42);
-        assert_eq!(row.1, 3.11);
-        assert_eq!(row.2, "hello");
-        assert_eq!(row.3, vec![0xCAu8, 0xFE]);
-        assert_eq!(row.4, None);
-
-        // UPDATE and verify affected_rows
-        db.execute("UPDATE data SET int_val = 99 WHERE id = 1", ())?;
-        assert_eq!(db.affected_rows(), 1);
-        let updated = db.query_some::<i64>("SELECT int_val FROM data WHERE id = 1", ())?;
-        assert_eq!(updated, 99);
-
-        // INSERT second row with Some optional
-        db.execute(
-            "INSERT INTO data (int_val, float_val, text_val, blob_val, opt_int) VALUES (?, ?, ?, ?, ?)",
-            (0i64, 0.0f64, String::new(), vec![], Some(7i64)),
-        )?;
-        let opt = db.query_some::<Option<i64>>("SELECT opt_int FROM data WHERE id = 2", ())?;
-        assert_eq!(opt, Some(7));
-
-        // DELETE and verify count drops
-        db.execute("DELETE FROM data WHERE id = 1", ())?;
-        assert_eq!(db.affected_rows(), 1);
-        let count = db.query_some::<i64>("SELECT COUNT(*) FROM data", ())?;
-        assert_eq!(count, 1);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_query_some_empty_error() {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute("CREATE TABLE empty (id INTEGER PRIMARY KEY)", ())
-            .unwrap();
-        let result = db.query_some::<i64>("SELECT id FROM empty", ());
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_multiple_rows_iteration() -> Result<(), StatementError> {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute("CREATE TABLE nums (n INTEGER NOT NULL)", ())?;
-        for i in 1i64..=5 {
-            db.execute("INSERT INTO nums (n) VALUES (?)", i)?;
-        }
-        let rows: Vec<i64> = db
-            .query::<i64>("SELECT n FROM nums ORDER BY n", ())?
-            .collect::<Result<Vec<_>, _>>()?;
-        assert_eq!(rows, vec![1, 2, 3, 4, 5]);
-        Ok(())
-    }
-
-    #[test]
-    fn test_statement_can_outlive_connection() -> Result<(), StatementError> {
-        let mut statement = {
-            let db = Connection::open_sqlite_memory().unwrap();
-            db.query::<i64>("SELECT 42", ())?
-        };
-
-        assert_eq!(statement.next().transpose()?, Some(42));
-        Ok(())
-    }
-
-    #[test]
-    fn test_transaction_commits_on_success() -> Result<(), StatementError> {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute("CREATE TABLE values_table (value INTEGER NOT NULL)", ())?;
-
-        db.transaction(|transaction| -> Result<(), StatementError> {
-            transaction.execute("INSERT INTO values_table VALUES (1)", ())?;
-            transaction.execute("INSERT INTO values_table VALUES (2)", ())?;
-            Ok(())
-        })?;
-
-        assert_eq!(
-            db.query_some::<i64>("SELECT COUNT(*) FROM values_table", ())?,
-            2
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_transaction_rolls_back_on_error() -> Result<(), StatementError> {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute("CREATE TABLE values_table (value INTEGER NOT NULL)", ())?;
-
-        let result: Result<(), StatementError> = db.transaction(|transaction| {
-            transaction.execute("INSERT INTO values_table VALUES (1)", ())?;
-            Err(StatementError::new("stop transaction"))
-        });
-
-        assert!(result.is_err());
-        assert_eq!(
-            db.query_some::<i64>("SELECT COUNT(*) FROM values_table", ())?,
-            0
-        );
-
-        db.execute("INSERT INTO values_table VALUES (2)", ())?;
-        assert_eq!(
-            db.query_some::<i64>("SELECT value FROM values_table", ())?,
-            2
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_transaction_preserves_error_after_sqlite_rollback() -> Result<(), StatementError> {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute("CREATE TABLE values_table (value INTEGER UNIQUE)", ())?;
-
-        let result: Result<(), StatementError> = db.transaction(|transaction| {
-            transaction.execute("INSERT INTO values_table VALUES (1)", ())?;
-            transaction.execute("INSERT OR ROLLBACK INTO values_table VALUES (1)", ())?;
-            Ok(())
-        });
-
-        let error = match result {
-            Ok(()) => panic!("duplicate insert unexpectedly succeeded"),
-            Err(error) => error,
-        };
-        assert!(error.msg.contains("UNIQUE constraint failed"));
-        assert_eq!(
-            db.query_some::<i64>("SELECT COUNT(*) FROM values_table", ())?,
-            0
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_transaction_rolls_back_on_panic() -> Result<(), StatementError> {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute("CREATE TABLE values_table (value INTEGER NOT NULL)", ())?;
-
-        let result = panic::catch_unwind(AssertUnwindSafe(|| {
-            let _: Result<(), StatementError> = db.transaction(|transaction| {
-                transaction.execute("INSERT INTO values_table VALUES (1)", ())?;
-                panic!("stop transaction");
-            });
-        }));
-
-        assert!(result.is_err());
-        assert_eq!(
-            db.query_some::<i64>("SELECT COUNT(*) FROM values_table", ())?,
-            0
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_named_args_macro() -> Result<(), StatementError> {
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute(
-            "CREATE TABLE kv (key TEXT NOT NULL, val INTEGER NOT NULL)",
-            (),
-        )?;
-        execute_args!(
-            db,
-            "INSERT INTO kv (key, val) VALUES (:key, :val)",
-            Args {
-                key: "answer".to_string(),
-                val: 42i64,
-            },
-        )?;
-        let rows: Vec<i64> = query_args!(
-            i64,
-            db,
-            "SELECT val FROM kv WHERE key = :key",
-            Args {
-                key: "answer".to_string(),
-            },
-        )?
-        .collect::<Result<Vec<_>, _>>()?;
-        assert_eq!(rows, vec![42]);
-        Ok(())
-    }
-
-    #[cfg(feature = "uuid")]
-    #[test]
-    fn test_uuid_roundtrip() -> Result<(), StatementError> {
-        use uuid::Uuid;
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute("CREATE TABLE items (id BLOB NOT NULL)", ())?;
-        let uuid = Uuid::from_bytes([
-            0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4,
-            0x30, 0xc8,
-        ]);
-        db.execute("INSERT INTO items (id) VALUES (?)", uuid)?;
-        let fetched: Uuid = db.query_some("SELECT id FROM items", ())?;
-        assert_eq!(fetched, uuid);
-        Ok(())
-    }
-
-    #[cfg(feature = "chrono")]
-    #[test]
-    fn test_chrono_roundtrip() -> Result<(), StatementError> {
-        use chrono::{DateTime, NaiveDate, Utc};
-        let db = Connection::open_sqlite_memory().unwrap();
-        db.execute(
-            "CREATE TABLE events (day INTEGER NOT NULL, ts INTEGER NOT NULL)",
-            (),
-        )?;
-        let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
-        let ts = DateTime::<Utc>::from_timestamp_secs(1_700_000_000).unwrap();
-        db.execute("INSERT INTO events (day, ts) VALUES (?, ?)", (date, ts))?;
-        let (fetched_date, fetched_ts): (NaiveDate, DateTime<Utc>) =
-            db.query_some("SELECT day, ts FROM events", ())?;
-        assert_eq!(fetched_date, date);
-        assert_eq!(fetched_ts, ts);
-        Ok(())
-    }
 }

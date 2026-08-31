@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::ffi::{c_char, CStr};
+
 /// Preprocess a user-supplied search string into a safe FTS5 query expression.
 /// FTS5 keyword operators (AND, OR, NOT) are preserved so callers can use them
 /// intentionally. Structural characters that cause FTS5 parse errors (unmatched
@@ -48,4 +50,17 @@ pub fn preprocess_fts_query(q: &str) -> String {
     }
 
     cleaned.join(" ")
+}
+
+pub(crate) fn optional_string(value: *const c_char) -> Option<String> {
+    if value.is_null() {
+        None
+    } else {
+        Some(
+            // SAFETY: value is non-null and points to a SQLite-owned NUL-terminated string.
+            unsafe { CStr::from_ptr(value) }
+                .to_string_lossy()
+                .into_owned(),
+        )
+    }
 }
