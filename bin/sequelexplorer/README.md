@@ -7,6 +7,7 @@ A read-only SQLite and MySQL database GUI viewer built with [bwebview](../../lib
 
 - Open SQLite database files in read-only mode
 - Connect to MySQL over TCP or a local Unix socket
+- Save MySQL passwords in the operating system credential store and reconnect automatically
 - Browse the MySQL databases available to the connected account
 - Browse tables in the sidebar
 - Inspect table rows, declared column types, primary keys, and CREATE TABLE definitions
@@ -20,6 +21,10 @@ A read-only SQLite and MySQL database GUI viewer built with [bwebview](../../lib
 ## macOS Entitlements
 
 The `com.apple.security.app-sandbox` entitlement is not used because `com.apple.security.files.user-selected.read-only` only permits reading the selected file, not the accompanying `*-shm` and `*-wal` files next to the `.db` file.
+
+For stable Keychain authorization across rebuilds, bundles use the first valid system code-signing
+identity. Set `CODESIGN_IDENTITY` or `package.metadata.bundle.signing_identity` to select one
+explicitly. Ad-hoc signing remains the fallback when no certificate is available.
 
 ## License
 

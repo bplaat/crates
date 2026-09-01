@@ -30,6 +30,7 @@ bwebview = { path = "../../lib/bwebview", features = [
     "file_drop",
     "menu",
 ] }
+keyring = "4.2"
 rust-embed = "8.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -39,6 +40,7 @@ small-http = { version = "0.2.1", default-features = false, features = [
 ] }
 small-router = { version = "0.2.1" }
 url = { version = "2.5" }
+zeroize = { version = "1.9", features = ["serde"] }
 
 [target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
 bsql = { version = "0.1.2", features = ["sqlite-bundled"] }

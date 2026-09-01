@@ -811,6 +811,7 @@ dependencies = [
  "base64",
  "bsql",
  "bwebview",
+ "keyring",
  "rust-embed",
  "serde",
  "serde_json",
@@ -819,6 +820,7 @@ dependencies = [
  "small-router",
  "url",
  "winresource",
+ "zeroize",
 ]
 
 [[package]]
