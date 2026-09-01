@@ -126,7 +126,7 @@
                                                     {{ formatCellValue(val, colIdx) }}
                                                 </span>
                                                 <button
-                                                    v-if="columns[colIdx] && columns[colIdx].foreign_key"
+                                                    v-if="val.kind !== 'null' && columns[colIdx] && columns[colIdx].foreign_key"
                                                     class="button is-icon is-small is-subtle"
                                                     :title="`Go to ${columns[colIdx].foreign_key.table} row`"
                                                     @click="navigateToForeignKey(columns[colIdx].foreign_key.table, columns[colIdx].foreign_key.column, val)"
