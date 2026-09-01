@@ -13,7 +13,7 @@ use crate::api;
 
 // MARK: Person
 #[derive(Clone, FromRow, FromStruct)]
-#[from_struct(api::Person)]
+#[from_struct(api::Person, only_into)]
 pub(crate) struct Person {
     pub id: Uuid,
     pub name: String,

@@ -88,7 +88,7 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Result<Response> {
 
 // MARK: Persons Create
 #[derive(Validate, FromStruct)]
-#[from_struct(api::PersonCreateUpdateBody)]
+#[from_struct(api::PersonCreateUpdateBody, only_from)]
 struct PersonCreateUpdateBody {
     #[validate(ascii, length(min = 3, max = 25), custom(validators::name_validator))]
     name: String,
