@@ -41,6 +41,10 @@ fn main() {
 
 See the [examples](examples/) for many more examples.
 
+The multi-threaded server uses a scalable thread pool by default. Use
+`small_http::serve_with_options` and `small_http::ThreadPoolOptions` to configure its minimum and
+maximum worker thread counts and worker timeout.
+
 ## Important: reduce `url` dependencies
 
 You can greatly reduce the dependencies of the [url](https://crates.io/crates/url) crate, by removing the `idna` support with the following crate update:

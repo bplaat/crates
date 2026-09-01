@@ -8,16 +8,19 @@
 
 use std::time::Duration;
 
+#[cfg(feature = "multi-threaded")]
+pub use threadpool::Options as ThreadPoolOptions;
+
 pub use crate::client::Client;
 pub use crate::enums::{Method, Status};
 pub use crate::header_map::HeaderMap;
 pub use crate::request::Request;
 pub use crate::response::Response;
-#[cfg(feature = "multi-threaded")]
-pub use crate::serve::serve;
 #[cfg(feature = "cgi")]
 pub use crate::serve::serve_cgi;
 pub use crate::serve::serve_single_threaded;
+#[cfg(feature = "multi-threaded")]
+pub use crate::serve::{serve, serve_with_options};
 
 mod client;
 mod enums;

@@ -500,7 +500,7 @@ impl Executor {
                 println!();
             }
 
-            let pool = ThreadPool::new(
+            let pool = ThreadPool::new_fixed(
                 thread_count
                     .unwrap_or_else(|| thread::available_parallelism().map_or(1, |n| n.get())),
             );
