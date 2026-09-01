@@ -12,7 +12,7 @@ struct ApiUser {
 }
 
 #[derive(FromStruct)]
-#[from_struct(ApiUser)]
+#[from_struct(ApiUser, only_from)]
 struct User {
     name: String,
 }
@@ -26,7 +26,8 @@ let user = User::from(ApiUser {
 
 - `FromStruct` converts matching fields using `Into`
 - `FromEnum` converts identically named enum variants
-- Generates conversions in both directions
+- Conversions are bidirectional by default
+- Add `only_from` or `only_into` to generate only that direction, for example `#[from_struct(ApiUser, only_from)]` or `#[from_enum(ApiRole, only_into)]`
 
 ## License
 
