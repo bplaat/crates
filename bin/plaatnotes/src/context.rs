@@ -13,6 +13,7 @@ use std::time::Instant;
 use anyhow::{Context as _, Result};
 use bsql::{Connection, PoolOptions, SqliteMode, run_migrations};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use crate::models::{Note, Session, User, UserRole};
 
@@ -159,8 +160,9 @@ fn database_seed(database: &Connection) -> Result<()> {
     if database.query_some::<i64>("SELECT COUNT(id) FROM users", ())? == 0 {
         let admin_email =
             std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@example.com".to_string());
-        let admin_password =
-            std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "Password123!".to_string());
+        let admin_password = Zeroizing::new(
+            std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "Password123!".to_string()),
+        );
         let user = User {
             first_name: "Admin".to_string(),
             last_name: "Admin".to_string(),

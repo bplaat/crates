@@ -17,6 +17,7 @@ use simple_useragent::UserAgentParser;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
 use validate::Validate;
+use zeroize::Zeroizing;
 
 use crate::api;
 use crate::consts::{SESSION_EXPIRY_SECONDS, SESSION_TOKEN_LENGTH};
@@ -37,12 +38,12 @@ struct IpInfo {
 }
 
 #[derive(Validate, FromStruct)]
-#[from_struct(api::LoginBody)]
+#[from_struct(api::LoginBody, only_from)]
 struct LoginBody {
     #[validate(email)]
     email: String,
     #[validate(ascii, length(min = 8, max = 128))]
-    password: String,
+    password: Zeroizing<String>,
 }
 
 pub(crate) fn auth_login(req: &Request, ctx: &Context) -> Result<Response> {

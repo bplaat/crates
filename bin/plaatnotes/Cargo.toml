@@ -35,6 +35,7 @@ small-router = { version = "0.2.1", features = ["log"] }
 uuid = { version = "1.25", features = ["v7", "serde"] }
 validate = { path = "../../lib/validate" }
 zip = "8.6"
+zeroize = "1.9"
 
 [target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
 bsql = { version = "0.1.2", features = ["uuid", "chrono", "sqlite-bundled"] }

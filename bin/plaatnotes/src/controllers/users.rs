@@ -11,6 +11,7 @@ use from_derive::FromStruct;
 use small_http::{Request, Response, Status};
 use uuid::Uuid;
 use validate::Validate;
+use zeroize::Zeroizing;
 
 use crate::api;
 use crate::context::{Context, DatabaseHelpers};
@@ -96,8 +97,8 @@ pub(crate) fn users_index(req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 #[derive(Validate, FromStruct)]
-#[from_struct(api::UserCreateBody)]
 #[validate(context(Context))]
+#[from_struct(api::UserCreateBody, only_from)]
 struct UserCreateBody {
     #[validate(length(min = 1, max = 128))]
     first_name: String,
@@ -106,7 +107,7 @@ struct UserCreateBody {
     #[validate(email, custom(is_unique_email))]
     email: String,
     #[validate(ascii, length(min = 8, max = 128), custom(has_password_complexity_ctx))]
-    password: String,
+    password: Zeroizing<String>,
     role: UserRole,
 }
 
@@ -159,8 +160,8 @@ pub(crate) fn users_show(req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 #[derive(Validate, FromStruct)]
-#[from_struct(api::UserUpdateBody)]
 #[validate(context(Context))]
+#[from_struct(api::UserUpdateBody, only_from)]
 struct UserUpdateBody {
     #[validate(length(min = 1, max = 128))]
     first_name: String,
@@ -169,7 +170,7 @@ struct UserUpdateBody {
     #[validate(email, custom(is_unique_email_or_target_user_email))]
     email: String,
     #[validate(ascii, length(min = 8, max = 128), custom(has_password_complexity_ctx))]
-    password: Option<String>,
+    password: Option<Zeroizing<String>>,
     theme: UserTheme,
     language: String,
     role: UserRole,
@@ -246,12 +247,12 @@ pub(crate) fn users_update(req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 #[derive(Validate, FromStruct)]
-#[from_struct(api::UserChangePasswordBody)]
+#[from_struct(api::UserChangePasswordBody, only_from)]
 struct UserChangePasswordBody {
     #[validate(ascii, length(min = 8, max = 128))]
-    old_password: String,
+    old_password: Zeroizing<String>,
     #[validate(ascii, length(min = 8, max = 128), custom(has_password_complexity))]
-    new_password: String,
+    new_password: Zeroizing<String>,
 }
 
 pub(crate) fn users_change_password(req: &Request, ctx: &Context) -> Result<Response> {
