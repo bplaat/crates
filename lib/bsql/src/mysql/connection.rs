@@ -7,24 +7,57 @@
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::connection::{Connection, InnerConnection};
-use crate::ConnectionError;
+use crate::connection::Connection;
+use crate::{ConnectionError, PoolOptions};
 
-pub(super) enum MysqlTransport {
+/// Transport used to connect to MySQL.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum MysqlTransport {
+    /// TCP connection with optional verified TLS.
     Tcp {
+        /// Server hostname.
         host: String,
+        /// Server port.
         port: u16,
+        /// Whether verified TLS is required.
+        tls: bool,
     },
+    /// Unix domain socket connection.
     #[cfg(unix)]
     Unix {
+        /// Socket path.
         path: PathBuf,
     },
 }
 
-pub(super) struct MysqlOptions {
+impl MysqlTransport {
+    /// Create a TCP transport.
+    pub fn tcp(host: impl Into<String>, port: u16, tls: bool) -> Self {
+        Self::Tcp {
+            host: host.into(),
+            port,
+            tls,
+        }
+    }
+
+    /// Create a Unix domain socket transport.
+    #[cfg(unix)]
+    pub fn unix(path: impl Into<PathBuf>) -> Self {
+        Self::Unix { path: path.into() }
+    }
+
+    const fn tls(&self) -> bool {
+        match self {
+            Self::Tcp { tls, .. } => *tls,
+            #[cfg(unix)]
+            Self::Unix { .. } => false,
+        }
+    }
+}
+
+pub(crate) struct MysqlOptions {
     pub(super) transport: MysqlTransport,
     pub(super) user: String,
     pub(super) password: String,
@@ -34,40 +67,18 @@ pub(super) struct MysqlOptions {
 }
 
 impl MysqlOptions {
-    fn tcp(
-        host: impl Into<String>,
-        port: u16,
-        user: impl Into<String>,
-        password: impl Into<String>,
-        database: Option<&str>,
-        tls: bool,
-    ) -> Self {
-        Self {
-            transport: MysqlTransport::Tcp {
-                host: host.into(),
-                port,
-            },
-            user: user.into(),
-            password: password.into(),
-            database: database.map(str::to_owned),
-            tls,
-            timeout: Duration::from_secs(10),
-        }
-    }
-
-    #[cfg(unix)]
-    fn unix(
-        path: impl Into<PathBuf>,
+    fn new(
+        transport: MysqlTransport,
         user: impl Into<String>,
         password: impl Into<String>,
         database: Option<&str>,
     ) -> Self {
         Self {
-            transport: MysqlTransport::Unix { path: path.into() },
+            tls: transport.tls(),
+            transport,
             user: user.into(),
             password: password.into(),
             database: database.map(str::to_owned),
-            tls: false,
             timeout: Duration::from_secs(10),
         }
     }
@@ -82,34 +93,21 @@ pub(crate) struct Client {
     pub(crate) affected_rows: u64,
     pub(crate) last_insert_id: u64,
     pub(crate) capabilities: u32,
+    pub(crate) in_transaction: bool,
 }
 
 impl Connection {
-    fn connect_mysql(options: MysqlOptions) -> Result<Self, ConnectionError> {
-        let client = Client::connect(&options).map_err(ConnectionError::new)?;
-        Ok(Self::from_inner(InnerConnection::Mysql(Mutex::new(client))))
-    }
-
-    /// Connect to a MySQL server over TCP using the classic client/server protocol.
-    pub fn open_mysql_tcp(
-        host: impl Into<String>,
-        port: u16,
+    /// Connect to MySQL using the classic client/server protocol.
+    pub fn open_mysql(
+        transport: MysqlTransport,
         user: impl Into<String>,
         password: impl Into<String>,
         database: Option<&str>,
-        tls: bool,
+        pool_options: PoolOptions,
     ) -> Result<Self, ConnectionError> {
-        Self::connect_mysql(MysqlOptions::tcp(host, port, user, password, database, tls))
-    }
-
-    /// Connect to a MySQL server through a Unix domain socket.
-    #[cfg(unix)]
-    pub fn open_mysql_unix(
-        path: impl Into<PathBuf>,
-        user: impl Into<String>,
-        password: impl Into<String>,
-        database: Option<&str>,
-    ) -> Result<Self, ConnectionError> {
-        Self::connect_mysql(MysqlOptions::unix(path, user, password, database))
+        Self::from_mysql_options(
+            MysqlOptions::new(transport, user, password, database),
+            pool_options,
+        )
     }
 }

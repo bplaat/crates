@@ -11,11 +11,15 @@ use std::ptr;
 use libsqlite3_sys::*;
 
 use super::Prepared;
-use crate::connection::{Connection as GenericConnection, InnerConnection};
-use crate::{ConnectionError, StatementError};
+use crate::connection::{Connection as GenericConnection, SqlitePoolOptions};
+use crate::{ConnectionError, PoolOptions, StatementError};
 
-pub(crate) enum SqliteOpenMode {
+/// SQLite database access mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SqliteMode {
+    /// Open an existing database for reads only.
     ReadOnly,
+    /// Open a database for reads and writes, creating it when needed.
     ReadWrite,
 }
 
@@ -23,11 +27,14 @@ pub(crate) struct Connection(*mut sqlite3);
 
 // SAFETY: Connection exclusively owns its SQLite handle and never aliases mutable ownership.
 unsafe impl Send for Connection {}
-// SAFETY: SQLite is opened with SQLITE_OPEN_FULLMUTEX, which serializes calls for this handle.
-unsafe impl Sync for Connection {}
 
 impl Connection {
-    pub(crate) fn open(path: &Path, mode: SqliteOpenMode) -> Result<Self, String> {
+    pub(crate) fn is_threadsafe() -> bool {
+        // SAFETY: sqlite3_threadsafe takes no arguments and reads immutable compile-time state.
+        unsafe { sqlite3_threadsafe() != 0 }
+    }
+
+    pub(crate) fn open(path: &Path, mode: SqliteMode) -> Result<Self, String> {
         let mut database = ptr::null_mut();
         let path = path
             .to_str()
@@ -41,9 +48,9 @@ impl Connection {
                 path.as_ptr(),
                 &mut database,
                 match mode {
-                    SqliteOpenMode::ReadOnly => SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX,
-                    SqliteOpenMode::ReadWrite => {
-                        SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
+                    SqliteMode::ReadOnly => SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX,
+                    SqliteMode::ReadWrite => {
+                        SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX
                     }
                 },
                 ptr::null(),
@@ -165,45 +172,52 @@ impl Drop for Connection {
 }
 
 impl GenericConnection {
-    fn open_sqlite_with_mode(
+    /// Open a SQLite database with the requested access mode and pool configuration.
+    pub fn open_sqlite(
         path: impl AsRef<Path>,
-        mode: SqliteOpenMode,
+        mode: SqliteMode,
+        pool_options: PoolOptions,
     ) -> Result<Self, ConnectionError> {
-        let connection = Connection::open(path.as_ref(), mode).map_err(ConnectionError::new)?;
-        Ok(Self::from_inner(InnerConnection::Sqlite(connection)))
-    }
-
-    /// Open a SQLite database for reading and writing, creating it when needed.
-    pub fn open_sqlite(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
-        Self::open_sqlite_with_mode(path, SqliteOpenMode::ReadWrite)
-    }
-
-    /// Open an existing SQLite database in read-only mode.
-    pub fn open_sqlite_read_only(path: impl AsRef<Path>) -> Result<Self, ConnectionError> {
-        Self::open_sqlite_with_mode(path, SqliteOpenMode::ReadOnly)
+        if path.as_ref() == Path::new(":memory:") {
+            if mode == SqliteMode::ReadOnly {
+                return Err(ConnectionError::new(
+                    "in-memory SQLite databases cannot be opened read-only",
+                ));
+            }
+            if pool_options.max_connections != 1 {
+                return Err(ConnectionError::new(
+                    "in-memory SQLite databases require exactly one connection",
+                ));
+            }
+        }
+        Self::from_sqlite_options(
+            SqlitePoolOptions {
+                path: path.as_ref().to_path_buf(),
+                mode,
+            },
+            pool_options,
+        )
     }
 
     /// Open an in-memory SQLite database.
     pub fn open_sqlite_memory() -> Result<Self, ConnectionError> {
-        Self::open_sqlite(":memory:")
+        Self::from_sqlite_options(
+            SqlitePoolOptions {
+                path: ":memory:".into(),
+                mode: SqliteMode::ReadWrite,
+            },
+            PoolOptions::single_connection(),
+        )
     }
 
     /// Set the SQLite journal mode to write-ahead logging.
     pub fn enable_wal_logging(&self) -> Result<(), StatementError> {
-        self.require_sqlite()?;
-        self.execute("PRAGMA journal_mode = WAL", ())
-    }
-
-    /// Apply the crate's recommended SQLite performance settings.
-    pub fn apply_various_performance_settings(&self) -> Result<(), StatementError> {
-        self.require_sqlite()?;
-        self.execute("PRAGMA synchronous = NORMAL", ())?;
-        self.execute("PRAGMA busy_timeout = 5000", ())?;
-        self.execute("PRAGMA cache_size = 20000", ())?;
-        self.execute("PRAGMA foreign_keys = ON", ())?;
-        self.execute("PRAGMA auto_vacuum = INCREMENTAL", ())?;
-        self.execute("PRAGMA temp_store = MEMORY", ())?;
-        self.execute("PRAGMA mmap_size = 2147483648", ())?;
-        self.execute("PRAGMA page_size = 8192", ())
+        let pool = self.sqlite_pool()?;
+        let writer = pool.acquire_writer()?;
+        let result = writer.connection().execute_script(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;",
+        );
+        result
     }
 }

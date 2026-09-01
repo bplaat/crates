@@ -958,6 +958,8 @@ mod test {
         let router = router(ctx.clone());
         let (_, token) = create_test_user_with_session_and_role(&ctx, UserRole::Admin);
         let user = insert_test_user(&ctx, "John", "Doe", "john@example.com");
+        insert_test_session(&ctx, user.id, "deleted-user-session");
+        insert_test_note(&ctx, user.id, None, "Deleted user's note");
 
         let res = router.handle(
             &Request::delete(format!("http://localhost/api/users/{}", user.id))
@@ -975,6 +977,18 @@ mod test {
             .unwrap()
             .data;
         assert_eq!(users.len(), 1);
+        assert_eq!(
+            ctx.database
+                .query_some::<i64>("SELECT COUNT(*) FROM sessions WHERE user_id = ?", user.id)
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            ctx.database
+                .query_some::<i64>("SELECT COUNT(*) FROM notes WHERE user_id = ?", user.id)
+                .unwrap(),
+            0
+        );
     }
 
     #[test]

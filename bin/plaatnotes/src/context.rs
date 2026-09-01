@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use anyhow::{Context as _, Result};
-use bsql::{Connection, run_migrations};
+use bsql::{Connection, PoolOptions, SqliteMode, run_migrations};
 use uuid::Uuid;
 
 use crate::models::{Note, Session, User, UserRole};
@@ -34,9 +34,10 @@ impl Context {
     #[allow(dead_code)]
     pub(crate) fn with_database(path: impl AsRef<Path>, server_origin: String) -> Result<Self> {
         log::info!("Using database at {}", path.as_ref().display());
-        let database = Connection::open_sqlite(path.as_ref())?;
+        let database =
+            Connection::open_sqlite(path.as_ref(), SqliteMode::ReadWrite, PoolOptions::default())?;
+        database.execute_script("PRAGMA foreign_keys = ON")?;
         database.enable_wal_logging()?;
-        database.apply_various_performance_settings()?;
         log::info!("Running database migrations...");
         run_migrations!(database, "src/migrations")?;
         database_seed(&database)?;
@@ -56,6 +57,7 @@ impl Context {
     #[cfg(test)]
     pub(crate) fn with_test_database() -> Result<Self> {
         let database = Connection::open_sqlite_memory()?;
+        database.execute_script("PRAGMA foreign_keys = ON")?;
         log::info!("Running database migrations...");
         run_migrations!(database, "src/migrations")?;
         Ok(Self {
@@ -73,6 +75,7 @@ impl Context {
 
     pub(crate) fn with_e2e_database() -> Result<Self> {
         let database = Connection::open_sqlite_memory()?;
+        database.execute_script("PRAGMA foreign_keys = ON")?;
         log::info!("Running database migrations...");
         run_migrations!(database, "src/migrations")?;
         database_seed(&database)?;

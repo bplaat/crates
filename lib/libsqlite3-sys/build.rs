@@ -12,6 +12,7 @@ fn main() {
         feature = "bundled" => {
             cc::Build::new()
                 .file("sqlite3/sqlite3.c")
+                .define("SQLITE_THREADSAFE", "1")
                 .define("SQLITE_ENABLE_COLUMN_METADATA", None)
                 .define("SQLITE_ENABLE_FTS5", None)
                 .compile("sqlite3");

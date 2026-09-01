@@ -221,6 +221,34 @@ impl Xtask {
             run(&mut command)?;
         }
 
+        for feature in ["sqlite", "mysql"] {
+            println!("Checking bsql with only the {feature} backend...");
+            run(Command::new("cargo").args([
+                "clippy",
+                "--locked",
+                "-p",
+                "bsql",
+                "--all-targets",
+                "--no-default-features",
+                "--features",
+                feature,
+                "--",
+                "-D",
+                "warnings",
+                "-W",
+                "clippy::uninlined_format_args",
+            ]))?;
+            run(Command::new("cargo").args([
+                "test",
+                "--locked",
+                "-p",
+                "bsql",
+                "--no-default-features",
+                "--features",
+                feature,
+            ]))?;
+        }
+
         if self.os != Os::Windows {
             self.check_address_sanitizer(&metadata)?;
         }

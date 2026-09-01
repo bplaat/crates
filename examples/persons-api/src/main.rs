@@ -9,6 +9,7 @@
 use std::env;
 use std::net::{Ipv4Addr, TcpListener};
 
+use bsql::PoolOptions;
 use log::info;
 use small_router::{Router, RouterBuilder};
 
@@ -52,10 +53,17 @@ fn main() {
 
     // Create router and load database
     let database_path = env::var("DATABASE_PATH").unwrap_or_else(|_| "database.db".to_string());
-    let context = Context::with_database(&database_path).expect("Can't open/create database");
+    let is_cgi = env::var("GATEWAY_INTERFACE").is_ok();
+    let pool_options = if is_cgi {
+        PoolOptions::single_connection()
+    } else {
+        PoolOptions::default()
+    };
+    let context =
+        Context::with_database(&database_path, pool_options).expect("Can't open/create database");
     let router = router(context);
 
-    if env::var("GATEWAY_INTERFACE").is_ok() {
+    if is_cgi {
         small_http::serve_cgi(move |req| router.handle(req));
     } else {
         // Start server

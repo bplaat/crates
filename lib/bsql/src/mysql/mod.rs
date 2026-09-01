@@ -19,8 +19,8 @@ mod connection;
 mod statement;
 mod utils;
 
-pub(crate) use connection::{Client, OpenedStream, Stream};
-use connection::{MysqlOptions, MysqlTransport};
+pub use connection::MysqlTransport;
+pub(crate) use connection::{Client, MysqlOptions, OpenedStream, Stream};
 pub(crate) use statement::{Column, Prepared};
 use utils::*;
 
@@ -39,6 +39,7 @@ const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA: u32 = 0x0020_0000;
 const CLIENT_DEPRECATE_EOF: u32 = 0x0100_0000;
 
 const SERVER_MORE_RESULTS_EXISTS: u16 = 0x0008;
+const SERVER_STATUS_IN_TRANS: u16 = 0x0001;
 const UNSIGNED_FLAG: u16 = 0x0020;
 const BINARY_CHARSET: u16 = 63;
 const MAX_PACKET_PAYLOAD: usize = 0x00ff_ffff;
@@ -50,7 +51,7 @@ const COM_STMT_CLOSE: u8 = 0x19;
 const COM_STMT_RESET: u8 = 0x1a;
 
 impl Client {
-    fn connect(options: &MysqlOptions) -> Result<Self, String> {
+    pub(crate) fn connect(options: &MysqlOptions) -> Result<Self, String> {
         let (mut stream, tls_host, secure) = open_stream(options)?;
         let mut sequence = 0;
         let handshake_packet =
@@ -111,6 +112,7 @@ impl Client {
             affected_rows: 0,
             last_insert_id: 0,
             capabilities,
+            in_transaction: false,
         })
     }
 
@@ -122,6 +124,7 @@ impl Client {
         write_packet(&mut *self.stream, &mut sequence, &payload).map_err(statement_io)?;
         loop {
             let status = self.drain_query_response(&mut sequence)?;
+            self.in_transaction = status & SERVER_STATUS_IN_TRANS != 0;
             if status & SERVER_MORE_RESULTS_EXISTS == 0 {
                 return Ok(());
             }
@@ -134,7 +137,7 @@ impl Client {
             return Err(server_error(&packet));
         }
         if packet.first() == Some(&0xfb) {
-            return Err(StatementError::new(
+            return Err(StatementError::broken_connection(
                 "MySQL LOCAL INFILE requests are not supported",
             ));
         }
@@ -275,6 +278,7 @@ impl Client {
             }
             statement.columns.clear();
             statement.executed = true;
+            self.in_transaction = status & SERVER_STATUS_IN_TRANS != 0;
             return Ok(());
         }
 
@@ -307,6 +311,7 @@ impl Client {
         while status & SERVER_MORE_RESULTS_EXISTS != 0 {
             status = self.drain_query_response(&mut sequence)?;
         }
+        self.in_transaction = status & SERVER_STATUS_IN_TRANS != 0;
         statement.columns = columns;
         statement.executed = true;
         Ok(())
@@ -330,12 +335,12 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) fn close(&mut self, statement_id: u32) {
+    pub(crate) fn close(&mut self, statement_id: u32) -> Result<(), StatementError> {
         let mut payload = Vec::with_capacity(5);
         payload.push(COM_STMT_CLOSE);
         payload.extend_from_slice(&statement_id.to_le_bytes());
         let mut sequence = 0;
-        _ = write_packet(&mut *self.stream, &mut sequence, &payload);
+        write_packet(&mut *self.stream, &mut sequence, &payload).map_err(statement_io)
     }
 
     const fn deprecates_eof(&self) -> bool {
@@ -345,7 +350,7 @@ impl Client {
 
 fn open_stream(options: &MysqlOptions) -> Result<OpenedStream, String> {
     match &options.transport {
-        MysqlTransport::Tcp { host, port } => {
+        MysqlTransport::Tcp { host, port, tls: _ } => {
             let address = (host.as_str(), *port)
                 .to_socket_addrs()
                 .map_err(|error| error.to_string())?
@@ -1146,6 +1151,70 @@ impl<'a> Reader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TestStream {
+        input: io::Cursor<Vec<u8>>,
+        output: Vec<u8>,
+    }
+
+    impl Read for TestStream {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.input.read(buffer)
+        }
+    }
+
+    impl Write for TestStream {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            self.output.extend_from_slice(buffer);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn ok_packet(status: u16) -> Vec<u8> {
+        let payload = [
+            0x00,
+            0x00,
+            0x00,
+            status as u8,
+            (status >> 8) as u8,
+            0x00,
+            0x00,
+        ];
+        let mut packet = vec![payload.len() as u8, 0, 0, 1];
+        packet.extend_from_slice(&payload);
+        packet
+    }
+
+    #[test]
+    fn client_tracks_transaction_status() {
+        let mut input = ok_packet(SERVER_STATUS_IN_TRANS);
+        input.extend(ok_packet(0));
+        let mut client = Client {
+            stream: Box::new(TestStream {
+                input: io::Cursor::new(input),
+                output: Vec::new(),
+            }),
+            affected_rows: 0,
+            last_insert_id: 0,
+            capabilities: CLIENT_PROTOCOL_41,
+            in_transaction: false,
+        };
+        client.execute_script("START TRANSACTION").unwrap();
+        assert!(client.in_transaction);
+        client.execute_script("COMMIT").unwrap();
+        assert!(!client.in_transaction);
+    }
+
+    #[test]
+    fn transport_errors_mark_connections_as_broken() {
+        assert!(statement_io(io::Error::from(io::ErrorKind::BrokenPipe)).connection_broken);
+        assert!(protocol_error("invalid packet").connection_broken);
+        assert!(!server_error(&[0xff, 1, 0]).connection_broken);
+    }
 
     #[test]
     fn named_parameters_ignore_literals_and_comments() {

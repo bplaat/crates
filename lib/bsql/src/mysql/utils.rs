@@ -36,9 +36,9 @@ pub(super) fn nonempty_lossy(value: &[u8]) -> Option<String> {
 }
 
 pub(super) fn protocol_error(message: impl Into<String>) -> StatementError {
-    StatementError::new(format!("MySQL protocol error: {}", message.into()))
+    StatementError::broken_connection(format!("MySQL protocol error: {}", message.into()))
 }
 
 pub(super) fn statement_io(error: io::Error) -> StatementError {
-    StatementError::new(format!("MySQL I/O error: {error}"))
+    StatementError::broken_connection(format!("MySQL I/O error: {error}"))
 }

@@ -37,13 +37,8 @@ pub(crate) struct Prepared {
 }
 
 impl PreparedStatement for Prepared {
-    fn reset(&mut self, connection: &InnerConnection) {
-        let Ok(client) = connection.mysql() else {
-            return;
-        };
-        if let Ok(mut client) = client.lock() {
-            _ = client.reset(self);
-        }
+    fn reset(&mut self, connection: &mut InnerConnection) -> Result<(), StatementError> {
+        connection.mysql_mut()?.reset(self)
     }
 
     fn bind_value(&mut self, index: i32, value: Value) -> Result<(), StatementError> {
@@ -74,13 +69,10 @@ impl PreparedStatement for Prepared {
         Ok(())
     }
 
-    fn step(&mut self, connection: &InnerConnection) -> Result<Option<()>, StatementError> {
-        let client = connection.mysql()?;
+    fn step(&mut self, connection: &mut InnerConnection) -> Result<Option<()>, StatementError> {
+        let client = connection.mysql_mut()?;
         if !self.executed {
-            client
-                .lock()
-                .map_err(|_| StatementError::new("MySQL connection lock is poisoned"))?
-                .execute_prepared(self)?;
+            client.execute_prepared(self)?;
         }
         if let Some(row) = self.rows.get(self.row_index).cloned() {
             self.row_index += 1;
@@ -113,13 +105,8 @@ impl PreparedStatement for Prepared {
     fn column_value(&self, index: i32) -> Value {
         self.current_row.as_ref().expect("current row checked")[index as usize].clone()
     }
-    fn close(&mut self, connection: &InnerConnection) {
-        let Ok(client) = connection.mysql() else {
-            return;
-        };
-        if let Ok(mut client) = client.lock() {
-            client.close(self.id);
-        }
+    fn close(&mut self, connection: &mut InnerConnection) -> Result<(), StatementError> {
+        connection.mysql_mut()?.close(self.id)
     }
 }
 
