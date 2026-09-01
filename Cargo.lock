@@ -658,6 +658,7 @@ dependencies = [
  "small-router",
  "uuid",
  "validate",
+ "zeroize",
  "zip",
 ]
 
