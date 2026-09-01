@@ -97,7 +97,7 @@ pub fn validate_derive(input: TokenStream) -> TokenStream {
             "_rust_embed_{}",
             file_path.to_lowercase().replace(['/', '.', '-'], "_")
         );
-        let const_ident = syn::Ident::new(&const_name, proc_macro2::Span::call_site());
+        let const_ident = syn::Ident::new(&const_name, proc_macro::Span::call_site().into());
         (file_path.to_string(), const_ident)
     };
 
