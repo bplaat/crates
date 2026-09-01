@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 use std::io::{self, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 
+#[cfg(feature = "mysql-tls")]
 use native_tls::TlsConnector;
 #[cfg(feature = "mysql-native-password")]
 use sha1::Sha1;
@@ -69,7 +70,7 @@ impl Client {
             | CLIENT_PLUGIN_AUTH
             | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
             | CLIENT_DEPRECATE_EOF;
-        let wants_tls = tls_host.is_some() && options.tls;
+        let wants_tls = cfg!(feature = "mysql-tls") && tls_host.is_some() && options.tls;
         if wants_tls && handshake.capabilities & CLIENT_SSL == 0 {
             return Err("MySQL server does not support TLS".to_string());
         }
@@ -82,6 +83,7 @@ impl Client {
         }
         capabilities &= handshake.capabilities;
 
+        #[cfg(feature = "mysql-tls")]
         if let Some(host) = tls_host {
             if wants_tls {
                 let request = ssl_request(capabilities);

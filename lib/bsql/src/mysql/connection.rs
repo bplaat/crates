@@ -34,6 +34,8 @@ pub enum MysqlTransport {
 
 impl MysqlTransport {
     /// Create a TCP transport.
+    ///
+    /// Setting `tls` to `true` requires the `mysql-tls` feature.
     pub fn tcp(host: impl Into<String>, port: u16, tls: bool) -> Self {
         Self::Tcp {
             host: host.into(),
@@ -105,9 +107,39 @@ impl Connection {
         database: Option<&str>,
         pool_options: PoolOptions,
     ) -> Result<Self, ConnectionError> {
+        #[cfg(not(feature = "mysql-tls"))]
+        if transport.tls() {
+            return Err(ConnectionError::new(
+                "MySQL TLS requires the `mysql-tls` feature",
+            ));
+        }
         Self::from_mysql_options(
             MysqlOptions::new(transport, user, password, database),
             pool_options,
         )
+    }
+}
+
+#[cfg(all(test, not(feature = "mysql-tls")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tls_transport_requires_mysql_tls_feature() {
+        let result = Connection::open_mysql(
+            MysqlTransport::tcp("localhost", 3306, true),
+            "user",
+            "password",
+            None,
+            PoolOptions::default(),
+        );
+        let error = match result {
+            Ok(_) => panic!("TLS connection unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.to_string(),
+            "Connection error: MySQL TLS requires the `mysql-tls` feature"
+        );
     }
 }
