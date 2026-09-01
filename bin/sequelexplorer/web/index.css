@@ -184,6 +184,12 @@ body {
     text-align: center;
 }
 
+.icon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
 @media (prefers-color-scheme: dark) {
     .placeholder.is-error {
         color: #ff8d8d;
