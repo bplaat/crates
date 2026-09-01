@@ -3,10 +3,12 @@
 A simple and minimal Rust SQLite and MySQL library with an ergonomic API.
 
 SQLite is enabled by default and can be selected explicitly with the `sqlite` feature. The
-MySQL backend is enabled with the `mysql` feature. On Unix targets, enabling `mysql` also makes
-Unix socket transports available. Use `default-features = false` to build with only the backend
-features an application needs. Enable `sqlite-bundled` to compile and link the bundled SQLite
-source instead of using the system library. At least one database backend must be enabled.
+MySQL backend is enabled with the `mysql` feature. Add `mysql-tls` for verified TLS over TCP or
+`mysql-native-password` for the legacy MySQL/MariaDB authentication plugin. On Unix targets,
+enabling `mysql` also makes Unix socket transports available. Use `default-features = false` to
+build with only the backend features an application needs. Enable `sqlite-bundled` to compile and
+link the bundled SQLite source instead of using the system library. At least one database backend
+must be enabled.
 
 Connections use a thread-safe, lazily grown pool sized by default for `small-http`'s worker pool.
 Pass `PoolOptions` when opening a database to set a custom limit. Transactions keep one pooled
@@ -124,8 +126,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 On Unix, use `MysqlTransport::unix("/tmp/mysql.sock")` to connect through a local socket. TCP
-transports support choosing whether verified TLS is required. MySQL pool connections can all
-handle reads and writes; a transaction exclusively leases one until it commits or rolls back.
+transports support choosing whether verified TLS is required when the `mysql-tls` feature is
+enabled. MySQL pool connections can all handle reads and writes; a transaction exclusively leases
+one until it commits or rolls back.
 Empty-password accounts, MySQL 8.4 `caching_sha2_password`, and the `auth_socket`/`unix_socket`
 account plugins are supported, including server-requested authentication switches. Enable the
 `mysql-native-password` feature for the legacy MySQL/MariaDB `mysql_native_password` plugin.
