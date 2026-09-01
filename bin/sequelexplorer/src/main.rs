@@ -8,6 +8,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -20,11 +21,13 @@ use bwebview::{
     Event, EventLoopBuilder, FileDialog, LogicalSize, Theme, WebviewBuilder, WebviewEvent,
     WindowBuilder,
 };
+use keyring::{Entry as CredentialEntry, Error as CredentialError};
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use small_http::{Request, Response, Status};
 use small_router::RouterBuilder;
+use zeroize::Zeroizing;
 
 #[derive(Embed)]
 #[folder = "web"]
@@ -70,13 +73,17 @@ enum IpcMessage {
         port: u16,
         socket: String,
         user: String,
-        password: String,
+        password: Option<Zeroizing<String>>,
         tls: bool,
+        remember: bool,
+        previous_connection: Option<MysqlCredentialIdentity>,
     },
     OpenMysqlResponse {
         request_id: u64,
         ok: bool,
         error: Option<String>,
+        credential_saved: bool,
+        credential_error: Option<String>,
     },
     SelectMysqlDatabase {
         request_id: u64,
@@ -87,6 +94,16 @@ enum IpcMessage {
         ok: bool,
         error: Option<String>,
     },
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MysqlCredentialIdentity {
+    transport: String,
+    host: String,
+    port: u16,
+    socket: String,
+    user: String,
 }
 
 // MARK: State
@@ -102,17 +119,23 @@ enum MysqlConnectionSettings {
         host: String,
         port: u16,
         user: String,
-        password: String,
+        password: Zeroizing<String>,
         tls: bool,
     },
     Unix {
         socket: String,
         user: String,
-        password: String,
+        password: Zeroizing<String>,
     },
 }
 
 impl MysqlConnectionSettings {
+    fn password(&self) -> &str {
+        match self {
+            Self::Tcp { password, .. } | Self::Unix { password, .. } => password,
+        }
+    }
+
     fn connect(&self, database: Option<&str>) -> Result<Connection, String> {
         match self {
             Self::Tcp {
@@ -124,7 +147,7 @@ impl MysqlConnectionSettings {
             } => Connection::open_mysql(
                 MysqlTransport::tcp(host.as_str(), *port, *tls),
                 user,
-                password,
+                password.as_str(),
                 database,
                 PoolOptions::single_connection(),
             )
@@ -139,7 +162,7 @@ impl MysqlConnectionSettings {
                     Connection::open_mysql(
                         MysqlTransport::unix(socket.as_str()),
                         user,
-                        password,
+                        password.as_str(),
                         database,
                         PoolOptions::single_connection(),
                     )
@@ -168,6 +191,209 @@ struct DatabaseState {
 }
 
 type State = Arc<Mutex<DatabaseState>>;
+
+fn replace_database_state_if_current(
+    state: &State,
+    connection_generation: &AtomicU64,
+    request_generation: u64,
+    new_state: DatabaseState,
+) -> bool {
+    let mut database_state = state.lock().expect("mutex poisoned");
+    if connection_generation.load(Ordering::Acquire) != request_generation {
+        return false;
+    }
+    *database_state = new_state;
+    true
+}
+
+const MYSQL_CREDENTIAL_SERVICE: &str = "nl.bplaat.SequelExplorer.mysql";
+
+fn mysql_credential_account(
+    transport: &str,
+    host: &str,
+    port: u16,
+    socket: &str,
+    user: &str,
+) -> String {
+    json!({
+        "transport": transport,
+        "host": host,
+        "port": port,
+        "socket": socket,
+        "user": user,
+    })
+    .to_string()
+}
+
+fn mysql_identity_credential_account(identity: &MysqlCredentialIdentity) -> String {
+    mysql_credential_account(
+        &identity.transport,
+        &identity.host,
+        identity.port,
+        &identity.socket,
+        &identity.user,
+    )
+}
+
+fn delete_saved_password(account: &str) -> std::result::Result<(), String> {
+    match CredentialEntry::new(MYSQL_CREDENTIAL_SERVICE, account)
+        .and_then(|entry| entry.delete_credential())
+    {
+        Ok(()) | Err(CredentialError::NoEntry) => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+struct OpenMysqlRequest {
+    request_id: u64,
+    connection_generation: u64,
+    transport: String,
+    host: String,
+    port: u16,
+    socket: String,
+    user: String,
+    password: Option<Zeroizing<String>>,
+    tls: bool,
+    remember: bool,
+    previous_connection: Option<MysqlCredentialIdentity>,
+}
+
+fn open_mysql(
+    request: OpenMysqlRequest,
+    state: &State,
+    connection_generation: &AtomicU64,
+) -> IpcMessage {
+    let credential_account = mysql_credential_account(
+        &request.transport,
+        &request.host,
+        request.port,
+        &request.socket,
+        &request.user,
+    );
+    let previous_credential_account = request
+        .previous_connection
+        .as_ref()
+        .map(mysql_identity_credential_account)
+        .filter(|account| account != &credential_account);
+    let loaded_saved_password = request.password.is_none();
+    let password = match request.password {
+        Some(password) => Ok(password),
+        None => CredentialEntry::new(MYSQL_CREDENTIAL_SERVICE, &credential_account)
+            .and_then(|entry| entry.get_password())
+            .map(Zeroizing::new)
+            .map_err(|error| format!("Failed to load saved password: {error}")),
+    };
+    let password = match password {
+        Ok(password) => password,
+        Err(error) => {
+            return IpcMessage::OpenMysqlResponse {
+                request_id: request.request_id,
+                ok: false,
+                error: Some(error),
+                credential_saved: false,
+                credential_error: None,
+            };
+        }
+    };
+    let settings = if request.transport == "tcp" {
+        Ok(MysqlConnectionSettings::Tcp {
+            host: request.host,
+            port: request.port,
+            user: request.user,
+            password,
+            tls: request.tls,
+        })
+    } else if request.transport == "unix" {
+        Ok(MysqlConnectionSettings::Unix {
+            socket: request.socket,
+            user: request.user,
+            password,
+        })
+    } else {
+        Err("Unknown MySQL transport".to_string())
+    };
+    let result = settings.and_then(|settings| {
+        settings
+            .connect(None)
+            .map(|connection| (connection, settings))
+    });
+    let (ok, error, credential_saved, credential_error) = match result {
+        Ok((connection, settings)) => {
+            if connection_generation.load(Ordering::Acquire) != request.connection_generation {
+                return IpcMessage::OpenMysqlResponse {
+                    request_id: request.request_id,
+                    ok: false,
+                    error: Some("Connection request was superseded".to_string()),
+                    credential_saved: false,
+                    credential_error: None,
+                };
+            }
+            let (credential_saved, mut credential_error) = if request.remember {
+                if loaded_saved_password {
+                    (true, None)
+                } else {
+                    match CredentialEntry::new(MYSQL_CREDENTIAL_SERVICE, &credential_account)
+                        .and_then(|entry| entry.set_password(settings.password()))
+                    {
+                        Ok(()) => (true, None),
+                        Err(error) => (false, Some(error.to_string())),
+                    }
+                }
+            } else {
+                (false, None)
+            };
+            if !replace_database_state_if_current(
+                state,
+                connection_generation,
+                request.connection_generation,
+                DatabaseState {
+                    connection: Some(connection),
+                    backend: Some(DatabaseBackend::Mysql),
+                    mysql_settings: Some(settings),
+                    database: None,
+                    table_metadata: HashMap::new(),
+                },
+            ) {
+                return IpcMessage::OpenMysqlResponse {
+                    request_id: request.request_id,
+                    ok: false,
+                    error: Some("Connection request was superseded".to_string()),
+                    credential_saved: false,
+                    credential_error: None,
+                };
+            }
+            if request.remember && credential_saved {
+                if let Some(previous_account) = &previous_credential_account {
+                    credential_error = delete_saved_password(previous_account).err();
+                }
+            } else if !request.remember {
+                credential_error = delete_saved_password(&credential_account).err();
+                if credential_error.is_none()
+                    && let Some(previous_account) = &previous_credential_account
+                {
+                    credential_error = delete_saved_password(previous_account).err();
+                }
+            }
+            (true, None, credential_saved, credential_error)
+        }
+        Err(error) => (false, Some(error), false, None),
+    };
+    IpcMessage::OpenMysqlResponse {
+        request_id: request.request_id,
+        ok,
+        error,
+        credential_saved,
+        credential_error,
+    }
+}
+
+struct MysqlConnectionPendingGuard(Arc<AtomicBool>);
+
+impl Drop for MysqlConnectionPendingGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
 
 // MARK: Database helpers
 fn get_connection(state: &State) -> Result<std::sync::MutexGuard<'_, DatabaseState>, Response> {
@@ -1091,6 +1317,9 @@ fn main() {
         .get("/api/table/:name/schema", db_table_schema)
         .post("/api/query", db_query)
         .build();
+    let event_loop_proxy = Arc::new(event_loop.create_proxy());
+    let mysql_connection_pending = Arc::new(AtomicBool::new(false));
+    let connection_generation = Arc::new(AtomicU64::new(0));
 
     #[allow(unused_mut)]
     let mut window_builder = WindowBuilder::new()
@@ -1183,6 +1412,7 @@ fn main() {
             }
         }
         Event::Webview(WebviewEvent::MessageReceive(message)) => {
+            let message = Zeroizing::new(message);
             let message = match serde_json::from_str(&message) {
                 Ok(message) => message,
                 Err(error) => {
@@ -1232,6 +1462,8 @@ fn main() {
                     );
                 }
                 IpcMessage::OpenDatabase { request_id, path } => {
+                    let request_generation =
+                        connection_generation.fetch_add(1, Ordering::AcqRel) + 1;
                     let result = Connection::open_sqlite(
                         &path,
                         SqliteMode::ReadOnly,
@@ -1239,14 +1471,22 @@ fn main() {
                     );
                     let (ok, error) = match result {
                         Ok(conn) => {
-                            *state.lock().expect("mutex poisoned") = DatabaseState {
-                                connection: Some(conn),
-                                backend: Some(DatabaseBackend::Sqlite),
-                                mysql_settings: None,
-                                database: None,
-                                table_metadata: HashMap::new(),
-                            };
-                            (true, None)
+                            if replace_database_state_if_current(
+                                &state,
+                                &connection_generation,
+                                request_generation,
+                                DatabaseState {
+                                    connection: Some(conn),
+                                    backend: Some(DatabaseBackend::Sqlite),
+                                    mysql_settings: None,
+                                    database: None,
+                                    table_metadata: HashMap::new(),
+                                },
+                            ) {
+                                (true, None)
+                            } else {
+                                (false, Some("Connection request was superseded".to_string()))
+                            }
                         }
                         Err(e) => (false, Some(e.to_string())),
                     };
@@ -1268,55 +1508,70 @@ fn main() {
                     user,
                     password,
                     tls,
+                    remember,
+                    previous_connection,
                 } => {
-                    let settings = if transport == "tcp" {
-                        Ok(MysqlConnectionSettings::Tcp {
-                            host,
-                            port,
-                            user,
-                            password,
-                            tls,
-                        })
-                    } else if transport == "unix" {
-                        Ok(MysqlConnectionSettings::Unix {
-                            socket,
-                            user,
-                            password,
-                        })
-                    } else {
-                        Err("Unknown MySQL transport".to_string())
+                    if mysql_connection_pending.swap(true, Ordering::AcqRel) {
+                        webview.send_ipc_message(
+                            serde_json::to_string(&IpcMessage::OpenMysqlResponse {
+                                request_id,
+                                ok: false,
+                                error: Some(
+                                    "A MySQL connection is already being opened".to_string(),
+                                ),
+                                credential_saved: false,
+                                credential_error: None,
+                            })
+                            .expect("Failed to serialize response"),
+                        );
+                        return;
+                    }
+                    let request = OpenMysqlRequest {
+                        request_id,
+                        connection_generation: connection_generation.fetch_add(1, Ordering::AcqRel)
+                            + 1,
+                        transport,
+                        host,
+                        port,
+                        socket,
+                        user,
+                        password,
+                        tls,
+                        remember,
+                        previous_connection,
                     };
-                    let result = settings.and_then(|settings| {
-                        settings
-                            .connect(None)
-                            .map(|connection| (connection, settings))
+                    let state = Arc::clone(&state);
+                    let event_loop_proxy = Arc::clone(&event_loop_proxy);
+                    let mysql_connection_pending = Arc::clone(&mysql_connection_pending);
+                    let connection_generation = Arc::clone(&connection_generation);
+                    std::thread::spawn(move || {
+                        let _pending_guard = MysqlConnectionPendingGuard(mysql_connection_pending);
+                        let request_id = request.request_id;
+                        let response =
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                open_mysql(request, &state, &connection_generation)
+                            }))
+                            .unwrap_or_else(|_| {
+                                IpcMessage::OpenMysqlResponse {
+                                    request_id,
+                                    ok: false,
+                                    error: Some("Failed to open MySQL connection".to_string()),
+                                    credential_saved: false,
+                                    credential_error: None,
+                                }
+                            });
+                        event_loop_proxy.send_user_event(
+                            serde_json::to_string(&response)
+                                .expect("Failed to serialize MySQL response"),
+                        );
                     });
-                    let (ok, error) = match result {
-                        Ok((connection, settings)) => {
-                            *state.lock().expect("mutex poisoned") = DatabaseState {
-                                connection: Some(connection),
-                                backend: Some(DatabaseBackend::Mysql),
-                                mysql_settings: Some(settings),
-                                database: None,
-                                table_metadata: HashMap::new(),
-                            };
-                            (true, None)
-                        }
-                        Err(error) => (false, Some(error)),
-                    };
-                    webview.send_ipc_message(
-                        serde_json::to_string(&IpcMessage::OpenMysqlResponse {
-                            request_id,
-                            ok,
-                            error,
-                        })
-                        .expect("Failed to serialize response"),
-                    );
                 }
                 IpcMessage::SelectMysqlDatabase {
                     request_id,
                     database,
                 } => {
+                    let request_generation =
+                        connection_generation.fetch_add(1, Ordering::AcqRel) + 1;
                     let settings = state.lock().expect("mutex poisoned").mysql_settings.clone();
                     let result = settings
                         .ok_or_else(|| "No MySQL connection open".to_string())
@@ -1327,14 +1582,22 @@ fn main() {
                         });
                     let (ok, error) = match result {
                         Ok((connection, settings)) => {
-                            *state.lock().expect("mutex poisoned") = DatabaseState {
-                                connection: Some(connection),
-                                backend: Some(DatabaseBackend::Mysql),
-                                mysql_settings: Some(settings),
-                                database: Some(database),
-                                table_metadata: HashMap::new(),
-                            };
-                            (true, None)
+                            if replace_database_state_if_current(
+                                &state,
+                                &connection_generation,
+                                request_generation,
+                                DatabaseState {
+                                    connection: Some(connection),
+                                    backend: Some(DatabaseBackend::Mysql),
+                                    mysql_settings: Some(settings),
+                                    database: Some(database),
+                                    table_metadata: HashMap::new(),
+                                },
+                            ) {
+                                (true, None)
+                            } else {
+                                (false, Some("Connection request was superseded".to_string()))
+                            }
                         }
                         Err(error) => (false, Some(error)),
                     };
@@ -1350,6 +1613,63 @@ fn main() {
                 _ => {}
             }
         }
+        Event::UserEvent(message) => webview.send_ipc_message(message),
         _ => {}
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn credential_account_identifies_connection() {
+        let account = mysql_credential_account("tcp", "localhost", 3306, "", "root");
+        assert_eq!(
+            account,
+            mysql_credential_account("tcp", "localhost", 3306, "", "root")
+        );
+        assert_ne!(
+            account,
+            mysql_credential_account("tcp", "example.com", 3306, "", "root")
+        );
+        assert_ne!(
+            account,
+            mysql_credential_account("tcp", "localhost", 3306, "", "other")
+        );
+    }
+
+    #[test]
+    fn stale_connection_state_is_not_committed() {
+        let state = Arc::new(Mutex::new(DatabaseState::default()));
+        let generation = AtomicU64::new(2);
+
+        let committed = replace_database_state_if_current(
+            &state,
+            &generation,
+            1,
+            DatabaseState {
+                backend: Some(DatabaseBackend::Mysql),
+                ..DatabaseState::default()
+            },
+        );
+
+        assert!(!committed);
+        assert!(state.lock().unwrap().backend.is_none());
+    }
+
+    #[test]
+    fn pending_guard_resets_flag_when_unwinding() {
+        let pending = Arc::new(AtomicBool::new(true));
+        let result = std::panic::catch_unwind({
+            let pending = Arc::clone(&pending);
+            move || {
+                let _guard = MysqlConnectionPendingGuard(pending);
+                panic!("worker failed");
+            }
+        });
+
+        assert!(result.is_err());
+        assert!(!pending.load(Ordering::Acquire));
+    }
 }

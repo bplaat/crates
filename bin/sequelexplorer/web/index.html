@@ -282,6 +282,11 @@
                             Require verified TLS
                         </label>
 
+                        <label class="checkbox-field">
+                            <input type="checkbox" v-model="mysql.remember" />
+                            Remember password
+                        </label>
+
                         <div class="dialog-actions">
                             <span class="connection-error" role="alert">{{ connectionError }}</span>
                             <button class="button is-primary" type="submit" :disabled="isConnecting">

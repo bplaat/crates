@@ -112,6 +112,7 @@ PetiteVue.createApp({
         user: 'root',
         password: '',
         tls: false,
+        remember: true,
     },
     tables: [],
     currentTable: null,
@@ -139,7 +140,11 @@ PetiteVue.createApp({
             if (message.type === 'openFile') this._openDatabaseByPath(message.path);
             if (message.type === 'restoreLastFile') {
                 const lastDbPath = localStorage.getItem('lastDbPath');
-                if (lastDbPath) this._openDatabaseByPath(lastDbPath);
+                if (lastDbPath) {
+                    this._openDatabaseByPath(lastDbPath);
+                } else {
+                    this.restoreMysqlConnection();
+                }
             }
             if (message.type === 'menuAction') this.performAction(message.action);
         });
@@ -228,19 +233,59 @@ PetiteVue.createApp({
         }
     },
 
+    async restoreMysqlConnection() {
+        const savedConnection = localStorage.getItem('lastMysqlConnection');
+        if (!savedConnection) return;
+        try {
+            const connection = JSON.parse(savedConnection);
+            if (!connection || !connection.transport || !connection.user) return;
+            this.mysql = { ...this.mysql, ...connection, password: '', remember: true };
+            this.connectionTab = 'mysql';
+            if (!(await this._openMysql(true))) this.$refs.connectionDialog.showModal();
+        } catch (_error) {
+            localStorage.removeItem('lastMysqlConnection');
+        }
+    },
+
     async openMysql() {
+        return this._openMysql(false);
+    },
+
+    async _openMysql(useSavedPassword) {
         if (this.isConnecting) return;
         this.isConnecting = true;
         this.connectionError = '';
         let response;
         try {
-            response = await ipcRequest('openMysql', { ...this.mysql });
+            let previousConnection = null;
+            try {
+                const savedConnection = JSON.parse(localStorage.getItem('lastMysqlConnection'));
+                if (savedConnection?.transport && savedConnection?.user) previousConnection = savedConnection;
+            } catch (_error) {
+                localStorage.removeItem('lastMysqlConnection');
+            }
+            response = await ipcRequest('openMysql', {
+                ...this.mysql,
+                password: useSavedPassword ? null : this.mysql.password,
+                previousConnection,
+            });
         } finally {
             this.isConnecting = false;
         }
         if (!response.ok) {
             this.connectionError = response.error || 'Failed to connect';
-            return;
+            return false;
+        }
+
+        this.mysql.password = '';
+        if (this.mysql.remember && response.credentialSaved) {
+            const { transport, host, port, socket, user, tls } = this.mysql;
+            localStorage.setItem('lastMysqlConnection', JSON.stringify({ transport, host, port, socket, user, tls }));
+        } else {
+            localStorage.removeItem('lastMysqlConnection');
+        }
+        if (response.credentialError) {
+            alert(`Connected, but credentials could not be saved securely:\n${response.credentialError}`);
         }
 
         localStorage.removeItem('lastDbPath');
@@ -262,6 +307,7 @@ PetiteVue.createApp({
         const lastDatabase = localStorage.getItem('lastMysqlDatabase');
         const database = this.databases.includes(lastDatabase) ? lastDatabase : this.databases[0];
         if (database) await this.selectDatabase(database);
+        return true;
     },
 
     async loadDatabases() {
