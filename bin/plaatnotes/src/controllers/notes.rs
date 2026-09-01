@@ -26,7 +26,7 @@ pub(crate) fn notes_index(req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 #[derive(Validate, FromStruct)]
-#[from_struct(api::NoteCreateBody)]
+#[from_struct(api::NoteCreateBody, only_from)]
 pub(crate) struct NoteCreateBody {
     #[validate(length(min = 1))]
     pub(crate) title: Option<String>,
@@ -36,7 +36,7 @@ pub(crate) struct NoteCreateBody {
 }
 
 #[derive(Validate, FromStruct)]
-#[from_struct(api::NoteAdminCreateBody)]
+#[from_struct(api::NoteAdminCreateBody, only_from)]
 struct NoteAdminCreateBody {
     pub(crate) user_id: Uuid,
     #[validate(length(min = 1))]
@@ -95,7 +95,7 @@ pub(crate) fn notes_show(req: &Request, ctx: &Context) -> Result<Response> {
 }
 
 #[derive(Validate, FromStruct)]
-#[from_struct(api::NoteUpdateBody)]
+#[from_struct(api::NoteUpdateBody, only_from)]
 struct NoteUpdateBody {
     user_id: Option<Uuid>,
     #[validate(length(min = 1))]

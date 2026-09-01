@@ -19,7 +19,7 @@ pub(crate) const FILTER_ARCHIVED: &str = "is_trashed = 0 AND is_archived = 1";
 pub(crate) const FILTER_TRASHED: &str = "is_trashed = 1";
 
 #[derive(Clone, FromRow, FromStruct)]
-#[from_struct(api::Note)]
+#[from_struct(api::Note, only_into)]
 pub(crate) struct Note {
     pub id: Uuid,
     pub user_id: Uuid,
