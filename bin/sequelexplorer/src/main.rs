@@ -1136,6 +1136,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     let mut pending_menu_action: Option<String> = None;
     let mut pending_open_path = startup_path;
+    let mut initial_restore_sent = false;
     event_loop.run(move |event| match event {
         #[cfg(target_os = "macos")]
         Event::Webview(WebviewEvent::PageLoadStart) => page_ready = false,
@@ -1195,16 +1196,19 @@ fn main() {
                     {
                         page_ready = true;
                     }
-                    if let Some(path) = pending_open_path.take() {
-                        webview.send_ipc_message(
-                            serde_json::to_string(&IpcMessage::OpenFile { path })
-                                .expect("Failed to serialize open file message"),
-                        );
-                    } else {
-                        webview.send_ipc_message(
-                            serde_json::to_string(&IpcMessage::RestoreLastFile)
-                                .expect("Failed to serialize restore last file message"),
-                        );
+                    if !initial_restore_sent {
+                        initial_restore_sent = true;
+                        if let Some(path) = pending_open_path.take() {
+                            webview.send_ipc_message(
+                                serde_json::to_string(&IpcMessage::OpenFile { path })
+                                    .expect("Failed to serialize open file message"),
+                            );
+                        } else {
+                            webview.send_ipc_message(
+                                serde_json::to_string(&IpcMessage::RestoreLastFile)
+                                    .expect("Failed to serialize restore last file message"),
+                            );
+                        }
                     }
                     #[cfg(target_os = "macos")]
                     if let Some(action) = pending_menu_action.take() {
