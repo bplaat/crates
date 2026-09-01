@@ -163,7 +163,12 @@ PetiteVue.createApp({
         );
         observer.observe(this.$refs.loadSentinel);
 
-        ipcSend('ready');
+        const notifyReady = () => requestAnimationFrame(() => requestAnimationFrame(() => ipcSend('ready')));
+        if (document.readyState === 'complete') {
+            notifyReady();
+        } else {
+            window.addEventListener('load', notifyReady, { once: true });
+        }
     },
 
     // Runs an action by id, coming from the macOS menu bar or from a keyboard shortcut
