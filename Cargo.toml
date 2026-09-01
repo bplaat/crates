@@ -41,6 +41,7 @@ enable-ansi-support = { path = "lib/enable-ansi-support" }
 form_urlencoded = { path = "lib/form_urlencoded" }
 getrandom = { path = "lib/getrandom" }
 hmac = { path = "lib/hmac" }
+keyring = { path = "lib/keyring" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
 local-ip-address = { path = "lib/local-ip-address" }
 maxminddb = { path = "lib/maxminddb" }

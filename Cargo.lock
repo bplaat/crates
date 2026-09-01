@@ -391,6 +391,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "keyring"
+version = "4.2.0+patch"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
