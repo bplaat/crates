@@ -8,19 +8,31 @@ use std::fmt::{self, Display, Formatter};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::connection::InnerConnection;
+use crate::connection::{ConnectionLease, InnerConnection};
 use crate::{Bind, FromRow, Value};
 
 /// A statement error.
 #[derive(Debug)]
 pub struct StatementError {
     pub(crate) msg: String,
+    pub(crate) connection_broken: bool,
 }
 
 impl StatementError {
     #[doc(hidden)]
     pub fn new(msg: impl Into<String>) -> Self {
-        Self { msg: msg.into() }
+        Self {
+            msg: msg.into(),
+            connection_broken: false,
+        }
+    }
+
+    #[cfg(feature = "mysql")]
+    pub(crate) fn broken_connection(msg: impl Into<String>) -> Self {
+        Self {
+            msg: msg.into(),
+            connection_broken: true,
+        }
     }
 }
 impl Display for StatementError {
@@ -46,10 +58,10 @@ pub enum ColumnType {
 }
 
 pub(crate) trait PreparedStatement {
-    fn reset(&mut self, connection: &InnerConnection);
+    fn reset(&mut self, connection: &mut InnerConnection) -> Result<(), StatementError>;
     fn bind_value(&mut self, index: i32, value: Value) -> Result<(), StatementError>;
     fn bind_named_value(&mut self, name: &str, value: Value) -> Result<(), StatementError>;
-    fn step(&mut self, connection: &InnerConnection) -> Result<Option<()>, StatementError>;
+    fn step(&mut self, connection: &mut InnerConnection) -> Result<Option<()>, StatementError>;
     fn column_count(&self) -> i32;
     fn column_name(&self, index: i32) -> String;
     fn column_type(&self, index: i32) -> ColumnType;
@@ -57,12 +69,10 @@ pub(crate) trait PreparedStatement {
     fn column_table_name(&self, index: i32) -> Option<String>;
     fn column_origin_name(&self, index: i32) -> Option<String>;
     fn column_value(&self, index: i32) -> Value;
-    fn close(&mut self, connection: &InnerConnection);
+    fn close(&mut self, connection: &mut InnerConnection) -> Result<(), StatementError>;
 }
 
 enum StatementInner {
-    #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
-    Disabled,
     #[cfg(feature = "mysql")]
     Mysql(crate::mysql::Prepared),
     #[cfg(feature = "sqlite")]
@@ -76,8 +86,6 @@ impl StatementInner {
             Self::Mysql(s) => s,
             #[cfg(feature = "sqlite")]
             Self::Sqlite(s) => s,
-            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
-            Self::Disabled => unreachable!(),
         }
     }
 
@@ -87,8 +95,6 @@ impl StatementInner {
             Self::Mysql(s) => s,
             #[cfg(feature = "sqlite")]
             Self::Sqlite(s) => s,
-            #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
-            Self::Disabled => unreachable!(),
         }
     }
 }
@@ -97,14 +103,14 @@ impl StatementInner {
 pub struct RawStatement {
     inner: StatementInner,
     has_current_row: bool,
-    connection: Arc<InnerConnection>,
+    connection: Arc<ConnectionLease>,
 }
 
 impl RawStatement {
     #[cfg(feature = "mysql")]
     pub(crate) const fn new_mysql(
         statement: crate::mysql::Prepared,
-        connection: Arc<InnerConnection>,
+        connection: Arc<ConnectionLease>,
     ) -> Self {
         Self {
             inner: StatementInner::Mysql(statement),
@@ -116,7 +122,7 @@ impl RawStatement {
     #[cfg(feature = "sqlite")]
     pub(crate) const fn new_sqlite(
         statement: crate::sqlite::Prepared,
-        connection: Arc<InnerConnection>,
+        connection: Arc<ConnectionLease>,
     ) -> Self {
         Self {
             inner: StatementInner::Sqlite(statement),
@@ -142,7 +148,14 @@ impl RawStatement {
     /// Reset the statement.
     pub fn reset(&mut self) {
         self.has_current_row = false;
-        self.inner.backend_mut().reset(&self.connection);
+        let Ok(mut connection) = self.connection.active_connection() else {
+            return;
+        };
+        if let Err(error) = self.inner.backend_mut().reset(&mut connection) {
+            if error.connection_broken {
+                self.connection.mark_broken();
+            }
+        }
     }
 
     /// Bind values to the statement.
@@ -152,30 +165,44 @@ impl RawStatement {
 
     /// Bind a value by zero-based index.
     pub fn bind_value(&mut self, index: i32, value: Value) -> Result<(), StatementError> {
+        let _connection = self.connection.active_connection()?;
         self.inner.backend_mut().bind_value(index, value)
     }
 
     /// Bind a value by parameter name.
     pub fn bind_named_value(&mut self, name: &str, value: Value) -> Result<(), StatementError> {
+        let _connection = self.connection.active_connection()?;
         self.inner.backend_mut().bind_named_value(name, value)
     }
 
     /// Advance the statement.
     pub fn step(&mut self) -> Result<Option<()>, StatementError> {
         self.has_current_row = false;
-        let row = self.inner.backend_mut().step(&self.connection)?;
+        let mut connection = self.connection.active_connection()?;
+        let row = self
+            .inner
+            .backend_mut()
+            .step(&mut connection)
+            .inspect_err(|error| {
+                if error.connection_broken {
+                    self.connection.mark_broken();
+                }
+            })?;
+        drop(connection);
         self.has_current_row = row.is_some();
         Ok(row)
     }
 
     /// Return the column count.
     pub fn column_count(&self) -> i32 {
+        let _connection = self.connection.connection();
         self.inner.backend().column_count()
     }
 
     /// Return a column name.
     pub fn column_name(&self, index: i32) -> String {
         self.assert_column_index(index);
+        let _connection = self.connection.connection();
         self.inner.backend().column_name(index)
     }
 
@@ -183,24 +210,28 @@ impl RawStatement {
     pub fn column_type(&self, index: i32) -> ColumnType {
         self.assert_current_row();
         self.assert_column_index(index);
+        let _connection = self.connection.connection();
         self.inner.backend().column_type(index)
     }
 
     /// Return the declared column type.
     pub fn column_declared_type(&self, index: i32) -> Option<String> {
         self.assert_column_index(index);
+        let _connection = self.connection.connection();
         self.inner.backend().column_declared_type(index)
     }
 
     /// Return the source table name.
     pub fn column_table_name(&self, index: i32) -> Option<String> {
         self.assert_column_index(index);
+        let _connection = self.connection.connection();
         self.inner.backend().column_table_name(index)
     }
 
     /// Return the source column name.
     pub fn column_origin_name(&self, index: i32) -> Option<String> {
         self.assert_column_index(index);
+        let _connection = self.connection.connection();
         self.inner.backend().column_origin_name(index)
     }
 
@@ -208,13 +239,27 @@ impl RawStatement {
     pub fn column_value(&self, index: i32) -> Value {
         self.assert_current_row();
         self.assert_column_index(index);
+        let _connection = self.connection.connection();
         self.inner.backend().column_value(index)
+    }
+
+    pub(crate) fn execution_result(&self) -> crate::ExecutionResult {
+        let connection = self.connection.connection();
+        crate::ExecutionResult {
+            affected_rows: connection.affected_rows(),
+            last_insert_row_id: connection.last_insert_row_id(),
+        }
     }
 }
 
 impl Drop for RawStatement {
     fn drop(&mut self) {
-        self.inner.backend_mut().close(&self.connection);
+        let mut connection = self.connection.connection();
+        if let Err(error) = self.inner.backend_mut().close(&mut connection) {
+            if error.connection_broken {
+                self.connection.mark_broken();
+            }
+        }
     }
 }
 
@@ -225,7 +270,7 @@ impl<T: FromRow> Statement<T> {
     #[cfg(feature = "mysql")]
     pub(crate) const fn new_mysql(
         statement: crate::mysql::Prepared,
-        connection: Arc<InnerConnection>,
+        connection: Arc<ConnectionLease>,
     ) -> Self {
         Self(RawStatement::new_mysql(statement, connection), PhantomData)
     }
@@ -233,7 +278,7 @@ impl<T: FromRow> Statement<T> {
     #[cfg(feature = "sqlite")]
     pub(crate) const fn new_sqlite(
         statement: crate::sqlite::Prepared,
-        connection: Arc<InnerConnection>,
+        connection: Arc<ConnectionLease>,
     ) -> Self {
         Self(RawStatement::new_sqlite(statement, connection), PhantomData)
     }
@@ -242,10 +287,12 @@ impl<T: FromRow> Statement<T> {
     pub fn reset(&mut self) {
         self.0.reset();
     }
+
     /// Bind all parameters.
     pub fn bind(&mut self, params: impl Bind) -> Result<(), StatementError> {
         self.0.bind(params)
     }
+
     /// Bind a parameter by zero-based index.
     pub fn bind_value(
         &mut self,
@@ -254,6 +301,7 @@ impl<T: FromRow> Statement<T> {
     ) -> Result<(), StatementError> {
         self.0.bind_value(index, value.into())
     }
+
     /// Bind a parameter by name.
     pub fn bind_named_value(
         &mut self,
@@ -262,42 +310,56 @@ impl<T: FromRow> Statement<T> {
     ) -> Result<(), StatementError> {
         self.0.bind_named_value(name, value.into())
     }
+
     /// Advance to the next row.
     pub fn step(&mut self) -> Result<Option<()>, StatementError> {
         self.0.step()
     }
+
     /// Return the column count.
     pub fn column_count(&self) -> i32 {
         self.0.column_count()
     }
+
     /// Return a column name.
     pub fn column_name(&self, index: i32) -> String {
         self.0.column_name(index)
     }
+
     /// Return the current value type.
     pub fn column_type(&self, index: i32) -> ColumnType {
         self.0.column_type(index)
     }
+
     /// Return a declared column type.
     pub fn column_declared_type(&self, index: i32) -> Option<String> {
         self.0.column_declared_type(index)
     }
+
     /// Return the source table name.
     pub fn column_table_name(&self, index: i32) -> Option<String> {
         self.0.column_table_name(index)
     }
+
     /// Return the source column name.
     pub fn column_origin_name(&self, index: i32) -> Option<String> {
         self.0.column_origin_name(index)
     }
+
     /// Return a value from the current row.
     pub fn column_value(&self, index: i32) -> Value {
         self.0.column_value(index)
+    }
+
+    /// Return metadata from the latest execution of this statement.
+    pub fn execution_result(&self) -> crate::ExecutionResult {
+        self.0.execution_result()
     }
 }
 
 impl<T: FromRow> Iterator for Statement<T> {
     type Item = Result<T, StatementError>;
+
     fn next(&mut self) -> Option<Self::Item> {
         match self.step() {
             Ok(Some(())) => Some(

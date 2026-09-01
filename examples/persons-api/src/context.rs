@@ -5,7 +5,7 @@
  */
 
 use anyhow::Result;
-use bsql::{Connection, run_migrations};
+use bsql::{Connection, PoolOptions, SqliteMode, run_migrations};
 
 use crate::models::{Person, Relation};
 
@@ -16,10 +16,10 @@ pub(crate) struct Context {
 }
 
 impl Context {
-    pub(crate) fn with_database(path: &str) -> Result<Self> {
-        let database = Connection::open_sqlite(path)?;
+    pub(crate) fn with_database(path: &str, pool_options: PoolOptions) -> Result<Self> {
+        let database = Connection::open_sqlite(path, SqliteMode::ReadWrite, pool_options)?;
+        database.execute_script("PRAGMA foreign_keys = ON")?;
         database.enable_wal_logging()?;
-        database.apply_various_performance_settings()?;
         log::info!("Running database migrations...");
         run_migrations!(database, "src/migrations")?;
         database_seed(&database)?;
@@ -29,6 +29,7 @@ impl Context {
     #[cfg(test)]
     pub(crate) fn with_test_database() -> Result<Self> {
         let database = Connection::open_sqlite_memory()?;
+        database.execute_script("PRAGMA foreign_keys = ON")?;
         log::info!("Running database migrations...");
         run_migrations!(database, "src/migrations")?;
         Ok(Self { database })

@@ -13,7 +13,9 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use bsql::{ColumnType, Connection, StatementError, Value};
+use bsql::{
+    ColumnType, Connection, MysqlTransport, PoolOptions, SqliteMode, StatementError, Value,
+};
 use bwebview::{
     Event, EventLoopBuilder, FileDialog, LogicalSize, Theme, WebviewBuilder, WebviewEvent,
     WindowBuilder,
@@ -119,8 +121,14 @@ impl MysqlConnectionSettings {
                 user,
                 password,
                 tls,
-            } => Connection::open_mysql_tcp(host, *port, user, password, database, *tls)
-                .map_err(|error| error.to_string()),
+            } => Connection::open_mysql(
+                MysqlTransport::tcp(host.as_str(), *port, *tls),
+                user,
+                password,
+                database,
+                PoolOptions::single_connection(),
+            )
+            .map_err(|error| error.to_string()),
             Self::Unix {
                 socket,
                 user,
@@ -128,8 +136,14 @@ impl MysqlConnectionSettings {
             } => {
                 #[cfg(unix)]
                 {
-                    Connection::open_mysql_unix(socket, user, password, database)
-                        .map_err(|error| error.to_string())
+                    Connection::open_mysql(
+                        MysqlTransport::unix(socket.as_str()),
+                        user,
+                        password,
+                        database,
+                        PoolOptions::single_connection(),
+                    )
+                    .map_err(|error| error.to_string())
                 }
                 #[cfg(not(unix))]
                 {
@@ -372,11 +386,8 @@ fn load_foreign_keys(
 // MARK: Statement processing
 fn process_statement(
     stmt: &mut bsql::Statement<()>,
-    conn: &Connection,
-    backend: DatabaseBackend,
-    database: Option<&str>,
     table_metadata: Option<&TableMetadata>,
-) -> Result<(Vec<ColumnInfo>, Vec<Vec<CellValue>>), StatementError> {
+) -> Result<StatementOutput, StatementError> {
     let mut has_current_row = stmt.step()?.is_some();
     let column_count = stmt.column_count();
     let source_columns = (0..column_count)
@@ -387,19 +398,10 @@ fn process_statement(
             )
         })
         .collect::<Vec<_>>();
-    let source_tables = source_columns
-        .iter()
-        .filter_map(|(table, _)| table.clone())
-        .collect::<HashSet<_>>();
-    let foreign_keys = if table_metadata.is_some() {
-        HashMap::new()
-    } else {
-        load_foreign_keys(conn, backend, database, &source_tables)?
-    };
     let columns = (0..column_count)
         .map(|index| {
             let name = stmt.column_name(index);
-            let (table, origin_name) = &source_columns[index as usize];
+            let (_, origin_name) = &source_columns[index as usize];
             let declared_type = origin_name
                 .as_ref()
                 .and_then(|name| {
@@ -422,11 +424,6 @@ fn process_statement(
                 foreign_key: origin_name.as_ref().and_then(|column| {
                     table_metadata
                         .and_then(|metadata| metadata.foreign_keys.get(column))
-                        .or_else(|| {
-                            table.as_ref().and_then(|table| {
-                                foreign_keys.get(&(table.clone(), column.clone()))
-                            })
-                        })
                         .cloned()
                 }),
             }
@@ -442,7 +439,41 @@ fn process_statement(
         has_current_row = stmt.step()?.is_some();
     }
 
-    Ok((columns, rows))
+    Ok(StatementOutput {
+        columns,
+        rows,
+        source_columns,
+    })
+}
+
+struct StatementOutput {
+    columns: Vec<ColumnInfo>,
+    rows: Vec<Vec<CellValue>>,
+    source_columns: Vec<(Option<String>, Option<String>)>,
+}
+
+fn add_foreign_keys(
+    output: &mut StatementOutput,
+    conn: &Connection,
+    backend: DatabaseBackend,
+    database: Option<&str>,
+) -> Result<(), StatementError> {
+    let source_tables = output
+        .source_columns
+        .iter()
+        .filter_map(|(table, _)| table.clone())
+        .collect::<HashSet<_>>();
+    let foreign_keys = load_foreign_keys(conn, backend, database, &source_tables)?;
+    for (column, (table, origin_name)) in output.columns.iter_mut().zip(&output.source_columns) {
+        column.foreign_key = table
+            .as_ref()
+            .zip(origin_name.as_ref())
+            .and_then(|(table, origin_name)| {
+                foreign_keys.get(&(table.clone(), origin_name.clone()))
+            })
+            .cloned();
+    }
+    Ok(())
 }
 
 fn load_table_metadata(
@@ -747,13 +778,7 @@ fn db_table_data(req: &Request, state: &State) -> Result<Response> {
         stmt.bind_value(1, query.offset)?;
     }
 
-    let (columns, rows) = process_statement(
-        &mut stmt,
-        &conn,
-        backend,
-        database.as_deref(),
-        Some(&metadata),
-    )?;
+    let StatementOutput { columns, rows, .. } = process_statement(&mut stmt, Some(&metadata))?;
     let next_cursor = (!metadata.key_columns.is_empty())
         .then(|| next_cursor(&columns, &rows, &metadata.key_columns))
         .flatten();
@@ -867,29 +892,17 @@ fn execute_custom_query(
     database: Option<&str>,
     sql: &str,
 ) -> Result<QueryResult, StatementError> {
-    let execute = || {
-        let mut stmt = conn.prepare::<()>(bounded_select(conn, backend, sql)?)?;
-        let (columns, mut rows) = process_statement(&mut stmt, conn, backend, database, None)?;
-        let truncated = rows.len() > CUSTOM_QUERY_ROW_LIMIT;
-        rows.truncate(CUSTOM_QUERY_ROW_LIMIT);
-        Ok(QueryResult {
-            columns,
-            rows,
-            truncated,
-        })
-    };
-
-    if backend != DatabaseBackend::Mysql {
-        return execute();
-    }
-
-    conn.execute_script("START TRANSACTION READ ONLY")?;
-    let result = execute();
-    let rollback = conn.execute_script("ROLLBACK");
-    match (result, rollback) {
-        (Ok(result), Ok(())) => Ok(result),
-        (Err(error), _) | (Ok(_), Err(error)) => Err(error),
-    }
+    let mut stmt = conn.prepare::<()>(bounded_select(conn, backend, sql)?)?;
+    let mut output = process_statement(&mut stmt, None)?;
+    drop(stmt);
+    add_foreign_keys(&mut output, conn, backend, database)?;
+    let truncated = output.rows.len() > CUSTOM_QUERY_ROW_LIMIT;
+    output.rows.truncate(CUSTOM_QUERY_ROW_LIMIT);
+    Ok(QueryResult {
+        columns: output.columns,
+        rows: output.rows,
+        truncated,
+    })
 }
 
 fn db_query(req: &Request, state: &State) -> Result<Response> {
@@ -1215,7 +1228,11 @@ fn main() {
                     );
                 }
                 IpcMessage::OpenDatabase { request_id, path } => {
-                    let result = Connection::open_sqlite_read_only(&path);
+                    let result = Connection::open_sqlite(
+                        &path,
+                        SqliteMode::ReadOnly,
+                        PoolOptions::single_connection(),
+                    );
                     let (ok, error) = match result {
                         Ok(conn) => {
                             *state.lock().expect("mutex poisoned") = DatabaseState {

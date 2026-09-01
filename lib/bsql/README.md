@@ -6,7 +6,13 @@ SQLite is enabled by default and can be selected explicitly with the `sqlite` fe
 MySQL backend is enabled with the `mysql` feature. On Unix targets, enabling `mysql` also makes
 Unix socket transports available. Use `default-features = false` to build with only the backend
 features an application needs. Enable `sqlite-bundled` to compile and link the bundled SQLite
-source instead of using the system library.
+source instead of using the system library. At least one database backend must be enabled.
+
+Connections use a thread-safe, lazily grown pool sized by default for `small-http`'s worker pool.
+Pass `PoolOptions` when opening a database to set a custom limit. Transactions keep one pooled
+connection for the complete closure, and `execute` returns an `ExecutionResult` with the affected
+row count and last inserted row ID. Use `PoolOptions::single_connection()` for serialized
+applications that do not benefit from multiple physical connections.
 
 ## SQLite example
 
@@ -88,17 +94,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 See the [examples](examples/) for many more examples.
 
+File-backed SQLite reserves one connection for serialized writes and transactions, while the
+remaining connections serve concurrent reads. Call `enable_wal_logging` to enable WAL, and enable foreign keys in application setup when needed. In-memory
+SQLite uses one serialized read/write connection because each plain `:memory:` connection owns a
+separate database.
+
 ## MySQL example
 
 The MySQL backend implements the MySQL classic protocol directly and does not use another
 database client crate:
 
 ```rs
-use bsql::Connection;
+use bsql::{Connection, MysqlTransport, PoolOptions};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let database =
-        Connection::open_mysql_tcp("localhost", 3306, "app", "secret", Some("app"), true)?;
+    let database = Connection::open_mysql(
+        MysqlTransport::tcp("localhost", 3306, true),
+        "app",
+        "secret",
+        Some("app"),
+        PoolOptions::default(),
+    )?;
     let names = database
         .query::<String>("SELECT name FROM persons WHERE age >= ?", 18_i64)?
         .collect::<Result<Vec<_>, _>>()?;
@@ -107,9 +123,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-On Unix, `Connection::open_mysql_unix("/tmp/mysql.sock", "app", "secret", Some("app"))`
-connects through a local socket. `Connection::open_mysql_tcp` supports optional database selection
-and choosing whether verified TLS is required.
+On Unix, use `MysqlTransport::unix("/tmp/mysql.sock")` to connect through a local socket. TCP
+transports support choosing whether verified TLS is required. MySQL pool connections can all
+handle reads and writes; a transaction exclusively leases one until it commits or rolls back.
 Empty-password accounts, MySQL 8.4 `caching_sha2_password`, and the `auth_socket`/`unix_socket`
 account plugins are supported, including server-requested authentication switches. Enable the
 `mysql-native-password` feature for the legacy MySQL/MariaDB `mysql_native_password` plugin.

@@ -18,6 +18,20 @@ use crate::{ColumnType, StatementError, Value};
 pub(crate) struct Prepared(pub(super) *mut sqlite3_stmt);
 
 impl Prepared {
+    fn finalize(&mut self) {
+        if self.0.is_null() {
+            return;
+        }
+        // SAFETY: self.0 is exclusively owned and finalized exactly once.
+        unsafe { sqlite3_finalize(self.0) };
+        self.0 = std::ptr::null_mut();
+    }
+
+    pub(crate) fn is_read_only(&self) -> bool {
+        // SAFETY: self.0 is a valid prepared statement.
+        unsafe { sqlite3_stmt_readonly(self.0) != 0 }
+    }
+
     pub(crate) fn reset(&mut self) {
         // SAFETY: self.0 is a valid prepared statement.
         unsafe { sqlite3_reset(self.0) };
@@ -186,14 +200,14 @@ impl Prepared {
 
 impl Drop for Prepared {
     fn drop(&mut self) {
-        // SAFETY: self.0 is exclusively owned and finalized exactly once.
-        unsafe { sqlite3_finalize(self.0) };
+        self.finalize();
     }
 }
 
 impl PreparedStatement for Prepared {
-    fn reset(&mut self, _connection: &InnerConnection) {
+    fn reset(&mut self, _connection: &mut InnerConnection) -> Result<(), StatementError> {
         self.reset();
+        Ok(())
     }
     fn bind_value(&mut self, index: i32, value: Value) -> Result<(), StatementError> {
         self.bind_value(index, value)
@@ -201,7 +215,7 @@ impl PreparedStatement for Prepared {
     fn bind_named_value(&mut self, name: &str, value: Value) -> Result<(), StatementError> {
         self.bind_named_value(name, value)
     }
-    fn step(&mut self, _connection: &InnerConnection) -> Result<Option<()>, StatementError> {
+    fn step(&mut self, _connection: &mut InnerConnection) -> Result<Option<()>, StatementError> {
         self.step()
     }
     fn column_count(&self) -> i32 {
@@ -225,7 +239,10 @@ impl PreparedStatement for Prepared {
     fn column_value(&self, index: i32) -> Value {
         self.column_value(index)
     }
-    fn close(&mut self, _connection: &InnerConnection) {}
+    fn close(&mut self, _connection: &mut InnerConnection) -> Result<(), StatementError> {
+        self.finalize();
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -249,6 +266,7 @@ mod tests {
         assert_eq!(statement.step()?, Some(()));
         assert_eq!(statement.column_type(0), ColumnType::Integer);
         assert_eq!(statement.column_value(1), Value::Text("item".to_string()));
+        drop(statement);
 
         let text_with_null = "before\0after".to_string();
         database.execute("CREATE TABLE texts (value TEXT) STRICT", ())?;
