@@ -69,3 +69,4 @@ url = { path = "lib/url" }
 uuid = { path = "lib/uuid" }
 winresource = { path = "lib/winresource" }
 zip = { path = "lib/zip" }
+zeroize = { path = "lib/zeroize" }
