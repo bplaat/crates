@@ -60,10 +60,18 @@ pub fn serve(
     listener: TcpListener,
     handler: impl Fn(&Request) -> Response + Clone + Send + 'static,
 ) {
-    // Create thread pool with workers
-    // FIXME: The current thread pool doesn't spawn extra threads so http server could be overwhelmed with long running requests.
-    let num_threads = std::thread::available_parallelism().map_or(1, |n| n.get());
-    let pool = threadpool::ThreadPool::new(num_threads * 8);
+    serve_with_options(listener, threadpool::Options::default(), handler);
+}
+
+/// Start HTTP server with custom thread pool options
+#[cfg(feature = "multi-threaded")]
+pub fn serve_with_options(
+    listener: TcpListener,
+    thread_pool_options: threadpool::Options,
+    handler: impl Fn(&Request) -> Response + Clone + Send + 'static,
+) {
+    // Create a scalable thread pool for incoming connections
+    let pool = threadpool::ThreadPool::new_with_options(thread_pool_options);
 
     // Listen for incoming tcp clients
     for stream in listener.incoming() {
@@ -219,7 +227,15 @@ mod test {
         let addr = listener.local_addr().unwrap();
 
         thread::spawn(move || {
-            serve(listener, |_req| Response::with_status(Status::Ok));
+            serve_with_options(
+                listener,
+                crate::ThreadPoolOptions {
+                    min_worker_threads: 1,
+                    max_worker_threads: 2,
+                    worker_timeout: Duration::from_millis(20),
+                },
+                |_req| Response::with_status(Status::Ok),
+            );
         });
 
         for _ in 0..10 {

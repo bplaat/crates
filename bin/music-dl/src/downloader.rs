@@ -72,7 +72,7 @@ pub(crate) struct Downloader {
 impl Downloader {
     pub(crate) fn new() -> Self {
         Self {
-            pool: ThreadPool::new(DOWNLOAD_THREAD_COUNT),
+            pool: ThreadPool::new_fixed(DOWNLOAD_THREAD_COUNT),
             track_start: 0,
         }
     }

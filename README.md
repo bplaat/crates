@@ -22,6 +22,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library
 - [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library
 - [small-websocket](lib/small-websocket) A simple and small WebSocket library for the [small-http](lib/small-http) library
+- [threadpool](lib/threadpool) A fixed and scalable thread pool for Rust
 - [tinyvg](lib/tinyvg) A TinyVG vector image parser (binary and text formats)
 - [validate](lib/validate) A simple struct validation library
 - [validate_derive](lib/validate_derive) Validation derive macros library
@@ -139,7 +140,6 @@ These libraries are minimal replacements for commonly used crates.
 - [simple_logger](lib/simple_logger) A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
 - [subtle](lib/subtle) A minimal replacement for the [subtle](https://crates.io/crates/subtle) crate
 - [terminal_size](lib/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
-- [threadpool](lib/threadpool) A minimal replacement for the [threadpool](https://crates.io/crates/threadpool) crate
 - [trybuild](lib/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
 - [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 - [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
