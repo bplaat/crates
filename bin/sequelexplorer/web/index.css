@@ -495,8 +495,12 @@ body.is-bwebview-macos:not(.is-fullscreen) .macos-titlebar {
 }
 
 .data-table .button.is-subtle {
-    margin-left: 0.35rem;
     vertical-align: middle;
+}
+
+.foreign-key-icon {
+    width: 16px;
+    height: 16px;
 }
 
 .load-sentinel {

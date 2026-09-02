@@ -131,7 +131,13 @@
                                                     :title="`Go to ${columns[colIdx].foreign_key.table} row`"
                                                     @click="navigateToForeignKey(columns[colIdx].foreign_key.table, columns[colIdx].foreign_key.column, val)"
                                                 >
-                                                    ↗
+                                                    <svg
+                                                        class="icon foreign-key-icon"
+                                                        viewBox="0 0 24 24"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <path d="M5,17.59L15.59,7H9V5H19V15H17V8.41L6.41,19L5,17.59Z" />
+                                                    </svg>
                                                 </button>
                                             </td>
                                         </tr>
