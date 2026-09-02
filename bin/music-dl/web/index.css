@@ -325,7 +325,10 @@ body.is-bwebview-macos:not(.is-fullscreen) .macos-titlebar {
     background: var(--color-hover);
 }
 .breadcrumb-arrow {
-    font-size: 1rem;
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+    fill: currentColor;
 }
 .breadcrumb-label {
     font-weight: 600;
