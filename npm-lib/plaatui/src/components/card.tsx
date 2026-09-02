@@ -19,3 +19,7 @@ export type CardTitleProps = JSX.IntrinsicElements['h2'] & { tight?: boolean };
 export function CardTitle({ class: extraClass, tight, ...props }: CardTitleProps) {
     return <h2 {...props} class={cx('card-title', tight && 'is-tight', extraClass)} />;
 }
+
+export function CardDescription({ class: extraClass, ...props }: JSX.IntrinsicElements['p']) {
+    return <p {...props} class={cx('card-desc', extraClass)} />;
+}

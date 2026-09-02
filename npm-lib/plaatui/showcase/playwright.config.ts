@@ -16,11 +16,15 @@ export default defineConfig({
     retries: process.env.CI ? 1 : 0,
     workers: process.env.CI ? 1 : undefined,
     reporter: process.env.CI ? [['list'], ['junit', { outputFile: 'test-results/junit.xml' }]] : 'list',
+    projects: [
+        { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+        { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+        { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    ],
     expect: {
         timeout: 10_000,
     },
     use: {
-        ...devices['Desktop Chrome'],
         baseURL: `${origin}/plaatui/`,
         trace: 'on-first-retry',
     },

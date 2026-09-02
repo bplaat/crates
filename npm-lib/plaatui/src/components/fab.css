@@ -21,6 +21,6 @@
     transition: background-color 0.15s;
     cursor: pointer;
 }
-.fab:hover {
+.fab:hover:not(:disabled) {
     background-color: var(--color-accent-background-hover);
 }

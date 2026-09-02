@@ -9,5 +9,9 @@ import { cx } from '../utils.ts';
 import './table.css';
 
 export function Table({ class: extraClass, ...props }: JSX.IntrinsicElements['table']) {
-    return <table {...props} class={cx('table', extraClass)} />;
+    return (
+        <div class="table-container">
+            <table {...props} class={cx('table', extraClass)} />
+        </div>
+    );
 }

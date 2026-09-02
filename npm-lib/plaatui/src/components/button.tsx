@@ -9,29 +9,29 @@ import { cx } from '../utils.ts';
 import './button.css';
 
 export function Button({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
-    return <button {...props} class={cx('button', 'is-primary', extraClass)} />;
+    return <button type="button" {...props} class={cx('button', 'is-primary', extraClass)} />;
 }
 
 export function SecondaryButton({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
-    return <button {...props} class={cx('button', 'is-secondary', extraClass)} />;
+    return <button type="button" {...props} class={cx('button', 'is-secondary', extraClass)} />;
 }
 
 export function DangerButton({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
-    return <button {...props} class={cx('button', 'is-danger', extraClass)} />;
+    return <button type="button" {...props} class={cx('button', 'is-danger', extraClass)} />;
 }
 
 export function IconButton({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
-    return <button {...props} class={cx('button', 'is-icon', extraClass)} />;
+    return <button type="button" {...props} class={cx('button', 'is-icon', extraClass)} />;
 }
 
 export function SmallIconButton({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
-    return <button {...props} class={cx('button', 'is-icon', 'is-small', extraClass)} />;
+    return <button type="button" {...props} class={cx('button', 'is-icon', 'is-small', extraClass)} />;
 }
 
 export function TextButton({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
-    return <button {...props} class={cx('text-button', extraClass)} />;
+    return <button type="button" {...props} class={cx('text-button', extraClass)} />;
 }
 
 export function DangerTextButton({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
-    return <button {...props} class={cx('text-button', 'is-danger', extraClass)} />;
+    return <button type="button" {...props} class={cx('text-button', 'is-danger', extraClass)} />;
 }

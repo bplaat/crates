@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { type ComponentChildren } from 'preact';
 import { type JSX } from 'preact/jsx-runtime';
 import { cx } from '../utils.ts';
-import { CloseIcon, MagnifyIcon } from './icons.tsx';
+import { CheckIcon, ChevronDownIcon, CloseIcon, MagnifyIcon } from './icons.tsx';
 import './input.css';
 
 export function FormInput({ class: extraClass, ...props }: JSX.IntrinsicElements['input']) {
@@ -15,9 +16,28 @@ export function FormInput({ class: extraClass, ...props }: JSX.IntrinsicElements
 
 export function FormSelect({ class: extraClass, children, ...props }: JSX.IntrinsicElements['select']) {
     return (
-        <select {...props} class={cx('select', extraClass)}>
-            {children}
-        </select>
+        <span class="select-control">
+            <select {...props} class={cx('select', extraClass)}>
+                {children}
+            </select>
+            <ChevronDownIcon class="select-icon" aria-hidden="true" />
+        </span>
+    );
+}
+
+export type FormCheckboxProps = Omit<JSX.IntrinsicElements['input'], 'type'> & {
+    label: ComponentChildren;
+};
+
+export function FormCheckbox({ class: extraClass, label, ...props }: FormCheckboxProps) {
+    return (
+        <label class={cx('checkbox', extraClass)}>
+            <input {...props} type="checkbox" class="checkbox-input" />
+            <span class="checkbox-control" aria-hidden="true">
+                <CheckIcon class="checkbox-icon" />
+            </span>
+            <span class="checkbox-label">{label}</span>
+        </label>
     );
 }
 

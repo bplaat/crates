@@ -10,6 +10,8 @@ import {
     mdiArrowLeft,
     mdiButtonCursor,
     mdiCardTextOutline,
+    mdiCheck,
+    mdiChevronDown,
     mdiClipboardTextOutline,
     mdiClose,
     mdiCloudUpload,
@@ -88,6 +90,8 @@ export const AccountMultipleIcon = /*#__PURE__*/ createIcon('AccountMultipleIcon
 export const ArrowLeftIcon = /*#__PURE__*/ createIcon('ArrowLeftIcon', mdiArrowLeft);
 export const ButtonCursorIcon = /*#__PURE__*/ createIcon('ButtonCursorIcon', mdiButtonCursor);
 export const CardTextOutlineIcon = /*#__PURE__*/ createIcon('CardTextOutlineIcon', mdiCardTextOutline);
+export const CheckIcon = /*#__PURE__*/ createIcon('CheckIcon', mdiCheck);
+export const ChevronDownIcon = /*#__PURE__*/ createIcon('ChevronDownIcon', mdiChevronDown);
 export const ClipboardTextOutlineIcon = /*#__PURE__*/ createIcon('ClipboardTextOutlineIcon', mdiClipboardTextOutline);
 export const CloseIcon = /*#__PURE__*/ createIcon('CloseIcon', mdiClose);
 export const CloudUploadIcon = /*#__PURE__*/ createIcon('CloudUploadIcon', mdiCloudUpload);

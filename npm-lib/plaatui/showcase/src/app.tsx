@@ -10,6 +10,8 @@ import {
     Badge,
     Button,
     Card,
+    CardDescription,
+    CardTitle,
     CogIcon,
     ConfirmDialog,
     ContentSaveIcon,
@@ -24,11 +26,15 @@ import {
     Fab,
     Form,
     FormActions,
+    FormCheckbox,
     FormField,
+    FormFooter,
     FormInput,
     FormMessage,
+    FormRow,
     FormSelect,
     IconButton,
+    IconText,
     LoadingText,
     LogoutIcon,
     MagnifyIcon,
@@ -45,6 +51,7 @@ import {
     PlusIcon,
     SearchInput,
     SecondaryButton,
+    SectionLabel,
     SidebarLayout,
     SidebarLink,
     SmallIconButton,
@@ -244,7 +251,7 @@ export function App() {
             id: 'inputs',
             label: 'Inputs',
             icon: 'form-textbox',
-            description: 'Text input, select and the clearable search input.',
+            description: 'Text, search, select and checkbox controls.',
             render: () => (
                 <div class="showcase-stack">
                     <FormInput
@@ -253,17 +260,18 @@ export function App() {
                         placeholder="Type something…"
                         onInput={(e) => setText((e.target as HTMLInputElement).value)}
                     />
-                    <FormSelect value={select} onChange={(e) => setSelect((e.target as HTMLSelectElement).value)}>
-                        <option value="note-text">Note</option>
-                        <option value="account">Account</option>
-                        <option value="cog">Settings</option>
-                    </FormSelect>
                     <SearchInput
                         value={demoSearch}
                         onInput={setDemoSearch}
                         onClear={() => setDemoSearch('')}
                         placeholder="Search…"
                     />
+                    <FormSelect value={select} onChange={(e) => setSelect((e.target as HTMLSelectElement).value)}>
+                        <option value="note-text">Note</option>
+                        <option value="account">Account</option>
+                        <option value="cog">Settings</option>
+                    </FormSelect>
+                    <FormCheckbox label="Enable notifications" />
                 </div>
             ),
         },
@@ -271,34 +279,53 @@ export function App() {
             id: 'forms',
             label: 'Forms',
             icon: 'clipboard-text-outline',
-            description: 'Field labels with validation, messages and action rows.',
+            description: 'Labeled inputs, selects, checkboxes, validation, messages and action rows.',
             render: () => (
-                <div class="showcase-stack">
-                    <FormField id="email" label="Email address">
-                        <FormInput id="email" type="email" placeholder="you@example.com" />
+                <Form class="showcase-stack" onSubmit={(e) => e.preventDefault()}>
+                    <FormRow>
+                        <FormField id="email" label="Email address">
+                            <FormInput id="email" type="email" placeholder="you@example.com" />
+                        </FormField>
+                        <FormField id="password" label="Password" error="Password is too short">
+                            <FormInput id="password" type="password" value="123" />
+                        </FormField>
+                    </FormRow>
+                    <FormField id="role" label="Role">
+                        <FormSelect id="role" defaultValue="editor">
+                            <option value="viewer">Viewer</option>
+                            <option value="editor">Editor</option>
+                            <option value="admin">Administrator</option>
+                        </FormSelect>
                     </FormField>
-                    <FormField id="password" label="Password" error="Password is too short">
-                        <FormInput id="password" type="password" value="123" />
-                    </FormField>
-                    <FormMessage type="success" message="Your changes have been saved." />
-                    <FormMessage type="error" message="Something went wrong." />
-                    <FormActions>
-                        <SecondaryButton>Cancel</SecondaryButton>
-                        <Button>Save</Button>
-                    </FormActions>
-                </div>
+                    <FormCheckbox name="updates" label="Email me about product updates" defaultChecked />
+                    <FormFooter>
+                        <div>
+                            <FormMessage type="success" message="Your changes have been saved." />
+                            <FormMessage type="error" message="Something went wrong." />
+                        </div>
+                        <FormActions flush>
+                            <SecondaryButton>Cancel</SecondaryButton>
+                            <Button type="submit">
+                                <IconText>
+                                    <ContentSaveIcon class="is-sm" />
+                                    Save
+                                </IconText>
+                            </Button>
+                        </FormActions>
+                    </FormFooter>
+                </Form>
             ),
         },
         {
             id: 'cards',
             label: 'Cards',
             icon: 'card-text-outline',
-            description: 'A simple padded surface container.',
+            description: 'A padded surface with reusable title and description styles.',
             render: () => (
                 <div class="showcase-stack">
                     <Card>
-                        <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Card title</h3>
-                        <p style="color: var(--color-text-soft);">Cards group related content on a raised surface.</p>
+                        <CardTitle tight>Card title</CardTitle>
+                        <CardDescription>Cards group related content on a raised surface.</CardDescription>
                     </Card>
                 </div>
             ),
@@ -487,7 +514,7 @@ export function App() {
                         </nav>
                     </aside>
                     <div class="showcase-sidebar-demo-content">
-                        <p class="section-label">Selected</p>
+                        <SectionLabel>Selected</SectionLabel>
                         <p>{SIDEBAR_DEMO.find((item) => item.id === sidebarActive)?.label}</p>
                     </div>
                 </div>

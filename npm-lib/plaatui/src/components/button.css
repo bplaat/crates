@@ -57,7 +57,7 @@ html.dark .button.is-danger:hover:not(:disabled) {
 }
 .button.is-icon:hover:not(:disabled),
 .button.is-icon:focus-visible:not(:disabled) {
-    background-color: var(--color-hover);
+    background-color: color-mix(in srgb, var(--color-text) 12%, transparent);
 }
 .button.is-icon.is-small {
     padding: 0.375rem;

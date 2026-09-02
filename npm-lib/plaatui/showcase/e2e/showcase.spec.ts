@@ -16,6 +16,11 @@ test.describe('PlaatUI showcase', () => {
         await expect(page.locator('.sidebar-version')).toHaveText('v0.1.0');
         await expect(page.getByRole('heading', { name: 'Buttons' })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Icons' })).toBeVisible();
+        await expect(page.locator('#forms .field-row')).toBeVisible();
+        await expect(page.locator('#forms .form-footer')).toBeVisible();
+        await expect(page.locator('#forms .icon-text')).toBeVisible();
+        await expect(page.locator('#cards .card-title')).toHaveText('Card title');
+        await expect(page.locator('#cards .card-desc')).toBeVisible();
     });
 
     test('filters and clears the component catalog', async ({ page }) => {
@@ -48,7 +53,7 @@ test.describe('PlaatUI showcase', () => {
         await expect(page.locator('html')).toHaveClass(/dark/);
     });
 
-    test('updates input, select and search controls', async ({ page }) => {
+    test('updates input, search, select and checkbox controls', async ({ page }) => {
         await page.goto('./');
         const section = page.locator('#inputs');
         const textInput = section.locator('input[type="text"]');
@@ -59,10 +64,71 @@ test.describe('PlaatUI showcase', () => {
         await section.locator('select').selectOption('cog');
         await expect(section.locator('select')).toHaveValue('cog');
 
+        const checkbox = section.getByRole('checkbox', { name: 'Enable notifications' });
+        await checkbox.check();
+        await expect(checkbox).toBeChecked();
+
         const search = section.locator('input[type="search"]');
         await search.fill('notes');
         await section.locator('.search-clear').click();
         await expect(search).toHaveValue('');
+    });
+
+    test('uses safe button types while allowing explicit submit buttons', async ({ page }) => {
+        await page.goto('./');
+
+        await expect(page.locator('#buttons').getByRole('button', { name: 'Primary' })).toHaveAttribute(
+            'type',
+            'button',
+        );
+        await expect(page.locator('#forms').getByRole('button', { name: 'Cancel' })).toHaveAttribute('type', 'button');
+        await expect(page.locator('#forms').getByRole('button', { name: 'Save' })).toHaveAttribute('type', 'submit');
+        await expect(page.locator('#fab').getByRole('button', { name: 'Create' })).toHaveAttribute('type', 'button');
+    });
+
+    test('showcases interactive form controls', async ({ page }) => {
+        await page.goto('./');
+        const form = page.locator('#forms form');
+
+        await form.getByLabel('Role').selectOption('admin');
+        await expect(form.getByLabel('Role')).toHaveValue('admin');
+
+        const checkbox = form.getByRole('checkbox', { name: 'Email me about product updates' });
+        await expect(checkbox).toBeChecked();
+        await checkbox.uncheck();
+        await expect(checkbox).not.toBeChecked();
+    });
+
+    test('shows a round hover state on table icon actions', async ({ page }) => {
+        await page.goto('./');
+        const editButton = page.locator('#table').getByRole('button', { name: 'Edit' }).first();
+
+        await editButton.hover();
+        const styles = await editButton.evaluate((button) => {
+            const computed = getComputedStyle(button);
+            return {
+                backgroundColor: computed.backgroundColor,
+                borderRadius: computed.borderRadius,
+            };
+        });
+
+        expect(styles.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+        expect(styles.borderRadius).toBe('9999px');
+    });
+
+    test('keeps tables and forms contained on narrow screens', async ({ page }) => {
+        await page.setViewportSize({ width: 375, height: 812 });
+        await page.goto('./');
+
+        const pageWidths = await page.evaluate(() => ({
+            client: document.documentElement.clientWidth,
+            scroll: document.documentElement.scrollWidth,
+        }));
+        expect(pageWidths.scroll).toBe(pageWidths.client);
+
+        const formRow = page.locator('#forms .field-row');
+        await expect(formRow).toHaveCSS('grid-template-columns', /^(?!.* ).+$/);
+        await expect(page.locator('#table .table-container')).toHaveCSS('overflow-x', 'auto');
     });
 
     test('opens and closes basic and form dialogs', async ({ page }) => {

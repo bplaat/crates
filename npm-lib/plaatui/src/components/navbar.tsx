@@ -51,7 +51,7 @@ export const NavbarMenu = forwardRef<HTMLDivElement, JSX.IntrinsicElements['div'
 );
 
 export function NavbarUserButton({ class: extraClass, ...props }: JSX.IntrinsicElements['button']) {
-    return <button {...props} class={cx('navbar-user', extraClass)} />;
+    return <button type="button" {...props} class={cx('navbar-user', extraClass)} />;
 }
 
 export function NavbarUserName({ children }: { children: ComponentChildren }) {
