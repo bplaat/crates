@@ -531,13 +531,19 @@ input[type='checkbox'] {
     border-color: var(--color-primary);
     background: var(--color-primary);
 }
-.cleanup-row > input:checked + .checkmark::after {
-    content: '';
-    width: 8px;
-    height: 4px;
-    transform: translateY(-1px) rotate(-45deg);
-    border-bottom: 2px solid white;
-    border-left: 2px solid white;
+.checkmark-icon {
+    width: 14px;
+    height: 14px;
+    color: #fff;
+    opacity: 0;
+    transform: scale(0.7);
+    transition:
+        opacity 0.12s,
+        transform 0.12s;
+}
+.cleanup-row > input:checked + .checkmark .checkmark-icon {
+    opacity: 1;
+    transform: scale(1);
 }
 .cleanup-copy {
     min-width: 0;
