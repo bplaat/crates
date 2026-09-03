@@ -14,8 +14,8 @@ use serde_json::Value;
 use crate::metadata::{InstallableApp, packages, supports_os};
 use crate::process::{npm_program, run};
 use crate::utils::{
-    collect_paths, copy_directory, copy_directory_contents, remove_directory_except, remove_path,
-    remove_path_if_exists,
+    collect_paths, copy_directory, copy_directory_contents, relative_slash,
+    remove_directory_except, remove_path, remove_path_if_exists,
 };
 use crate::{Os, Xtask};
 
@@ -102,6 +102,7 @@ impl Xtask {
             }
         })?;
         for path in generated {
+            println!("Removing {}", relative_slash(&self.root, &path));
             remove_path(&path)?;
         }
         Ok(())
