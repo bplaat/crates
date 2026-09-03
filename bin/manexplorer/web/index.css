@@ -16,12 +16,20 @@ MARK: Base
         ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
     --color-background: #fff;
     --color-surface: #f6f6f6;
+    --color-surface-soft: #e8e8e8;
     --color-hover: #e8e8e8;
     --color-text-primary: #111;
     --color-text-secondary: #555;
     --color-border: #ccc;
     --color-disabled: #888;
     --color-primary: #4c7ef3;
+    --color-primary-hover: #3a6de0;
+    --color-primary-soft: #edf2ff;
+    --color-success: #27ae60;
+    --color-danger: #e74c3c;
+    --color-danger-hover: #c0392b;
+    --color-warning: #f39c12;
+    --color-focus-ring: rgba(76, 126, 243, 0.28);
     --color-scrollbar: rgba(0, 0, 0, 0.1);
 }
 
@@ -29,12 +37,17 @@ MARK: Base
     :root {
         --color-background: #222;
         --color-surface: #2a2a2a;
+        --color-surface-soft: #333;
         --color-hover: #333;
         --color-text-primary: #fff;
         --color-text-secondary: #aaa;
         --color-border: #444;
         --color-disabled: #666;
         --color-primary: #5b8cf5;
+        --color-primary-hover: #6d9bf8;
+        --color-primary-soft: #29364f;
+        --color-danger-hover: #ff6252;
+        --color-focus-ring: rgba(91, 140, 245, 0.35);
         --color-scrollbar: rgba(255, 255, 255, 0.1);
     }
 }
@@ -47,7 +60,9 @@ MARK: Base
 
 html,
 button,
-input {
+input,
+select,
+textarea {
     font-family: var(--font-sans-serif);
     font-size: 16px;
     line-height: 1.5;
@@ -88,6 +103,9 @@ body {
     height: 100vh;
 }
 
+/*
+MARK: Components
+*/
 .button,
 .input {
     border: 1px solid var(--color-border);
@@ -105,6 +123,7 @@ body {
     gap: 0.35rem;
     padding: 0.35rem 0.75rem;
     cursor: pointer;
+    font-size: 0.875rem;
     font-weight: 500;
     white-space: nowrap;
 }
@@ -116,9 +135,11 @@ body {
 .button:focus-visible,
 .input:focus {
     border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-focus-ring);
 }
 
-.button:disabled {
+.button:disabled,
+.input:disabled {
     color: var(--color-disabled);
     cursor: default;
     opacity: 0.6;
@@ -135,6 +156,7 @@ body {
 .input {
     min-width: 0;
     padding: 0.35rem 0.6rem;
+    font-size: 0.875rem;
 }
 .input::placeholder {
     color: var(--color-text-secondary);
@@ -155,6 +177,15 @@ body {
     width: 24px;
     height: 24px;
     fill: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+    }
 }
 
 /*
