@@ -21,7 +21,12 @@ test.describe('Auth', () => {
         await page.goto('/');
         await page.getByLabel('Email').fill('wrong@example.com');
         await page.getByLabel('Password').fill('wrongpassword');
+
+        const loginResponse = page.waitForResponse(
+            (response) => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST',
+        );
         await page.getByRole('button', { name: 'Sign in' }).click();
+        expect((await loginResponse).status()).toBe(401);
         await expect(page.getByText('Invalid email or password.')).toBeVisible();
         await expect(page).toHaveURL('/');
     });
