@@ -11,6 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
@@ -78,6 +79,15 @@ impl WebSocket {
     #[cfg(test)]
     fn new(stream: TcpStream, role: Role) -> Self {
         Self::new_with_buffer(stream, role, Vec::new())
+    }
+
+    /// Sets the timeout used when writing messages to this connection.
+    pub fn set_write_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        self.state
+            .lock()
+            .map_err(|_| io::Error::other("WebSocket lock is poisoned"))?
+            .stream
+            .set_write_timeout(timeout)
     }
 
     fn new_with_buffer(stream: TcpStream, role: Role, read_buffer: Vec<u8>) -> Self {
@@ -616,6 +626,26 @@ mod test {
         let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
         let (server, _) = listener.accept().unwrap();
         (client, server)
+    }
+
+    #[test]
+    fn configures_write_timeout() {
+        let (stream, _peer) = connected_pair();
+        let websocket = WebSocket::new(stream, Role::Server);
+        let timeout = Duration::from_millis(250);
+        websocket
+            .set_write_timeout(Some(timeout))
+            .expect("Failed to set write timeout");
+        assert_eq!(
+            websocket
+                .state
+                .lock()
+                .expect("Failed to lock connection")
+                .stream
+                .write_timeout()
+                .expect("Failed to read write timeout"),
+            Some(timeout)
+        );
     }
 
     #[cfg(feature = "client")]
