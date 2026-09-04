@@ -24,7 +24,7 @@ The Linux desktop session must also provide a Secret Service implementation, suc
 Headless environments without a Secret Service can compile applications, but cannot store or load
 credentials.
 
-```rust,no_run
+```rs
 fn main() -> Result<(), keyring::Error> {
     let entry = keyring::Entry::new("com.example.App", "account")?;
     entry.set_password("secret")?;
