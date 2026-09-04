@@ -1,0 +1,2 @@
+# Allow the locally logged-in user to access uDMX without running BassieLight as root.
+SUBSYSTEM=="usb", ATTR{idVendor}=="16c0", ATTR{idProduct}=="05dc", MODE="0660", TAG+="uaccess"
