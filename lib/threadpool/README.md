@@ -6,7 +6,7 @@ A dependency-free thread pool for running jobs on a fixed or scalable set of wor
 
 Create a scalable thread pool and submit jobs with `execute`:
 
-```rust
+```rs
 use std::sync::{Arc, Mutex};
 use threadpool::ThreadPool;
 
@@ -33,7 +33,7 @@ for 30 seconds.
 Use `ThreadPool::new_with_options` to control the minimum and maximum number of worker threads and
 their worker timeout:
 
-```rust
+```rs
 use std::time::Duration;
 use threadpool::{Options, ThreadPool};
 
@@ -49,7 +49,7 @@ pool.join();
 
 Use `ThreadPool::new_fixed` when the pool must always use a fixed number of worker threads:
 
-```rust
+```rs
 use threadpool::ThreadPool;
 
 let pool = ThreadPool::new_fixed(4);
