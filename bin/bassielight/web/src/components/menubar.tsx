@@ -14,6 +14,34 @@ import './menubar.css';
 
 export const $dmxLive = signal(false);
 
+type UsbStatus =
+    | { state: 'connected' }
+    | { state: 'disconnected' }
+    | {
+          state: 'error';
+          category: 'access' | 'busy' | 'noDevice' | 'timeout' | 'pipe' | 'unsupported' | 'other';
+      };
+
+const USB_ERRORS: Record<Extract<UsbStatus, { state: 'error' }>['category'], { label: string; detail: string }> = {
+    access: { label: 'uDMX access denied', detail: 'Check USB permissions and reconnect.' },
+    busy: { label: 'uDMX is busy', detail: 'Close other apps using uDMX.' },
+    noDevice: { label: 'uDMX disconnected', detail: 'Reconnect uDMX; output resumes automatically.' },
+    timeout: { label: 'uDMX timeout', detail: 'The adapter did not respond; retrying.' },
+    pipe: { label: 'uDMX transfer stalled', detail: 'The USB transfer stalled; retrying.' },
+    unsupported: { label: 'uDMX unsupported', detail: 'Check the installed USB driver.' },
+    other: { label: 'uDMX error', detail: 'USB communication failed; retrying.' },
+};
+
+function usbStatusContent(status: UsbStatus) {
+    if (status.state === 'connected') {
+        return { label: 'uDMX connected', detail: 'USB output is ready.' };
+    }
+    if (status.state === 'disconnected') {
+        return { label: 'uDMX not connected', detail: 'Connect uDMX; retrying automatically.' };
+    }
+    return USB_ERRORS[status.category];
+}
+
 function NavLink({ href, children }: { href: string; children: any }) {
     const [isActive] = useRoute(href);
     return (
@@ -26,14 +54,23 @@ function NavLink({ href, children }: { href: string; children: any }) {
 export function Menubar() {
     const ipc = useContext(IpcContext)!;
     const [showQrCode, setShowQrCode] = useState(false);
+    const [usbStatus, setUsbStatus] = useState<UsbStatus>({ state: 'disconnected' });
 
     useEffect(() => {
         const listeners = [
             ipc.on('start', () => ($dmxLive.value = true)),
             ipc.on('stop', () => ($dmxLive.value = false)),
+            ipc.on('usbStatusChanged', (data) => {
+                setUsbStatus((data as { status: UsbStatus }).status);
+            }),
         ];
+        ipc.request('getUsbStatus').then(({ status }: any) => setUsbStatus(status));
         return () => listeners.forEach((l) => l.remove());
     }, []);
+
+    const statusContent = usbStatusContent(usbStatus);
+    const usbStatusClass =
+        usbStatus.state === 'connected' ? 'is-success' : usbStatus.state === 'error' ? 'is-warning' : 'is-danger';
 
     return (
         <>
@@ -54,6 +91,17 @@ export function Menubar() {
                 </NavLink>
 
                 <div class="spacer" />
+
+                <div
+                    class="menubar-status"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    title={statusContent.detail}
+                >
+                    <span class={`menubar-dot ${usbStatusClass}`} />
+                    {statusContent.label}
+                </div>
 
                 <div class="menubar-status">
                     <span class={`menubar-dot ${$dmxLive.value ? 'is-success' : 'is-danger'}`} />

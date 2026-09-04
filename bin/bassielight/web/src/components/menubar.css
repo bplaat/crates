@@ -68,3 +68,6 @@
 .menubar-dot.is-danger {
     background-color: var(--color-danger);
 }
+.menubar-dot.is-warning {
+    background-color: var(--color-warning);
+}

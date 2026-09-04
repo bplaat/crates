@@ -14,7 +14,7 @@ use std::time::Duration;
 use bwebview::{
     Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
 };
-use log::info;
+use log::{info, warn};
 use rust_embed::Embed;
 use small_http::Response;
 use small_websocket::Message;
@@ -82,6 +82,10 @@ fn main() {
 
             if req.url.path() == "/ipc" {
                 return small_websocket::upgrade(req, |mut ws| {
+                    if let Err(error) = ws.set_write_timeout(Some(Duration::from_millis(250))) {
+                        warn!("Can't configure WebSocket write timeout: {error}");
+                        return;
+                    }
                     IPC_CONNECTIONS
                         .lock()
                         .expect("Failed to lock IPC connections")
@@ -92,12 +96,20 @@ fn main() {
                             Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                                 continue;
                             }
-                            Err(err) => panic!("WebSocket recv error: {err}"),
+                            Err(err) => {
+                                warn!("WebSocket recv error: {err}");
+                                break;
+                            }
                         };
                         match message {
                             Some(Message::Close(_, _)) => break,
-                            Some(Message::Text(text)) => {
-                                ipc_message_handler(IpcConnection::WebSocket(ws.clone()), &text);
+                            Some(Message::Text(text))
+                                if !ipc_message_handler(
+                                    IpcConnection::WebSocket(ws.clone()),
+                                    &text,
+                                ) =>
+                            {
+                                break;
                             }
                             None => {
                                 // FIXME: Create async framework don't do micro sleeps
@@ -170,10 +182,12 @@ fn main() {
                 .expect("Failed to lock IPC connections")
                 .push(IpcConnection::WebviewIpc(event_loop_proxy.clone()));
         }
-        Event::Webview(WebviewEvent::MessageReceive(message)) => ipc_message_handler(
-            IpcConnection::WebviewIpc(event_loop_proxy.clone()),
-            &message,
-        ),
+        Event::Webview(WebviewEvent::MessageReceive(message)) => {
+            ipc_message_handler(
+                IpcConnection::WebviewIpc(event_loop_proxy.clone()),
+                &message,
+            );
+        }
         Event::UserEvent(data) => webview.send_ipc_message(&data),
 
         _ => {}

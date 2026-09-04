@@ -12,10 +12,10 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use log::{info, trace, warn};
-use rusb::{Context, DeviceHandle};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Config, DMX_SWITCHES_LENGTH, FixtureType};
+use crate::config::{Config, DMX_LENGTH, DMX_SWITCHES_LENGTH, FixtureType};
+use crate::ipc::{self, UsbStatus};
 use crate::usb;
 
 // MARK: Color
@@ -124,10 +124,8 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
 
 // MARK: DMX Thread
 pub(crate) fn dmx_thread(config: Config) {
-    let mut handle: Option<DeviceHandle<Context>> = usb::open_udmx_handle();
-    if handle.is_some() {
-        info!("uDMX device opened");
-    }
+    let mut connection = usb::UdmxConnection::new(Instant::now());
+    let frame_interval = Duration::from_secs_f64(1.0 / config.dmx_fps.max(1) as f64);
 
     // Only send channels up to the last one used by a fixture to keep transfers short
     let send_length = config
@@ -136,7 +134,8 @@ pub(crate) fn dmx_thread(config: Config) {
         .map(|f| f.addr - 1 + f.r#type.channel_count())
         .max()
         .unwrap_or(config.dmx_length)
-        .min(config.dmx_length);
+        .min(config.dmx_length)
+        .min(DMX_LENGTH);
 
     let mut dmx = vec![0u8; config.dmx_length];
     let mut previous_toggle_speed = None;
@@ -144,18 +143,19 @@ pub(crate) fn dmx_thread(config: Config) {
     let mut is_toggle_color = false;
     let mut strobe_time = Instant::now();
     let mut is_strobe = false;
-    let mut consecutive_errors: u32 = 0;
     let use_colors = io::stdout().is_terminal()
         && env::var_os("NO_COLOR").is_none()
         && env::var_os("CI").is_none();
 
     loop {
+        log_connection_event(connection.poll(Instant::now()));
         let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
         if !dmx_state.is_running {
             // FIXME: Create async framework don't do micro sleeps
             sleep(Duration::from_millis(100));
             continue;
         }
+        let frame_started = Instant::now();
 
         // Update timers
         if previous_toggle_speed != dmx_state.toggle_speed {
@@ -313,39 +313,54 @@ pub(crate) fn dmx_thread(config: Config) {
             }
         }
 
-        // Send DMX data, use RECIPIENT_INTERFACE as required by the uDMX firmware
-        let write_err = if let Some(h) = &handle {
-            h.write_control(
-                rusb::request_type(
-                    rusb::Direction::Out,
-                    rusb::RequestType::Vendor,
-                    rusb::Recipient::Interface,
-                ),
-                0x02,
-                send_length as u16,
-                0,
-                &dmx[..send_length],
-                Duration::from_millis(500),
-            )
-            .err()
-        } else {
-            None
-        };
-        if let Some(err) = write_err {
-            consecutive_errors += 1;
-            if consecutive_errors >= 10 {
-                warn!("Can't write to uDMX device: {err}, reconnecting...");
-                drop(handle.take());
-                sleep(Duration::from_millis(200));
-                handle = usb::open_udmx_handle();
-                if handle.is_some() {
-                    info!("Reconnected to uDMX device");
-                    consecutive_errors = 0;
-                }
-            }
-        } else {
-            consecutive_errors = 0;
+        log_connection_event(connection.send(Instant::now(), &dmx[..send_length]));
+        sleep(frame_interval.saturating_sub(frame_started.elapsed()));
+    }
+}
+
+fn log_connection_event(event: Option<usb::ConnectionEvent>) {
+    match event {
+        Some(usb::ConnectionEvent::Connected) => {
+            info!("uDMX device connected");
+            ipc::set_usb_status(UsbStatus::Connected);
         }
-        sleep(Duration::from_millis(1000 / config.dmx_fps));
+        Some(usb::ConnectionEvent::Recovered) => {
+            info!("uDMX communication recovered");
+            ipc::set_usb_status(UsbStatus::Connected);
+        }
+        Some(usb::ConnectionEvent::Disconnected(category)) => {
+            warn!("uDMX device disconnected: {category}");
+            ipc::set_usb_status(status_for_error(category));
+        }
+        Some(usb::ConnectionEvent::Error(category)) => {
+            warn!("uDMX error: {category}");
+            ipc::set_usb_status(status_for_error(category));
+        }
+        None => {}
+    }
+}
+
+const fn status_for_error(category: usb::ErrorCategory) -> UsbStatus {
+    if matches!(category, usb::ErrorCategory::NoDevice) {
+        UsbStatus::Disconnected
+    } else {
+        UsbStatus::Error(category)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_connection_failures_to_gui_status() {
+        assert_eq!(
+            status_for_error(usb::ErrorCategory::NoDevice),
+            UsbStatus::Disconnected
+        );
+        assert_eq!(
+            status_for_error(usb::ErrorCategory::Access),
+            UsbStatus::Error(usb::ErrorCategory::Access)
+        );
     }
 }
