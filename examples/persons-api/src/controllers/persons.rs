@@ -42,7 +42,7 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Result<Response> {
             Person,
             ctx.database,
             format!(
-                "SELECT {} FROM persons WHERE id IN (SELECT id FROM persons_fts WHERE persons_fts MATCH :fts_query) ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                "SELECT {} FROM persons WHERE id IN (SELECT id FROM persons_fts WHERE persons_fts MATCH :fts_query) ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset",
                 Person::columns()
             ),
             Args {
@@ -62,7 +62,7 @@ pub(crate) fn persons_index(req: &Request, ctx: &Context) -> Result<Response> {
             Person,
             ctx.database,
             format!(
-                "SELECT {} FROM persons ORDER BY created_at DESC LIMIT :limit OFFSET :offset",
+                "SELECT {} FROM persons ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset",
                 Person::columns()
             ),
             Args {
@@ -368,29 +368,46 @@ mod test {
     fn test_persons_index_pagination() {
         let ctx = Context::with_test_database().expect("Can't create test database");
         let router = router(ctx.clone());
+        let created_at = chrono::DateTime::from_timestamp_secs(1_700_000_000).unwrap();
 
-        // Create multiple persons
-        for i in 1..=30 {
+        // Create multiple persons with the same timestamp to test deterministic ordering
+        for i in 1_u8..=30 {
             ctx.database
                 .insert_person(Person {
+                    id: Uuid::from_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, i]),
                     name: format!("Person {i}"),
-                    age_in_years: 20 + i,
+                    age_in_years: 20 + i64::from(i),
                     relation: Relation::Me,
+                    created_at,
                     ..Default::default()
                 })
                 .unwrap();
         }
 
-        // Fetch /persons with limit 10 and page 1
-        let res = router.handle(&Request::get("http://localhost/persons?limit=10&page=1"));
+        // Fetch /persons with limit 5 and page 1
+        let res = router.handle(&Request::get("http://localhost/persons?limit=5&page=1"));
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
-        assert_eq!(response.data.len(), 10);
+        assert_eq!(response.data.len(), 5);
         assert_eq!(response.pagination.page, 1);
-        assert_eq!(response.pagination.limit, 10);
+        assert_eq!(response.pagination.limit, 5);
         assert_eq!(response.pagination.total, 30);
+        assert_eq!(
+            response
+                .data
+                .iter()
+                .map(|person| person.name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Person 30",
+                "Person 29",
+                "Person 28",
+                "Person 27",
+                "Person 26"
+            ]
+        );
 
-        // Fetch /persons with limit 10 and page 2
+        // Fetch /persons with limit 5 and page 2
         let res = router.handle(&Request::get("http://localhost/persons?limit=5&page=2"));
         assert_eq!(res.status, Status::Ok);
         let response = serde_json::from_slice::<api::PersonIndexResponse>(&res.body).unwrap();
@@ -398,7 +415,20 @@ mod test {
         assert_eq!(response.pagination.page, 2);
         assert_eq!(response.pagination.limit, 5);
         assert_eq!(response.pagination.total, 30);
-        assert_eq!(response.data[0].name, "Person 6");
+        assert_eq!(
+            response
+                .data
+                .iter()
+                .map(|person| person.name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Person 25",
+                "Person 24",
+                "Person 23",
+                "Person 22",
+                "Person 21"
+            ]
+        );
     }
 
     #[test]
