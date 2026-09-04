@@ -92,7 +92,6 @@ dependencies = [
  "enable-ansi-support",
  "plist",
  "regex",
- "semver",
  "serde",
  "sha1",
  "terminal_size",

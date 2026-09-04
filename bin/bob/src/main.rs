@@ -28,6 +28,7 @@ mod log;
 mod manifest;
 mod tasks;
 mod utils;
+mod version;
 
 // MARK: Subcommands
 fn print_dir_remove_stats(path: &str) {

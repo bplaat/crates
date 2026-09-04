@@ -8,14 +8,13 @@ use std::path::Path;
 use std::process::{Command, exit};
 use std::{env, fs};
 
-use semver::Version;
-
 use crate::executor::ExecutorBuilder;
 use crate::manifest::AndroidMetadata;
 use crate::tasks::jvm::{
     find_jdk_home, find_modules, get_class_name, get_java_major_version, jdk_bin,
 };
 use crate::utils::{index_files, write_file_when_different};
+use crate::version::Version;
 use crate::{Bobje, Profile};
 
 // MARK: Android vars
@@ -582,6 +581,6 @@ pub(crate) fn run_android_apk(bobje: &Bobje) -> ! {
 
 // MARK: Utils
 fn parse_version_to_code(version: &str) -> u32 {
-    let version = Version::parse(version).expect("Can't parse version semver");
+    let version = Version::parse(version).expect("Can't parse numeric version");
     (version.major as u32) * 1_000_000 + (version.minor as u32) * 1_000 + (version.patch as u32)
 }
