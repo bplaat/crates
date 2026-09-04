@@ -104,6 +104,12 @@ pub(crate) struct Context {
     raw: NonNull<sys::LibusbContext>,
 }
 
+// SAFETY: libusb documents its contexts and synchronous API as thread-safe. The context is
+// reference-counted by the safe facade, so libusb_exit cannot run while a device or handle uses it.
+unsafe impl Send for Context {}
+// SAFETY: the same libusb thread-safety guarantee permits shared context references.
+unsafe impl Sync for Context {}
+
 impl Context {
     pub(crate) fn new() -> Result<Self, Error> {
         let mut raw = ptr::null_mut();
@@ -157,6 +163,12 @@ pub(crate) struct Device {
     raw: NonNull<sys::LibusbDevice>,
 }
 
+// SAFETY: libusb devices are thread-safe reference-counted objects. Device owns one reference, and
+// Rust ownership ensures its final unref cannot race with a safe method call on the same value.
+unsafe impl Send for Device {}
+// SAFETY: the same libusb thread-safety guarantee permits shared device references.
+unsafe impl Sync for Device {}
+
 impl Device {
     pub(crate) fn device_descriptor(&self) -> Result<DeviceDescriptor, Error> {
         let mut descriptor = std::mem::MaybeUninit::uninit();
@@ -194,6 +206,12 @@ pub(crate) struct Handle {
     raw: NonNull<sys::LibusbDeviceHandle>,
     claimed: Mutex<Vec<u8>>,
 }
+
+// SAFETY: libusb permits calls on device handles from multiple threads. The claimed-interface
+// bookkeeping is synchronized, and Rust ownership prevents close from racing with a safe borrow.
+unsafe impl Send for Handle {}
+// SAFETY: the same guarantee permits shared access to a handle while Rust keeps it alive.
+unsafe impl Sync for Handle {}
 
 impl Handle {
     pub(crate) fn set_active_configuration(&self, configuration: u8) -> Result<(), Error> {
@@ -291,7 +309,7 @@ const fn map_error(code: c_int) -> Error {
     }
 }
 
-fn check(code: c_int) -> Result<(), Error> {
+const fn check(code: c_int) -> Result<(), Error> {
     if code < 0 {
         Err(map_error(code))
     } else {
@@ -302,6 +320,15 @@ fn check(code: c_int) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn native_resources_are_thread_safe() {
+        assert_send_sync::<Context>();
+        assert_send_sync::<Device>();
+        assert_send_sync::<Handle>();
+    }
 
     #[test]
     fn maps_every_libusb_error() {
