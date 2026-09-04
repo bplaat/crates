@@ -1,0 +1,12 @@
+[package]
+name = "rusb"
+version = "0.9.4+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
