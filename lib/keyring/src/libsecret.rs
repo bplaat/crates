@@ -87,11 +87,29 @@ impl Drop for Schema {
     }
 }
 
+struct SecretCString(Zeroizing<Vec<u8>>);
+
+impl SecretCString {
+    fn new(value: &str) -> Result<Self> {
+        if value.as_bytes().contains(&0) {
+            return Err(Error::InvalidInput);
+        }
+        let mut bytes = Vec::with_capacity(value.len() + 1);
+        bytes.extend_from_slice(value.as_bytes());
+        bytes.push(0);
+        Ok(Self(Zeroizing::new(bytes)))
+    }
+
+    fn as_ptr(&self) -> *const c_char {
+        self.0.as_ptr().cast()
+    }
+}
+
 pub(crate) fn set_password(service: &str, account: &str, password: &str) -> Result<()> {
     let schema = Schema::new()?;
     let service = c_string(service)?;
     let account = c_string(account)?;
-    let password = Zeroizing::new(c_string(password)?);
+    let password = SecretCString::new(password)?;
     let mut error = null_mut();
     // SAFETY: pointers remain valid for the call, attributes match the schema, and varargs end in NULL.
     let succeeded = unsafe {
@@ -195,4 +213,23 @@ fn take_error(error: *mut GError, operation: &str) -> Error {
     Error::Platform(format!(
         "failed to {operation} libsecret credential: {message}"
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secret_c_string_is_nul_terminated() {
+        let value = SecretCString::new("secret").expect("secret string creation failed");
+        assert_eq!(value.0.as_slice(), b"secret\0");
+    }
+
+    #[test]
+    fn secret_c_string_rejects_embedded_nul() {
+        assert!(matches!(
+            SecretCString::new("secret\0suffix"),
+            Err(Error::InvalidInput)
+        ));
+    }
 }
