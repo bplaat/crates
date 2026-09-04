@@ -15,7 +15,7 @@ chrono = { version = "0.4.45", default-features = false, features = [
     "now",
     "serde",
 ] }
-dotenv = "0.15.0"
+dotenvy = "0.15.7"
 from_derive = { path = "../../lib/from_derive" }
 log = "0.4.34"
 serde = { version = "1.0", features = ["derive"] }

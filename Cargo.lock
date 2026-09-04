@@ -88,7 +88,7 @@ version = "0.1.0"
 dependencies = [
  "basic-toml",
  "directories",
- "dotenv",
+ "dotenvy",
  "enable-ansi-support",
  "plist",
  "regex",
@@ -197,8 +197,10 @@ name = "directories"
 version = "6.0.0+patch"
 
 [[package]]
-name = "dotenv"
-version = "0.15.0+patch"
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "enable-ansi-support"
@@ -227,7 +229,7 @@ dependencies = [
  "anyhow",
  "bsql",
  "chrono",
- "dotenv",
+ "dotenvy",
  "from_derive",
  "log",
  "openapi-generator",
@@ -261,7 +263,9 @@ checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.2+patch"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
 ]
@@ -603,7 +607,9 @@ dependencies = [
 
 [[package]]
 name = "percent-encoding"
-version = "2.3.3+patch"
+version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pin-project-lite"
@@ -637,7 +643,7 @@ dependencies = [
  "bsql",
  "chrono",
  "copy_dir",
- "dotenv",
+ "dotenvy",
  "from_derive",
  "getrandom 0.4.3+patch",
  "log",
@@ -800,7 +806,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "semver"
-version = "1.0.28+patch"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
 name = "sequelexplorer"
@@ -973,7 +981,9 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
 name = "subtle"
-version = "2.6.1+patch"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "syn"
@@ -1229,7 +1239,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.9.0+patch"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 dependencies = [
  "serde",
 ]

@@ -120,7 +120,7 @@ fn main() {
     env::set_current_dir(bob_dir).expect("Failed to change working directory");
 
     // Read .env file
-    _ = dotenv::dotenv();
+    _ = dotenvy::dotenv();
 
     // Clean build artifacts
     if args.subcommand == Subcommand::Clean {

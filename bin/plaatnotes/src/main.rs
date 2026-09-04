@@ -94,7 +94,7 @@ pub(crate) fn router(ctx: Context) -> Router<Context> {
 
 fn main() {
     // Load environment variables
-    _ = dotenv::dotenv();
+    _ = dotenvy::dotenv();
 
     // Parse args
     let args = parse_args();

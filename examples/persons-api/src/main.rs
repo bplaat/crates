@@ -49,7 +49,7 @@ fn main() {
     }
 
     // Load environment variables
-    _ = dotenv::dotenv();
+    _ = dotenvy::dotenv();
 
     // Create router and load database
     let database_path = env::var("DATABASE_PATH").unwrap_or_else(|_| "database.db".to_string());

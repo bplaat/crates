@@ -36,9 +36,7 @@ chrono = { path = "lib/chrono" }
 copy_dir = { path = "lib/copy_dir" }
 digest = { path = "lib/digest" }
 directories = { path = "lib/directories" }
-dotenv = { path = "lib/dotenv" }
 enable-ansi-support = { path = "lib/enable-ansi-support" }
-form_urlencoded = { path = "lib/form_urlencoded" }
 getrandom = { path = "lib/getrandom" }
 hmac = { path = "lib/hmac" }
 keyring = { path = "lib/keyring" }
@@ -50,11 +48,9 @@ mime_guess = { path = "lib/mime_guess" }
 native-tls = { path = "lib/native-tls" }
 objc2 = { path = "lib/objc2" }
 objc2-proc-macros = { path = "lib/objc2-proc-macros" }
-percent-encoding = { path = "lib/percent-encoding" }
 plist = { path = "lib/plist" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
-semver = { path = "lib/semver" }
 serde_yaml = { path = "lib/serde_yaml" }
 sha1 = { path = "lib/sha1" }
 sha2 = { path = "lib/sha2" }
@@ -62,7 +58,6 @@ simple-useragent = { path = "lib/simple-useragent" }
 simple_logger = { path = "lib/simple_logger" }
 small-http = { path = "lib/small-http" }
 small-router = { path = "lib/small-router" }
-subtle = { path = "lib/subtle" }
 terminal_size = { path = "lib/terminal_size" }
 threadpool = { path = "lib/threadpool" }
 trybuild = { path = "lib/trybuild" }
@@ -70,4 +65,3 @@ url = { path = "lib/url" }
 uuid = { path = "lib/uuid" }
 winresource = { path = "lib/winresource" }
 zip = { path = "lib/zip" }
-zeroize = { path = "lib/zeroize" }
