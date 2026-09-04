@@ -1,0 +1,19 @@
+[package]
+name = "regex"
+version = "1.13.1+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+regex-lite = { version = "0.1.9", default-features = false, features = [
+    "std",
+    "string",
+] }
+
+[features]
+default = []
+unicode-perl = []

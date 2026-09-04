@@ -49,6 +49,7 @@ native-tls = { path = "lib/native-tls" }
 objc2 = { path = "lib/objc2" }
 objc2-proc-macros = { path = "lib/objc2-proc-macros" }
 plist = { path = "lib/plist" }
+regex = { path = "lib/regex" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 serde_yaml = { path = "lib/serde_yaml" }

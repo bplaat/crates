@@ -128,6 +128,7 @@ These libraries are minimal replacements for commonly used crates.
 - [objc2](lib/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
 - [objc2-proc-macros](lib/objc2-proc-macros) A minimal replacement for the [objc2](https://crates.io/crates/objc2-proc-macros) crate
 - [plist](lib/plist) A minimal replacement for the [plist](https://crates.io/crates/plist) crate
+- [regex](lib/regex) A minimal replacement for the [regex](https://crates.io/crates/regex) crate
 - [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 - [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 - [serde_yaml](lib/serde_yaml) A minimal replacement for the [serde_yaml](https://crates.io/crates/serde_yaml) crate
