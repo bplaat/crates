@@ -4,45 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ops::{BitOr, BitOrAssign};
-
-/// macOS menu shortcut modifiers
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Modifiers(u8);
-
-impl Modifiers {
-    /// No modifiers
-    pub const NONE: Self = Self(0);
-    /// Command key
-    pub const COMMAND: Self = Self(1 << 0);
-    /// Control key
-    pub const CONTROL: Self = Self(1 << 1);
-    /// Option key
-    pub const OPTION: Self = Self(1 << 2);
-    /// Alt key (alias for Option)
-    pub const ALT: Self = Self::OPTION;
-    /// Super/Meta key (alias for Command on macOS)
-    pub const SUPER: Self = Self::COMMAND;
-    /// Shift key
-    pub const SHIFT: Self = Self(1 << 3);
-
-    /// Returns whether every modifier in `other` is set
-    pub const fn contains(self, other: Self) -> bool {
-        self.0 & other.0 == other.0
-    }
-}
-
-impl BitOr for Modifiers {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
-    }
-}
-
-impl BitOrAssign for Modifiers {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
+bitflags::bitflags! {
+    /// macOS menu shortcut modifiers
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct Modifiers: u8 {
+        /// No modifiers
+        const NONE = 0;
+        /// Command key
+        const COMMAND = 1 << 0;
+        /// Control key
+        const CONTROL = 1 << 1;
+        /// Option key
+        const OPTION = 1 << 2;
+        /// Alt key (alias for Option)
+        const ALT = Self::OPTION.bits();
+        /// Super/Meta key (alias for Command on macOS)
+        const SUPER = Self::COMMAND.bits();
+        /// Shift key
+        const SHIFT = 1 << 3;
     }
 }
 
