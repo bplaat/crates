@@ -6,7 +6,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{DeriveInput, parse_macro_input};
 
 pub(crate) fn from_row_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -44,22 +44,22 @@ pub(crate) fn from_row_derive(input: TokenStream) -> TokenStream {
                                 )
                                 .expect("Invalid attribute");
                             for meta in list {
-                                if let syn::Meta::Path(path) = &meta {
-                                    if path.is_ident("skip") {
-                                        return None;
-                                    }
+                                if let syn::Meta::Path(path) = &meta
+                                    && path.is_ident("skip")
+                                {
+                                    return None;
                                 }
-                                if let syn::Meta::NameValue(nv) = &meta {
-                                    if nv.path.is_ident("rename") {
-                                        if let syn::Expr::Lit(syn::ExprLit {
-                                            lit: syn::Lit::Str(lit_str),
-                                            ..
-                                        }) = &nv.value
-                                        {
-                                            field_name = lit_str.value();
-                                        } else {
-                                            panic!("Invalid #[sql(rename)] value")
-                                        }
+                                if let syn::Meta::NameValue(nv) = &meta
+                                    && nv.path.is_ident("rename")
+                                {
+                                    if let syn::Expr::Lit(syn::ExprLit {
+                                        lit: syn::Lit::Str(lit_str),
+                                        ..
+                                    }) = &nv.value
+                                    {
+                                        field_name = lit_str.value();
+                                    } else {
+                                        panic!("Invalid #[sql(rename)] value")
                                     }
                                 }
                             }
