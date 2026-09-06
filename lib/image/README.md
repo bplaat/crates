@@ -29,9 +29,9 @@ All formats are enabled by default. Disable default features and select from
 `png` feature is the only feature that enables the optional `miniz_oxide`
 dependency.
 
-Run `cargo run -p image --bin generate` to regenerate fixtures with ImageMagick
-and libjpeg-turbo. The checked-in fixtures let normal builds and the test suite
-run without those tools.
+Run `cargo run -p image --bin generate-fixtures` to regenerate fixtures with
+ImageMagick and libjpeg-turbo. The checked-in fixtures let normal builds and the
+test suite run without those tools.
 
 ## License
 
