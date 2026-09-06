@@ -13,10 +13,10 @@ use std::time::Duration;
 #[cfg(feature = "tls")]
 use native_tls::TlsStream;
 
+use crate::KEEP_ALIVE_TIMEOUT;
 use crate::header_map::HeaderMap;
 use crate::request::{FetchError, Request};
 use crate::response::Response;
-use crate::KEEP_ALIVE_TIMEOUT;
 
 // MARK: MaybeHttpsStream
 #[allow(clippy::large_enum_variant)]

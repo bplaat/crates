@@ -9,10 +9,10 @@ use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 
+use crate::KEEP_ALIVE_TIMEOUT;
 use crate::enums::{Status, Version};
 use crate::header_map::HeaderMap;
 use crate::request::Request;
-use crate::KEEP_ALIVE_TIMEOUT;
 
 // MARK: Response
 /// HTTP response

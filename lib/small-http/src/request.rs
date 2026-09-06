@@ -13,10 +13,10 @@ use std::str::{self, FromStr};
 
 use url::Url;
 
+use crate::KEEP_ALIVE_TIMEOUT;
 use crate::enums::{Method, Version};
 use crate::header_map::HeaderMap;
 use crate::response::Response;
-use crate::KEEP_ALIVE_TIMEOUT;
 
 // MARK: Request
 /// HTTP request
@@ -368,10 +368,10 @@ impl Request {
         if path.is_empty() {
             path = "/".to_string();
         }
-        if let Ok(query_string) = env::var("QUERY_STRING") {
-            if !query_string.is_empty() {
-                path = format!("{path}?{query_string}");
-            }
+        if let Ok(query_string) = env::var("QUERY_STRING")
+            && !query_string.is_empty()
+        {
+            path = format!("{path}?{query_string}");
         }
         let version = match env::var("SERVER_PROTOCOL").as_deref() {
             Ok("HTTP/1.0") => Version::Http1_0,
@@ -388,20 +388,20 @@ impl Request {
 
         // Read body
         let mut body = None;
-        if let Ok(content_length) = env::var("CONTENT_LENGTH") {
-            if let Ok(content_length) = content_length.parse::<usize>() {
-                if content_length > crate::MAX_REQUEST_BODY {
-                    return Err(InvalidRequestError("Content-Length too large".to_string()));
-                }
-                if content_length > 0 {
-                    let mut buffer = vec![0; content_length];
-                    std::io::stdin().read_exact(&mut buffer).map_err(|_| {
-                        InvalidRequestError(
-                            "Can't read Content-Length amount of bytes from stdin".to_string(),
-                        )
-                    })?;
-                    body = Some(buffer);
-                }
+        if let Ok(content_length) = env::var("CONTENT_LENGTH")
+            && let Ok(content_length) = content_length.parse::<usize>()
+        {
+            if content_length > crate::MAX_REQUEST_BODY {
+                return Err(InvalidRequestError("Content-Length too large".to_string()));
+            }
+            if content_length > 0 {
+                let mut buffer = vec![0; content_length];
+                std::io::stdin().read_exact(&mut buffer).map_err(|_| {
+                    InvalidRequestError(
+                        "Can't read Content-Length amount of bytes from stdin".to_string(),
+                    )
+                })?;
+                body = Some(buffer);
             }
         }
 
@@ -733,11 +733,13 @@ mod test {
             "GET /{} HTTP/1.1\r\nHost: localhost\r\n\r\n",
             "a".repeat(8192)
         );
-        assert!(Request::read_from_reader(
-            &mut overlong.as_bytes(),
-            (Ipv4Addr::LOCALHOST, 12345).into()
-        )
-        .is_err());
+        assert!(
+            Request::read_from_reader(
+                &mut overlong.as_bytes(),
+                (Ipv4Addr::LOCALHOST, 12345).into()
+            )
+            .is_err()
+        );
 
         let mut unterminated = &b"GET / HTTP/1.1"[..];
         assert!(

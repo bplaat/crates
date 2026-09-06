@@ -279,20 +279,30 @@ mod test {
 
     #[test]
     #[cfg(feature = "cgi")]
-    #[allow(unsafe_code)]
     fn test_parse_cgi_get() {
-        use std::env;
-        env::set_var("GATEWAY_INTERFACE", "CGI/1.1");
-        env::set_var("REQUEST_METHOD", "GET");
-        env::set_var("SERVER_PROTOCOL", "HTTP/1.1");
-        env::set_var("PATH_INFO", "/test.txt");
-        env::set_var("QUERY_STRING", "x=1&y=2");
-        serve_cgi(|req| {
-            assert_eq!(req.method.to_string(), "GET");
-            assert_eq!(req.url.path(), "/test.txt");
-            assert_eq!(req.url.query(), Some("x=1&y=2"));
-            Response::with_status(Status::Ok)
-        });
+        const CHILD_ENV: &str = "SMALL_HTTP_CGI_TEST_CHILD";
+
+        if std::env::var_os(CHILD_ENV).is_some() {
+            serve_cgi(|req| {
+                assert_eq!(req.method.to_string(), "GET");
+                assert_eq!(req.url.path(), "/test.txt");
+                assert_eq!(req.url.query(), Some("x=1&y=2"));
+                Response::with_status(Status::Ok)
+            });
+            return;
+        }
+
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("test_parse_cgi_get")
+            .env(CHILD_ENV, "1")
+            .env("GATEWAY_INTERFACE", "CGI/1.1")
+            .env("REQUEST_METHOD", "GET")
+            .env("SERVER_PROTOCOL", "HTTP/1.1")
+            .env("PATH_INFO", "/test.txt")
+            .env("QUERY_STRING", "x=1&y=2")
+            .status()
+            .unwrap();
+        assert!(status.success());
     }
 
     #[test]
