@@ -4,10 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::Cell;
 use std::ptr::null_mut;
+use std::sync::Arc;
 
 use base64::prelude::*;
-use macview_appkit::{OwnedString, Point, Rect, Size, ns_string};
+use macview_appkit::{
+    NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, OwnedString, Point, Rect, Size,
+    create_image_view, decode_image, ns_string,
+};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
@@ -27,6 +32,7 @@ pub(crate) struct Svg {
     pub size: Size,
     /// A page that draws the document centered and scaled to fit.
     pub html: OwnedString,
+    bytes: Arc<[u8]>,
 }
 
 /// Returns whether the bytes are an SVG document.
@@ -37,6 +43,7 @@ pub(crate) fn is_svg(bytes: &[u8]) -> bool {
 /// Reads the intrinsic size of an SVG document and wraps it in a page WebKit can display.
 pub(crate) fn parse_svg(bytes: &[u8]) -> Svg {
     Svg {
+        bytes: Arc::from(bytes),
         size: root_tag(bytes).and_then(tag_size).unwrap_or(DEFAULT_SIZE),
         // The document is embedded as an image so that any script or external reference it
         // contains stays inert.
@@ -44,18 +51,84 @@ pub(crate) fn parse_svg(bytes: &[u8]) -> Svg {
             "<!doctype html><meta charset=\"utf-8\"><style>\
              html,body{{margin:0;height:100%;overflow:hidden;background:transparent}}\
              img{{width:100%;height:100%;object-fit:contain}}\
-             </style><img src=\"data:image/svg+xml;base64,{}\">",
+             </style><img onerror=\"window.webkit.messageHandlers.imageFailed.postMessage(null)\" src=\"data:image/svg+xml;base64,{}\">",
             BASE64_STANDARD.encode(bytes)
         )),
+    }
+}
+
+struct SvgViewIvars {
+    bytes: Arc<[u8]>,
+    fallback_attempted: Cell<bool>,
+    delegate: Retained<SvgDelegate>,
+}
+
+impl Drop for SvgViewIvars {
+    fn drop(&mut self) {
+        self.delegate.ivars().set(null_mut());
+    }
+}
+
+type DelegateIvars = Cell<*mut Object>;
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "MacViewSvgDelegate"]
+    #[ivars = DelegateIvars]
+    struct SvgDelegate;
+
+    impl SvgDelegate {
+        #[unsafe(method(userContentController:didReceiveScriptMessage:))]
+        fn failed_image(&self, _: *mut Object, _: *mut Object) { self.fallback(); }
+
+        #[unsafe(method(webView:didFailNavigation:withError:))]
+        fn failed_navigation(&self, _: *mut Object, _: *mut Object, _: *mut Object) { self.fallback(); }
+
+        #[unsafe(method(webView:didFailProvisionalNavigation:withError:))]
+        fn failed_provisional_navigation(&self, _: *mut Object, _: *mut Object, _: *mut Object) { self.fallback(); }
+
+        #[unsafe(method(webViewWebContentProcessDidTerminate:))]
+        fn terminated(&self, _: *mut Object) { self.fallback(); }
+    }
+);
+
+impl SvgDelegate {
+    fn fallback(&self) {
+        let view = self.ivars().get();
+        if !view.is_null() {
+            // SAFETY: WebKit callbacks and view destruction run on the main thread.
+            // The view clears this borrowed pointer before destroying its ivars.
+            unsafe {
+                let _: () = msg_send![view, useNativeFallback];
+            }
+        }
     }
 }
 
 define_class!(
     #[unsafe(super(WKWebView))]
     #[name = "MacViewSvgView"]
+    #[ivars = SvgViewIvars]
     struct SvgView;
 
     impl SvgView {
+        #[unsafe(method(useNativeFallback))]
+        fn native_fallback(&self) {
+            if self.ivars().fallback_attempted.replace(true) { return; }
+            let Ok(image) = decode_image(self.ivars().bytes.to_vec()) else { return; };
+            // SAFETY: This is a live WKWebView on the main thread; the image view
+            // retains its pixels. Clear the failed page before overlaying the fallback.
+            unsafe {
+                let this = self as *const Self as *mut Object;
+                let _: () = msg_send![this, stopLoading];
+                let _: *mut Object = msg_send![this, loadHTMLString: ns_string!("<html></html>"), baseURL: null_mut::<Object>()];
+                let bounds: Rect = msg_send![this, bounds];
+                let fallback = create_image_view(bounds, &image);
+                let _: () = msg_send![&*fallback, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
+                let _: () = msg_send![this, addSubview: fallback.as_ptr()];
+            }
+        }
+
         /// Lets every event through to the scroll view around it.
         ///
         /// A web view handles scrolling, magnifying and its own page menu itself, none of which
@@ -78,13 +151,20 @@ pub(crate) fn create_svg_view(frame: Rect, svg: &Svg) -> Retained<Object> {
     unsafe {
         let configuration: Retained<Object> = msg_send![class!(WKWebViewConfiguration), new];
         let preferences: *mut Object = msg_send![&*configuration, defaultWebpagePreferences];
-        let _: () = msg_send![preferences, setAllowsContentJavaScript: Bool::NO];
-        let view: Allocated<Object> = msg_send![SvgView::class(), alloc];
-        let view: Retained<Object> = msg_send![view,
-            initWithFrame: frame,
-            configuration: configuration.as_ptr()
-        ];
-
+        // Only the trusted wrapper executes JavaScript. The SVG stays in an img
+        // element, where scripts and external resources in SVG are inert.
+        let _: () = msg_send![preferences, setAllowsContentJavaScript: Bool::YES];
+        let delegate: Allocated<SvgDelegate> = msg_send![SvgDelegate::class(), alloc];
+        let delegate: Retained<SvgDelegate> =
+            msg_send![super(delegate.set_ivars(Cell::new(null_mut()))), init];
+        let controller: *mut Object = msg_send![&*configuration, userContentController];
+        let _: () = msg_send![controller, addScriptMessageHandler: delegate.as_ptr(), name: ns_string!("imageFailed")];
+        let view: Allocated<SvgView> = msg_send![SvgView::class(), alloc];
+        let view: Retained<SvgView> = msg_send![super(view.set_ivars(SvgViewIvars {
+            bytes: svg.bytes.clone(), fallback_attempted: Cell::new(false), delegate: delegate.clone(),
+        })), initWithFrame: frame, configuration: configuration.as_ptr()];
+        delegate.ivars().set(view.as_ptr().cast());
+        let _: () = msg_send![&*view, setNavigationDelegate: delegate.as_ptr()];
         // A web view paints an opaque background of its own, which would hide the checkerboard.
         let opaque: *mut Object = msg_send![class!(NSNumber), numberWithBool: Bool::NO];
         let _: () = msg_send![&*view, setValue: opaque, forKey: ns_string!("drawsBackground")];
@@ -92,7 +172,7 @@ pub(crate) fn create_svg_view(frame: Rect, svg: &Svg) -> Retained<Object> {
             loadHTMLString: svg.html.as_ptr(),
             baseURL: null_mut::<Object>()
         ];
-        view
+        Retained::into_any(view)
     }
 }
 

@@ -39,3 +39,7 @@ block2 = "0.6.2"
 objc2 = "0.6.4"
 macview-appkit = { path = "../../lib/macview-appkit" }
 tinyvg = { path = "../../lib/tinyvg" }
+
+[[test]]
+name = "svg_fallback"
+harness = false
