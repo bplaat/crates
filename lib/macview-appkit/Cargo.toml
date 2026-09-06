@@ -13,5 +13,5 @@ workspace = true
 
 [dependencies]
 objc2 = "0.6.4"
-qoi = { path = "../qoi" }
+image = { path = "../image" }
 tinyvg = { path = "../tinyvg" }

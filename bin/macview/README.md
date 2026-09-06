@@ -1,10 +1,13 @@
 # MacView
 
-A simple native macOS image viewer with support for SVG, QOI, and TinyVG images.
+A simple native macOS image viewer with local raster decoders and support for SVG and TinyVG images.
 
 ## Features
 
-- View common image formats, SVG, QOI, and TinyVG files
+- Decode JPEG, PNG/APNG, GIF, BMP, and QOI with the local [image](../../lib/image) crate
+- Play GIF/APNG animations with frame timings and loop counts
+- Render SVG with WebKit and TinyVG with the local renderer
+- Fall back to NSImage when local decoding fails, including 16-bit PNG files
 - Zoom, pan, and fit images to the window
 - Browse previous and next images in the same folder
 - Print images at their natural size or scaled to fit

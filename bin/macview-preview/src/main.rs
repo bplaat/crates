@@ -147,8 +147,8 @@ impl PreviewViewController {
 fn create_media_view(frame: Rect, media: Media) -> Retained<Object> {
     match media {
         Media::TinyVg(document) => create_tinyvg_view(frame, document),
-        // SAFETY: NSImageView retains the image, which stays alive until this function returns.
-        Media::Image(image) => unsafe { create_image_view(frame, image.as_ptr()) },
+        // The view retains the image and any animation frames.
+        Media::Image(image) => create_image_view(frame, &image),
     }
 }
 

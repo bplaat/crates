@@ -12,12 +12,12 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [bsql_derive](lib/bsql_derive) The derive macros for the [bsql](lib/bsql) crate
 - [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
+- [image](lib/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
 - [js](lib/js) A WIP JavaScript interpreter
 - [macview-appkit](lib/macview-appkit) Shared AppKit image loading for MacView
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 - [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [plaatui](npm-lib/plaatui) A Preact web components ui library for my own services
-- [qoi](lib/qoi) A small decoder for the Quite OK Image format
 - [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
 - [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library
 - [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library
