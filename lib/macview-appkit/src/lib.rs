@@ -18,6 +18,7 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send, sel};
 
+mod animation;
 mod cocoa;
 mod tinyvg_renderer;
 
@@ -74,7 +75,9 @@ unsafe impl Sync for OwnedString {}
 pub struct Image {
     image: Retained<Object>,
     size: Size,
+    pixel_size: Option<Size>,
     _backing: ImageBacking,
+    animation: Option<animation::Animation>,
 }
 
 enum ImageBacking {
@@ -92,6 +95,11 @@ impl Image {
     /// Returns the natural image size in points.
     pub const fn size(&self) -> Size {
         self.size
+    }
+
+    /// Returns the exact pixel dimensions when MacView decoded the image itself.
+    pub const fn pixel_size(&self) -> Option<Size> {
+        self.pixel_size
     }
 }
 
@@ -229,8 +237,10 @@ pub unsafe fn load_media(url: *mut Object) -> Result<Media, String> {
 }
 
 fn decode_media(bytes: Vec<u8>) -> Result<Media, String> {
-    if tinyvg::is_tinyvg(&bytes) {
-        return decode_tinyvg(&bytes).map(Arc::new).map(Media::TinyVg);
+    if tinyvg::is_tinyvg(&bytes)
+        && let Ok(document) = decode_tinyvg(&bytes)
+    {
+        return Ok(Media::TinyVg(Arc::new(document)));
     }
     decode_image(bytes).map(Media::Image)
 }
@@ -256,14 +266,10 @@ pub fn decode_tinyvg(bytes: &[u8]) -> Result<tinyvg::Document, String> {
     tinyvg::parse_auto(bytes).map_err(|error| error.to_string())
 }
 
-/// Decodes QOI or an AppKit-supported image format from an owned Rust buffer.
+/// Tries the raster decoders, then AppKit, using an owned Rust buffer.
 pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
-    if bytes.starts_with(b"qoif") {
-        let decoded = qoi::decode(&bytes).map_err(|error| error.to_string())?;
-        let image =
-            make_image(&decoded).ok_or_else(|| String::from("Could not create the image"))?;
-        // SAFETY: make_image returned an owned, initialized NSImage.
-        return unsafe { finish_image(image, ImageBacking::None) };
+    if let Some(image) = decode_custom_image(&bytes) {
+        return Ok(image);
     }
 
     let bytes = bytes.into_boxed_slice();
@@ -280,7 +286,7 @@ pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
     unsafe { decode_native_image(data, ImageBacking::Bytes { _bytes: bytes }) }
 }
 
-/// Decodes an AppKit-supported image while retaining its existing native data buffer.
+/// Tries the raster decoders, then AppKit, retaining native data for lazy fallback decoding.
 ///
 /// # Safety
 ///
@@ -297,12 +303,8 @@ pub unsafe fn decode_image_data(data: *mut Object) -> Result<Image, String> {
             std::slice::from_raw_parts(bytes.cast::<u8>(), length)
         }
     };
-    if bytes.starts_with(b"qoif") {
-        let decoded = qoi::decode(bytes).map_err(|error| error.to_string())?;
-        let image =
-            make_image(&decoded).ok_or_else(|| String::from("Could not create the image"))?;
-        // SAFETY: make_image returned an owned, initialized NSImage.
-        return unsafe { finish_image(image, ImageBacking::None) };
+    if let Some(image) = decode_custom_image(bytes) {
+        return Ok(image);
     }
     // SAFETY: Retaining data keeps lazy AppKit access valid for the image lifetime.
     let retained = unsafe { Retained::retain(data) }.expect("cannot retain a null NSData");
@@ -344,28 +346,59 @@ unsafe fn finish_image(image: Retained<Object>, backing: ImageBacking) -> Result
     Ok(Image {
         image,
         size,
+        pixel_size: None,
         _backing: backing,
+        animation: None,
     })
 }
 
-/// Creates an owned `NSImageView` that scales `image` to fit `frame`.
+/// Creates an owned image view, playing decoded or native animations.
 ///
-/// An image that holds more than one frame, such as an animated GIF or APNG, plays instead of
-/// showing its first frame. The returned view owns one retain count.
-///
-/// # Safety
-///
-/// `image` must point to a valid `NSImage` for the duration of this call.
-pub unsafe fn create_image_view(frame: Rect, image: *mut Object) -> Retained<Object> {
-    // SAFETY: The caller guarantees the image is valid, and NSImageView retains it.
+/// Call on the main thread. The view retains all images it needs.
+pub fn create_image_view(frame: Rect, image: &Image) -> Retained<Object> {
+    if let Some(animation) = &image.animation {
+        return animation::create_view(frame, animation.clone());
+    }
+    // SAFETY: The wrapper owns a live NSImage; NSImageView retains it.
     unsafe {
         let view: Allocated<Object> = msg_send![class!(NSImageView), alloc];
         let view: Retained<Object> = msg_send![view, initWithFrame: frame];
-        let _: () = msg_send![&*view, setImage: image];
+        let _: () = msg_send![&*view, setImage: image.as_ptr()];
         let _: () = msg_send![&*view, setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN];
         let _: () = msg_send![&*view, setAnimates: Bool::YES];
         view
     }
+}
+
+fn decode_custom_image(bytes: &[u8]) -> Option<Image> {
+    let decoded = image::decode(bytes).ok()?;
+    let mut frames = Vec::new();
+    frames.try_reserve_exact(decoded.frames().len()).ok()?;
+    for frame in decoded.frames() {
+        frames.push(animation::NativeFrame {
+            image: make_image(
+                decoded.width(),
+                decoded.height(),
+                decoded.color_space(),
+                frame.pixels(),
+            )?,
+            delay: frame.delay(),
+        });
+    }
+    let first = frames.first()?.image.clone();
+    // SAFETY: Each frame was constructed as an owned, initialized NSImage.
+    let mut image = unsafe { finish_image(first, ImageBacking::None) }.ok()?;
+    image.pixel_size = Some(Size {
+        width: f64::from(decoded.width()),
+        height: f64::from(decoded.height()),
+    });
+    if frames.len() > 1 {
+        image.animation = Some(animation::Animation {
+            frames,
+            loop_count: decoded.loop_count(),
+        });
+    }
+    Some(image)
 }
 
 /// Creates an autoreleased `NSError` that carries `description` as its localized description.
@@ -406,18 +439,19 @@ pub fn extension_main() -> ! {
     unreachable!("NSExtensionMain does not return");
 }
 
-/// Creates an owned `NSImage` from a decoded QOI image.
+/// Creates an owned `NSImage` from straight-alpha RGBA8 pixels.
 ///
 /// The returned object owns one retain count.
-fn make_image(image: &qoi::Image) -> Option<Retained<Object>> {
+fn make_image(
+    width: u32,
+    height: u32,
+    color_space: image::ColorSpace,
+    pixels: &[u8],
+) -> Option<Retained<Object>> {
     // SAFETY: Core Foundation copies the decoded bytes. Each create call is checked, and every
     // owned Core Foundation/Core Graphics object is released after ownership is transferred.
     unsafe {
-        let data = CFDataCreate(
-            null(),
-            image.pixels().as_ptr(),
-            image.pixels().len() as isize,
-        );
+        let data = CFDataCreate(null(), pixels.as_ptr(), pixels.len() as isize);
         if data.is_null() {
             return None;
         }
@@ -427,10 +461,9 @@ fn make_image(image: &qoi::Image) -> Option<Retained<Object>> {
         if provider.is_null() {
             return None;
         }
-
-        let color_space_name = match image.color_space() {
-            qoi::ColorSpace::Srgb => kCGColorSpaceSRGB,
-            qoi::ColorSpace::Linear => kCGColorSpaceLinearSRGB,
+        let color_space_name = match color_space {
+            image::ColorSpace::Srgb => kCGColorSpaceSRGB,
+            image::ColorSpace::Linear => kCGColorSpaceLinearSRGB,
         };
         let color_space = CGColorSpaceCreateWithName(color_space_name);
         if color_space.is_null() {
@@ -440,11 +473,11 @@ fn make_image(image: &qoi::Image) -> Option<Retained<Object>> {
 
         // kCGImageAlphaLast is 3: the source pixels are straight-alpha RGBA.
         let cg_image = CGImageCreate(
-            image.width() as usize,
-            image.height() as usize,
+            width as usize,
+            height as usize,
             8,
             32,
-            image.width() as usize * 4,
+            width as usize * 4,
             color_space,
             3,
             provider,
@@ -462,8 +495,8 @@ fn make_image(image: &qoi::Image) -> Option<Retained<Object>> {
         let native_image: Option<Retained<Object>> = msg_send![native_image,
             initWithCGImage: cg_image,
             size: Size {
-                width: f64::from(image.width()),
-                height: f64::from(image.height()),
+                width: f64::from(width),
+                height: f64::from(height),
             }
         ];
         CGImageRelease(cg_image);
@@ -504,6 +537,55 @@ mod tests {
             assert_eq!(image.size().width, 1.0);
             assert_eq!(image.size().height, 1.0);
         });
+    }
+
+    #[test]
+    fn custom_formats_and_native_fallback_use_both_buffer_entrypoints() {
+        let cases: &[(&[u8], bool)] = &[
+            (include_bytes!("../tests/fixtures/rgb.png"), true),
+            (include_bytes!("../tests/fixtures/progressive.jpg"), true),
+            (include_bytes!("../tests/fixtures/rgb.bmp"), true),
+            (
+                include_bytes!("../../../bin/macview/examples/dice.bmp"),
+                true,
+            ),
+            (include_bytes!("../tests/fixtures/rgb.qoi"), true),
+            (include_bytes!("../tests/fixtures/16bit.png"), false),
+            (include_bytes!("../tests/fixtures/16bit-apng.png"), false),
+            (include_bytes!("../tests/fixtures/native.tiff"), false),
+        ];
+        for &(bytes, custom) in cases {
+            autoreleasepool(|_| {
+                assert_eq!(decode_custom_image(bytes).is_some(), custom);
+                let image = decode_image(bytes.to_vec()).expect("owned bytes should decode");
+                assert_eq!(matches!(image._backing, ImageBacking::None), custom);
+                // SAFETY: NSData copies the fixture and stays live through this pool.
+                let image = unsafe {
+                    let data: *mut Object = msg_send![class!(NSData), dataWithBytes: bytes.as_ptr().cast::<c_void>(), length: bytes.len()];
+                    decode_image_data(data).expect("native data should decode")
+                };
+                assert_eq!(matches!(image._backing, ImageBacking::None), custom);
+                assert!(image.size.width > 0.0 && image.size.height > 0.0);
+            });
+        }
+    }
+
+    #[test]
+    fn decoded_animation_keeps_frames_timings_and_first_frame_for_thumbnails() {
+        for bytes in [
+            &include_bytes!("../tests/fixtures/animated.gif")[..],
+            &include_bytes!("../tests/fixtures/animated.png")[..],
+        ] {
+            autoreleasepool(|_| {
+                let image = decode_image(bytes.to_vec()).expect("animation should decode");
+                let animation = image.animation.as_ref().expect("custom animation");
+                assert_eq!(animation.frames.len(), 2);
+                assert_eq!(animation.loop_count, 3);
+                assert_eq!(animation.frames[0].delay, Duration::from_millis(70));
+                assert_eq!(animation.frames[1].delay, Duration::from_millis(130));
+                assert_eq!(image.as_ptr(), animation.frames[0].image.as_ptr());
+            });
+        }
     }
 
     #[test]

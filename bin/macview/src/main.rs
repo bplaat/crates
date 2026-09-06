@@ -290,7 +290,7 @@ impl Document {
             }
             DecodedMedia::Image(image) => {
                 // SAFETY: The ivar owns a live NSImage for the duration of this call.
-                unsafe { create_image_view(frame, image.as_ptr()) }
+                create_image_view(frame, image)
             }
         }
     }
@@ -299,6 +299,9 @@ impl Document {
     fn title_size(&self, media_size: Size) -> Size {
         let media = self.ivars().media.borrow();
         if let Some(DecodedMedia::Image(image)) = media.as_ref() {
+            if let Some(pixel_size) = image.pixel_size() {
+                return pixel_size;
+            }
             // SAFETY: The ivar owns a live NSImage that keeps its representations alive.
             unsafe { image_pixel_size(image.as_ptr(), media_size) }
         } else {
@@ -446,10 +449,10 @@ unsafe fn decode_document(data: *mut Object) -> Result<DecodedMedia, String> {
             std::slice::from_raw_parts(bytes.cast::<u8>(), length)
         }
     };
-    if tinyvg::is_tinyvg(bytes) {
-        return decode_tinyvg(bytes)
-            .map(std::sync::Arc::new)
-            .map(DecodedMedia::TinyVg);
+    if tinyvg::is_tinyvg(bytes)
+        && let Ok(document) = decode_tinyvg(bytes)
+    {
+        return Ok(DecodedMedia::TinyVg(std::sync::Arc::new(document)));
     }
     if is_svg(bytes) {
         return Ok(DecodedMedia::Svg(Box::new(parse_svg(bytes))));
@@ -461,10 +464,10 @@ unsafe fn decode_document(data: *mut Object) -> Result<DecodedMedia, String> {
 
 /// Decodes bytes read by Rust without creating views or touching window state.
 fn decode_document_bytes(bytes: Vec<u8>) -> Result<DecodedMedia, String> {
-    if tinyvg::is_tinyvg(&bytes) {
-        return decode_tinyvg(&bytes)
-            .map(std::sync::Arc::new)
-            .map(DecodedMedia::TinyVg);
+    if tinyvg::is_tinyvg(&bytes)
+        && let Ok(document) = decode_tinyvg(&bytes)
+    {
+        return Ok(DecodedMedia::TinyVg(std::sync::Arc::new(document)));
     }
     if is_svg(&bytes) {
         return Ok(DecodedMedia::Svg(Box::new(parse_svg(&bytes))));
@@ -543,7 +546,11 @@ unsafe fn decode_document_url(url: *mut Object) -> Result<(DecodedMedia, OwnedSt
 ///
 /// This calls thread-safe immutable Uniform Type Identifier APIs.
 unsafe fn type_identifier(extension: &str) -> Result<OwnedString, String> {
-    let declared = if extension.eq_ignore_ascii_case("qoi") {
+    let declared = if extension.eq_ignore_ascii_case("apng") {
+        Some("org.libpng.apng")
+    } else if extension.eq_ignore_ascii_case("bmp") {
+        Some("com.microsoft.bmp")
+    } else if extension.eq_ignore_ascii_case("qoi") {
         Some("org.qoiformat.qoi")
     } else if extension.eq_ignore_ascii_case("tvg") {
         Some("org.tinyvg.tvg")
@@ -1021,7 +1028,7 @@ mod tests {
     #[test]
     fn coordinated_load_reads_and_classifies_an_image() {
         autoreleasepool(|_| {
-            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/qoi_logo.qoi");
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rgb.qoi");
             // SAFETY: path names an existing image and the autorelease pool keeps its URL alive.
             let (media, kind) = unsafe {
                 let url = file_url(&path);
@@ -1038,10 +1045,58 @@ mod tests {
     }
 
     #[test]
+    fn bmp_uses_its_decoded_pixel_dimensions() {
+        autoreleasepool(|_| {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/dice.bmp");
+            // SAFETY: path names an existing image and the autorelease pool keeps its URL alive.
+            let (media, _) = unsafe {
+                let url = file_url(&path);
+                load_document(url).expect("BMP example should load")
+            };
+            let DecodedMedia::Image(image) = media else {
+                panic!("BMP example should decode as an image");
+            };
+            assert_eq!((image.size().width, image.size().height), (800.0, 600.0));
+            let size = image
+                .pixel_size()
+                .expect("BMP should have decoded dimensions");
+            assert_eq!((size.width, size.height), (800.0, 600.0));
+        });
+    }
+
+    #[test]
+    fn apng_extension_uses_the_declared_image_type() {
+        autoreleasepool(|_| {
+            // SAFETY: Type lookup only accesses immutable Uniform Type Identifier objects.
+            let identifier = unsafe { type_identifier("APNG") }.expect("declared APNG type");
+            // SAFETY: identifier owns the NSString and its UTF-8 representation for this scope.
+            let bytes: *const std::ffi::c_char =
+                unsafe { msg_send![identifier.as_ptr(), UTF8String] };
+            // SAFETY: NSString returns a null-terminated UTF-8 representation.
+            let bytes = unsafe { std::ffi::CStr::from_ptr(bytes) }.to_bytes();
+            assert_eq!(bytes, b"org.libpng.apng");
+        });
+    }
+
+    #[test]
+    fn bmp_extension_uses_the_system_image_type() {
+        autoreleasepool(|_| {
+            // SAFETY: Type lookup only accesses immutable Uniform Type Identifier objects.
+            let identifier = unsafe { type_identifier("BMP") }.expect("BMP type");
+            // SAFETY: identifier owns the NSString and its UTF-8 representation for this scope.
+            let bytes: *const std::ffi::c_char =
+                unsafe { msg_send![identifier.as_ptr(), UTF8String] };
+            // SAFETY: NSString returns a null-terminated UTF-8 representation.
+            let bytes = unsafe { std::ffi::CStr::from_ptr(bytes) }.to_bytes();
+            assert_eq!(bytes, b"com.microsoft.bmp");
+        });
+    }
+
+    #[test]
     fn document_convenience_initializer_initializes_ivars_once() {
         let kind = ns_string!("org.qoiformat.qoi");
         autoreleasepool(|_| {
-            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/qoi_logo.qoi");
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rgb.qoi");
             // SAFETY: The URL and type describe an existing image. NSDocument's inherited
             // convenience initializer calls Document's init, which initializes the Rust ivars.
             let document: Option<Retained<Document>> = unsafe {
