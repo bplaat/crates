@@ -366,6 +366,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.1.0"
+dependencies = [
+ "miniz_oxide",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -449,8 +456,8 @@ dependencies = [
 name = "macview-appkit"
 version = "0.1.0"
 dependencies = [
+ "image",
  "objc2",
- "qoi",
  "tinyvg",
 ]
 

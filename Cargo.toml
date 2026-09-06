@@ -67,3 +67,6 @@ url = { path = "lib/url" }
 uuid = { path = "lib/uuid" }
 winresource = { path = "lib/winresource" }
 zip = { path = "lib/zip" }
+
+[profile.release.package.image]
+opt-level = 3
