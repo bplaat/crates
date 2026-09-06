@@ -14,11 +14,21 @@ const MAX_COMPRESSED_SIZE: usize = 128 * 1024 * 1024;
 const MAX_TOTAL_UNCOMPRESSED_SIZE: usize = 256 * 1024 * 1024;
 const MAX_ARCHIVE_SIZE: usize = 512 * 1024 * 1024;
 
+bitflags::bitflags! {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    struct GeneralPurposeFlags: u16 {
+        const ENCRYPTED = 1 << 0;
+        const DATA_DESCRIPTOR = 1 << 3;
+        // Preserve all bits when comparing central and local headers.
+        const _ = !0;
+    }
+}
+
 // MARK: Entry metadata
 struct CdEntry {
     name: String,
     name_bytes: Vec<u8>,
-    flags: u16,
+    flags: GeneralPurposeFlags,
     compression: u16,
     crc32: u32,
     compressed_size: u32,
@@ -89,8 +99,8 @@ impl<R: Read + Seek> ZipArchive<R> {
             if pos + 46 > bytes.len() {
                 return Err(ZipError::InvalidZip("central directory entry truncated"));
             }
-            let flags = read_u16_le(&bytes, pos + 8);
-            if flags & 0x01 != 0 {
+            let flags = GeneralPurposeFlags::from_bits_retain(read_u16_le(&bytes, pos + 8));
+            if flags.contains(GeneralPurposeFlags::ENCRYPTED) {
                 return Err(ZipError::InvalidZip("encrypted entries are unsupported"));
             }
             let compression = read_u16_le(&bytes, pos + 10);
@@ -194,7 +204,7 @@ impl<R: Read + Seek> ZipArchive<R> {
         if local_header[..4] != [0x50, 0x4b, 0x03, 0x04] {
             return Err(ZipError::InvalidZip("invalid local file header signature"));
         }
-        let local_flags = read_u16_le(&local_header, 6);
+        let local_flags = GeneralPurposeFlags::from_bits_retain(read_u16_le(&local_header, 6));
         let local_compression = read_u16_le(&local_header, 8);
         let local_crc32 = read_u32_le(&local_header, 14);
         let local_compressed_size = read_u32_le(&local_header, 18);
@@ -206,7 +216,7 @@ impl<R: Read + Seek> ZipArchive<R> {
                 "local and central directory metadata differ",
             ));
         }
-        if flags & 0x08 == 0
+        if !flags.contains(GeneralPurposeFlags::DATA_DESCRIPTOR)
             && (local_crc32 != expected_crc32
                 || local_compressed_size as usize != compressed_size
                 || local_uncompressed_size as usize != uncompressed_size)
@@ -352,6 +362,30 @@ mod tests {
             .windows(4)
             .position(|window| window == [0x50, 0x4b, 0x01, 0x02])
             .expect("central directory")
+    }
+
+    #[test]
+    fn test_preserves_uninterpreted_header_flags() {
+        let mut bytes = STORED_ZIP.to_vec();
+        let central = central_directory_offset(&bytes);
+        bytes[central + 9] |= 0x08; // UTF-8 names
+        let mut archive = ZipArchive::new(Cursor::new(&bytes)).expect("open zip");
+        assert!(archive.by_index(0).is_err());
+
+        bytes[7] |= 0x08;
+        let mut archive = ZipArchive::new(Cursor::new(&bytes)).expect("open zip");
+        let mut file = archive.by_index(0).expect("matching flags");
+        let mut content = String::new();
+        file.read_to_string(&mut content).expect("read");
+        assert_eq!(content, "hello world");
+    }
+
+    #[test]
+    fn test_rejects_encrypted_entries() {
+        let mut bytes = STORED_ZIP.to_vec();
+        let central = central_directory_offset(&bytes);
+        bytes[central + 8] |= 0x01;
+        assert!(ZipArchive::new(Cursor::new(bytes)).is_err());
     }
 
     #[test]

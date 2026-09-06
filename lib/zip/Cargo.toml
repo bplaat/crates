@@ -9,4 +9,5 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+bitflags = "2.13"
 miniz_oxide = "0.9.1"
