@@ -14,7 +14,7 @@ pub(crate) struct Column {
     pub(crate) table: Option<String>,
     pub(crate) origin_name: Option<String>,
     pub(crate) type_code: u8,
-    pub(crate) flags: u16,
+    pub(crate) flags: super::ColumnFlags,
     pub(crate) charset: u16,
 }
 

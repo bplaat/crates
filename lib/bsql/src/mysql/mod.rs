@@ -25,23 +25,40 @@ pub(crate) use connection::{Client, MysqlOptions, OpenedStream, Stream};
 pub(crate) use statement::{Column, Prepared};
 use utils::*;
 
-const CLIENT_LONG_PASSWORD: u32 = 0x0000_0001;
-const CLIENT_LONG_FLAG: u32 = 0x0000_0004;
-const CLIENT_CONNECT_WITH_DB: u32 = 0x0000_0008;
-const CLIENT_PROTOCOL_41: u32 = 0x0000_0200;
-const CLIENT_SSL: u32 = 0x0000_0800;
-const CLIENT_TRANSACTIONS: u32 = 0x0000_2000;
-const CLIENT_SECURE_CONNECTION: u32 = 0x0000_8000;
-const CLIENT_MULTI_STATEMENTS: u32 = 0x0001_0000;
-const CLIENT_MULTI_RESULTS: u32 = 0x0002_0000;
-const CLIENT_PS_MULTI_RESULTS: u32 = 0x0004_0000;
-const CLIENT_PLUGIN_AUTH: u32 = 0x0008_0000;
-const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA: u32 = 0x0020_0000;
-const CLIENT_DEPRECATE_EOF: u32 = 0x0100_0000;
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) struct Capabilities: u32 {
+        const LONG_PASSWORD = 0x0000_0001;
+        const LONG_FLAG = 0x0000_0004;
+        const CONNECT_WITH_DB = 0x0000_0008;
+        const PROTOCOL_41 = 0x0000_0200;
+        const SSL = 0x0000_0800;
+        const TRANSACTIONS = 0x0000_2000;
+        const SECURE_CONNECTION = 0x0000_8000;
+        const MULTI_STATEMENTS = 0x0001_0000;
+        const MULTI_RESULTS = 0x0002_0000;
+        const PS_MULTI_RESULTS = 0x0004_0000;
+        const PLUGIN_AUTH = 0x0008_0000;
+        const PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x0020_0000;
+        const DEPRECATE_EOF = 0x0100_0000;
+        // Servers may send flags that this client does not interpret.
+        const _ = !0;
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) struct ServerStatus: u16 {
+        const MORE_RESULTS_EXISTS = 0x0008;
+        const IN_TRANS = 0x0001;
+        // Servers may send flags that this client does not interpret.
+        const _ = !0;
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) struct ColumnFlags: u16 {
+        const UNSIGNED = 0x0020;
+        // Servers may send flags that this client does not interpret.
+        const _ = !0;
+    }
+}
 
-const SERVER_MORE_RESULTS_EXISTS: u16 = 0x0008;
-const SERVER_STATUS_IN_TRANS: u16 = 0x0001;
-const UNSIGNED_FLAG: u16 = 0x0020;
 const BINARY_CHARSET: u16 = 63;
 const MAX_PACKET_PAYLOAD: usize = 0x00ff_ffff;
 
@@ -59,27 +76,27 @@ impl Client {
             read_packet(&mut *stream, &mut sequence).map_err(|error| error.to_string())?;
         let handshake = Handshake::parse(&handshake_packet)?;
 
-        let base_capabilities = CLIENT_LONG_PASSWORD
-            | CLIENT_LONG_FLAG
-            | CLIENT_PROTOCOL_41
-            | CLIENT_TRANSACTIONS
-            | CLIENT_SECURE_CONNECTION
-            | CLIENT_MULTI_STATEMENTS
-            | CLIENT_MULTI_RESULTS
-            | CLIENT_PS_MULTI_RESULTS
-            | CLIENT_PLUGIN_AUTH
-            | CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA
-            | CLIENT_DEPRECATE_EOF;
+        let base_capabilities = Capabilities::LONG_PASSWORD
+            | Capabilities::LONG_FLAG
+            | Capabilities::PROTOCOL_41
+            | Capabilities::TRANSACTIONS
+            | Capabilities::SECURE_CONNECTION
+            | Capabilities::MULTI_STATEMENTS
+            | Capabilities::MULTI_RESULTS
+            | Capabilities::PS_MULTI_RESULTS
+            | Capabilities::PLUGIN_AUTH
+            | Capabilities::PLUGIN_AUTH_LENENC_CLIENT_DATA
+            | Capabilities::DEPRECATE_EOF;
         let wants_tls = cfg!(feature = "mysql-tls") && tls_host.is_some() && options.tls;
-        if wants_tls && handshake.capabilities & CLIENT_SSL == 0 {
+        if wants_tls && !handshake.capabilities.contains(Capabilities::SSL) {
             return Err("MySQL server does not support TLS".to_string());
         }
         let mut capabilities = base_capabilities;
         if options.database.is_some() {
-            capabilities |= CLIENT_CONNECT_WITH_DB;
+            capabilities |= Capabilities::CONNECT_WITH_DB;
         }
         if wants_tls {
-            capabilities |= CLIENT_SSL;
+            capabilities |= Capabilities::SSL;
         }
         capabilities &= handshake.capabilities;
 
@@ -126,14 +143,14 @@ impl Client {
         write_packet(&mut *self.stream, &mut sequence, &payload).map_err(statement_io)?;
         loop {
             let status = self.drain_query_response(&mut sequence)?;
-            self.in_transaction = status & SERVER_STATUS_IN_TRANS != 0;
-            if status & SERVER_MORE_RESULTS_EXISTS == 0 {
+            self.in_transaction = status.contains(ServerStatus::IN_TRANS);
+            if !status.contains(ServerStatus::MORE_RESULTS_EXISTS) {
                 return Ok(());
             }
         }
     }
 
-    fn drain_query_response(&mut self, sequence: &mut u8) -> Result<u16, StatementError> {
+    fn drain_query_response(&mut self, sequence: &mut u8) -> Result<ServerStatus, StatementError> {
         let packet = read_packet(&mut *self.stream, sequence).map_err(statement_io)?;
         if packet.first() == Some(&0xff) {
             return Err(server_error(&packet));
@@ -275,12 +292,12 @@ impl Client {
             self.affected_rows = ok.affected_rows;
             self.last_insert_id = ok.last_insert_id;
             let mut status = ok.status;
-            while status & SERVER_MORE_RESULTS_EXISTS != 0 {
+            while status.contains(ServerStatus::MORE_RESULTS_EXISTS) {
                 status = self.drain_query_response(&mut sequence)?;
             }
             statement.columns.clear();
             statement.executed = true;
-            self.in_transaction = status & SERVER_STATUS_IN_TRANS != 0;
+            self.in_transaction = status.contains(ServerStatus::IN_TRANS);
             return Ok(());
         }
 
@@ -310,10 +327,10 @@ impl Client {
             statement.rows.push(decode_binary_row(&packet, &columns)?);
         };
         let mut status = status;
-        while status & SERVER_MORE_RESULTS_EXISTS != 0 {
+        while status.contains(ServerStatus::MORE_RESULTS_EXISTS) {
             status = self.drain_query_response(&mut sequence)?;
         }
-        self.in_transaction = status & SERVER_STATUS_IN_TRANS != 0;
+        self.in_transaction = status.contains(ServerStatus::IN_TRANS);
         statement.columns = columns;
         statement.executed = true;
         Ok(())
@@ -346,7 +363,7 @@ impl Client {
     }
 
     const fn deprecates_eof(&self) -> bool {
-        self.capabilities & CLIENT_DEPRECATE_EOF != 0
+        self.capabilities.contains(Capabilities::DEPRECATE_EOF)
     }
 }
 
@@ -384,7 +401,7 @@ fn open_stream(options: &MysqlOptions) -> Result<OpenedStream, String> {
 }
 
 struct Handshake {
-    capabilities: u32,
+    capabilities: Capabilities,
     scramble: Vec<u8>,
     auth_plugin: String,
 }
@@ -406,7 +423,7 @@ impl Handshake {
         reader.skip(1).map_err(|error| error.to_string())?;
         reader.skip(2).map_err(|error| error.to_string())?;
         let high = reader.u16().map_err(|error| error.to_string())? as u32;
-        let capabilities = low | high << 16;
+        let capabilities = Capabilities::from_bits_retain(low | high << 16);
         let auth_len = reader.u8().map_err(|error| error.to_string())? as usize;
         reader.skip(10).map_err(|error| error.to_string())?;
         let second_len = auth_len.saturating_sub(8).max(13).min(reader.remaining());
@@ -415,12 +432,13 @@ impl Handshake {
             .map_err(|error| error.to_string())?;
         scramble.extend(second.iter().copied().take_while(|byte| *byte != 0));
         scramble.truncate(20);
-        let auth_plugin = if capabilities & CLIENT_PLUGIN_AUTH != 0 && reader.remaining() > 0 {
-            String::from_utf8_lossy(reader.nul_bytes().map_err(|error| error.to_string())?)
-                .into_owned()
-        } else {
-            "mysql_native_password".to_string()
-        };
+        let auth_plugin =
+            if capabilities.contains(Capabilities::PLUGIN_AUTH) && reader.remaining() > 0 {
+                String::from_utf8_lossy(reader.nul_bytes().map_err(|error| error.to_string())?)
+                    .into_owned()
+            } else {
+                "mysql_native_password".to_string()
+            };
         let auth_plugin = if auth_plugin.is_empty() {
             "mysql_native_password".to_string()
         } else {
@@ -490,9 +508,9 @@ fn finish_authentication(
     }
 }
 
-fn ssl_request(capabilities: u32) -> Vec<u8> {
+fn ssl_request(capabilities: Capabilities) -> Vec<u8> {
     let mut packet = Vec::with_capacity(32);
-    packet.extend_from_slice(&capabilities.to_le_bytes());
+    packet.extend_from_slice(&capabilities.bits().to_le_bytes());
     packet.extend_from_slice(&(MAX_PACKET_PAYLOAD as u32).to_le_bytes());
     packet.push(45);
     packet.extend_from_slice(&[0; 23]);
@@ -500,7 +518,7 @@ fn ssl_request(capabilities: u32) -> Vec<u8> {
 }
 
 fn handshake_response(
-    capabilities: u32,
+    capabilities: Capabilities,
     options: &MysqlOptions,
     plugin: &str,
     auth: &[u8],
@@ -508,21 +526,21 @@ fn handshake_response(
     let mut packet = ssl_request(capabilities);
     packet.extend_from_slice(options.user.as_bytes());
     packet.push(0);
-    if capabilities & CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA != 0 {
+    if capabilities.contains(Capabilities::PLUGIN_AUTH_LENENC_CLIENT_DATA) {
         put_lenenc_int(&mut packet, auth.len() as u64);
         packet.extend_from_slice(auth);
-    } else if capabilities & CLIENT_SECURE_CONNECTION != 0 {
+    } else if capabilities.contains(Capabilities::SECURE_CONNECTION) {
         packet.push(auth.len() as u8);
         packet.extend_from_slice(auth);
     } else {
         packet.extend_from_slice(auth);
         packet.push(0);
     }
-    if capabilities & CLIENT_CONNECT_WITH_DB != 0 {
+    if capabilities.contains(Capabilities::CONNECT_WITH_DB) {
         packet.extend_from_slice(options.database.as_deref().unwrap_or_default().as_bytes());
         packet.push(0);
     }
-    if capabilities & CLIENT_PLUGIN_AUTH != 0 {
+    if capabilities.contains(Capabilities::PLUGIN_AUTH) {
         packet.extend_from_slice(plugin.as_bytes());
         packet.push(0);
     }
@@ -735,7 +753,7 @@ fn parse_column(packet: &[u8]) -> Result<Column, StatementError> {
     let charset = reader.u16()?;
     reader.u32()?;
     let type_code = reader.u8()?;
-    let flags = reader.u16()?;
+    let flags = ColumnFlags::from_bits_retain(reader.u16()?);
     reader.skip(fixed_len - 9)?;
     Ok(Column {
         name,
@@ -768,7 +786,7 @@ fn decode_binary_row(packet: &[u8], columns: &[Column]) -> Result<Vec<Value>, St
 }
 
 fn decode_binary_value(reader: &mut Reader<'_>, column: &Column) -> Result<Value, StatementError> {
-    let unsigned = column.flags & UNSIGNED_FLAG != 0;
+    let unsigned = column.flags.contains(ColumnFlags::UNSIGNED);
     match column.type_code {
         1 => integer_value(reader.u8()? as u64, unsigned, 8),
         2 | 13 => integer_value(reader.u16()? as u64, unsigned, 16),
@@ -935,7 +953,7 @@ const fn binary_or_text_type(
 struct OkPacket {
     affected_rows: u64,
     last_insert_id: u64,
-    status: u16,
+    status: ServerStatus,
 }
 
 fn parse_ok(packet: &[u8]) -> Result<OkPacket, StatementError> {
@@ -949,7 +967,7 @@ fn parse_ok(packet: &[u8]) -> Result<OkPacket, StatementError> {
     }
     let affected_rows = reader.lenenc_int()?;
     let last_insert_id = reader.lenenc_int()?;
-    let status = reader.u16()?;
+    let status = ServerStatus::from_bits_retain(reader.u16()?);
     let _warnings = reader.u16()?;
     Ok(OkPacket {
         affected_rows,
@@ -975,7 +993,7 @@ fn parse_result_terminator(
         return Err(protocol_error("expected MySQL EOF packet"));
     }
     let _warnings = reader.u16()?;
-    let status = reader.u16()?;
+    let status = ServerStatus::from_bits_retain(reader.u16()?);
     if reader.remaining() != 0 {
         return Err(protocol_error("invalid MySQL EOF packet"));
     }
@@ -1176,13 +1194,13 @@ mod tests {
         }
     }
 
-    fn ok_packet(status: u16) -> Vec<u8> {
+    fn ok_packet(status: ServerStatus) -> Vec<u8> {
         let payload = [
             0x00,
             0x00,
             0x00,
-            status as u8,
-            (status >> 8) as u8,
+            status.bits() as u8,
+            (status.bits() >> 8) as u8,
             0x00,
             0x00,
         ];
@@ -1193,8 +1211,8 @@ mod tests {
 
     #[test]
     fn client_tracks_transaction_status() {
-        let mut input = ok_packet(SERVER_STATUS_IN_TRANS);
-        input.extend(ok_packet(0));
+        let mut input = ok_packet(ServerStatus::IN_TRANS);
+        input.extend(ok_packet(ServerStatus::empty()));
         let mut client = Client {
             stream: Box::new(TestStream {
                 input: io::Cursor::new(input),
@@ -1202,7 +1220,7 @@ mod tests {
             }),
             affected_rows: 0,
             last_insert_id: 0,
-            capabilities: CLIENT_PROTOCOL_41,
+            capabilities: Capabilities::PROTOCOL_41,
             in_transaction: false,
         };
         client.execute_script("START TRANSACTION").unwrap();
@@ -1285,20 +1303,22 @@ mod tests {
 
     #[test]
     fn legacy_eof_packet_preserves_server_status() {
-        let packet = [0xfe, 0x02, 0x00, 0x08, 0x00];
+        let packet = [0xfe, 0x02, 0x00, 0x08, 0x80];
         let parsed = parse_result_terminator(&packet, false).unwrap();
         assert_eq!(parsed.affected_rows, 0);
         assert_eq!(parsed.last_insert_id, 0);
-        assert_eq!(parsed.status, SERVER_MORE_RESULTS_EXISTS);
+        assert!(parsed.status.contains(ServerStatus::MORE_RESULTS_EXISTS));
+        assert_eq!(parsed.status.bits(), 0x8008);
     }
 
     #[test]
     fn ok_packet_requires_protocol_41_status_and_warnings() {
-        let packet = [0x00, 0x01, 0x02, 0x08, 0x00, 0x03, 0x00];
+        let packet = [0x00, 0x01, 0x02, 0x08, 0x80, 0x03, 0x00];
         let parsed = parse_ok(&packet).unwrap();
         assert_eq!(parsed.affected_rows, 1);
         assert_eq!(parsed.last_insert_id, 2);
-        assert_eq!(parsed.status, SERVER_MORE_RESULTS_EXISTS);
+        assert!(parsed.status.contains(ServerStatus::MORE_RESULTS_EXISTS));
+        assert_eq!(parsed.status.bits(), 0x8008);
         assert!(parse_ok(&packet[..5]).is_err());
     }
 
@@ -1314,7 +1334,7 @@ mod tests {
             table: None,
             origin_name: None,
             type_code: 245,
-            flags: 0,
+            flags: ColumnFlags::empty(),
             charset: BINARY_CHARSET,
         };
         let row = [0x00, 0x00, 0x07, b'{', b'"', b'a', b'"', b':', b'1', b'}'];
@@ -1331,7 +1351,7 @@ mod tests {
             table: None,
             origin_name: None,
             type_code: 252,
-            flags: 0,
+            flags: ColumnFlags::empty(),
             charset: 45,
         };
         let blob_column = Column {
@@ -1395,7 +1415,7 @@ mod tests {
                 table: None,
                 origin_name: None,
                 type_code: 3,
-                flags: 0,
+                flags: ColumnFlags::empty(),
                 charset: 63,
             },
             Column {
@@ -1403,7 +1423,7 @@ mod tests {
                 table: None,
                 origin_name: None,
                 type_code: 8,
-                flags: UNSIGNED_FLAG,
+                flags: ColumnFlags::UNSIGNED,
                 charset: 63,
             },
             Column {
@@ -1411,7 +1431,7 @@ mod tests {
                 table: None,
                 origin_name: None,
                 type_code: 253,
-                flags: 0,
+                flags: ColumnFlags::empty(),
                 charset: 45,
             },
         ];
@@ -1431,7 +1451,7 @@ mod tests {
             table: None,
             origin_name: None,
             type_code: 8,
-            flags: UNSIGNED_FLAG,
+            flags: ColumnFlags::UNSIGNED,
             charset: 63,
         };
         let mut packet = vec![0, 0];

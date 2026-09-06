@@ -94,7 +94,7 @@ pub(crate) struct Client {
     pub(crate) stream: Box<dyn Stream>,
     pub(crate) affected_rows: u64,
     pub(crate) last_insert_id: u64,
-    pub(crate) capabilities: u32,
+    pub(crate) capabilities: super::Capabilities,
     pub(crate) in_transaction: bool,
 }
 

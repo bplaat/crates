@@ -109,6 +109,7 @@ name = "bsql"
 version = "0.1.2"
 dependencies = [
  "anyhow",
+ "bitflags",
  "bsql_derive",
  "chrono",
  "libsqlite3-sys",
