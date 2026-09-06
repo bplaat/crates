@@ -19,7 +19,7 @@ pub use crate::from_row::FromRow;
 #[cfg(feature = "mysql")]
 pub use crate::mysql::MysqlTransport;
 #[cfg(feature = "sqlite")]
-pub use crate::sqlite::{preprocess_fts_query, Migration, MigrationError, SqliteMode};
+pub use crate::sqlite::{Migration, MigrationError, SqliteMode, preprocess_fts_query};
 #[cfg(any(feature = "mysql", feature = "sqlite"))]
 pub use crate::statement::{ColumnType, RawStatement, Statement, StatementError};
 #[cfg(any(feature = "mysql", feature = "sqlite"))]

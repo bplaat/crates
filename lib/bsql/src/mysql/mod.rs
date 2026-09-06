@@ -84,17 +84,17 @@ impl Client {
         capabilities &= handshake.capabilities;
 
         #[cfg(feature = "mysql-tls")]
-        if let Some(host) = tls_host {
-            if wants_tls {
-                let request = ssl_request(capabilities);
-                write_packet(&mut *stream, &mut sequence, &request)
-                    .map_err(|error| error.to_string())?;
-                let connector = TlsConnector::new().map_err(|error| error.to_string())?;
-                let tls = connector
-                    .connect(&host, stream)
-                    .map_err(|error| format!("MySQL TLS handshake failed: {error}"))?;
-                stream = Box::new(tls);
-            }
+        if let Some(host) = tls_host
+            && wants_tls
+        {
+            let request = ssl_request(capabilities);
+            write_packet(&mut *stream, &mut sequence, &request)
+                .map_err(|error| error.to_string())?;
+            let connector = TlsConnector::new().map_err(|error| error.to_string())?;
+            let tls = connector
+                .connect(&host, stream)
+                .map_err(|error| format!("MySQL TLS handshake failed: {error}"))?;
+            stream = Box::new(tls);
         }
 
         let plugin = handshake.auth_plugin.as_str();
@@ -1357,12 +1357,16 @@ mod tests {
 
     #[test]
     fn socket_authentication_sends_an_empty_response() {
-        assert!(auth_response("auth_socket", "ignored", b"nonce")
-            .unwrap()
-            .is_empty());
-        assert!(auth_response("unix_socket", "ignored", b"nonce")
-            .unwrap()
-            .is_empty());
+        assert!(
+            auth_response("auth_socket", "ignored", b"nonce")
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            auth_response("unix_socket", "ignored", b"nonce")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

@@ -208,9 +208,11 @@ mod tests {
     #[test]
     fn test_bool_float_text_and_blob_roundtrips() {
         assert!(bool::try_from(Value::from(true)).unwrap());
-        assert!(!Option::<bool>::try_from(Value::from(Some(false)))
-            .unwrap()
-            .unwrap());
+        assert!(
+            !Option::<bool>::try_from(Value::from(Some(false)))
+                .unwrap()
+                .unwrap()
+        );
         assert_eq!(Option::<bool>::try_from(Value::Null).unwrap(), None);
 
         assert_eq!(f64::try_from(Value::from(1.5_f64)).unwrap(), 1.5);

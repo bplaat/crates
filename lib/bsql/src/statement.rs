@@ -151,10 +151,10 @@ impl RawStatement {
         let Ok(mut connection) = self.connection.active_connection() else {
             return;
         };
-        if let Err(error) = self.inner.backend_mut().reset(&mut connection) {
-            if error.connection_broken {
-                self.connection.mark_broken();
-            }
+        if let Err(error) = self.inner.backend_mut().reset(&mut connection)
+            && error.connection_broken
+        {
+            self.connection.mark_broken();
         }
     }
 
@@ -255,10 +255,10 @@ impl RawStatement {
 impl Drop for RawStatement {
     fn drop(&mut self) {
         let mut connection = self.connection.connection();
-        if let Err(error) = self.inner.backend_mut().close(&mut connection) {
-            if error.connection_broken {
-                self.connection.mark_broken();
-            }
+        if let Err(error) = self.inner.backend_mut().close(&mut connection)
+            && error.connection_broken
+        {
+            self.connection.mark_broken();
         }
     }
 }

@@ -6,7 +6,7 @@
 
 //! A example that uses the execute_args and query_args macro's to bind named parameters.
 
-use bsql::{execute_args, query_args, Connection};
+use bsql::{Connection, execute_args, query_args};
 
 fn main() -> anyhow::Result<()> {
     // Connect and create table

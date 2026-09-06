@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 
 /// Preprocess a user-supplied search string into a safe FTS5 query expression.
 /// FTS5 keyword operators (AND, OR, NOT) are preserved so callers can use them

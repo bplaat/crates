@@ -163,11 +163,10 @@ fn expand_fts5_directive(rest: &str) -> Result<String, MigrationError> {
         .join(", ");
 
     let mut sql = String::new();
-    _=  writeln!(
+    _ = writeln!(
         sql,
         "CREATE VIRTUAL TABLE IF NOT EXISTS {fts_table} USING fts5({indexed_columns}, id UNINDEXED);"
-    )
-    ;
+    );
     _ = writeln!(
         sql,
         "CREATE TRIGGER IF NOT EXISTS {table}_ai AFTER INSERT ON {table} BEGIN"

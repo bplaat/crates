@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 use std::path::Path;
 use std::ptr;
 
@@ -214,10 +214,9 @@ impl GenericConnection {
     pub fn enable_wal_logging(&self) -> Result<(), StatementError> {
         let pool = self.sqlite_pool()?;
         let writer = pool.acquire_writer()?;
-        let result = writer.connection().execute_script(
+        writer.connection().execute_script(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;",
-        );
-        result
+        )
     }
 }

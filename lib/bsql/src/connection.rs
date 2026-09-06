@@ -192,10 +192,10 @@ impl ConnectionLease {
 
     fn begin_transaction(&self) -> Result<(), StatementError> {
         let result = self.connection().begin();
-        if let Err(error) = &result {
-            if error.connection_broken {
-                self.mark_broken();
-            }
+        if let Err(error) = &result
+            && error.connection_broken
+        {
+            self.mark_broken();
         }
         result
     }
@@ -203,10 +203,10 @@ impl ConnectionLease {
     fn finish_transaction(&self, commit: bool) -> Result<(), StatementError> {
         self.finished.store(true, Ordering::Release);
         let result = self.connection().finish(commit);
-        if let Err(error) = &result {
-            if error.connection_broken {
-                self.mark_broken();
-            }
+        if let Err(error) = &result
+            && error.connection_broken
+        {
+            self.mark_broken();
         }
         result
     }
@@ -314,10 +314,10 @@ fn prepare_on_lease<T: FromRow>(
             .map(|prepared| Statement::new_sqlite(prepared, Arc::clone(&lease))),
     };
     drop(connection);
-    if let Err(error) = &result {
-        if error.connection_broken {
-            lease.mark_broken();
-        }
+    if let Err(error) = &result
+        && error.connection_broken
+    {
+        lease.mark_broken();
     }
     result
 }
@@ -489,7 +489,7 @@ impl SqlitePool {
                 let result = crate::sqlite::Connection::open(&self.options.path, self.options.mode);
                 match result {
                     Ok(connection) => {
-                        return Ok(self.reader_lease(InnerConnection::Sqlite(connection)))
+                        return Ok(self.reader_lease(InnerConnection::Sqlite(connection)));
                     }
                     Err(error) => {
                         let mut state = self.state.lock().map_err(|_| pool_lock_error())?;
@@ -1009,9 +1009,11 @@ mod tests {
         let database = Connection::open_sqlite_memory().expect("open SQLite");
         database.execute("CREATE TABLE items (id INTEGER PRIMARY KEY) STRICT", ())?;
         assert!(database.execute("BEGIN", ()).is_err());
-        assert!(database
-            .execute_script("BEGIN; INSERT INTO items VALUES (1)")
-            .is_err());
+        assert!(
+            database
+                .execute_script("BEGIN; INSERT INTO items VALUES (1)")
+                .is_err()
+        );
         assert_eq!(
             database.query_some::<i64>("SELECT COUNT(*) FROM items", ())?,
             0
@@ -1088,9 +1090,11 @@ mod tests {
         let error = database
             .transaction(|transaction| -> Result<(), StatementError> {
                 transaction.execute("INSERT INTO items VALUES (1)", ())?;
-                assert!(transaction
-                    .transaction(|_| -> Result<(), StatementError> { Ok(()) })
-                    .is_err());
+                assert!(
+                    transaction
+                        .transaction(|_| -> Result<(), StatementError> { Ok(()) })
+                        .is_err()
+                );
                 Err(StatementError::new("abort"))
             })
             .expect_err("closure error must propagate");
