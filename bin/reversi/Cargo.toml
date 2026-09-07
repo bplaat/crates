@@ -1,0 +1,22 @@
+[package]
+name = "reversi"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.bundle]
+name = "Reversi"
+identifier = "nl.bplaat.Reversi"
+copyright = "Copyright (c) 2026 Bastiaan van der Plaat"
+icon = "meta/macos/icon.icon"
+
+[dependencies]
+bwindow = { path = "../../lib/bwindow", features = ["menu"] }
+bcanvas = { path = "../../lib/bcanvas" }
+
+[build-dependencies]
+winresource = "0.1.31"
