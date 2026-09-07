@@ -1,0 +1,520 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+use std::marker::PhantomData;
+use std::rc::Rc;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+
+use bwindow::Window;
+
+use crate::platforms::{PlatformCanvas, PlatformCanvasContext};
+
+/// Cursor shown over a canvas; native window decorations retain their own cursors.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CursorIcon {
+    /// Standard arrow.
+    #[default]
+    Default,
+    /// Pointing hand for an interactive target.
+    Pointer,
+    /// Background work in progress.
+    Progress,
+}
+
+/// A portable RGBA color.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Color {
+    /// Red component.
+    pub red: u8,
+    /// Green component.
+    pub green: u8,
+    /// Blue component.
+    pub blue: u8,
+    /// Alpha component.
+    pub alpha: u8,
+}
+
+impl Color {
+    /// Create an opaque color from a packed `0xRRGGBB` value.
+    pub const fn from_rgb(rgb: u32) -> Self {
+        Self::rgb(
+            ((rgb >> 16) & 0xff) as u8,
+            ((rgb >> 8) & 0xff) as u8,
+            (rgb & 0xff) as u8,
+        )
+    }
+
+    /// Create an opaque RGB color.
+    pub const fn rgb(red: u8, green: u8, blue: u8) -> Self {
+        Self {
+            red,
+            green,
+            blue,
+            alpha: 255,
+        }
+    }
+
+    /// Create an RGBA color.
+    pub const fn rgba(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
+        Self {
+            red,
+            green,
+            blue,
+            alpha,
+        }
+    }
+
+    pub(crate) fn components(self, global_alpha: f32) -> (f64, f64, f64, f64) {
+        (
+            f64::from(self.red) / 255.0,
+            f64::from(self.green) / 255.0,
+            f64::from(self.blue) / 255.0,
+            f64::from(self.alpha) / 255.0 * f64::from(global_alpha.clamp(0.0, 1.0)),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Color;
+
+    #[test]
+    fn saved_state_shares_font_storage_and_preserves_its_value() {
+        let mut state = super::CanvasState::default();
+        let saved = state.clone();
+        assert!(super::Rc::ptr_eq(&state.font_family, &saved.font_family));
+        state.font_family = "monospace".into();
+        assert_eq!(saved.font_family.as_ref(), "sans-serif");
+        assert_eq!(state.font_family.as_ref(), "monospace");
+    }
+
+    #[test]
+    fn color_from_packed_rgb_uses_rrggbb_order() {
+        assert_eq!(Color::from_rgb(0x12_34_56), Color::rgb(0x12, 0x34, 0x56));
+        assert_eq!(Color::from_rgb(0), Color::rgba(0, 0, 0, 255));
+    }
+}
+
+/// Canvas line cap style.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LineCap {
+    /// Flat line ends.
+    #[default]
+    Butt,
+    /// Round line ends.
+    Round,
+    /// Square line ends.
+    Square,
+}
+
+/// Canvas line join style.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LineJoin {
+    /// Mitered joins.
+    #[default]
+    Miter,
+    /// Rounded joins.
+    Round,
+    /// Beveled joins.
+    Bevel,
+}
+
+/// Horizontal text alignment.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TextAlign {
+    /// Align at the text start.
+    #[default]
+    Start,
+    /// Align at the text end.
+    End,
+    /// Align left.
+    Left,
+    /// Align right.
+    Right,
+    /// Center text.
+    Center,
+}
+
+/// Vertical text alignment.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TextBaseline {
+    /// Top edge.
+    Top,
+    /// Hanging baseline.
+    Hanging,
+    /// Middle.
+    Middle,
+    /// Alphabetic baseline.
+    #[default]
+    Alphabetic,
+    /// Ideographic baseline.
+    Ideographic,
+    /// Bottom edge.
+    Bottom,
+}
+
+/// Canvas font weight.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum FontWeight {
+    /// Normal font weight.
+    #[default]
+    Normal,
+    /// Bold font weight.
+    Bold,
+}
+
+#[derive(Clone)]
+pub(crate) struct CanvasState {
+    pub fill: Color,
+    pub stroke: Color,
+    pub alpha: f32,
+    pub line_width: f32,
+    pub line_cap: LineCap,
+    pub line_join: LineJoin,
+    pub font_family: Rc<str>,
+    pub font_size: f32,
+    pub font_weight: FontWeight,
+    pub text_align: TextAlign,
+    pub text_baseline: TextBaseline,
+}
+
+impl Default for CanvasState {
+    fn default() -> Self {
+        Self {
+            fill: Color::rgb(0, 0, 0),
+            stroke: Color::rgb(0, 0, 0),
+            alpha: 1.0,
+            line_width: 1.0,
+            line_cap: LineCap::Butt,
+            line_join: LineJoin::Miter,
+            font_family: "sans-serif".into(),
+            font_size: 10.0,
+            font_weight: FontWeight::Normal,
+            text_align: TextAlign::Start,
+            text_baseline: TextBaseline::Alphabetic,
+        }
+    }
+}
+
+/// Builder for one native 2D canvas attached to a window.
+pub struct CanvasBuilder<'a> {
+    window: &'a Window,
+}
+
+impl<'a> CanvasBuilder<'a> {
+    /// Create a canvas builder.
+    pub const fn new(window: &'a Window) -> Self {
+        Self { window }
+    }
+
+    /// Build the canvas, panicking if the window is closed or already has content.
+    pub fn build(self) -> Canvas {
+        self.try_build().expect("cannot attach canvas")
+    }
+
+    /// Build the canvas with a recoverable attachment error.
+    pub fn try_build(self) -> Result<Canvas, bwindow::AttachError> {
+        Ok(Canvas {
+            platform: PlatformCanvas::new(self.window.attach_content()?),
+        })
+    }
+}
+
+/// A native 2D canvas. All access is confined to the main thread.
+pub struct Canvas {
+    platform: PlatformCanvas,
+}
+
+impl Canvas {
+    /// Set the cursor over this canvas. Has no effect after the window closes.
+    pub fn set_cursor(&mut self, cursor: CursorIcon) {
+        self.platform.set_cursor(cursor);
+    }
+
+    /// Schedule a repaint. Repeated requests coalesce.
+    pub fn request_redraw(&self) {
+        self.platform.request_redraw();
+    }
+
+    /// Paint once during this canvas window's RedrawRequested callback.
+    ///
+    /// Returns false outside a native paint callback, after close, or if this frame
+    /// was already drawn. The context cannot escape the closure.
+    pub fn draw(
+        &mut self,
+        draw: impl for<'frame> FnOnce(&mut CanvasRenderingContext2d<'frame>),
+    ) -> bool {
+        self.platform.draw(draw)
+    }
+}
+
+/// A frame-scoped HTML5 Canvas 2D-like drawing context.
+pub struct CanvasRenderingContext2d<'a> {
+    pub(crate) platform: PlatformCanvasContext,
+    pub(crate) state: CanvasState,
+    pub(crate) stack: Vec<CanvasState>,
+    width: f32,
+    height: f32,
+    scale_factor: f32,
+    timestamp: Duration,
+    _lifetime: PhantomData<(&'a mut (), Rc<()>)>,
+}
+
+impl<'a> CanvasRenderingContext2d<'a> {
+    pub(crate) fn new(
+        platform: PlatformCanvasContext,
+        width: f32,
+        height: f32,
+        scale_factor: f32,
+    ) -> Self {
+        static START: OnceLock<Instant> = OnceLock::new();
+        Self {
+            platform,
+            state: CanvasState::default(),
+            stack: Vec::new(),
+            width,
+            height,
+            scale_factor,
+            timestamp: START.get_or_init(Instant::now).elapsed(),
+            _lifetime: PhantomData,
+        }
+    }
+    /// Width of this frame in logical pixels.
+    pub const fn width(&self) -> f32 {
+        self.width
+    }
+    /// Height of this frame in logical pixels.
+    pub const fn height(&self) -> f32 {
+        self.height
+    }
+    /// Native pixels per logical pixel for this frame.
+    pub const fn scale_factor(&self) -> f32 {
+        self.scale_factor
+    }
+    /// Monotonic time since the first canvas frame in this process.
+    pub const fn timestamp(&self) -> Duration {
+        self.timestamp
+    }
+    /// Save styles, the transform, and the clipping region, but not the current path.
+    pub fn save(&mut self) {
+        self.platform.save();
+        self.stack.push(self.state.clone());
+    }
+    /// Restore the most recently saved drawing state. An empty stack is a no-op.
+    pub fn restore(&mut self) {
+        if let Some(state) = self.stack.pop() {
+            self.platform.restore();
+            self.state = state;
+        }
+    }
+    /// Current fill color.
+    pub const fn fill_style(&self) -> Color {
+        self.state.fill
+    }
+    /// Set the fill color.
+    pub const fn set_fill_style(&mut self, color: Color) {
+        self.state.fill = color;
+    }
+    /// Current stroke color.
+    pub const fn stroke_style(&self) -> Color {
+        self.state.stroke
+    }
+    /// Set the stroke color.
+    pub const fn set_stroke_style(&mut self, color: Color) {
+        self.state.stroke = color;
+    }
+    /// Current global alpha, from 0.0 to 1.0.
+    pub const fn global_alpha(&self) -> f32 {
+        self.state.alpha
+    }
+    /// Set global alpha. Non-finite values and values outside 0.0..=1.0 are ignored.
+    pub const fn set_global_alpha(&mut self, alpha: f32) {
+        if alpha.is_finite() && alpha >= 0.0 && alpha <= 1.0 {
+            self.state.alpha = alpha;
+        }
+    }
+    /// Current line width in logical pixels.
+    pub const fn line_width(&self) -> f32 {
+        self.state.line_width
+    }
+    /// Set line width. Non-finite, zero, and negative values are ignored.
+    pub const fn set_line_width(&mut self, width: f32) {
+        if width.is_finite() && width > 0.0 {
+            self.state.line_width = width;
+        }
+    }
+    /// Current line cap.
+    pub const fn line_cap(&self) -> LineCap {
+        self.state.line_cap
+    }
+    /// Set line cap.
+    pub const fn set_line_cap(&mut self, cap: LineCap) {
+        self.state.line_cap = cap;
+    }
+    /// Current line join.
+    pub const fn line_join(&self) -> LineJoin {
+        self.state.line_join
+    }
+    /// Set line join.
+    pub const fn set_line_join(&mut self, join: LineJoin) {
+        self.state.line_join = join;
+    }
+    /// Current font family.
+    pub fn font_family(&self) -> &str {
+        &self.state.font_family
+    }
+    /// Current font size in logical pixels.
+    pub const fn font_size(&self) -> f32 {
+        self.state.font_size
+    }
+    /// Set text font family and size in logical pixels, rather than a CSS font string.
+    /// Non-finite, zero, and negative sizes leave both properties unchanged.
+    pub fn set_font(&mut self, family: impl Into<String>, size: f32) {
+        if !size.is_finite() || size <= 0.0 {
+            return;
+        }
+        let family = family.into();
+        if self.state.font_family.as_ref() != family {
+            self.state.font_family = family.into();
+        }
+        self.state.font_size = size;
+    }
+    /// Current font weight.
+    pub const fn font_weight(&self) -> FontWeight {
+        self.state.font_weight
+    }
+    /// Set text font weight.
+    pub const fn set_font_weight(&mut self, weight: FontWeight) {
+        self.state.font_weight = weight;
+    }
+    /// Current horizontal text alignment.
+    pub const fn text_align(&self) -> TextAlign {
+        self.state.text_align
+    }
+    /// Set horizontal text alignment.
+    pub const fn set_text_align(&mut self, align: TextAlign) {
+        self.state.text_align = align;
+    }
+    /// Current text baseline.
+    pub const fn text_baseline(&self) -> TextBaseline {
+        self.state.text_baseline
+    }
+    /// Set vertical text baseline.
+    pub const fn set_text_baseline(&mut self, baseline: TextBaseline) {
+        self.state.text_baseline = baseline;
+    }
+    /// Clear a rectangle.
+    pub fn clear_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
+        self.platform.clear_rect(x, y, width, height);
+    }
+    /// Fill a rectangle.
+    pub fn fill_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
+        self.platform.fill_rect(&self.state, x, y, width, height);
+    }
+    /// Stroke a rectangle.
+    pub fn stroke_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
+        self.platform.stroke_rect(&self.state, x, y, width, height);
+    }
+    /// Begin a new path.
+    pub fn begin_path(&mut self) {
+        self.platform.begin_path();
+    }
+    /// Close the current path.
+    pub fn close_path(&mut self) {
+        self.platform.close_path();
+    }
+    /// Move the current point.
+    pub fn move_to(&mut self, x: f32, y: f32) {
+        self.platform.move_to(x, y);
+    }
+    /// Add a line segment.
+    pub fn line_to(&mut self, x: f32, y: f32) {
+        self.platform.line_to(x, y);
+    }
+    /// Add a rectangle to the path.
+    pub fn rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
+        self.platform.rect(x, y, width, height);
+    }
+    /// Add a rounded rectangle to the current path.
+    pub fn round_rect(&mut self, x: f32, y: f32, width: f32, height: f32, radius: f32) {
+        self.platform.round_rect(x, y, width, height, radius);
+    }
+    /// Add a complete, axis-aligned ellipse to the current path.
+    /// Unlike browser Canvas 2D, this does not accept rotation or arc angles.
+    pub fn ellipse(&mut self, x: f32, y: f32, radius_x: f32, radius_y: f32) {
+        self.platform.ellipse(x, y, radius_x, radius_y);
+    }
+    /// Add a circular arc, with angles in radians.
+    pub fn arc(
+        &mut self,
+        x: f32,
+        y: f32,
+        radius: f32,
+        start: f32,
+        end: f32,
+        counterclockwise: bool,
+    ) {
+        self.platform
+            .arc(x, y, radius, start, end, counterclockwise);
+    }
+    /// Add a quadratic Bezier segment.
+    pub fn quadratic_curve_to(&mut self, cpx: f32, cpy: f32, x: f32, y: f32) {
+        self.platform.quadratic_curve_to(cpx, cpy, x, y);
+    }
+    /// Add a cubic Bezier segment.
+    pub fn bezier_curve_to(&mut self, cp1x: f32, cp1y: f32, cp2x: f32, cp2y: f32, x: f32, y: f32) {
+        self.platform.bezier_curve_to(cp1x, cp1y, cp2x, cp2y, x, y);
+    }
+    /// Fill the current path without consuming it.
+    pub fn fill(&mut self) {
+        self.platform.fill(&self.state);
+    }
+    /// Stroke the current path without consuming it.
+    pub fn stroke(&mut self) {
+        self.platform.stroke(&self.state);
+    }
+    /// Clip future drawing to the current path without consuming it.
+    pub fn clip(&mut self) {
+        self.platform.clip();
+    }
+    /// Translate the current transform.
+    pub fn translate(&mut self, x: f32, y: f32) {
+        self.platform.translate(x, y);
+    }
+    /// Rotate the current transform by radians.
+    pub fn rotate(&mut self, angle: f32) {
+        self.platform.rotate(angle);
+    }
+    /// Scale the current transform.
+    pub fn scale(&mut self, x: f32, y: f32) {
+        self.platform.scale(x, y);
+    }
+    /// Replace the current affine transform.
+    pub fn set_transform(&mut self, a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) {
+        self.platform.set_transform(a, b, c, d, e, f);
+    }
+    /// Reset the current transform.
+    pub fn reset_transform(&mut self) {
+        self.platform.reset_transform();
+    }
+    /// Draw filled text.
+    pub fn fill_text(&mut self, text: impl AsRef<str>, x: f32, y: f32) {
+        self.platform.fill_text(&self.state, text.as_ref(), x, y);
+    }
+    /// Measure text width in logical pixels.
+    pub fn measure_text(&mut self, text: impl AsRef<str>) -> f32 {
+        self.platform.measure_text(&self.state, text.as_ref())
+    }
+}
+
+impl Drop for CanvasRenderingContext2d<'_> {
+    fn drop(&mut self) {
+        while self.stack.pop().is_some() {
+            self.platform.restore();
+        }
+    }
+}
