@@ -24,6 +24,7 @@ impl Xtask {
             .with_context(|| format!("failed to read {}", settings_path.display()))?;
         let mut settings = parse_json_with_comments(&contents)
             .with_context(|| format!("failed to parse {}", settings_path.display()))?;
+        set_xml_format_on_save(&mut settings)?;
         set_rust_analyzer_excludes(&mut settings, excludes)?;
 
         let mut output = Vec::new();
@@ -49,6 +50,20 @@ fn parse_json_with_comments(contents: &str) -> Result<Value, serde_json::Error> 
             .map_or_else(String::new, |string| string.as_str().to_owned())
     });
     serde_json::from_str(&json)
+}
+
+fn set_xml_format_on_save(settings: &mut Value) -> Result<()> {
+    let settings = settings
+        .as_object_mut()
+        .context("VS Code settings must be a JSON object")?;
+    settings.insert(
+        "[xml]".to_owned(),
+        serde_json::json!({
+            "editor.defaultFormatter": "esbenp.prettier-vscode",
+            "editor.formatOnSave": true
+        }),
+    );
+    Ok(())
 }
 
 fn set_rust_analyzer_excludes(
@@ -104,6 +119,20 @@ mod tests {
             json!({
                 "editor.formatOnSave": true,
                 "rust-analyzer.files.exclude": ["bin/macos-app", "bin/windows-app"]
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn xml_files_use_prettier_on_save() -> Result<()> {
+        let mut settings = json!({});
+        set_xml_format_on_save(&mut settings)?;
+        assert_eq!(
+            settings["[xml]"],
+            json!({
+                "editor.defaultFormatter": "esbenp.prettier-vscode",
+                "editor.formatOnSave": true
             })
         );
         Ok(())

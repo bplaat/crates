@@ -2,9 +2,15 @@
     "printWidth": 120,
     "tabWidth": 4,
     "singleQuote": true,
-    "plugins": ["@ianvs/prettier-plugin-sort-imports"],
+    "plugins": ["@ianvs/prettier-plugin-sort-imports", "@prettier/plugin-xml"],
     "importOrder": ["<BUILTIN_MODULES>", "<THIRD_PARTY_MODULES>", "^[.]"],
     "overrides": [
+        {
+            "files": "*.svg",
+            "options": {
+                "parser": "html"
+            }
+        },
         {
             "files": "*.{yml,yaml}",
             "options": {
