@@ -17,7 +17,8 @@ workspace = true
 
 [dependencies]
 anyhow = "1"
-bwebview = { path = "../../lib/bwebview", features = ["progress_bar", "rust-embed"] }
+bwindow = { path = "../../lib/bwindow", features = ["progress_bar"] }
+bwebview = { path = "../../lib/bwebview", features = [ "rust-embed"] }
 glob = "0.3"
 rust-embed = { path = "../../lib/rust-embed" }
 serde = { version = "1.0", features = ["derive"] }

@@ -12,7 +12,7 @@
 
 use std::ffi::c_void;
 
-use super::win32::*;
+use bwindow::ffi::*;
 
 #[repr(C)]
 pub(crate) struct EventRegistrationToken {
@@ -172,6 +172,10 @@ pub(crate) struct ICoreWebView2Controller {
 }
 
 impl ICoreWebView2Controller {
+    pub(crate) unsafe fn Close(&self) -> HRESULT {
+        unsafe { ((*self.lpVtbl).Close)(self as *const _ as *mut _) }
+    }
+
     pub(crate) unsafe fn QueryInterface(
         &self,
         riid: *const GUID,
@@ -212,7 +216,8 @@ pub(crate) struct ICoreWebView2ControllerVtbl {
     padding2: [usize; 1],
     put_Bounds:
         unsafe extern "system" fn(This: *mut ICoreWebView2Controller, bounds: RECT) -> HRESULT,
-    padding3: [usize; 18],
+    padding3: [usize; 17],
+    Close: unsafe extern "system" fn(This: *mut ICoreWebView2Controller) -> HRESULT,
     get_CoreWebView2: unsafe extern "system" fn(
         This: *mut ICoreWebView2Controller,
         webview: *mut *mut ICoreWebView2,
@@ -1126,3 +1131,52 @@ pub(crate) struct ICoreWebView2WebResourceResponseVtbl {
     pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
     pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
 }
+
+pub(crate) const IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler: GUID = GUID {
+    data1: 0x6c4819f3,
+    data2: 0xc9b7,
+    data3: 0x4260,
+    data4: [0x81, 0x27, 0xc9, 0xf5, 0xbd, 0xe7, 0xf6, 0x8c],
+};
+
+pub(crate) const IID_ICoreWebView2WebResourceRequestedEventHandler: GUID = GUID {
+    data1: 0xab00b74c,
+    data2: 0x15f1,
+    data3: 0x4646,
+    data4: [0x80, 0xe8, 0xe7, 0x63, 0x41, 0xd2, 0x5d, 0x71],
+};
+
+pub(crate) const IID_ICoreWebView2NavigationStartingEventHandler: GUID = GUID {
+    data1: 0x9adbe429,
+    data2: 0xf36d,
+    data3: 0x432b,
+    data4: [0x9d, 0xdc, 0xf8, 0x88, 0x1f, 0xbd, 0x76, 0xe3],
+};
+
+pub(crate) const IID_ICoreWebView2NavigationCompletedEventHandler: GUID = GUID {
+    data1: 0xd33a35bf,
+    data2: 0x1c49,
+    data3: 0x4f98,
+    data4: [0x93, 0xab, 0x00, 0x6e, 0x05, 0x33, 0xfe, 0x1c],
+};
+
+pub(crate) const IID_ICoreWebView2DocumentTitleChangedEventHandler: GUID = GUID {
+    data1: 0xf5f2b923,
+    data2: 0x953e,
+    data3: 0x4042,
+    data4: [0x9f, 0x95, 0xf3, 0xa1, 0x18, 0xe1, 0xaf, 0xd4],
+};
+
+pub(crate) const IID_ICoreWebView2NewWindowRequestedEventHandler: GUID = GUID {
+    data1: 0xd4c185fe,
+    data2: 0xc81c,
+    data3: 0x4989,
+    data4: [0x97, 0xaf, 0x2d, 0x3f, 0xa7, 0xab, 0x56, 0x51],
+};
+
+pub(crate) const IID_ICoreWebView2WebMessageReceivedEventHandler: GUID = GUID {
+    data1: 0x57213f19,
+    data2: 0x00e6,
+    data3: 0x49fa,
+    data4: [0x8e, 0x07, 0x89, 0x8e, 0xa0, 0x1e, 0xcb, 0xd2],
+};

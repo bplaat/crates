@@ -8,8 +8,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use super::gdk::GdkRGBA;
-use super::glib::GInputStream;
+use bwindow::ffi::{GInputStream, GdkRGBA};
 
 // MARK: Soup
 #[repr(C)]
@@ -17,6 +16,7 @@ pub(crate) struct SoupMessageHeaders([u8; 0]);
 pub(crate) const SOUP_MESSAGE_HEADERS_RESPONSE: i32 = 1;
 // WebKitGTK 4.0 uses libsoup 2.4; WebKitGTK 4.1 uses libsoup 3.0.
 unsafe extern "C" {
+    pub(crate) fn webkit_web_view_stop_loading(webview: *mut WebKitWebView);
     pub(crate) fn soup_message_headers_new(r#type: i32) -> *mut SoupMessageHeaders;
     pub(crate) fn soup_message_headers_foreach(
         headers: *mut SoupMessageHeaders,

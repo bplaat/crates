@@ -6,7 +6,8 @@
 
 //! A bwebview file drop example
 
-use bwebview::{Event, EventLoop, Theme, WebviewBuilder, WindowBuilder, WindowEvent};
+use bwebview::WebviewBuilder;
+use bwindow::{Event, EventLoop, Theme, WindowBuilder, WindowEvent};
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -50,7 +51,7 @@ window.ipc.addEventListener('message', e => {
         .build();
 
     event_loop.run(move |event| {
-        if let Event::Window(WindowEvent::DroppedFile(path)) = event {
+        if let Event::Window(_, WindowEvent::DroppedFile(path)) = event {
             webview.send_ipc_message(path.to_string_lossy());
         }
     });

@@ -7,10 +7,10 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use bwebview::{
+use bwebview::{WebviewBuilder, WebviewEvent};
+use bwindow::{
     Event, EventLoopBuilder, FileDialog, LogicalSize, MessageButtons, MessageDialog,
-    MessageDialogResult, MessageLevel, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
-    WindowEvent,
+    MessageDialogResult, MessageLevel, Theme, WindowBuilder, WindowEvent,
 };
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -88,15 +88,20 @@ enum IpcMessage {
 }
 
 // MARK: Main
+pub(crate) enum AppEvent {
+    Webview(bwindow::WindowId, WebviewEvent),
+}
+
 fn main() {
     let startup_path = std::env::args().nth(1);
     #[allow(unused_mut)]
     let mut event_loop_builder = EventLoopBuilder::new()
+        .with_user_event::<AppEvent>()
         .app_id("nl", "bplaat", "PixelFontEditor")
         .single_instance(false);
     #[cfg(target_os = "macos")]
     {
-        use bwebview::{Accelerator, KeyCode, MenuBarBuilder, MenuBuilder, MenuItem, Modifiers};
+        use bwindow::{Accelerator, KeyCode, MenuBarBuilder, MenuBuilder, MenuItem, Modifiers};
 
         event_loop_builder = event_loop_builder.macos_set_menu(
             MenuBarBuilder::new()
@@ -217,6 +222,7 @@ fn main() {
         .build();
 
     let mut webview = WebviewBuilder::new(&window)
+        .on_event(event_loop.create_proxy(), AppEvent::Webview)
         .load_rust_embed::<WebAssets>()
         .build();
 
@@ -225,7 +231,8 @@ fn main() {
     #[cfg(target_os = "macos")]
     let mut pending_menu_action: Option<String> = None;
     event_loop.run(move |event| {
-        if let Event::Webview(WebviewEvent::PageLoadStart) = &event {
+        if let Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageLoadStart)) = &event
+        {
             page_ready = false;
         }
         #[cfg(target_os = "macos")]
@@ -242,7 +249,11 @@ fn main() {
                 pending_open_path = Some(path);
             }
         }
-        if let Event::Webview(WebviewEvent::PageTitleChange(title)) = &event {
+        if let Event::UserEvent(AppEvent::Webview(
+            _window_id,
+            WebviewEvent::PageTitleChange(title),
+        )) = &event
+        {
             window.set_title(title);
         }
         #[cfg(target_os = "macos")]
@@ -258,8 +269,8 @@ fn main() {
                 pending_menu_action = Some(action.clone());
             }
         }
-        if let Event::Window(WindowEvent::CloseRequested(request)) = &event {
-            request.prevent_close();
+        if let Event::Window(_, WindowEvent::CloseRequested(request)) = &event {
+            request.prevent_default();
             if page_ready {
                 webview.send_ipc_message(
                     serde_json::to_string(&IpcMessage::CloseRequested)
@@ -269,7 +280,7 @@ fn main() {
                 window.close();
             }
         }
-        if let Event::Window(WindowEvent::DroppedFile(path)) = &event {
+        if let Event::Window(_, WindowEvent::DroppedFile(path)) = &event {
             let path = path.to_string_lossy().into_owned();
             if page_ready {
                 webview.send_ipc_message(
@@ -280,7 +291,11 @@ fn main() {
                 pending_open_path = Some(path);
             }
         }
-        if let Event::Webview(WebviewEvent::MessageReceive(message)) = event {
+        if let Event::UserEvent(AppEvent::Webview(
+            _window_id,
+            WebviewEvent::MessageReceive(message),
+        )) = event
+        {
             let Ok(ipc_message) = serde_json::from_str::<IpcMessage>(&message) else {
                 return;
             };

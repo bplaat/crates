@@ -16,8 +16,10 @@
 ))]
 use std::{thread, time::Duration};
 
+#[cfg(not(target_os = "macos"))]
+use bwebview::WebviewBuilder;
 #[cfg(windows)]
-use bwebview::WindowsProgressBarState;
+use bwindow::WindowsProgressBarState;
 #[cfg(any(
     target_os = "linux",
     target_os = "freebsd",
@@ -26,7 +28,7 @@ use bwebview::WindowsProgressBarState;
     target_os = "netbsd",
     windows
 ))]
-use bwebview::{Event, EventLoopBuilder, Theme, WebviewBuilder, WindowBuilder};
+use bwindow::{Event, EventLoopBuilder, Theme, WindowBuilder};
 
 #[cfg(target_os = "macos")]
 fn main() {}
@@ -41,6 +43,7 @@ fn main() {}
 ))]
 fn main() {
     let event_loop = EventLoopBuilder::new()
+        .with_user_event::<String>()
         .app_id("nl", "bplaat", "BwebviewProgressBarExample")
         .build();
 
@@ -78,19 +81,19 @@ body { font: 16px system-ui, sans-serif; height: 100vh; margin: 0; display: flex
         .name("progress-updater".to_string())
         .spawn(move || {
             loop {
-                progress.send_user_event("indeterminate".to_owned());
+                let _ = progress.send_user_event("indeterminate".to_owned());
                 thread::sleep(Duration::from_secs(2));
                 for step in 0..=100 {
                     if step == 45 {
-                        progress.send_user_event("paused:0.45".to_owned());
+                        let _ = progress.send_user_event("paused:0.45".to_owned());
                         thread::sleep(Duration::from_secs(1));
                     }
-                    progress.send_user_event(format!("normal:{}", f64::from(step) / 100.0));
+                    let _ = progress.send_user_event(format!("normal:{}", f64::from(step) / 100.0));
                     thread::sleep(Duration::from_millis(35));
                 }
-                progress.send_user_event("error:1".to_owned());
+                let _ = progress.send_user_event("error:1".to_owned());
                 thread::sleep(Duration::from_secs(1));
-                progress.send_user_event("none".to_owned());
+                let _ = progress.send_user_event("none".to_owned());
                 thread::sleep(Duration::from_secs(1));
             }
         })

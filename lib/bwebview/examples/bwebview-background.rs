@@ -6,7 +6,8 @@
 
 //! A bwebview background example
 
-use bwebview::{EventLoop, Theme, WebviewBuilder, WindowBuilder};
+use bwebview::WebviewBuilder;
+use bwindow::{EventLoop, Theme, WindowBuilder};
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -20,7 +21,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         window_builder =
-            window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
+            window_builder.macos_titlebar_style(bwindow::MacosTitlebarStyle::Transparent);
     }
     let window = window_builder.build();
 

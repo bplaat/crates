@@ -6,7 +6,8 @@
 
 //! A simple bwebview multi-monitor example
 
-use bwebview::{EventLoop, WebviewBuilder, WindowBuilder};
+use bwebview::WebviewBuilder;
+use bwindow::{EventLoop, WindowBuilder};
 
 fn main() {
     let event_loop = EventLoop::new();

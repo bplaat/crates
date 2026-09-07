@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-mod gdk;
-mod glib;
-mod gtk;
 mod webkit;
 
-pub(crate) use self::gdk::*;
-pub(crate) use self::glib::*;
-pub(crate) use self::gtk::*;
+pub(crate) use bwindow::ffi::*;
+
 pub(crate) use self::webkit::*;

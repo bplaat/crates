@@ -8,10 +8,8 @@ use std::collections::HashSet;
 use std::sync::{Arc, mpsc};
 use std::thread;
 
-use bwebview::{
-    Event, EventLoopBuilder, EventLoopProxy, LogicalSize, Theme, WebviewBuilder, WebviewEvent,
-    WindowBuilder,
-};
+use bwebview::{WebviewBuilder, WebviewEvent};
+use bwindow::{Event, EventLoopBuilder, EventLoopProxy, LogicalSize, Theme, WindowBuilder};
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +17,11 @@ use crate::args::{Args, Subcommand};
 use crate::downloader::{Downloader, ProgressEvent};
 use crate::services::metadata::MetadataService;
 use crate::structs::deezer::AlbumSmall;
+
+pub(crate) enum AppEvent {
+    Webview(bwindow::WindowId, WebviewEvent),
+    UserEvent(String),
+}
 
 #[derive(Embed)]
 #[folder = "web"]
@@ -129,9 +132,9 @@ fn gui_args(with_cover: bool) -> Args {
     }
 }
 
-fn send_push(proxy: &Arc<EventLoopProxy>, push: IpcPush) {
+fn send_push(proxy: &Arc<EventLoopProxy<AppEvent>>, push: IpcPush) {
     let json = serde_json::to_string(&push).expect("Failed to serialize IPC push");
-    proxy.send_user_event(json);
+    let _ = proxy.send_user_event(AppEvent::UserEvent(json));
 }
 
 fn build_search_results(
@@ -164,7 +167,7 @@ fn build_search_results(
     results
 }
 
-fn background_worker(cmd_rx: mpsc::Receiver<GuiCommand>, proxy: Arc<EventLoopProxy>) {
+fn background_worker(cmd_rx: mpsc::Receiver<GuiCommand>, proxy: Arc<EventLoopProxy<AppEvent>>) {
     let mut metadata_service = MetadataService::new();
     let mut downloader = Downloader::new();
     let (prog_tx, prog_rx) = mpsc::channel::<ProgressEvent>();
@@ -176,7 +179,7 @@ fn background_worker(cmd_rx: mpsc::Receiver<GuiCommand>, proxy: Arc<EventLoopPro
             for event in prog_rx {
                 if let Some(push) = Option::<IpcPush>::from(event) {
                     let json = serde_json::to_string(&push).expect("Failed to serialize IPC push");
-                    bridge_proxy.send_user_event(json);
+                    let _ = bridge_proxy.send_user_event(AppEvent::UserEvent(json));
                 }
             }
         })
@@ -227,6 +230,7 @@ fn background_worker(cmd_rx: mpsc::Receiver<GuiCommand>, proxy: Arc<EventLoopPro
 
 pub(crate) fn run() {
     let event_loop = EventLoopBuilder::new()
+        .with_user_event::<AppEvent>()
         .app_id("nl", "bplaat", "MusicDownloader")
         .build();
 
@@ -253,11 +257,12 @@ pub(crate) fn run() {
         .remember_window_state();
     #[cfg(target_os = "macos")]
     {
-        window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+        window_builder = window_builder.macos_titlebar_style(bwindow::MacosTitlebarStyle::Hidden);
     }
     let mut window = window_builder.build();
 
     let mut webview = WebviewBuilder::new(&window)
+        .on_event(event_loop.create_proxy(), AppEvent::Webview)
         .load_rust_embed::<WebAssets>()
         .build();
 
@@ -271,17 +276,19 @@ pub(crate) fn run() {
     );
 
     event_loop.run(move |event| match event {
-        Event::UserEvent(json) => webview.send_ipc_message(json),
-        Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
+        Event::UserEvent(AppEvent::UserEvent(json)) => webview.send_ipc_message(json),
+        Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageTitleChange(title))) => {
+            window.set_title(title)
+        }
         #[cfg(target_os = "macos")]
-        Event::Window(bwebview::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
+        Event::Window(_, bwindow::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
             if is_fullscreen {
                 webview.evaluate_script("document.body.classList.add('is-fullscreen');");
             } else {
                 webview.evaluate_script("document.body.classList.remove('is-fullscreen');");
             }
         }
-        Event::Webview(WebviewEvent::MessageReceive(msg)) => {
+        Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::MessageReceive(msg))) => {
             if let Ok(req) = serde_json::from_str::<IpcRequest>(&msg) {
                 let cmd = match req {
                     IpcRequest::Search { query } => GuiCommand::Search { query },

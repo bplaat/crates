@@ -4,42 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::path::PathBuf;
-
 use objc2::runtime::{AnyObject as Object, Bool};
-use objc2::{class, define_class, msg_send};
+use objc2::{class, define_class};
 
-use super::event_loop::send_event;
-use super::headers::{NS_DRAG_OPERATION_COPY, NSFilenamesPboardType, NSString};
-use crate::WindowEvent;
-
-/// Sends a `DroppedFile` event for every file in a completed drag operation
-pub(super) fn perform_file_drop(sender: *mut Object) -> Bool {
-    unsafe {
-        let pasteboard: *mut Object = msg_send![sender, draggingPasteboard];
-        let filenames: *mut Object =
-            msg_send![pasteboard, propertyListForType:NSFilenamesPboardType];
-        if filenames.is_null() {
-            return Bool::NO;
-        }
-        let count: usize = msg_send![filenames, count];
-        for index in 0..count {
-            let filename: NSString = msg_send![filenames, objectAtIndex:index];
-            send_event(crate::Event::Window(WindowEvent::DroppedFile(
-                PathBuf::from(filename.to_string()),
-            )));
-        }
-        Bool::YES
-    }
-}
-
-/// Registers a window or view for file drags
-pub(super) unsafe fn register_dragged_types(view: *mut Object) {
-    let dragged_types: *mut Object =
-        unsafe { msg_send![class!(NSArray), arrayWithObject:NSFilenamesPboardType] };
-    let _: () = unsafe { msg_send![view, registerForDraggedTypes:dragged_types] };
-}
-
+use super::headers::*;
 define_class!(
     #[unsafe(super(WKWebView))]
     #[name = "BWebviewDroppableWebview"]
@@ -63,7 +31,7 @@ define_class!(
 
         #[unsafe(method(performDragOperation:))]
         fn _perform_drag_operation(&self, sender: *mut Object) -> Bool {
-            perform_file_drop(sender)
+            unsafe { perform_file_drop(sender) }
         }
     }
 );

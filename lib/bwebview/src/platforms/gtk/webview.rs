@@ -4,46 +4,61 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::{Cell, RefCell};
 use std::env;
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr::{null, null_mut};
+use std::rc::Rc;
 
-use super::event_loop::send_event;
 #[cfg(feature = "file_drop")]
 use super::file_drop::{FileDropState, connect_signals};
 use super::headers::*;
-use super::window::PlatformWindow;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent, WindowEvent};
 
 pub(super) struct WebviewData {
+    pub(super) attachment: crate::WindowAttachment,
+    closed: Cell<bool>,
+    handler: RefCell<Option<crate::EventHandler>>,
+    manager: Cell<*mut WebKitUserContentManager>,
     pub(super) window: *mut GtkWindow,
-    pub(super) background_color: Option<u32>,
+    pub(super) background_color: Cell<Option<u32>>,
     #[cfg(feature = "file_drop")]
-    pub(super) allow_file_drop: bool,
-    #[cfg(feature = "file_drop")]
-    pub(super) file_drop: FileDropState,
-    pub(super) webview: *mut WebKitWebView,
+    pub(super) file_drop: RefCell<FileDropState>,
+    pub(super) webview: Cell<*mut WebKitWebView>,
 }
 
-pub(crate) struct PlatformWebview(pub(super) Box<WebviewData>);
+pub(crate) struct PlatformWebview(pub(super) Rc<WebviewData>);
 
 impl PlatformWebview {
-    pub(crate) fn new(window: &PlatformWindow) -> Self {
-        PlatformWebview(Box::new(WebviewData {
-            window: window.0.window,
-            background_color: window.0.background_color,
+    pub(crate) fn new(attachment: crate::WindowAttachment) -> Self {
+        let Some(crate::NativeWindowHandle::Gtk(window)) = (unsafe { attachment.native_handle() })
+        else {
+            panic!("invalid native window handle");
+        };
+        PlatformWebview(Rc::new(WebviewData {
+            closed: Cell::new(false),
+            handler: RefCell::new(None),
+            manager: Cell::new(null_mut()),
+            window: window.cast(),
+            background_color: Cell::new(attachment.background_color()),
             #[cfg(feature = "file_drop")]
-            allow_file_drop: window.0.allow_file_drop,
-            #[cfg(feature = "file_drop")]
-            file_drop: FileDropState::default(),
-            webview: null_mut(),
+            file_drop: RefCell::new(FileDropState::default()),
+            webview: Cell::new(null_mut()),
+            attachment,
         }))
     }
 }
 
 impl PlatformWebview {
     pub(crate) fn init_webview(&mut self, builder: WebviewBuilder<'_>) {
-        let data = &mut *self.0;
+        let data = &*self.0;
+        *data.handler.borrow_mut() = builder.event_handler;
+        let weak = Rc::downgrade(&self.0);
+        data.attachment.on_close(move || {
+            if let Some(data) = weak.upgrade() {
+                data.close();
+            }
+        });
         let is_wayland = unsafe {
             CStr::from_ptr(gdk_display_get_name(gdk_display_get_default()))
                 .to_string_lossy()
@@ -82,6 +97,7 @@ impl PlatformWebview {
             let script = super::super::IPC_SCRIPT;
 
             let user_content_manager = webkit_user_content_manager_new();
+            data.manager.set(user_content_manager);
             let script = CString::new(script).expect("Can't convert to CString");
             let user_script = webkit_user_script_new(
                 script.as_ptr(),
@@ -134,10 +150,10 @@ impl PlatformWebview {
             ) as *mut WebKitWebView;
             gtk_container_add(window as *mut GtkWidget, webview as *mut GtkWidget);
             #[cfg(feature = "file_drop")]
-            if data.allow_file_drop {
+            if data.attachment.allow_file_drop() {
                 connect_signals(webview, data);
             }
-            if data.background_color.is_some() {
+            if data.background_color.get().is_some() {
                 let rgba = GdkRGBA {
                     red: 0.0,
                     green: 0.0,
@@ -201,23 +217,97 @@ impl PlatformWebview {
             webview
         };
 
-        data.webview = webview;
+        data.webview.set(webview);
+        unsafe { g_object_ref(webview.cast()) };
 
         // Show the native window but keep partial WebKit paints hidden
         unsafe {
             gtk_widget_show_all(data.window as *mut GtkWidget);
-            gtk_widget_hide(data.webview as *mut GtkWidget);
+            gtk_widget_hide(data.webview.get() as *mut GtkWidget);
         }
+    }
+}
 
-        // Send window created event
-        send_event(crate::Event::Window(WindowEvent::Create));
+impl WebviewData {
+    fn emit(&self, event: WebviewEvent) {
+        let handler = self.handler.borrow().clone();
+        if let Some(handler) = handler {
+            handler(event);
+        }
+    }
+
+    // Registered signal data originates from Rc<WebviewData>. Retain it across
+    // callbacks because application code may drop the view while handling an event.
+    pub(super) unsafe fn retain(data: &Self) -> Rc<Self> {
+        let pointer = data as *const Self;
+        unsafe {
+            Rc::increment_strong_count(pointer);
+            Rc::from_raw(pointer)
+        }
+    }
+
+    fn close(&self) {
+        if self.closed.replace(true) {
+            return;
+        }
+        self.attachment.disconnect();
+        let view = self.webview.get();
+        let manager = self.manager.get();
+        let data = self as *const Self as *mut c_void;
+        unsafe {
+            if !manager.is_null() {
+                g_signal_handlers_disconnect_matched(
+                    manager.cast(),
+                    16,
+                    0,
+                    0,
+                    null_mut(),
+                    null_mut(),
+                    data,
+                );
+            }
+            if !view.is_null() {
+                g_signal_handlers_disconnect_matched(
+                    view.cast(),
+                    16,
+                    0,
+                    0,
+                    null_mut(),
+                    null_mut(),
+                    data,
+                );
+                webkit_web_view_stop_loading(view);
+                gtk_widget_destroy(view.cast());
+            }
+        }
+    }
+}
+
+impl Drop for WebviewData {
+    fn drop(&mut self) {
+        self.close();
+        if !self.webview.get().is_null() {
+            unsafe { g_object_unref(self.webview.get().cast()) };
+        }
+        if !self.manager.get().is_null() {
+            unsafe { g_object_unref(self.manager.get().cast()) };
+        }
+    }
+}
+
+impl Drop for PlatformWebview {
+    fn drop(&mut self) {
+        self.0.close();
     }
 }
 
 impl crate::WebviewInterface for PlatformWebview {
     fn url(&self) -> Option<String> {
+        if self.0.closed.get() {
+            return None;
+        }
         unsafe {
-            let url = webkit_web_view_get_uri(self.0.webview);
+            let url = webkit_web_view_get_uri(self.0.webview.get());
             if !url.is_null() {
                 Some(CStr::from_ptr(url).to_string_lossy().into_owned())
             } else {
@@ -227,12 +317,18 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 
     fn load_url(&mut self, url: impl AsRef<str>) {
+        if self.0.closed.get() {
+            return;
+        }
         let url = CString::new(url.as_ref()).expect("Can't convert to CString");
-        unsafe { webkit_web_view_load_uri(self.0.webview, url.as_ptr()) }
+        unsafe { webkit_web_view_load_uri(self.0.webview.get(), url.as_ptr()) }
     }
 
     fn set_background_color(&mut self, color: u32) {
-        self.0.background_color = Some(color);
+        if self.0.closed.get() {
+            return;
+        }
+        self.0.background_color.set(Some(color));
         unsafe {
             let rgba = GdkRGBA {
                 red: ((color >> 16) & 0xFF) as f64 / 255.0,
@@ -240,21 +336,27 @@ impl crate::WebviewInterface for PlatformWebview {
                 blue: (color & 0xFF) as f64 / 255.0,
                 alpha: 1.0,
             };
-            webkit_web_view_set_background_color(self.0.webview, &rgba);
+            webkit_web_view_set_background_color(self.0.webview.get(), &rgba);
         }
     }
 
     fn load_html(&mut self, html: impl AsRef<str>) {
+        if self.0.closed.get() {
+            return;
+        }
         let html = CString::new(html.as_ref()).expect("Can't convert to CString");
-        unsafe { webkit_web_view_load_html(self.0.webview, html.as_ptr(), null()) }
+        unsafe { webkit_web_view_load_html(self.0.webview.get(), html.as_ptr(), null()) }
     }
 
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
+        if self.0.closed.get() {
+            return;
+        }
         let script = script.as_ref();
         unsafe {
             cfg_select! {
                 webkit2gtk_4_1 => webkit_web_view_evaluate_javascript(
-                    self.0.webview,
+                    self.0.webview.get(),
                     script.as_ptr() as *const c_char,
                     script.len(),
                     null(),
@@ -266,7 +368,7 @@ impl crate::WebviewInterface for PlatformWebview {
                 _ => {
                     let script = CString::new(script).expect("Can't convert to CString");
                     webkit_web_view_run_javascript(
-                        self.0.webview,
+                        self.0.webview.get(),
                         script.as_ptr(),
                         null(),
                         null(),
@@ -278,9 +380,13 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 
     fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime) {
+        if self.0.closed.get() {
+            return;
+        }
         let script = CString::new(script.as_ref()).expect("Can't convert to CString");
         unsafe {
-            let user_content_manager = webkit_web_view_get_user_content_manager(self.0.webview);
+            let user_content_manager =
+                webkit_web_view_get_user_content_manager(self.0.webview.get());
             let user_script = webkit_user_script_new(
                 script.as_ptr(),
                 WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
@@ -299,35 +405,48 @@ impl crate::WebviewInterface for PlatformWebview {
 extern "C" fn webview_on_load_changed(
     webview: *mut WebKitWebView,
     event: i32,
-    _self: &mut WebviewData,
+    _self: &WebviewData,
 ) {
+    let owner = unsafe { WebviewData::retain(_self) };
+    let _self = &*owner;
+    if _self.closed.get() {
+        return;
+    }
     if event == WEBKIT_LOAD_STARTED {
-        send_event(crate::Event::Webview(WebviewEvent::PageLoadStart))
+        _self.emit(WebviewEvent::PageLoadStart)
     }
     if event == WEBKIT_LOAD_FINISHED {
         unsafe { gtk_widget_show(webview as *mut GtkWidget) };
-        send_event(crate::Event::Webview(WebviewEvent::PageLoadFinish))
+        _self.emit(WebviewEvent::PageLoadFinish)
     }
 }
 
 extern "C" fn webview_on_title_changed(
     webview: *mut WebKitWebView,
     _pspec: *const c_void,
-    _self: &mut WebviewData,
+    _self: &WebviewData,
 ) {
+    let owner = unsafe { WebviewData::retain(_self) };
+    let _self = &*owner;
+    if _self.closed.get() {
+        return;
+    }
     let title = unsafe { webkit_web_view_get_title(webview) };
     let title = unsafe { CStr::from_ptr(title) }.to_string_lossy();
-    send_event(crate::Event::Webview(WebviewEvent::PageTitleChange(
-        title.to_string(),
-    )));
+    _self.emit(WebviewEvent::PageTitleChange(title.to_string()));
 }
 
 extern "C" fn webview_on_navigation_policy_decision(
     _webview: *mut WebKitWebView,
     decision: *mut WebKitNavigationPolicyDecision,
     decision_type: i32,
-    _self: &mut WebviewData,
+    _self: &WebviewData,
 ) -> bool {
+    let owner = unsafe { WebviewData::retain(_self) };
+    let _self = &*owner;
+    if _self.closed.get() {
+        return false;
+    }
     if decision_type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION {
         let request = unsafe { webkit_navigation_policy_decision_get_request(decision) };
         let uri = unsafe { webkit_uri_request_get_uri(request) };
@@ -345,18 +464,28 @@ extern "C" fn webview_on_navigation_policy_decision(
 extern "C" fn webview_on_message_ipc(
     _manager: *mut WebKitUserContentManager,
     _message: *mut WebKitJavascriptResult,
-    _self: &mut WebviewData,
+    _self: &WebviewData,
 ) {
+    let owner = unsafe { WebviewData::retain(_self) };
+    let _self = &*owner;
+    if _self.closed.get() {
+        return;
+    }
     let message = js_result_to_string(_message);
-    send_event(crate::Event::Webview(WebviewEvent::MessageReceive(message)));
+    _self.emit(WebviewEvent::MessageReceive(message));
 }
 
 #[cfg(feature = "log")]
 extern "C" fn webview_on_message_console(
     _manager: *mut WebKitUserContentManager,
     _message: *mut WebKitJavascriptResult,
-    _self: &mut WebviewData,
+    _self: &WebviewData,
 ) {
+    let owner = unsafe { WebviewData::retain(_self) };
+    let _self = &*owner;
+    if _self.closed.get() {
+        return;
+    }
     let message = js_result_to_string(_message);
     let (level, message) = message.split_at(1);
     match level {

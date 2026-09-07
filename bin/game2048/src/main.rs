@@ -7,7 +7,8 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use bwebview::{EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WindowBuilder};
+use bwebview::WebviewBuilder;
+use bwindow::{EventLoopBuilder, LogicalSize, Theme, WindowBuilder};
 use rust_embed::Embed;
 
 #[derive(Embed)]
@@ -30,7 +31,7 @@ fn main() {
         .remember_window_state();
     #[cfg(target_os = "macos")]
     {
-        window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+        window_builder = window_builder.macos_titlebar_style(bwindow::MacosTitlebarStyle::Hidden);
     }
     let window = window_builder.build();
 

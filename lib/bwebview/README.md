@@ -2,7 +2,50 @@
 
 A cross-platform webview library for Rust with minimal dependencies.
 
-## Linux runtime dependencies
+Windows and the main event loop are provided by [bwindow](../bwindow). Use
+[bcanvas](../bcanvas) for native 2D content; browser-only applications do not need it.
+
+## Getting Started
+
+Map browser notifications into typed application messages:
+
+```rust,no_run
+use bwindow::{Event, EventLoopBuilder, WindowBuilder, WindowId};
+use bwebview::{WebviewBuilder, WebviewEvent};
+
+enum AppEvent {
+    Browser(WindowId, WebviewEvent),
+}
+
+let event_loop = EventLoopBuilder::new().with_user_event::<AppEvent>().build();
+let mut window = WindowBuilder::new().title("Browser").build();
+let _webview = WebviewBuilder::new(&window)
+    .on_event(event_loop.create_proxy(), AppEvent::Browser)
+    .load_url("https://example.com")
+    .build();
+
+event_loop.run(move |event| {
+    if let Event::UserEvent(AppEvent::Browser(id, WebviewEvent::PageTitleChange(title))) = event {
+        if id == window.id() {
+            window.set_title(title);
+        }
+    }
+});
+```
+
+Windowing and the `dialog`, `menu`, `progress_bar`, and `remember_window_state`
+features belong to `bwindow`. Browser notifications are optional when no mapper
+is installed. The `file_drop` feature forwards to
+`bwindow/file_drop` and also enables handling drops on browser content.
+
+A window accepts one content attachment. Closing or dropping the window tears
+down its browser content; later browser operations do nothing and `url()` returns
+`None`. The [lifecycle example](examples/bwebview-lifecycle.rs) exercises both drop
+orders and proxy delivery after the first window closes.
+See the [mixed-content example](examples/bwebview-canvas.rs) for browser and canvas
+windows sharing one event loop.
+
+## Linux Dependencies
 
 The Linux backend requires the GTK 3 and WebKitGTK runtime libraries.
 
@@ -46,7 +89,7 @@ sudo dnf install gtk3 webkit2gtk4.0
 | macOS       | WKWebView (WebKit)             | macOS 11.0+                               |
 | Linux/other | WebKitGTK (GTK 3 + WebKit2GTK) | See GTK tiers below                       |
 
-### Linux / GTK tiers
+### Linux / GTK Tiers
 
 The Linux backend automatically selects the best available WebKitGTK version at build time:
 
@@ -81,12 +124,8 @@ The Linux backend automatically selects the best available WebKitGTK version at 
 ## Features
 
 - **log** - Enables logging support by forwarding `console.*` calls to the `log` crate (default).
-- **remember_window_state** - Adds options for remembering the window position and size between launches (default).
 - **custom_protocol** - Adds support for serving content from custom URL schemes.
-- **dialog** - Adds support for native message and file dialogs.
 - **file_drop** - Adds support for dropping files onto the window, reported as `WindowEvent::DroppedFile`.
-- **menu** - Adds support for custom macOS menu bar entries, reported as `Event::MacosMenuItem`.
-- **progress_bar** - Adds support for Windows taskbar and GTK application launcher progress bars.
 - **rust-embed** - Adds support for serving embedded assets using the `rust-embed` crate.
 
 ## License

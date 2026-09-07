@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use bwebview::{EventLoopProxy, Window, WindowsProgressBarState};
+use bwindow::{EventLoopProxy, Window, WindowsProgressBarState};
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::Catalog;
@@ -82,9 +82,11 @@ pub(crate) enum ProgressBarState {
 
 pub(crate) const PROGRESS_EVENT_PREFIX: &str = "binman:progress:";
 
-pub(crate) fn send_progress(proxy: &EventLoopProxy, state: ProgressBarState) {
+pub(crate) fn send_progress(proxy: &EventLoopProxy<crate::AppEvent>, state: ProgressBarState) {
     if let Ok(json) = serde_json::to_string(&state) {
-        proxy.send_user_event(format!("{PROGRESS_EVENT_PREFIX}{json}"));
+        let _ = proxy.send_user_event(crate::AppEvent::UserEvent(format!(
+            "{PROGRESS_EVENT_PREFIX}{json}"
+        )));
     }
 }
 
@@ -105,15 +107,17 @@ pub(crate) fn update_progress(window: &mut Window, state: ProgressBarState) {
     }
 }
 
-pub(crate) fn send_push(proxy: &Arc<EventLoopProxy>, push: IpcPush<'_>) {
+pub(crate) fn send_push(proxy: &Arc<EventLoopProxy<crate::AppEvent>>, push: IpcPush<'_>) {
     match serde_json::to_string(&push) {
-        Ok(json) => proxy.send_user_event(json),
+        Ok(json) => {
+            let _ = proxy.send_user_event(crate::AppEvent::UserEvent(json));
+        }
         Err(error) => {
             let fallback = serde_json::to_string(&IpcPush::FatalError {
                 message: error.to_string(),
             })
             .expect("fatal error should serialize");
-            proxy.send_user_event(fallback);
+            let _ = proxy.send_user_event(crate::AppEvent::UserEvent(fallback));
         }
     }
 }
