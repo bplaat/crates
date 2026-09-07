@@ -8,3 +8,6 @@ bin/pixelfont/meta/macos/icon.icon/icon.json
 bin/reversi/meta/macos/icon.icon/icon.json
 bin/sequelexplorer/meta/macos/icon.icon/icon.json
 bin/bob/examples/bin/objc-bundle-xstreaks/icons/icon.icon/icon.json
+
+# External test fixture
+bin/macview/examples/tiger.svg

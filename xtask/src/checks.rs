@@ -81,7 +81,7 @@ impl Xtask {
         self.ensure_npm_deps()?;
         println!("Checking Prettier formatting...");
         let extensions = [
-            "md", "json", "yml", "yaml", "html", "css", "js", "jsx", "ts", "tsx",
+            "md", "json", "yml", "yaml", "html", "css", "js", "jsx", "ts", "tsx", "xml", "svg",
         ];
         let files = self
             .source_files(&extensions)?
