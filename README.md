@@ -11,6 +11,8 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [bsql](lib/bsql) A simple and minimal Rust SQLite and MySQL library with an ergonomic API
 - [bsql_derive](lib/bsql_derive) The derive macros for the [bsql](lib/bsql) crate
 - [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
+- [bwindow](lib/bwindow) Native windows and one typed main event loop
+- [bcanvas](lib/bcanvas) Native 2D canvas content, without a browser dependency
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
 - [image](lib/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
 - [js](lib/js) A WIP JavaScript interpreter
@@ -29,7 +31,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 
 ### Apps
 
-Some desktop apps written with the [bwebview](lib/bwebview) library.
+Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebview), and [bcanvas](lib/bcanvas) libraries.
 
 <table>
 <tr>
@@ -57,14 +59,14 @@ Some desktop apps written with the [bwebview](lib/bwebview) library.
         ManExplorer
     </a>
 </td>
-</tr>
-<tr>
 <td width="100" align="center">
     <a href="./bin/navidrome">
         <img src="bin/navidrome/docs/images/icon.svg" alt="Navidrome icon" width="48" height="48"/><br/>
         Navidrome
     </a>
 </td>
+</tr>
+<tr>
 <td width="100" align="center">
     <a href="./bin/music-dl">
         <img src="bin/music-dl/docs/images/icon.svg" alt="Music Downloader icon" width="48" height="48"/><br/>
@@ -78,11 +80,18 @@ Some desktop apps written with the [bwebview](lib/bwebview) library.
     </a>
 </td>
 <td width="100" align="center">
+    <a href="./bin/reversi">
+        <img src="bin/reversi/docs/images/icon.svg" alt="Reversi icon" width="48" height="48"/><br/>
+        Reversi
+    </a>
+</td>
+<td width="100" align="center">
     <a href="./bin/sequelexplorer">
         <img src="bin/sequelexplorer/docs/images/icon.svg" alt="Sequel Explorer icon" width="48" height="48"/><br/>
         Sequel Explorer
     </a>
 </td>
+<td width="100"></td>
 </tr>
 </table>
 
@@ -94,6 +103,7 @@ Some desktop apps written with the [bwebview](lib/bwebview) library.
 - [Music Downloader](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](bin/pixelfont) An 8x8 pixel font editor
 - [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
+- [Reversi](bin/reversi) A native canvas board game with a background AI
 - [Sequel Explorer](bin/sequelexplorer) A read-only SQLite and MySQL database GUI viewer
 
 ### Tools / Websites

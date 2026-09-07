@@ -1,0 +1,38 @@
+{
+    "fill": {
+        "linear-gradient": ["srgb:0.11765,0.58824,0.36471,1.00000", "srgb:0.04314,0.34118,0.20392,1.00000"],
+        "orientation": {
+            "start": { "x": 0.2, "y": 0 },
+            "stop": { "x": 0.8, "y": 1 }
+        }
+    },
+    "groups": [
+        {
+            "layers": [{ "image-name": "grid.svg", "name": "Board grid" }],
+            "name": "Board",
+            "shadow": { "kind": "neutral", "opacity": 0 },
+            "specular-specializations": [{ "value": false }],
+            "translucency": { "enabled": false, "value": 0.5 }
+        },
+        {
+            "layers": [
+                { "image-name": "dark-discs.svg", "name": "Dark discs" },
+                { "image-name": "light-discs.svg", "name": "Light discs" }
+            ],
+            "name": "Playing pieces",
+            "shadow-specializations": [
+                { "value": { "kind": "neutral", "opacity": 0.5 } },
+                {
+                    "appearance": "dark",
+                    "value": { "kind": "neutral", "opacity": 0.35 }
+                }
+            ],
+            "specular-specializations": [{ "value": false }, { "appearance": "tinted", "value": true }],
+            "translucency-specializations": [
+                { "value": { "enabled": false, "value": 0.5 } },
+                { "appearance": "tinted", "value": { "enabled": true, "value": 0.15 } }
+            ]
+        }
+    ],
+    "supported-platforms": { "squares": ["macOS"] }
+}
