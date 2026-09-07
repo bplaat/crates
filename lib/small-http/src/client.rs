@@ -224,18 +224,21 @@ mod test {
         // Start test server
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let server_addr = listener.local_addr().unwrap();
-        thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            loop {
-                let mut buf = [0; 512];
-                _ = stream.read(&mut buf);
-                stream
+        thread::Builder::new()
+            .name("test-http-server".to_string())
+            .spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                loop {
+                    let mut buf = [0; 512];
+                    _ = stream.read(&mut buf);
+                    stream
                     .write_all(
                         b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: closed\r\n\r\ntest",
                     )
                     .unwrap();
-            }
-        });
+                }
+            })
+            .expect("Failed to spawn test HTTP server thread");
 
         // Create client and fetch multiple requests
         let mut client = Client::new();

@@ -637,14 +637,17 @@ mod test {
     fn fetch_from_local_server(response: &'static [u8]) -> Response {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let server_addr = listener.local_addr().unwrap();
-        let server = thread::spawn(move || {
-            let (stream, client_addr) = listener.accept().unwrap();
-            let mut reader = std::io::BufReader::new(stream);
-            Request::read_from_reader(&mut reader, client_addr).unwrap();
-            let mut stream = reader.into_inner();
-            stream.write_all(response).unwrap();
-            stream.flush().unwrap();
-        });
+        let server = thread::Builder::new()
+            .name("test-http-server".to_string())
+            .spawn(move || {
+                let (stream, client_addr) = listener.accept().unwrap();
+                let mut reader = std::io::BufReader::new(stream);
+                Request::read_from_reader(&mut reader, client_addr).unwrap();
+                let mut stream = reader.into_inner();
+                stream.write_all(response).unwrap();
+                stream.flush().unwrap();
+            })
+            .expect("Failed to spawn test HTTP server thread");
 
         let res = Request::get(format!("http://{server_addr}/"))
             .fetch()

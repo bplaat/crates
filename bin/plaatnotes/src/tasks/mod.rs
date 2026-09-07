@@ -16,15 +16,21 @@ pub(crate) mod ip_database;
 pub(crate) fn start_task_runner(ctx: Context, mmdb_path: String) {
     // Startup task: download and load the DB-IP database
     let ctx_clone = ctx.clone();
-    thread::spawn(move || ip_database::run(mmdb_path, ctx_clone));
+    thread::Builder::new()
+        .name("ip-database".to_string())
+        .spawn(move || ip_database::run(mmdb_path, ctx_clone))
+        .expect("Failed to spawn IP database thread");
 
     // Background task: clear trashed notes
-    thread::spawn(move || {
-        loop {
-            if let Err(e) = clear_trashed_notes::run(&ctx) {
-                log::error!("Failed to clear trashed notes: {e}");
+    thread::Builder::new()
+        .name("trash-cleaner".to_string())
+        .spawn(move || {
+            loop {
+                if let Err(e) = clear_trashed_notes::run(&ctx) {
+                    log::error!("Failed to clear trashed notes: {e}");
+                }
+                thread::sleep(Duration::from_secs(TASK_RUNNER_INTERVAL_SECONDS));
             }
-            thread::sleep(Duration::from_secs(TASK_RUNNER_INTERVAL_SECONDS));
-        }
-    });
+        })
+        .expect("Failed to spawn trash cleaner thread");
 }

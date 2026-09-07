@@ -74,24 +74,27 @@ body { font: 16px system-ui, sans-serif; height: 100vh; margin: 0; display: flex
         )
         .build();
 
-    thread::spawn(move || {
-        loop {
-            progress.send_user_event("indeterminate".to_owned());
-            thread::sleep(Duration::from_secs(2));
-            for step in 0..=100 {
-                if step == 45 {
-                    progress.send_user_event("paused:0.45".to_owned());
-                    thread::sleep(Duration::from_secs(1));
+    thread::Builder::new()
+        .name("progress-updater".to_string())
+        .spawn(move || {
+            loop {
+                progress.send_user_event("indeterminate".to_owned());
+                thread::sleep(Duration::from_secs(2));
+                for step in 0..=100 {
+                    if step == 45 {
+                        progress.send_user_event("paused:0.45".to_owned());
+                        thread::sleep(Duration::from_secs(1));
+                    }
+                    progress.send_user_event(format!("normal:{}", f64::from(step) / 100.0));
+                    thread::sleep(Duration::from_millis(35));
                 }
-                progress.send_user_event(format!("normal:{}", f64::from(step) / 100.0));
-                thread::sleep(Duration::from_millis(35));
+                progress.send_user_event("error:1".to_owned());
+                thread::sleep(Duration::from_secs(1));
+                progress.send_user_event("none".to_owned());
+                thread::sleep(Duration::from_secs(1));
             }
-            progress.send_user_event("error:1".to_owned());
-            thread::sleep(Duration::from_secs(1));
-            progress.send_user_event("none".to_owned());
-            thread::sleep(Duration::from_secs(1));
-        }
-    });
+        })
+        .expect("Failed to spawn progress updater thread");
 
     event_loop.run(move |event| {
         let _ = &_webview;

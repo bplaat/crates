@@ -44,14 +44,18 @@ pub(crate) fn cancellable_output(
     let mut child = command.spawn()?;
     let mut stdout = child.stdout.take().expect("stdout should be piped");
     let mut stderr = child.stderr.take().expect("stderr should be piped");
-    let stdout_reader = thread::spawn(move || {
-        let mut bytes = Vec::new();
-        stdout.read_to_end(&mut bytes).map(|_| bytes)
-    });
-    let stderr_reader = thread::spawn(move || {
-        let mut bytes = Vec::new();
-        stderr.read_to_end(&mut bytes).map(|_| bytes)
-    });
+    let stdout_reader = thread::Builder::new()
+        .name("process-stdout-reader".to_string())
+        .spawn(move || {
+            let mut bytes = Vec::new();
+            stdout.read_to_end(&mut bytes).map(|_| bytes)
+        })?;
+    let stderr_reader = thread::Builder::new()
+        .name("process-stderr-reader".to_string())
+        .spawn(move || {
+            let mut bytes = Vec::new();
+            stderr.read_to_end(&mut bytes).map(|_| bytes)
+        })?;
 
     loop {
         if cancelled.load(Ordering::Acquire) {

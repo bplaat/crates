@@ -570,17 +570,22 @@ mod test {
         // Create WebSocket server
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let addr = listener.local_addr().unwrap();
-        thread::spawn(move || {
-            small_http::serve(listener, |req| {
-                upgrade(req, |mut ws| {
-                    loop {
-                        if let Message::Text(text) = ws.recv().expect("Failed to receive message") {
-                            ws.send(Message::Text(text)).unwrap();
+        thread::Builder::new()
+            .name("test-websocket-server".to_string())
+            .spawn(move || {
+                small_http::serve(listener, |req| {
+                    upgrade(req, |mut ws| {
+                        loop {
+                            if let Message::Text(text) =
+                                ws.recv().expect("Failed to receive message")
+                            {
+                                ws.send(Message::Text(text)).unwrap();
+                            }
                         }
-                    }
-                })
-            });
-        });
+                    })
+                });
+            })
+            .expect("Failed to spawn test WebSocket server thread");
 
         // Connect WebSocket client
         let mut ws = WebSocket::connect(format!("ws://{}:{}/", addr.ip(), addr.port())).unwrap();
@@ -653,7 +658,9 @@ mod test {
     fn test_connect_preserves_frame_read_with_handshake() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let address = listener.local_addr().unwrap();
-        thread::spawn(move || {
+        thread::Builder::new()
+            .name("test-websocket-handshake-server".to_string())
+            .spawn(move || {
             use std::io::{BufRead, BufReader};
 
             let (stream, _) = listener.accept().unwrap();
@@ -680,7 +687,8 @@ mod test {
             .into_bytes();
             response.extend(make_frame(0x1, b"ready"));
             reader.get_mut().write_all(&response).unwrap();
-        });
+            })
+            .expect("Failed to spawn test WebSocket handshake server thread");
 
         let mut websocket = WebSocket::connect(format!("ws://{address}/")).unwrap();
         assert!(matches!(
@@ -792,10 +800,13 @@ mod test {
         let frame = make_frame(0x1, b"split message");
         let split = 4;
         sender.write_all(&frame[..split]).unwrap();
-        thread::spawn(move || {
-            thread::sleep(Duration::from_millis(10));
-            sender.write_all(&frame[split..]).unwrap();
-        });
+        thread::Builder::new()
+            .name("test-frame-writer".to_string())
+            .spawn(move || {
+                thread::sleep(Duration::from_millis(10));
+                sender.write_all(&frame[split..]).unwrap();
+            })
+            .expect("Failed to spawn test frame writer thread");
 
         assert!(matches!(
             websocket.recv().unwrap(),
@@ -883,11 +894,14 @@ mod test {
         sender.write_all(&frame[..2]).unwrap();
         assert!(websocket.recv_non_blocking().unwrap().is_none());
 
-        thread::spawn(move || {
-            thread::sleep(Duration::from_millis(10));
-            sender.write_all(&frame[2..]).unwrap();
-            sender.shutdown(Shutdown::Write).unwrap();
-        });
+        thread::Builder::new()
+            .name("test-delayed-frame-writer".to_string())
+            .spawn(move || {
+                thread::sleep(Duration::from_millis(10));
+                sender.write_all(&frame[2..]).unwrap();
+                sender.shutdown(Shutdown::Write).unwrap();
+            })
+            .expect("Failed to spawn test delayed frame writer thread");
         assert!(matches!(
             websocket.recv().unwrap(),
             Message::Text(text) if text == "delayed"

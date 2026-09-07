@@ -43,15 +43,18 @@ fn main() {
     let worker_proxy = Arc::clone(&proxy);
     let worker_cancelled = Arc::clone(&cancelled);
     let worker_operation_state = Arc::clone(&operation_state);
-    thread::spawn(move || {
-        worker::run(
-            receiver,
-            worker_proxy,
-            worker_cancelled,
-            worker_operation_state,
-            is_administrator,
-        );
-    });
+    thread::Builder::new()
+        .name("worker".to_string())
+        .spawn(move || {
+            worker::run(
+                receiver,
+                worker_proxy,
+                worker_cancelled,
+                worker_operation_state,
+                is_administrator,
+            );
+        })
+        .expect("Failed to spawn worker thread");
 
     let mut window = WindowBuilder::new()
         .title("Binman")

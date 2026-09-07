@@ -1544,27 +1544,31 @@ fn main() {
                     let event_loop_proxy = Arc::clone(&event_loop_proxy);
                     let mysql_connection_pending = Arc::clone(&mysql_connection_pending);
                     let connection_generation = Arc::clone(&connection_generation);
-                    std::thread::spawn(move || {
-                        let _pending_guard = MysqlConnectionPendingGuard(mysql_connection_pending);
-                        let request_id = request.request_id;
-                        let response =
-                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                open_mysql(request, &state, &connection_generation)
-                            }))
-                            .unwrap_or_else(|_| {
-                                IpcMessage::OpenMysqlResponse {
-                                    request_id,
-                                    ok: false,
-                                    error: Some("Failed to open MySQL connection".to_string()),
-                                    credential_saved: false,
-                                    credential_error: None,
-                                }
-                            });
-                        event_loop_proxy.send_user_event(
-                            serde_json::to_string(&response)
-                                .expect("Failed to serialize MySQL response"),
-                        );
-                    });
+                    std::thread::Builder::new()
+                        .name("mysql-connection".to_string())
+                        .spawn(move || {
+                            let _pending_guard =
+                                MysqlConnectionPendingGuard(mysql_connection_pending);
+                            let request_id = request.request_id;
+                            let response =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    open_mysql(request, &state, &connection_generation)
+                                }))
+                                .unwrap_or_else(|_| {
+                                    IpcMessage::OpenMysqlResponse {
+                                        request_id,
+                                        ok: false,
+                                        error: Some("Failed to open MySQL connection".to_string()),
+                                        credential_saved: false,
+                                        credential_error: None,
+                                    }
+                                });
+                            event_loop_proxy.send_user_event(
+                                serde_json::to_string(&response)
+                                    .expect("Failed to serialize MySQL response"),
+                            );
+                        })
+                        .expect("Failed to spawn MySQL connection thread");
                 }
                 IpcMessage::SelectMysqlDatabase {
                     request_id,

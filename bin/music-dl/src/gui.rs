@@ -170,14 +170,17 @@ fn background_worker(cmd_rx: mpsc::Receiver<GuiCommand>, proxy: Arc<EventLoopPro
     let (prog_tx, prog_rx) = mpsc::channel::<ProgressEvent>();
 
     let bridge_proxy = Arc::clone(&proxy);
-    thread::spawn(move || {
-        for event in prog_rx {
-            if let Some(push) = Option::<IpcPush>::from(event) {
-                let json = serde_json::to_string(&push).expect("Failed to serialize IPC push");
-                bridge_proxy.send_user_event(json);
+    thread::Builder::new()
+        .name("progress-bridge".to_string())
+        .spawn(move || {
+            for event in prog_rx {
+                if let Some(push) = Option::<IpcPush>::from(event) {
+                    let json = serde_json::to_string(&push).expect("Failed to serialize IPC push");
+                    bridge_proxy.send_user_event(json);
+                }
             }
-        }
-    });
+        })
+        .expect("Failed to spawn progress bridge thread");
 
     for cmd in cmd_rx {
         match cmd {
@@ -231,7 +234,10 @@ pub(crate) fn run() {
 
     let (cmd_tx, cmd_rx) = mpsc::channel::<GuiCommand>();
     let worker_proxy = Arc::clone(&proxy);
-    thread::spawn(move || background_worker(cmd_rx, worker_proxy));
+    thread::Builder::new()
+        .name("background-worker".to_string())
+        .spawn(move || background_worker(cmd_rx, worker_proxy))
+        .expect("Failed to spawn background worker thread");
 
     #[allow(unused_mut)]
     let mut window_builder = WindowBuilder::new()

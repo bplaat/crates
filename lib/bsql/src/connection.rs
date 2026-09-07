@@ -1172,24 +1172,30 @@ mod tests {
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
         let first = database.clone();
-        let first_writer = std::thread::spawn(move || {
-            first.transaction(|transaction| -> Result<(), StatementError> {
-                transaction.execute("UPDATE items SET value = 1", ())?;
-                started_tx.send(()).expect("signal transaction start");
-                release_rx.recv().expect("release transaction");
-                Ok(())
+        let first_writer = std::thread::Builder::new()
+            .name("test-first-writer".to_string())
+            .spawn(move || {
+                first.transaction(|transaction| -> Result<(), StatementError> {
+                    transaction.execute("UPDATE items SET value = 1", ())?;
+                    started_tx.send(()).expect("signal transaction start");
+                    release_rx.recv().expect("release transaction");
+                    Ok(())
+                })
             })
-        });
+            .expect("spawn first writer");
         started_rx.recv_timeout(Duration::from_secs(1))?;
 
         let (attempting_tx, attempting_rx) = mpsc::channel();
         let (finished_tx, finished_rx) = mpsc::channel();
         let second = database.clone();
-        let second_writer = std::thread::spawn(move || {
-            attempting_tx.send(()).expect("signal writer attempt");
-            let result = second.execute("UPDATE items SET value = 2", ());
-            finished_tx.send(result).expect("signal writer completion");
-        });
+        let second_writer = std::thread::Builder::new()
+            .name("test-second-writer".to_string())
+            .spawn(move || {
+                attempting_tx.send(()).expect("signal writer attempt");
+                let result = second.execute("UPDATE items SET value = 2", ());
+                finished_tx.send(result).expect("signal writer completion");
+            })
+            .expect("spawn second writer");
         attempting_rx.recv_timeout(Duration::from_secs(1))?;
         assert!(finished_rx.recv_timeout(Duration::from_millis(50)).is_err());
         assert_eq!(

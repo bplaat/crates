@@ -39,7 +39,10 @@ pub fn serve_single_threaded(
 
                 // If the response has a takeover function, start thread and move tcp stream
                 if let Some(takeover) = response.takeover.take() {
-                    std::thread::spawn(move || takeover(reader));
+                    std::thread::Builder::new()
+                        .name("http-takeover".to_string())
+                        .spawn(move || takeover(reader))
+                        .expect("Failed to spawn HTTP takeover thread");
                 }
             }
             Err(err) => {
@@ -116,7 +119,10 @@ pub fn serve_with_options(
 
                         // If the response has a takeover function, start thread and move tcp stream
                         if let Some(takeover) = response.takeover.take() {
-                            std::thread::spawn(move || takeover(reader));
+                            std::thread::Builder::new()
+                                .name("http-takeover".to_string())
+                                .spawn(move || takeover(reader))
+                                .expect("Failed to spawn HTTP takeover thread");
                             return;
                         }
 
@@ -171,12 +177,19 @@ mod test {
     use crate::enums::Status;
     use crate::request::Request;
 
+    fn spawn_test_thread(name: &str, function: impl FnOnce() + Send + 'static) {
+        thread::Builder::new()
+            .name(name.to_string())
+            .spawn(function)
+            .expect("Failed to spawn test thread");
+    }
+
     #[test]
     fn test_serve_single_threaded() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("Failed to bind address");
         let addr = listener.local_addr().unwrap();
 
-        thread::spawn(move || {
+        spawn_test_thread("test-single-threaded-server", move || {
             serve_single_threaded(listener, |_req| Response::with_status(Status::Ok));
         });
 
@@ -198,7 +211,7 @@ mod test {
         let addr = listener.local_addr().unwrap();
         let (sender, receiver) = mpsc::channel();
 
-        thread::spawn(move || {
+        spawn_test_thread("test-takeover-server", move || {
             serve_single_threaded(listener, move |_req| {
                 let sender = sender.clone();
                 Response::with_status(Status::SwitchingProtocols).takeover(move |mut reader| {
@@ -226,7 +239,7 @@ mod test {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("Failed to bind address");
         let addr = listener.local_addr().unwrap();
 
-        thread::spawn(move || {
+        spawn_test_thread("test-multi-threaded-server", move || {
             serve_with_options(
                 listener,
                 crate::ThreadPoolOptions {
@@ -257,7 +270,7 @@ mod test {
     fn test_serve_pipelined_requests() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("Failed to bind address");
         let addr = listener.local_addr().unwrap();
-        thread::spawn(move || {
+        spawn_test_thread("test-pipelined-server", move || {
             serve(listener, |request| {
                 Response::with_status(Status::Ok).body(request.url.path())
             });
@@ -309,7 +322,7 @@ mod test {
     fn test_various_methods() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let addr = listener.local_addr().unwrap();
-        thread::spawn(move || {
+        spawn_test_thread("test-method-server", move || {
             serve_single_threaded(listener, |req| {
                 Response::with_status(Status::Ok).header("X-Method", req.method.to_string())
             });
@@ -331,7 +344,7 @@ mod test {
     fn test_various_status_codes() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let addr = listener.local_addr().unwrap();
-        thread::spawn(move || {
+        spawn_test_thread("test-status-server", move || {
             serve_single_threaded(listener, |req| match req.url.path() {
                 "/created" => Response::with_status(Status::Created),
                 "/no-content" => Response::with_status(Status::NoContent),

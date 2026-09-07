@@ -57,7 +57,10 @@ fn subcommand_download(args: &Args) {
     {
         _ = enable_ansi_support::enable_ansi_support();
     }
-    let renderer_handle = thread::spawn(move || run_renderer(rx, is_tty));
+    let renderer_handle = thread::Builder::new()
+        .name("progress-renderer".to_string())
+        .spawn(move || run_renderer(rx, is_tty))
+        .expect("Failed to spawn progress renderer thread");
 
     let mut downloader = Downloader::new();
     for album_id in album_ids {

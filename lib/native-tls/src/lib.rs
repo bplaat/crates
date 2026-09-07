@@ -173,49 +173,52 @@ mod tests {
     ) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind failed");
         let server_addr = listener.local_addr().expect("local_addr failed");
-        let server = thread::spawn(move || {
-            let config = Arc::new(local_tls_server_config(
-                LOCALHOST_CERT_PEM,
-                LOCALHOST_KEY_PEM,
-            ));
-            for _ in 0..connection_count {
-                let (mut tcp, _) = listener.accept().expect("accept failed");
-                tcp.set_read_timeout(Some(Duration::from_secs(5)))
-                    .expect("set_read_timeout failed");
-                tcp.set_write_timeout(Some(Duration::from_secs(5)))
-                    .expect("set_write_timeout failed");
+        let server = thread::Builder::new()
+            .name("test-https-server".to_string())
+            .spawn(move || {
+                let config = Arc::new(local_tls_server_config(
+                    LOCALHOST_CERT_PEM,
+                    LOCALHOST_KEY_PEM,
+                ));
+                for _ in 0..connection_count {
+                    let (mut tcp, _) = listener.accept().expect("accept failed");
+                    tcp.set_read_timeout(Some(Duration::from_secs(5)))
+                        .expect("set_read_timeout failed");
+                    tcp.set_write_timeout(Some(Duration::from_secs(5)))
+                        .expect("set_write_timeout failed");
 
-                let mut conn = rustls::ServerConnection::new(config.clone()).unwrap();
-                while conn.is_handshaking() {
-                    conn.complete_io(&mut tcp).expect("TLS handshake failed");
-                }
-
-                {
-                    let mut tls = rustls::Stream::new(&mut conn, &mut tcp);
-                    let mut request = Vec::new();
-                    let mut buffer = [0; 1024];
-                    loop {
-                        let bytes_read = tls.read(&mut buffer).expect("read request failed");
-                        assert!(bytes_read > 0, "connection closed before HTTP request");
-                        request.extend_from_slice(&buffer[..bytes_read]);
-                        if request.windows(4).any(|window| window == b"\r\n\r\n") {
-                            break;
-                        }
+                    let mut conn = rustls::ServerConnection::new(config.clone()).unwrap();
+                    while conn.is_handshaking() {
+                        conn.complete_io(&mut tcp).expect("TLS handshake failed");
                     }
 
-                    let mut response = format!(
-                        "HTTP/1.0 200 OK\r\nContent-Length: {}\r\n\r\n",
-                        response_body.len()
-                    )
-                    .into_bytes();
-                    response.extend_from_slice(response_body);
-                    tls.write_all(&response).expect("write response failed");
-                    tls.flush().expect("flush response failed");
+                    {
+                        let mut tls = rustls::Stream::new(&mut conn, &mut tcp);
+                        let mut request = Vec::new();
+                        let mut buffer = [0; 1024];
+                        loop {
+                            let bytes_read = tls.read(&mut buffer).expect("read request failed");
+                            assert!(bytes_read > 0, "connection closed before HTTP request");
+                            request.extend_from_slice(&buffer[..bytes_read]);
+                            if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+
+                        let mut response = format!(
+                            "HTTP/1.0 200 OK\r\nContent-Length: {}\r\n\r\n",
+                            response_body.len()
+                        )
+                        .into_bytes();
+                        response.extend_from_slice(response_body);
+                        tls.write_all(&response).expect("write response failed");
+                        tls.flush().expect("flush response failed");
+                    }
+                    conn.send_close_notify();
+                    let _ = conn.complete_io(&mut tcp);
                 }
-                conn.send_close_notify();
-                let _ = conn.complete_io(&mut tcp);
-            }
-        });
+            })
+            .expect("Failed to spawn test HTTPS server thread");
         (server_addr, server)
     }
 
@@ -226,18 +229,22 @@ mod tests {
     ) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind failed");
         let server_addr = listener.local_addr().expect("local_addr failed");
-        let server = thread::spawn(move || {
-            let (mut tcp, _) = listener.accept().expect("accept failed");
-            tcp.set_read_timeout(Some(Duration::from_secs(5)))
-                .expect("set_read_timeout failed");
-            tcp.set_write_timeout(Some(Duration::from_secs(5)))
-                .expect("set_write_timeout failed");
+        let server = thread::Builder::new()
+            .name("test-tls-fragment-server".to_string())
+            .spawn(move || {
+                let (mut tcp, _) = listener.accept().expect("accept failed");
+                tcp.set_read_timeout(Some(Duration::from_secs(5)))
+                    .expect("set_read_timeout failed");
+                tcp.set_write_timeout(Some(Duration::from_secs(5)))
+                    .expect("set_write_timeout failed");
 
-            let mut conn =
-                rustls::ServerConnection::new(Arc::new(local_tls_server_config(cert_pem, key_pem)))
-                    .unwrap();
-            let _ = conn.complete_io(&mut tcp);
-        });
+                let mut conn = rustls::ServerConnection::new(Arc::new(local_tls_server_config(
+                    cert_pem, key_pem,
+                )))
+                .unwrap();
+                let _ = conn.complete_io(&mut tcp);
+            })
+            .expect("Failed to spawn test TLS fragment server thread");
 
         let tcp = TcpStream::connect(server_addr).expect("TCP connect failed");
         let connector = TlsConnector::new().expect("TlsConnector::new failed");
@@ -258,20 +265,23 @@ mod tests {
     fn test_preserves_application_data_after_handshake() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind failed");
         let server_addr = listener.local_addr().expect("local_addr failed");
-        let server = thread::spawn(move || {
-            let (mut tcp, _) = listener.accept().expect("accept failed");
-            let config = Arc::new(local_tls_server_config(
-                LOCALHOST_CERT_PEM,
-                LOCALHOST_KEY_PEM,
-            ));
-            let mut conn = rustls::ServerConnection::new(config).unwrap();
-            while conn.is_handshaking() {
-                conn.complete_io(&mut tcp).expect("TLS handshake failed");
-            }
-            let mut tls = rustls::Stream::new(&mut conn, &mut tcp);
-            tls.write_all(b"hello").expect("write greeting failed");
-            tls.flush().expect("flush greeting failed");
-        });
+        let server = thread::Builder::new()
+            .name("test-tls-application-data-server".to_string())
+            .spawn(move || {
+                let (mut tcp, _) = listener.accept().expect("accept failed");
+                let config = Arc::new(local_tls_server_config(
+                    LOCALHOST_CERT_PEM,
+                    LOCALHOST_KEY_PEM,
+                ));
+                let mut conn = rustls::ServerConnection::new(config).unwrap();
+                while conn.is_handshaking() {
+                    conn.complete_io(&mut tcp).expect("TLS handshake failed");
+                }
+                let mut tls = rustls::Stream::new(&mut conn, &mut tcp);
+                tls.write_all(b"hello").expect("write greeting failed");
+                tls.flush().expect("flush greeting failed");
+            })
+            .expect("Failed to spawn test TLS application data server thread");
 
         let tcp = TcpStream::connect(server_addr).expect("TCP connect failed");
         let connector =

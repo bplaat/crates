@@ -175,7 +175,10 @@ impl ThreadPool {
 
     fn spawn_worker_thread(&self) {
         let shared = Arc::clone(&self.shared);
-        let worker_thread = thread::spawn(move || worker_thread_loop(shared));
+        let worker_thread = thread::Builder::new()
+            .name("threadpool-worker".to_string())
+            .spawn(move || worker_thread_loop(shared))
+            .expect("Failed to spawn worker thread");
         self.worker_threads
             .lock()
             .expect("Mutex lock failed")

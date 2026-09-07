@@ -57,7 +57,10 @@ fn main() {
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
 
     // Start DMX thread
-    thread::spawn(move || dmx::dmx_thread(cloned_config));
+    thread::Builder::new()
+        .name("dmx".to_string())
+        .spawn(move || dmx::dmx_thread(cloned_config))
+        .expect("Failed to spawn DMX thread");
 
     // Try to get local IP address, fallback to localhost if it fails
     let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, PORT))
@@ -73,67 +76,70 @@ fn main() {
 
     // Start internal http server thread
     info!("Starting internal HTTP server at {url}");
-    thread::spawn(move || {
-        small_http::serve_single_threaded(listener, move |req| {
-            let mut path = req.url.path().to_string();
-            if path.ends_with('/') {
-                path = format!("{path}index.html");
-            }
+    thread::Builder::new()
+        .name("http-server".to_string())
+        .spawn(move || {
+            small_http::serve_single_threaded(listener, move |req| {
+                let mut path = req.url.path().to_string();
+                if path.ends_with('/') {
+                    path = format!("{path}index.html");
+                }
 
-            if req.url.path() == "/ipc" {
-                return small_websocket::upgrade(req, |mut ws| {
-                    if let Err(error) = ws.set_write_timeout(Some(Duration::from_millis(250))) {
-                        warn!("Can't configure WebSocket write timeout: {error}");
-                        return;
-                    }
-                    IPC_CONNECTIONS
-                        .lock()
-                        .expect("Failed to lock IPC connections")
-                        .push(IpcConnection::WebSocket(ws.clone()));
-                    loop {
-                        let message = match ws.recv_non_blocking() {
-                            Ok(message) => message,
-                            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                                continue;
-                            }
-                            Err(err) => {
-                                warn!("WebSocket recv error: {err}");
-                                break;
-                            }
-                        };
-                        match message {
-                            Some(Message::Close(_, _)) => break,
-                            Some(Message::Text(text))
-                                if !ipc_message_handler(
-                                    IpcConnection::WebSocket(ws.clone()),
-                                    &text,
-                                ) =>
-                            {
-                                break;
-                            }
-                            None => {
-                                // FIXME: Create async framework don't do micro sleeps
-                                thread::sleep(Duration::from_millis(100));
-                            }
-                            _ => {}
+                if req.url.path() == "/ipc" {
+                    return small_websocket::upgrade(req, |mut ws| {
+                        if let Err(error) = ws.set_write_timeout(Some(Duration::from_millis(250))) {
+                            warn!("Can't configure WebSocket write timeout: {error}");
+                            return;
                         }
-                    }
-                    IPC_CONNECTIONS
-                        .lock()
-                        .expect("Failed to lock IPC connections")
-                        .retain(|conn| conn != &IpcConnection::WebSocket(ws.clone()));
-                });
-            }
+                        IPC_CONNECTIONS
+                            .lock()
+                            .expect("Failed to lock IPC connections")
+                            .push(IpcConnection::WebSocket(ws.clone()));
+                        loop {
+                            let message = match ws.recv_non_blocking() {
+                                Ok(message) => message,
+                                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                                    continue;
+                                }
+                                Err(err) => {
+                                    warn!("WebSocket recv error: {err}");
+                                    break;
+                                }
+                            };
+                            match message {
+                                Some(Message::Close(_, _)) => break,
+                                Some(Message::Text(text))
+                                    if !ipc_message_handler(
+                                        IpcConnection::WebSocket(ws.clone()),
+                                        &text,
+                                    ) =>
+                                {
+                                    break;
+                                }
+                                None => {
+                                    // FIXME: Create async framework don't do micro sleeps
+                                    thread::sleep(Duration::from_millis(100));
+                                }
+                                _ => {}
+                            }
+                        }
+                        IPC_CONNECTIONS
+                            .lock()
+                            .expect("Failed to lock IPC connections")
+                            .retain(|conn| conn != &IpcConnection::WebSocket(ws.clone()));
+                    });
+                }
 
-            if let Some(file) = WebAssets::get(path.trim_start_matches('/')) {
-                let mime = mime_guess::from_path(&path).first_or_octet_stream();
-                Response::with_header("Content-Type", mime.to_string()).body(file.data)
-            } else {
-                let file = WebAssets::get("index.html").expect("index.html not found");
-                Response::with_header("Content-Type", "text/html").body(file.data)
-            }
-        });
-    });
+                if let Some(file) = WebAssets::get(path.trim_start_matches('/')) {
+                    let mime = mime_guess::from_path(&path).first_or_octet_stream();
+                    Response::with_header("Content-Type", mime.to_string()).body(file.data)
+                } else {
+                    let file = WebAssets::get("index.html").expect("index.html not found");
+                    Response::with_header("Content-Type", "text/html").body(file.data)
+                }
+            });
+        })
+        .expect("Failed to spawn HTTP server thread");
 
     // Create webview
     #[allow(unused_mut)]
