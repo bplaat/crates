@@ -6,13 +6,19 @@
 
 //! A bwebview dialog example
 
-use bwebview::{
-    Event, EventLoop, FileDialog, MessageButtons, MessageDialog, Theme, WebviewBuilder,
-    WebviewEvent, WindowBuilder,
+use bwebview::{WebviewBuilder, WebviewEvent};
+use bwindow::{
+    Event, EventLoopBuilder, FileDialog, MessageButtons, MessageDialog, Theme, WindowBuilder,
 };
 
+enum AppEvent {
+    Webview(bwindow::WindowId, WebviewEvent),
+}
+
 fn main() {
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoopBuilder::new()
+        .with_user_event::<AppEvent>()
+        .build();
 
     let window = WindowBuilder::new()
         .title("Dialog Example")
@@ -22,7 +28,7 @@ fn main() {
             0xffffff
         })
         .build();
-    let mut webview = WebviewBuilder::new(&window)
+    let mut webview = WebviewBuilder::new(&window).on_event(event_loop.create_proxy(), AppEvent::Webview)
         .load_html(
             r#"<!DOCTYPE html>
 <html>
@@ -56,7 +62,9 @@ window.ipc.addEventListener('message', e => {
         .build();
 
     event_loop.run(move |event| {
-        if let Event::Webview(WebviewEvent::MessageReceive(msg)) = event {
+        if let Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::MessageReceive(msg))) =
+            event
+        {
             let result = match msg.as_str() {
                 "show_message" => format!(
                     "Selected: {:?}",

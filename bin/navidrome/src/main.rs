@@ -7,9 +7,8 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use bwebview::{
-    EventLoopBuilder, InjectionTime, LogicalSize, Theme, WebviewBuilder, WindowBuilder,
-};
+use bwebview::{InjectionTime, WebviewBuilder};
+use bwindow::{EventLoopBuilder, LogicalSize, Theme, WindowBuilder};
 
 fn player_script(titlebar_height: f32) -> String {
     format!(
@@ -70,7 +69,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         window_builder =
-            window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Transparent);
+            window_builder.macos_titlebar_style(bwindow::MacosTitlebarStyle::Transparent);
     }
     let window = window_builder.build();
 
@@ -91,9 +90,10 @@ fn main() {
     #[allow(unused)]
     event_loop.run(move |event| {
         #[cfg(target_os = "macos")]
-        if let bwebview::Event::Window(bwebview::WindowEvent::MacosFullscreenChange(
-            is_fullscreen,
-        )) = event
+        if let bwindow::Event::Window(
+            _,
+            bwindow::WindowEvent::MacosFullscreenChange(is_fullscreen),
+        ) = event
         {
             if is_fullscreen {
                 webview.evaluate_script("document.documentElement.classList.add('is-fullscreen');");

@@ -187,50 +187,6 @@ const fn hresult_from_win32(error: u32) -> HRESULT {
 const ERROR_FILE_NOT_FOUND: u32 = 2;
 const ERROR_PROC_NOT_FOUND: u32 = 127;
 
-pub(super) const fn environment_handler_vtable(
-    invoke: unsafe extern "system" fn(
-        *mut ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
-        HRESULT,
-        *mut ICoreWebView2Environment,
-    ) -> HRESULT,
-) -> ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl {
-    ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl {
-        QueryInterface: environment_query_interface,
-        AddRef: environment_add_ref,
-        Release: environment_release,
-        Invoke: invoke,
-    }
-}
-
-unsafe extern "system" fn environment_query_interface(
-    this: *mut c_void,
-    riid: *const GUID,
-    object: *mut *mut c_void,
-) -> HRESULT {
-    if riid.is_null() || object.is_null() {
-        return E_POINTER;
-    }
-    unsafe {
-        *object = null_mut();
-        if *riid == IID_IUNKNOWN
-            || *riid == IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
-        {
-            *object = this;
-            environment_add_ref(this);
-            return S_OK;
-        }
-    }
-    E_NOINTERFACE
-}
-
-const unsafe extern "system" fn environment_add_ref(_this: *mut c_void) -> HRESULT {
-    1
-}
-
-const unsafe extern "system" fn environment_release(_this: *mut c_void) -> HRESULT {
-    1
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

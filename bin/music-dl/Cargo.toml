@@ -16,6 +16,7 @@ workspace = true
 
 [dependencies]
 anyhow = "1.0"
+bwindow = { path = "../../lib/bwindow" }
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
 directories = "6.0"
 mp4ameta = "0.13.0"

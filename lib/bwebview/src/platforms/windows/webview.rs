@@ -4,57 +4,66 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
+use std::rc::Rc;
 use std::{env, mem};
 
-use super::event_loop::send_event;
+use super::callback::{self, CallbackHandle, release_interface};
 #[cfg(feature = "file_drop")]
 use super::file_drop::{FileDropTarget, install_file_drop_targets};
 use super::headers::*;
 use super::loader::*;
-use super::window::{PlatformWindow, WindowData, config_dir};
 #[cfg(feature = "custom_protocol")]
 use crate::CustomProtocol;
 use crate::{InjectionTime, WebviewBuilder, WebviewEvent};
 
 pub(super) struct WebviewData {
+    pub(super) attachment: crate::WindowAttachment,
+    handler: Option<crate::EventHandler>,
+    closed: Cell<bool>,
     pub(super) hwnd: HWND,
-    pub(super) background_color: Option<u32>,
+    pub(super) background_color: Cell<Option<u32>>,
     pub(super) should_load_url: Option<String>,
     pub(super) should_load_html: Option<String>,
     #[cfg(feature = "custom_protocol")]
     pub(super) custom_protocols: Vec<CustomProtocol>,
-    pub(super) environment: Option<*mut ICoreWebView2Environment>,
-    pub(super) webview: Option<*mut ICoreWebView2>,
-    pub(super) controller: Option<*mut ICoreWebView2Controller>,
+    pub(super) environment: Cell<Option<*mut ICoreWebView2Environment>>,
+    pub(super) webview: Cell<Option<*mut ICoreWebView2>>,
+    pub(super) controller: Cell<Option<*mut ICoreWebView2Controller>>,
     #[cfg(feature = "file_drop")]
     #[allow(clippy::vec_box)]
     // Registered COM pointers must remain stable when the vector grows.
-    pub(super) drop_targets: Vec<Box<FileDropTarget>>,
-    pub(super) window_data: *mut WindowData,
+    pub(super) drop_targets: RefCell<Vec<Box<FileDropTarget>>>,
 }
 
 pub(crate) struct PlatformWebview {
-    pub(super) webview_data: Box<WebviewData>,
+    pub(super) webview_data: Rc<WebviewData>,
 }
 
 impl PlatformWebview {
-    pub(crate) fn new(window: &PlatformWindow) -> Self {
-        let window_data = &*window.0 as *const WindowData as *mut WindowData;
-        let webview_data = Box::new(WebviewData {
-            hwnd: window.0.hwnd,
-            background_color: window.0.background_color,
+    pub(crate) fn new(attachment: crate::WindowAttachment) -> Self {
+        let Some(crate::NativeWindowHandle::Win32(window)) =
+            (unsafe { attachment.native_handle() })
+        else {
+            panic!("invalid native window handle");
+        };
+        let webview_data = Rc::new(WebviewData {
+            closed: Cell::new(false),
+            handler: None,
+            hwnd: window,
+            background_color: Cell::new(attachment.background_color()),
             should_load_url: None,
             should_load_html: None,
             #[cfg(feature = "custom_protocol")]
             custom_protocols: Vec::new(),
-            environment: None,
-            webview: None,
-            controller: None,
+            environment: Cell::new(None),
+            webview: Cell::new(None),
+            controller: Cell::new(None),
             #[cfg(feature = "file_drop")]
-            drop_targets: Vec::new(),
-            window_data,
+            drop_targets: RefCell::new(Vec::new()),
+            attachment,
         });
         PlatformWebview { webview_data }
     }
@@ -62,26 +71,45 @@ impl PlatformWebview {
 
 impl PlatformWebview {
     pub(crate) fn init_webview(&mut self, builder: WebviewBuilder<'_>) {
-        self.webview_data.should_load_url = builder.should_load_url;
-        self.webview_data.should_load_html = builder.should_load_html;
+        let data = Rc::get_mut(&mut self.webview_data).expect("webview already initialized");
+        data.handler = builder.event_handler;
+        data.should_load_url = builder.should_load_url;
+        data.should_load_html = builder.should_load_html;
         #[cfg(feature = "custom_protocol")]
         {
-            self.webview_data.custom_protocols = builder.custom_protocols;
+            data.custom_protocols = builder.custom_protocols;
         }
+
+        let weak = Rc::downgrade(&self.webview_data);
+        self.webview_data.attachment.on_close(move || {
+            if let Some(data) = weak.upgrade() {
+                data.close();
+            }
+        });
 
         // Init Webview2 creation
         unsafe {
             static VTBL: ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl =
-                environment_handler_vtable(environment_created);
-            let completed_handler = Box::into_raw(Box::new(
-                ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler {
-                    lpVtbl: &VTBL,
-                    user_data: self.webview_data.as_mut() as *mut WebviewData as *mut _,
-                },
-            ));
+                ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl {
+                    QueryInterface: callback::query_interface,
+                    AddRef: callback::add_ref,
+                    Release: callback::release,
+                    Invoke: environment_created,
+                };
+            let completed_handler = CallbackHandle::new(
+                &VTBL,
+                IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
+                self.webview_data.clone(),
+            );
             let result = create_core_webview2_environment(
-                config_dir().display().to_string().to_wide_string().as_ptr() as *mut _,
-                completed_handler,
+                self.webview_data
+                    .attachment
+                    .windows_data_directory()
+                    .display()
+                    .to_string()
+                    .to_wide_string()
+                    .as_ptr() as *mut _,
+                completed_handler.as_ptr(),
             );
             if result != S_OK {
                 if result == WEBVIEW2_RUNTIME_NOT_FOUND {
@@ -111,10 +139,45 @@ impl PlatformWebview {
     }
 }
 
+impl WebviewData {
+    fn emit(&self, event: WebviewEvent) {
+        if let Some(handler) = &self.handler {
+            handler(event);
+        }
+    }
+
+    fn close(&self) {
+        if self.closed.replace(true) {
+            return;
+        }
+        self.attachment.disconnect();
+        #[cfg(feature = "file_drop")]
+        super::file_drop::revoke_file_drop_targets(self);
+        if let Some(controller) = self.controller.take() {
+            unsafe {
+                (*controller).Close();
+                release_interface(controller);
+            }
+        }
+        if let Some(webview) = self.webview.take() {
+            unsafe { release_interface(webview) };
+        }
+        if let Some(environment) = self.environment.take() {
+            unsafe { release_interface(environment) };
+        }
+    }
+}
+
+impl Drop for PlatformWebview {
+    fn drop(&mut self) {
+        self.webview_data.close();
+    }
+}
+
 impl crate::WebviewInterface for PlatformWebview {
     fn url(&self) -> Option<String> {
         unsafe {
-            if let Some(webview) = self.webview_data.webview {
+            if let Some(webview) = self.webview_data.webview.get() {
                 let mut uri = LPWSTR::default();
                 (*webview).get_Source(uri.as_mut_ptr());
                 Some(uri.to_string())
@@ -126,7 +189,7 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn load_url(&mut self, url: impl AsRef<str>) {
         unsafe {
-            if let Some(webview) = self.webview_data.webview {
+            if let Some(webview) = self.webview_data.webview.get() {
                 let url = cfg_select! {
                     feature = "custom_protocol" => replace_custom_protocol_in_url(
                         url.as_ref(),
@@ -140,9 +203,9 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 
     fn set_background_color(&mut self, color: u32) {
-        self.webview_data.background_color = Some(color);
+        self.webview_data.background_color.set(Some(color));
         unsafe {
-            if let Some(controller) = self.webview_data.controller {
+            if let Some(controller) = self.webview_data.controller.get() {
                 let mut controller2: *mut ICoreWebView2Controller2 = null_mut();
                 (*controller).QueryInterface(
                     &IID_ICoreWebView2Controller2,
@@ -155,6 +218,7 @@ impl crate::WebviewInterface for PlatformWebview {
                         G: ((color >> 8) & 0xFF) as u8,
                         B: (color & 0xFF) as u8,
                     });
+                    release_interface(controller2);
                 }
             }
         }
@@ -162,7 +226,7 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn load_html(&mut self, html: impl AsRef<str>) {
         unsafe {
-            if let Some(webview) = self.webview_data.webview {
+            if let Some(webview) = self.webview_data.webview.get() {
                 (*webview).NavigateToString(html.as_ref().to_wide_string().as_ptr() as *mut _);
             }
         }
@@ -170,7 +234,7 @@ impl crate::WebviewInterface for PlatformWebview {
 
     fn evaluate_script(&mut self, script: impl AsRef<str>) {
         unsafe {
-            if let Some(webview) = self.webview_data.webview {
+            if let Some(webview) = self.webview_data.webview.get() {
                 (*webview).ExecuteScript(
                     script.as_ref().to_wide_string().as_ptr() as *mut _,
                     null_mut(),
@@ -182,7 +246,7 @@ impl crate::WebviewInterface for PlatformWebview {
     fn add_user_script(&mut self, script: impl AsRef<str>, injection_time: InjectionTime) {
         let mut script = script.as_ref().to_string();
         unsafe {
-            if let Some(webview) = self.webview_data.webview {
+            if let Some(webview) = self.webview_data.webview.get() {
                 if let InjectionTime::DocumentLoaded = injection_time {
                     script = format!(
                         "window.addEventListener('DOMContentLoaded', function () {{ {script} }});"
@@ -197,27 +261,17 @@ impl crate::WebviewInterface for PlatformWebview {
     }
 }
 
-const extern "system" fn unimplemented_query_interface(
-    _this: *mut c_void,
-    _riid: *const GUID,
-    _ppv_object: *mut *mut c_void,
-) -> HRESULT {
-    E_NOINTERFACE
-}
-const extern "system" fn unimplemented_add_ref(_this: *mut c_void) -> HRESULT {
-    E_NOTIMPL
-}
-const extern "system" fn unimplemented_release(_this: *mut c_void) -> HRESULT {
-    E_NOTIMPL
-}
-
 extern "system" fn environment_created(
     _this: *mut ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
     _result: HRESULT,
     environment: *mut ICoreWebView2Environment,
 ) -> HRESULT {
     unsafe {
-        let _self = &mut *((*_this).user_data as *mut WebviewData);
+        let owner = callback::state(_this.cast());
+        let _self = &*owner;
+        if _self.closed.get() || _self.attachment.is_closed() {
+            return S_OK;
+        }
         if _result != S_OK || environment.is_null() {
             show_webview_error(
                 _self.hwnd,
@@ -228,23 +282,22 @@ extern "system" fn environment_created(
         }
 
         (*environment).AddRef();
-        _self.environment = Some(environment);
+        _self.environment.set(Some(environment));
 
         static VTBL: ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl =
             ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl {
-                QueryInterface: unimplemented_query_interface,
-                AddRef: unimplemented_add_ref,
-                Release: unimplemented_release,
+                QueryInterface: callback::query_interface,
+                AddRef: callback::add_ref,
+                Release: callback::release,
                 Invoke: controller_created,
             };
-        let creation_completed_handler = Box::into_raw(Box::new(
-            ICoreWebView2CreateCoreWebView2ControllerCompletedHandler {
-                lpVtbl: &VTBL,
-                user_data: (*_this).user_data,
-            },
-        ));
+        let creation_completed_handler = CallbackHandle::new(
+            &VTBL,
+            IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
+            owner.clone(),
+        );
         let mut controller_creation_started = false;
-        if _self.background_color.is_some() {
+        if _self.background_color.get().is_some() {
             let mut environment10: *mut ICoreWebView2Environment10 = null_mut();
             if (*environment).QueryInterface(
                 &IID_ICoreWebView2Environment10,
@@ -272,7 +325,7 @@ extern "system" fn environment_created(
                                 (*environment10).CreateCoreWebView2ControllerWithOptions(
                                     _self.hwnd,
                                     options,
-                                    creation_completed_handler,
+                                    creation_completed_handler.as_ptr(),
                                 ) == S_OK;
                         }
                         (*options3).Release();
@@ -284,7 +337,8 @@ extern "system" fn environment_created(
         }
 
         if !controller_creation_started {
-            (*environment).CreateCoreWebView2Controller(_self.hwnd, creation_completed_handler);
+            (*environment)
+                .CreateCoreWebView2Controller(_self.hwnd, creation_completed_handler.as_ptr());
         }
 
         S_OK
@@ -297,7 +351,14 @@ extern "system" fn controller_created(
     controller: *mut ICoreWebView2Controller,
 ) -> HRESULT {
     unsafe {
-        let _self = &mut *((*_this).user_data as *mut WebviewData);
+        let owner = callback::state(_this.cast());
+        let _self = &*owner;
+        if _self.closed.get() || _self.attachment.is_closed() {
+            if !controller.is_null() {
+                (*controller).Close();
+            }
+            return S_OK;
+        }
         if _result != S_OK || controller.is_null() {
             show_webview_error(
                 _self.hwnd,
@@ -307,20 +368,20 @@ extern "system" fn controller_created(
             std::process::exit(1);
         }
         (*controller).AddRef();
-        _self.controller = Some(controller);
+        _self.controller.set(Some(controller));
 
         // Keep partial WebView2 paints hidden behind the native backing surface.
         (*controller).put_IsVisible(FALSE);
 
         // Register resize callback on the window
-        (*_self.window_data).resize_callback = Some(Box::new(move |w, h| {
+        _self.attachment.on_resize(move |w, h| {
             (*controller).put_Bounds(RECT {
                 left: 0,
                 top: 0,
-                right: w,
-                bottom: h,
+                right: w as i32,
+                bottom: h as i32,
             });
-        }));
+        });
 
         // Set initial bounds
         let mut rect: RECT = mem::zeroed();
@@ -330,7 +391,7 @@ extern "system" fn controller_created(
         // Let our drop target handle files instead of allowing WebView2 to
         // navigate to them.
         #[cfg(feature = "file_drop")]
-        if (*_self.window_data).allow_file_drop {
+        if _self.attachment.allow_file_drop() {
             let mut controller4: *mut ICoreWebView2Controller4 = null_mut();
             (*controller).QueryInterface(
                 &IID_ICoreWebView2Controller4,
@@ -346,10 +407,10 @@ extern "system" fn controller_created(
         // Get webview
         let mut webview: *mut ICoreWebView2 = null_mut();
         (*controller).get_CoreWebView2(&mut webview);
-        _self.webview = Some(webview);
+        _self.webview.set(Some(webview));
 
         // Set transparent background if needed
-        if _self.background_color.is_some() {
+        if _self.background_color.get().is_some() {
             let mut controller2: *mut ICoreWebView2Controller2 = null_mut();
             (*controller).QueryInterface(
                 &IID_ICoreWebView2Controller2,
@@ -361,6 +422,7 @@ extern "system" fn controller_created(
                 G: 0,
                 B: 0,
             });
+            release_interface(controller2);
         }
 
         // Set user agent
@@ -378,6 +440,8 @@ extern "system" fn controller_created(
             &mut settings2 as *mut _ as *mut *mut c_void,
         );
         (*settings2).put_UserAgent(useragent.to_wide_string().as_ptr() as *mut _);
+        release_interface(settings2);
+        release_interface(settings);
 
         // Set custom protocols
         #[cfg(feature = "custom_protocol")]
@@ -393,79 +457,81 @@ extern "system" fn controller_created(
 
             static VTBL: ICoreWebView2WebResourceRequestedEventHandlerVtbl =
                 ICoreWebView2WebResourceRequestedEventHandlerVtbl {
-                    QueryInterface: unimplemented_query_interface,
-                    AddRef: unimplemented_add_ref,
-                    Release: unimplemented_release,
+                    QueryInterface: callback::query_interface,
+                    AddRef: callback::add_ref,
+                    Release: callback::release,
                     Invoke: web_resource_requested,
                 };
-            let web_resource_requested_handler =
-                Box::into_raw(Box::new(ICoreWebView2WebResourceRequestedEventHandler {
-                    lpVtbl: &VTBL,
-                    user_data: (*_this).user_data,
-                }));
-            (*webview).add_WebResourceRequested(web_resource_requested_handler, null_mut());
+            let web_resource_requested_handler = CallbackHandle::new(
+                &VTBL,
+                IID_ICoreWebView2WebResourceRequestedEventHandler,
+                owner.clone(),
+            );
+            (*webview)
+                .add_WebResourceRequested(web_resource_requested_handler.as_ptr(), null_mut());
         }
 
         // Setup event handlers
         {
             static VTBL: ICoreWebView2NavigationStartingEventHandlerVtbl =
                 ICoreWebView2NavigationStartingEventHandlerVtbl {
-                    QueryInterface: unimplemented_query_interface,
-                    AddRef: unimplemented_add_ref,
-                    Release: unimplemented_release,
+                    QueryInterface: callback::query_interface,
+                    AddRef: callback::add_ref,
+                    Release: callback::release,
                     Invoke: navigation_starting,
                 };
-            let navigation_starting_handler =
-                Box::into_raw(Box::new(ICoreWebView2NavigationStartingEventHandler {
-                    lpVtbl: &VTBL,
-                    user_data: (*_this).user_data,
-                }));
-            (*webview).add_NavigationStarting(navigation_starting_handler, null_mut());
+            let navigation_starting_handler = CallbackHandle::new(
+                &VTBL,
+                IID_ICoreWebView2NavigationStartingEventHandler,
+                owner.clone(),
+            );
+            (*webview).add_NavigationStarting(navigation_starting_handler.as_ptr(), null_mut());
         }
         {
             static VTBL: ICoreWebView2NavigationCompletedEventHandlerVtbl =
                 ICoreWebView2NavigationCompletedEventHandlerVtbl {
-                    QueryInterface: unimplemented_query_interface,
-                    AddRef: unimplemented_add_ref,
-                    Release: unimplemented_release,
+                    QueryInterface: callback::query_interface,
+                    AddRef: callback::add_ref,
+                    Release: callback::release,
                     Invoke: navigation_completed,
                 };
-            let navigation_completed_handler =
-                Box::into_raw(Box::new(ICoreWebView2NavigationCompletedEventHandler {
-                    lpVtbl: &VTBL,
-                    user_data: (*_this).user_data,
-                }));
-            (*webview).add_NavigationCompleted(navigation_completed_handler, null_mut());
+            let navigation_completed_handler = CallbackHandle::new(
+                &VTBL,
+                IID_ICoreWebView2NavigationCompletedEventHandler,
+                owner.clone(),
+            );
+            (*webview).add_NavigationCompleted(navigation_completed_handler.as_ptr(), null_mut());
         }
         {
             static VTBL: ICoreWebView2DocumentTitleChangedEventHandlerVtbl =
                 ICoreWebView2DocumentTitleChangedEventHandlerVtbl {
-                    QueryInterface: unimplemented_query_interface,
-                    AddRef: unimplemented_add_ref,
-                    Release: unimplemented_release,
+                    QueryInterface: callback::query_interface,
+                    AddRef: callback::add_ref,
+                    Release: callback::release,
                     Invoke: document_title_changed,
                 };
-            let document_title_changed_handler =
-                Box::into_raw(Box::new(ICoreWebView2DocumentTitleChangedEventHandler {
-                    lpVtbl: &VTBL,
-                    user_data: (*_this).user_data,
-                }));
-            (*webview).add_DocumentTitleChanged(document_title_changed_handler, null_mut());
+            let document_title_changed_handler = CallbackHandle::new(
+                &VTBL,
+                IID_ICoreWebView2DocumentTitleChangedEventHandler,
+                owner.clone(),
+            );
+            (*webview)
+                .add_DocumentTitleChanged(document_title_changed_handler.as_ptr(), null_mut());
         }
         {
             static VTBL: ICoreWebView2NewWindowRequestedEventHandlerVtbl =
                 ICoreWebView2NewWindowRequestedEventHandlerVtbl {
-                    QueryInterface: unimplemented_query_interface,
-                    AddRef: unimplemented_add_ref,
-                    Release: unimplemented_release,
+                    QueryInterface: callback::query_interface,
+                    AddRef: callback::add_ref,
+                    Release: callback::release,
                     Invoke: new_window_requested,
                 };
-            let new_window_requested_handler =
-                Box::into_raw(Box::new(ICoreWebView2NewWindowRequestedEventHandler {
-                    lpVtbl: &VTBL,
-                    user_data: null_mut(),
-                }));
-            (*webview).add_NewWindowRequested(new_window_requested_handler, null_mut());
+            let new_window_requested_handler = CallbackHandle::new(
+                &VTBL,
+                IID_ICoreWebView2NewWindowRequestedEventHandler,
+                owner.clone(),
+            );
+            (*webview).add_NewWindowRequested(new_window_requested_handler.as_ptr(), null_mut());
         }
 
         // Setup ipc and console logging
@@ -477,17 +543,17 @@ extern "system" fn controller_created(
 
         static VTBL: ICoreWebView2WebMessageReceivedEventHandlerVtbl =
             ICoreWebView2WebMessageReceivedEventHandlerVtbl {
-                QueryInterface: unimplemented_query_interface,
-                AddRef: unimplemented_add_ref,
-                Release: unimplemented_release,
+                QueryInterface: callback::query_interface,
+                AddRef: callback::add_ref,
+                Release: callback::release,
                 Invoke: web_message_received,
             };
-        let message_received_handler =
-            Box::into_raw(Box::new(ICoreWebView2WebMessageReceivedEventHandler {
-                lpVtbl: &VTBL,
-                user_data: (*_this).user_data,
-            }));
-        (*webview).add_WebMessageReceived(message_received_handler, null_mut());
+        let message_received_handler = CallbackHandle::new(
+            &VTBL,
+            IID_ICoreWebView2WebMessageReceivedEventHandler,
+            owner.clone(),
+        );
+        (*webview).add_WebMessageReceived(message_received_handler.as_ptr(), null_mut());
 
         // Load initial contents
         if let Some(url) = &_self.should_load_url {
@@ -528,8 +594,12 @@ extern "system" fn navigation_starting(
     _sender: *mut ICoreWebView2,
     _args: *mut ICoreWebView2NavigationStartingEventArgs,
 ) -> HRESULT {
-    let _self = unsafe { &*((*_this).user_data as *const WebviewData) };
-    send_event(crate::Event::Webview(WebviewEvent::PageLoadStart));
+    let owner = unsafe { callback::state(_this.cast()) };
+    let _self = &*owner;
+    if _self.closed.get() || _self.attachment.is_closed() {
+        return S_OK;
+    }
+    _self.emit(WebviewEvent::PageLoadStart);
     S_OK
 }
 
@@ -538,11 +608,15 @@ extern "system" fn navigation_completed(
     _sender: *mut ICoreWebView2,
     _args: *mut ICoreWebView2NavigationCompletedEventArgs,
 ) -> HRESULT {
-    let _self = unsafe { &*((*_this).user_data as *const WebviewData) };
-    if let Some(controller) = _self.controller {
+    let owner = unsafe { callback::state(_this.cast()) };
+    let _self = &*owner;
+    if _self.closed.get() || _self.attachment.is_closed() {
+        return S_OK;
+    }
+    if let Some(controller) = _self.controller.get() {
         unsafe { (*controller).put_IsVisible(TRUE) };
     }
-    send_event(crate::Event::Webview(WebviewEvent::PageLoadFinish));
+    _self.emit(WebviewEvent::PageLoadFinish);
     S_OK
 }
 
@@ -551,13 +625,15 @@ extern "system" fn document_title_changed(
     _sender: *mut ICoreWebView2,
     _args: *mut c_void,
 ) -> HRESULT {
-    let _self = unsafe { &*((*_this).user_data as *const WebviewData) };
+    let owner = unsafe { callback::state(_this.cast()) };
+    let _self = &*owner;
+    if _self.closed.get() || _self.attachment.is_closed() {
+        return S_OK;
+    }
     unsafe {
         let mut title = LPWSTR::default();
         (*_sender).get_DocumentTitle(title.as_mut_ptr());
-        send_event(crate::Event::Webview(WebviewEvent::PageTitleChange(
-            title.to_string(),
-        )));
+        _self.emit(WebviewEvent::PageTitleChange(title.to_string()));
     }
     S_OK
 }
@@ -567,6 +643,10 @@ extern "system" fn new_window_requested(
     _sender: *mut ICoreWebView2,
     args: *mut ICoreWebView2NewWindowRequestedEventArgs,
 ) -> HRESULT {
+    let owner = unsafe { callback::state(_this.cast()) };
+    if owner.closed.get() || owner.attachment.is_closed() {
+        return S_OK;
+    }
     unsafe {
         (*args).put_Handled(TRUE);
         let mut uri = LPWSTR::default();
@@ -588,7 +668,11 @@ extern "system" fn web_message_received(
     _sender: *mut ICoreWebView2,
     args: *mut ICoreWebView2WebMessageReceivedEventArgs,
 ) -> HRESULT {
-    let _self = unsafe { &*((*_this).user_data as *const WebviewData) };
+    let owner = unsafe { callback::state(_this.cast()) };
+    let _self = &*owner;
+    if _self.closed.get() || _self.attachment.is_closed() {
+        return S_OK;
+    }
     let mut message = LPWSTR::default();
     unsafe { (*args).TryGetWebMessageAsString(message.as_mut_ptr()) };
     let message = message.to_string();
@@ -607,9 +691,7 @@ extern "system" fn web_message_received(
         }
     }
     if r#type == "i" {
-        send_event(crate::Event::Webview(WebviewEvent::MessageReceive(
-            message.to_string(),
-        )));
+        _self.emit(WebviewEvent::MessageReceive(message.to_string()));
     }
 
     S_OK
@@ -621,7 +703,11 @@ extern "system" fn web_resource_requested(
     _sender: *mut ICoreWebView2,
     args: *mut ICoreWebView2WebResourceRequestedEventArgs,
 ) -> HRESULT {
-    let _self = unsafe { &mut *((*_this).user_data as *mut WebviewData) };
+    let owner = unsafe { callback::state(_this.cast()) };
+    let _self = &*owner;
+    if _self.closed.get() || _self.attachment.is_closed() {
+        return S_OK;
+    }
 
     let mut webview2_request = null_mut();
     unsafe { (*args).get_Request(&mut webview2_request) };
@@ -634,7 +720,7 @@ extern "system" fn web_resource_requested(
 
             let webview2_response = http_response_to_webview2_response(
                 response,
-                _self.environment.expect("Should be some"),
+                _self.environment.get().expect("Should be some"),
             );
             unsafe { (*args).put_Response(webview2_response) };
             unsafe { (*webview2_response).Release() };

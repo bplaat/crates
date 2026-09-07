@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, mpsc};
 
-use bwebview::EventLoopProxy;
+use bwindow::EventLoopProxy;
 
 use crate::catalog::Catalog;
 use crate::engine;
@@ -26,7 +26,7 @@ pub(crate) const OPERATION_CLEAN: u8 = 2;
 
 pub(crate) fn run(
     receiver: mpsc::Receiver<WorkerCommand>,
-    proxy: Arc<EventLoopProxy>,
+    proxy: Arc<EventLoopProxy<crate::AppEvent>>,
     cancelled: Arc<AtomicBool>,
     operation_state: Arc<AtomicU8>,
     is_administrator: bool,

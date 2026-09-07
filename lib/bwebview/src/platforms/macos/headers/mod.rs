@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-mod cocoa;
 mod webkit;
 
-pub(crate) use self::cocoa::*;
+pub(crate) use bwindow::ffi::*;
+
 pub(crate) use self::webkit::*;

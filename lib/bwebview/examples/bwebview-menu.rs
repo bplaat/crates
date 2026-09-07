@@ -8,9 +8,10 @@
 //!
 //! The menu bar API is macOS only, on other platforms the window is created without any menus
 
+use bwebview::WebviewBuilder;
 #[cfg(target_os = "macos")]
-use bwebview::{Accelerator, Event, KeyCode, MenuBarBuilder, MenuBuilder, MenuItem, Modifiers};
-use bwebview::{EventLoopBuilder, Theme, WebviewBuilder, WindowBuilder};
+use bwindow::{Accelerator, Event, KeyCode, MenuBarBuilder, MenuBuilder, MenuItem, Modifiers};
+use bwindow::{EventLoopBuilder, Theme, WindowBuilder};
 
 fn main() {
     let builder = EventLoopBuilder::new().app_id("nl", "bplaat", "BwebviewMenuExample");

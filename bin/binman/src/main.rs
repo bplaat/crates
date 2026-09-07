@@ -18,9 +18,8 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
 
-use bwebview::{
-    Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
-};
+use bwebview::{WebviewBuilder, WebviewEvent};
+use bwindow::{Event, EventLoopBuilder, LogicalSize, Theme, WindowBuilder};
 use ipc::{IpcPush, IpcRequest, PROGRESS_EVENT_PREFIX, update_progress};
 use rust_embed::Embed;
 use worker::{OPERATION_CLEAN, OPERATION_IDLE, OPERATION_SCAN, WorkerCommand};
@@ -29,11 +28,17 @@ use worker::{OPERATION_CLEAN, OPERATION_IDLE, OPERATION_SCAN, WorkerCommand};
 #[folder = "web"]
 struct WebAssets;
 
+pub(crate) enum AppEvent {
+    Webview(bwindow::WindowId, WebviewEvent),
+    UserEvent(String),
+}
+
 fn main() {
     elevation::wait_for_parent_if_requested();
 
     let is_administrator = elevation::is_process_elevated();
     let event_loop = EventLoopBuilder::new()
+        .with_user_event::<AppEvent>()
         .app_id("nl", "bplaat", "Binman")
         .build();
     let proxy = Arc::new(event_loop.create_proxy());
@@ -70,11 +75,12 @@ fn main() {
         .build();
 
     let mut webview = WebviewBuilder::new(&window)
+        .on_event(event_loop.create_proxy(), AppEvent::Webview)
         .load_rust_embed::<WebAssets>()
         .build();
 
     event_loop.run(move |event| match event {
-        Event::UserEvent(json) => {
+        Event::UserEvent(AppEvent::UserEvent(json)) => {
             if let Some(json) = json.strip_prefix(PROGRESS_EVENT_PREFIX) {
                 if let Ok(state) = serde_json::from_str(json) {
                     update_progress(&mut window, state);
@@ -83,8 +89,10 @@ fn main() {
                 webview.send_ipc_message(json);
             }
         }
-        Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
-        Event::Webview(WebviewEvent::MessageReceive(message)) => {
+        Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageTitleChange(title))) => {
+            window.set_title(title)
+        }
+        Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::MessageReceive(message))) => {
             match serde_json::from_str::<IpcRequest>(&message) {
                 Ok(request) => match request {
                     IpcRequest::Initialize => {

@@ -5,7 +5,7 @@
  */
 
 mod webview2;
-mod win32;
+
+pub(crate) use bwindow::ffi::*;
 
 pub(crate) use self::webview2::*;
-pub(crate) use self::win32::*;

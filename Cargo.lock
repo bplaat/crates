@@ -47,6 +47,7 @@ name = "bassielight"
 version = "0.1.0"
 dependencies = [
  "bwebview",
+ "bwindow",
  "copy_dir",
  "directories",
  "local-ip-address",
@@ -63,11 +64,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bcanvas"
+version = "0.1.0"
+dependencies = [
+ "bwindow",
+ "objc2",
+ "winresource",
+]
+
+[[package]]
 name = "binman"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bwebview",
+ "bwindow",
  "glob",
  "rust-embed",
  "serde",
@@ -138,9 +149,9 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 name = "bwebview"
 version = "0.1.0"
 dependencies = [
- "bitflags",
+ "bcanvas",
  "block2",
- "directories",
+ "bwindow",
  "log",
  "mime_guess",
  "objc2",
@@ -148,6 +159,16 @@ dependencies = [
  "serde",
  "serde_json",
  "small-http",
+ "winresource",
+]
+
+[[package]]
+name = "bwindow"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "directories",
+ "objc2",
  "winresource",
 ]
 
@@ -256,6 +277,7 @@ name = "example-todo-app"
 version = "0.1.0"
 dependencies = [
  "bwebview",
+ "bwindow",
  "directories",
  "rust-embed",
  "serde",
@@ -316,6 +338,7 @@ name = "game2048"
 version = "0.1.0"
 dependencies = [
  "bwebview",
+ "bwindow",
  "rust-embed",
  "winresource",
 ]
@@ -485,6 +508,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bwebview",
+ "bwindow",
  "rust-embed",
  "serde",
  "serde_json",
@@ -537,6 +561,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bwebview",
+ "bwindow",
  "directories",
  "enable-ansi-support",
  "mp4ameta",
@@ -563,6 +588,7 @@ name = "navidrome"
 version = "0.1.0"
 dependencies = [
  "bwebview",
+ "bwindow",
  "winresource",
 ]
 
@@ -625,6 +651,7 @@ name = "pixelfont"
 version = "0.1.0"
 dependencies = [
  "bwebview",
+ "bwindow",
  "rust-embed",
  "serde",
  "serde_json",
@@ -698,6 +725,15 @@ name = "regex-lite"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
+name = "reversi"
+version = "0.1.0"
+dependencies = [
+ "bcanvas",
+ "bwindow",
+ "winresource",
+]
 
 [[package]]
 name = "ring"
@@ -796,6 +832,7 @@ dependencies = [
  "base64",
  "bsql",
  "bwebview",
+ "bwindow",
  "keyring",
  "rust-embed",
  "serde",

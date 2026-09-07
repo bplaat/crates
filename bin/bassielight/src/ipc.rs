@@ -8,7 +8,7 @@ use std::io;
 use std::sync::{Arc, LazyLock, Mutex, mpsc};
 use std::time::Duration;
 
-use bwebview::EventLoopProxy;
+use bwindow::EventLoopProxy;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use small_websocket::{Message, WebSocket};
@@ -132,7 +132,7 @@ pub(crate) struct State {
 pub(crate) static IPC_CONNECTIONS: Mutex<Vec<IpcConnection>> = Mutex::new(Vec::new());
 
 pub(crate) enum IpcConnection {
-    WebviewIpc(Arc<EventLoopProxy>),
+    WebviewIpc(Arc<EventLoopProxy<crate::AppEvent>>),
     WebSocket(WebSocket),
 }
 
@@ -151,7 +151,7 @@ impl IpcConnection {
     pub(crate) fn send(&mut self, message: String) -> io::Result<()> {
         match self {
             Self::WebviewIpc(event_loop_proxy) => {
-                event_loop_proxy.send_user_event(message);
+                let _ = event_loop_proxy.send_user_event(crate::AppEvent::UserEvent(message));
                 Ok(())
             }
             Self::WebSocket(ws) => ws.send(Message::Text(message)),

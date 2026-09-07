@@ -4,12 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::ffi::{CStr, OsStr, c_void};
-use std::os::unix::ffi::OsStrExt;
+use std::ffi::c_void;
 use std::path::PathBuf;
-use std::ptr::{null, null_mut};
+use std::ptr::null;
 
-use super::event_loop::send_event;
 use super::headers::*;
 use super::webview::WebviewData;
 use crate::WindowEvent;
@@ -52,13 +50,13 @@ pub(super) unsafe fn connect_signals(webview: *mut WebKitWebView, data: &Webview
     }
 }
 
-const extern "C" fn webview_on_drag_leave(
+extern "C" fn webview_on_drag_leave(
     _webview: *mut WebKitWebView,
     _context: *mut GdkDragContext,
     _time: u32,
-    data: &mut WebviewData,
+    data: &WebviewData,
 ) {
-    data.file_drop.leaving = true;
+    data.file_drop.borrow_mut().leaving = true;
 }
 
 extern "C" fn webview_on_drag_drop(
@@ -67,15 +65,23 @@ extern "C" fn webview_on_drag_drop(
     _x: i32,
     _y: i32,
     time: u32,
-    data: &mut WebviewData,
+    data: &WebviewData,
 ) -> i32 {
-    if data.file_drop.leaving
-        && let Some(paths) = data.file_drop.paths.take()
-    {
+    let data = unsafe { WebviewData::retain(data) };
+    let paths = {
+        let mut drop_state = data.file_drop.borrow_mut();
+        if drop_state.leaving {
+            drop_state.leaving = false;
+            drop_state.paths.take()
+        } else {
+            None
+        }
+    };
+    if let Some(paths) = paths {
         unsafe { gtk_drag_finish(context, 1, 0, time) };
-        data.file_drop.leaving = false;
+        let sender = data.attachment.event_sender();
         for path in paths {
-            send_event(crate::Event::Window(WindowEvent::DroppedFile(path)));
+            sender.send(WindowEvent::DroppedFile(path));
         }
         return 1;
     }
@@ -90,7 +96,7 @@ extern "C" fn webview_on_drag_data_received(
     selection_data: *mut GtkSelectionData,
     info: u32,
     _time: u32,
-    data: &mut WebviewData,
+    data: &WebviewData,
 ) {
     // WebKitGTK registers URI lists as target info 2. Other data requests are
     // used internally by the web view and are not native file drags.
@@ -98,23 +104,7 @@ extern "C" fn webview_on_drag_data_received(
         return;
     }
 
-    let uris = unsafe { gtk_selection_data_get_uris(selection_data) };
-    if !uris.is_null() {
-        let mut paths = Vec::new();
-        let mut uri = uris;
-        while !unsafe { *uri }.is_null() {
-            let filename = unsafe { g_filename_from_uri(*uri, null_mut(), null_mut()) };
-            if !filename.is_null() {
-                let path = PathBuf::from(OsStr::from_bytes(unsafe {
-                    CStr::from_ptr(filename).to_bytes()
-                }));
-                unsafe { g_free(filename as *mut c_void) };
-                paths.push(path);
-            }
-            uri = unsafe { uri.add(1) };
-        }
-        unsafe { g_strfreev(uris) };
-        data.file_drop.paths = Some(paths);
-        data.file_drop.leaving = false;
-    }
+    let paths = unsafe { gtk_dropped_paths(selection_data) };
+    data.file_drop.borrow_mut().paths = Some(paths);
+    data.file_drop.borrow_mut().leaving = false;
 }

@@ -10,9 +10,8 @@ use std::collections::HashSet;
 use std::process::{Command, exit};
 
 use anyhow::Result;
-use bwebview::{
-    Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
-};
+use bwebview::{WebviewBuilder, WebviewEvent};
+use bwindow::{Event, EventLoopBuilder, LogicalSize, Theme, WindowBuilder};
 use rust_embed::Embed;
 use serde::Serialize;
 use small_http::{Request, Response, Status};
@@ -83,6 +82,10 @@ fn man_show(req: &Request, _ctx: &()) -> Result<Response> {
     ))
 }
 
+pub(crate) enum AppEvent {
+    Webview(bwindow::WindowId, WebviewEvent),
+}
+
 fn main() {
     if !cfg!(any(target_os = "linux", target_os = "macos")) {
         eprintln!("ManExplorer can only be run on Linux and macOS");
@@ -90,6 +93,7 @@ fn main() {
     }
 
     let event_loop = EventLoopBuilder::new()
+        .with_user_event::<AppEvent>()
         .app_id("nl", "bplaat", "ManExplorer")
         .build();
 
@@ -112,12 +116,13 @@ fn main() {
         .remember_window_state();
     #[cfg(target_os = "macos")]
     {
-        window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+        window_builder = window_builder.macos_titlebar_style(bwindow::MacosTitlebarStyle::Hidden);
     }
     let mut window = window_builder.build();
 
     #[allow(unused)]
     let mut webview = WebviewBuilder::new(&window)
+        .on_event(event_loop.create_proxy(), AppEvent::Webview)
         .load_rust_embed_with_custom_handler::<WebAssets>(move |req| {
             let res = router.handle(req);
             if res.status != Status::NotFound {
@@ -138,9 +143,11 @@ fn main() {
     );
 
     event_loop.run(move |event| match event {
-        Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
+        Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageTitleChange(title))) => {
+            window.set_title(title)
+        }
         #[cfg(target_os = "macos")]
-        Event::Window(bwebview::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
+        Event::Window(_, bwindow::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
             if is_fullscreen {
                 webview.evaluate_script("document.body.classList.add('is-fullscreen');");
             } else {

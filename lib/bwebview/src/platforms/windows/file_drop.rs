@@ -11,7 +11,6 @@ use std::path::PathBuf;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use super::event_loop::send_event;
 use super::headers::*;
 use super::webview::WebviewData;
 use crate::WindowEvent;
@@ -20,6 +19,7 @@ use crate::WindowEvent;
 #[repr(C)]
 pub(super) struct FileDropTarget {
     interface: IDropTarget,
+    sender: bwindow::WindowEventSender,
     refs: AtomicU32,
     hwnd: HWND,
     valid: bool,
@@ -48,19 +48,19 @@ const IID_IDROP_TARGET: GUID = GUID {
     data4: [0xc0, 0, 0, 0, 0, 0, 0, 0x46],
 };
 
-impl Drop for WebviewData {
-    fn drop(&mut self) {
-        for target in &self.drop_targets {
-            unsafe { RevokeDragDrop(target.hwnd) };
-        }
+pub(super) fn revoke_file_drop_targets(data: &WebviewData) {
+    let targets = mem::take(&mut *data.drop_targets.borrow_mut());
+    for target in &targets {
+        unsafe { RevokeDragDrop(target.hwnd) };
     }
 }
 
 /// Registers a drop target on every WebView2 child window
-pub(super) unsafe fn install_file_drop_targets(data: &mut WebviewData) {
+pub(super) unsafe fn install_file_drop_targets(data: &WebviewData) {
     unsafe extern "system" fn enum_child(hwnd: HWND, data: LPARAM) -> BOOL {
-        let data = unsafe { &mut *(data as *mut WebviewData) };
+        let data = unsafe { &*(data as *const WebviewData) };
         let mut target = Box::new(FileDropTarget {
+            sender: data.attachment.event_sender(),
             interface: IDropTarget {
                 lpVtbl: &FILE_DROP_TARGET_VTBL,
             },
@@ -72,12 +72,12 @@ pub(super) unsafe fn install_file_drop_targets(data: &mut WebviewData) {
         if revoked != DRAGDROP_E_INVALIDHWND
             && unsafe { RegisterDragDrop(hwnd, &mut target.interface) } == S_OK
         {
-            data.drop_targets.push(target);
+            data.drop_targets.borrow_mut().push(target);
         }
         TRUE
     }
 
-    unsafe { EnumChildWindows(data.hwnd, enum_child, data as *mut WebviewData as LPARAM) };
+    unsafe { EnumChildWindows(data.hwnd, enum_child, data as *const WebviewData as LPARAM) };
 }
 
 unsafe extern "system" fn file_drop_query_interface(
@@ -160,7 +160,7 @@ unsafe extern "system" fn file_drop(
         && let Some(paths) = unsafe { file_drop_paths(data) }
     {
         for path in paths {
-            send_event(crate::Event::Window(WindowEvent::DroppedFile(path)));
+            target.sender.send(WindowEvent::DroppedFile(path));
         }
         unsafe { *effect = DROPEFFECT_COPY };
     } else {
@@ -197,18 +197,4 @@ unsafe fn file_drop_paths(data: *mut IDataObject) -> Option<Vec<PathBuf>> {
     }
     unsafe { ReleaseStgMedium(&mut medium) };
     Some(paths)
-}
-
-/// Reports the files of a WM_DROPFILES message dropped onto the window frame
-pub(super) unsafe fn handle_file_drop(drop: HDROP) {
-    let count = unsafe { DragQueryFileW(drop, u32::MAX, null_mut(), 0) };
-    for index in 0..count {
-        let length = unsafe { DragQueryFileW(drop, index, null_mut(), 0) };
-        let mut buffer = vec![0; length as usize + 1];
-        unsafe { DragQueryFileW(drop, index, buffer.as_mut_ptr(), buffer.len() as u32) };
-        send_event(crate::Event::Window(WindowEvent::DroppedFile(
-            OsString::from_wide(&buffer[..length as usize]).into(),
-        )));
-    }
-    unsafe { DragFinish(drop) };
 }

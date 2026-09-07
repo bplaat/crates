@@ -10,7 +10,8 @@
 
 use std::fs;
 
-use bwebview::{Event, EventLoopBuilder, LogicalSize, WebviewBuilder, WebviewEvent, WindowBuilder};
+use bwebview::{WebviewBuilder, WebviewEvent};
+use bwindow::{Event, EventLoopBuilder, LogicalSize, WindowBuilder};
 use directories::ProjectDirs;
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -35,8 +36,13 @@ enum IpcMessage {
 #[folder = "web"]
 struct WebAssets;
 
+enum AppEvent {
+    Webview(bwindow::WindowId, WebviewEvent),
+}
+
 fn main() {
     let event_loop = EventLoopBuilder::new()
+        .with_user_event::<AppEvent>()
         .app_id("nl", "bplaat", "TodoApp")
         .build();
 
@@ -49,6 +55,7 @@ fn main() {
         .build();
 
     let mut webview = WebviewBuilder::new(&window)
+        .on_event(event_loop.create_proxy(), AppEvent::Webview)
         .load_rust_embed::<WebAssets>()
         .build();
 
@@ -58,7 +65,11 @@ fn main() {
     let todos_config_path = config_dir.join("todos.json");
 
     event_loop.run(move |event| {
-        if let Event::Webview(WebviewEvent::MessageReceive(message)) = event {
+        if let Event::UserEvent(AppEvent::Webview(
+            _window_id,
+            WebviewEvent::MessageReceive(message),
+        )) = event
+        {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::GetTodos => {
                     let todos: Vec<Todo> = fs::read_to_string(&todos_config_path)

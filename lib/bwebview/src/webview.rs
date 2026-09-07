@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::rc::Rc;
+
 use crate::Window;
+
+pub(crate) type EventHandler = Rc<dyn Fn(crate::WebviewEvent)>;
 use crate::platforms::PlatformWebview;
 
 // MARK: CustomProtocol
@@ -31,6 +35,7 @@ type EmbedCustomHandler =
 
 /// Webview builder
 pub struct WebviewBuilder<'a> {
+    pub(crate) event_handler: Option<EventHandler>,
     pub(crate) window: &'a Window,
     pub(crate) should_load_url: Option<String>,
     pub(crate) should_load_html: Option<String>,
@@ -46,6 +51,7 @@ impl<'a> WebviewBuilder<'a> {
     /// Create new webview builder
     pub const fn new(window: &'a Window) -> Self {
         Self {
+            event_handler: None,
             window,
             should_load_url: None,
             should_load_html: None,
@@ -56,6 +62,19 @@ impl<'a> WebviewBuilder<'a> {
             #[cfg(feature = "rust-embed")]
             embed_custom_handler: None,
         }
+    }
+
+    /// Map browser notifications into typed messages for the main event loop.
+    pub fn on_event<T: Send + 'static>(
+        mut self,
+        proxy: bwindow::EventLoopProxy<T>,
+        map: impl Fn(bwindow::WindowId, crate::WebviewEvent) -> T + 'static,
+    ) -> Self {
+        let id = self.window.id();
+        self.event_handler = Some(Rc::new(move |event| {
+            let _ = proxy.send_user_event(map(id, event));
+        }));
+        self
     }
 
     /// Add custom protocol
@@ -134,7 +153,8 @@ impl<'a> WebviewBuilder<'a> {
             self = self.load_url("app://index.html");
         }
 
-        let mut platform = PlatformWebview::new(&self.window.platform);
+        let attachment = self.window.attach_content().expect("cannot attach webview");
+        let mut platform = PlatformWebview::new(attachment);
         platform.init_webview(self);
         Webview { platform }
     }

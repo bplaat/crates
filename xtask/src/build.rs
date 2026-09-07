@@ -303,15 +303,18 @@ impl Xtask {
                 continue;
             }
             let bundle = package.pointer("/metadata/bundle");
-            let uses_bwebview = package
+            let uses_windowing = package
                 .get("dependencies")
                 .and_then(Value::as_array)
                 .is_some_and(|dependencies| {
                     dependencies.iter().any(|dependency| {
-                        dependency.get("name").and_then(Value::as_str) == Some("bwebview")
+                        matches!(
+                            dependency.get("name").and_then(Value::as_str),
+                            Some("bwindow" | "bwebview")
+                        )
                     })
                 });
-            if bundle_only && bundle.is_none() || bundle.is_none() && !uses_bwebview {
+            if bundle_only && bundle.is_none() || bundle.is_none() && !uses_windowing {
                 continue;
             }
             let package_name = package

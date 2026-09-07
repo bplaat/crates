@@ -11,9 +11,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use bwebview::{
-    Event, EventLoopBuilder, LogicalSize, Theme, WebviewBuilder, WebviewEvent, WindowBuilder,
-};
+use bwebview::{WebviewBuilder, WebviewEvent};
+use bwindow::{Event, EventLoopBuilder, LogicalSize, Theme, WindowBuilder};
 use log::{info, warn};
 use rust_embed::Embed;
 use small_http::Response;
@@ -36,6 +35,11 @@ pub(crate) static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 struct WebAssets;
 
 // MARK: Main
+pub(crate) enum AppEvent {
+    Webview(bwindow::WindowId, WebviewEvent),
+    UserEvent(String),
+}
+
 fn main() {
     // Init logger
     simple_logger::init_with_level(if cfg!(debug_assertions) {
@@ -47,6 +51,7 @@ fn main() {
 
     // Create event loop
     let event_loop = EventLoopBuilder::new()
+        .with_user_event::<AppEvent>()
         .app_id("nl", "bplaat", "BassieLight")
         .build();
 
@@ -153,11 +158,14 @@ fn main() {
         .background_color(0x18181b);
     #[cfg(target_os = "macos")]
     {
-        window_builder = window_builder.macos_titlebar_style(bwebview::MacosTitlebarStyle::Hidden);
+        window_builder = window_builder.macos_titlebar_style(bwindow::MacosTitlebarStyle::Hidden);
     }
     let mut window = window_builder.build();
 
-    let mut webview = WebviewBuilder::new(&window).load_url(&url).build();
+    let mut webview = WebviewBuilder::new(&window)
+        .on_event(event_loop.create_proxy(), AppEvent::Webview)
+        .load_url(&url)
+        .build();
 
     #[cfg(target_os = "macos")]
     webview.add_user_script(
@@ -171,9 +179,11 @@ fn main() {
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {
         // Window events
-        Event::Webview(WebviewEvent::PageTitleChange(title)) => window.set_title(title),
+        Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageTitleChange(title))) => {
+            window.set_title(title)
+        }
         #[cfg(target_os = "macos")]
-        Event::Window(bwebview::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
+        Event::Window(_, bwindow::WindowEvent::MacosFullscreenChange(is_fullscreen)) => {
             if is_fullscreen {
                 webview.evaluate_script("document.body.classList.add('is-fullscreen');");
             } else {
@@ -182,19 +192,19 @@ fn main() {
         }
 
         // IPC events
-        Event::Webview(WebviewEvent::PageLoadStart) => {
+        Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageLoadStart)) => {
             IPC_CONNECTIONS
                 .lock()
                 .expect("Failed to lock IPC connections")
                 .push(IpcConnection::WebviewIpc(event_loop_proxy.clone()));
         }
-        Event::Webview(WebviewEvent::MessageReceive(message)) => {
+        Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::MessageReceive(message))) => {
             ipc_message_handler(
                 IpcConnection::WebviewIpc(event_loop_proxy.clone()),
                 &message,
             );
         }
-        Event::UserEvent(data) => webview.send_ipc_message(&data),
+        Event::UserEvent(AppEvent::UserEvent(data)) => webview.send_ipc_message(&data),
 
         _ => {}
     });
