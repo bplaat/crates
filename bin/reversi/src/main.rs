@@ -21,7 +21,6 @@ use bwindow::{
 use worker::{AiJob, AiResult, AiWorker};
 
 mod engine;
-mod profile;
 mod worker;
 use engine::{CellState, Move, Othello, Player};
 
@@ -250,11 +249,6 @@ enum AppEvent {
 
 fn main() {
     let smoke = std::env::args().any(|arg| arg == "--smoke");
-    let profiling = std::env::args().any(|arg| arg == "--profile-render");
-    assert!(
-        !(smoke && profiling),
-        "Choose either --smoke or --profile-render"
-    );
     let event_loop_builder = EventLoopBuilder::new()
         .with_user_event::<AppEvent>()
         .app_id("nl", "bplaat", "Reversi");
@@ -270,13 +264,18 @@ fn main() {
     let event_loop = event_loop_builder.build();
     let worker = AiWorker::new(event_loop.create_proxy());
     let theme = event_loop.theme();
-    let mut window = WindowBuilder::new()
+    let window_builder = WindowBuilder::new()
         .title("Reversi")
         .size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
         .min_size(LogicalSize::new(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT))
         .background_color(Palette::for_theme(theme).background)
-        .center()
-        .build();
+        .center();
+    let window_builder = if smoke {
+        window_builder
+    } else {
+        window_builder.remember_window_state()
+    };
+    let mut window = window_builder.build();
     let window_id = window.id();
     #[cfg(target_os = "macos")]
     if smoke {
@@ -284,7 +283,6 @@ fn main() {
     }
     let mut canvas = CanvasBuilder::new(&window).build();
     let mut game = Game::new(theme, 0.0);
-    let mut profile = profiling.then(|| profile::RenderProfile::new(&mut game));
     let completed = std::rc::Rc::new(std::cell::Cell::new(false));
     let result = completed.clone();
     let mut smoke_started = false;
@@ -292,28 +290,19 @@ fn main() {
     let mut showed_progress_cursor = false;
     #[cfg(target_os = "macos")]
     let mut smoke_themes = 0;
-    if smoke || profiling {
+    if smoke {
         let watchdog = event_loop.create_proxy();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(15));
-            let _ = watchdog.exit();
-        });
+        std::thread::Builder::new()
+            .name("smoke-watchdog".to_string())
+            .spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(15));
+                let _ = watchdog.exit();
+            })
+            .expect("Can't spawn smoke watchdog thread");
     }
     event_loop.run(move |event| {
         match event {
-            Event::Window(
-                _,
-                WindowEvent::MouseMove { .. }
-                | WindowEvent::MouseLeave
-                | WindowEvent::MouseDown(_)
-                | WindowEvent::MouseUp(_)
-                | WindowEvent::KeyDown(_)
-                | WindowEvent::KeyUp(_),
-            ) if profiling => {}
-            #[cfg(target_os = "macos")]
-            Event::MacosMenuItem(_) if profiling => {}
             Event::Window(id, WindowEvent::RedrawRequested) if id == window_id => {
-                let started = profiling.then(std::time::Instant::now);
                 assert!(canvas.draw(|context| {
                     game.window_size = LogicalSize::new(context.width(), context.height());
                     draw(
@@ -322,15 +311,6 @@ fn main() {
                         GameLayout::new(game.window_size, game.top_inset),
                     );
                 }));
-                if let Some(profile) = &mut profile {
-                    if profile.record(started.expect("profile timer").elapsed()) {
-                        completed.set(true);
-                        window.close();
-                    } else {
-                        window.request_redraw();
-                    }
-                    return;
-                }
                 if smoke && !smoke_started {
                     #[cfg(target_os = "macos")]
                     window.set_theme(Theme::Dark);
@@ -425,7 +405,6 @@ fn main() {
             _ => {}
         }
         if !window.is_closed()
-            && !profiling
             && let Some(job) = game.ai_job()
         {
             worker.submit(job);
@@ -435,11 +414,8 @@ fn main() {
         canvas.set_cursor(cursor);
         showed_progress_cursor |= cursor == CursorIcon::Progress;
     });
-    if smoke || profiling {
-        assert!(
-            result.get(),
-            "Reversi smoke test or render profile did not finish"
-        );
+    if smoke {
+        assert!(result.get(), "Reversi smoke test did not finish");
     }
 }
 

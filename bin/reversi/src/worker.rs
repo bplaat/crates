@@ -38,34 +38,37 @@ impl AiWorker {
         let stop = Arc::new(AtomicBool::new(false));
         let current = revision.clone();
         let stopping = stop.clone();
-        let thread = thread::spawn(move || {
-            while let Ok(mut job) = receiver.recv() {
-                // Only search the newest queued position after a reset.
-                for newer in receiver.try_iter() {
-                    job = newer;
+        let thread = thread::Builder::new()
+            .name("ai-worker".to_string())
+            .spawn(move || {
+                while let Ok(mut job) = receiver.recv() {
+                    // Only search the newest queued position after a reset.
+                    for newer in receiver.try_iter() {
+                        job = newer;
+                    }
+                    let cancelled = || {
+                        stopping.load(Ordering::Relaxed)
+                            || current.load(Ordering::Relaxed) != job.revision
+                    };
+                    if stopping.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if cancelled() {
+                        continue;
+                    }
+                    let movement =
+                        job.board
+                            .compute_move_cancellable(Player::White, 64, 500_000, &cancelled);
+                    if !cancelled()
+                        && proxy
+                            .send_user_event(AppEvent::Ai(AiResult { job, movement }))
+                            .is_err()
+                    {
+                        break;
+                    }
                 }
-                let cancelled = || {
-                    stopping.load(Ordering::Relaxed)
-                        || current.load(Ordering::Relaxed) != job.revision
-                };
-                if stopping.load(Ordering::Relaxed) {
-                    break;
-                }
-                if cancelled() {
-                    continue;
-                }
-                let movement =
-                    job.board
-                        .compute_move_cancellable(Player::White, 64, 500_000, &cancelled);
-                if !cancelled()
-                    && proxy
-                        .send_user_event(AppEvent::Ai(AiResult { job, movement }))
-                        .is_err()
-                {
-                    break;
-                }
-            }
-        });
+            })
+            .expect("Can't spawn AI worker thread");
         Self {
             sender: Some(sender),
             revision,
