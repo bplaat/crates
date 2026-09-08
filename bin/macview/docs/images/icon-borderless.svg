@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+    <defs>
+        <linearGradient id="background" x1="0" y1="0" x2="0" y2="1">
+            <stop stop-color="#29b6f0" />
+            <stop offset="1" stop-color="#1649c8" />
+        </linearGradient>
+    </defs>
+    <rect fill="url(#background)" width="1024" height="1024" />
+    <path fill="#8de5f5" d="M220 654L372 452Q388 430 406 452L628 748H244A24 24 0 0 1 220 724Z" />
+    <path fill="#fff" d="M390 748L612 500Q632 478 652 500L804 670V724A24 24 0 0 1 780 748Z" />
+    <circle cx="664" cy="380" r="54" fill="#ffdc80" />
+    <path
+        fill="#fff"
+        fill-rule="evenodd"
+        d="M244 232H780A68 68 0 0 1 848 300V724A68 68 0 0 1 780 792H244A68 68 0 0 1 176 724V300A68 68 0 0 1 244 232ZM244 276A24 24 0 0 0 220 300V724A24 24 0 0 0 244 748H780A24 24 0 0 0 804 724V300A24 24 0 0 0 780 276Z"
+    />
+</svg>

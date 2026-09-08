@@ -54,15 +54,15 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
     </a>
 </td>
 <td width="100" align="center">
-    <a href="./bin/manexplorer">
-        <img src="bin/manexplorer/docs/images/icon.svg" alt="ManExplorer icon" width="48" height="48"/><br/>
-        ManExplorer
+    <a href="./bin/macview">
+        <img src="bin/macview/docs/images/icon.svg" alt="MacView icon" width="48" height="48"/><br/>
+        MacView
     </a>
 </td>
 <td width="100" align="center">
-    <a href="./bin/navidrome">
-        <img src="bin/navidrome/docs/images/icon.svg" alt="Navidrome icon" width="48" height="48"/><br/>
-        Navidrome
+    <a href="./bin/manexplorer">
+        <img src="bin/manexplorer/docs/images/icon.svg" alt="ManExplorer icon" width="48" height="48"/><br/>
+        ManExplorer
     </a>
 </td>
 </tr>
@@ -71,6 +71,12 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
     <a href="./bin/music-dl">
         <img src="bin/music-dl/docs/images/icon.svg" alt="Music Downloader icon" width="48" height="48"/><br/>
         Music Downloader
+    </a>
+</td>
+<td width="100" align="center">
+    <a href="./bin/navidrome">
+        <img src="bin/navidrome/docs/images/icon.svg" alt="Navidrome icon" width="48" height="48"/><br/>
+        Navidrome
     </a>
 </td>
 <td width="100" align="center">
@@ -91,7 +97,6 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
         Sequel Explorer
     </a>
 </td>
-<td width="100"></td>
 </tr>
 </table>
 

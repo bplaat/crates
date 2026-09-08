@@ -12,6 +12,7 @@ platforms = ["macos"]
 name = "MacView"
 identifier = "nl.bplaat.MacView"
 copyright = "Copyright (c) 2026 Bastiaan van der Plaat"
+icon = "meta/macos/icon.icon"
 hardened_runtime = true
 
 [[package.metadata.bundle.appex]]
