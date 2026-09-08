@@ -9,6 +9,7 @@ authors = ["Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>"]
 repository = "https://github.com/bplaat/crates"
 
 [workspace.lints.rust]
+warnings = "deny"
 unreachable_pub = "deny"
 unused_qualifications = "deny"
 missing_docs = "deny"

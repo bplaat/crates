@@ -156,25 +156,6 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<(String, Option<
 }
 
 fn main() -> Result<()> {
-    const WARNINGS_CONFIGURED: &str = "CRATES_XTASK_WARNINGS_CONFIGURED";
-    if env::var_os(WARNINGS_CONFIGURED).is_none() {
-        let rustflags = env::var("RUSTFLAGS").unwrap_or_default();
-        let rustflags = format!(
-            "{rustflags}{}-D warnings",
-            if rustflags.is_empty() { "" } else { " " }
-        );
-        let status = Command::new(env::current_exe().context("failed to locate xtask executable")?)
-            .args(env::args_os().skip(1))
-            .env("RUSTFLAGS", rustflags)
-            .env(WARNINGS_CONFIGURED, "1")
-            .status()
-            .context("failed to restart xtask with warnings denied")?;
-        if !status.success() {
-            bail!("xtask failed with {status}");
-        }
-        return Ok(());
-    }
-
     let (task, package) = parse_args(env::args().skip(1))?;
     Xtask::new()?.run(&task, package.as_deref())
 }
