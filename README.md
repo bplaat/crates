@@ -37,31 +37,31 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 <tr>
 <td width="100" align="center">
     <a href="./bin/game2048">
-        <img src="bin/game2048/docs/images/icon.svg" alt="2048 icon" width="48" height="48"/><br/>
+        <img src="bin/game2048/meta/freedesktop/icons/128x128.png" alt="2048 icon" width="48" height="48"/><br/>
         2048
     </a>
 </td>
 <td width="100" align="center">
     <a href="./bin/bassielight">
-        <img src="bin/bassielight/docs/images/icon.svg" alt="BassieLight icon" width="48" height="48"/><br/>
+        <img src="bin/bassielight/meta/freedesktop/icons/128x128.png" alt="BassieLight icon" width="48" height="48"/><br/>
         BassieLight
     </a>
 </td>
 <td width="100" align="center">
     <a href="./bin/binman">
-        <img src="bin/binman/docs/images/icon.svg" alt="Binman icon" width="48" height="48"/><br/>
+        <img src="bin/binman/docs/images/icon.png" alt="Binman icon" width="48" height="48"/><br/>
         Binman
     </a>
 </td>
 <td width="100" align="center">
     <a href="./bin/macview">
-        <img src="bin/macview/docs/images/icon.svg" alt="MacView icon" width="48" height="48"/><br/>
+        <img src="bin/macview/docs/images/icon.png" alt="MacView icon" width="48" height="48"/><br/>
         MacView
     </a>
 </td>
 <td width="100" align="center">
     <a href="./bin/manexplorer">
-        <img src="bin/manexplorer/docs/images/icon.svg" alt="ManExplorer icon" width="48" height="48"/><br/>
+        <img src="bin/manexplorer/meta/freedesktop/icons/128x128.png" alt="ManExplorer icon" width="48" height="48"/><br/>
         ManExplorer
     </a>
 </td>
@@ -69,31 +69,31 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 <tr>
 <td width="100" align="center">
     <a href="./bin/music-dl">
-        <img src="bin/music-dl/docs/images/icon.svg" alt="Music Downloader icon" width="48" height="48"/><br/>
+        <img src="bin/music-dl/meta/freedesktop/icons/128x128.png" alt="Music Downloader icon" width="48" height="48"/><br/>
         Music Downloader
     </a>
 </td>
 <td width="100" align="center">
     <a href="./bin/navidrome">
-        <img src="bin/navidrome/docs/images/icon.svg" alt="Navidrome icon" width="48" height="48"/><br/>
+        <img src="bin/navidrome/meta/freedesktop/icons/128x128.png" alt="Navidrome icon" width="48" height="48"/><br/>
         Navidrome
     </a>
 </td>
 <td width="100" align="center">
     <a href="./bin/pixelfont">
-        <img src="bin/pixelfont/docs/images/icon.svg" alt="Pixel Font Editor icon" width="48" height="48"/><br/>
+        <img src="bin/pixelfont/meta/freedesktop/icons/128x128.png" alt="Pixel Font Editor icon" width="48" height="48"/><br/>
         Pixel Font Editor
     </a>
 </td>
 <td width="100" align="center">
     <a href="./bin/reversi">
-        <img src="bin/reversi/docs/images/icon.svg" alt="Reversi icon" width="48" height="48"/><br/>
+        <img src="bin/reversi/meta/freedesktop/icons/128x128.png" alt="Reversi icon" width="48" height="48"/><br/>
         Reversi
     </a>
 </td>
 <td width="100" align="center">
     <a href="./bin/sequelexplorer">
-        <img src="bin/sequelexplorer/docs/images/icon.svg" alt="Sequel Explorer icon" width="48" height="48"/><br/>
+        <img src="bin/sequelexplorer/meta/freedesktop/icons/128x128.png" alt="Sequel Explorer icon" width="48" height="48"/><br/>
         Sequel Explorer
     </a>
 </td>
