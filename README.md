@@ -103,11 +103,11 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 - [2048](bin/game2048) An offline desktop 2048 game app
 - [BassieLight](bin/bassielight) A simple lights controller with GUI
 - [Binman](bin/binman) A safe and minimal Windows cleanup tool
+- [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
 - [ManExplorer](bin/manexplorer) A simple man page explorer tool
 - [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 - [Music Downloader](bin/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](bin/pixelfont) An 8x8 pixel font editor
-- [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
 - [Reversi](bin/reversi) A native canvas board game with a background AI
 - [Sequel Explorer](bin/sequelexplorer) A read-only SQLite and MySQL database GUI viewer
 
