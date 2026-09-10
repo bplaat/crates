@@ -20,7 +20,6 @@ block2 = "0.6.2"
 objc2 = "0.6.4"
 
 [dev-dependencies]
-bcanvas = { path = "../bcanvas" }
 bwindow = { path = "../bwindow", features = ["dialog", "file_drop", "menu", "progress_bar"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

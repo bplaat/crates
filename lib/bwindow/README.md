@@ -1,7 +1,8 @@
 # Bassie Window Rust library
 
-Native windows and one main event loop for Rust. Supports AppKit, Win32, and GTK 3.
-Window contents are provided by sibling crates `bwebview` and `bcanvas`.
+Cross-platform native windows and a main event loop for Rust, using AppKit on macOS,
+Win32 on Windows, and GTK 3 on Linux. Add [bcanvas](../bcanvas) for native 2D
+drawing or [bwebview](../bwebview) for web content.
 
 ## Getting Started
 
@@ -18,14 +19,8 @@ event_loop.run(move |_event| {
 ```
 
 Use `EventLoopBuilder::new().with_user_event::<AppEvent>()` for typed worker and
-content events. Every window event carries a `WindowId`. Closing the last window
-or calling a proxy's `exit()` returns from `run`; sends after shutdown fail.
-
-A window accepts one content attachment. Its native handle and resize/close
-hooks let content backends integrate without accessing private window state.
-Dropping a window closes it and invalidates its attachment.
-Window setters do nothing after close, and geometry getters return zero. Use
-`is_closed()` to distinguish a closed window.
+content events. Every window event includes a `WindowId`. Closing the last window
+or calling a proxy's `exit()` stops the event loop.
 
 ## Input Events
 
@@ -67,10 +62,8 @@ Modifiers provide `shift_key()`, `ctrl_key()`, `alt_key()`, and `meta_key()`.
 Mouse positions are logical client-area pixels, analogous to `clientX`/`clientY`.
 Wheel deltas carry pixel or line units, with positive values scrolling right/down.
 Close requests support `prevent_default()` and `default_prevented()`; other events
-are not cancelable. There is no DOM tree, capture/bubbling, synthesized `click`, or
-IME text-input API. Key mappings are a subset of DOM values, and modifier/dead-key
-reporting is not yet browser-equivalent. `MouseButton::Other` retains native button
-numbers rather than DOM `button` values.
+are not cancelable. Key mappings are a subset of DOM values, and IME text input is
+not yet supported.
 
 `RedrawRequested` and `CloseRequested` retain native window terminology: they are
 not DOM `requestAnimationFrame` or `beforeunload` events.
@@ -83,10 +76,6 @@ not DOM `requestAnimationFrame` or `beforeunload` events.
 - Web content: attach `bwebview::WebviewBuilder` and map browser notifications into
   your application's typed events with `on_event(proxy, mapper)`.
 
-The siblings can share one event loop without depending on each other.
-Run `cargo run -p bwebview --example bwebview-canvas` for a mixed-content example;
-add `-- --smoke` to exercise IPC and closing the browser before the canvas.
-
 ## Features
 
 - `remember_window_state` (default): persist native window placement.
@@ -95,10 +84,24 @@ add `-- --smoke` to exercise IPC and closing the browser before the canvas.
 - `menu`: custom macOS menus.
 - `progress_bar`: Windows taskbar and GTK launcher progress.
 
-## Linux Dependencies
+## Linux
 
-Install the GTK 3 runtime libraries (GTK 3.18 or newer). Window-only applications
-do not require WebKitGTK. Set `BWINDOW_LIB_DIR` to a nonstandard library directory.
+The Linux backend requires the GTK 3.18 or newer runtime library. Development
+headers are not required.
+
+Debian / Ubuntu:
+
+```sh
+sudo apt install libgtk-3-0
+```
+
+On distributions using 64-bit `time_t`, install `libgtk-3-0t64` instead.
+
+Fedora:
+
+```sh
+sudo dnf install gtk3
+```
 
 ## License
 

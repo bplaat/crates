@@ -1,11 +1,11 @@
 # Bassie Canvas Rust library
 
-Native 2D drawing for [bwindow](../bwindow) windows, with no browser dependency.
+Cross-platform 2D drawing for [bwindow](../bwindow) windows using the system-native
+graphics API: Core Graphics on macOS, Direct2D on Windows, and Cairo on Linux.
 
 ## Features
 
 - Paths, clipping, transforms, solid RGBA colors, and text
-- CoreGraphics on macOS, Direct2D and DirectWrite on Windows, Cairo on GTK
 - Logical pixel coordinates and native pointer cursors
 - One event loop shared with window and webview content
 
@@ -33,22 +33,21 @@ event_loop.run(move |event| {
 
 Drawing state resets each frame; contexts cannot outlive the drawing callback.
 Request another frame with `window.request_redraw()` or `canvas.request_redraw()`.
-Repeated requests coalesce. Drawing after close or outside a paint callback returns
-false. Each window accepts one content attachment for its lifetime.
-Requests outside paint invalidate immediately; requests during paint are deferred
-and paced to avoid a busy redraw loop. This is not a display-synchronized animation
-API. Idle canvases do not run a recurring redraw timer.
+Repeated requests coalesce, and requests made while drawing schedule the next frame.
+Drawing after the window closes returns `false`.
 
 Keyboard and pointer events use bwindow input types. Images and IME text editing
 are not supported.
 
 ## Canvas 2D API
 
-The context follows [Canvas 2D](https://html.spec.whatwg.org/multipage/canvas.html) method names in Rust's snake_case. Drawing properties
-use getter/setter pairs such as `fill_style()` / `set_fill_style(color)` and
-`global_alpha()` / `set_global_alpha(alpha)`. Invalid alpha and line-width values
-are ignored, preserving the current value. `save()` / `restore()` include drawing
-styles, transforms, and clipping, but not the current path.
+The context follows
+[Canvas 2D](https://html.spec.whatwg.org/multipage/canvas.html) method names in
+Rust's snake_case. Drawing properties use getter/setter pairs such as
+`fill_style()` / `set_fill_style(color)` and `global_alpha()` /
+`set_global_alpha(alpha)`. Invalid alpha and line-width values are ignored,
+preserving the current value. `save()` / `restore()` include drawing styles,
+transforms, and clipping, but not the current path.
 
 This is a native subset, not a browser compatibility layer:
 
@@ -61,8 +60,8 @@ This is a native subset, not a browser compatibility layer:
   one corner radius.
 - Text direction is left-to-right; `Start` and `End` map to left and right.
   Native text baselines are approximations, not browser-identical typography.
-- Drawing state and paths reset each frame. The context is only available inside
-  `canvas.draw`, called from `WindowEvent::RedrawRequested`.
+- The context is only available inside `canvas.draw`, called from
+  `WindowEvent::RedrawRequested`.
 
 ## Cursors
 
@@ -70,30 +69,6 @@ Use `canvas.set_cursor(CursorIcon::Pointer)` for clickable content, `Default`
 for the arrow, or `Progress` for background work. macOS has no public busy cursor,
 so `Progress` currently uses the arrow there.
 Cursor changes apply only over the canvas and are ignored after close.
-
-## Linux Dependencies
-
-On Linux/BSD, install GTK 3.18+ and Cairo runtime libraries. Set `BWINDOW_LIB_DIR`
-for a nonstandard GTK library directory and `BCANVAS_LIB_DIR` for Cairo (it falls
-back to `BWINDOW_LIB_DIR`). Native development headers are not required.
-
-Cairo ignores singular or non-finite transform changes, keeping the previous
-transform so an invalid matrix cannot disable subsequent drawing in the frame.
-
-## Examples
-
-Run `cargo run -p bcanvas --example bcanvas-showcase` for an interactive demo.
-Add `-- --smoke` for a three-frame rendering check, or run `bcanvas-lifecycle`
-for the two-window teardown check.
-Run `cargo run -p bcanvas --release --example bcanvas-redraw` to measure native
-redraw scheduling.
-
-## Windows Drawing
-
-Windows canvas surfaces are opaque. Clearing uses the native render target's
-transparent-black clear (displayed as black), with an axis-aligned clip. Use
-`fill_rect` with the window background color when repainting a background,
-especially under rotated transforms.
 
 ## License
 

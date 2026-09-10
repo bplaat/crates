@@ -20,7 +20,7 @@ fn main() {
     println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_0)");
     println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_0_jsc_glib)");
     if target_os != "macos" && target_os != "windows" {
-        let search_dirs = search_dirs(&["BWEBVIEW_LIB_DIR", "BWINDOW_LIB_DIR"]);
+        let search_dirs = search_dirs();
         gtk_cfgs(&search_dirs);
         if let Some(webkit) = find_library(&search_dirs, "webkit2gtk-4.1") {
             link_library(&webkit);
@@ -45,7 +45,7 @@ fn main() {
             println!("cargo::rustc-cfg=webkit2gtk_4_0");
         } else {
             panic!(
-                "could not find the WebKitGTK runtime library (webkit2gtk-4.1 or webkit2gtk-4.0); searched: {}. Set BWEBVIEW_LIB_DIR to its library directory",
+                "could not find the WebKitGTK runtime library (webkit2gtk-4.1 or webkit2gtk-4.0); searched: {}",
                 display_paths(&search_dirs)
             );
         }
@@ -78,7 +78,7 @@ fn find_library(search_dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
 fn require_library(search_dirs: &[PathBuf], name: &str) -> PathBuf {
     find_library(search_dirs, name).unwrap_or_else(|| {
         panic!(
-            "could not find the {name} runtime library; searched: {}. Set BWEBVIEW_LIB_DIR to its library directory",
+            "could not find the {name} runtime library; searched: {}",
             display_paths(search_dirs)
         )
     })
@@ -126,14 +126,8 @@ fn display_paths(paths: &[PathBuf]) -> String {
         .join(", ")
 }
 
-fn search_dirs(variables: &[&str]) -> Vec<PathBuf> {
+fn search_dirs() -> Vec<PathBuf> {
     let mut search_dirs = Vec::new();
-    for variable in variables {
-        println!("cargo::rerun-if-env-changed={variable}");
-        if let Some(path) = env::var_os(variable) {
-            push_unique(&mut search_dirs, PathBuf::from(path));
-        }
-    }
     if let Some(multiarch) = command_stdout("cc", &["-print-multiarch"]) {
         let multiarch = multiarch.trim();
         if !multiarch.is_empty() {
