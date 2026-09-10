@@ -177,10 +177,10 @@ impl EntryQuery {
     }
 }
 
-pub(crate) fn set_password(service: &str, account: &str, password: &str) -> Result<()> {
+pub(crate) fn set_secret(service: &str, account: &str, secret: &[u8]) -> Result<()> {
     let entry = EntryQuery::new(service, account)?;
     let query = entry.dictionary()?;
-    let data = SensitiveData::new(password.as_bytes())?;
+    let data = SensitiveData::new(secret)?;
     // SAFETY: Security framework constants are valid and data remains alive for the call.
     let update = unsafe { OwnedCf::dictionary(&[(kSecValueData, data.object.0)])? };
     // SAFETY: query and update are valid dictionaries for SecItemUpdate.
@@ -210,7 +210,7 @@ pub(crate) fn set_password(service: &str, account: &str, password: &str) -> Resu
     }
 }
 
-pub(crate) fn get_password(service: &str, account: &str) -> Result<String> {
+pub(crate) fn get_secret(service: &str, account: &str) -> Result<Vec<u8>> {
     let entry = EntryQuery::new(service, account)?;
     // SAFETY: Security and Core Foundation constants are valid process-lifetime objects.
     let query = unsafe {
@@ -231,16 +231,15 @@ pub(crate) fn get_password(service: &str, account: &str) -> Result<String> {
     if status != ERR_SEC_SUCCESS {
         return Err(status_error("load", status));
     }
-    let data = OwnedCf::from_created(result, "load Keychain password")?;
+    let data = OwnedCf::from_created(result, "load Keychain secret")?;
     // SAFETY: a successful data-returning Keychain query returns a valid CFData object.
     let length = unsafe { CFDataGetLength(data.0) };
     if length == 0 {
-        return Ok(String::new());
+        return Ok(Vec::new());
     }
     // SAFETY: the CFData remains alive and exposes `length` bytes.
     let bytes = unsafe { std::slice::from_raw_parts(CFDataGetBytePtr(data.0), length as usize) };
-    String::from_utf8(bytes.to_vec())
-        .map_err(|_| Error::Platform("Keychain returned a non-UTF-8 password".to_string()))
+    Ok(bytes.to_vec())
 }
 
 pub(crate) fn delete_credential(service: &str, account: &str) -> Result<()> {

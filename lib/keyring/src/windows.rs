@@ -78,10 +78,10 @@ unsafe extern "system" {
     fn GetLastError() -> u32;
 }
 
-pub(crate) fn set_password(service: &str, account: &str, password: &str) -> Result<()> {
+pub(crate) fn set_secret(service: &str, account: &str, secret: &[u8]) -> Result<()> {
     let mut target = wide(&format!("{service}/{account}"));
     let mut username = wide(account);
-    let mut secret = Zeroizing::new(password.as_bytes().to_vec());
+    let mut secret = Zeroizing::new(secret.to_vec());
     let credential = CredentialW {
         Flags: 0,
         Type: CRED_TYPE_GENERIC,
@@ -108,7 +108,7 @@ pub(crate) fn set_password(service: &str, account: &str, password: &str) -> Resu
     }
 }
 
-pub(crate) fn get_password(service: &str, account: &str) -> Result<String> {
+pub(crate) fn get_secret(service: &str, account: &str) -> Result<Vec<u8>> {
     let target = wide(&format!("{service}/{account}"));
     let mut credential = null_mut();
     // SAFETY: target is NUL-terminated and credential points to writable pointer storage.
@@ -125,7 +125,7 @@ pub(crate) fn get_password(service: &str, account: &str) -> Result<String> {
     // Empty credentials may use a null blob pointer, which cannot be passed to Rust slice APIs.
     // SAFETY: CredReadW returned a valid credential allocation owned by credential.
     if unsafe { (*credential.0).CredentialBlobSize } == 0 {
-        return Ok(String::new());
+        return Ok(Vec::new());
     }
     // SAFETY: CredReadW returned a valid credential allocation with a blob of the declared size.
     let bytes = unsafe {
@@ -134,9 +134,7 @@ pub(crate) fn get_password(service: &str, account: &str) -> Result<String> {
             (*credential.0).CredentialBlobSize as usize,
         )
     };
-    String::from_utf8(bytes.to_vec()).map_err(|_| {
-        Error::Platform("Windows Credential Manager returned a non-UTF-8 password".to_string())
-    })
+    Ok(bytes.to_vec())
 }
 
 pub(crate) fn delete_credential(service: &str, account: &str) -> Result<()> {

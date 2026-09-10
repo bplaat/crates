@@ -60,7 +60,7 @@ impl std::error::Error for Error {}
 /// A result returned by the system credential store.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// A password identified by a service and account name.
+/// A secret identified by a service and account name.
 #[derive(Debug, Clone)]
 pub struct Entry {
     service: String,
@@ -79,17 +79,17 @@ impl Entry {
         })
     }
 
-    /// Stores or replaces this entry's password.
-    pub fn set_password(&self, password: &str) -> Result<()> {
-        imp::set_password(&self.service, &self.account, password)
+    /// Stores or replaces this entry's secret.
+    pub fn set_secret(&self, secret: &[u8]) -> Result<()> {
+        imp::set_secret(&self.service, &self.account, secret)
     }
 
-    /// Loads this entry's password.
-    pub fn get_password(&self) -> Result<String> {
-        imp::get_password(&self.service, &self.account)
+    /// Loads this entry's secret.
+    pub fn get_secret(&self) -> Result<Vec<u8>> {
+        imp::get_secret(&self.service, &self.account)
     }
 
-    /// Deletes this entry's password.
+    /// Deletes this entry's secret.
     pub fn delete_credential(&self) -> Result<()> {
         imp::delete_credential(&self.service, &self.account)
     }
@@ -118,12 +118,12 @@ mod tests {
     fn native_store_round_trip() {
         let account = format!("test-{}", std::process::id());
         let entry = Entry::new("nl.bplaat.keyring.tests", &account).expect("entry creation failed");
-        entry.set_password("test password").expect("store failed");
-        let password = Zeroizing::new(entry.get_password().expect("load failed"));
-        entry.set_password("").expect("store empty failed");
-        let empty_password = Zeroizing::new(entry.get_password().expect("load empty failed"));
+        entry.set_secret(b"test\0secret\xff").expect("store failed");
+        let secret = Zeroizing::new(entry.get_secret().expect("load failed"));
+        entry.set_secret(b"").expect("store empty failed");
+        let empty_secret = Zeroizing::new(entry.get_secret().expect("load empty failed"));
         entry.delete_credential().expect("delete failed");
-        assert_eq!(password.as_str(), "test password");
-        assert!(empty_password.is_empty());
+        assert_eq!(secret.as_slice(), b"test\0secret\xff");
+        assert!(empty_secret.is_empty());
     }
 }

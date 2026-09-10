@@ -9,8 +9,6 @@
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr::{null, null_mut};
 
-use zeroize::Zeroizing;
-
 use crate::{Error, Result};
 
 const SECRET_SCHEMA_NONE: i32 = 0;
@@ -18,6 +16,9 @@ const SECRET_SCHEMA_ATTRIBUTE_STRING: i32 = 0;
 
 #[repr(C)]
 struct SecretSchema([u8; 0]);
+
+#[repr(C)]
+struct SecretValue([u8; 0]);
 
 #[repr(C)]
 struct GError {
@@ -29,28 +30,34 @@ struct GError {
 unsafe extern "C" {
     fn secret_schema_new(name: *const c_char, flags: i32, ...) -> *mut SecretSchema;
     fn secret_schema_unref(schema: *mut SecretSchema);
-    fn secret_password_store_sync(
+    fn secret_password_store_binary_sync(
         schema: *const SecretSchema,
         collection: *const c_char,
         label: *const c_char,
-        password: *const c_char,
+        value: *mut SecretValue,
         cancellable: *mut c_void,
         error: *mut *mut GError,
         ...
     ) -> i32;
-    fn secret_password_lookup_sync(
+    fn secret_password_lookup_binary_sync(
         schema: *const SecretSchema,
         cancellable: *mut c_void,
         error: *mut *mut GError,
         ...
-    ) -> *mut c_char;
+    ) -> *mut SecretValue;
     fn secret_password_clear_sync(
         schema: *const SecretSchema,
         cancellable: *mut c_void,
         error: *mut *mut GError,
         ...
     ) -> i32;
-    fn secret_password_free(password: *mut c_char);
+    fn secret_value_new(
+        secret: *const c_char,
+        length: isize,
+        content_type: *const c_char,
+    ) -> *mut SecretValue;
+    fn secret_value_get(value: *mut SecretValue, length: *mut usize) -> *const c_char;
+    fn secret_value_unref(value: *mut SecretValue);
     fn g_error_free(error: *mut GError);
 }
 
@@ -87,37 +94,41 @@ impl Drop for Schema {
     }
 }
 
-struct SecretCString(Zeroizing<Vec<u8>>);
+struct OwnedSecretValue(*mut SecretValue);
 
-impl SecretCString {
-    fn new(value: &str) -> Result<Self> {
-        if value.as_bytes().contains(&0) {
-            return Err(Error::InvalidInput);
-        }
-        let mut bytes = Vec::with_capacity(value.len() + 1);
-        bytes.extend_from_slice(value.as_bytes());
-        bytes.push(0);
-        Ok(Self(Zeroizing::new(bytes)))
-    }
-
-    fn as_ptr(&self) -> *const c_char {
-        self.0.as_ptr().cast()
+impl Drop for OwnedSecretValue {
+    fn drop(&mut self) {
+        // SAFETY: this wrapper owns the reference returned by libsecret.
+        unsafe { secret_value_unref(self.0) };
     }
 }
 
-pub(crate) fn set_password(service: &str, account: &str, password: &str) -> Result<()> {
+pub(crate) fn set_secret(service: &str, account: &str, secret: &[u8]) -> Result<()> {
     let schema = Schema::new()?;
     let service = c_string(service)?;
     let account = c_string(account)?;
-    let password = SecretCString::new(password)?;
+    // SAFETY: libsecret copies `secret.len()` bytes and the content type is NUL-terminated.
+    let value = unsafe {
+        secret_value_new(
+            secret.as_ptr().cast(),
+            secret.len() as isize,
+            c"application/octet-stream".as_ptr(),
+        )
+    };
+    if value.is_null() {
+        return Err(Error::Platform(
+            "failed to create libsecret value".to_string(),
+        ));
+    }
+    let value = OwnedSecretValue(value);
     let mut error = null_mut();
     // SAFETY: pointers remain valid for the call, attributes match the schema, and varargs end in NULL.
     let succeeded = unsafe {
-        secret_password_store_sync(
+        secret_password_store_binary_sync(
             schema.0,
             null(),
             service.as_ptr(),
-            password.as_ptr(),
+            value.0,
             null_mut(),
             &mut error,
             c"service".as_ptr(),
@@ -139,14 +150,14 @@ pub(crate) fn set_password(service: &str, account: &str, password: &str) -> Resu
     }
 }
 
-pub(crate) fn get_password(service: &str, account: &str) -> Result<String> {
+pub(crate) fn get_secret(service: &str, account: &str) -> Result<Vec<u8>> {
     let schema = Schema::new()?;
     let service = c_string(service)?;
     let account = c_string(account)?;
     let mut error = null_mut();
     // SAFETY: pointers remain valid for the call, attributes match the schema, and varargs end in NULL.
-    let password = unsafe {
-        secret_password_lookup_sync(
+    let value = unsafe {
+        secret_password_lookup_binary_sync(
             schema.0,
             null_mut(),
             &mut error,
@@ -157,18 +168,26 @@ pub(crate) fn get_password(service: &str, account: &str) -> Result<String> {
             null::<c_char>(),
         )
     };
+    let value = (!value.is_null()).then(|| OwnedSecretValue(value));
     if !error.is_null() {
         return Err(take_error(error, "load"));
     }
-    if password.is_null() {
+    let Some(value) = value else {
         return Err(Error::NoEntry);
+    };
+    let mut length = 0;
+    // SAFETY: value is a valid SecretValue and length points to writable storage.
+    let bytes = unsafe { secret_value_get(value.0, &mut length) };
+    if length == 0 {
+        return Ok(Vec::new());
     }
-    // SAFETY: libsecret returned a valid NUL-terminated password string.
-    let bytes = unsafe { CStr::from_ptr(password) }.to_bytes().to_vec();
-    // SAFETY: password was allocated by libsecret and must be wiped and freed with this function.
-    unsafe { secret_password_free(password) };
-    String::from_utf8(bytes)
-        .map_err(|_| Error::Platform("libsecret returned a non-UTF-8 password".to_string()))
+    if bytes.is_null() {
+        return Err(Error::Platform(
+            "libsecret returned an invalid secret".to_string(),
+        ));
+    }
+    // SAFETY: libsecret reports that bytes points to `length` bytes owned by value.
+    Ok(unsafe { std::slice::from_raw_parts(bytes.cast(), length) }.to_vec())
 }
 
 pub(crate) fn delete_credential(service: &str, account: &str) -> Result<()> {
@@ -213,23 +232,4 @@ fn take_error(error: *mut GError, operation: &str) -> Error {
     Error::Platform(format!(
         "failed to {operation} libsecret credential: {message}"
     ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn secret_c_string_is_nul_terminated() {
-        let value = SecretCString::new("secret").expect("secret string creation failed");
-        assert_eq!(value.0.as_slice(), b"secret\0");
-    }
-
-    #[test]
-    fn secret_c_string_rejects_embedded_nul() {
-        assert!(matches!(
-            SecretCString::new("secret\0suffix"),
-            Err(Error::InvalidInput)
-        ));
-    }
 }

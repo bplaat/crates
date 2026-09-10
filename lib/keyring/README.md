@@ -27,8 +27,8 @@ credentials.
 ```rs
 fn main() -> Result<(), keyring::Error> {
     let entry = keyring::Entry::new("com.example.App", "account")?;
-    entry.set_password("secret")?;
-    let password = entry.get_password()?;
+    entry.set_secret(b"secret")?;
+    let secret = entry.get_secret()?;
     entry.delete_credential()?;
     Ok(())
 }

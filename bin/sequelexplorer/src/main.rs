@@ -277,9 +277,14 @@ fn open_mysql(
     let password = match request.password {
         Some(password) => Ok(password),
         None => CredentialEntry::new(MYSQL_CREDENTIAL_SERVICE, &credential_account)
-            .and_then(|entry| entry.get_password())
-            .map(Zeroizing::new)
-            .map_err(|error| format!("Failed to load saved password: {error}")),
+            .and_then(|entry| entry.get_secret())
+            .map_err(|error| format!("Failed to load saved password: {error}"))
+            .and_then(|secret| {
+                let secret = Zeroizing::new(secret);
+                std::str::from_utf8(&secret)
+                    .map(|password| Zeroizing::new(password.to_string()))
+                    .map_err(|_| "Saved password is not valid UTF-8".to_string())
+            }),
     };
     let password = match password {
         Ok(password) => password,
@@ -331,7 +336,7 @@ fn open_mysql(
                     (true, None)
                 } else {
                     match CredentialEntry::new(MYSQL_CREDENTIAL_SERVICE, &credential_account)
-                        .and_then(|entry| entry.set_password(settings.password()))
+                        .and_then(|entry| entry.set_secret(settings.password().as_bytes()))
                     {
                         Ok(()) => (true, None),
                         Err(error) => (false, Some(error.to_string())),

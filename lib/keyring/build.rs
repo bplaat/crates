@@ -32,8 +32,8 @@ fn main() {
     }
 
     let secret = require_library(&search_dirs, "secret-1");
-    if !library_has_symbol(&secret, b"secret_password_store_sync") {
-        panic!("keyring requires a libsecret-1 runtime with the simple password API");
+    if !library_has_symbol(&secret, b"secret_password_store_binary_sync") {
+        panic!("keyring requires libsecret-1 0.19 or newer");
     }
     link_library(&secret);
     link_library(&require_library(&search_dirs, "glib-2.0"));
