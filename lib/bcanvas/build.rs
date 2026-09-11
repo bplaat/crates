@@ -11,9 +11,7 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     let target = env::var("CARGO_CFG_TARGET_OS").expect("target OS");
-    if target == "windows" {
-        compile_example_manifest();
-    } else if target != "macos" {
+    if target != "macos" && target != "windows" {
         let directories = search_dirs();
         link_library(&require_library(&directories, "cairo"));
     }
@@ -101,24 +99,4 @@ fn search_dirs() -> Vec<PathBuf> {
         push_unique(&mut search_dirs, PathBuf::from(path));
     }
     search_dirs
-}
-
-fn compile_example_manifest() {
-    let manifest = format!(
-        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-    <assemblyIdentity type="win32" name="bcanvas.examples" version="{}.0" processorArchitecture="*"/>
-    <dependency>
-        <dependentAssembly>
-            <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
-        </dependentAssembly>
-    </dependency>
-</assembly>
-"#,
-        env!("CARGO_PKG_VERSION")
-    );
-    winresource::WindowsResource::new()
-        .set_manifest(&manifest)
-        .compile_for_examples()
-        .expect("Failed to compile bcanvas example manifest");
 }

@@ -13,9 +13,6 @@ fn main() {
     println!("cargo::rustc-check-cfg=cfg(gtk3_20)");
     println!("cargo::rustc-check-cfg=cfg(gtk3_22)");
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
-    if target_os == "windows" {
-        compile_example_manifest();
-    }
     println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_1)");
     println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_0)");
     println!("cargo::rustc-check-cfg=cfg(webkit2gtk_4_0_jsc_glib)");
@@ -152,24 +149,4 @@ fn gtk_cfgs(search_dirs: &[PathBuf]) {
     {
         println!("cargo::rustc-cfg=gtk3_22");
     }
-}
-
-fn compile_example_manifest() {
-    let manifest = format!(
-        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-    <assemblyIdentity type="win32" name="bwebview.examples" version="{}.0" processorArchitecture="*"/>
-    <dependency>
-        <dependentAssembly>
-            <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
-        </dependentAssembly>
-    </dependency>
-</assembly>
-"#,
-        env!("CARGO_PKG_VERSION")
-    );
-    winresource::WindowsResource::new()
-        .set_manifest(&manifest)
-        .compile_for_examples()
-        .expect("Failed to compile bwebview example manifest");
 }
