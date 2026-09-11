@@ -8,7 +8,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use bwindow::ffi::{GInputStream, GdkRGBA};
+pub(crate) use bwindow::ffi::*;
 
 // MARK: Soup
 #[repr(C)]

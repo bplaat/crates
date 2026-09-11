@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -12,7 +12,7 @@
 
 use std::ffi::c_void;
 
-use bwindow::ffi::*;
+pub(crate) use bwindow::ffi::*;
 
 #[repr(C)]
 pub(crate) struct EventRegistrationToken {
@@ -55,8 +55,8 @@ pub(crate) struct ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandlerVtbl
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) Invoke: unsafe extern "system" fn(
         This: *mut ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler,
         hr: HRESULT,
@@ -79,7 +79,7 @@ impl ICoreWebView2Environment {
         unsafe { ((*self.lpVtbl).QueryInterface)(self as *const _ as *mut _, riid, ppvObject) }
     }
 
-    pub(crate) unsafe fn AddRef(&self) -> HRESULT {
+    pub(crate) unsafe fn AddRef(&self) -> u32 {
         unsafe { ((*self.lpVtbl).AddRef)(self as *const _ as *mut _) }
     }
 
@@ -125,8 +125,8 @@ pub(crate) struct ICoreWebView2EnvironmentVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     CreateCoreWebView2Controller: unsafe extern "system" fn(
         This: *mut ICoreWebView2Environment,
         parentWindow: HWND,
@@ -156,8 +156,8 @@ pub(crate) struct ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl 
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) Invoke: unsafe extern "system" fn(
         This: *mut ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
         hr: HRESULT,
@@ -184,7 +184,7 @@ impl ICoreWebView2Controller {
         unsafe { ((*self.lpVtbl).QueryInterface)(self as *const _ as *mut _, riid, ppvObject) }
     }
 
-    pub(crate) unsafe fn AddRef(&self) -> HRESULT {
+    pub(crate) unsafe fn AddRef(&self) -> u32 {
         unsafe { ((*self.lpVtbl).AddRef)(self as *const _ as *mut _) }
     }
 
@@ -208,8 +208,8 @@ pub(crate) struct ICoreWebView2ControllerVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     padding: [usize; 1],
     put_IsVisible:
         unsafe extern "system" fn(This: *mut ICoreWebView2Controller, isVisible: BOOL) -> HRESULT,
@@ -250,8 +250,8 @@ pub(crate) struct ICoreWebView2Controller2Vtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     padding: [usize; 24],
     put_DefaultBackgroundColor: unsafe extern "system" fn(
         This: *mut ICoreWebView2Controller2,
@@ -273,7 +273,7 @@ pub(crate) struct ICoreWebView2Controller4 {
 }
 
 impl ICoreWebView2Controller4 {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 
@@ -289,8 +289,8 @@ pub(crate) struct ICoreWebView2Controller4Vtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     padding: [usize; 34],
     put_AllowExternalDrop:
         unsafe extern "system" fn(This: *mut ICoreWebView2Controller4, value: BOOL) -> HRESULT,
@@ -310,7 +310,7 @@ pub(crate) struct ICoreWebView2Environment10 {
 }
 
 impl ICoreWebView2Environment10 {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 
@@ -347,8 +347,8 @@ pub(crate) struct ICoreWebView2Environment10Vtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     padding: [usize; 17],
     CreateCoreWebView2ControllerOptions: unsafe extern "system" fn(
         This: *mut ICoreWebView2Environment10,
@@ -377,7 +377,7 @@ impl ICoreWebView2ControllerOptions {
         unsafe { ((*self.lpVtbl).QueryInterface)(self as *const _ as *mut _, riid, ppvObject) }
     }
 
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 }
@@ -389,8 +389,8 @@ pub(crate) struct ICoreWebView2ControllerOptionsVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
 }
 
 // ICoreWebView2ControllerOptions3
@@ -407,7 +407,7 @@ pub(crate) struct ICoreWebView2ControllerOptions3 {
 }
 
 impl ICoreWebView2ControllerOptions3 {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 
@@ -423,8 +423,8 @@ pub(crate) struct ICoreWebView2ControllerOptions3Vtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     padding: [usize; 7],
     put_DefaultBackgroundColor: unsafe extern "system" fn(
         This: *mut ICoreWebView2ControllerOptions3,
@@ -576,8 +576,8 @@ pub(crate) struct ICoreWebView2Vtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     get_Settings: unsafe extern "system" fn(
         This: *mut ICoreWebView2,
         settings: *mut *mut ICoreWebView2Settings,
@@ -659,8 +659,8 @@ pub(crate) struct ICoreWebView2WebMessageReceivedEventHandlerVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) Invoke: unsafe extern "system" fn(
         This: *mut ICoreWebView2WebMessageReceivedEventHandler,
         sender: *mut ICoreWebView2,
@@ -687,8 +687,8 @@ pub(crate) struct ICoreWebView2WebMessageReceivedEventArgsVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     padding: [usize; 2],
     pub(crate) TryGetWebMessageAsString: unsafe extern "system" fn(
         This: *mut ICoreWebView2WebMessageReceivedEventArgs,
@@ -719,8 +719,8 @@ pub(crate) struct ICoreWebView2SettingsVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
 }
 
 // ICoreWebView2Settings2
@@ -749,8 +749,8 @@ pub(crate) struct ICoreWebView2Settings2Vtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     padding: [usize; 19],
     put_UserAgent: unsafe extern "system" fn(
         This: *mut ICoreWebView2Settings2,
@@ -777,8 +777,8 @@ pub(crate) struct ICoreWebView2NavigationStartingEventHandlerVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) Invoke: unsafe extern "system" fn(
         This: *mut ICoreWebView2NavigationStartingEventHandler,
         sender: *mut ICoreWebView2,
@@ -805,8 +805,8 @@ pub(crate) struct ICoreWebView2NavigationCompletedEventHandlerVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) Invoke: unsafe extern "system" fn(
         This: *mut ICoreWebView2NavigationCompletedEventHandler,
         sender: *mut ICoreWebView2,
@@ -828,8 +828,8 @@ pub(crate) struct ICoreWebView2DocumentTitleChangedEventHandlerVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) Invoke: unsafe extern "system" fn(
         This: *mut ICoreWebView2DocumentTitleChangedEventHandler,
         sender: *mut ICoreWebView2,
@@ -851,8 +851,8 @@ pub(crate) struct ICoreWebView2NewWindowRequestedEventHandlerVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) Invoke: unsafe extern "system" fn(
         This: *mut ICoreWebView2NewWindowRequestedEventHandler,
         sender: *mut ICoreWebView2,
@@ -883,8 +883,8 @@ pub(crate) struct ICoreWebView2NewWindowRequestedEventArgsVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) get_Uri: unsafe extern "system" fn(
         This: *mut ICoreWebView2NewWindowRequestedEventArgs,
         uri: *mut *mut w_char,
@@ -910,8 +910,8 @@ pub(crate) struct ICoreWebView2WebResourceRequestedEventHandlerVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) Invoke: unsafe extern "system" fn(
         This: *mut ICoreWebView2WebResourceRequestedEventHandler,
         sender: *mut ICoreWebView2,
@@ -948,8 +948,8 @@ pub(crate) struct ICoreWebView2WebResourceRequestedEventArgsVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) get_Request: unsafe extern "system" fn(
         This: *mut ICoreWebView2WebResourceRequestedEventArgs,
         request: *mut *mut ICoreWebView2WebResourceRequest,
@@ -968,7 +968,7 @@ pub(crate) struct ICoreWebView2WebResourceRequest {
 }
 
 impl ICoreWebView2WebResourceRequest {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 
@@ -999,8 +999,8 @@ pub(crate) struct ICoreWebView2WebResourceRequestVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) get_Uri: unsafe extern "system" fn(
         This: *mut ICoreWebView2WebResourceRequest,
         uri: *mut *mut w_char,
@@ -1029,7 +1029,7 @@ pub(crate) struct ICoreWebView2HttpRequestHeaders {
 }
 
 impl ICoreWebView2HttpRequestHeaders {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 
@@ -1048,8 +1048,8 @@ pub(crate) struct ICoreWebView2HttpRequestHeadersVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     padding: [usize; 5],
     pub(crate) GetIterator: unsafe extern "system" fn(
         This: *mut ICoreWebView2HttpRequestHeaders,
@@ -1064,7 +1064,7 @@ pub(crate) struct ICoreWebView2HttpRequestHeadersIterator {
 }
 
 impl ICoreWebView2HttpRequestHeadersIterator {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 
@@ -1092,8 +1092,8 @@ pub(crate) struct ICoreWebView2HttpRequestHeadersIteratorVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
     pub(crate) GetCurrentHeader: unsafe extern "system" fn(
         This: *mut ICoreWebView2HttpRequestHeadersIterator,
         name: *mut *mut w_char,
@@ -1116,7 +1116,7 @@ pub(crate) struct ICoreWebView2WebResourceResponse {
 }
 
 impl ICoreWebView2WebResourceResponse {
-    pub(crate) unsafe fn Release(&self) -> HRESULT {
+    pub(crate) unsafe fn Release(&self) -> u32 {
         unsafe { ((*self.lpVtbl).Release)(self as *const _ as *mut _) }
     }
 }
@@ -1128,8 +1128,8 @@ pub(crate) struct ICoreWebView2WebResourceResponseVtbl {
         riid: *const GUID,
         ppvObject: *mut *mut c_void,
     ) -> HRESULT,
-    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
-    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> HRESULT,
+    pub(crate) AddRef: unsafe extern "system" fn(This: *mut c_void) -> u32,
+    pub(crate) Release: unsafe extern "system" fn(This: *mut c_void) -> u32,
 }
 
 pub(crate) const IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler: GUID = GUID {
