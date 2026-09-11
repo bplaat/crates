@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![allow(missing_docs)]
+#![allow(missing_docs, reason = "Raw Cocoa declarations")]
 
 use std::ffi::{c_char, c_void};
 use std::fmt::{self, Display, Formatter};

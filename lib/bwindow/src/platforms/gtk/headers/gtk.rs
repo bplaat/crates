@@ -55,6 +55,14 @@ unsafe extern "C" {
     pub fn gtk_widget_show(widget: *mut GtkWidget);
     pub fn gtk_widget_hide(widget: *mut GtkWidget);
     pub fn gtk_widget_show_all(window: *mut GtkWidget);
+    pub fn gtk_drag_dest_set(
+        widget: *mut GtkWidget,
+        flags: i32,
+        targets: *const c_void,
+        count: i32,
+        actions: i32,
+    );
+    pub fn gtk_drag_dest_add_uri_targets(widget: *mut GtkWidget);
     pub fn gtk_settings_get_default() -> *mut GtkSettings;
     pub fn gtk_widget_override_background_color(
         widget: *mut GtkWidget,

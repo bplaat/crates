@@ -15,6 +15,8 @@ pub struct GdkDisplay([u8; 0]);
 #[repr(C)]
 pub struct GdkDragContext([u8; 0]);
 #[repr(C)]
+pub struct GdkEvent([u8; 0]);
+#[repr(C)]
 pub struct GdkRectangle {
     pub x: i32,
     pub y: i32,
@@ -37,6 +39,15 @@ pub struct GdkScreen([u8; 0]);
 pub struct GdkMonitor([u8; 0]);
 
 unsafe extern "C" {
+    pub fn gdk_event_get_event_type(event: *const GdkEvent) -> i32;
+    pub fn gdk_event_get_keycode(event: *const GdkEvent, code: *mut u16) -> i32;
+    pub fn gdk_event_get_keyval(event: *const GdkEvent, keyval: *mut u32) -> i32;
+    pub fn gdk_event_get_coords(event: *const GdkEvent, x: *mut f64, y: *mut f64) -> i32;
+    pub fn gdk_event_get_state(event: *const GdkEvent, state: *mut u32) -> i32;
+    pub fn gdk_event_get_button(event: *const GdkEvent, button: *mut u32) -> i32;
+    pub fn gdk_event_get_scroll_direction(event: *const GdkEvent, direction: *mut i32) -> i32;
+    pub fn gdk_event_get_scroll_deltas(event: *const GdkEvent, x: *mut f64, y: *mut f64) -> i32;
+    pub fn gdk_keyval_to_unicode(keyval: u32) -> u32;
     pub fn gdk_display_get_default() -> *mut GdkDisplay;
     pub fn gdk_display_get_name(display: *mut GdkDisplay) -> *const c_char;
 

@@ -12,17 +12,6 @@ use std::ptr::{null, null_mut};
 use super::headers::*;
 use crate::{WindowEvent, WindowEventSender};
 
-unsafe extern "C" {
-    fn gtk_drag_dest_set(
-        widget: *mut GtkWidget,
-        flags: i32,
-        targets: *const c_void,
-        count: i32,
-        actions: i32,
-    );
-    fn gtk_drag_dest_add_uri_targets(widget: *mut GtkWidget);
-}
-
 /// Read local file paths from a GTK URI-list selection.
 ///
 /// # Safety
