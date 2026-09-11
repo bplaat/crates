@@ -51,7 +51,9 @@ impl Xtask {
 
     pub(crate) fn check_copyright(&self) -> Result<()> {
         println!("Checking copyright headers...");
-        let extensions = ["rs", "html", "css", "js", "jsx", "ts", "tsx", "cc", "hh"];
+        let extensions = [
+            "rs", "wgsl", "html", "css", "js", "jsx", "ts", "tsx", "cc", "hh",
+        ];
         let mut bad = Vec::new();
         for file in self.source_files(&extensions)? {
             let relative = relative_slash(&self.root, &file);
