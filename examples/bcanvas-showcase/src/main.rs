@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A visual tour of the native Canvas 2D API.
+//! A visual tour of the native Bassie Canvas API.
 
 use std::f32::consts::{PI, TAU};
+use std::time::Duration;
 
 use bcanvas::{
     CanvasBuilder, CanvasRenderingContext2d, Color, FontWeight, LineCap, LineJoin, TextAlign,
@@ -91,12 +92,37 @@ struct State {
     pointer_y: f32,
 }
 
+#[derive(Default)]
+struct FrameRate {
+    previous: Option<Duration>,
+    value: f32,
+}
+
+impl FrameRate {
+    fn sample(&mut self, timestamp: Duration) -> u32 {
+        if let Some(elapsed) = self
+            .previous
+            .and_then(|previous| timestamp.checked_sub(previous))
+            .filter(|elapsed| !elapsed.is_zero())
+        {
+            let current = 1.0 / elapsed.as_secs_f32();
+            self.value = if self.value == 0.0 {
+                current
+            } else {
+                self.value * 0.9 + current * 0.1
+            };
+        }
+        self.previous = Some(timestamp);
+        self.value.round() as u32
+    }
+}
+
 fn main() {
     let event_loop = EventLoop::new();
     let theme = event_loop.theme();
     let palette = Palette::for_theme(theme);
     let mut window = WindowBuilder::new()
-        .title("Canvas 2D Showcase")
+        .title("Bassie Canvas Showcase")
         .size(LogicalSize::new(WIDTH, HEIGHT))
         .min_size(LogicalSize::new(680.0, 490.0))
         .resizable(true)
@@ -109,28 +135,31 @@ fn main() {
         pointer_x: WIDTH * 0.5,
         pointer_y: HEIGHT * 0.5,
     };
-    let smoke = std::env::args().any(|arg| arg == "--smoke");
-    let mut frames = 0;
+    let mut frame_rate = FrameRate::default();
     let id = window.id();
+    canvas.request_animation_frame();
     event_loop.run(move |event| match event {
         Event::Window(window_id, WindowEvent::RedrawRequested) if window_id == id => {
-            assert!(canvas.draw(|ctx| draw(ctx, state)));
-            frames += 1;
-            if smoke && frames == 3 {
-                window.close();
-            } else {
-                window.request_redraw();
+            if canvas.draw(|ctx| {
+                let fps = frame_rate.sample(ctx.timestamp());
+                draw(ctx, state, fps);
+            }) {
+                canvas.request_animation_frame();
             }
         }
-        Event::Window(_, WindowEvent::MouseMove { position, .. }) => {
+        Event::Window(window_id, WindowEvent::MouseMove { position, .. }) if window_id == id => {
             state.pointer_x = position.x;
             state.pointer_y = position.y;
+        }
+        Event::Window(window_id, WindowEvent::ThemeChanged(theme)) if window_id == id => {
+            state.theme = theme;
+            window.set_background_color(Palette::for_theme(theme).background);
         }
         _ => {}
     });
 }
 
-fn draw(ctx: &mut CanvasRenderingContext2d<'_>, state: State) {
+fn draw(ctx: &mut CanvasRenderingContext2d<'_>, state: State, fps: u32) {
     let palette = Palette::for_theme(state.theme);
     let scale = (ctx.width() / WIDTH).min(ctx.height() / HEIGHT).max(0.01);
     let offset_x = (ctx.width() - WIDTH * scale) * 0.5;
@@ -145,7 +174,7 @@ fn draw(ctx: &mut CanvasRenderingContext2d<'_>, state: State) {
     ctx.translate(offset_x, offset_y);
     ctx.scale(scale, scale);
 
-    draw_header(ctx, &palette, time);
+    draw_header(ctx, &palette, fps);
     draw_shapes(ctx, &palette, time);
     draw_paths(ctx, &palette, time);
     draw_typography(ctx, &palette, time);
@@ -154,14 +183,14 @@ fn draw(ctx: &mut CanvasRenderingContext2d<'_>, state: State) {
     ctx.restore();
 }
 
-fn draw_header(ctx: &mut CanvasRenderingContext2d<'_>, palette: &Palette, time: f32) {
+fn draw_header(ctx: &mut CanvasRenderingContext2d<'_>, palette: &Palette, fps: u32) {
     ctx.set_fill_style(palette.text);
     ctx.set_font("sans-serif", 34.0);
     ctx.set_font_weight(FontWeight::Bold);
     ctx.set_text_baseline(TextBaseline::Top);
-    ctx.fill_text("Canvas 2D", 32.0, 24.0);
+    ctx.fill_text("Bassie Canvas", 32.0, 24.0);
 
-    let title_width = ctx.measure_text("Canvas 2D");
+    let title_width = ctx.measure_text("Bassie Canvas");
     ctx.set_fill_style(palette.blue);
     ctx.fill_rect(32.0, 65.0, title_width, 3.0);
     ctx.set_fill_style(palette.muted);
@@ -173,14 +202,10 @@ fn draw_header(ctx: &mut CanvasRenderingContext2d<'_>, palette: &Palette, time: 
         76.0,
     );
 
-    let pulse = 0.65 + (time * 2.2).sin() * 0.2;
-    ctx.set_global_alpha(pulse);
-    circle(ctx, 946.0, 47.0, 7.0, palette.cyan);
-    ctx.set_global_alpha(1.0);
-    ctx.set_fill_style(palette.muted);
+    ctx.set_font("sans-serif", 12.0);
     ctx.set_text_align(TextAlign::Right);
-    ctx.set_text_baseline(TextBaseline::Middle);
-    ctx.fill_text("LIVE", 932.0, 47.0);
+    ctx.set_text_baseline(TextBaseline::Top);
+    ctx.fill_text(format!("{fps} FPS"), 968.0, 24.0);
     ctx.set_text_align(TextAlign::Left);
 }
 
