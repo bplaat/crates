@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! Native framework declarations and constants.
+
 #![allow(non_snake_case, non_upper_case_globals)]
 
 use objc2::runtime::AnyObject as Object;

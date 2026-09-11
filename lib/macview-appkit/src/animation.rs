@@ -12,7 +12,7 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
-use crate::cocoa::*;
+use crate::headers::*;
 use crate::ns_string;
 
 type TargetIvars = Cell<*mut Object>;

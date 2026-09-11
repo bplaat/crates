@@ -8,7 +8,7 @@
 
 #![allow(unsafe_code)]
 
-mod cocoa;
+mod headers;
 
 use std::ptr::null_mut;
 
