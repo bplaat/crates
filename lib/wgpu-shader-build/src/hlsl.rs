@@ -9,6 +9,7 @@ use std::path::Path;
 use crate::Result;
 
 #[cfg(target_os = "windows")]
+#[allow(unsafe_code, clippy::undocumented_unsafe_blocks)]
 mod platform {
     use std::ffi::{CStr, CString, c_void};
     use std::fs;
@@ -122,7 +123,7 @@ mod platform {
     struct Blob(*mut c_void);
 
     impl Blob {
-        unsafe fn from_raw(value: *mut c_void) -> Option<Self> {
+        const unsafe fn from_raw(value: *mut c_void) -> Option<Self> {
             if value.is_null() {
                 None
             } else {
