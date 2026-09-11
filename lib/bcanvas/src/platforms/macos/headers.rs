@@ -11,11 +11,40 @@ use bwindow::ffi::CGRect;
 pub(super) const NS_BOLD_FONT_MASK: usize = 1 << 1;
 
 pub(super) type CGContextRef = *mut c_void;
+pub(super) type CVDisplayLinkRef = *mut c_void;
+pub(super) type CVDisplayLinkOutputCallback = unsafe extern "C" fn(
+    CVDisplayLinkRef,
+    *const c_void,
+    *const c_void,
+    u64,
+    *mut u64,
+    *mut c_void,
+) -> i32;
+
+#[link(name = "CoreVideo", kind = "framework")]
+unsafe extern "C" {
+    pub(super) fn CVDisplayLinkCreateWithActiveCGDisplays(
+        display_link: *mut CVDisplayLinkRef,
+    ) -> i32;
+    pub(super) fn CVDisplayLinkSetOutputCallback(
+        display_link: CVDisplayLinkRef,
+        callback: CVDisplayLinkOutputCallback,
+        user_info: *mut c_void,
+    ) -> i32;
+    pub(super) fn CVDisplayLinkSetCurrentCGDisplay(
+        display_link: CVDisplayLinkRef,
+        display_id: u32,
+    ) -> i32;
+    pub(super) fn CVDisplayLinkStart(display_link: CVDisplayLinkRef) -> i32;
+    pub(super) fn CVDisplayLinkStop(display_link: CVDisplayLinkRef) -> i32;
+    pub(super) fn CVDisplayLinkRelease(display_link: CVDisplayLinkRef);
+}
 
 #[link(name = "CoreGraphics", kind = "framework")]
 unsafe extern "C" {
     pub(super) fn CGContextSaveGState(context: CGContextRef);
     pub(super) fn CGContextRestoreGState(context: CGContextRef);
+    pub(super) fn CGContextFlush(context: CGContextRef);
     pub(super) fn CGContextClearRect(context: CGContextRef, rect: CGRect);
     pub(super) fn CGContextSetRGBFillColor(context: CGContextRef, r: f64, g: f64, b: f64, a: f64);
     pub(super) fn CGContextSetRGBStrokeColor(context: CGContextRef, r: f64, g: f64, b: f64, a: f64);
@@ -86,7 +115,6 @@ pub(super) struct CGAffineTransform {
     pub(super) ty: f64,
 }
 
-#[cfg(test)]
 unsafe extern "C" {
     pub(super) fn CGColorSpaceCreateDeviceRGB() -> *mut c_void;
     pub(super) fn CGColorSpaceRelease(space: *mut c_void);

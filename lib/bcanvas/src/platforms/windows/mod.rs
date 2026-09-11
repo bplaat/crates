@@ -14,14 +14,16 @@ use bwindow::{
     WindowEvent, WindowEventSender,
 };
 pub(crate) use context::PlatformCanvasContext;
-use direct2d::*;
-use win32::*;
+use headers::*;
 
+use self::com::ComPtr;
 use crate::CanvasRenderingContext2d;
-use crate::platforms::com::ComPtr;
+mod com;
 mod context;
-mod direct2d;
-mod win32;
+mod headers;
+mod offscreen;
+
+pub(crate) use offscreen::PlatformOffscreenCanvas;
 
 struct CanvasData {
     cursor: Cell<crate::CursorIcon>,
@@ -30,6 +32,8 @@ struct CanvasData {
     factory: ComPtr<ID2D1Factory>,
     write: ComPtr<IDWriteFactory>,
     target: RefCell<Option<ComPtr<ID2D1HwndRenderTarget>>>,
+    target_size: Cell<(u32, u32)>,
+    target_dpi: Cell<u32>,
     frame: RefCell<Option<CanvasRenderingContext2d<'static>>>,
     painting: Cell<bool>,
     scheduled: Cell<bool>,
@@ -46,23 +50,17 @@ impl CanvasData {
     }
 
     fn request_redraw(&self) {
-        // Input-driven updates can use native invalidation immediately. Only
-        // self-requested frames need pacing to avoid an unbounded paint loop.
-        if let Some(hwnd) = self.hwnd.get()
-            && !self.painting.get()
-        {
-            if self.scheduled.replace(false) {
-                let _ = unsafe { KillTimer(hwnd, 1) };
-            }
-            let _ = unsafe { InvalidateRect(hwnd, null(), FALSE) };
-            return;
-        }
-        if let Some(hwnd) = self.hwnd.get()
-            && !self.scheduled.replace(true)
-            && unsafe { SetTimer(hwnd, 1, 16, None) } == 0
-        {
+        if let Some(hwnd) = self.hwnd.get() {
             self.scheduled.set(false);
             let _ = unsafe { InvalidateRect(hwnd, null(), FALSE) };
+        }
+    }
+
+    fn request_animation_frame(&self) {
+        if self.painting.get() {
+            self.scheduled.set(true);
+        } else {
+            self.request_redraw();
         }
     }
 
@@ -72,6 +70,8 @@ impl CanvasData {
         }
         self.frame.borrow_mut().take();
         self.target.borrow_mut().take();
+        self.target_size.set((0, 0));
+        self.target_dpi.set(0);
     }
 
     fn paint(&self, hwnd: HWND) {
@@ -95,44 +95,58 @@ impl CanvasData {
         let scale = dpi / 96.0;
         let size = D2D_SIZE_U { width, height };
         let cached = self.target.borrow().clone();
-        let target = cached.or_else(|| unsafe {
-            self.factory
-                .CreateHwndRenderTarget(
-                    &D2D1_RENDER_TARGET_PROPERTIES {
-                        pixelFormat: D2D1_PIXEL_FORMAT {
-                            format: DXGI_FORMAT_UNKNOWN,
-                            alphaMode: D2D1_ALPHA_MODE_UNKNOWN,
+        let target = if let Some(target) = cached {
+            if self.target_size.get() != (width, height) {
+                if unsafe { target.Resize(&size) }.is_err() {
+                    self.target.borrow_mut().take();
+                    self.target_size.set((0, 0));
+                    self.target_dpi.set(0);
+                    let _ = unsafe { EndPaint(hwnd, &paint) };
+                    self.request_redraw();
+                    self.painting.set(false);
+                    return;
+                }
+                self.target_size.set((width, height));
+            }
+            if self.target_dpi.replace(dpi as u32) != dpi as u32 {
+                unsafe { target.SetDpi(dpi, dpi) };
+            }
+            Some(target)
+        } else {
+            let target = unsafe {
+                self.factory
+                    .CreateHwndRenderTarget(
+                        &D2D1_RENDER_TARGET_PROPERTIES {
+                            pixelFormat: D2D1_PIXEL_FORMAT {
+                                format: DXGI_FORMAT_UNKNOWN,
+                                alphaMode: D2D1_ALPHA_MODE_UNKNOWN,
+                            },
+                            dpiX: dpi,
+                            dpiY: dpi,
+                            ..Default::default()
                         },
-                        dpiX: dpi,
-                        dpiY: dpi,
-                        ..Default::default()
-                    },
-                    &D2D1_HWND_RENDER_TARGET_PROPERTIES {
-                        hwnd,
-                        pixelSize: size,
-                        ..Default::default()
-                    },
-                )
-                .ok()
-        });
+                        &D2D1_HWND_RENDER_TARGET_PROPERTIES {
+                            hwnd,
+                            pixelSize: size,
+                            ..Default::default()
+                        },
+                    )
+                    .ok()
+            };
+            if target.is_some() {
+                self.target_size.set((width, height));
+                self.target_dpi.set(dpi as u32);
+            }
+            target
+        };
         let Some(target) = target else {
             let _ = unsafe { EndPaint(hwnd, &paint) };
             self.request_redraw();
             self.painting.set(false);
             return;
         };
-        if unsafe { target.Resize(&size) }.is_err() {
-            self.target.borrow_mut().take();
-            let _ = unsafe { EndPaint(hwnd, &paint) };
-            self.request_redraw();
-            self.painting.set(false);
-            return;
-        }
         *self.target.borrow_mut() = Some(target.clone());
-        unsafe {
-            target.SetDpi(dpi, dpi);
-            target.BeginDraw();
-        }
+        unsafe { target.BeginDraw() }
         *self.frame.borrow_mut() = Some(CanvasRenderingContext2d::new(
             PlatformCanvasContext::new(target.clone(), self.factory.clone(), self.write.clone()),
             width as f32 / scale,
@@ -153,7 +167,13 @@ impl CanvasData {
         if failed {
             // Brushes are frame-owned, so none survive a lost render target.
             self.target.borrow_mut().take();
+            self.target_size.set((0, 0));
+            self.target_dpi.set(0);
             self.request_redraw();
+        } else if self.scheduled.replace(false) {
+            // The HWND render target's default presentation mode already waits for
+            // display refresh. Queue the next coalesced WM_PAINT after that present.
+            let _ = unsafe { InvalidateRect(hwnd, null(), FALSE) };
         }
     }
 }
@@ -196,6 +216,8 @@ impl PlatformCanvas {
                 factory: ID2D1Factory::new().expect("Direct2D factory"),
                 write: IDWriteFactory::new().expect("DirectWrite factory"),
                 target: RefCell::new(None),
+                target_size: Cell::new((0, 0)),
+                target_dpi: Cell::new(0),
                 frame: RefCell::new(None),
                 painting: Cell::new(false),
                 scheduled: Cell::new(false),
@@ -249,6 +271,12 @@ impl PlatformCanvas {
                     data.request_redraw();
                 }
             });
+            let animation_frame = Rc::downgrade(&data);
+            attachment.on_animation_frame(move || {
+                if let Some(data) = animation_frame.upgrade() {
+                    data.request_animation_frame();
+                }
+            });
             let close = data.clone();
             attachment.on_close(move || close.close());
             let _ = SetFocus(hwnd);
@@ -259,6 +287,10 @@ impl PlatformCanvas {
 
     pub(crate) fn request_redraw(&self) {
         self.data.request_redraw();
+    }
+
+    pub(crate) fn request_animation_frame(&self) {
+        self.data.request_animation_frame();
     }
 
     pub(crate) fn set_cursor(&mut self, cursor: crate::CursorIcon) {
@@ -330,12 +362,6 @@ unsafe extern "system" fn window_proc(
                 return 0;
             }
             WM_ERASEBKGND => return 1,
-            WM_TIMER if wparam == 1 => {
-                let _ = KillTimer(hwnd, 1);
-                data.scheduled.set(false);
-                let _ = InvalidateRect(hwnd, null(), FALSE);
-                return 0;
-            }
             WM_SIZE => data.request_redraw(),
             WM_SETFOCUS => data.sender.send(WindowEvent::Focus),
             WM_KILLFOCUS => data.sender.send(WindowEvent::Blur),

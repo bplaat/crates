@@ -13,7 +13,7 @@ use objc2::rc::Retained;
 use objc2::runtime::AnyObject as Object;
 use objc2::{class, msg_send};
 
-use super::cocoa::*;
+use super::headers::*;
 use crate::{CanvasState, Color, FontWeight, LineCap, LineJoin, TextAlign, TextBaseline};
 
 pub(crate) struct PlatformCanvasContext {

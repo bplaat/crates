@@ -4,19 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+#[cfg(test)]
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::{NonNull, null_mut};
 use std::rc::Rc;
 
-#[repr(C)]
-pub(crate) struct IUnknownVtbl {
-    pub(crate) query_interface:
-        unsafe extern "system" fn(*mut c_void, *const c_void, *mut *mut c_void) -> i32,
-    pub(crate) add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
-    pub(crate) release: unsafe extern "system" fn(*mut c_void) -> u32,
-}
+#[cfg(test)]
+use super::headers::GUID;
+use super::headers::IUnknownVtbl;
 
 /// One owned COM reference. Canvas COM objects stay on the window thread.
 pub(crate) struct ComPtr<T> {
@@ -50,7 +47,7 @@ impl<T> ComPtr<T> {
 
 impl<T> Clone for ComPtr<T> {
     fn clone(&self) -> Self {
-        unsafe { (self.unknown().add_ref)(self.as_ptr().cast()) };
+        unsafe { (self.unknown().AddRef)(self.as_ptr().cast()) };
         Self {
             pointer: self.pointer,
             _thread: PhantomData,
@@ -68,7 +65,7 @@ impl<T> Deref for ComPtr<T> {
 
 impl<T> Drop for ComPtr<T> {
     fn drop(&mut self) {
-        unsafe { (self.unknown().release)(self.as_ptr().cast()) };
+        unsafe { (self.unknown().Release)(self.as_ptr().cast()) };
     }
 }
 
@@ -89,7 +86,7 @@ mod tests {
         releases: Cell<u32>,
     }
 
-    unsafe extern "system" fn query(_: *mut c_void, _: *const c_void, _: *mut *mut c_void) -> i32 {
+    unsafe extern "system" fn query(_: *mut c_void, _: *const GUID, _: *mut *mut c_void) -> i32 {
         0x80004002u32 as i32
     }
 
@@ -107,9 +104,9 @@ mod tests {
     }
 
     const VTABLE: IUnknownVtbl = IUnknownVtbl {
-        query_interface: query,
-        add_ref,
-        release,
+        QueryInterface: query,
+        AddRef: add_ref,
+        Release: release,
     };
 
     #[test]

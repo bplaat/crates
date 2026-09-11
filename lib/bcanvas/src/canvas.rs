@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use bwindow::Window;
 
-use crate::platforms::{PlatformCanvas, PlatformCanvasContext};
+use crate::platforms::{PlatformCanvas, PlatformCanvasContext, PlatformOffscreenCanvas};
 
 /// Cursor shown over a canvas; native window decorations retain their own cursors.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -96,6 +96,29 @@ mod tests {
     fn color_from_packed_rgb_uses_rrggbb_order() {
         assert_eq!(Color::from_rgb(0x12_34_56), Color::rgb(0x12, 0x34, 0x56));
         assert_eq!(Color::from_rgb(0), Color::rgba(0, 0, 0, 255));
+    }
+
+    #[test]
+    fn offscreen_canvas_returns_straight_rgba_pixels() {
+        let mut canvas = super::OffscreenCanvas::new(2, 1);
+        canvas.draw(|context| {
+            context.set_fill_style(Color::rgba(120, 80, 40, 128));
+            context.fill_rect(0.0, 0.0, 1.0, 1.0);
+        });
+        let pixels = canvas.pixels();
+        assert!((i16::from(pixels[0]) - 120).abs() <= 2);
+        assert!((i16::from(pixels[1]) - 80).abs() <= 2);
+        assert!((i16::from(pixels[2]) - 40).abs() <= 2);
+        assert_eq!(pixels[3], 128);
+        assert_eq!(&pixels[4..8], &[0, 0, 0, 0]);
+        let previous = pixels.to_vec();
+        assert_eq!(canvas.pixels(), previous);
+        canvas.draw(|context| {
+            context.clear_rect(0.0, 0.0, 2.0, 1.0);
+            context.set_fill_style(Color::rgb(1, 2, 3));
+            context.fill_rect(1.0, 0.0, 1.0, 1.0);
+        });
+        assert_eq!(canvas.pixels(), &[0, 0, 0, 0, 1, 2, 3, 255]);
     }
 }
 
@@ -240,6 +263,11 @@ impl Canvas {
         self.platform.request_redraw();
     }
 
+    /// Schedule one repaint at the next native display frame.
+    pub fn request_animation_frame(&self) {
+        self.platform.request_animation_frame();
+    }
+
     /// Paint once during this canvas window's RedrawRequested callback.
     ///
     /// Returns false outside a native paint callback, after close, or if this frame
@@ -249,6 +277,102 @@ impl Canvas {
         draw: impl for<'frame> FnOnce(&mut CanvasRenderingContext2d<'frame>),
     ) -> bool {
         self.platform.draw(draw)
+    }
+}
+
+/// A native 2D canvas backed by tightly packed, straight-alpha RGBA8 pixels.
+///
+/// It is independent of a window and is suitable for image encoding, CPU access,
+/// or uploading to a GPU texture. Access is confined to the creating thread.
+pub struct OffscreenCanvas {
+    platform: PlatformOffscreenCanvas,
+    width: u32,
+    height: u32,
+}
+
+impl OffscreenCanvas {
+    /// Create a transparent offscreen canvas with one logical pixel per output pixel.
+    pub fn new(width: u32, height: u32) -> Self {
+        assert!(
+            width > 0 && height > 0 && width <= i32::MAX as u32 && height <= i32::MAX as u32,
+            "canvas dimensions must be nonzero and fit in i32"
+        );
+        let length = width
+            .checked_mul(height)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .and_then(|bytes| usize::try_from(bytes).ok())
+            .expect("canvas dimensions are too large");
+        Self {
+            platform: PlatformOffscreenCanvas::new(width, height, length),
+            width,
+            height,
+        }
+    }
+
+    /// Width in pixels.
+    pub const fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Height in pixels.
+    pub const fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Number of bytes between adjacent rows.
+    pub const fn bytes_per_row(&self) -> u32 {
+        self.width * 4
+    }
+
+    /// Draw into the bitmap with the same API as a window canvas.
+    pub fn draw(&mut self, draw: impl for<'frame> FnOnce(&mut CanvasRenderingContext2d<'frame>)) {
+        let platform = self.platform.begin_draw();
+        let mut context =
+            CanvasRenderingContext2d::new(platform, self.width as f32, self.height as f32, 1.0);
+        draw(&mut context);
+        drop(context);
+        self.platform.end_draw();
+    }
+
+    /// Return tightly packed pixels in RGBA byte order with straight alpha.
+    pub fn pixels(&mut self) -> &[u8] {
+        self.platform.pixels()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn copy_bgra_premultiplied_to_rgba(source: &[u8], output: &mut [u8]) {
+    let (source, source_remainder) = source.as_chunks::<4>();
+    let (output, output_remainder) = output.as_chunks_mut::<4>();
+    debug_assert!(source_remainder.is_empty() && output_remainder.is_empty());
+    for (source, output) in source.iter().zip(output) {
+        let alpha = source[3];
+        output[0] = unpremultiply(source[2], alpha);
+        output[1] = unpremultiply(source[1], alpha);
+        output[2] = unpremultiply(source[0], alpha);
+        output[3] = alpha;
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn copy_rgba_premultiplied_to_straight(source: &[u8], output: &mut [u8]) {
+    let (source, source_remainder) = source.as_chunks::<4>();
+    let (output, output_remainder) = output.as_chunks_mut::<4>();
+    debug_assert!(source_remainder.is_empty() && output_remainder.is_empty());
+    for (source, output) in source.iter().zip(output) {
+        let alpha = source[3];
+        output[0] = unpremultiply(source[0], alpha);
+        output[1] = unpremultiply(source[1], alpha);
+        output[2] = unpremultiply(source[2], alpha);
+        output[3] = alpha;
+    }
+}
+
+fn unpremultiply(component: u8, alpha: u8) -> u8 {
+    if alpha == 0 {
+        0
+    } else {
+        ((u16::from(component) * 255 + u16::from(alpha) / 2) / u16::from(alpha)).min(255) as u8
     }
 }
 

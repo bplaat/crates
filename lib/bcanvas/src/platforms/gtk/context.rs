@@ -6,7 +6,7 @@
 
 use std::ffi::{CString, c_void};
 
-use super::cairo::*;
+use super::headers::*;
 use crate::{CanvasState, FontWeight, LineCap, LineJoin, TextAlign, TextBaseline};
 
 pub(crate) struct PlatformCanvasContext {

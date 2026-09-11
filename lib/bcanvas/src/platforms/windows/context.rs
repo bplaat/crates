@@ -10,9 +10,9 @@ use std::rc::Rc;
 
 use bwindow::ffi::ToWideString;
 
-use super::direct2d::*;
+use super::com::ComPtr;
+use super::headers::*;
 use crate::path::{Command, Path, Point, Transform};
-use crate::platforms::com::ComPtr;
 use crate::{CanvasState, Color, FontWeight, LineCap, LineJoin, TextAlign, TextBaseline};
 
 pub(crate) struct PlatformCanvasContext {

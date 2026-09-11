@@ -5,21 +5,27 @@
  */
 
 use std::cell::Cell;
+use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 
 use bwindow::ffi::*;
 use bwindow::{NativeWindowHandle, WindowAttachment, WindowEventSender};
-use objc2::rc::{Allocated, Retained};
+use objc2::rc::{Allocated, Retained, autoreleasepool};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
-use self::cocoa::CGContextRef;
 pub(crate) use self::context::PlatformCanvasContext;
+use self::headers::*;
 use crate::CanvasRenderingContext2d;
 
-mod cocoa;
 mod context;
+mod headers;
+mod offscreen;
+
+pub(crate) use offscreen::PlatformOffscreenCanvas;
 
 #[derive(Clone, Copy)]
 struct Frame {
@@ -36,9 +42,40 @@ struct ViewState {
     closed: Cell<bool>,
     painting: Cell<bool>,
     scheduled: Cell<bool>,
+    display_link: Cell<CVDisplayLinkRef>,
+    display_link_running: Cell<bool>,
+    screen: Cell<*mut Object>,
+    signal: Arc<DisplayLinkSignal>,
 }
 
 type ViewIvars = Rc<ViewState>;
+
+struct DisplayLinkSignal {
+    target: AtomicPtr<Object>,
+    posted: AtomicBool,
+}
+
+unsafe extern "C" fn display_link_callback(
+    _: CVDisplayLinkRef,
+    _: *const c_void,
+    _: *const c_void,
+    _: u64,
+    _: *mut u64,
+    user_info: *mut c_void,
+) -> i32 {
+    let signal = unsafe { &*user_info.cast::<DisplayLinkSignal>() };
+    if !signal.posted.swap(true, Ordering::AcqRel) {
+        let target = signal.target.load(Ordering::Acquire);
+        if !target.is_null() {
+            autoreleasepool(|_| unsafe {
+                let _: () = msg_send![target,
+                    performSelectorOnMainThread:sel!(displayFrame:),
+                    withObject:null_mut::<Object>(), waitUntilDone:Bool::NO];
+            });
+        }
+    }
+    0
+}
 
 define_class!(
     #[unsafe(super(NSView))]
@@ -144,17 +181,25 @@ define_class!(
         #[unsafe(method(drawRect:))]
         fn _draw_rect(&self, _: NSRect) { self.paint(); }
 
-        #[unsafe(method(schedulePaint))]
-        fn _schedule_paint(&self) {
-            self.ivars().scheduled.set(false);
-            if !self.ivars().closed.get() {
-                let _: () = unsafe { msg_send![self, setNeedsDisplay:Bool::YES] };
+        #[unsafe(method(displayFrame:))]
+        fn _display_frame(&self, _: *mut Object) {
+            self.stop_display_link();
+            self.ivars().signal.posted.store(false, Ordering::Release);
+            if self.ivars().scheduled.get() {
+                self.deliver_animation_frame();
             }
         }
     }
 );
 
 impl CanvasView {
+    fn deliver_animation_frame(&self) {
+        self.ivars().scheduled.set(false);
+        if !self.ivars().closed.get() {
+            let _: () = unsafe { msg_send![self, setNeedsDisplay:Bool::YES] };
+        }
+    }
+
     fn request_redraw(&self) {
         let state = self.ivars();
         if state.closed.get() {
@@ -163,8 +208,7 @@ impl CanvasView {
         if !state.painting.get() {
             unsafe {
                 if state.scheduled.replace(false) {
-                    let _: () =
-                        msg_send![class!(NSObject), cancelPreviousPerformRequestsWithTarget:self];
+                    self.stop_display_link();
                 }
                 let _: () = msg_send![self, setNeedsDisplay:Bool::YES];
             }
@@ -173,12 +217,61 @@ impl CanvasView {
         if state.scheduled.replace(true) {
             return;
         }
-        // A display invalidation inside drawRect can be absorbed by that paint.
-        // Queue and coalesce a later invalidation instead.
-        let _: () = unsafe {
-            msg_send![self, performSelector:sel!(schedulePaint),
-                withObject:null_mut::<Object>(), afterDelay:1.0f64 / 60.0]
-        };
+        self.schedule_animation_frame();
+    }
+
+    fn request_animation_frame(&self) {
+        let state = self.ivars();
+        if state.closed.get() || state.scheduled.replace(true) {
+            return;
+        }
+        self.schedule_animation_frame();
+    }
+
+    fn schedule_animation_frame(&self) {
+        self.synchronize_display_link();
+        let state = self.ivars();
+        state.signal.posted.store(false, Ordering::Release);
+        if !state.display_link_running.replace(true) {
+            let result = unsafe { CVDisplayLinkStart(state.display_link.get()) };
+            assert_eq!(
+                result, 0,
+                "Could not start Core Video display link: {result}"
+            );
+        }
+    }
+
+    fn synchronize_display_link(&self) {
+        let state = self.ivars();
+        unsafe {
+            let window: *mut Object = msg_send![self, window];
+            if window.is_null() {
+                return;
+            }
+            let screen: *mut Object = msg_send![window, screen];
+            if screen.is_null() || state.screen.get() == screen {
+                return;
+            }
+            let description: *mut Object = msg_send![screen, deviceDescription];
+            let key = NSString::new("NSScreenNumber");
+            let number: *mut Object = msg_send![description, objectForKey:&*key];
+            if number.is_null() {
+                return;
+            }
+            let display_id: u32 = msg_send![number, unsignedIntValue];
+            if CVDisplayLinkSetCurrentCGDisplay(state.display_link.get(), display_id) == 0 {
+                state.screen.set(screen);
+            }
+        }
+    }
+
+    fn stop_display_link(&self) {
+        let state = self.ivars();
+        if state.display_link_running.replace(false) {
+            unsafe {
+                CVDisplayLinkStop(state.display_link.get());
+            }
+        }
     }
 
     fn close(&self) {
@@ -186,8 +279,17 @@ impl CanvasView {
             return;
         }
         self.ivars().frame.set(None);
+        self.ivars().scheduled.set(false);
+        self.stop_display_link();
+        self.ivars()
+            .signal
+            .target
+            .store(null_mut(), Ordering::Release);
         unsafe {
-            let _: () = msg_send![class!(NSObject), cancelPreviousPerformRequestsWithTarget:self];
+            let display_link = self.ivars().display_link.replace(null_mut());
+            if !display_link.is_null() {
+                CVDisplayLinkRelease(display_link);
+            }
             let _: () = msg_send![self, removeFromSuperview];
         }
     }
@@ -243,6 +345,10 @@ impl PlatformCanvas {
             let window = window.cast::<Object>();
             let content: *mut Object = msg_send![window, contentView];
             let bounds: NSRect = msg_send![content, bounds];
+            let signal = Arc::new(DisplayLinkSignal {
+                target: AtomicPtr::new(null_mut()),
+                posted: AtomicBool::new(false),
+            });
             let view: Allocated<CanvasView> = msg_send![CanvasView::class(), alloc];
             let view: Retained<CanvasView> = msg_send![
                 super(view.set_ivars(Rc::new(ViewState {
@@ -251,9 +357,30 @@ impl PlatformCanvas {
                     frame: Cell::new(None), closed: Cell::new(false),
                     painting: Cell::new(false),
                     scheduled: Cell::new(false),
+                    display_link: Cell::new(null_mut()),
+                    display_link_running: Cell::new(false),
+                    screen: Cell::new(null_mut()),
+                    signal: signal.clone(),
                 }))),
                 initWithFrame:bounds
             ];
+            signal.target.store(view.as_ptr().cast(), Ordering::Release);
+            let mut display_link = null_mut();
+            let result = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
+            assert_eq!(
+                result, 0,
+                "Could not create Core Video display link: {result}"
+            );
+            let result = CVDisplayLinkSetOutputCallback(
+                display_link,
+                display_link_callback,
+                Arc::as_ptr(&signal).cast_mut().cast(),
+            );
+            if result != 0 {
+                CVDisplayLinkRelease(display_link);
+                panic!("Could not configure Core Video display link: {result}");
+            }
+            view.ivars().display_link.set(display_link);
             let _: () = msg_send![&*view, setAutoresizingMask:NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
             let _: () = msg_send![content, addSubview:&*view];
             let tracking: Allocated<Object> = msg_send![class!(NSTrackingArea), alloc];
@@ -269,6 +396,8 @@ impl PlatformCanvas {
             let _: () = msg_send![window, setAcceptsMouseMovedEvents:Bool::YES];
             let redraw = view.clone();
             attachment.on_redraw(move || redraw.request_redraw());
+            let animation_frame = view.clone();
+            attachment.on_animation_frame(move || animation_frame.request_animation_frame());
             let close = view.clone();
             attachment.on_close(move || close.close());
             view.request_redraw();
@@ -278,6 +407,10 @@ impl PlatformCanvas {
 
     pub(crate) fn request_redraw(&self) {
         self.view.request_redraw();
+    }
+
+    pub(crate) fn request_animation_frame(&self) {
+        self.view.request_animation_frame();
     }
 
     pub(crate) fn set_cursor(&mut self, cursor: crate::CursorIcon) {

@@ -15,33 +15,12 @@ use bwindow::{NativeWindowHandle, WindowAttachment, WindowEvent, WindowEventSend
 pub(crate) use context::PlatformCanvasContext;
 
 use crate::CanvasRenderingContext2d;
-mod cairo;
 mod context;
+mod headers;
+mod offscreen;
 
-unsafe extern "C" {
-    fn gtk_widget_get_window(widget: *mut GtkWidget) -> *mut c_void;
-    fn gdk_window_get_display(window: *mut c_void) -> *mut c_void;
-    fn gdk_cursor_new_from_name(
-        display: *mut c_void,
-        name: *const std::ffi::c_char,
-    ) -> *mut GObject;
-    fn gdk_window_set_cursor(window: *mut c_void, cursor: *mut GObject);
-    fn gtk_drawing_area_new() -> *mut GtkWidget;
-    fn gtk_widget_set_can_focus(widget: *mut GtkWidget, can_focus: i32);
-    fn gtk_widget_grab_focus(widget: *mut GtkWidget);
-    fn gtk_widget_add_events(widget: *mut GtkWidget, events: i32);
-    fn gtk_widget_queue_draw(widget: *mut GtkWidget);
-    fn gtk_widget_get_allocated_width(widget: *mut GtkWidget) -> i32;
-    fn gtk_widget_get_allocated_height(widget: *mut GtkWidget) -> i32;
-    fn g_object_ref_sink(object: *mut GObject) -> *mut GObject;
-    fn g_timeout_add_full(
-        priority: i32,
-        interval: u32,
-        function: extern "C" fn(*mut c_void) -> i32,
-        data: *mut c_void,
-        notify: extern "C" fn(*mut c_void),
-    ) -> u32;
-}
+use headers::*;
+pub(crate) use offscreen::PlatformOffscreenCanvas;
 
 struct CanvasData {
     cursor: Cell<crate::CursorIcon>,
@@ -83,16 +62,24 @@ impl CanvasData {
         }
         if !self.painting.get() {
             if let Some(source) = self.source.take() {
-                unsafe { g_source_remove(source) };
+                unsafe { gtk_widget_remove_tick_callback(self.widget, source) };
             }
             unsafe { gtk_widget_queue_draw(self.widget) };
+            return;
+        }
+        self.request_animation_frame();
+    }
+
+    fn request_animation_frame(self: &Rc<Self>) {
+        if self.closed.get() {
             return;
         }
         if self.source.get().is_some() {
             return;
         }
         let pointer = Rc::into_raw(self.clone()) as *mut c_void;
-        let source = unsafe { g_timeout_add_full(0, 16, redraw, pointer, release_source) };
+        let source =
+            unsafe { gtk_widget_add_tick_callback(self.widget, redraw, pointer, release_source) };
         self.source.set(Some(source));
     }
 
@@ -101,7 +88,7 @@ impl CanvasData {
             return;
         }
         if let Some(source) = self.source.take() {
-            unsafe { g_source_remove(source) };
+            unsafe { gtk_widget_remove_tick_callback(self.widget, source) };
         }
         self.frame.borrow_mut().take();
         unsafe {
@@ -132,7 +119,7 @@ impl Drop for CanvasData {
     }
 }
 
-extern "C" fn redraw(pointer: *mut c_void) -> i32 {
+extern "C" fn redraw(_: *mut GtkWidget, _: *mut c_void, pointer: *mut c_void) -> i32 {
     let data = unsafe { &*pointer.cast::<CanvasData>() };
     data.source.set(None);
     if !data.closed.get() {
@@ -211,6 +198,12 @@ impl PlatformCanvas {
                     data.request_redraw();
                 }
             });
+            let animation_frame = Rc::downgrade(&data);
+            attachment.on_animation_frame(move || {
+                if let Some(data) = animation_frame.upgrade() {
+                    data.request_animation_frame();
+                }
+            });
             let close = data.clone();
             attachment.on_close(move || close.close());
             gtk_widget_show(widget);
@@ -222,6 +215,10 @@ impl PlatformCanvas {
 
     pub(crate) fn request_redraw(&self) {
         self.data.request_redraw();
+    }
+
+    pub(crate) fn request_animation_frame(&self) {
+        self.data.request_animation_frame();
     }
 
     pub(crate) fn set_cursor(&mut self, cursor: crate::CursorIcon) {

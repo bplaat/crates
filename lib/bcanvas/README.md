@@ -32,9 +32,9 @@ event_loop.run(move |event| {
 ```
 
 Drawing state resets each frame; contexts cannot outlive the drawing callback.
-Request another frame with `window.request_redraw()` or `canvas.request_redraw()`.
-Repeated requests coalesce, and requests made while drawing schedule the next frame.
-Drawing after the window closes returns `false`.
+Use `request_redraw()` for state changes or `request_animation_frame()` for
+display-synchronized animation. Schedule the next animation frame from its
+`RedrawRequested` callback. Drawing after the window closes returns `false`.
 
 Keyboard and pointer events use bwindow input types. Images and IME text editing
 are not supported.
@@ -69,6 +69,24 @@ Use `canvas.set_cursor(CursorIcon::Pointer)` for clickable content, `Default`
 for the arrow, or `Progress` for background work. macOS has no public busy cursor,
 so `Progress` currently uses the arrow there.
 Cursor changes apply only over the canvas and are ignored after close.
+
+## Offscreen drawing
+
+`OffscreenCanvas` uses the same drawing API without occupying a window. Its
+tightly packed, straight-alpha RGBA8 pixels can be encoded, processed on the CPU,
+or uploaded directly with `wgpu::Queue::write_texture`:
+
+```rust
+use bcanvas::{Color, OffscreenCanvas};
+
+let mut canvas = OffscreenCanvas::new(128, 32);
+canvas.draw(|ctx| {
+    ctx.set_fill_style(Color::rgb(255, 255, 255));
+    ctx.fill_text("60 FPS", 8.0, 20.0);
+});
+let rgba = canvas.pixels();
+assert_eq!(rgba.len(), 128 * 32 * 4);
+```
 
 ## License
 
