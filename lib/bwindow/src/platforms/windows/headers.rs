@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![allow(missing_docs)]
+#![allow(missing_docs, reason = "Raw Win32 declarations")]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
@@ -263,6 +263,7 @@ pub const WM_NCCREATE: u32 = 0x0081;
 pub const WM_DROPFILES: u32 = 0x0233;
 pub const WM_DPICHANGED: u32 = 0x02E0;
 pub const WM_USER: u32 = 0x0400;
+pub const WM_APP: u32 = 0x8000;
 
 pub const SW_SHOWNORMAL: i32 = 1;
 pub const SW_RESTORE: i32 = 9;
@@ -299,6 +300,18 @@ pub const SWP_NOREPOSITION: u32 = 0x0200;
 
 #[link(name = "user32")]
 unsafe extern "system" {
+    pub fn GetKeyState(key: i32) -> i16;
+    pub fn GetKeyboardState(state: *mut u8) -> i32;
+    pub fn GetKeyboardLayout(thread: u32) -> isize;
+    pub fn ToUnicodeEx(
+        key: u32,
+        scan: u32,
+        state: *const u8,
+        text: *mut u16,
+        count: i32,
+        flags: u32,
+        layout: isize,
+    ) -> i32;
     pub fn EnumChildWindows(
         hwndParent: HWND,
         lpEnumFunc: unsafe extern "system" fn(HWND, LPARAM) -> BOOL,

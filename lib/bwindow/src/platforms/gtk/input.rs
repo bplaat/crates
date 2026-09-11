@@ -4,27 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+use super::headers::*;
 use crate::{
     Key, KeyboardEvent, LogicalPoint, Modifiers, MouseButton, NamedKey, ScrollDelta, WindowEvent,
 };
-
-/// Opaque GDK event.
-#[repr(C)]
-pub struct GdkEvent([u8; 0]);
-
-unsafe extern "C" {
-    /// Get the native event kind.
-    pub fn gdk_event_get_event_type(event: *const GdkEvent) -> i32;
-    /// Get the native hardware key code.
-    pub fn gdk_event_get_keycode(event: *const GdkEvent, code: *mut u16) -> i32;
-    fn gdk_event_get_keyval(event: *const GdkEvent, keyval: *mut u32) -> i32;
-    fn gdk_event_get_coords(event: *const GdkEvent, x: *mut f64, y: *mut f64) -> i32;
-    fn gdk_event_get_state(event: *const GdkEvent, state: *mut u32) -> i32;
-    fn gdk_event_get_button(event: *const GdkEvent, button: *mut u32) -> i32;
-    fn gdk_event_get_scroll_direction(event: *const GdkEvent, direction: *mut i32) -> i32;
-    fn gdk_event_get_scroll_deltas(event: *const GdkEvent, x: *mut f64, y: *mut f64) -> i32;
-    fn gdk_keyval_to_unicode(keyval: u32) -> u32;
-}
 
 /// Translate GDK modifier flags.
 pub const fn gtk_modifiers(state: u32) -> Modifiers {

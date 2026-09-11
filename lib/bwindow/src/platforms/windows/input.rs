@@ -4,24 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+use super::headers::{GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx};
 use crate::input::set1_key_code as physical_key;
 use crate::{ButtonState, Key, KeyCode, KeyboardEvent, Modifiers, NamedKey};
-
-#[link(name = "user32")]
-unsafe extern "system" {
-    fn GetKeyState(key: i32) -> i16;
-    fn GetKeyboardState(state: *mut u8) -> i32;
-    fn GetKeyboardLayout(thread: u32) -> isize;
-    fn ToUnicodeEx(
-        key: u32,
-        scan: u32,
-        state: *const u8,
-        text: *mut u16,
-        count: i32,
-        flags: u32,
-        layout: isize,
-    ) -> i32;
-}
 
 /// Current Win32 keyboard modifiers on the calling UI thread.
 pub fn windows_modifiers() -> Modifiers {
