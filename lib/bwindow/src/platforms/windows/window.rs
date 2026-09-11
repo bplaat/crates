@@ -43,6 +43,10 @@ thread_local! {
     static WINDOW_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+pub(crate) fn post_content_redraw(window: *mut c_void) -> bool {
+    unsafe { InvalidateRect(window, null(), FALSE) != FALSE }
+}
+
 pub(crate) struct PlatformWindow(pub(super) Box<WindowData>);
 
 fn calculate_window_rect(
@@ -385,6 +389,16 @@ unsafe extern "system" fn window_proc(
         window_data
     };
     match msg {
+        WM_PAINT => {
+            let mut paint = PAINTSTRUCT::default();
+            unsafe { BeginPaint(hwnd, &mut paint) };
+            unsafe { EndPaint(hwnd, &paint) };
+            // Redraw delivery can run application code and destroy this window.
+            // End the raw WindowData borrow before entering that callback.
+            let host = _self.host.clone();
+            host.request_redraw();
+            0
+        }
         // WM_SETTINGCHANGE and WM_THEMECHANGED, including the application's color mode.
         0x001A | 0x031A => {
             let theme = _self.theme.unwrap_or_else(system_theme);

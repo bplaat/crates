@@ -38,6 +38,7 @@ unsafe extern "C" {
     pub fn gtk_init(argc: *mut i32, argv: *mut *mut *mut c_char);
     pub fn gtk_main();
     pub fn gtk_main_quit();
+    pub fn gtk_main_level() -> u32;
     pub fn gtk_window_new(r#type: i32) -> *mut GtkWindow;
     pub fn gtk_window_set_default_icon_name(name: *const c_char) -> bool;
     pub fn gtk_widget_set_size_request(widget: *mut GtkWidget, width: i32, height: i32);

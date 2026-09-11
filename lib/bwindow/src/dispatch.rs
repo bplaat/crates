@@ -13,6 +13,7 @@ type Handler<E> = Box<dyn FnMut(E)>;
 
 struct Pending<E> {
     event: E,
+    before: Option<Box<dyn FnOnce()>>,
     after: Option<Box<dyn FnOnce()>>,
 }
 
@@ -44,20 +45,31 @@ impl<E> Dispatcher<E> {
     }
 
     fn send(&self, event: E) {
-        self.enqueue(event, None);
+        self.enqueue(event, None, None);
+    }
+
+    fn send_before(&self, event: E, before: impl FnOnce() + 'static) {
+        self.enqueue(event, Some(Box::new(before)), None);
     }
 
     fn send_then(&self, event: E, after: impl FnOnce() + 'static) {
-        self.enqueue(event, Some(Box::new(after)));
+        self.enqueue(event, None, Some(Box::new(after)));
     }
 
-    fn enqueue(&self, event: E, after: Option<Box<dyn FnOnce()>>) {
+    fn enqueue(
+        &self,
+        event: E,
+        before: Option<Box<dyn FnOnce()>>,
+        after: Option<Box<dyn FnOnce()>>,
+    ) {
         if self.closed.get() {
             return;
         }
-        self.pending
-            .borrow_mut()
-            .push_back(Pending { event, after });
+        self.pending.borrow_mut().push_back(Pending {
+            event,
+            before,
+            after,
+        });
         self.flush();
     }
 
@@ -68,7 +80,10 @@ impl<E> Dispatcher<E> {
         self.dispatching.set(true);
         while !self.closed.get() {
             let pending = self.pending.borrow_mut().pop_front();
-            let Some(pending) = pending else { break };
+            let Some(mut pending) = pending else { break };
+            if let Some(before) = pending.before.take() {
+                before();
+            }
             // No queue or handler borrow is held while application/native code runs.
             let mut handler = self
                 .handler
@@ -139,6 +154,10 @@ pub(crate) fn shutdown(mailbox: &crate::mailbox::Mailbox) {
 
 pub(crate) fn send(event: NativeEvent) {
     DISPATCHER.with(|dispatcher| dispatcher.send(event));
+}
+
+pub(crate) fn send_before(event: NativeEvent, before: impl FnOnce() + 'static) {
+    DISPATCHER.with(|dispatcher| dispatcher.send_before(event, before));
 }
 
 // A borrowed native frame cannot be queued. Finish it before draining nested events.
@@ -289,6 +308,24 @@ mod tests {
         assert_eq!(*seen.borrow(), [1, 2, 3]);
         dispatcher.stop();
         assert_eq!(Rc::strong_count(&dispatcher), 1);
+    }
+
+    #[test]
+    fn queued_before_callback_runs_immediately_before_delivery() {
+        let dispatcher = Rc::new(Dispatcher::new());
+        let state = Rc::new(Cell::new(0));
+        let before = state.clone();
+        dispatcher.send_before(7, move || before.set(1));
+        assert_eq!(state.get(), 0);
+
+        let observed = state.clone();
+        dispatcher.start(move |event| {
+            assert_eq!(event, 7);
+            assert_eq!(observed.get(), 1);
+            observed.set(2);
+        });
+        assert_eq!(state.get(), 2);
+        dispatcher.stop();
     }
 
     #[test]

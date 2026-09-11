@@ -65,8 +65,10 @@ Close requests support `prevent_default()` and `default_prevented()`; other even
 are not cancelable. Key mappings are a subset of DOM values, and IME text input is
 not yet supported.
 
-`RedrawRequested` and `CloseRequested` retain native window terminology: they are
-not DOM `requestAnimationFrame` or `beforeunload` events.
+Use `request_redraw()` for state changes and `request_animation_frame()` for one
+display-synchronized animation frame. Requests made before an animation frame is
+delivered coalesce. Schedule the next frame from its `RedrawRequested` callback
+to animate continuously at the display's native cadence.
 
 ## Window Content
 
