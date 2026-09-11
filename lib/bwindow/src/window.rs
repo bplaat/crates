@@ -263,6 +263,12 @@ impl Window {
         self.host.request_redraw();
     }
 
+    /// Schedule one redraw at the next native display frame.
+    /// Repeated requests before delivery coalesce into one frame.
+    pub fn request_animation_frame(&self) {
+        self.host.request_animation_frame();
+    }
+
     /// Attach one native content backend to this window.
     pub fn attach_content(&self) -> Result<crate::WindowAttachment, crate::AttachError> {
         self.host.attach()

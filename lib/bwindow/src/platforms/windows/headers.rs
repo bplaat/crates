@@ -217,6 +217,19 @@ pub struct RECT {
 }
 
 #[repr(C)]
+#[derive(Default)]
+pub struct PAINTSTRUCT {
+    pub hdc: HDC,
+    pub fErase: BOOL,
+    pub rcPaint: RECT,
+    pub fRestore: BOOL,
+    pub fIncUpdate: BOOL,
+    pub rgbReserved: [u8; 32],
+}
+
+const _: () = assert!(size_of::<PAINTSTRUCT>() == if size_of::<HWND>() == 8 { 72 } else { 64 });
+
+#[repr(C)]
 pub struct MINMAXINFO {
     pub ptReserved: POINT,
     pub ptMaxSize: POINT,
@@ -256,6 +269,7 @@ pub const WM_CREATE: u32 = 0x0001;
 pub const WM_DESTROY: u32 = 0x0002;
 pub const WM_MOVE: u32 = 0x0003;
 pub const WM_SIZE: u32 = 0x0005;
+pub const WM_PAINT: u32 = 0x000f;
 pub const WM_CLOSE: u32 = 0x0010;
 pub const WM_ERASEBKGND: u32 = 0x0014;
 pub const WM_GETMINMAXINFO: u32 = 0x0024;
@@ -364,6 +378,8 @@ unsafe extern "system" {
     pub fn TranslateMessage(lpMsg: *const MSG) -> i32;
     pub fn DispatchMessageW(lpMsg: *const MSG) -> isize;
     pub fn DefWindowProcW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> isize;
+    pub fn BeginPaint(hWnd: HWND, lpPaint: *mut PAINTSTRUCT) -> HDC;
+    pub fn EndPaint(hWnd: HWND, lpPaint: *const PAINTSTRUCT) -> BOOL;
     pub fn PostQuitMessage(nExitCode: i32);
     pub fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
     pub fn MessageBoxW(

@@ -182,7 +182,12 @@ thread_local! {
 
 pub(super) fn stop() {
     EXIT_REQUESTED.set(true);
-    unsafe { gtk_main_quit() };
+    // Startup callbacks can close the last window before gtk_main starts.
+    unsafe {
+        if gtk_main_level() != 0 {
+            gtk_main_quit();
+        }
+    }
 }
 
 struct Wake {

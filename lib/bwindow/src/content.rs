@@ -35,6 +35,8 @@ pub(crate) struct ContentHost {
     resize: RefCell<Option<ResizeHandler>>,
     close: RefCell<Option<CloseHandler>>,
     redraw: RefCell<Option<Rc<dyn Fn()>>>,
+    animation_frame: RefCell<Option<Rc<dyn Fn()>>>,
+    animation_frame_pending: Cell<bool>,
 }
 
 impl ContentHost {
@@ -50,6 +52,8 @@ impl ContentHost {
             resize: RefCell::new(None),
             close: RefCell::new(None),
             redraw: RefCell::new(None),
+            animation_frame: RefCell::new(None),
+            animation_frame_pending: Cell::new(false),
         })
     }
 
@@ -106,6 +110,9 @@ impl ContentHost {
         self.handle.set(None);
         let redraw = self.redraw.borrow_mut().take();
         drop(redraw);
+        let animation_frame = self.animation_frame.borrow_mut().take();
+        drop(animation_frame);
+        self.animation_frame_pending.set(false);
         let resize = self.resize.borrow_mut().take();
         let close = self.close.borrow_mut().take();
         drop(resize);
@@ -121,6 +128,18 @@ impl ContentHost {
         let redraw = self.redraw.borrow().clone();
         if let Some(redraw) = redraw {
             redraw();
+        }
+    }
+
+    pub(crate) fn request_animation_frame(&self) {
+        if self.closed.get() || self.animation_frame_pending.replace(true) {
+            return;
+        }
+        let animation_frame = self.animation_frame.borrow().clone();
+        if let Some(animation_frame) = animation_frame {
+            animation_frame();
+        } else {
+            self.animation_frame_pending.set(false);
         }
     }
 }
@@ -202,6 +221,17 @@ impl WindowAttachment {
         drop(previous);
     }
 
+    /// Register the content backend's display-synchronized frame scheduler.
+    pub fn on_animation_frame(&self, handler: impl Fn() + 'static) {
+        assert!(!self.is_closed(), "window is closed");
+        let previous = self
+            .0
+            .animation_frame
+            .borrow_mut()
+            .replace(Rc::new(handler));
+        drop(previous);
+    }
+
     /// Create a weak sender for native content input and file-drop callbacks.
     pub fn event_sender(&self) -> WindowEventSender {
         self.0.event_sender()
@@ -211,6 +241,9 @@ impl WindowAttachment {
     pub fn disconnect(&self) {
         let redraw = self.0.redraw.borrow_mut().take();
         drop(redraw);
+        let animation_frame = self.0.animation_frame.borrow_mut().take();
+        drop(animation_frame);
+        self.0.animation_frame_pending.set(false);
         let resize = self.0.resize.borrow_mut().take();
         let close = self.0.close.borrow_mut().take();
         drop(resize);
@@ -235,6 +268,18 @@ impl Drop for WindowAttachment {
 pub struct WindowEventSender(Weak<ContentHost>);
 
 impl WindowEventSender {
+    /// Queue a redraw through the native Windows message loop.
+    #[cfg(windows)]
+    pub fn post_redraw(&self) -> bool {
+        let Some(host) = self.0.upgrade() else {
+            return false;
+        };
+        let Some(NativeWindowHandle::Win32(window)) = host.handle.get() else {
+            return false;
+        };
+        !host.closed.get() && crate::platforms::windows::post_content_redraw(window)
+    }
+
     /// Deliver a native paint event synchronously, without queuing a borrowed frame.
     ///
     /// Returns false if the loop is busy, not running, or the window is closed.
@@ -244,19 +289,38 @@ impl WindowEventSender {
         if let Some(host) = self.0.upgrade()
             && !host.closed.get()
         {
-            return crate::dispatch::try_paint(
+            let animation_frame_pending = host.animation_frame_pending.replace(false);
+            let delivered = crate::dispatch::try_paint(
                 crate::Event::Window(host.id, WindowEvent::RedrawRequested),
                 finish,
             );
+            if !delivered && animation_frame_pending {
+                host.animation_frame_pending.set(true);
+            }
+            return delivered;
         }
         false
     }
+
     /// Deliver an event while the owning window is open; discard late events.
     pub fn send(&self, event: WindowEvent) {
         if let Some(host) = self.0.upgrade()
             && !host.closed.get()
         {
-            crate::dispatch::send(crate::Event::Window(host.id, event));
+            let event = crate::Event::Window(host.id, event);
+            if matches!(
+                &event,
+                crate::Event::Window(_, WindowEvent::RedrawRequested)
+            ) {
+                let weak = Rc::downgrade(&host);
+                crate::dispatch::send_before(event, move || {
+                    if let Some(host) = weak.upgrade() {
+                        host.animation_frame_pending.set(false);
+                    }
+                });
+            } else {
+                crate::dispatch::send(event);
+            }
         }
     }
 }
@@ -274,7 +338,7 @@ mod tests {
             }
         }
 
-        for kind in 0..3 {
+        for kind in 0..4 {
             let host = ContentHost::new(WindowId::new(), None, false);
             let attachment = Rc::new(host.attach().expect("attachment"));
             let weak = Rc::downgrade(&attachment);
@@ -285,7 +349,8 @@ mod tests {
                 match kind {
                     0 => attachment.on_resize(|_, _| {}),
                     1 => attachment.on_close(|| {}),
-                    _ => attachment.on_redraw(|| {}),
+                    2 => attachment.on_redraw(|| {}),
+                    _ => attachment.on_animation_frame(|| {}),
                 }
                 output.set(true);
             }));
@@ -302,11 +367,17 @@ mod tests {
                     });
                     attachment.on_close(|| {});
                 }
-                _ => {
+                2 => {
                     attachment.on_redraw(move || {
                         let _keep_alive = &guard;
                     });
                     attachment.on_redraw(|| {});
+                }
+                _ => {
+                    attachment.on_animation_frame(move || {
+                        let _keep_alive = &guard;
+                    });
+                    attachment.on_animation_frame(|| {});
                 }
             }
             assert!(dropped.get());
@@ -331,6 +402,23 @@ mod tests {
         attachment.on_redraw(|| panic!("disconnected"));
         drop(attachment);
         host.request_redraw();
+    }
+
+    #[test]
+    fn animation_frame_requests_coalesce_until_redraw_delivery() {
+        let host = ContentHost::new(WindowId::new(), None, false);
+        let attachment = host.attach().expect("attachment");
+        let count = Rc::new(Cell::new(0));
+        let output = count.clone();
+        attachment.on_animation_frame(move || output.set(output.get() + 1));
+
+        host.request_animation_frame();
+        host.request_animation_frame();
+        assert_eq!(count.get(), 1);
+
+        host.animation_frame_pending.set(false);
+        host.request_animation_frame();
+        assert_eq!(count.get(), 2);
     }
 
     #[test]
