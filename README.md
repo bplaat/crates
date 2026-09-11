@@ -28,6 +28,8 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [tinyvg](lib/tinyvg) A TinyVG vector image parser (binary and text formats)
 - [validate](lib/validate) A simple struct validation library
 - [validate_derive](lib/validate_derive) Validation derive macros library
+- [wgpu](lib/wgpu) A native GPU rendering library for bwindow
+- [wgpu-shader-build](lib/wgpu-shader-build) Build-time native WGSL compilation for wgpu
 
 ### Apps
 
