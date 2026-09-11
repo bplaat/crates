@@ -1,0 +1,2449 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+//! Vulkan 1.1, one graphics/present queue, with explicit uploads and synchronization.
+
+use std::cell::Cell;
+use std::collections::HashMap;
+use std::ffi::{CStr, c_ulong, c_void};
+use std::ptr;
+use std::rc::Rc;
+
+use headers as vk;
+use headers::{
+    GetProc, dlclose, dlopen, dlsym, gdk_wayland_display_get_wl_display,
+    gdk_wayland_window_get_wl_surface, gdk_window_get_display, gdk_x11_display_get_xdisplay,
+    gdk_x11_window_get_xid, gtk_widget_add_tick_callback, gtk_widget_get_scale_factor,
+    gtk_widget_get_window, gtk_widget_remove_tick_callback,
+};
+
+use super::*;
+
+mod headers;
+mod widget;
+
+enum PlatformWindow {
+    Xlib {
+        display: *mut c_void,
+        window: c_ulong,
+    },
+    Wayland {
+        display: *mut c_void,
+        surface: *mut c_void,
+    },
+}
+
+fn platform_window(handle: bwindow::NativeWindowHandle) -> Result<PlatformWindow> {
+    let bwindow::NativeWindowHandle::Gtk(widget) = handle else {
+        return Err(Error("Vulkan requires a GTK window".into()));
+    };
+    unsafe {
+        let window = gtk_widget_get_window(widget);
+        if window.is_null() {
+            return Err(Error("GTK window is not realized".into()));
+        }
+        let display = gdk_window_get_display(window);
+        if display.is_null() {
+            return Err(Error("GTK window has no display".into()));
+        }
+        if vk::g_type_check_instance_is_a(display, vk::gdk_wayland_display_get_type()) != 0 {
+            let display = gdk_wayland_display_get_wl_display(display);
+            let surface = gdk_wayland_window_get_wl_surface(window);
+            if display.is_null() || surface.is_null() {
+                return Err(Error("GTK returned invalid Wayland handles".into()));
+            }
+            Ok(PlatformWindow::Wayland { display, surface })
+        } else {
+            let display = gdk_x11_display_get_xdisplay(display);
+            let window = gdk_x11_window_get_xid(window);
+            if display.is_null() || window == 0 {
+                return Err(Error("GTK returned invalid X11 handles".into()));
+            }
+            Ok(PlatformWindow::Xlib { display, window })
+        }
+    }
+}
+
+pub(super) struct Instance {
+    library: *mut c_void,
+    handle: vk::Instance,
+    get: GetProc,
+    functions: RefCell<HashMap<&'static CStr, *const c_void>>,
+}
+
+impl Instance {
+    fn function(&self, name: &'static CStr) -> *const c_void {
+        *self.functions.borrow_mut().entry(name).or_insert_with(|| {
+            let function = unsafe { (self.get)(self.handle, name.as_ptr()) };
+            assert!(!function.is_null(), "Missing Vulkan function {name:?}");
+            function
+        })
+    }
+}
+
+macro_rules! call {
+    ($instance:expr, $name:ident $(, $arg:expr)* $(,)?) => {{
+        let function: vk::$name = std::mem::transmute($instance.function(CStr::from_bytes_with_nul_unchecked(concat!("vk", stringify!($name), "\0").as_bytes())));
+        function($($arg),*)
+    }};
+}
+
+fn check(result: i32) -> Result<()> {
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(Error(format!("Vulkan error {result}")))
+    }
+}
+
+const fn format(value: TextureFormat) -> u32 {
+    match value {
+        TextureFormat::Rgba8Unorm => 37,
+        TextureFormat::Rgba8UnormSrgb => 43,
+        TextureFormat::Bgra8Unorm => 44,
+        TextureFormat::Bgra8UnormSrgb => 50,
+        TextureFormat::Depth32Float => 126,
+    }
+}
+
+const fn from_format(value: u32) -> Option<TextureFormat> {
+    match value {
+        37 => Some(TextureFormat::Rgba8Unorm),
+        43 => Some(TextureFormat::Rgba8UnormSrgb),
+        44 => Some(TextureFormat::Bgra8Unorm),
+        50 => Some(TextureFormat::Bgra8UnormSrgb),
+        _ => None,
+    }
+}
+
+impl Drop for Instance {
+    fn drop(&mut self) {
+        unsafe {
+            call!(self, DestroyInstance, self.handle, ptr::null());
+            dlclose(self.library);
+        }
+    }
+}
+
+pub(super) type Factory = Rc<Instance>;
+
+struct SurfaceOwner {
+    instance: Rc<Instance>,
+    handle: u64,
+    widget: Rc<widget::Widget>,
+}
+
+impl Drop for SurfaceOwner {
+    fn drop(&mut self) {
+        unsafe {
+            call!(
+                self.instance,
+                DestroySurfaceKHR,
+                self.instance.handle,
+                self.handle,
+                ptr::null()
+            );
+        }
+    }
+}
+
+pub(super) struct Surface {
+    instance: Rc<Instance>,
+    handle: u64,
+    owner: Rc<SurfaceOwner>,
+    swap: RefCell<Option<Rc<Swapchain>>>,
+    widget: *mut c_void,
+    redraw: Rc<RedrawTimer>,
+    startup_clock: *mut c_void,
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.startup_clock.is_null() {
+                bwindow::ffi::g_signal_handlers_disconnect_matched(
+                    self.startup_clock.cast(),
+                    16, // G_SIGNAL_MATCH_DATA
+                    0,
+                    0,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    Rc::as_ptr(&self.redraw) as *mut c_void,
+                );
+                bwindow::ffi::g_object_unref(self.startup_clock.cast());
+            }
+            let window = gtk_widget_get_window(self.widget);
+            if !window.is_null() {
+                vk::gdk_window_set_invalidate_handler(window, None);
+                vk::g_object_set_data(window, c"bplaat-wgpu-redraw".as_ptr(), ptr::null_mut());
+            }
+            bwindow::ffi::g_signal_handlers_disconnect_matched(
+                self.widget.cast(),
+                16, // G_SIGNAL_MATCH_DATA
+                0,
+                0,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                Rc::as_ptr(&self.redraw) as *mut c_void,
+            );
+        }
+        if let Some(id) = self.redraw.callback.take() {
+            unsafe { gtk_widget_remove_tick_callback(self.widget, id) };
+        }
+    }
+}
+
+struct RedrawTimer {
+    widget: *mut c_void,
+    sender: bwindow::WindowEventSender,
+    callback: Cell<Option<u32>>,
+    ready: Cell<bool>,
+}
+
+extern "C" fn surface_after_paint(_: *mut c_void, data: *const RedrawTimer) {
+    let timer = unsafe {
+        Rc::increment_strong_count(data);
+        Rc::from_raw(data)
+    };
+    if !timer.ready.replace(true) {
+        timer.request_animation_frame();
+    }
+}
+
+impl Drop for RedrawTimer {
+    fn drop(&mut self) {
+        if let Some(id) = self.callback.take() {
+            unsafe { gtk_widget_remove_tick_callback(self.widget, id) };
+        }
+    }
+}
+
+impl RedrawTimer {
+    fn request_animation_frame(self: &Rc<Self>) {
+        if self.callback.get().is_some() {
+            return;
+        }
+        let data = Rc::into_raw(self.clone()) as *mut c_void;
+        let id =
+            unsafe { gtk_widget_add_tick_callback(self.widget, redraw_tick, data, release_redraw) };
+        self.callback.set(Some(id));
+    }
+}
+
+extern "C" fn surface_invalidate(window: *mut c_void, region: *mut c_void) {
+    unsafe {
+        // This native window belongs to Vulkan. Preserve the repaint request,
+        // but remove its Cairo damage so GDK cannot attach a competing buffer.
+        let pointer =
+            vk::g_object_get_data(window, c"bplaat-wgpu-redraw".as_ptr()).cast::<RedrawTimer>();
+        if !pointer.is_null() {
+            Rc::increment_strong_count(pointer);
+            let timer = Rc::from_raw(pointer);
+            timer.request_animation_frame();
+        }
+        vk::cairo_region_subtract(region, region);
+    }
+}
+
+extern "C" fn surface_draw(_: *mut c_void, _: *mut c_void, data: *const RedrawTimer) -> i32 {
+    // GTK flushes its backing buffer after this signal, which can overwrite a
+    // Vulkan presentation. Repaint on the next tick, after GTK finishes drawing.
+    let timer = unsafe {
+        Rc::increment_strong_count(data);
+        Rc::from_raw(data)
+    };
+    timer.request_animation_frame();
+    1
+}
+
+extern "C" fn redraw_tick(_: *mut c_void, _: *mut c_void, data: *mut c_void) -> i32 {
+    // The application can close the window (removing this callback) while
+    // handling the redraw. Retain the callback data across that delivery.
+    let timer = unsafe {
+        let pointer = data.cast::<RedrawTimer>();
+        Rc::increment_strong_count(pointer);
+        Rc::from_raw(pointer)
+    };
+    timer.callback.set(None);
+    timer.sender.send(bwindow::WindowEvent::RedrawRequested);
+    0
+}
+
+extern "C" fn release_redraw(data: *mut c_void) {
+    drop(unsafe { Rc::from_raw(data.cast::<RedrawTimer>()) });
+}
+
+impl Surface {
+    pub(super) fn new(
+        window: bwindow::NativeWindowHandle,
+        sender: bwindow::WindowEventSender,
+        factory: &mut Option<Factory>,
+    ) -> Result<Self> {
+        unsafe {
+            let bwindow::NativeWindowHandle::Gtk(widget) = window else {
+                return Err(Error("Vulkan requires a GTK window".into()));
+            };
+            let content = widget::Widget::new(widget, sender.clone());
+            let parent = widget;
+            let widget = content.handle;
+            let window = platform_window(bwindow::NativeWindowHandle::Gtk(widget))?;
+            let wayland = matches!(window, PlatformWindow::Wayland { .. });
+            let platform = match window {
+                PlatformWindow::Xlib { .. } => c"VK_KHR_xlib_surface",
+                PlatformWindow::Wayland { .. } => c"VK_KHR_wayland_surface",
+            };
+            let instance = if let Some(instance) = factory {
+                instance.clone()
+            } else {
+                let library = dlopen(c"libvulkan.so.1".as_ptr(), 2);
+                if library.is_null() {
+                    return Err(Error("Cannot load libvulkan.so.1".into()));
+                }
+                let get = dlsym(library, c"vkGetInstanceProcAddr".as_ptr());
+                if get.is_null() {
+                    dlclose(library);
+                    return Err(Error("Missing vkGetInstanceProcAddr".into()));
+                }
+                let get: GetProc = std::mem::transmute(get);
+                let create: vk::CreateInstance =
+                    std::mem::transmute(get(ptr::null_mut(), c"vkCreateInstance".as_ptr()));
+                let extensions = [c"VK_KHR_surface".as_ptr(), platform.as_ptr()];
+                let application = vk::ApplicationInfo {
+                    s_type: 0,
+                    api_version: (1 << 22) | (1 << 12),
+                    ..Default::default()
+                };
+                let info = vk::InstanceCreateInfo {
+                    s_type: 1,
+                    p_application_info: &application,
+                    enabled_extension_count: 2,
+                    pp_enabled_extension_names: extensions.as_ptr(),
+                    ..Default::default()
+                };
+                let mut handle = ptr::null_mut();
+                if let Err(error) = check(create(&info, ptr::null(), &mut handle)) {
+                    dlclose(library);
+                    return Err(error);
+                }
+                let instance = Rc::new(Instance {
+                    library,
+                    handle,
+                    get,
+                    functions: RefCell::new(HashMap::new()),
+                });
+                *factory = Some(instance.clone());
+                instance
+            };
+            let handle = instance.handle;
+            let mut surface = 0;
+            match window {
+                PlatformWindow::Xlib { display, window } => {
+                    let info = vk::XlibSurfaceCreateInfoKHR {
+                        s_type: 1000004000,
+                        dpy: display,
+                        window,
+                        ..Default::default()
+                    };
+                    check(call!(
+                        instance,
+                        CreateXlibSurfaceKHR,
+                        handle,
+                        &info,
+                        ptr::null(),
+                        &mut surface
+                    ))?;
+                }
+                PlatformWindow::Wayland {
+                    display,
+                    surface: window,
+                } => {
+                    let info = vk::WaylandSurfaceCreateInfoKHR {
+                        s_type: 1000006000,
+                        display,
+                        surface: window,
+                        ..Default::default()
+                    };
+                    check(call!(
+                        instance,
+                        CreateWaylandSurfaceKHR,
+                        handle,
+                        &info,
+                        ptr::null(),
+                        &mut surface
+                    ))?;
+                }
+            }
+            let redraw = Rc::new(RedrawTimer {
+                widget,
+                sender,
+                callback: Cell::new(None),
+                ready: Cell::new(!wayland),
+            });
+            // GDK keeps a new Wayland subsurface synchronized until the parent
+            // commits its first frame. Presenting repeatedly before that commit
+            // can merge Vulkan FIFO timestamps and cause a fatal protocol error.
+            let startup_clock = if wayland {
+                let clock = vk::gtk_widget_get_frame_clock(parent);
+                bwindow::ffi::g_object_ref(clock.cast());
+                bwindow::ffi::g_signal_connect_data(
+                    clock.cast(),
+                    c"after-paint".as_ptr(),
+                    surface_after_paint as *const c_void,
+                    Rc::as_ptr(&redraw).cast(),
+                    ptr::null(),
+                    1, // G_CONNECT_AFTER: GDK must commit and desynchronize first.
+                );
+                clock
+            } else {
+                ptr::null_mut()
+            };
+            let native_window = gtk_widget_get_window(widget);
+            vk::g_object_set_data(
+                native_window,
+                c"bplaat-wgpu-redraw".as_ptr(),
+                Rc::as_ptr(&redraw) as *mut c_void,
+            );
+            vk::gdk_window_set_invalidate_handler(native_window, Some(surface_invalidate));
+            // Discard Cairo damage queued while GTK realized and mapped the widget.
+            let pending = vk::gdk_window_get_update_area(native_window);
+            if !pending.is_null() {
+                vk::cairo_region_destroy(pending);
+            }
+            bwindow::ffi::g_signal_connect_data(
+                widget.cast(),
+                c"draw".as_ptr(),
+                surface_draw as *const c_void,
+                Rc::as_ptr(&redraw).cast(),
+                ptr::null(),
+                bwindow::ffi::G_CONNECT_DEFAULT,
+            );
+            Ok(Self {
+                owner: Rc::new(SurfaceOwner {
+                    instance: instance.clone(),
+                    handle: surface,
+                    widget: content,
+                }),
+                instance,
+                handle: surface,
+                swap: RefCell::new(None),
+                widget,
+                redraw,
+                startup_clock,
+            })
+        }
+    }
+
+    pub(super) fn request_redraw(&self) {
+        self.redraw
+            .sender
+            .send(bwindow::WindowEvent::RedrawRequested);
+    }
+
+    pub(super) fn request_animation_frame(&self) {
+        self.redraw.request_animation_frame();
+    }
+
+    pub(super) fn size(&self) -> (u32, u32) {
+        if self.is_lost() {
+            return (0, 0);
+        }
+        let width = unsafe { vk::gtk_widget_get_allocated_width(self.widget) };
+        let height = unsafe { vk::gtk_widget_get_allocated_height(self.widget) };
+        let scale = unsafe { gtk_widget_get_scale_factor(self.widget) }.max(1);
+        (
+            width.max(0).saturating_mul(scale) as u32,
+            height.max(0).saturating_mul(scale) as u32,
+        )
+    }
+
+    fn is_lost(&self) -> bool {
+        self.owner.widget.lost.get() || unsafe { gtk_widget_get_window(self.widget) }.is_null()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct RenderPassKey {
+    format: u32,
+    clear_color: bool,
+    has_depth: bool,
+    clear_depth: bool,
+    store_depth: bool,
+}
+
+struct NativeDevice {
+    instance: Rc<Instance>,
+    handle: vk::Device,
+    physical: vk::PhysicalDevice,
+    queue: vk::Queue,
+    family: u32,
+    memory: vk::PhysicalDeviceMemoryProperties,
+    pools: RefCell<Vec<Weak<Memory>>>,
+    render_passes: RefCell<HashMap<RenderPassKey, u64>>,
+}
+
+impl Drop for NativeDevice {
+    fn drop(&mut self) {
+        unsafe {
+            call!(self.instance, DeviceWaitIdle, self.handle);
+            for (_, render) in self.render_passes.get_mut().drain() {
+                call!(
+                    self.instance,
+                    DestroyRenderPass,
+                    self.handle,
+                    render,
+                    ptr::null()
+                );
+            }
+            call!(self.instance, DestroyDevice, self.handle, ptr::null());
+        }
+    }
+}
+
+struct Memory {
+    device: Rc<NativeDevice>,
+    handle: u64,
+    size: u64,
+    kind: u32,
+    free: RefCell<allocation::Ranges>,
+}
+
+impl Drop for Memory {
+    fn drop(&mut self) {
+        unsafe {
+            call!(
+                self.device.instance,
+                FreeMemory,
+                self.device.handle,
+                self.handle,
+                ptr::null()
+            );
+        }
+    }
+}
+
+impl Memory {
+    fn reserve(&self, size: u64, alignment: u64) -> Option<u64> {
+        self.free.borrow_mut().allocate(size, alignment)
+    }
+
+    fn release(&self, range: Range<u64>) {
+        self.free.borrow_mut().release(range);
+    }
+}
+
+impl NativeDevice {
+    fn allocate(
+        self: &Rc<Self>,
+        requirements: vk::MemoryRequirements,
+        flags: u32,
+        pooled: bool,
+    ) -> Result<(Rc<Memory>, u64)> {
+        let kind = (0..self.memory.memory_type_count)
+            .find(|&i| {
+                requirements.memory_type_bits & (1 << i) != 0
+                    && self.memory.memory_types[i as usize].property_flags & flags == flags
+            })
+            .ok_or_else(|| Error("No compatible Vulkan memory type".into()))?;
+        if pooled {
+            self.pools
+                .borrow_mut()
+                .retain(|pool| pool.strong_count() > 0);
+            for memory in self.pools.borrow().iter().filter_map(Weak::upgrade) {
+                if memory.kind == kind
+                    && let Some(offset) = memory.reserve(requirements.size, requirements.alignment)
+                {
+                    return Ok((memory, offset));
+                }
+            }
+        }
+        let size = if pooled {
+            requirements.size.max(64 * 1024 * 1024)
+        } else {
+            requirements.size
+        };
+        let mut handle = 0;
+        let info = vk::MemoryAllocateInfo {
+            s_type: 5,
+            allocation_size: size,
+            memory_type_index: kind,
+            ..Default::default()
+        };
+        unsafe {
+            check(call!(
+                self.instance,
+                AllocateMemory,
+                self.handle,
+                &info,
+                ptr::null(),
+                &mut handle
+            ))?;
+        }
+        let memory = Rc::new(Memory {
+            device: self.clone(),
+            handle,
+            size,
+            kind,
+            free: RefCell::new(allocation::Ranges::new(size)),
+        });
+        let offset = memory
+            .reserve(requirements.size, requirements.alignment)
+            .expect("fresh Vulkan allocation is large enough");
+        if pooled {
+            self.pools.borrow_mut().push(Rc::downgrade(&memory));
+        }
+        Ok((memory, offset))
+    }
+
+    fn buffer(self: &Rc<Self>, size: u64, staging: bool) -> Result<Buffer> {
+        unsafe {
+            let info = vk::BufferCreateInfo {
+                s_type: 12,
+                size,
+                usage: if staging { 1 } else { 2 | 16 | 32 | 128 },
+                ..Default::default()
+            };
+            let mut handle = 0;
+            check(call!(
+                self.instance,
+                CreateBuffer,
+                self.handle,
+                &info,
+                ptr::null(),
+                &mut handle
+            ))?;
+            let mut requirements = vk::MemoryRequirements::default();
+            call!(
+                self.instance,
+                GetBufferMemoryRequirements,
+                self.handle,
+                handle,
+                &mut requirements
+            );
+            let (memory, offset) =
+                match self.allocate(requirements, if staging { 2 | 4 } else { 1 }, !staging) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        call!(
+                            self.instance,
+                            DestroyBuffer,
+                            self.handle,
+                            handle,
+                            ptr::null()
+                        );
+                        return Err(e);
+                    }
+                };
+            let result = Buffer {
+                handle,
+                memory,
+                offset,
+                allocation_size: requirements.size,
+                capacity: size,
+            };
+            check(call!(
+                self.instance,
+                BindBufferMemory,
+                self.handle,
+                handle,
+                result.memory.handle,
+                offset
+            ))?;
+            Ok(result)
+        }
+    }
+}
+
+pub(super) struct Buffer {
+    handle: u64,
+    memory: Rc<Memory>,
+    offset: u64,
+    allocation_size: u64,
+    capacity: u64,
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        unsafe {
+            let device = &self.memory.device;
+            call!(
+                device.instance,
+                DestroyBuffer,
+                device.handle,
+                self.handle,
+                ptr::null()
+            );
+        }
+        self.memory
+            .release(self.offset..self.offset + self.allocation_size);
+    }
+}
+
+pub(super) struct Texture {
+    image: u64,
+    view: u64,
+    memory: Option<Rc<Memory>>,
+    swap: Option<Rc<Swapchain>>,
+    device: Rc<NativeDevice>,
+    layout: Cell<u32>,
+    mips: u32,
+    layers: u32,
+    depth: bool,
+    index: usize,
+}
+
+impl Drop for Texture {
+    fn drop(&mut self) {
+        if self.memory.is_some() {
+            unsafe {
+                call!(
+                    self.device.instance,
+                    DestroyImageView,
+                    self.device.handle,
+                    self.view,
+                    ptr::null()
+                );
+                call!(
+                    self.device.instance,
+                    DestroyImage,
+                    self.device.handle,
+                    self.image,
+                    ptr::null()
+                );
+            }
+        }
+    }
+}
+
+pub(super) struct Sampler {
+    handle: u64,
+    device: Rc<NativeDevice>,
+}
+
+impl Drop for Sampler {
+    fn drop(&mut self) {
+        unsafe {
+            call!(
+                self.device.instance,
+                DestroySampler,
+                self.device.handle,
+                self.handle,
+                ptr::null()
+            );
+        }
+    }
+}
+
+pub(super) struct Pipeline {
+    handle: u64,
+    layout: u64,
+    set_layout: u64,
+    render: u64,
+    device: Rc<NativeDevice>,
+}
+
+impl Drop for Pipeline {
+    fn drop(&mut self) {
+        unsafe {
+            let d = &self.device;
+            call!(
+                d.instance,
+                DestroyPipeline,
+                d.handle,
+                self.handle,
+                ptr::null()
+            );
+            call!(
+                d.instance,
+                DestroyPipelineLayout,
+                d.handle,
+                self.layout,
+                ptr::null()
+            );
+            call!(
+                d.instance,
+                DestroyDescriptorSetLayout,
+                d.handle,
+                self.set_layout,
+                ptr::null()
+            );
+        }
+    }
+}
+
+struct Swapchain {
+    _surface: Rc<SurfaceOwner>,
+    handle: u64,
+    device: Rc<NativeDevice>,
+    images: Vec<u64>,
+    views: Vec<u64>,
+    finished: Vec<u64>,
+    size: (u32, u32),
+}
+
+impl Drop for Swapchain {
+    fn drop(&mut self) {
+        unsafe {
+            let d = &self.device;
+            call!(d.instance, DeviceWaitIdle, d.handle);
+            for &view in &self.views {
+                call!(d.instance, DestroyImageView, d.handle, view, ptr::null());
+            }
+            for &sem in &self.finished {
+                call!(d.instance, DestroySemaphore, d.handle, sem, ptr::null());
+            }
+            call!(
+                d.instance,
+                DestroySwapchainKHR,
+                d.handle,
+                self.handle,
+                ptr::null()
+            );
+        }
+    }
+}
+
+struct Frame {
+    device: Rc<NativeDevice>,
+    pool: u64,
+    command: vk::CommandBuffer,
+    fence: u64,
+    available: u64,
+    descriptors: u64,
+    busy: bool,
+    uploads: Vec<Upload>,
+    passes: Vec<Pass>,
+    staging: Vec<Buffer>,
+    framebuffers: Vec<u64>,
+}
+
+pub(super) struct Context {
+    device: Rc<NativeDevice>,
+    frames: RefCell<Vec<Frame>>,
+    slot: Cell<usize>,
+    acquired: RefCell<Option<(Rc<Swapchain>, usize)>>,
+    acquisition_waited: Cell<bool>,
+    surface_status: Cell<i32>,
+}
+
+impl Context {
+    pub(super) fn new(surface: &Surface) -> Result<Rc<Self>> {
+        unsafe {
+            let instance = &surface.instance;
+            let mut count = 0;
+            check(call!(
+                instance,
+                EnumeratePhysicalDevices,
+                instance.handle,
+                &mut count,
+                ptr::null_mut()
+            ))?;
+            let mut physicals = vec![ptr::null_mut(); count as usize];
+            check(call!(
+                instance,
+                EnumeratePhysicalDevices,
+                instance.handle,
+                &mut count,
+                physicals.as_mut_ptr()
+            ))?;
+            let mut selected = None;
+            for physical in physicals {
+                let mut count = 0;
+                call!(
+                    instance,
+                    GetPhysicalDeviceQueueFamilyProperties,
+                    physical,
+                    &mut count,
+                    ptr::null_mut()
+                );
+                let mut families = vec![vk::QueueFamilyProperties::default(); count as usize];
+                call!(
+                    instance,
+                    GetPhysicalDeviceQueueFamilyProperties,
+                    physical,
+                    &mut count,
+                    families.as_mut_ptr()
+                );
+                for (family, properties) in families.iter().enumerate() {
+                    let mut supported = 0;
+                    check(call!(
+                        instance,
+                        GetPhysicalDeviceSurfaceSupportKHR,
+                        physical,
+                        family as u32,
+                        surface.handle,
+                        &mut supported
+                    ))?;
+                    if properties.queue_flags & 1 != 0 && supported != 0 {
+                        selected = Some((physical, family as u32));
+                        break;
+                    }
+                }
+                if selected.is_some() {
+                    break;
+                }
+            }
+            let (physical, family) =
+                selected.ok_or_else(|| Error("No Vulkan graphics/present queue".into()))?;
+            let priority = 1f32;
+            let queue_info = vk::DeviceQueueCreateInfo {
+                s_type: 2,
+                queue_family_index: family,
+                queue_count: 1,
+                p_queue_priorities: &priority,
+                ..Default::default()
+            };
+            let extensions = [c"VK_KHR_swapchain".as_ptr()];
+            let info = vk::DeviceCreateInfo {
+                s_type: 3,
+                queue_create_info_count: 1,
+                p_queue_create_infos: &queue_info,
+                enabled_extension_count: 1,
+                pp_enabled_extension_names: extensions.as_ptr(),
+                ..Default::default()
+            };
+            let mut handle = ptr::null_mut();
+            check(call!(
+                instance,
+                CreateDevice,
+                physical,
+                &info,
+                ptr::null(),
+                &mut handle
+            ))?;
+            let mut queue = ptr::null_mut();
+            call!(instance, GetDeviceQueue, handle, family, 0, &mut queue);
+            let mut memory = vk::PhysicalDeviceMemoryProperties::default();
+            call!(
+                instance,
+                GetPhysicalDeviceMemoryProperties,
+                physical,
+                &mut memory
+            );
+            let device = Rc::new(NativeDevice {
+                instance: instance.clone(),
+                handle,
+                physical,
+                queue,
+                family,
+                memory,
+                pools: RefCell::new(Vec::new()),
+                render_passes: RefCell::new(HashMap::new()),
+            });
+            let context = Rc::new(Self {
+                device,
+                frames: RefCell::new(Vec::new()),
+                slot: Cell::new(0),
+                acquired: RefCell::new(None),
+                acquisition_waited: Cell::new(false),
+                surface_status: Cell::new(0),
+            });
+            for _ in 0..2 {
+                context.frames.borrow_mut().push(context.frame()?);
+            }
+            Ok(context)
+        }
+    }
+
+    fn frame(&self) -> Result<Frame> {
+        unsafe {
+            let d = &self.device;
+            let mut frame = Frame {
+                device: d.clone(),
+                pool: 0,
+                command: ptr::null_mut(),
+                fence: 0,
+                available: 0,
+                descriptors: 0,
+                busy: false,
+                uploads: Vec::new(),
+                passes: Vec::new(),
+                staging: Vec::new(),
+                framebuffers: Vec::new(),
+            };
+            let info = vk::CommandPoolCreateInfo {
+                s_type: 39,
+                queue_family_index: d.family,
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                CreateCommandPool,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut frame.pool
+            ))?;
+            let info = vk::CommandBufferAllocateInfo {
+                s_type: 40,
+                command_pool: frame.pool,
+                command_buffer_count: 1,
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                AllocateCommandBuffers,
+                d.handle,
+                &info,
+                &mut frame.command
+            ))?;
+            let info = vk::FenceCreateInfo {
+                s_type: 8,
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                CreateFence,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut frame.fence
+            ))?;
+            let info = vk::SemaphoreCreateInfo {
+                s_type: 9,
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                CreateSemaphore,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut frame.available
+            ))?;
+            let sizes = [
+                vk::DescriptorPoolSize {
+                    ty: 6,
+                    descriptor_count: 256,
+                },
+                vk::DescriptorPoolSize {
+                    ty: 7,
+                    descriptor_count: 256,
+                },
+                vk::DescriptorPoolSize {
+                    ty: 2,
+                    descriptor_count: 256,
+                },
+                vk::DescriptorPoolSize {
+                    ty: 0,
+                    descriptor_count: 256,
+                },
+            ];
+            let info = vk::DescriptorPoolCreateInfo {
+                s_type: 33,
+                max_sets: 256,
+                pool_size_count: sizes.len() as u32,
+                p_pool_sizes: sizes.as_ptr(),
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                CreateDescriptorPool,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut frame.descriptors
+            ))?;
+            Ok(frame)
+        }
+    }
+
+    fn wait(&self, frame: &mut Frame, timeout: u64) -> Result<bool> {
+        unsafe {
+            let d = &self.device;
+            if frame.busy {
+                let result = call!(
+                    d.instance,
+                    WaitForFences,
+                    d.handle,
+                    1,
+                    &frame.fence,
+                    1,
+                    timeout
+                );
+                if result == 2 {
+                    return Ok(false);
+                }
+                check(result)?;
+                frame.busy = false;
+            }
+            for framebuffer in frame.framebuffers.drain(..) {
+                call!(
+                    d.instance,
+                    DestroyFramebuffer,
+                    d.handle,
+                    framebuffer,
+                    ptr::null()
+                );
+            }
+            frame.passes.clear();
+            frame.uploads.clear();
+            check(call!(d.instance, ResetCommandPool, d.handle, frame.pool, 0))?;
+            check(call!(
+                d.instance,
+                ResetDescriptorPool,
+                d.handle,
+                frame.descriptors,
+                0
+            ))?;
+            Ok(true)
+        }
+    }
+
+    pub(super) fn formats(&self, surface: &Surface) -> Result<Vec<TextureFormat>> {
+        unsafe {
+            let d = &self.device;
+            let mut count = 0;
+            check(call!(
+                d.instance,
+                GetPhysicalDeviceSurfaceFormatsKHR,
+                d.physical,
+                surface.handle,
+                &mut count,
+                ptr::null_mut()
+            ))?;
+            let mut formats = vec![vk::SurfaceFormatKHR::default(); count as usize];
+            check(call!(
+                d.instance,
+                GetPhysicalDeviceSurfaceFormatsKHR,
+                d.physical,
+                surface.handle,
+                &mut count,
+                formats.as_mut_ptr()
+            ))?;
+            if formats.len() == 1 && formats[0].format == 0 {
+                return Ok(vec![TextureFormat::Bgra8UnormSrgb]);
+            }
+            Ok(formats
+                .iter()
+                .filter(|f| f.color_space == 0)
+                .filter_map(|f| from_format(f.format))
+                .collect())
+        }
+    }
+
+    pub(super) fn configure(&self, surface: &Surface, config: &SurfaceConfiguration) -> Result<()> {
+        if surface.is_lost() {
+            return Err(Error(
+                "GTK presentation surface is no longer available".into(),
+            ));
+        }
+        unsafe {
+            let d = &self.device;
+            require(
+                Rc::ptr_eq(&surface.instance, &d.instance),
+                "Surface belongs to another Vulkan instance",
+            );
+            require(
+                self.acquired.borrow().is_none(),
+                "Present the acquired frame before reconfiguring the surface",
+            );
+            for frame in self.frames.borrow_mut().iter_mut() {
+                self.wait(frame, u64::MAX)?;
+            }
+            check(call!(d.instance, DeviceWaitIdle, d.handle))?;
+            self.surface_status.set(0);
+            let mut caps = vk::SurfaceCapabilitiesKHR::default();
+            check(call!(
+                d.instance,
+                GetPhysicalDeviceSurfaceCapabilitiesKHR,
+                d.physical,
+                surface.handle,
+                &mut caps
+            ))?;
+            let extent = if caps.current_extent.width != u32::MAX {
+                caps.current_extent
+            } else {
+                vk::Extent2D {
+                    width: config
+                        .width
+                        .clamp(caps.min_image_extent.width, caps.max_image_extent.width),
+                    height: config
+                        .height
+                        .clamp(caps.min_image_extent.height, caps.max_image_extent.height),
+                }
+            };
+            if extent.width != config.width || extent.height != config.height {
+                return Err(Error(
+                    "Surface extent differs from window extent; retry after resize".into(),
+                ));
+            }
+            let count = if caps.max_image_count == 0 {
+                caps.min_image_count.max(3)
+            } else {
+                caps.min_image_count.max(3).min(caps.max_image_count)
+            };
+            let old = surface.swap.borrow().as_ref().map_or(0, |swap| swap.handle);
+            let info = vk::SwapchainCreateInfoKHR {
+                s_type: 1000001000,
+                surface: surface.handle,
+                min_image_count: count,
+                image_format: format(config.format),
+                image_color_space: 0,
+                image_extent: extent,
+                image_array_layers: 1,
+                image_usage: 16,
+                pre_transform: caps.current_transform,
+                composite_alpha: 1 << caps.supported_composite_alpha.trailing_zeros(),
+                present_mode: 2,
+                clipped: 1,
+                old_swapchain: old,
+                ..Default::default()
+            };
+            let mut swap = Swapchain {
+                _surface: surface.owner.clone(),
+                handle: 0,
+                device: d.clone(),
+                images: Vec::new(),
+                views: Vec::new(),
+                finished: Vec::new(),
+                size: (extent.width, extent.height),
+            };
+            check(call!(
+                d.instance,
+                CreateSwapchainKHR,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut swap.handle
+            ))?;
+            let mut count = 0;
+            check(call!(
+                d.instance,
+                GetSwapchainImagesKHR,
+                d.handle,
+                swap.handle,
+                &mut count,
+                ptr::null_mut()
+            ))?;
+            swap.images.resize(count as usize, 0);
+            check(call!(
+                d.instance,
+                GetSwapchainImagesKHR,
+                d.handle,
+                swap.handle,
+                &mut count,
+                swap.images.as_mut_ptr()
+            ))?;
+            for &image in &swap.images {
+                swap.views.push(self.view(image, config.format, 1, 1)?);
+                let info = vk::SemaphoreCreateInfo {
+                    s_type: 9,
+                    ..Default::default()
+                };
+                let mut sem = 0;
+                check(call!(
+                    d.instance,
+                    CreateSemaphore,
+                    d.handle,
+                    &info,
+                    ptr::null(),
+                    &mut sem
+                ))?;
+                swap.finished.push(sem);
+            }
+            *surface.swap.borrow_mut() = Some(Rc::new(swap));
+            Ok(())
+        }
+    }
+
+    pub(super) fn acquire(
+        &self,
+        surface: &Surface,
+    ) -> std::result::Result<(Texture, bool), CurrentSurfaceTexture> {
+        // GTK may have destroyed the native surface while the application still
+        // retains its renderer. Never pass its stale Wayland/X11 handle to WSI.
+        if surface.is_lost() {
+            return Err(CurrentSurfaceTexture::Lost);
+        }
+        if !surface.redraw.ready.get() {
+            return Err(CurrentSurfaceTexture::Occluded);
+        }
+        match self.surface_status.replace(0) {
+            -1000001004 | 1000001003 => return Err(CurrentSurfaceTexture::Outdated),
+            -1000000000 => return Err(CurrentSurfaceTexture::Lost),
+            _ => {}
+        }
+        if self.acquired.borrow().is_some() {
+            return Err(CurrentSurfaceTexture::Validation);
+        }
+        let mut frames = self.frames.borrow_mut();
+        let frame = &mut frames[self.slot.get()];
+        // Yield to GTK while the GPU is busy; the caller retries on a later frame tick.
+        if !self
+            .wait(frame, 0)
+            .map_err(|_| CurrentSurfaceTexture::Lost)?
+        {
+            return Err(CurrentSurfaceTexture::Timeout);
+        }
+        let swap = surface
+            .swap
+            .borrow()
+            .clone()
+            .ok_or(CurrentSurfaceTexture::Validation)?;
+        // Wayland has no fixed surface extent, so the driver need not report
+        // OUT_OF_DATE when GTK resizes the content or changes its scale.
+        if swap.size != surface.size() {
+            return Err(CurrentSurfaceTexture::Outdated);
+        }
+        let mut index = 0;
+        let result = unsafe {
+            call!(
+                self.device.instance,
+                AcquireNextImageKHR,
+                self.device.handle,
+                swap.handle,
+                0,
+                frame.available,
+                0,
+                &mut index
+            )
+        };
+        match result {
+            0 | 1000001003 => {}
+            -1000001004 => return Err(CurrentSurfaceTexture::Outdated),
+            -1000000000 => return Err(CurrentSurfaceTexture::Lost),
+            -4 => return Err(CurrentSurfaceTexture::Validation),
+            1 | 2 => return Err(CurrentSurfaceTexture::Timeout),
+            _ => return Err(CurrentSurfaceTexture::Validation),
+        }
+        *self.acquired.borrow_mut() = Some((swap.clone(), index as usize));
+        self.acquisition_waited.set(false);
+        Ok((
+            Texture {
+                image: swap.images[index as usize],
+                view: swap.views[index as usize],
+                memory: None,
+                swap: Some(swap),
+                device: self.device.clone(),
+                layout: Cell::new(0),
+                mips: 1,
+                layers: 1,
+                depth: false,
+                index: index as usize,
+            },
+            result != 0,
+        ))
+    }
+
+    pub(super) fn buffer(&self, size: u64, _: BufferUsages) -> Result<Buffer> {
+        self.device.buffer(size, false)
+    }
+
+    fn view(&self, image: u64, fmt: TextureFormat, mips: u32, layers: u32) -> Result<u64> {
+        let info = vk::ImageViewCreateInfo {
+            s_type: 15,
+            image,
+            view_type: if layers > 1 { 5 } else { 1 },
+            format: format(fmt),
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: if fmt == TextureFormat::Depth32Float {
+                    2
+                } else {
+                    1
+                },
+                level_count: mips,
+                layer_count: layers,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut view = 0;
+        unsafe {
+            check(call!(
+                self.device.instance,
+                CreateImageView,
+                self.device.handle,
+                &info,
+                ptr::null(),
+                &mut view
+            ))?;
+        }
+        Ok(view)
+    }
+
+    pub(super) fn texture(&self, desc: &TextureDescriptor<'_>) -> Result<Texture> {
+        unsafe {
+            let d = &self.device;
+            let depth = desc.format == TextureFormat::Depth32Float;
+            let usage = if desc.usage.contains(TextureUsages::COPY_DST) {
+                2
+            } else {
+                0
+            } | if desc.usage.contains(TextureUsages::TEXTURE_BINDING) {
+                4
+            } else {
+                0
+            } | if desc.usage.contains(TextureUsages::RENDER_ATTACHMENT) {
+                if depth { 32 } else { 16 }
+            } else {
+                0
+            };
+            let info = vk::ImageCreateInfo {
+                s_type: 14,
+                image_type: 1,
+                format: format(desc.format),
+                extent: vk::Extent3D {
+                    width: desc.size.width,
+                    height: desc.size.height,
+                    depth: 1,
+                },
+                mip_levels: desc.mip_level_count,
+                array_layers: desc.size.depth_or_array_layers,
+                samples: 1,
+                usage,
+                ..Default::default()
+            };
+            let mut image = 0;
+            check(call!(
+                d.instance,
+                CreateImage,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut image
+            ))?;
+            let mut requirements = vk::MemoryRequirements::default();
+            call!(
+                d.instance,
+                GetImageMemoryRequirements,
+                d.handle,
+                image,
+                &mut requirements
+            );
+            let (memory, offset) = match d.allocate(requirements, 1, false) {
+                Ok(value) => value,
+                Err(e) => {
+                    call!(d.instance, DestroyImage, d.handle, image, ptr::null());
+                    return Err(e);
+                }
+            };
+            let mut texture = Texture {
+                image,
+                view: 0,
+                memory: Some(memory),
+                swap: None,
+                device: d.clone(),
+                layout: Cell::new(0),
+                mips: desc.mip_level_count,
+                layers: desc.size.depth_or_array_layers,
+                depth,
+                index: 0,
+            };
+            check(call!(
+                d.instance,
+                BindImageMemory,
+                d.handle,
+                image,
+                texture
+                    .memory
+                    .as_ref()
+                    .expect("texture memory allocated")
+                    .handle,
+                offset
+            ))?;
+            // Transfer-only images cannot have Vulkan image views.
+            if usage & (4 | 16 | 32) != 0 {
+                texture.view = self.view(image, desc.format, texture.mips, texture.layers)?;
+            }
+            Ok(texture)
+        }
+    }
+
+    pub(super) fn sampler(&self, desc: &SamplerDescriptor<'_>) -> Result<Sampler> {
+        let info = vk::SamplerCreateInfo {
+            s_type: 31,
+            mag_filter: u32::from(desc.mag_filter == FilterMode::Linear),
+            min_filter: u32::from(desc.min_filter == FilterMode::Linear),
+            mipmap_mode: u32::from(desc.mipmap_filter == FilterMode::Linear),
+            address_mode_u: if desc.address_mode_u == AddressMode::Repeat {
+                0
+            } else {
+                2
+            },
+            address_mode_v: if desc.address_mode_v == AddressMode::Repeat {
+                0
+            } else {
+                2
+            },
+            address_mode_w: 2,
+            max_lod: 32.,
+            ..Default::default()
+        };
+        let mut handle = 0;
+        unsafe {
+            check(call!(
+                self.device.instance,
+                CreateSampler,
+                self.device.handle,
+                &info,
+                ptr::null(),
+                &mut handle
+            ))?;
+        }
+        Ok(Sampler {
+            handle,
+            device: self.device.clone(),
+        })
+    }
+
+    fn render_pass(
+        &self,
+        fmt: TextureFormat,
+        clear_color: bool,
+        has_depth: bool,
+        clear_depth: bool,
+        store_depth: bool,
+    ) -> Result<u64> {
+        let key = RenderPassKey {
+            format: format(fmt),
+            clear_color,
+            has_depth,
+            clear_depth: has_depth && clear_depth,
+            store_depth: has_depth && store_depth,
+        };
+        let mut cache = self.device.render_passes.borrow_mut();
+        if let Some(&render) = cache.get(&key) {
+            return Ok(render);
+        }
+        unsafe {
+            let d = &self.device;
+            let mut render = 0;
+            let attachments = [
+                vk::AttachmentDescription {
+                    format: format(fmt),
+                    samples: 1,
+                    load_op: u32::from(clear_color),
+                    store_op: 0,
+                    stencil_load_op: 2,
+                    stencil_store_op: 1,
+                    initial_layout: 2,
+                    final_layout: 2,
+                    ..Default::default()
+                },
+                vk::AttachmentDescription {
+                    format: 126,
+                    samples: 1,
+                    load_op: u32::from(clear_depth),
+                    store_op: u32::from(!store_depth),
+                    stencil_load_op: 2,
+                    stencil_store_op: 1,
+                    initial_layout: 3,
+                    final_layout: 3,
+                    ..Default::default()
+                },
+            ];
+            let color_ref = vk::AttachmentReference {
+                attachment: 0,
+                layout: 2,
+            };
+            let depth_ref = vk::AttachmentReference {
+                attachment: 1,
+                layout: 3,
+            };
+            let subpass = vk::SubpassDescription {
+                color_attachment_count: 1,
+                p_color_attachments: &color_ref,
+                p_depth_stencil_attachment: if has_depth { &depth_ref } else { ptr::null() },
+                ..Default::default()
+            };
+            let info = vk::RenderPassCreateInfo {
+                s_type: 38,
+                attachment_count: if has_depth { 2 } else { 1 },
+                p_attachments: attachments.as_ptr(),
+                subpass_count: 1,
+                p_subpasses: &subpass,
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                CreateRenderPass,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut render
+            ))?;
+            cache.insert(key, render);
+            Ok(render)
+        }
+    }
+
+    pub(super) fn pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> Result<Pipeline> {
+        unsafe {
+            let d = &self.device;
+            let mut pipeline = Pipeline {
+                handle: 0,
+                layout: 0,
+                set_layout: 0,
+                render: 0,
+                device: d.clone(),
+            };
+            let bindings: Vec<_> = desc
+                .layout
+                .and_then(|layout| layout.group.as_ref())
+                .into_iter()
+                .flat_map(|group| group.entries.iter())
+                .map(|entry| vk::DescriptorSetLayoutBinding {
+                    binding: entry.binding,
+                    descriptor_type: match entry.ty {
+                        BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            ..
+                        } => 6,
+                        BindingType::Buffer { .. } => 7,
+                        BindingType::Texture { .. } => 2,
+                        BindingType::Sampler(_) => 0,
+                    },
+                    descriptor_count: 1,
+                    stage_flags: (if entry.visibility.contains(ShaderStages::VERTEX) {
+                        1
+                    } else {
+                        0
+                    }) | (if entry.visibility.contains(ShaderStages::FRAGMENT) {
+                        16
+                    } else {
+                        0
+                    }),
+                    ..Default::default()
+                })
+                .collect();
+            let info = vk::DescriptorSetLayoutCreateInfo {
+                s_type: 32,
+                binding_count: bindings.len() as u32,
+                p_bindings: bindings.as_ptr(),
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                CreateDescriptorSetLayout,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut pipeline.set_layout
+            ))?;
+            let info = vk::PipelineLayoutCreateInfo {
+                s_type: 30,
+                set_layout_count: 1,
+                p_set_layouts: &pipeline.set_layout,
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                CreatePipelineLayout,
+                d.handle,
+                &info,
+                ptr::null(),
+                &mut pipeline.layout
+            ))?;
+            let fragment = desc.fragment.as_ref().expect("fragment stage validated");
+            let color = fragment.targets[0].expect("color target validated");
+            pipeline.render = self.render_pass(
+                color.format,
+                true,
+                desc.depth_stencil.is_some(),
+                desc.depth_stencil.is_some(),
+                true,
+            )?;
+            let mut modules = ShaderModules {
+                device: d,
+                handles: [0; 2],
+            };
+            for (index, shader) in [desc.vertex.module, fragment.module].iter().enumerate() {
+                let NativeSource::SpirV(words) = &shader.source else {
+                    return Err(Error("Vulkan requires SPIR-V".into()));
+                };
+                let info = vk::ShaderModuleCreateInfo {
+                    s_type: 16,
+                    code_size: words.len() * 4,
+                    p_code: words.as_ptr(),
+                    ..Default::default()
+                };
+                check(call!(
+                    d.instance,
+                    CreateShaderModule,
+                    d.handle,
+                    &info,
+                    ptr::null(),
+                    &mut modules.handles[index]
+                ))?;
+            }
+            let names = [
+                std::ffi::CString::new(desc.vertex.module.entry(desc.vertex.entry_point))
+                    .expect("WGSL entry point contains no NUL"),
+                std::ffi::CString::new(fragment.module.entry(fragment.entry_point))
+                    .expect("WGSL entry point contains no NUL"),
+            ];
+            let stages = [
+                vk::PipelineShaderStageCreateInfo {
+                    s_type: 18,
+                    stage: 1,
+                    module: modules.handles[0],
+                    p_name: names[0].as_ptr(),
+                    ..Default::default()
+                },
+                vk::PipelineShaderStageCreateInfo {
+                    s_type: 18,
+                    stage: 16,
+                    module: modules.handles[1],
+                    p_name: names[1].as_ptr(),
+                    ..Default::default()
+                },
+            ];
+            let layout = desc.vertex.buffers.first().and_then(Option::as_ref);
+            let binding = vk::VertexInputBindingDescription {
+                binding: 0,
+                stride: layout.map_or(0, |l| l.array_stride as u32),
+                input_rate: u32::from(
+                    layout.is_some_and(|layout| layout.step_mode == VertexStepMode::Instance),
+                ),
+            };
+            let attributes = layout
+                .into_iter()
+                .flat_map(|layout| layout.attributes)
+                .map(|attribute| vk::VertexInputAttributeDescription {
+                    location: attribute.shader_location,
+                    binding: 0,
+                    format: match attribute.format {
+                        VertexFormat::Float32x2 => 103,
+                        VertexFormat::Float32x3 => 106,
+                        VertexFormat::Uint32x2 => 101,
+                    },
+                    offset: attribute.offset as u32,
+                })
+                .collect::<Vec<_>>();
+            let vertex = vk::PipelineVertexInputStateCreateInfo {
+                s_type: 19,
+                vertex_binding_description_count: u32::from(layout.is_some()),
+                p_vertex_binding_descriptions: &binding,
+                vertex_attribute_description_count: attributes.len() as u32,
+                p_vertex_attribute_descriptions: attributes.as_ptr(),
+                ..Default::default()
+            };
+            let assembly = vk::PipelineInputAssemblyStateCreateInfo {
+                s_type: 20,
+                topology: 3,
+                ..Default::default()
+            };
+            let viewport = vk::PipelineViewportStateCreateInfo {
+                s_type: 22,
+                viewport_count: 1,
+                scissor_count: 1,
+                ..Default::default()
+            };
+            let raster = vk::PipelineRasterizationStateCreateInfo {
+                s_type: 23,
+                cull_mode: if desc.primitive.cull_mode.is_some() {
+                    2
+                } else {
+                    0
+                },
+                front_face: 0,
+                line_width: 1.,
+                ..Default::default()
+            };
+            let multisample = vk::PipelineMultisampleStateCreateInfo {
+                s_type: 24,
+                rasterization_samples: 1,
+                ..Default::default()
+            };
+            let depth = desc.depth_stencil;
+            let depth = vk::PipelineDepthStencilStateCreateInfo {
+                s_type: 25,
+                depth_test_enable: u32::from(depth.is_some()),
+                depth_write_enable: u32::from(
+                    depth.is_some_and(|depth| depth.depth_write_enabled.unwrap_or(false)),
+                ),
+                depth_compare_op: if depth
+                    .is_some_and(|depth| depth.depth_compare == Some(CompareFunction::Always))
+                {
+                    7
+                } else {
+                    3
+                },
+                ..Default::default()
+            };
+            let blend_attachment = vk::PipelineColorBlendAttachmentState {
+                blend_enable: u32::from(color.blend.is_some()),
+                src_color_blend_factor: 6,
+                dst_color_blend_factor: 7,
+                src_alpha_blend_factor: 1,
+                dst_alpha_blend_factor: 7,
+                color_write_mask: 15,
+                ..Default::default()
+            };
+            let blend = vk::PipelineColorBlendStateCreateInfo {
+                s_type: 26,
+                attachment_count: 1,
+                p_attachments: &blend_attachment,
+                ..Default::default()
+            };
+            let states = [0, 1];
+            let dynamic = vk::PipelineDynamicStateCreateInfo {
+                s_type: 27,
+                dynamic_state_count: 2,
+                p_dynamic_states: states.as_ptr(),
+                ..Default::default()
+            };
+            let info = vk::GraphicsPipelineCreateInfo {
+                s_type: 28,
+                stage_count: 2,
+                p_stages: stages.as_ptr(),
+                p_vertex_input_state: &vertex,
+                p_input_assembly_state: &assembly,
+                p_viewport_state: &viewport,
+                p_rasterization_state: &raster,
+                p_multisample_state: &multisample,
+                p_depth_stencil_state: &depth,
+                p_color_blend_state: &blend,
+                p_dynamic_state: &dynamic,
+                layout: pipeline.layout,
+                render_pass: pipeline.render,
+                base_pipeline_index: -1,
+                ..Default::default()
+            };
+            let result = call!(
+                d.instance,
+                CreateGraphicsPipelines,
+                d.handle,
+                0,
+                1,
+                &info,
+                ptr::null(),
+                &mut pipeline.handle
+            );
+            drop(modules);
+            check(result)?;
+            Ok(pipeline)
+        }
+    }
+
+    unsafe fn transition(&self, command: vk::CommandBuffer, texture: &Texture, layout: u32) {
+        let old = texture.layout.replace(layout);
+        // Repeated transfer writes may overlap even without a layout change.
+        if old == layout && layout != 7 {
+            return;
+        }
+        let barrier = vk::ImageMemoryBarrier {
+            s_type: 45,
+            src_access_mask: if old == 0 { 0 } else { 0x18000 },
+            dst_access_mask: 0x18000,
+            old_layout: old,
+            new_layout: layout,
+            src_queue_family_index: u32::MAX,
+            dst_queue_family_index: u32::MAX,
+            image: texture.image,
+            subresource_range: vk::ImageSubresourceRange {
+                aspect_mask: if texture.depth { 2 } else { 1 },
+                level_count: texture.mips,
+                layer_count: texture.layers,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        unsafe {
+            call!(
+                self.device.instance,
+                CmdPipelineBarrier,
+                command,
+                0x10000,
+                0x10000,
+                0,
+                0,
+                ptr::null(),
+                0,
+                ptr::null(),
+                1,
+                &barrier
+            );
+        }
+    }
+
+    pub(super) fn submit(&self, uploads: Vec<Upload>, passes: Vec<Pass>) -> Result<()> {
+        unsafe {
+            let d = &self.device;
+            let mut frames = self.frames.borrow_mut();
+            let frame = &mut frames[self.slot.get()];
+            self.wait(frame, u64::MAX)?;
+            let info = vk::CommandBufferBeginInfo {
+                s_type: 42,
+                flags: 1,
+                ..Default::default()
+            };
+            check(call!(d.instance, BeginCommandBuffer, frame.command, &info))?;
+            // Serialize transfers with previous frames before modifying shared resources.
+            let memory = vk::MemoryBarrier {
+                s_type: 46,
+                src_access_mask: 0x18000,
+                dst_access_mask: 0x18000,
+                ..Default::default()
+            };
+            call!(
+                d.instance,
+                CmdPipelineBarrier,
+                frame.command,
+                0x10000,
+                0x10000,
+                0,
+                1,
+                &memory,
+                0,
+                ptr::null(),
+                0,
+                ptr::null()
+            );
+            let total: usize = uploads
+                .iter()
+                .map(|u| match u {
+                    Upload::Buffer { data, .. } | Upload::Texture { data, .. } => {
+                        (data.len() + 3) & !3
+                    }
+                })
+                .sum();
+            if total > 0 {
+                let staging = match frame.staging.pop() {
+                    Some(buffer) if buffer.capacity >= total as u64 => buffer,
+                    _ => d.buffer(total as u64, true)?,
+                };
+                let mut mapped = ptr::null_mut();
+                check(call!(
+                    d.instance,
+                    MapMemory,
+                    d.handle,
+                    staging.memory.handle,
+                    0,
+                    staging.memory.size,
+                    0,
+                    &mut mapped
+                ))?;
+                let mut offset = 0;
+                let mut written = std::collections::HashSet::new();
+                for upload in &uploads {
+                    let data = match upload {
+                        Upload::Buffer { data, .. } | Upload::Texture { data, .. } => data,
+                    };
+                    ptr::copy_nonoverlapping(
+                        data.as_ptr(),
+                        mapped.cast::<u8>().add(offset),
+                        data.len(),
+                    );
+                    match upload {
+                        Upload::Buffer {
+                            buffer,
+                            offset: destination,
+                            ..
+                        } => {
+                            if !written.insert(buffer.inner.native.handle) {
+                                call!(
+                                    d.instance,
+                                    CmdPipelineBarrier,
+                                    frame.command,
+                                    0x10000,
+                                    0x10000,
+                                    0,
+                                    1,
+                                    &memory,
+                                    0,
+                                    ptr::null(),
+                                    0,
+                                    ptr::null()
+                                );
+                            }
+                            let region = vk::BufferCopy {
+                                src_offset: offset as u64,
+                                dst_offset: *destination,
+                                size: data.len() as u64,
+                            };
+                            call!(
+                                d.instance,
+                                CmdCopyBuffer,
+                                frame.command,
+                                staging.handle,
+                                buffer.inner.native.handle,
+                                1,
+                                &region
+                            );
+                        }
+                        Upload::Texture {
+                            texture,
+                            mip,
+                            origin,
+                            size,
+                            ..
+                        } => {
+                            self.transition(frame.command, &texture.inner.native, 7);
+                            let region = vk::BufferImageCopy {
+                                buffer_offset: offset as u64,
+                                image_subresource: vk::ImageSubresourceLayers {
+                                    aspect_mask: 1,
+                                    mip_level: *mip,
+                                    base_array_layer: origin.z,
+                                    layer_count: size.depth_or_array_layers,
+                                },
+                                image_offset: vk::Offset3D {
+                                    x: origin.x as i32,
+                                    y: origin.y as i32,
+                                    z: 0,
+                                },
+                                image_extent: vk::Extent3D {
+                                    width: size.width,
+                                    height: size.height,
+                                    depth: 1,
+                                },
+                                ..Default::default()
+                            };
+                            call!(
+                                d.instance,
+                                CmdCopyBufferToImage,
+                                frame.command,
+                                staging.handle,
+                                texture.inner.native.image,
+                                7,
+                                1,
+                                &region
+                            );
+                        }
+                    }
+                    offset += (data.len() + 3) & !3;
+                }
+                call!(d.instance, UnmapMemory, d.handle, staging.memory.handle);
+                frame.staging.push(staging);
+            }
+            call!(
+                d.instance,
+                CmdPipelineBarrier,
+                frame.command,
+                0x10000,
+                0x10000,
+                0,
+                1,
+                &memory,
+                0,
+                ptr::null(),
+                0,
+                ptr::null()
+            );
+            let mut sets = HashMap::new();
+            for pass in &passes {
+                call!(
+                    d.instance,
+                    CmdPipelineBarrier,
+                    frame.command,
+                    0x10000,
+                    0x10000,
+                    0,
+                    1,
+                    &memory,
+                    0,
+                    ptr::null(),
+                    0,
+                    ptr::null()
+                );
+                // Load/store operations belong to the pass, not its pipelines.
+                // Vulkan render-pass compatibility ignores these operations.
+                let render = self.render_pass(
+                    pass.color.texture.inner.format,
+                    pass.clear.is_some(),
+                    pass.depth.is_some(),
+                    pass.clear_depth.is_some(),
+                    pass.store_depth,
+                )?;
+                for draw in &pass.draws {
+                    if let Some(group) = &draw.group {
+                        for (_, resource) in group.entries.iter() {
+                            if let Resource::Texture(view) = resource {
+                                self.transition(frame.command, &view.texture.inner.native, 5);
+                            }
+                        }
+                    }
+                }
+                self.transition(frame.command, &pass.color.texture.inner.native, 2);
+                if let Some(depth) = &pass.depth {
+                    self.transition(frame.command, &depth.texture.inner.native, 3);
+                }
+                let mut views = vec![pass.color.texture.inner.native.view];
+                if let Some(depth) = &pass.depth {
+                    views.push(depth.texture.inner.native.view);
+                }
+                let size = pass.color.texture.inner.size;
+                let info = vk::FramebufferCreateInfo {
+                    s_type: 37,
+                    render_pass: render,
+                    attachment_count: views.len() as u32,
+                    p_attachments: views.as_ptr(),
+                    width: size.width,
+                    height: size.height,
+                    layers: 1,
+                    ..Default::default()
+                };
+                let mut framebuffer = 0;
+                check(call!(
+                    d.instance,
+                    CreateFramebuffer,
+                    d.handle,
+                    &info,
+                    ptr::null(),
+                    &mut framebuffer
+                ))?;
+                frame.framebuffers.push(framebuffer);
+                let clear = pass.clear.unwrap_or(Color::BLACK);
+                let clears = [
+                    vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [
+                                clear.r as f32,
+                                clear.g as f32,
+                                clear.b as f32,
+                                clear.a as f32,
+                            ],
+                        },
+                    },
+                    vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: pass.clear_depth.unwrap_or(1.),
+                            stencil: 0,
+                        },
+                    },
+                ];
+                let info = vk::RenderPassBeginInfo {
+                    s_type: 43,
+                    render_pass: render,
+                    framebuffer,
+                    render_area: vk::Rect2D {
+                        offset: vk::Offset2D { x: 0, y: 0 },
+                        extent: vk::Extent2D {
+                            width: size.width,
+                            height: size.height,
+                        },
+                    },
+                    clear_value_count: views.len() as u32,
+                    p_clear_values: clears.as_ptr(),
+                    ..Default::default()
+                };
+                call!(d.instance, CmdBeginRenderPass, frame.command, &info, 0);
+                for draw in &pass.draws {
+                    let pipeline = &draw.pipeline.native;
+                    call!(
+                        d.instance,
+                        CmdBindPipeline,
+                        frame.command,
+                        0,
+                        pipeline.handle
+                    );
+                    if let Some(group) = &draw.group {
+                        let key = (Rc::as_ptr(&group.entries), pipeline.set_layout);
+                        let set = if let Some(&set) = sets.get(&key) {
+                            set
+                        } else {
+                            let info = vk::DescriptorSetAllocateInfo {
+                                s_type: 34,
+                                descriptor_pool: frame.descriptors,
+                                descriptor_set_count: 1,
+                                p_set_layouts: &pipeline.set_layout,
+                                ..Default::default()
+                            };
+                            let mut set = 0;
+                            check(call!(
+                                d.instance,
+                                AllocateDescriptorSets,
+                                d.handle,
+                                &info,
+                                &mut set
+                            ))?;
+                            for (binding, resource) in group.entries.iter() {
+                                let layout = group
+                                    .layout
+                                    .entries
+                                    .iter()
+                                    .find(|entry| entry.binding == *binding)
+                                    .expect("Missing bind group layout entry");
+                                let mut buffer = vk::DescriptorBufferInfo::default();
+                                let mut image = vk::DescriptorImageInfo::default();
+                                let ty = match resource {
+                                    Resource::Buffer(b) => {
+                                        buffer.buffer = b.inner.native.handle;
+                                        buffer.range = b.inner.size;
+                                        match layout.ty {
+                                            BindingType::Buffer {
+                                                ty: BufferBindingType::Uniform,
+                                                ..
+                                            } => 6,
+                                            BindingType::Buffer { .. } => 7,
+                                            _ => unreachable!(),
+                                        }
+                                    }
+                                    Resource::Texture(t) => {
+                                        image.image_view = t.texture.inner.native.view;
+                                        image.image_layout = 5;
+                                        2
+                                    }
+                                    Resource::Sampler(s) => {
+                                        image.sampler = s.native.handle;
+                                        0
+                                    }
+                                };
+                                let write = vk::WriteDescriptorSet {
+                                    s_type: 35,
+                                    dst_set: set,
+                                    dst_binding: *binding,
+                                    descriptor_count: 1,
+                                    descriptor_type: ty,
+                                    p_buffer_info: &buffer,
+                                    p_image_info: &image,
+                                    ..Default::default()
+                                };
+                                call!(
+                                    d.instance,
+                                    UpdateDescriptorSets,
+                                    d.handle,
+                                    1,
+                                    &write,
+                                    0,
+                                    ptr::null()
+                                );
+                            }
+                            sets.insert(key, set);
+                            set
+                        };
+                        call!(
+                            d.instance,
+                            CmdBindDescriptorSets,
+                            frame.command,
+                            0,
+                            pipeline.layout,
+                            0,
+                            1,
+                            &set,
+                            0,
+                            ptr::null()
+                        );
+                    }
+                    if let Some((buffer, range)) = &draw.vertex {
+                        call!(
+                            d.instance,
+                            CmdBindVertexBuffers,
+                            frame.command,
+                            0,
+                            1,
+                            &buffer.inner.native.handle,
+                            &range.start
+                        );
+                    }
+                    let v = draw.viewport;
+                    // Naga's SPIR-V writer flips clip-space Y to Vulkan's convention.
+                    let viewport = vk::Viewport {
+                        x: v[0],
+                        y: v[1],
+                        width: v[2],
+                        height: v[3],
+                        min_depth: v[4],
+                        max_depth: v[5],
+                    };
+                    call!(d.instance, CmdSetViewport, frame.command, 0, 1, &viewport);
+                    let s = draw.scissor;
+                    let scissor = vk::Rect2D {
+                        offset: vk::Offset2D {
+                            x: s[0] as i32,
+                            y: s[1] as i32,
+                        },
+                        extent: vk::Extent2D {
+                            width: s[2],
+                            height: s[3],
+                        },
+                    };
+                    call!(d.instance, CmdSetScissor, frame.command, 0, 1, &scissor);
+                    call!(
+                        d.instance,
+                        CmdDraw,
+                        frame.command,
+                        draw.vertices.len() as u32,
+                        draw.instances.len() as u32,
+                        draw.vertices.start,
+                        draw.instances.start
+                    );
+                }
+                call!(d.instance, CmdEndRenderPass, frame.command);
+                if pass.color.texture.inner.native.swap.is_some() {
+                    self.transition(frame.command, &pass.color.texture.inner.native, 1000001002);
+                }
+            }
+            check(call!(d.instance, EndCommandBuffer, frame.command))?;
+            check(call!(d.instance, ResetFences, d.handle, 1, &frame.fence))?;
+            let acquired = self.acquired.borrow();
+            let stage = 0x10000u32;
+            let info = vk::SubmitInfo {
+                s_type: 4,
+                // A binary semaphore's signal can only be consumed once per acquisition.
+                wait_semaphore_count: u32::from(
+                    acquired.is_some() && !self.acquisition_waited.get(),
+                ),
+                p_wait_semaphores: &frame.available,
+                p_wait_dst_stage_mask: &stage,
+                command_buffer_count: 1,
+                p_command_buffers: &frame.command,
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                QueueSubmit,
+                d.queue,
+                1,
+                &info,
+                frame.fence
+            ))?;
+            if acquired.is_some() {
+                self.acquisition_waited.set(true);
+            }
+            frame.busy = true;
+            frame.uploads = uploads;
+            frame.passes = passes;
+            Ok(())
+        }
+    }
+
+    pub(super) fn present(&self, surface: &Surface, texture: &Texture) -> Result<()> {
+        require(
+            self.acquisition_waited.get(),
+            "Present requires a submission after acquisition",
+        );
+        let (swap, index) = self
+            .acquired
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| Error("No acquired frame".into()))?;
+        require(
+            texture.index == index && texture.swap.as_ref().is_some_and(|s| Rc::ptr_eq(s, &swap)),
+            "Wrong surface texture",
+        );
+        if surface.is_lost() {
+            self.acquisition_waited.set(false);
+            self.surface_status.set(-1000000000);
+            self.slot.set((self.slot.get() + 1) % 2);
+            return Ok(());
+        }
+        // Signal only after all submissions for this image. Signaling on every
+        // submit would reuse an unconsumed binary semaphore before presentation.
+        let ready = vk::SubmitInfo {
+            s_type: 4,
+            signal_semaphore_count: 1,
+            p_signal_semaphores: &swap.finished[index],
+            ..Default::default()
+        };
+        unsafe {
+            check(call!(
+                self.device.instance,
+                QueueSubmit,
+                self.device.queue,
+                1,
+                &ready,
+                0
+            ))?;
+        }
+        self.acquisition_waited.set(false);
+        let index32 = index as u32;
+        let info = vk::PresentInfoKHR {
+            s_type: 1000001001,
+            wait_semaphore_count: 1,
+            p_wait_semaphores: &swap.finished[index],
+            swapchain_count: 1,
+            p_swapchains: &swap.handle,
+            p_image_indices: &index32,
+            ..Default::default()
+        };
+        let result = unsafe {
+            call!(
+                self.device.instance,
+                QueuePresentKHR,
+                self.device.queue,
+                &info
+            )
+        };
+        self.slot.set((self.slot.get() + 1) % 2);
+        if matches!(result, 1000001003 | -1000001004 | -1000000000) {
+            self.surface_status.set(result);
+            Ok(())
+        } else {
+            check(result)
+        }
+    }
+}
+
+impl Drop for Context {
+    fn drop(&mut self) {
+        unsafe {
+            call!(self.device.instance, DeviceWaitIdle, self.device.handle);
+        }
+    }
+}
+
+impl Drop for Frame {
+    fn drop(&mut self) {
+        unsafe {
+            let d = &self.device;
+            if self.busy {
+                call!(
+                    d.instance,
+                    WaitForFences,
+                    d.handle,
+                    1,
+                    &self.fence,
+                    1,
+                    u64::MAX
+                );
+            }
+            for framebuffer in self.framebuffers.drain(..) {
+                call!(
+                    d.instance,
+                    DestroyFramebuffer,
+                    d.handle,
+                    framebuffer,
+                    ptr::null()
+                );
+            }
+            call!(
+                d.instance,
+                DestroyDescriptorPool,
+                d.handle,
+                self.descriptors,
+                ptr::null()
+            );
+            call!(
+                d.instance,
+                DestroyCommandPool,
+                d.handle,
+                self.pool,
+                ptr::null()
+            );
+            call!(d.instance, DestroyFence, d.handle, self.fence, ptr::null());
+            call!(
+                d.instance,
+                DestroySemaphore,
+                d.handle,
+                self.available,
+                ptr::null()
+            );
+        }
+    }
+}
+
+struct ShaderModules<'a> {
+    device: &'a NativeDevice,
+    handles: [u64; 2],
+}
+
+impl Drop for ShaderModules<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            for handle in self.handles {
+                call!(
+                    self.device.instance,
+                    DestroyShaderModule,
+                    self.device.handle,
+                    handle,
+                    ptr::null()
+                );
+            }
+        }
+    }
+}

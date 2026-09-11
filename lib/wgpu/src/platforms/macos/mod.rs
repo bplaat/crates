@@ -1,0 +1,1302 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+//! Metal renderer; objc2 supplies messaging and ownership only.
+
+use std::cell::{Cell, RefCell};
+use std::ffi::{c_char, c_void};
+use std::ptr;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+
+use headers::*;
+use objc2::rc::{Allocated, Retained, autoreleasepool};
+use objc2::runtime::{AnyObject, Bool};
+use objc2::{class, define_class, msg_send, sel};
+
+use super::*;
+
+mod headers;
+
+// SAFETY: Callers choose owned() only for +1 Objective-C results and retained()
+// only for live +0 results. Retained releases the corresponding reference.
+unsafe fn owned(value: *mut AnyObject) -> Result<Object> {
+    unsafe { Retained::from_raw(value) }.ok_or_else(|| Error("Metal returned nil".into()))
+}
+unsafe fn retained(value: *mut AnyObject) -> Result<Object> {
+    unsafe { Retained::retain(value) }.ok_or_else(|| Error("Metal returned nil".into()))
+}
+
+fn string(value: &str) -> Object {
+    unsafe {
+        let object: *mut AnyObject = msg_send![class!(NSString), alloc];
+        owned(msg_send![object, initWithBytes: value.as_ptr().cast::<c_void>(), length: value.len(), encoding: 4usize])
+            .expect("NSString allocation")
+    }
+}
+
+fn error(value: *mut AnyObject) -> Error {
+    if value.is_null() {
+        return Error("Metal operation failed".into());
+    }
+    unsafe {
+        let description: *mut AnyObject = msg_send![value, localizedDescription];
+        let text: *const c_char = msg_send![description, UTF8String];
+        Error(
+            std::ffi::CStr::from_ptr(text)
+                .to_string_lossy()
+                .into_owned(),
+        )
+    }
+}
+const fn format(value: TextureFormat) -> usize {
+    match value {
+        TextureFormat::Rgba8Unorm => 70,
+        TextureFormat::Rgba8UnormSrgb => 71,
+        TextureFormat::Bgra8Unorm => 80,
+        TextureFormat::Bgra8UnormSrgb => 81,
+        TextureFormat::Depth32Float => 252,
+    }
+}
+
+pub(super) type Factory = ();
+
+struct RedrawState {
+    sender: bwindow::WindowEventSender,
+    display_link: Cell<CVDisplayLinkRef>,
+    display_link_running: Cell<bool>,
+    screen: Cell<*mut AnyObject>,
+    signal: Arc<DisplayLinkSignal>,
+}
+
+type RedrawIvars = Rc<RedrawState>;
+
+struct DisplayLinkSignal {
+    target: AtomicPtr<AnyObject>,
+    posted: AtomicBool,
+}
+
+unsafe extern "C" fn display_link_callback(
+    _: CVDisplayLinkRef,
+    _: *const c_void,
+    _: *const c_void,
+    _: u64,
+    _: *mut u64,
+    user_info: *mut c_void,
+) -> i32 {
+    let signal = unsafe { &*user_info.cast::<DisplayLinkSignal>() };
+    if !signal.posted.swap(true, Ordering::AcqRel) {
+        let target = signal.target.load(Ordering::Acquire);
+        if !target.is_null() {
+            autoreleasepool(|_| unsafe {
+                let _: () = msg_send![target,
+                    performSelectorOnMainThread:sel!(drawFrame:),
+                    withObject:ptr::null_mut::<AnyObject>(), waitUntilDone:Bool::NO];
+            });
+        }
+    }
+    0
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "WgpuRedrawTarget"]
+    #[ivars = RedrawIvars]
+    struct RedrawTarget;
+
+    impl RedrawTarget {
+        #[unsafe(method(drawFrame:))]
+        fn draw_frame(&self, _: *mut AnyObject) {
+            let state = self.ivars();
+            if state.display_link_running.replace(false) {
+                unsafe {
+                    CVDisplayLinkStop(state.display_link.get());
+                }
+            }
+            state.signal.posted.store(false, Ordering::Release);
+            state
+                .sender
+                .send(bwindow::WindowEvent::RedrawRequested);
+        }
+    }
+);
+
+pub(super) struct Surface {
+    view: Object,
+    layer: Object,
+    previous: Option<Object>,
+    wanted_layer: Bool,
+    redraw: Retained<RedrawTarget>,
+}
+
+impl Surface {
+    pub(super) fn new(
+        window: bwindow::NativeWindowHandle,
+        sender: bwindow::WindowEventSender,
+        _: &mut Option<Factory>,
+    ) -> Result<Self> {
+        let bwindow::NativeWindowHandle::AppKit(window) = window else {
+            return Err(Error("Metal requires an AppKit window".into()));
+        };
+        // AppKit layer operations must run on the main thread.
+        let is_main_thread: Bool = unsafe { msg_send![class!(NSThread), isMainThread] };
+        if !is_main_thread.as_bool() {
+            return Err(Error(
+                "Metal surface creation requires the main thread".into(),
+            ));
+        }
+        autoreleasepool(|_| unsafe {
+            let window = window.cast::<AnyObject>();
+            let view: *mut AnyObject = msg_send![window, contentView];
+            let view = retained(view)?;
+            let signal = Arc::new(DisplayLinkSignal {
+                target: AtomicPtr::new(ptr::null_mut()),
+                posted: AtomicBool::new(false),
+            });
+            let redraw: Allocated<RedrawTarget> = msg_send![RedrawTarget::class(), alloc];
+            let redraw: Retained<RedrawTarget> = msg_send![
+                super(redraw.set_ivars(Rc::new(RedrawState {
+                    sender,
+                    display_link: Cell::new(ptr::null_mut()),
+                    display_link_running: Cell::new(false),
+                    screen: Cell::new(ptr::null_mut()),
+                    signal: signal.clone(),
+                }))),
+                init
+            ];
+            signal
+                .target
+                .store(redraw.as_ptr().cast(), Ordering::Release);
+            let mut display_link = ptr::null_mut();
+            let result = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
+            if result != 0 {
+                return Err(Error(format!(
+                    "Could not create Core Video display link: {result}"
+                )));
+            }
+            let result = CVDisplayLinkSetOutputCallback(
+                display_link,
+                display_link_callback,
+                Arc::as_ptr(&signal).cast_mut().cast(),
+            );
+            if result != 0 {
+                CVDisplayLinkRelease(display_link);
+                return Err(Error(format!(
+                    "Could not configure Core Video display link: {result}"
+                )));
+            }
+            redraw.ivars().display_link.set(display_link);
+            let old: *mut AnyObject = msg_send![&*view, layer];
+            let previous = Retained::retain(old);
+            let wanted_layer = msg_send![&*view, wantsLayer];
+            let layer = owned(msg_send![class!(CAMetalLayer), new])?;
+            let _: () = msg_send![&*view, setWantsLayer: Bool::YES];
+            let _: () = msg_send![&*view, setLayer: &*layer];
+            let _: () = msg_send![&*layer, setOpaque: Bool::YES];
+            let _: () = msg_send![&*layer, setMaximumDrawableCount: 3usize];
+            let _: () = msg_send![&*layer, setAllowsNextDrawableTimeout: Bool::YES];
+            Ok(Self {
+                view,
+                layer,
+                previous,
+                wanted_layer,
+                redraw,
+            })
+        })
+    }
+
+    pub(super) fn request_redraw(&self) {
+        self.redraw
+            .ivars()
+            .sender
+            .send(bwindow::WindowEvent::RedrawRequested);
+    }
+
+    pub(super) fn request_animation_frame(&self) {
+        let state = self.redraw.ivars();
+        self.synchronize_display_link();
+        state.signal.posted.store(false, Ordering::Release);
+        if !state.display_link_running.replace(true) {
+            let result = unsafe { CVDisplayLinkStart(state.display_link.get()) };
+            assert_eq!(
+                result, 0,
+                "Could not start Core Video display link: {result}"
+            );
+        }
+    }
+
+    pub(super) fn size(&self) -> (u32, u32) {
+        unsafe {
+            let bounds: Rect = msg_send![&*self.view, bounds];
+            let window: *mut AnyObject = msg_send![&*self.view, window];
+            let scale: f64 = if window.is_null() {
+                1.0
+            } else {
+                msg_send![window, backingScaleFactor]
+            };
+            (
+                (bounds.size.width * scale).round().max(0.0) as u32,
+                (bounds.size.height * scale).round().max(0.0) as u32,
+            )
+        }
+    }
+
+    fn synchronize_display_link(&self) {
+        let state = self.redraw.ivars();
+        unsafe {
+            let window: *mut AnyObject = msg_send![&*self.view, window];
+            if window.is_null() {
+                return;
+            }
+            let screen: *mut AnyObject = msg_send![window, screen];
+            if screen.is_null() || state.screen.get() == screen {
+                return;
+            }
+            let description: *mut AnyObject = msg_send![screen, deviceDescription];
+            let key = string("NSScreenNumber");
+            let number: *mut AnyObject = msg_send![description, objectForKey:&*key];
+            if number.is_null() {
+                return;
+            }
+            let display_id: u32 = msg_send![number, unsignedIntValue];
+            if CVDisplayLinkSetCurrentCGDisplay(state.display_link.get(), display_id) == 0 {
+                state.screen.set(screen);
+            }
+        }
+    }
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        unsafe {
+            let state = self.redraw.ivars();
+            if state.display_link_running.replace(false) {
+                CVDisplayLinkStop(state.display_link.get());
+            }
+            state
+                .signal
+                .target
+                .store(ptr::null_mut(), Ordering::Release);
+            let display_link = state.display_link.replace(ptr::null_mut());
+            if !display_link.is_null() {
+                CVDisplayLinkRelease(display_link);
+            }
+            let current: *mut AnyObject = msg_send![&*self.view, layer];
+            if ptr::eq(current, &*self.layer) {
+                let previous = self
+                    .previous
+                    .as_deref()
+                    .map_or(ptr::null(), |p| p as *const AnyObject);
+                let _: () = msg_send![&*self.view, setLayer: previous];
+                let _: () = msg_send![&*self.view, setWantsLayer: self.wanted_layer];
+            }
+        }
+    }
+}
+
+pub(super) struct Context {
+    device: Object,
+    queue: Object,
+    frames: RefCell<[Option<Frame>; 2]>,
+    slot: Cell<usize>,
+    staging_pool: RefCell<[Vec<Object>; 2]>,
+}
+
+struct Frame {
+    command: Object,
+    presentation: Option<Object>,
+    _uploads: Vec<Upload>,
+    _passes: Vec<Pass>,
+    _staging: Vec<Object>,
+}
+
+pub(super) struct Buffer {
+    object: Object,
+}
+
+pub(super) struct Texture {
+    object: Object,
+    drawable: Option<Object>,
+}
+
+pub(super) struct Sampler {
+    object: Object,
+}
+
+pub(super) struct Pipeline {
+    object: Object,
+    depth: Option<Object>,
+    cull: bool,
+}
+
+impl Context {
+    pub(super) fn new(_: &Surface) -> Result<Rc<Self>> {
+        Self::headless()
+    }
+
+    fn headless() -> Result<Rc<Self>> {
+        unsafe {
+            let device = owned(MTLCreateSystemDefaultDevice())?;
+            let queue = owned(msg_send![&*device, newCommandQueue])?;
+            Ok(Rc::new(Self {
+                device,
+                queue,
+                frames: RefCell::new([None, None]),
+                slot: Cell::new(0),
+                staging_pool: RefCell::new([Vec::new(), Vec::new()]),
+            }))
+        }
+    }
+
+    pub(super) fn formats(&self, _: &Surface) -> Result<Vec<TextureFormat>> {
+        Ok(vec![
+            TextureFormat::Bgra8UnormSrgb,
+            TextureFormat::Bgra8Unorm,
+        ])
+    }
+
+    fn wait(&self, slot: usize) -> Result<()> {
+        if let Some(frame) = self.frames.borrow_mut()[slot].take() {
+            unsafe {
+                for command in std::iter::once(&frame.command).chain(frame.presentation.as_ref()) {
+                    let _: () = msg_send![&**command, waitUntilCompleted];
+                    let status: usize = msg_send![&**command, status];
+                    if status == 5 {
+                        return Err(error(msg_send![&**command, error]));
+                    }
+                }
+                self.staging_pool.borrow_mut()[slot] = frame._staging;
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn configure(&self, surface: &Surface, config: &SurfaceConfiguration) -> Result<()> {
+        self.wait(0)?;
+        self.wait(1)?;
+        unsafe {
+            let _: () = msg_send![&*surface.layer, setDevice: &*self.device];
+            let _: () = msg_send![&*surface.layer, setPixelFormat: format(config.format)];
+            let _: () = msg_send![&*surface.layer, setFramebufferOnly: Bool::YES];
+            let _: () = msg_send![&*surface.layer, setDisplaySyncEnabled: Bool::YES];
+            let window: *mut AnyObject = msg_send![&*surface.view, window];
+            let scale: f64 = if window.is_null() {
+                1.
+            } else {
+                msg_send![window, backingScaleFactor]
+            };
+            let bounds: Rect = msg_send![&*surface.view, bounds];
+            let _: () = msg_send![&*surface.layer, setFrame: bounds];
+            let _: () = msg_send![&*surface.layer, setContentsScale: scale];
+            let _: () = msg_send![&*surface.layer, setDrawableSize: Size { width: config.width as f64, height: config.height as f64 }];
+        }
+        Ok(())
+    }
+
+    pub(super) fn acquire(
+        &self,
+        surface: &Surface,
+    ) -> std::result::Result<(Texture, bool), CurrentSurfaceTexture> {
+        self.wait(self.slot.get())
+            .map_err(|_| CurrentSurfaceTexture::Lost)?;
+        autoreleasepool(|_| unsafe {
+            let drawable = retained(msg_send![&*surface.layer, nextDrawable])
+                .map_err(|_| CurrentSurfaceTexture::Timeout)?;
+            let object = retained(msg_send![&*drawable, texture])
+                .map_err(|_| CurrentSurfaceTexture::Lost)?;
+            Ok((
+                Texture {
+                    object,
+                    drawable: Some(drawable),
+                },
+                false,
+            ))
+        })
+    }
+
+    fn stage(&self, data: &[u8]) -> Result<Object> {
+        unsafe {
+            let source = match self.staging_pool.borrow_mut()[self.slot.get()].pop() {
+                Some(buffer)
+                    if {
+                        let length: usize = msg_send![&*buffer, length];
+                        length >= data.len()
+                    } =>
+                {
+                    buffer
+                }
+                _ => owned(
+                    msg_send![&*self.device, newBufferWithLength: data.len(), options: 0usize],
+                )?,
+            };
+            let contents: *mut c_void = msg_send![&*source, contents];
+            ptr::copy_nonoverlapping(data.as_ptr(), contents.cast(), data.len());
+            Ok(source)
+        }
+    }
+
+    pub(super) fn buffer(&self, size: u64, _: BufferUsages) -> Result<Buffer> {
+        unsafe {
+            Ok(Buffer {
+                object: owned(
+                    msg_send![&*self.device, newBufferWithLength: size as usize, options: 32usize],
+                )?,
+            })
+        }
+    }
+
+    pub(super) fn texture(&self, desc: &TextureDescriptor<'_>) -> Result<Texture> {
+        autoreleasepool(|_| unsafe {
+            let descriptor = owned(msg_send![class!(MTLTextureDescriptor), new])?;
+            let _: () = msg_send![&*descriptor, setTextureType: if desc.size.depth_or_array_layers > 1 { 3usize } else { 2usize }];
+            let _: () = msg_send![&*descriptor, setPixelFormat: format(desc.format)];
+            let _: () = msg_send![&*descriptor, setWidth: desc.size.width as usize];
+            let _: () = msg_send![&*descriptor, setHeight: desc.size.height as usize];
+            let _: () =
+                msg_send![&*descriptor, setArrayLength: desc.size.depth_or_array_layers as usize];
+            let _: () = msg_send![&*descriptor, setMipmapLevelCount: desc.mip_level_count as usize];
+            let _: () = msg_send![&*descriptor, setStorageMode: 2usize];
+            let usage = usize::from(desc.usage.contains(TextureUsages::TEXTURE_BINDING))
+                | if desc.usage.contains(TextureUsages::RENDER_ATTACHMENT) {
+                    4
+                } else {
+                    0
+                };
+            let _: () = msg_send![&*descriptor, setUsage: usage];
+            Ok(Texture {
+                object: owned(msg_send![&*self.device, newTextureWithDescriptor: &*descriptor])?,
+                drawable: None,
+            })
+        })
+    }
+
+    pub(super) fn sampler(&self, desc: &SamplerDescriptor<'_>) -> Result<Sampler> {
+        autoreleasepool(|_| unsafe {
+            let descriptor = owned(msg_send![class!(MTLSamplerDescriptor), new])?;
+            let _: () = msg_send![&*descriptor, setSAddressMode: if desc.address_mode_u == AddressMode::Repeat { 2usize } else { 0usize }];
+            let _: () = msg_send![&*descriptor, setTAddressMode: if desc.address_mode_v == AddressMode::Repeat { 2usize } else { 0usize }];
+            let _: () = msg_send![&*descriptor, setMagFilter: usize::from(desc.mag_filter == FilterMode::Linear)];
+            let _: () = msg_send![&*descriptor, setMinFilter: usize::from(desc.min_filter == FilterMode::Linear)];
+            let _: () = msg_send![&*descriptor, setMipFilter: if desc.mipmap_filter == FilterMode::Linear { 2usize } else { 1usize }];
+            Ok(Sampler {
+                object: owned(
+                    msg_send![&*self.device, newSamplerStateWithDescriptor: &*descriptor],
+                )?,
+            })
+        })
+    }
+
+    fn function(&self, shader: &ShaderModule, entry: Option<&str>) -> Result<Object> {
+        unsafe {
+            let mut err = ptr::null_mut::<AnyObject>();
+            let error_out = (&mut err as *mut *mut AnyObject).cast::<c_void>();
+            let library: *mut AnyObject = match &shader.source {
+                NativeSource::Binary(_) => {
+                    let bytes = shader
+                        .binary(entry)
+                        .ok_or_else(|| Error("Metal entry point has no library".into()))?;
+                    let data = owned(dispatch_data_create(
+                        bytes.as_ptr().cast(),
+                        bytes.len(),
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                    ))?;
+                    msg_send![&*self.device, newLibraryWithData: &*data, error: error_out]
+                }
+                NativeSource::Text(source) => {
+                    msg_send![&*self.device, newLibraryWithSource: &*string(source), options: ptr::null::<AnyObject>(), error: error_out]
+                }
+                NativeSource::SpirV(_) => {
+                    return Err(Error("Metal requires a Metal library".into()));
+                }
+            };
+            if library.is_null() {
+                return Err(error(err));
+            }
+            let library = owned(library)?;
+            owned(msg_send![&*library, newFunctionWithName: &*string(shader.entry(entry))])
+        }
+    }
+
+    pub(super) fn pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> Result<Pipeline> {
+        autoreleasepool(|_| unsafe {
+            let fragment = desc.fragment.as_ref().expect("fragment state");
+            let color = fragment.targets[0].expect("color target");
+            let vertex = self.function(desc.vertex.module, desc.vertex.entry_point)?;
+            let fragment = self.function(fragment.module, fragment.entry_point)?;
+            let descriptor = owned(msg_send![class!(MTLRenderPipelineDescriptor), new])?;
+            let _: () = msg_send![&*descriptor, setVertexFunction: &*vertex];
+            let _: () = msg_send![&*descriptor, setFragmentFunction: &*fragment];
+            let attachments: *mut AnyObject = msg_send![&*descriptor, colorAttachments];
+            let attachment: *mut AnyObject =
+                msg_send![attachments, objectAtIndexedSubscript: 0usize];
+            let _: () = msg_send![attachment, setPixelFormat: format(color.format)];
+            if color.blend.is_some() {
+                let _: () = msg_send![attachment, setBlendingEnabled: Bool::YES];
+                let _: () = msg_send![attachment, setSourceRGBBlendFactor: 4usize];
+                let _: () = msg_send![attachment, setDestinationRGBBlendFactor: 5usize];
+                let _: () = msg_send![attachment, setSourceAlphaBlendFactor: 1usize];
+                let _: () = msg_send![attachment, setDestinationAlphaBlendFactor: 5usize];
+            }
+            if desc.depth_stencil.is_some() {
+                let _: () = msg_send![&*descriptor, setDepthAttachmentPixelFormat: 252usize];
+            }
+            if let Some(Some(layout)) = desc.vertex.buffers.first() {
+                let vertex_descriptor = owned(msg_send![class!(MTLVertexDescriptor), new])?;
+                let attributes: *mut AnyObject = msg_send![&*vertex_descriptor, attributes];
+                for attribute in layout.attributes {
+                    let native: *mut AnyObject = msg_send![
+                        attributes,
+                        objectAtIndexedSubscript: attribute.shader_location as usize
+                    ];
+                    let format = match attribute.format {
+                        VertexFormat::Float32x2 => 29usize,
+                        VertexFormat::Float32x3 => 30usize,
+                        VertexFormat::Uint32x2 => 37usize,
+                    };
+                    let _: () = msg_send![native, setFormat: format];
+                    let _: () = msg_send![native, setOffset: attribute.offset as usize];
+                    let _: () = msg_send![native, setBufferIndex: 16usize];
+                }
+                let layouts: *mut AnyObject = msg_send![&*vertex_descriptor, layouts];
+                let native_layout: *mut AnyObject =
+                    msg_send![layouts, objectAtIndexedSubscript: 16usize];
+                let _: () = msg_send![native_layout, setStride: layout.array_stride as usize];
+                let _: () = msg_send![native_layout, setStepFunction: if layout.step_mode == VertexStepMode::Vertex { 1usize } else { 2usize }];
+                let _: () = msg_send![native_layout, setStepRate: 1usize];
+                let _: () = msg_send![&*descriptor, setVertexDescriptor: &*vertex_descriptor];
+            }
+            let mut err = ptr::null_mut::<AnyObject>();
+            let error_out = (&mut err as *mut *mut AnyObject).cast::<c_void>();
+            let pipeline: *mut AnyObject = msg_send![&*self.device, newRenderPipelineStateWithDescriptor: &*descriptor, error: error_out];
+            if pipeline.is_null() {
+                return Err(error(err));
+            }
+            let object = owned(pipeline)?;
+            let depth = desc
+                .depth_stencil
+                .map(|depth| -> Result<Object> {
+                    let descriptor = owned(msg_send![class!(MTLDepthStencilDescriptor), new])?;
+                    let _: () = msg_send![&*descriptor, setDepthCompareFunction: if depth.depth_compare == Some(CompareFunction::Always) { 7usize } else { 3usize }];
+                    let write_enabled = if depth.depth_write_enabled.unwrap_or(false) {
+                        Bool::YES
+                    } else {
+                        Bool::NO
+                    };
+                    let _: () = msg_send![&*descriptor, setDepthWriteEnabled: write_enabled];
+                    owned(msg_send![&*self.device, newDepthStencilStateWithDescriptor: &*descriptor])
+                })
+                .transpose()?;
+            Ok(Pipeline {
+                object,
+                depth,
+                cull: desc.primitive.cull_mode.is_some(),
+            })
+        })
+    }
+
+    pub(super) fn submit(&self, uploads: Vec<Upload>, passes: Vec<Pass>) -> Result<()> {
+        self.wait(self.slot.get())?;
+        autoreleasepool(|_| unsafe {
+            let command = retained(msg_send![&*self.queue, commandBuffer])?;
+            let mut staging = Vec::new();
+            if !uploads.is_empty() {
+                let blit = retained(msg_send![&*command, blitCommandEncoder])?;
+                for upload in &uploads {
+                    match upload {
+                        Upload::Buffer {
+                            buffer,
+                            offset,
+                            data,
+                        } => {
+                            let source = self.stage(data)?;
+                            let _: () = msg_send![&*blit, copyFromBuffer: &*source, sourceOffset: 0usize, toBuffer: &*buffer.inner.native.object, destinationOffset: *offset as usize, size: data.len()];
+                            staging.push(source);
+                        }
+                        Upload::Texture {
+                            texture,
+                            mip,
+                            origin,
+                            size,
+                            data,
+                        } => {
+                            let row = size.width as usize * 4;
+                            let pitch = (row + 255) & !255;
+                            let image = pitch * size.height as usize;
+                            let mut padded = vec![0u8; image * size.depth_or_array_layers as usize];
+                            for (src, dst) in
+                                data.chunks_exact(row).zip(padded.chunks_exact_mut(pitch))
+                            {
+                                dst[..row].copy_from_slice(src);
+                            }
+                            let source = self.stage(&padded)?;
+                            for layer in 0..size.depth_or_array_layers {
+                                let _: () = msg_send![&*blit, copyFromBuffer: &*source, sourceOffset: layer as usize * image, sourceBytesPerRow: pitch, sourceBytesPerImage: image, sourceSize: MSize { width: size.width as usize, height: size.height as usize, depth: 1 }, toTexture: &*texture.inner.native.object, destinationSlice: (origin.z + layer) as usize, destinationLevel: *mip as usize, destinationOrigin: MOrigin { x: origin.x as usize, y: origin.y as usize, z: 0 }];
+                            }
+                            staging.push(source);
+                        }
+                    }
+                }
+                let _: () = msg_send![&*blit, endEncoding];
+            }
+            for pass in &passes {
+                let descriptor = owned(msg_send![class!(MTLRenderPassDescriptor), new])?;
+                let colors: *mut AnyObject = msg_send![&*descriptor, colorAttachments];
+                let color: *mut AnyObject = msg_send![colors, objectAtIndexedSubscript: 0usize];
+                let _: () = msg_send![color, setTexture: &*pass.color.texture.inner.native.object];
+                let _: () = msg_send![color, setLoadAction: if pass.clear.is_some() { 2usize } else { 1usize }];
+                let _: () = msg_send![color, setStoreAction: 1usize];
+                if let Some(clear) = pass.clear {
+                    let _: () = msg_send![color, setClearColor: Clear { r: clear.r, g: clear.g, b: clear.b, a: clear.a }];
+                }
+                if let Some(depth_view) = &pass.depth {
+                    let depth: *mut AnyObject = msg_send![&*descriptor, depthAttachment];
+                    let _: () =
+                        msg_send![depth, setTexture: &*depth_view.texture.inner.native.object];
+                    let _: () = msg_send![depth, setLoadAction: if pass.clear_depth.is_some() { 2usize } else { 1usize }];
+                    let _: () = msg_send![depth, setStoreAction: usize::from(pass.store_depth)];
+                    if let Some(clear) = pass.clear_depth {
+                        let _: () = msg_send![depth, setClearDepth: clear as f64];
+                    }
+                }
+                let render = retained(
+                    msg_send![&*command, renderCommandEncoderWithDescriptor: &*descriptor],
+                )?;
+                let _: () = msg_send![&*render, setFrontFacingWinding: 1usize];
+                for draw in &pass.draws {
+                    let native = &draw.pipeline.native;
+                    let _: () = msg_send![&*render, setRenderPipelineState: &*native.object];
+                    if let Some(depth) = &native.depth {
+                        let _: () = msg_send![&*render, setDepthStencilState: &**depth];
+                    }
+                    let _: () =
+                        msg_send![&*render, setCullMode: if native.cull { 2usize } else { 0usize }];
+                    for (binding, resource) in
+                        draw.group.iter().flat_map(|group| group.entries.iter())
+                    {
+                        match resource {
+                            Resource::Buffer(buffer) => {
+                                let _: () = msg_send![&*render, setVertexBuffer: &*buffer.inner.native.object, offset: 0usize, atIndex: *binding as usize];
+                                let _: () = msg_send![&*render, setFragmentBuffer: &*buffer.inner.native.object, offset: 0usize, atIndex: *binding as usize];
+                                if buffer.inner.usage.contains(BufferUsages::STORAGE) {
+                                    let length = u32::try_from(buffer.inner.size)
+                                        .expect("Metal storage buffer too large");
+                                    let _: () = msg_send![&*render, setVertexBytes: (&length as *const u32).cast::<c_void>(), length: 4usize, atIndex: 30usize];
+                                }
+                            }
+                            Resource::Texture(view) => {
+                                let _: () = msg_send![&*render, setFragmentTexture: &*view.texture.inner.native.object, atIndex: *binding as usize];
+                            }
+                            Resource::Sampler(sampler) => {
+                                let _: () = msg_send![&*render, setFragmentSamplerState: &*sampler.native.object, atIndex: *binding as usize];
+                            }
+                        }
+                    }
+                    if let Some((buffer, range)) = &draw.vertex {
+                        let _: () = msg_send![&*render, setVertexBuffer: &*buffer.inner.native.object, offset: range.start as usize, atIndex: 16usize];
+                    }
+                    let v = draw.viewport;
+                    let _: () = msg_send![&*render, setViewport: Viewport { x: v[0] as f64, y: v[1] as f64, width: v[2] as f64, height: v[3] as f64, near: v[4] as f64, far: v[5] as f64 }];
+                    let s = draw.scissor;
+                    let _: () = msg_send![&*render, setScissorRect: Scissor { x: s[0] as usize, y: s[1] as usize, width: s[2] as usize, height: s[3] as usize }];
+                    let _: () = msg_send![&*render, drawPrimitives: 3usize, vertexStart: draw.vertices.start as usize, vertexCount: draw.vertices.len(), instanceCount: draw.instances.len(), baseInstance: draw.instances.start as usize];
+                }
+                let _: () = msg_send![&*render, endEncoding];
+            }
+            let _: () = msg_send![&*command, commit];
+            self.staging_pool.borrow_mut()[self.slot.get()].clear();
+            self.frames.borrow_mut()[self.slot.get()] = Some(Frame {
+                command,
+                presentation: None,
+                _uploads: uploads,
+                _passes: passes,
+                _staging: staging,
+            });
+            Ok(())
+        })
+    }
+
+    pub(super) fn present(&self, _: &Surface, texture: &Texture) -> Result<()> {
+        autoreleasepool(|_| unsafe {
+            let drawable = texture
+                .drawable
+                .as_ref()
+                .ok_or_else(|| Error("Texture is not a drawable".into()))?;
+            // A separate command buffer orders presentation after the submitted rendering.
+            let command = retained(msg_send![&*self.queue, commandBuffer])?;
+            let _: () = msg_send![&*command, presentDrawable: &**drawable];
+            let _: () = msg_send![&*command, commit];
+            self.frames.borrow_mut()[self.slot.get()]
+                .as_mut()
+                .ok_or_else(|| Error("Present requires a submission".into()))?
+                .presentation = Some(command);
+            self.slot.set((self.slot.get() + 1) % 2);
+            Ok(())
+        })
+    }
+}
+
+impl Drop for Context {
+    fn drop(&mut self) {
+        let _ = self.wait(0);
+        let _ = self.wait(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn gpu() -> (Device, Queue) {
+        let shared = Rc::new(Shared {
+            native: Context::headless().expect("Metal device required"),
+            uploads: RefCell::new(Vec::new()),
+        });
+        (
+            Device {
+                shared: shared.clone(),
+            },
+            Queue { shared },
+        )
+    }
+
+    fn pixels(device: &Device, texture: &super::super::Texture) -> Vec<u8> {
+        autoreleasepool(|_| unsafe {
+            let context = &device.shared.native;
+            let size = texture.inner.size;
+            let pitch = (size.width as usize * 4).div_ceil(256) * 256;
+            let length = pitch * size.height as usize;
+            let buffer =
+                owned(msg_send![&*context.device, newBufferWithLength: length, options: 0usize])
+                    .unwrap();
+            let command = retained(msg_send![&*context.queue, commandBuffer]).unwrap();
+            let blit = retained(msg_send![&*command, blitCommandEncoder]).unwrap();
+            let _: () = msg_send![&*blit, copyFromTexture: &*texture.inner.native.object, sourceSlice: 0usize, sourceLevel: 0usize, sourceOrigin: MOrigin { x: 0, y: 0, z: 0 }, sourceSize: MSize { width: size.width as usize, height: size.height as usize, depth: 1 }, toBuffer: &*buffer, destinationOffset: 0usize, destinationBytesPerRow: pitch, destinationBytesPerImage: length];
+            let _: () = msg_send![&*blit, endEncoding];
+            let _: () = msg_send![&*command, commit];
+            let _: () = msg_send![&*command, waitUntilCompleted];
+            let status: usize = msg_send![&*command, status];
+            assert_eq!(status, 4, "Readback command failed");
+            let contents: *const c_void = msg_send![&*buffer, contents];
+            let bytes = std::slice::from_raw_parts(contents.cast::<u8>(), length);
+            bytes
+                .chunks_exact(pitch)
+                .flat_map(|row| &row[..size.width as usize * 4])
+                .copied()
+                .collect()
+        })
+    }
+
+    #[test]
+    fn native_render_without_bindings_or_depth() {
+        let (device, queue) = gpu();
+        let color = device.create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: None,
+            entries: &[("vs", "vs"), ("fs", "fs")],
+            source: ShaderSource::Text(
+                r#"
+                #include <metal_stdlib>
+                using namespace metal;
+                vertex float4 vs(uint index [[vertex_id]]) {
+                    const float2 points[] = { float2(-1,-1), float2(3,-1), float2(-1,3) };
+                    return float4(points[index], 0, 1);
+                }
+                fragment float4 fs() { return float4(0, 1, 0, 1); }
+                "#,
+            ),
+        });
+        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: None,
+            layout: None,
+            vertex: VertexState {
+                module: &shader,
+                entry_point: Some("vs"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: Default::default(),
+            depth_stencil: None,
+            multisample: Default::default(),
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: Some("fs"),
+                compilation_options: Default::default(),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Rgba8Unorm,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+        let view = color.create_view(&Default::default());
+        let mut encoder = device.create_command_encoder(&Default::default());
+        {
+            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::BLACK),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.draw(0..3, 0..1);
+        }
+        queue.submit([encoder.finish()]);
+        assert!(
+            pixels(&device, &color)
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|pixel| *pixel == [0, 255, 0, 255])
+        );
+    }
+
+    #[test]
+    fn invalid_upload_alignment_and_attachment_feedback_are_rejected() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        let (device, _) = gpu();
+        assert!(
+            catch_unwind(AssertUnwindSafe(|| device.create_buffer(
+                &BufferDescriptor {
+                    label: None,
+                    size: 3,
+                    usage: BufferUsages::VERTEX,
+                    mapped_at_creation: true,
+                }
+            )))
+            .is_err()
+        );
+        // Odd sizes remain valid for unmapped buffers, which can receive aligned writes.
+        let _buffer = device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: 7,
+            usage: BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let descriptor = TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        };
+        let color = device.create_texture(&descriptor);
+        let other = device.create_texture(&descriptor);
+        let depth = device.create_texture(&TextureDescriptor {
+            format: TextureFormat::Depth32Float,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            ..descriptor
+        });
+        let color_view = color.create_view(&Default::default());
+        let depth_view = depth.create_view(&Default::default());
+        let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 1,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Texture {
+                    sample_type: TextureSampleType::Float { filterable: true },
+                    view_dimension: TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            }],
+        });
+        let mut encoder = device.create_command_encoder(&Default::default());
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &color_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::BLACK),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &depth_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+        });
+        for (texture, reject) in [(&other, false), (&color, true)] {
+            // A separate view of the same texture must still be detected as feedback.
+            let view = texture.create_view(&Default::default());
+            let group = device.create_bind_group(&BindGroupDescriptor {
+                label: None,
+                layout: &layout,
+                entries: &[BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(&view),
+                }],
+            });
+            assert_eq!(
+                catch_unwind(AssertUnwindSafe(|| pass.set_bind_group(0, &group, &[]))).is_err(),
+                reject
+            );
+        }
+    }
+
+    #[test]
+    fn native_render_uploads_depth_blending_and_lifetimes() {
+        let (device, queue) = gpu();
+        let color = device.create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let depth = device.create_texture(&TextureDescriptor {
+            label: None,
+            size: color.inner.size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Depth32Float,
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let tiles = device.create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: 2,
+                height: 2,
+                depth_or_array_layers: 2,
+            },
+            mip_level_count: 2,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8Unorm,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        for (layer, data) in [[255, 0, 0, 255], [0, 255, 0, 255]].iter().enumerate() {
+            queue.write_texture(
+                TexelCopyTextureInfo {
+                    texture: &tiles,
+                    mip_level: 1,
+                    origin: Origin3d {
+                        z: layer as u32,
+                        ..Default::default()
+                    },
+                    aspect: TextureAspect::All,
+                },
+                data,
+                TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: Some(1),
+                },
+                Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+        let uniforms = device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: 16,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let origins = device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: 32,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let values: Vec<u8> = [0., 0., 0.75f32, 0., 0., 0., 0.5, 0.]
+            .iter()
+            .flat_map(|n| n.to_ne_bytes())
+            .collect();
+        queue.write_buffer(&origins, 0, &values);
+        let vertices = device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: 24,
+            usage: BufferUsages::VERTEX,
+            mapped_at_creation: true,
+        });
+        {
+            let mut mapped = vertices.slice(..).get_mapped_range_mut().unwrap();
+            let bytes: Vec<u8> = [0u32, 0, 1, 1, 0, 0]
+                .iter()
+                .flat_map(|n| n.to_ne_bytes())
+                .collect();
+            mapped.slice(0..bytes.len()).copy_from_slice(&bytes);
+            assert!(vertices.slice(..).get_mapped_range_mut().is_err());
+            assert!(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| vertices.unmap()))
+                    .is_err()
+            );
+        }
+        vertices.unmap();
+        assert!(vertices.slice(..).get_mapped_range_mut().is_err());
+        let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2Array,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: ShaderStages::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&layout)],
+        });
+        let shader = device.create_shader_module(ShaderModuleDescriptor { label: None, entries: &[("vs", "vs"), ("fs", "fs")], source: ShaderSource::Text(r#"
+            #include <metal_stdlib>
+            using namespace metal;
+            struct In { uint2 packed [[attribute(0)]]; };
+            struct Out { float4 position [[position]]; uint layer [[flat]]; };
+            vertex Out vs(In in [[stage_in]], uint index [[vertex_id]], device const float4* origins [[buffer(3)]]) {
+                const float2 points[] = { float2(-1,-1), float2(3,-1), float2(-1,3) };
+                return { float4(points[index], origins[in.packed.y].z, 1), in.packed.x };
+            }
+            fragment float4 fs(Out in [[stage_in]], constant float4& tint [[buffer(0)]], texture2d_array<float> tiles [[texture(1)]], sampler s [[sampler(2)]]) {
+                return tiles.sample(s, float2(0.5), in.layer, level(1)) * tint;
+            }
+        "#) });
+        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &shader,
+                entry_point: Some("vs"),
+                compilation_options: Default::default(),
+                buffers: &[Some(VertexBufferLayout {
+                    array_stride: 8,
+                    step_mode: VertexStepMode::Instance,
+                    attributes: &vertex_attr_array![0 => Uint32x2],
+                })],
+            },
+            primitive: PrimitiveState {
+                cull_mode: Some(Face::Back),
+            },
+            depth_stencil: Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(CompareFunction::LessEqual),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: Default::default(),
+            fragment: Some(FragmentState {
+                module: &shader,
+                entry_point: Some("fs"),
+                compilation_options: Default::default(),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Rgba8Unorm,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+        let sampler = device.create_sampler(&Default::default());
+        let view = tiles.create_view(&TextureViewDescriptor {
+            dimension: Some(TextureViewDimension::D2Array),
+        });
+        let group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: uniforms.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(&view),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::Sampler(&sampler),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: origins.as_entire_binding(),
+                },
+            ],
+        });
+        let vertex_lifetime = Rc::downgrade(&vertices.inner);
+        for alpha in [0.5f32, 1., 0.25] {
+            // Two writes to the same buffer must be observed in queue order.
+            queue.write_buffer(&uniforms, 0, &[0; 16]);
+            queue.write_buffer(
+                &uniforms,
+                0,
+                &[1f32, 1., 1., alpha]
+                    .iter()
+                    .flat_map(|n| n.to_ne_bytes())
+                    .collect::<Vec<_>>(),
+            );
+            let mut encoder = device.create_command_encoder(&Default::default());
+            for load in [false, true] {
+                let color_view = color.create_view(&Default::default());
+                let depth_view = depth.create_view(&Default::default());
+                let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: &color_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: if load {
+                                LoadOp::Load
+                            } else {
+                                LoadOp::Clear(Color {
+                                    r: 1.,
+                                    g: 0.,
+                                    b: 0.,
+                                    a: 1.,
+                                })
+                            },
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                        view: &depth_view,
+                        depth_ops: Some(Operations {
+                            load: if load {
+                                LoadOp::Load
+                            } else {
+                                LoadOp::Clear(1.)
+                            },
+                            store: StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                });
+                pass.set_bind_group(0, &group, &[]);
+                pass.set_pipeline(&pipeline);
+                pass.set_vertex_buffer(0, vertices.slice(..));
+                pass.set_viewport(0., 0., 4., 4., 0., 1.);
+                pass.set_scissor_rect(0, 0, 2, 4);
+                if load {
+                    // Loading both attachments must preserve the green image and its depth.
+                    // The farther red instance must fail against the first pass's depth.
+                    pass.draw(0..3, 2..3);
+                } else {
+                    pass.draw(0..3, 1..2);
+                }
+            }
+            queue.submit([encoder.finish()]);
+            let image = pixels(&device, &color);
+            for (i, pixel) in image.as_chunks::<4>().0.iter().enumerate() {
+                let expected = if i % 4 < 2 {
+                    [
+                        ((1. - alpha) * 255.).round() as u8,
+                        (alpha * 255.).round() as u8,
+                        0,
+                        255,
+                    ]
+                } else {
+                    [255, 0, 0, 255]
+                };
+                for (actual, expected) in pixel.iter().zip(expected) {
+                    assert!(
+                        actual.abs_diff(expected) <= 1,
+                        "pixel {i}: {pixel:?} expected {expected}"
+                    );
+                }
+            }
+        }
+        drop(vertices);
+        drop(group);
+        drop(uniforms);
+        drop(origins);
+        drop(view);
+        drop(tiles);
+        drop(pipeline);
+        assert!(
+            vertex_lifetime.upgrade().is_some(),
+            "Submission must retain vertex data"
+        );
+        device.shared.native.wait(0).unwrap();
+        device.shared.native.wait(1).unwrap();
+        assert!(
+            vertex_lifetime.upgrade().is_none(),
+            "Completed submissions must release vertex data"
+        );
+    }
+}
