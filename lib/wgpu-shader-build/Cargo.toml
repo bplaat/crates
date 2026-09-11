@@ -1,0 +1,13 @@
+[package]
+name = "wgpu-shader-build"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+naga = { version = "=30.0.1", default-features = false, features = ["wgsl-in", "msl-out", "spv-out", "hlsl-out"] }
