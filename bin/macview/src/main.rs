@@ -10,7 +10,7 @@
 
 mod browse;
 mod checkerboard;
-mod cocoa;
+mod headers;
 mod scroll_view;
 mod svg;
 mod window_controller;
@@ -22,7 +22,7 @@ use std::ptr::null_mut;
 use block2::RcBlock;
 use browse::{file_url, neighbour_path, url_path};
 use checkerboard::create_checkerboard_view;
-use cocoa::*;
+use headers::*;
 use macview_appkit::{
     Image, NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, OwnedString, Point, Rect, Size,
     create_image_view, create_tinyvg_view, decode_image, decode_image_data, decode_tinyvg,

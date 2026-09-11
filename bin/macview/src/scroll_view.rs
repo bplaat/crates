@@ -13,7 +13,7 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
-use crate::cocoa::*;
+use crate::headers::*;
 
 /// The magnification the media may be shrunk and enlarged to.
 const MINIMUM_MAGNIFICATION: f64 = 0.02;

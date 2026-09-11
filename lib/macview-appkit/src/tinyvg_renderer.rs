@@ -12,7 +12,7 @@ use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 use tinyvg::{Color, ColorSpace, Command, Document, Path, PathOperation, Point, Style};
 
-use crate::cocoa::*;
+use crate::headers::*;
 
 struct TinyVgViewIvars {
     document: Arc<Document>,

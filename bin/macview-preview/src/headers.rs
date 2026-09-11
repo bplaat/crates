@@ -4,5 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#[link(name = "QuickLookThumbnailing", kind = "framework")]
+//! Native Quick Look framework declaration.
+
+#[link(name = "QuickLookUI", kind = "framework")]
 unsafe extern "C" {}

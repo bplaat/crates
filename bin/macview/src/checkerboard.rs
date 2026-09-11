@@ -11,7 +11,7 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
-use crate::cocoa::*;
+use crate::headers::*;
 
 /// The width and height of a single checkerboard tile.
 const TILE: f64 = 12.0;

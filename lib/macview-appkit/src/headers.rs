@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+//! Native AppKit, Foundation, Core Foundation, and Core Graphics declarations.
+
 #![allow(non_snake_case, non_upper_case_globals)]
 
 use std::ffi::{c_char, c_void};
@@ -20,6 +22,7 @@ pub(crate) const LINE_CAP_ROUND: i32 = 1;
 pub(crate) const LINE_JOIN_ROUND: i32 = 1;
 pub(crate) const NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN: u64 = 3;
 pub(crate) const NS_UTF8_STRING_ENCODING: u64 = 4;
+pub(crate) const QOS_CLASS_USER_INITIATED: isize = 0x19;
 
 /// The autoresizing mask bit that keeps a view as wide as its superview.
 pub const NS_VIEW_WIDTH_SIZABLE: u64 = 2;
@@ -35,6 +38,18 @@ unsafe extern "C" {
     pub static __CFConstantStringClassReference: Object;
 
     pub(crate) fn NSExtensionMain(argc: i32, argv: *const *const c_char) -> i32;
+}
+
+#[link(name = "System")]
+unsafe extern "C" {
+    pub(crate) fn dispatch_get_global_queue(identifier: isize, flags: usize) -> *mut c_void;
+    pub(crate) fn dispatch_async_f(
+        queue: *mut c_void,
+        context: *mut c_void,
+        work: extern "C" fn(*mut c_void),
+    );
+    #[link_name = "_dispatch_main_q"]
+    pub(crate) static mut DISPATCH_MAIN_QUEUE: u8;
 }
 
 /// Creates an autoreleased `NSString` from a runtime string.

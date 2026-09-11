@@ -19,11 +19,11 @@ use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send, sel};
 
 mod animation;
-mod cocoa;
+mod headers;
 mod tinyvg_renderer;
 
-use cocoa::*;
-pub use cocoa::{
+use headers::*;
+pub use headers::{
     __CFConstantStringClassReference, CFConstString, CGContextFillRect, CGContextSetRGBFillColor,
     NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, ns_string,
 };
@@ -200,16 +200,6 @@ where
     unsafe {
         dispatch_async_f(queue, context, invoke::<F>);
     }
-}
-
-const QOS_CLASS_USER_INITIATED: isize = 0x19;
-
-#[link(name = "System")]
-unsafe extern "C" {
-    fn dispatch_get_global_queue(identifier: isize, flags: usize) -> *mut c_void;
-    fn dispatch_async_f(queue: *mut c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
-    #[link_name = "_dispatch_main_q"]
-    static mut DISPATCH_MAIN_QUEUE: u8;
 }
 
 /// Loads a supported image from a file URL.
