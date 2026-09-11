@@ -7,13 +7,21 @@
 // Minimal Direct2D 1.0 and DirectWrite COM ABI. Unused inherited methods retain
 // their SDK vtable slots; only the methods used by the canvas are callable.
 #![allow(non_camel_case_types, non_snake_case)]
-#![allow(clippy::too_many_arguments)]
+#![allow(clippy::too_many_arguments, clippy::upper_case_acronyms)]
 
 use std::ffi::c_void;
 
-use bwindow::ffi::{GUID, HWND};
+pub(super) use bwindow::ffi::*;
 
-use crate::platforms::com::{ComPtr, IUnknownVtbl, check};
+use super::com::{ComPtr, check};
+
+#[repr(C)]
+pub(super) struct IUnknownVtbl {
+    pub(super) QueryInterface:
+        unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
+    pub(super) AddRef: unsafe extern "system" fn(*mut c_void) -> u32,
+    pub(super) Release: unsafe extern "system" fn(*mut c_void) -> u32,
+}
 
 #[repr(C)]
 pub(super) struct ID2D1Factory {
@@ -38,6 +46,12 @@ struct ID2D1FactoryVtbl {
         *mut ID2D1Factory,
         *const D2D1_RENDER_TARGET_PROPERTIES,
         *const D2D1_HWND_RENDER_TARGET_PROPERTIES,
+        *mut *mut ID2D1HwndRenderTarget,
+    ) -> i32,
+    _unused_15_15: [*const c_void; 1],
+    CreateDCRenderTarget: unsafe extern "system" fn(
+        *mut ID2D1Factory,
+        *const D2D1_RENDER_TARGET_PROPERTIES,
         *mut *mut ID2D1HwndRenderTarget,
     ) -> i32,
 }
@@ -79,6 +93,21 @@ impl ID2D1Factory {
                     self as *const Self as *mut Self,
                     properties,
                     hwnd_properties,
+                    out,
+                )
+            })
+        }
+    }
+
+    pub(super) unsafe fn CreateDCRenderTarget(
+        &self,
+        properties: *const D2D1_RENDER_TARGET_PROPERTIES,
+    ) -> Result<ComPtr<ID2D1HwndRenderTarget>, i32> {
+        unsafe {
+            ComPtr::create(|out| {
+                ((*self.lpVtbl).CreateDCRenderTarget)(
+                    self as *const Self as *mut Self,
+                    properties,
                     out,
                 )
             })
@@ -157,7 +186,8 @@ struct ID2D1HwndRenderTargetVtbl {
     EndDraw: unsafe extern "system" fn(*mut ID2D1HwndRenderTarget, *mut u64, *mut u64) -> i32,
     _unused_50_50: [*const c_void; 1],
     SetDpi: unsafe extern "system" fn(*mut ID2D1HwndRenderTarget, f32, f32),
-    _unused_52_57: [*const c_void; 6],
+    _unused_52_56: [*const c_void; 5],
+    BindDC: unsafe extern "system" fn(*mut ID2D1HwndRenderTarget, HDC, *const RECT) -> i32,
     Resize: unsafe extern "system" fn(*mut ID2D1HwndRenderTarget, *const D2D_SIZE_U) -> i32,
 }
 
@@ -301,6 +331,16 @@ impl ID2D1HwndRenderTarget {
             check(((*self.lpVtbl).Resize)(
                 self as *const Self as *mut Self,
                 size,
+            ))
+        }
+    }
+
+    pub(super) unsafe fn BindDC(&self, dc: HDC, rect: *const RECT) -> Result<(), i32> {
+        unsafe {
+            check(((*self.lpVtbl).BindDC)(
+                self as *const Self as *mut Self,
+                dc,
+                rect,
             ))
         }
     }
@@ -695,7 +735,9 @@ impl D2D_MATRIX_3X2_F {
 }
 
 pub(super) const D2D1_ALPHA_MODE_UNKNOWN: u32 = 0;
+pub(super) const D2D1_ALPHA_MODE_PREMULTIPLIED: u32 = 1;
 pub(super) const DXGI_FORMAT_UNKNOWN: u32 = 0;
+pub(super) const DXGI_FORMAT_B8G8R8A8_UNORM: u32 = 87;
 pub(super) const D2D1_ANTIALIAS_MODE_PER_PRIMITIVE: u32 = 0;
 pub(super) const D2D1_ANTIALIAS_MODE_ALIASED: u32 = 1;
 pub(super) const D2D1_FILL_MODE_WINDING: u32 = 1;
@@ -723,6 +765,7 @@ const _: () = {
     assert!(std::mem::offset_of!(ID2D1FactoryVtbl, CreatePathGeometry) == 10 * slot);
     assert!(std::mem::offset_of!(ID2D1FactoryVtbl, CreateStrokeStyle) == 11 * slot);
     assert!(std::mem::offset_of!(ID2D1FactoryVtbl, CreateHwndRenderTarget) == 14 * slot);
+    assert!(std::mem::offset_of!(ID2D1FactoryVtbl, CreateDCRenderTarget) == 16 * slot);
     assert!(std::mem::offset_of!(ID2D1HwndRenderTargetVtbl, CreateSolidColorBrush) == 8 * slot);
     assert!(std::mem::offset_of!(ID2D1HwndRenderTargetVtbl, DrawRectangle) == 16 * slot);
     assert!(std::mem::offset_of!(ID2D1HwndRenderTargetVtbl, FillRectangle) == 17 * slot);
@@ -738,6 +781,7 @@ const _: () = {
     assert!(std::mem::offset_of!(ID2D1HwndRenderTargetVtbl, BeginDraw) == 48 * slot);
     assert!(std::mem::offset_of!(ID2D1HwndRenderTargetVtbl, EndDraw) == 49 * slot);
     assert!(std::mem::offset_of!(ID2D1HwndRenderTargetVtbl, SetDpi) == 51 * slot);
+    assert!(std::mem::offset_of!(ID2D1HwndRenderTargetVtbl, BindDC) == 57 * slot);
     assert!(std::mem::offset_of!(ID2D1HwndRenderTargetVtbl, Resize) == 58 * slot);
     assert!(std::mem::offset_of!(ID2D1PathGeometryVtbl, Open) == 17 * slot);
     assert!(std::mem::offset_of!(ID2D1GeometrySinkVtbl, SetFillMode) == 3 * slot);
@@ -766,6 +810,63 @@ const _: () = {
     assert!(size_of::<D2D1_LAYER_PARAMETERS>() == if slot == 8 { 72 } else { 60 });
     assert!(size_of::<DWRITE_TEXT_METRICS>() == 36);
 };
+
+pub(super) const CS_VREDRAW: u32 = 0x0001;
+pub(super) const CS_HREDRAW: u32 = 0x0002;
+pub(super) const WS_CHILD: u32 = 0x40000000;
+pub(super) const WS_VISIBLE: u32 = 0x10000000;
+pub(super) const WS_TABSTOP: u32 = 0x00010000;
+pub(super) const WM_SETFOCUS: u32 = 0x0007;
+pub(super) const WM_KILLFOCUS: u32 = 0x0008;
+pub(super) const WM_SETCURSOR: u32 = 0x0020;
+pub(super) const WM_NCDESTROY: u32 = 0x0082;
+pub(super) const WM_KEYDOWN: u32 = 0x0100;
+pub(super) const WM_KEYUP: u32 = 0x0101;
+pub(super) const WM_SYSKEYDOWN: u32 = 0x0104;
+pub(super) const WM_SYSKEYUP: u32 = 0x0105;
+pub(super) const WM_MOUSEMOVE: u32 = 0x0200;
+pub(super) const WM_LBUTTONDOWN: u32 = 0x0201;
+pub(super) const WM_LBUTTONUP: u32 = 0x0202;
+pub(super) const WM_RBUTTONDOWN: u32 = 0x0204;
+pub(super) const WM_RBUTTONUP: u32 = 0x0205;
+pub(super) const WM_MBUTTONDOWN: u32 = 0x0207;
+pub(super) const WM_MBUTTONUP: u32 = 0x0208;
+pub(super) const WM_MOUSEWHEEL: u32 = 0x020a;
+pub(super) const WM_XBUTTONDOWN: u32 = 0x020b;
+pub(super) const WM_XBUTTONUP: u32 = 0x020c;
+pub(super) const WM_MOUSEHWHEEL: u32 = 0x020e;
+pub(super) const WM_MOUSELEAVE: u32 = 0x02a3;
+pub(super) const HTCLIENT: u16 = 1;
+pub(super) const TME_LEAVE: u32 = 2;
+pub(super) const IDC_ARROW: *const u16 = 32512usize as *const u16;
+pub(super) const IDC_HAND: *const u16 = 32649usize as *const u16;
+pub(super) const IDC_APPSTARTING: *const u16 = 32650usize as *const u16;
+
+#[repr(C)]
+#[derive(Default)]
+pub(super) struct TRACKMOUSEEVENT {
+    pub(super) cbSize: u32,
+    pub(super) dwFlags: u32,
+    pub(super) hwndTrack: HWND,
+    pub(super) dwHoverTime: u32,
+}
+
+const _: () = {
+    let wide = size_of::<HWND>() == 8;
+    assert!(size_of::<TRACKMOUSEEVENT>() == if wide { 24 } else { 16 });
+};
+
+#[link(name = "user32")]
+unsafe extern "system" {
+    pub(super) fn GetCursorPos(point: *mut POINT) -> BOOL;
+    pub(super) fn WindowFromPoint(point: POINT) -> HWND;
+    pub(super) fn SetCursor(cursor: HCURSOR) -> HCURSOR;
+    pub(super) fn LoadCursorW(instance: HMODULE, name: *const u16) -> HCURSOR;
+    pub(super) fn SetFocus(hwnd: HWND) -> HWND;
+    pub(super) fn SetCapture(hwnd: HWND) -> HWND;
+    pub(super) fn ReleaseCapture() -> BOOL;
+    pub(super) fn TrackMouseEvent(event: *mut TRACKMOUSEEVENT) -> BOOL;
+}
 
 #[cfg(test)]
 mod tests {
