@@ -1,8 +1,10 @@
 /*
- * Copyright (c) 2025 Bastiaan van der Plaat
+ * Copyright (c) 2025-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
+
+pub(crate) use bwindow::ffi::*;
 
 #[link(name = "WebKit", kind = "framework")]
 unsafe extern "C" {}

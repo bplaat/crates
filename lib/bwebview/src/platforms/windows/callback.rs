@@ -24,7 +24,6 @@ const IID_IUNKNOWN: GUID = GUID {
 #[repr(C)]
 struct Callback {
     vtable: *const c_void,
-    user_data: *const c_void,
     refs: AtomicU32,
     iid: GUID,
     owner: Rc<dyn Any>,
@@ -37,7 +36,6 @@ impl<T> CallbackHandle<T> {
         Self(
             Box::into_raw(Box::new(Callback {
                 vtable: (vtable as *const V).cast(),
-                user_data: Rc::as_ptr(&owner).cast(),
                 refs: AtomicU32::new(1),
                 iid,
                 owner,
@@ -86,19 +84,19 @@ pub(super) unsafe extern "system" fn query_interface(
     }
 }
 
-pub(super) unsafe extern "system" fn add_ref(this: *mut c_void) -> HRESULT {
+pub(super) unsafe extern "system" fn add_ref(this: *mut c_void) -> u32 {
     let callback = unsafe { &*this.cast::<Callback>() };
-    (callback.refs.fetch_add(1, Ordering::Relaxed) + 1) as HRESULT
+    callback.refs.fetch_add(1, Ordering::Relaxed) + 1
 }
 
-pub(super) unsafe extern "system" fn release(this: *mut c_void) -> HRESULT {
+pub(super) unsafe extern "system" fn release(this: *mut c_void) -> u32 {
     let callback = unsafe { &*this.cast::<Callback>() };
     let remaining = callback.refs.fetch_sub(1, Ordering::Release) - 1;
     if remaining == 0 {
         fence(Ordering::Acquire);
         unsafe { drop(Box::from_raw(this.cast::<Callback>())) };
     }
-    remaining as HRESULT
+    remaining
 }
 
 #[repr(C)]
