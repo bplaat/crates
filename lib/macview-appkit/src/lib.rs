@@ -525,9 +525,12 @@ mod tests {
     #[test]
     fn vector_uses_a_concurrent_image_view() {
         autoreleasepool(|_| {
-            let image =
-                decode_vector_image(include_bytes!("../../../bin/macview/examples/tiger.tvg"))
-                    .expect("Tiger should decode");
+            let image = decode_vector_image(
+                br##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
+                  <circle cx="8" cy="8" r="6" fill="#f60"/>
+                </svg>"##,
+            )
+            .expect("inline vector should decode");
             let view = create_image_view(
                 Rect {
                     origin: Point { x: 0.0, y: 0.0 },

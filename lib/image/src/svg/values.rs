@@ -384,7 +384,7 @@ pub(super) fn parse_transform(source: &str) -> Result<Transform, VectorDecodeErr
             },
             _ => return Err(VectorDecodeError::InvalidData),
         };
-        result = result.then(transform);
+        result = transform.then(result);
         let tail = &rest[close + 1..];
         let mut next = tail.trim_start_matches(|character: char| character.is_ascii_whitespace());
         let had_whitespace = next.len() != tail.len();

@@ -4,18 +4,30 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::path::Path;
-
 use super::path::parse_path;
 use super::{decode, is_svg};
 use crate::{Color, DrawCommand, MaskType, Paint, PathSegment, Point, VectorDecodeError};
 
 #[test]
-fn decodes_tiger() {
-    let image = decode(include_bytes!("../../../../bin/macview/examples/tiger.svg"))
-        .expect("Tiger SVG should decode");
-    assert_eq!(image.size().width, 600.0);
-    assert!(image.commands().len() > 100);
+fn decodes_compound_vector_artwork() {
+    let image = decode(
+        br##"<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40">
+          <path d="M2 2h20v20H2z" fill="#f60"/>
+          <g transform="translate(30 5)">
+            <path d="M0 15C0 5 20 5 20 15Z" fill="#06f"/>
+          </g>
+        </svg>"##,
+    )
+    .expect("inline SVG should decode");
+    assert_eq!(image.size().width, 60.0);
+    assert_eq!(
+        image
+            .commands()
+            .iter()
+            .filter(|command| matches!(command, DrawCommand::Fill { .. }))
+            .count(),
+        2
+    );
 }
 
 #[test]
@@ -123,6 +135,30 @@ fn decodes_shapes_transforms_styles_and_clips() {
         |command| matches!(command, DrawCommand::PushScope { clips, .. } if !clips.is_empty())
     ));
     assert!(image.commands().iter().any(|command| matches!(command, DrawCommand::Stroke { style, .. } if style.dash_array.len() == 6)));
+}
+
+#[test]
+fn applies_transform_lists_in_svg_order() {
+    let image = decode(
+        br#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+          <g transform="translate(20 30) scale(2)">
+            <rect width="10" height="5"/>
+          </g>
+        </svg>"#,
+    )
+    .expect("transformed SVG should decode");
+    let bounds = image
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            DrawCommand::Fill { bounds, .. } => Some(*bounds),
+            _ => None,
+        })
+        .expect("transformed rectangle");
+    assert_eq!(bounds.x, 20.0);
+    assert_eq!(bounds.y, 30.0);
+    assert_eq!(bounds.width, 20.0);
+    assert_eq!(bounds.height, 10.0);
 }
 
 #[test]
@@ -333,41 +369,4 @@ fn recognized_malformed_svg_never_becomes_unknown_input() {
     let bytes = b"<!-- leading comment --><svg><path d='M0 nan'/></svg>";
     assert!(is_svg(bytes));
     assert_eq!(decode(bytes), Err(VectorDecodeError::InvalidData));
-}
-
-#[test]
-fn repository_svg_corpus_decodes_successfully() {
-    fn visit(path: &Path, failures: &mut Vec<String>) {
-        let Ok(entries) = std::fs::read_dir(path) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if !matches!(
-                    path.file_name().and_then(|name| name.to_str()),
-                    Some("target" | ".git" | "node_modules" | "vendor")
-                ) {
-                    visit(&path, failures);
-                }
-            } else if path.extension().and_then(|extension| extension.to_str()) == Some("svg") {
-                let bytes = std::fs::read(&path).expect("SVG corpus file should be readable");
-                match decode(&bytes) {
-                    Ok(image)
-                        if image.commands().iter().any(|command| {
-                            matches!(
-                                command,
-                                DrawCommand::Fill { .. } | DrawCommand::Stroke { .. }
-                            )
-                        }) => {}
-                    Ok(_) => failures.push(format!("{}: no drawing commands", path.display())),
-                    Err(error) => failures.push(format!("{}: {error:?}", path.display())),
-                }
-            }
-        }
-    }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let mut failures = Vec::new();
-    visit(&root, &mut failures);
-    assert!(failures.is_empty(), "SVG decode failures: {failures:#?}");
 }

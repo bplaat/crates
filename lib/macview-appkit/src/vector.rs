@@ -174,26 +174,38 @@ impl NativeGradient {
             .iter()
             .map(|stop| (stop.offset, mask_color(stop.color, mode)));
         if reverse {
-            Self::from_iter(iter.rev().map(|(offset, color)| (1.0 - offset, color)))
+            Self::from_iter(
+                iter.rev().map(|(offset, color)| (1.0 - offset, color)),
+                mode,
+            )
         } else {
-            Self::from_iter(iter)
+            Self::from_iter(iter, mode)
         }
     }
 
-    fn from_iter(iter: impl ExactSizeIterator<Item = (f64, Color)>) -> Option<Self> {
+    fn from_iter(
+        iter: impl ExactSizeIterator<Item = (f64, Color)>,
+        mode: RenderMode,
+    ) -> Option<Self> {
         let count = iter.len();
         if count == 0 {
             return None;
         }
         let mut components = Vec::with_capacity(count * 4);
         let mut locations = Vec::with_capacity(count);
-        for (offset, color) in iter {
-            components.extend(linear_components(color));
+        for (offset, mut color) in iter {
+            if matches!(mode, RenderMode::Normal) {
+                color = display_color(color);
+            }
+            components.extend([color.red, color.green, color.blue, color.alpha]);
             locations.push(offset);
         }
         // SAFETY: Core Graphics copies both temporary arrays.
         unsafe {
-            let color_space = CGColorSpaceCreateWithName(kCGColorSpaceLinearSRGB);
+            let color_space = CGColorSpaceCreateWithName(match mode {
+                RenderMode::Normal => kCGColorSpaceSRGB,
+                RenderMode::AlphaMask | RenderMode::LuminanceMask => kCGColorSpaceLinearSRGB,
+            });
             if color_space.is_null() {
                 return None;
             }
@@ -429,6 +441,8 @@ unsafe fn render_commands(
                     }
                     if let Some(mask) = mask {
                         let mut mask_index = 0;
+                        CGContextSaveGState(context);
+                        CGContextSetBlendMode(context, 17); // kCGBlendModeCopy
                         render_commands(
                             context,
                             &mask.commands,
@@ -441,6 +455,7 @@ unsafe fn render_commands(
                                 MaskType::Luminance => RenderMode::LuminanceMask,
                             },
                         );
+                        CGContextRestoreGState(context);
                         CGContextSaveGState(context);
                         CGContextSetBlendMode(context, 18); // kCGBlendModeSourceIn
                         CGContextBeginTransparencyLayer(context, null());
@@ -798,17 +813,7 @@ pub unsafe fn fill_white_background(context: *mut c_void, bounds: Size) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn renders_alpha_mask_into_bitmap() {
-        let document = image::decode_vector(
-            br##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10">
-          <defs><mask id="half" mask-type="alpha" maskContentUnits="objectBoundingBox">
-            <rect width=".5" height="1" fill="white"/>
-          </mask></defs>
-          <rect width="20" height="10" fill="red" mask="url(#half)"/>
-        </svg>"##,
-        )
-        .expect("masked SVG");
+    fn render_pixels(document: &VectorImage, width: usize, height: usize) -> Vec<u8> {
         let paths = document
             .paths()
             .map(|(_, path)| NativePath::new(path).expect("native path"))
@@ -817,34 +822,92 @@ mod tests {
             .paints()
             .map(|(_, paint)| PreparedPaint::new(paint, 1 | 2 | 4))
             .collect::<Vec<_>>();
-        let mut pixels = vec![0_u8; 20 * 10 * 4];
+        let mut pixels = vec![0_u8; width * height * 4];
         // SAFETY: The backing allocation remains live until after the context is released.
         unsafe {
             let color_space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
             let context = CGBitmapContextCreate(
                 pixels.as_mut_ptr().cast(),
-                20,
-                10,
+                width,
+                height,
                 8,
-                20 * 4,
+                width * 4,
                 color_space,
                 1 | (4 << 12),
             );
             assert!(!context.is_null());
             render_fitted(
                 context,
-                &document,
+                document,
                 &paths,
                 &paints,
                 Size {
-                    width: 20.0,
-                    height: 10.0,
+                    width: width as f64,
+                    height: height as f64,
                 },
             );
             CGContextRelease(context);
             CGColorSpaceRelease(color_space);
         }
-        assert!(pixels[(5 * 20 + 5) * 4 + 3] > 240);
-        assert!(pixels[(5 * 20 + 15) * 4 + 3] < 16);
+        pixels
+    }
+
+    #[test]
+    fn renders_alpha_and_luminance_masks_into_bitmap() {
+        for svg in [
+            br##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10">
+              <defs><mask id="half" mask-type="alpha" maskContentUnits="objectBoundingBox">
+                <rect width=".5" height="1" fill="white"/>
+              </mask></defs>
+              <rect width="20" height="10" fill="red" mask="url(#half)"/>
+            </svg>"##
+                .as_slice(),
+            br##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10">
+              <defs><mask id="half" mask-type="luminance">
+                <rect width="20" height="10" fill="white"/>
+                <rect x="10" width="10" height="10" fill="black"/>
+              </mask></defs>
+              <rect width="20" height="10" fill="red" mask="url(#half)"/>
+            </svg>"##
+                .as_slice(),
+        ] {
+            let document = image::decode_vector(svg).expect("masked SVG");
+            let pixels = render_pixels(&document, 20, 10);
+            assert!(pixels[(5 * 20 + 5) * 4 + 3] > 240);
+            assert!(pixels[(5 * 20 + 15) * 4 + 3] < 16);
+        }
+    }
+
+    #[test]
+    fn renders_transformed_mask_with_view_box() {
+        let document = image::decode_vector(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 100 100">
+              <mask id="cutout">
+                <rect width="100" height="100" fill="white"/>
+                <rect x="40" width="20" height="100" fill="black"/>
+              </mask>
+              <g transform="translate(10) scale(.8)">
+                <rect width="100" height="100" fill="white" mask="url(#cutout)"/>
+              </g>
+            </svg>"##,
+        )
+        .expect("transformed masked SVG");
+        let pixels = render_pixels(&document, 200, 200);
+        assert!(pixels[(100 * 200 + 40) * 4 + 3] > 240);
+        assert!(pixels[(100 * 200 + 100) * 4 + 3] < 16);
+    }
+
+    #[test]
+    fn renders_svg_gradients_in_srgb() {
+        let document = image::decode_vector(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" width="256" height="1">
+              <linearGradient id="gradient"><stop/><stop offset="1" stop-color="white"/></linearGradient>
+              <rect width="256" height="1" fill="url(#gradient)"/>
+            </svg>"##,
+        )
+        .expect("gradient SVG");
+        let pixels = render_pixels(&document, 256, 1);
+        let midpoint = pixels[128 * 4];
+        assert!((120..=136).contains(&midpoint), "midpoint was {midpoint}");
     }
 }
