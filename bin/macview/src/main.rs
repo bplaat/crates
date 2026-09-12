@@ -730,6 +730,7 @@ unsafe fn enable_concurrent_document_reading() {
 
 define_class!(
     #[unsafe(super(NSObject))]
+    #[name = "MacViewAppDelegate"]
     struct AppDelegate;
 
     impl AppDelegate {
