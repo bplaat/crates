@@ -42,6 +42,7 @@ struct DocumentIvars {
     svg_view: RefCell<Option<Retained<Object>>>,
     content_version: Cell<Option<ContentVersion>>,
     browse_generation: Cell<u64>,
+    reload_generation: Cell<u64>,
 }
 
 impl DocumentIvars {
@@ -51,6 +52,7 @@ impl DocumentIvars {
             svg_view: RefCell::new(None),
             content_version: Cell::new(None),
             browse_generation: Cell::new(0),
+            reload_generation: Cell::new(0),
         }
     }
 }
@@ -153,25 +155,66 @@ impl Document {
             // SAFETY: NSFilePresenter keeps the document alive for this callback.
             unsafe { Retained::retain(this) }.expect("cannot retain a null document"),
         );
-        // NSDocument delivers file-presenter callbacks on a private queue, while reverting and
-        // replacing AppKit views must happen on the main queue.
+        // NSDocument delivers file-presenter callbacks on a private queue. Capture its URL on the
+        // main queue, then coordinate, read and decode the changed file on a worker.
         dispatch_async_main(move || {
-            // SAFETY: retained owns the document until this main-queue callback ends. NSDocument
-            // owns its URL and type, and revertToContentsOfURL:ofType:error: accepts a null error
-            // pointer when the caller handles failure without presenting an error.
+            // SAFETY: retained owns the document until start_presented_item_reload moves that
+            // ownership into the worker continuation.
             unsafe {
                 let this = retained.as_ptr_on_main();
-                let url: *mut Object = msg_send![this, fileURL];
-                let kind: *mut Object = msg_send![this, fileType];
-                if url.is_null() || kind.is_null() {
-                    return;
-                }
-                let _: Bool = msg_send![this,
-                    revertToContentsOfURL: url,
-                    ofType: kind,
-                    error: null_mut::<c_void>()
-                ];
+                let document = &*this.cast::<Document>();
+                document.start_presented_item_reload(retained);
             }
+        });
+    }
+
+    /// Reads and decodes a changed presented item without blocking AppKit's main thread.
+    unsafe fn start_presented_item_reload(&self, retained_document: MainQueueObject) {
+        // SAFETY: This runs on the main queue with a retained document.
+        let prepared = unsafe {
+            let this = self as *const Self as *mut Object;
+            let url: *mut Object = msg_send![this, fileURL];
+            if url.is_null() {
+                None
+            } else {
+                let generation = self.ivars().reload_generation.get().wrapping_add(1);
+                self.ivars().reload_generation.set(generation);
+                let url = SendableUrl(
+                    Retained::retain(url).expect("cannot retain a null presented item URL"),
+                );
+                Some((url, generation))
+            }
+        };
+        let Some((url, generation)) = prepared else {
+            return;
+        };
+
+        dispatch_async(move || {
+            // SAFETY: The URL remains retained throughout this coordinated load.
+            let result = unsafe { load_document(url.as_ptr()) };
+            dispatch_async_main(move || {
+                // SAFETY: The document and URL remain retained for this main-queue continuation.
+                unsafe {
+                    let this = retained_document.as_ptr_on_main();
+                    let document = &*this.cast::<Document>();
+                    if document.ivars().reload_generation.get() != generation {
+                        return;
+                    }
+                    let current_url: *mut Object = msg_send![this, fileURL];
+                    let same_url: Bool = msg_send![url.as_ptr(), isEqual: current_url];
+                    if !same_url.as_bool() {
+                        return;
+                    }
+                    let Ok((media, _, version)) = result else {
+                        return;
+                    };
+                    if document.ivars().content_version.get() == Some(version) {
+                        return;
+                    }
+                    document.install_media(media, version);
+                    document.refresh_windows(false);
+                }
+            });
         });
     }
 
@@ -185,8 +228,7 @@ impl Document {
         match unsafe { decode_document(data) } {
             Ok(media) => {
                 let refresh = self.ivars().media.borrow().is_some();
-                self.install_media(media);
-                self.ivars().content_version.set(Some(version));
+                self.install_media(media, version);
                 if refresh {
                     // NSDocument can read on its private file-presenter queue. AppKit views must
                     // be replaced on the main queue, and the retained document keeps the decoded
@@ -212,10 +254,10 @@ impl Document {
         }
     }
 
-    fn install_media(&self, media: DecodedMedia) {
+    fn install_media(&self, media: DecodedMedia, version: ContentVersion) {
         self.ivars().media.replace(Some(media));
         self.ivars().svg_view.replace(None);
-        self.ivars().content_version.set(None);
+        self.ivars().content_version.set(Some(version));
     }
 
     fn next_browse_generation(&self) -> u64 {
@@ -306,8 +348,8 @@ impl Document {
                     let url = url.as_ptr();
                     if document.is_current_browse(generation) {
                         match result {
-                            Ok((media, kind)) => {
-                                document.install_media(media);
+                            Ok((media, kind, version)) => {
+                                document.install_media(media, version);
                                 let _: () = msg_send![this, setFileURL: url];
                                 let _: () = msg_send![this, setFileType: kind.as_ptr()];
                                 let controller: *mut Object = msg_send![
@@ -567,7 +609,9 @@ fn decode_document_bytes(bytes: Vec<u8>) -> Result<DecodedMedia, String> {
 /// # Safety
 ///
 /// `url` must point to a retained `NSURL` for the duration of this call.
-unsafe fn load_document(url: *mut Object) -> Result<(DecodedMedia, OwnedString), String> {
+unsafe fn load_document(
+    url: *mut Object,
+) -> Result<(DecodedMedia, OwnedString, ContentVersion), String> {
     let result = std::sync::Arc::new(std::sync::Mutex::new(None));
     let accessor_result = result.clone();
     let accessor = RcBlock::new::<*mut Object>(move |coordinated_url| {
@@ -614,7 +658,9 @@ unsafe fn load_document(url: *mut Object) -> Result<(DecodedMedia, OwnedString),
 /// # Safety
 ///
 /// `url` must be a valid coordinated file URL for this call.
-unsafe fn decode_document_url(url: *mut Object) -> Result<(DecodedMedia, OwnedString), String> {
+unsafe fn decode_document_url(
+    url: *mut Object,
+) -> Result<(DecodedMedia, OwnedString, ContentVersion), String> {
     // SAFETY: The caller supplies a live coordinated file URL.
     let path = unsafe { url_path(url) }.ok_or_else(|| String::from("Could not read the image"))?;
     let bytes = std::fs::read(&path).map_err(|_| String::from("Could not read the image"))?;
@@ -624,7 +670,8 @@ unsafe fn decode_document_url(url: *mut Object) -> Result<(DecodedMedia, OwnedSt
         .ok_or_else(|| String::from("Unsupported image type"))?;
     // SAFETY: UTType and NSString are immutable and safe on this worker.
     let identifier = unsafe { type_identifier(extension) }?;
-    decode_document_bytes(bytes).map(|media| (media, identifier))
+    let version = content_version(&bytes);
+    decode_document_bytes(bytes).map(|media| (media, identifier, version))
 }
 
 /// Returns the type identifier MacView declares for an extension.
@@ -1117,7 +1164,7 @@ mod tests {
         autoreleasepool(|_| {
             let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rgb.qoi");
             // SAFETY: path names an existing image and the autorelease pool keeps its URL alive.
-            let (media, kind) = unsafe {
+            let (media, kind, _) = unsafe {
                 let url = file_url(&path);
                 load_document(url).expect("example image should load")
             };
@@ -1136,7 +1183,7 @@ mod tests {
         autoreleasepool(|_| {
             let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/dice.bmp");
             // SAFETY: path names an existing image and the autorelease pool keeps its URL alive.
-            let (media, _) = unsafe {
+            let (media, _, _) = unsafe {
                 let url = file_url(&path);
                 load_document(url).expect("BMP example should load")
             };
