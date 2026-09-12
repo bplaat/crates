@@ -7,7 +7,7 @@
 //! Complete-file raster decoding to straight-alpha RGBA8 frames.
 //!
 //! Supports QOI, 8-bit sequential/progressive JPEG, PNG/APNG up to 8 bits per
-//! channel, GIF and common BMP variants. Decoding is synchronous and does not
+//! channel, GIF, common BMP variants and ICO. Decoding is synchronous and does not
 //! publish intermediate progressive scans. ICC profiles are not applied.
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
@@ -16,6 +16,8 @@ use std::time::Duration;
 mod bmp;
 #[cfg(feature = "gif")]
 mod gif;
+#[cfg(feature = "ico")]
+mod ico;
 #[cfg(feature = "jpeg")]
 mod jpeg;
 #[cfg(feature = "png")]
@@ -41,6 +43,9 @@ pub enum Format {
     /// Windows or OS/2 bitmap.
     #[cfg(feature = "bmp")]
     Bmp,
+    /// Windows icon.
+    #[cfg(feature = "ico")]
+    Ico,
 }
 
 /// The interpretation of decoded color channels. Alpha is always linear.
@@ -199,6 +204,10 @@ pub fn decode(_data: &[u8]) -> Result<Image> {
     #[cfg(feature = "bmp")]
     if _data.starts_with(b"BM") {
         return bmp::decode(_data);
+    }
+    #[cfg(feature = "ico")]
+    if _data.starts_with(b"\0\0\x01\0") {
+        return ico::decode(_data);
     }
     Err(DecodeError::InvalidMagic)
 }
@@ -595,6 +604,7 @@ mod tests {
                 &b"\xff\xd8"[..],
                 b"GIF89a",
                 b"BM",
+                b"\0\0\x01\0",
                 b"qoif",
                 b"\x89PNG\r\n\x1a\n",
             ] {

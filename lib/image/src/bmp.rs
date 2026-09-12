@@ -122,6 +122,8 @@ struct BmpHeader {
     top_down: bool,
     depth: u16,
     compression: Compression,
+    #[cfg(feature = "ico")]
+    image_size: usize,
     colors: usize,
     masks: ChannelMasks,
     pixel_len: usize,
@@ -129,18 +131,25 @@ struct BmpHeader {
 
 impl BmpHeader {
     fn parse<'a>(data: &'a [u8]) -> Result<(Self, Reader<'a>)> {
-        // CORE and INFO-family headers arrange palettes and masks differently.
         let mut r = Reader::new(data);
         r.take(2)?;
         let file_size = r.le32()? as usize;
         r.take(4)?;
         let pixel_offset = r.le32()? as usize;
+        let mut header = Self::parse_dib(&mut r, false, 0)?;
+        header.file_size = file_size;
+        header.pixel_offset = pixel_offset;
+        Ok((header, r))
+    }
+
+    fn parse_dib(r: &mut Reader<'_>, icon: bool, icon_colors: usize) -> Result<Self> {
+        // CORE and INFO-family headers arrange palettes and masks differently.
         let dib_len = r.le32()? as usize;
         if !matches!(dib_len, 12 | 40 | 52 | 56 | 108 | 124) {
             return Err(DecodeError::UnsupportedFeature);
         }
         let mut h = Reader::new(r.take(dib_len - 4)?);
-        let (width, height, top_down) = if dib_len == 12 {
+        let (width, mut height, top_down) = if dib_len == 12 {
             (u32::from(h.le16()?), u32::from(h.le16()?), false)
         } else {
             let w = h.le32()? as i32;
@@ -150,6 +159,12 @@ impl BmpHeader {
             }
             (w as u32, signed_h.unsigned_abs(), signed_h < 0)
         };
+        if icon {
+            if height % 2 != 0 {
+                return Err(DecodeError::InvalidHeader);
+            }
+            height /= 2;
+        }
         let pixel_len = pixel_len(width, height)?;
         if h.le16()? != 1 {
             return Err(DecodeError::InvalidHeader);
@@ -159,12 +174,17 @@ impl BmpHeader {
             return Err(DecodeError::UnsupportedFeature);
         }
         let mut compression = Compression::Rgb;
+        let mut _image_size = 0;
         let mut colors = 0;
         if dib_len != 12 {
             compression = Compression::try_from(h.le32()?)?;
-            h.take(12)?; // Image byte count and pixels per meter.
+            _image_size = h.le32()? as usize;
+            h.take(8)?; // Pixels per meter.
             colors = h.le32()? as usize;
             h.le32()?;
+        }
+        if icon && colors == 0 && icon_colors != 0 {
+            colors = icon_colors;
         }
         if (compression == Compression::Rle8 && depth != 8)
             || (compression == Compression::Rle4 && depth != 4)
@@ -176,23 +196,25 @@ impl BmpHeader {
         {
             return Err(DecodeError::InvalidHeader);
         }
-        let masks = ChannelMasks::read(depth, compression, dib_len, &mut h, &mut r)?;
-        Ok((
-            Self {
-                file_size,
-                pixel_offset,
-                dib_len,
-                width,
-                height,
-                top_down,
-                depth,
-                compression,
-                colors,
-                masks,
-                pixel_len,
-            },
-            r,
-        ))
+        let mut masks = ChannelMasks::read(depth, compression, dib_len, &mut h, r)?;
+        if icon && depth == 32 && compression == Compression::Rgb {
+            masks.0[3] = 0xff00_0000;
+        }
+        Ok(Self {
+            file_size: 0,
+            pixel_offset: 0,
+            dib_len,
+            width,
+            height,
+            top_down,
+            depth,
+            compression,
+            #[cfg(feature = "ico")]
+            image_size: _image_size,
+            colors,
+            masks,
+            pixel_len,
+        })
     }
 }
 
@@ -212,7 +234,7 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
         header.file_size
     };
     let mut budget = Budget::default();
-    let pixels = decode_pixels(
+    let (pixels, _) = decode_pixels(
         &data[header.pixel_offset..end],
         &header,
         &palette[..palette_len],
@@ -220,6 +242,51 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
     )?;
     Ok(Image::still(
         Format::Bmp,
+        header.width,
+        header.height,
+        pixels,
+    ))
+}
+
+#[cfg(feature = "ico")]
+pub(super) fn decode_icon(
+    data: &[u8],
+    directory_width: u32,
+    directory_height: u32,
+    directory_colors: usize,
+) -> Result<Image> {
+    let mut r = Reader::new(data);
+    let header = BmpHeader::parse_dib(&mut r, true, directory_colors)?;
+    if header.width != directory_width || header.height != directory_height {
+        return Err(DecodeError::InvalidHeader);
+    }
+    let (palette, palette_len) = read_palette(&mut r, &header)?;
+    let pixel_start = r.pos;
+    let mut budget = Budget::default();
+    let (mut pixels, consumed) = decode_pixels(
+        &data[pixel_start..],
+        &header,
+        &palette[..palette_len],
+        &mut budget,
+    )?;
+    let xor_len = if header.compression.is_rle() && header.image_size != 0 {
+        if header.image_size < consumed {
+            return Err(DecodeError::InvalidData);
+        }
+        header.image_size
+    } else {
+        consumed
+    };
+    let mask = data
+        .get(
+            pixel_start
+                .checked_add(xor_len)
+                .ok_or(DecodeError::InvalidData)?..,
+        )
+        .ok_or(DecodeError::InvalidData)?;
+    apply_icon_mask(mask, &header, &mut pixels)?;
+    Ok(Image::still(
+        Format::Ico,
         header.width,
         header.height,
         pixels,
@@ -253,7 +320,7 @@ fn decode_pixels(
     header: &BmpHeader,
     palette: &[[u8; 4]],
     budget: &mut Budget,
-) -> Result<Vec<u8>> {
+) -> Result<(Vec<u8>, usize)> {
     let mut r = Reader::new(data);
     let mut pixels = budget.zeroed(header.pixel_len)?;
     if header.compression.is_rle() {
@@ -325,7 +392,44 @@ fn decode_pixels(
             }
         }
     }
-    Ok(pixels)
+    Ok((pixels, r.pos))
+}
+
+#[cfg(feature = "ico")]
+fn apply_icon_mask(mask: &[u8], header: &BmpHeader, pixels: &mut [u8]) -> Result<()> {
+    let has_alpha = header.depth == 32
+        && header.masks.0[3] != 0
+        && pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0);
+    if header.depth == 32 && !has_alpha {
+        for pixel in pixels.as_chunks_mut::<4>().0 {
+            pixel[3] = 255;
+        }
+    }
+    if has_alpha {
+        return Ok(());
+    }
+    let stride = usize::try_from(u64::from(header.width).div_ceil(32) * 4)
+        .map_err(|_| DecodeError::ImageTooLarge)?;
+    let len = stride
+        .checked_mul(header.height as usize)
+        .ok_or(DecodeError::ImageTooLarge)?;
+    if mask.len() < len {
+        return Ok(());
+    }
+    for source_y in 0..header.height as usize {
+        let row = &mask[source_y * stride..(source_y + 1) * stride];
+        let y = if header.top_down {
+            source_y
+        } else {
+            header.height as usize - 1 - source_y
+        };
+        for x in 0..header.width as usize {
+            if row[x / 8] & (0x80 >> (x % 8)) != 0 {
+                pixels[(y * header.width as usize + x) * 4 + 3] = 0;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn rle(

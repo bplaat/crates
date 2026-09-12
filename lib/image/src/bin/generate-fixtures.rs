@@ -14,10 +14,20 @@ use std::{env, fs};
 
 fn main() {
     require("magick");
-    require("cjpeg");
 
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let fixtures = crate_dir.join("tests/fixtures");
+    let ico_only = match env::args().nth(1).as_deref() {
+        None => false,
+        Some("--ico-only") => true,
+        Some(argument) => panic!("unknown argument: {argument}"),
+    };
+    if ico_only {
+        write_ico_fixtures(&crate_dir, &fixtures);
+        return;
+    }
+
+    require("cjpeg");
     let work = TemporaryDirectory::new();
     let source = work.path.join("source.ppm");
     write_source(&source, 19, 13);
@@ -208,6 +218,7 @@ fn main() {
     convert(&large, &[], &fixtures.join("large.gif"));
     reference(&fixtures, "large.gif");
     write_png_fixtures(&fixtures);
+    write_ico_fixtures(&crate_dir, &fixtures);
 }
 
 fn require(program: &str) {
@@ -241,6 +252,53 @@ fn reference(fixtures: &Path, name: &str) {
         .arg(input)
         .args(["-colorspace", "sRGB", "-alpha", "on", "-depth", "8"])
         .arg(raw_path(Path::new(&output))));
+}
+
+fn reference_ico(fixtures: &Path, name: &str, frame: usize) {
+    let input = format!("{}[{frame}]", fixtures.join(name).display());
+    run(Command::new("magick")
+        .arg(input)
+        .args(["-colorspace", "sRGB", "-alpha", "on", "-depth", "8"])
+        .arg(raw_path(&fixtures.join(format!("{name}.rgba")))));
+}
+
+fn write_ico_fixtures(crate_dir: &Path, fixtures: &Path) {
+    let source = fixtures.join("rgb.png");
+    run(Command::new("magick")
+        .arg("(")
+        .arg(&source)
+        .args(["-resize", "16x16!"])
+        .arg(")")
+        .arg("(")
+        .arg(&source)
+        .args(["-resize", "32x32!"])
+        .arg(")")
+        .arg(fixtures.join("dib.ico")));
+    reference_ico(fixtures, "dib.ico", 1);
+
+    convert(
+        &source,
+        &["-colors", "16", "-type", "Palette"],
+        &fixtures.join("palette.ico"),
+    );
+    reference_ico(fixtures, "palette.ico", 0);
+
+    let png = fs::read(&source).expect("read PNG fixture");
+    let mut icon = vec![0, 0, 1, 0, 1, 0, 19, 13, 0, 0];
+    icon.extend_from_slice(&1u16.to_le_bytes());
+    icon.extend_from_slice(&32u16.to_le_bytes());
+    icon.extend_from_slice(&(png.len() as u32).to_le_bytes());
+    icon.extend_from_slice(&22u32.to_le_bytes());
+    icon.extend_from_slice(&png);
+    fs::write(fixtures.join("png.ico"), icon).expect("write PNG icon fixture");
+    fs::copy(fixtures.join("rgb.png.rgba"), fixtures.join("png.ico.rgba"))
+        .expect("write PNG icon reference");
+
+    fs::copy(
+        fixtures.join("dib.ico"),
+        crate_dir.join("../macview-appkit/tests/fixtures/dib.ico"),
+    )
+    .expect("write MacView icon fixture");
 }
 
 fn raw_path(path: &Path) -> OsString {

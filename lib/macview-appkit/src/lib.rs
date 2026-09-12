@@ -503,6 +503,7 @@ mod tests {
             include_bytes!("../tests/fixtures/rgb.png"),
             include_bytes!("../tests/fixtures/progressive.jpg"),
             include_bytes!("../tests/fixtures/rgb.bmp"),
+            include_bytes!("../tests/fixtures/dib.ico"),
             include_bytes!("../tests/fixtures/rgb.qoi"),
             include_bytes!("../tests/fixtures/16bit.png"),
             include_bytes!("../tests/fixtures/16bit-apng.png"),
