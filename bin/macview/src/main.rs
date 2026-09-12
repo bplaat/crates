@@ -26,8 +26,8 @@ use checkerboard::create_checkerboard_view;
 use headers::*;
 use macview_appkit::{
     Image, NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, OwnedString, Point, Rect, Size,
-    create_image_view, create_tinyvg_view, decode_image, decode_image_data, decode_tinyvg,
-    dispatch_async, dispatch_async_main, make_error, ns_string, preferred_content_size,
+    create_image_view, decode_image, decode_image_data, decode_tinyvg_image, dispatch_async,
+    dispatch_async_main, is_tinyvg, make_error, ns_string, preferred_content_size,
 };
 use objc2::ffi::{class_addMethod, object_getClass};
 use objc2::rc::{Allocated, Retained, autoreleasepool};
@@ -65,7 +65,6 @@ struct ContentVersion {
 
 enum DecodedMedia {
     Image(Image),
-    TinyVg(std::sync::Arc<tinyvg::Document>),
     Svg(Box<Svg>),
 }
 
@@ -373,10 +372,6 @@ impl Document {
     /// Returns the natural size of the loaded media, or `None` when the document is empty.
     fn media_size(&self) -> Option<Size> {
         match self.ivars().media.borrow().as_ref()? {
-            DecodedMedia::TinyVg(document) => Some(Size {
-                width: document.size.width,
-                height: document.size.height,
-            }),
             DecodedMedia::Svg(document) => Some(document.size),
             DecodedMedia::Image(image) => Some(image.size()),
         }
@@ -391,7 +386,6 @@ impl Document {
             .as_ref()
             .expect("cannot create a view without loaded media")
         {
-            DecodedMedia::TinyVg(document) => create_tinyvg_view(frame, document.clone()),
             DecodedMedia::Svg(document) => {
                 let view = create_svg_view(frame, document);
                 self.ivars().svg_view.replace(Some(view.clone()));
@@ -408,11 +402,7 @@ impl Document {
     fn title_size(&self, media_size: Size) -> Size {
         let media = self.ivars().media.borrow();
         if let Some(DecodedMedia::Image(image)) = media.as_ref() {
-            if let Some(pixel_size) = image.pixel_size() {
-                return pixel_size;
-            }
-            // SAFETY: The ivar owns a live NSImage that keeps its representations alive.
-            unsafe { image_pixel_size(image.as_ptr(), media_size) }
+            image.pixel_size().unwrap_or(media_size)
         } else {
             media_size
         }
@@ -549,16 +539,14 @@ impl Document {
 unsafe fn decode_document(data: *mut Object) -> Result<DecodedMedia, String> {
     // SAFETY: NSData keeps its immutable byte buffer alive for this call.
     let bytes = unsafe { document_data_bytes(data) };
-    if tinyvg::is_tinyvg(bytes)
-        && let Ok(document) = decode_tinyvg(bytes)
-    {
-        return Ok(DecodedMedia::TinyVg(std::sync::Arc::new(document)));
+    if is_tinyvg(bytes) {
+        return decode_tinyvg_image(bytes).map(DecodedMedia::Image);
     }
     if is_svg(bytes) {
         return Ok(DecodedMedia::Svg(Box::new(parse_svg(bytes))));
     }
 
-    // SAFETY: data remains live and is retained when AppKit needs it after this call.
+    // SAFETY: data remains live for the initializer, which owns what it needs after this call.
     unsafe { decode_image_data(data) }.map(DecodedMedia::Image)
 }
 
@@ -593,10 +581,8 @@ fn content_version(bytes: &[u8]) -> ContentVersion {
 
 /// Decodes bytes read by Rust without creating views or touching window state.
 fn decode_document_bytes(bytes: Vec<u8>) -> Result<DecodedMedia, String> {
-    if tinyvg::is_tinyvg(&bytes)
-        && let Ok(document) = decode_tinyvg(&bytes)
-    {
-        return Ok(DecodedMedia::TinyVg(std::sync::Arc::new(document)));
+    if is_tinyvg(&bytes) {
+        return decode_tinyvg_image(&bytes).map(DecodedMedia::Image);
     }
     if is_svg(&bytes) {
         return Ok(DecodedMedia::Svg(Box::new(parse_svg(&bytes))));
@@ -771,38 +757,6 @@ impl AppDelegate {
             let application: *mut Object = msg_send![notification, object];
             let _: () = msg_send![application, activateIgnoringOtherApps: Bool::YES];
         }
-    }
-}
-
-/// Returns the pixel dimensions of the largest representation of an image.
-///
-/// An `NSImage` reports its size in points, which is smaller than the stored pixels for images
-/// that carry a resolution above 72 dpi, so the title shows the representation sizes instead.
-///
-/// # Safety
-///
-/// `image` must point to a valid `NSImage` for the duration of this call.
-unsafe fn image_pixel_size(image: *mut Object, fallback: Size) -> Size {
-    // SAFETY: The caller supplies a live NSImage that owns its representations.
-    unsafe {
-        let representations: *mut Object = msg_send![image, representations];
-        let count: usize = msg_send![representations, count];
-        let mut size = Size {
-            width: 0.0,
-            height: 0.0,
-        };
-        for index in 0..count {
-            let representation: *mut Object = msg_send![representations, objectAtIndex: index];
-            let width: isize = msg_send![representation, pixelsWide];
-            let height: isize = msg_send![representation, pixelsHigh];
-            if width > 0 && height > 0 && (width * height) as f64 > size.width * size.height {
-                size = Size {
-                    width: width as f64,
-                    height: height as f64,
-                };
-            }
-        }
-        if size.width > 0.0 { size } else { fallback }
     }
 }
 

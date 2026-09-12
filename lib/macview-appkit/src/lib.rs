@@ -12,22 +12,21 @@ use std::ffi::{CStr, CString, OsStr, c_char, c_void};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::ptr::null;
-use std::sync::Arc;
 
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send, sel};
 
-mod animation;
 mod headers;
-mod tinyvg_renderer;
+mod tinyvg;
 
 use headers::*;
 pub use headers::{
     __CFConstantStringClassReference, CFConstString, CGContextFillRect, CGContextSetRGBFillColor,
     NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, ns_string,
 };
-pub use tinyvg_renderer::{create_tinyvg_view, fill_white_background, render_tinyvg};
+use tinyvg::create_tinyvg_image;
+pub use tinyvg::fill_white_background;
 
 /// An owned immutable `NSString` that can be transferred between queues.
 pub struct OwnedString {
@@ -76,14 +75,7 @@ pub struct Image {
     image: Retained<Object>,
     size: Size,
     pixel_size: Option<Size>,
-    _backing: ImageBacking,
-    animation: Option<animation::Animation>,
-}
-
-enum ImageBacking {
-    None,
-    Bytes { _bytes: Box<[u8]> },
-    Data { _data: Retained<Object> },
+    is_tinyvg: bool,
 }
 
 impl Image {
@@ -97,7 +89,7 @@ impl Image {
         self.size
     }
 
-    /// Returns the exact pixel dimensions when MacView decoded the image itself.
+    /// Returns the dimensions of the largest bitmap representation, or `None` for vector images.
     pub const fn pixel_size(&self) -> Option<Size> {
         self.pixel_size
     }
@@ -107,27 +99,6 @@ impl Image {
 // not access the image from both queues at once, and drawing remains on the queue chosen by
 // AppKit or Quick Look.
 unsafe impl Send for Image {}
-
-/// An image in one of the formats the viewer and its Quick Look extensions display.
-pub enum Media {
-    /// An image AppKit can draw, which covers QOI, SVG and every built-in format.
-    Image(Image),
-    /// A parsed TinyVG document.
-    TinyVg(Arc<tinyvg::Document>),
-}
-
-impl Media {
-    /// Returns the natural size of the image in points.
-    pub fn size(&self) -> Size {
-        match self {
-            Self::Image(image) => image.size,
-            Self::TinyVg(document) => Size {
-                width: document.size.width,
-                height: document.size.height,
-            },
-        }
-    }
-}
 
 /// The size media is shown at, which is the media itself when it lies between these bounds.
 const MINIMUM_CONTENT_SIZE: Size = Size {
@@ -207,7 +178,7 @@ where
 /// # Safety
 ///
 /// `url` must point to a valid `NSURL` for the duration of this call.
-pub unsafe fn load_media(url: *mut Object) -> Result<Media, String> {
+pub unsafe fn load_media(url: *mut Object) -> Result<Image, String> {
     // SAFETY: url is valid. Quick Look passes security-scoped URLs, and ordinary URLs simply
     // return false without changing their access state.
     let scoped: Bool = unsafe { msg_send![url, startAccessingSecurityScopedResource] };
@@ -226,13 +197,16 @@ pub unsafe fn load_media(url: *mut Object) -> Result<Media, String> {
     result
 }
 
-fn decode_media(bytes: Vec<u8>) -> Result<Media, String> {
-    if tinyvg::is_tinyvg(&bytes)
-        && let Ok(document) = decode_tinyvg(&bytes)
-    {
-        return Ok(Media::TinyVg(Arc::new(document)));
+fn decode_media(bytes: Vec<u8>) -> Result<Image, String> {
+    if is_tinyvg(&bytes) {
+        return decode_tinyvg_image(&bytes);
     }
-    decode_image(bytes).map(Media::Image)
+    decode_image(bytes)
+}
+
+/// Returns whether bytes start with a supported binary or textual TinyVG document.
+pub fn is_tinyvg(bytes: &[u8]) -> bool {
+    ::tinyvg::is_tinyvg(bytes)
 }
 
 /// Returns the Rust path represented by a file URL.
@@ -251,9 +225,15 @@ unsafe fn file_path(url: *mut Object) -> Option<PathBuf> {
     Some(PathBuf::from(OsStr::from_bytes(bytes)))
 }
 
-/// Parses a TinyVG document from bytes.
-pub fn decode_tinyvg(bytes: &[u8]) -> Result<tinyvg::Document, String> {
-    tinyvg::parse_auto(bytes).map_err(|error| error.to_string())
+/// Parses a TinyVG document into an `NSImage` with a vector image representation.
+pub fn decode_tinyvg_image(bytes: &[u8]) -> Result<Image, String> {
+    let document = ::tinyvg::parse_auto(bytes).map_err(|error| error.to_string())?;
+    let image = create_tinyvg_image(document);
+    // SAFETY: create_tinyvg_image returns an owned, initialized NSImage whose representation owns
+    // the parsed document.
+    let mut image = unsafe { finish_image(image) };
+    image.is_tinyvg = true;
+    Ok(image)
 }
 
 /// Tries the raster decoders, then AppKit, using an owned Rust buffer.
@@ -262,21 +242,20 @@ pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
         return Ok(image);
     }
 
-    let bytes = bytes.into_boxed_slice();
-    // SAFETY: NSData borrows the stable boxed allocation, which ImageBacking keeps alive until
-    // after NSImage is released. NSData must not free Rust's allocation.
+    // NSData must own the bytes because callers such as Quick Look retain the NSImage in a view,
+    // then drop this Rust wrapper. A no-copy NSData backed only by the wrapper would dangle.
+    // SAFETY: NSData copies the byte slice during this call.
     let data: *mut Object = unsafe {
         msg_send![class!(NSData),
-            dataWithBytesNoCopy: bytes.as_ptr().cast::<c_void>(),
-            length: bytes.len(),
-            freeWhenDone: Bool::NO
+            dataWithBytes: bytes.as_ptr().cast::<c_void>(),
+            length: bytes.len()
         ]
     };
-    // SAFETY: data remains valid through the owned backing buffer.
-    unsafe { decode_native_image(data, ImageBacking::Bytes { _bytes: bytes }) }
+    // SAFETY: NSData owns its copied bytes and remains valid for this call.
+    unsafe { decode_native_image(data) }
 }
 
-/// Tries the raster decoders, then AppKit, retaining native data for lazy fallback decoding.
+/// Tries the raster decoders, then AppKit, using data supplied by AppKit.
 ///
 /// # Safety
 ///
@@ -296,14 +275,12 @@ pub unsafe fn decode_image_data(data: *mut Object) -> Result<Image, String> {
     if let Some(image) = decode_custom_image(bytes) {
         return Ok(image);
     }
-    // SAFETY: Retaining data keeps lazy AppKit access valid for the image lifetime.
-    let retained = unsafe { Retained::retain(data) }.expect("cannot retain a null NSData");
-    // SAFETY: data is live and retained as the image backing.
-    unsafe { decode_native_image(data, ImageBacking::Data { _data: retained }) }
+    // SAFETY: NSImage's data initializer takes responsibility for any data it needs after return.
+    unsafe { decode_native_image(data) }
 }
 
-unsafe fn decode_native_image(data: *mut Object, backing: ImageBacking) -> Result<Image, String> {
-    // SAFETY: data is valid and its backing outlives the returned image.
+unsafe fn decode_native_image(data: *mut Object) -> Result<Image, String> {
+    // SAFETY: data is valid for the initializer call.
     let image: Option<Retained<Object>> = unsafe {
         let image: Allocated<Object> = msg_send![class!(NSImage), alloc];
         msg_send![image, initWithData: data]
@@ -312,43 +289,54 @@ unsafe fn decode_native_image(data: *mut Object, backing: ImageBacking) -> Resul
         return Err(String::from("Unsupported or invalid image"));
     };
     // SAFETY: image is owned and initialized.
-    unsafe { finish_image(image, backing) }
+    Ok(unsafe { finish_image(image) })
 }
 
-unsafe fn finish_image(image: Retained<Object>, backing: ImageBacking) -> Result<Image, String> {
+unsafe fn finish_image(image: Retained<Object>) -> Image {
     // SAFETY: image is a valid, initialized NSImage.
     let size = unsafe { msg_send![&*image, size] };
     // SAFETY: image owns its representations. Asking representations that expose CGImage for it
     // realizes their existing pixel storage on this worker without creating an application-owned
     // copy. Other representation types are left lazy.
-    unsafe {
+    let pixel_size = unsafe {
         let representations: *mut Object = msg_send![&*image, representations];
         let count: usize = msg_send![representations, count];
+        let mut pixel_size = None;
         for index in 0..count {
             let representation: *mut Object = msg_send![representations, objectAtIndex: index];
+            let width: isize = msg_send![representation, pixelsWide];
+            let height: isize = msg_send![representation, pixelsHigh];
+            if width > 0 && height > 0 {
+                let candidate = Size {
+                    width: width as f64,
+                    height: height as f64,
+                };
+                if pixel_size.is_none_or(|current: Size| {
+                    candidate.width * candidate.height > current.width * current.height
+                }) {
+                    pixel_size = Some(candidate);
+                }
+            }
             let exposes_cg_image: Bool =
                 msg_send![representation, respondsToSelector: sel!(CGImage)];
             if exposes_cg_image.as_bool() {
                 let _: *const c_void = msg_send![representation, CGImage];
             }
         }
-    }
-    Ok(Image {
+        pixel_size
+    };
+    Image {
         image,
         size,
-        pixel_size: None,
-        _backing: backing,
-        animation: None,
-    })
+        pixel_size,
+        is_tinyvg: false,
+    }
 }
 
-/// Creates an owned image view, playing decoded or native animations.
+/// Creates an owned image view, letting AppKit play animated image representations.
 ///
 /// Call on the main thread. The view retains all images it needs.
 pub fn create_image_view(frame: Rect, image: &Image) -> Retained<Object> {
-    if let Some(animation) = &image.animation {
-        return animation::create_view(frame, animation.clone());
-    }
     // SAFETY: The wrapper owns a live NSImage; NSImageView retains it.
     unsafe {
         let view: Allocated<Object> = msg_send![class!(NSImageView), alloc];
@@ -356,38 +344,35 @@ pub fn create_image_view(frame: Rect, image: &Image) -> Retained<Object> {
         let _: () = msg_send![&*view, setImage: image.as_ptr()];
         let _: () = msg_send![&*view, setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN];
         let _: () = msg_send![&*view, setAnimates: Bool::YES];
+        if image.is_tinyvg {
+            let _: () = msg_send![&*view, setCanDrawConcurrently: Bool::YES];
+        }
         view
     }
 }
 
 fn decode_custom_image(bytes: &[u8]) -> Option<Image> {
     let decoded = image::decode(bytes).ok()?;
-    let mut frames = Vec::new();
-    frames.try_reserve_exact(decoded.frames().len()).ok()?;
-    for frame in decoded.frames() {
-        frames.push(animation::NativeFrame {
-            image: make_image(
-                decoded.width(),
-                decoded.height(),
-                decoded.color_space(),
-                frame.pixels(),
-            )?,
-            delay: frame.delay(),
-        });
+    // NSImageView natively plays animated NSBitmapImageRep objects and preserves their frame
+    // durations and loop count. Leave animations encoded so AppKit can create that representation.
+    if decoded.frames().len() != 1 {
+        return None;
     }
-    let first = frames.first()?.image.clone();
-    // SAFETY: Each frame was constructed as an owned, initialized NSImage.
-    let mut image = unsafe { finish_image(first, ImageBacking::None) }.ok()?;
+    let frame = &decoded.frames()[0];
+    let native_image = make_image(
+        decoded.width(),
+        decoded.height(),
+        decoded.color_space(),
+        frame.pixels(),
+    )?;
+    // SAFETY: The frame was constructed as an owned, initialized NSImage.
+    // NSImage may expose the CGImage representation in backing pixels on a Retina display, so
+    // keep the decoder's format dimensions as the authoritative value.
+    let mut image = unsafe { finish_image(native_image) };
     image.pixel_size = Some(Size {
         width: f64::from(decoded.width()),
         height: f64::from(decoded.height()),
     });
-    if frames.len() > 1 {
-        image.animation = Some(animation::Animation {
-            frames,
-            loop_count: decoded.loop_count(),
-        });
-    }
     Some(image)
 }
 
@@ -513,67 +498,88 @@ mod tests {
     }
 
     #[test]
-    fn decodes_an_appkit_image_format() {
-        const PNG: &[u8] = &[
-            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
-            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00,
-            0x00, 0xb5, 0x1c, 0x0c, 0x02, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41, 0x54, 0x78,
-            0xda, 0x63, 0x64, 0xf8, 0x0f, 0x00, 0x01, 0x05, 0x01, 0x01, 0x27, 0x18, 0xe3, 0x66,
-            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    fn supported_rasters_decode_from_owned_bytes_and_nsdata() {
+        let cases: &[&[u8]] = &[
+            include_bytes!("../tests/fixtures/rgb.png"),
+            include_bytes!("../tests/fixtures/progressive.jpg"),
+            include_bytes!("../tests/fixtures/rgb.bmp"),
+            include_bytes!("../tests/fixtures/rgb.qoi"),
+            include_bytes!("../tests/fixtures/16bit.png"),
+            include_bytes!("../tests/fixtures/16bit-apng.png"),
+            include_bytes!("../tests/fixtures/native.tiff"),
         ];
-
-        autoreleasepool(|_| {
-            let image = decode_image(PNG.to_vec()).expect("PNG should be decoded by AppKit");
-            assert_eq!(image.size().width, 1.0);
-            assert_eq!(image.size().height, 1.0);
-        });
-    }
-
-    #[test]
-    fn custom_formats_and_native_fallback_use_both_buffer_entrypoints() {
-        let cases: &[(&[u8], bool)] = &[
-            (include_bytes!("../tests/fixtures/rgb.png"), true),
-            (include_bytes!("../tests/fixtures/progressive.jpg"), true),
-            (include_bytes!("../tests/fixtures/rgb.bmp"), true),
-            (
-                include_bytes!("../../../bin/macview/examples/dice.bmp"),
-                true,
-            ),
-            (include_bytes!("../tests/fixtures/rgb.qoi"), true),
-            (include_bytes!("../tests/fixtures/16bit.png"), false),
-            (include_bytes!("../tests/fixtures/16bit-apng.png"), false),
-            (include_bytes!("../tests/fixtures/native.tiff"), false),
-        ];
-        for &(bytes, custom) in cases {
+        for &bytes in cases {
             autoreleasepool(|_| {
-                assert_eq!(decode_custom_image(bytes).is_some(), custom);
                 let image = decode_image(bytes.to_vec()).expect("owned bytes should decode");
-                assert_eq!(matches!(image._backing, ImageBacking::None), custom);
+                assert!(image.pixel_size().is_some());
                 // SAFETY: NSData copies the fixture and stays live through this pool.
                 let image = unsafe {
                     let data: *mut Object = msg_send![class!(NSData), dataWithBytes: bytes.as_ptr().cast::<c_void>(), length: bytes.len()];
                     decode_image_data(data).expect("native data should decode")
                 };
-                assert_eq!(matches!(image._backing, ImageBacking::None), custom);
+                assert!(image.pixel_size().is_some());
                 assert!(image.size.width > 0.0 && image.size.height > 0.0);
             });
         }
     }
 
     #[test]
-    fn decoded_animation_keeps_frames_timings_and_first_frame_for_thumbnails() {
+    fn tinyvg_uses_a_concurrent_image_view() {
+        autoreleasepool(|_| {
+            let image =
+                decode_tinyvg_image(include_bytes!("../../../bin/macview/examples/tiger.tvg"))
+                    .expect("Tiger should decode");
+            let view = create_image_view(
+                Rect {
+                    origin: Point { x: 0.0, y: 0.0 },
+                    size: image.size(),
+                },
+                &image,
+            );
+            // SAFETY: The view remains owned for this autorelease pool.
+            unsafe {
+                let concurrent: Bool = msg_send![&*view, canDrawConcurrently];
+                assert!(concurrent.as_bool());
+            }
+        });
+    }
+
+    #[test]
+    fn native_images_keep_their_animated_representations() {
         for bytes in [
             &include_bytes!("../tests/fixtures/animated.gif")[..],
             &include_bytes!("../tests/fixtures/animated.png")[..],
         ] {
             autoreleasepool(|_| {
                 let image = decode_image(bytes.to_vec()).expect("animation should decode");
-                let animation = image.animation.as_ref().expect("custom animation");
-                assert_eq!(animation.frames.len(), 2);
-                assert_eq!(animation.loop_count, 3);
-                assert_eq!(animation.frames[0].delay, Duration::from_millis(70));
-                assert_eq!(animation.frames[1].delay, Duration::from_millis(130));
-                assert_eq!(image.as_ptr(), animation.frames[0].image.as_ptr());
+                assert!(image.pixel_size().is_some());
+                // SAFETY: image owns its representations and the selected representation is an
+                // NSBitmapImageRep, whose animation properties use NSNumber values.
+                unsafe {
+                    let representations: *mut Object = msg_send![image.as_ptr(), representations];
+                    let count: usize = msg_send![representations, count];
+                    let mut animated = None;
+                    for index in 0..count {
+                        let representation: *mut Object =
+                            msg_send![representations, objectAtIndex: index];
+                        let bitmap: Bool = msg_send![representation,
+                            respondsToSelector: sel!(valueForProperty:)
+                        ];
+                        if !bitmap.as_bool() {
+                            continue;
+                        }
+                        let frames: *mut Object = msg_send![representation,
+                            valueForProperty: ns_string("NSImageFrameCount")
+                        ];
+                        if !frames.is_null() {
+                            animated = Some((representation, frames));
+                            break;
+                        }
+                    }
+                    let (_, frames) = animated.expect("animated bitmap image rep");
+                    let frame_count: usize = msg_send![frames, unsignedIntegerValue];
+                    assert_eq!(frame_count, 2);
+                }
             });
         }
     }

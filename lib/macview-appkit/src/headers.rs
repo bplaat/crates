@@ -21,6 +21,7 @@ pub(crate) const GRADIENT_DRAWS_BEFORE_START: u32 = 1;
 pub(crate) const LINE_CAP_ROUND: i32 = 1;
 pub(crate) const LINE_JOIN_ROUND: i32 = 1;
 pub(crate) const NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN: u64 = 3;
+pub(crate) const NS_IMAGE_CACHE_NEVER: u64 = 3;
 pub(crate) const NS_UTF8_STRING_ENCODING: u64 = 4;
 pub(crate) const QOS_CLASS_USER_INITIATED: isize = 0x19;
 
@@ -180,6 +181,7 @@ unsafe extern "C" {
         x: f64,
         y: f64,
     );
+    pub(crate) fn CGContextAddPath(context: *mut c_void, path: *const c_void);
     pub(crate) fn CGContextAddLineToPoint(context: *mut c_void, x: f64, y: f64);
     pub(crate) fn CGContextAddQuadCurveToPoint(
         context: *mut c_void,
@@ -191,6 +193,7 @@ unsafe extern "C" {
     pub(crate) fn CGContextBeginPath(context: *mut c_void);
     pub(crate) fn CGContextClip(context: *mut c_void);
     pub(crate) fn CGContextClosePath(context: *mut c_void);
+    pub(crate) fn CGContextConvertSizeToDeviceSpace(context: *mut c_void, size: Size) -> Size;
     pub(crate) fn CGContextDrawLinearGradient(
         context: *mut c_void,
         gradient: *const c_void,
@@ -209,6 +212,7 @@ unsafe extern "C" {
         options: u32,
     );
     pub(crate) fn CGContextEOClip(context: *mut c_void);
+    pub(crate) fn CGContextGetClipBoundingBox(context: *mut c_void) -> Rect;
     /// Fills a rectangle with the current fill color.
     pub fn CGContextFillRect(context: *mut c_void, rectangle: Rect);
     pub(crate) fn CGContextMoveToPoint(context: *mut c_void, x: f64, y: f64);
@@ -253,6 +257,30 @@ unsafe extern "C" {
         rendering_intent: i32,
     ) -> *const c_void;
     pub(crate) fn CGImageRelease(image: *const c_void);
+    pub(crate) fn CGPathAddCurveToPoint(
+        path: *mut c_void,
+        transform: *const c_void,
+        control_0_x: f64,
+        control_0_y: f64,
+        control_1_x: f64,
+        control_1_y: f64,
+        x: f64,
+        y: f64,
+    );
+    pub(crate) fn CGPathAddLineToPoint(path: *mut c_void, transform: *const c_void, x: f64, y: f64);
+    pub(crate) fn CGPathAddQuadCurveToPoint(
+        path: *mut c_void,
+        transform: *const c_void,
+        control_x: f64,
+        control_y: f64,
+        x: f64,
+        y: f64,
+    );
+    pub(crate) fn CGPathCloseSubpath(path: *mut c_void);
+    pub(crate) fn CGPathCreateCopy(path: *const c_void) -> *const c_void;
+    pub(crate) fn CGPathCreateMutable() -> *mut c_void;
+    pub(crate) fn CGPathMoveToPoint(path: *mut c_void, transform: *const c_void, x: f64, y: f64);
+    pub(crate) fn CGPathRelease(path: *const c_void);
     pub(crate) fn CGGradientCreateWithColorComponents(
         color_space: *const c_void,
         components: *const f64,

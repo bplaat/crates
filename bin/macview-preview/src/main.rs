@@ -14,9 +14,9 @@ use std::ptr::null_mut;
 
 use block2::{Block, RcBlock};
 use macview_appkit::{
-    Media, NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, create_image_view,
-    create_tinyvg_view, dispatch_async, dispatch_async_main, extension_main, load_media,
-    make_error, ns_string, preferred_content_size,
+    NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, create_image_view,
+    dispatch_async, dispatch_async_main, extension_main, load_media, make_error, ns_string,
+    preferred_content_size,
 };
 use objc2::ffi::class_addProtocol;
 use objc2::rc::{Allocated, Retained};
@@ -121,7 +121,7 @@ impl PreviewViewController {
                             let size = preferred_content_size(media.size());
                             let root: *mut Object = msg_send![this, view];
                             let bounds: Rect = msg_send![root, bounds];
-                            let view = create_media_view(bounds, media);
+                            let view = create_image_view(bounds, &media);
                             let _: () = msg_send![&*view,
                                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
                             ];
@@ -138,17 +138,6 @@ impl PreviewViewController {
                 }
             });
         });
-    }
-}
-
-/// Creates an owned view that draws `media` inside `frame`.
-///
-/// The returned view owns one retain count.
-fn create_media_view(frame: Rect, media: Media) -> Retained<Object> {
-    match media {
-        Media::TinyVg(document) => create_tinyvg_view(frame, document),
-        // The view retains the image and any animation frames.
-        Media::Image(image) => create_image_view(frame, &image),
     }
 }
 

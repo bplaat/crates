@@ -16,8 +16,8 @@ use std::sync::Mutex;
 
 use block2::{Block, RcBlock};
 use macview_appkit::{
-    Media, Point, Rect, Size, dispatch_async, extension_main, fill_white_background, load_media,
-    make_error, ns_string, render_tinyvg,
+    Point, Rect, Size, dispatch_async, extension_main, fill_white_background, load_media,
+    make_error, ns_string,
 };
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject as Object, Bool};
@@ -107,20 +107,15 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
                 // block owns media and drawing is synchronous within the block invocation.
                 unsafe {
                     fill_white_background(context, drawing_size);
-                    let media = media.lock().unwrap_or_else(|error| error.into_inner());
-                    match &*media {
-                        Media::Image(image) => draw_image(
-                            context,
-                            image.as_ptr(),
-                            Rect {
-                                origin: fitted_origin,
-                                size: fitted_size,
-                            },
-                        ),
-                        Media::TinyVg(document) => {
-                            render_tinyvg(context, document, drawing_size, 1.0);
-                        }
-                    }
+                    let image = media.lock().unwrap_or_else(|error| error.into_inner());
+                    draw_image(
+                        context,
+                        image.as_ptr(),
+                        Rect {
+                            origin: fitted_origin,
+                            size: fitted_size,
+                        },
+                    );
                 }
                 true
             }))
@@ -141,7 +136,7 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
 /// Draws an image over the whole thumbnail.
 ///
 /// AppKit draws through the image itself instead of a fixed size bitmap, so vector formats like
-/// SVG are rasterized at the size the thumbnail is actually requested in.
+/// SVG and TinyVG are rasterized at the size the thumbnail is actually requested in.
 ///
 /// # Safety
 ///

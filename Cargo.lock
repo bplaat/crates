@@ -583,7 +583,6 @@ dependencies = [
  "block2",
  "macview-appkit",
  "objc2",
- "tinyvg",
 ]
 
 [[package]]
