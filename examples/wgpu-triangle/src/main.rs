@@ -8,7 +8,7 @@
 
 use bwindow::{Event, EventLoop, KeyCode, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
-struct Renderer {
+struct Gpu {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -16,8 +16,9 @@ struct Renderer {
     pipeline: wgpu::RenderPipeline,
 }
 
-impl Renderer {
+impl Gpu {
     fn new(attachment: bwindow::WindowAttachment) -> Self {
+        // Configure the surface and device
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(attachment).expect("Create surface");
         let adapter = instance
@@ -28,6 +29,7 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(&Default::default())
             .expect("Create device");
+
         let (width, height) = surface.size();
         let mut config = surface
             .get_default_config(&adapter, width.max(1), height.max(1))
@@ -39,6 +41,8 @@ impl Renderer {
             .find(|format| *format == wgpu::TextureFormat::Bgra8Unorm)
             .unwrap_or(config.format);
         surface.configure(&device, &config);
+
+        // Create the triangle pipeline
         let shader = device.create_shader_module(wgpu::include_wgsl!("triangle.wgsl"));
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -65,6 +69,7 @@ impl Renderer {
             multiview_mask: None,
             cache: None,
         });
+
         Self {
             surface,
             device,
@@ -79,6 +84,7 @@ impl Renderer {
         if width == 0 || height == 0 {
             return;
         }
+
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
@@ -100,6 +106,7 @@ impl Renderer {
                 return false;
             }
         };
+
         let view = frame.texture.create_view(&Default::default());
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
@@ -124,11 +131,13 @@ impl Renderer {
             pass.set_pipeline(&self.pipeline);
             pass.draw(0..3, 0..1);
         }
+
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         if reconfigure {
             self.resize();
         }
+
         false
     }
 }
@@ -136,24 +145,25 @@ impl Renderer {
 fn main() {
     let event_loop = EventLoop::new();
     let mut window = WindowBuilder::new()
-        .title("Triangle")
+        .title("WGPU Triangle")
         .size(LogicalSize::new(900.0, 650.0))
         .min_size(LogicalSize::new(480.0, 360.0))
         .resizable(true)
         .theme(Theme::Dark)
         .center()
         .build();
-    let mut renderer = Renderer::new(window.attach_content().expect("Attach graphics surface"));
+    let mut gpu = Gpu::new(window.attach_content().expect("Attach graphics surface"));
     let window_id = window.id();
+
     window.request_redraw();
     event_loop.run(move |event| match event {
         Event::Window(id, WindowEvent::RedrawRequested) if id == window_id => {
-            if renderer.render() {
+            if gpu.render() {
                 window.request_animation_frame();
             }
         }
         Event::Window(id, WindowEvent::Resize(_)) if id == window_id => {
-            renderer.resize();
+            gpu.resize();
             window.request_redraw();
         }
         Event::Window(id, WindowEvent::KeyDown(event))

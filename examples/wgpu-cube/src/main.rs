@@ -31,6 +31,7 @@ struct Gpu {
 
 impl Gpu {
     fn new(attachment: bwindow::WindowAttachment) -> Self {
+        // Configure the surface and device
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(attachment).expect("Create surface");
         let adapter = instance
@@ -41,6 +42,7 @@ impl Gpu {
         let (device, queue) = adapter
             .request_device(&Default::default())
             .expect("Create device");
+
         let (width, height) = surface.size();
         let mut config = surface
             .get_default_config(&adapter, width.max(1), height.max(1))
@@ -53,6 +55,8 @@ impl Gpu {
             .unwrap_or(config.format);
         surface.configure(&device, &config);
         let depth = Self::depth(&device, &config);
+
+        // Create the cube pipeline
         let entries = [
             (
                 0,
@@ -144,6 +148,8 @@ impl Gpu {
             multiview_mask: None,
             cache: None,
         });
+
+        // Create the FPS overlay pipeline and resources
         let overlay_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -237,6 +243,8 @@ impl Gpu {
                 },
             ],
         });
+
+        // Upload the cube mesh and texture
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 32,
@@ -245,6 +253,7 @@ impl Gpu {
         });
         let mesh = cube();
         let (vertices, group) = Self::upload(&device, &queue, &layout, &uniforms, &mesh);
+
         Self {
             surface,
             device,
@@ -288,6 +297,7 @@ impl Gpu {
         if width == 0 || height == 0 {
             return;
         }
+
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
@@ -301,6 +311,7 @@ impl Gpu {
         uniforms: &wgpu::Buffer,
         mesh: &Mesh,
     ) -> (wgpu::Buffer, wgpu::BindGroup) {
+        // Upload vertex data
         let bytes = mesh.bytes();
         let vertices = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -314,6 +325,8 @@ impl Gpu {
             .expect("Mapped vertex buffer")
             .copy_from_slice(&bytes);
         vertices.unmap();
+
+        // Upload the material texture
         let texture_width = mesh.texture.width();
         let texture_height = mesh.texture.height();
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -357,6 +370,8 @@ impl Gpu {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
+
+        // Bind the uniforms and material
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout,
@@ -375,6 +390,7 @@ impl Gpu {
                 },
             ],
         });
+
         (vertices, group)
     }
 
@@ -394,6 +410,8 @@ impl Gpu {
                 return false;
             }
         };
+
+        // Update per-frame resources
         let values = [
             0.4,
             0.25,
@@ -410,6 +428,8 @@ impl Gpu {
         }
         self.queue.write_buffer(&self.uniforms, 0, &bytes);
         self.update_fps(fps);
+
+        // Draw the cube and FPS overlay
         let view = frame.texture.create_view(&Default::default());
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
@@ -442,6 +462,7 @@ impl Gpu {
             pass.set_bind_group(0, &self.group, &[]);
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             pass.draw(0..self.vertex_count, 0..1);
+
             let overlay_width = self.overlay_canvas.width() as f32;
             let overlay_height = self.overlay_canvas.height() as f32;
             pass.set_viewport(
@@ -456,11 +477,13 @@ impl Gpu {
             pass.set_bind_group(0, &self.overlay_group, &[]);
             pass.draw(0..3, 0..1);
         }
+
         self.queue.submit([encoder.finish()]);
         self.queue.present(frame);
         if reconfigure {
             self.resize();
         }
+
         true
     }
 
@@ -468,19 +491,17 @@ impl Gpu {
         if self.displayed_fps == fps {
             return;
         }
+
         self.displayed_fps = fps;
         self.overlay_canvas.draw(|ctx| {
             ctx.clear_rect(0.0, 0.0, ctx.width(), ctx.height());
-            ctx.set_fill_style(Color::rgba(0, 0, 0, 160));
-            ctx.begin_path();
-            ctx.round_rect(0.0, 0.0, ctx.width(), ctx.height(), 9.0);
-            ctx.fill();
             ctx.set_fill_style(Color::rgb(255, 255, 255));
             ctx.set_font("sans-serif", 18.0);
             ctx.set_text_align(TextAlign::Right);
             ctx.set_text_baseline(TextBaseline::Top);
             ctx.fill_text(format!("{fps} FPS"), ctx.width() - 8.0, 8.0);
         });
+
         let width = self.overlay_canvas.width();
         let height = self.overlay_canvas.height();
         let bytes_per_row = self.overlay_canvas.bytes_per_row();
@@ -610,6 +631,7 @@ fn cube() -> Mesh {
             });
         }
     }
+
     Mesh {
         vertices,
         texture: image::decode(include_bytes!("../assets/crate.jpg"))
@@ -620,7 +642,7 @@ fn cube() -> Mesh {
 fn main() {
     let event_loop = EventLoop::new();
     let mut window = WindowBuilder::new()
-        .title("Textured cube")
+        .title("WGPU Cube")
         .size(LogicalSize::new(960.0, 720.0))
         .theme(Theme::Dark)
         .background_color(0x000000)
@@ -630,6 +652,7 @@ fn main() {
     let started = Instant::now();
     let mut frame_rate = FrameRate::default();
     let window_id = window.id();
+
     window.request_animation_frame();
     event_loop.run(move |event| match event {
         Event::Window(id, WindowEvent::RedrawRequested) if id == window_id => {

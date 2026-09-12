@@ -349,6 +349,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "example-wgpu-instanced"
+version = "0.1.0"
+dependencies = [
+ "bcanvas",
+ "bwindow",
+ "image",
+ "rust-embed",
+ "wgpu",
+ "wgpu-shader-build",
+]
+
+[[package]]
 name = "example-wgpu-triangle"
 version = "0.1.0"
 dependencies = [
