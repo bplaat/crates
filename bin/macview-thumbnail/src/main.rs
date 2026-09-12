@@ -133,14 +133,11 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
     });
 }
 
-/// Draws an image over the whole thumbnail.
-///
-/// AppKit draws through the image itself instead of a fixed size bitmap, so vector formats like
-/// SVG and TinyVG are rasterized at the size the thumbnail is actually requested in.
-///
-/// # Safety
-///
-/// `context` must be a valid `CGContext` and `image` a valid `NSImage` for this call.
+// Draws an image over the thumbnail, rasterizing vectors at the requested size.
+//
+// # Safety
+//
+// `context` must be a valid `CGContext` and `image` a valid `NSImage` for this call.
 unsafe fn draw_image(context: *mut c_void, image: *mut Object, frame: Rect) {
     // SAFETY: The caller guarantees both objects are valid, and the graphics state is restored
     // before returning.
@@ -156,10 +153,7 @@ unsafe fn draw_image(context: *mut c_void, image: *mut Object, frame: Rect) {
     }
 }
 
-/// Returns a reply context within Quick Look's accepted range.
-///
-/// Expanding a fitted dimension to the minimum can change the context's aspect ratio. Drawing is
-/// fitted and centered separately so extreme media is letterboxed instead of stretched.
+// Returns a Quick Look context size clamped to its accepted range.
 fn thumbnail_context_size(image: Size, minimum: Size, maximum: Size) -> Size {
     let fitted = aspect_fit(image, maximum);
     Size {
@@ -168,10 +162,7 @@ fn thumbnail_context_size(image: Size, minimum: Size, maximum: Size) -> Size {
     }
 }
 
-/// Returns the size `image` gets when it is scaled to fit inside `bounds`.
-///
-/// A drawing without a size, which is what AppKit reports for an SVG that declares none, keeps
-/// the requested bounds instead of scaling to nothing.
+// Returns `image` fitted inside `bounds`, or `bounds` when the image has no size.
 fn aspect_fit(image: Size, bounds: Size) -> Size {
     if image.width <= 0.0 || image.height <= 0.0 {
         return bounds;

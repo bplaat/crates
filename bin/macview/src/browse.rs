@@ -16,10 +16,7 @@ use macview_appkit::ns_string;
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send};
 
-/// Returns the index browsing moves to, wrapping around at both ends of the folder.
-///
-/// Wrapping keeps a step doing something at either end, which is what browsing a folder with the
-/// arrow keys expects, and it returns `None` only when there is nothing to browse.
+/// Returns the wrapped browsing index, or `None` when there is nothing to browse.
 pub(crate) fn sibling_index(count: usize, current: usize, offset: isize) -> Option<usize> {
     if count == 0 || current >= count {
         return None;
@@ -47,14 +44,11 @@ pub(crate) unsafe fn neighbour_path(
     }
 }
 
-/// Returns the files of the folder of `path` that hold one of `readable`, in Finder order.
-///
-/// The open file itself is part of the list whatever it holds, because a file the application has
-/// open is one it shows.
-///
-/// # Safety
-///
-/// `readable` must point to valid `UTType` objects for the duration of this call.
+// Returns Finder-sorted readable siblings, always including the open `path`.
+//
+// # Safety
+//
+// `readable` must point to valid `UTType` objects for the duration of this call.
 unsafe fn openable_siblings(path: &Path, readable: &[*mut Object]) -> Vec<PathBuf> {
     let Some(folder) = path.parent() else {
         return Vec::new();
@@ -79,14 +73,11 @@ unsafe fn openable_siblings(path: &Path, readable: &[*mut Object]) -> Vec<PathBu
     siblings.into_iter().map(|(_, sibling)| sibling).collect()
 }
 
-/// Returns whether the name of a file says it holds one of the types the application reads.
-///
-/// A type conforms to a type it is a kind of, which is how a PNG counts as an image, and how the
-/// other formats that share a folder are left out.
-///
-/// # Safety
-///
-/// `readable` must point to valid `UTType` objects for the duration of this call.
+// Returns whether the file's declared type conforms to one of the readable types.
+//
+// # Safety
+//
+// `readable` must point to valid `UTType` objects for the duration of this call.
 unsafe fn is_openable(path: &Path, readable: &[*mut Object]) -> bool {
     let Some(extension) = path.extension().and_then(OsStr::to_str) else {
         return false;
@@ -105,14 +96,11 @@ unsafe fn is_openable(path: &Path, readable: &[*mut Object]) -> bool {
     }
 }
 
-/// Returns the types the documents of this application read, as `UTType` objects.
-///
-/// The types are the ones the bundle declares for the document class, so browsing steps through
-/// exactly the files the application opens.
-///
-/// # Safety
-///
-/// `document_class` must be an `NSDocument` subclass.
+// Returns the document class's bundle-declared readable types as `UTType` objects.
+//
+// # Safety
+//
+// `document_class` must be an `NSDocument` subclass.
 unsafe fn readable_types(document_class: *mut Object) -> Vec<*mut Object> {
     // SAFETY: The caller supplies a document class, whose autoreleased type identifiers outlive
     // this call along with the types they are looked up as.
@@ -134,27 +122,27 @@ unsafe fn readable_types(document_class: *mut Object) -> Vec<*mut Object> {
     }
 }
 
-/// Returns whether a file is one that Finder keeps out of sight.
+// Returns whether a file is one that Finder keeps out of sight.
 fn is_hidden(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|name| name.as_bytes().starts_with(b"."))
 }
 
-/// Returns the name of a file as an autoreleased `NSString`.
-///
-/// # Safety
-///
-/// The returned string is only valid inside the current autorelease pool.
+// Returns the name of a file as an autoreleased `NSString`.
+//
+// # Safety
+//
+// The returned string is only valid inside the current autorelease pool.
 unsafe fn name_string(path: &Path) -> *mut Object {
     let name = path.file_name().unwrap_or(path.as_os_str());
     ns_string(&name.to_string_lossy())
 }
 
-/// Compares two file names the way Finder sorts them, which counts the numbers in a name.
-///
-/// # Safety
-///
-/// Both pointers must point to valid `NSString` objects for the duration of this call.
+// Compares two file names the way Finder sorts them, which counts the numbers in a name.
+//
+// # Safety
+//
+// Both pointers must point to valid `NSString` objects for the duration of this call.
 unsafe fn compare_names(left: *mut Object, right: *mut Object) -> Ordering {
     // SAFETY: The caller supplies valid strings.
     let result: isize = unsafe { msg_send![left, localizedStandardCompare: right] };
@@ -222,7 +210,7 @@ mod tests {
         assert_eq!(sibling_index(2, 2, 1), None);
     }
 
-    /// Creates a folder holding the given files, next to a folder of its own.
+    // Creates a folder holding the given files, next to a folder of its own.
     fn folder_with(name: &str, files: &[&str]) -> PathBuf {
         let folder = std::env::temp_dir().join(format!("macview-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&folder);
@@ -233,7 +221,7 @@ mod tests {
         folder
     }
 
-    /// Returns the types of an application that reads every image, as the bundle would declare.
+    // Returns the types of an application that reads every image, as the bundle would declare.
     fn image_types() -> Vec<*mut Object> {
         // SAFETY: The type of images is part of the system type database.
         let kind: *mut Object =

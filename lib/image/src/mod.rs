@@ -9,8 +9,24 @@
 //! Supports QOI, 8-bit sequential/progressive JPEG, PNG/APNG up to 8 bits per
 //! channel, GIF, common BMP variants and ICO. Decoding is synchronous and does not
 //! publish intermediate progressive scans. ICC profiles are not applied.
+//! Static SVG decoding supports paths and basic shapes, transforms, inherited
+//! presentation styles, colors, gradients, local references, clips, and masks.
+//! Well-formed unsupported SVG content is ignored so supported content can render.
+
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
+
+mod vector;
+pub use vector::{
+    Clip, Color, DrawCommand, FillRule, GradientStop, LineCap, LineJoin, Mask, MaskType, Paint,
+    PaintId, PathId, PathSegment, Point, Rect, Size, SpreadMethod, StrokeStyle, Transform,
+    VectorColorSpace, VectorDecodeError, VectorFormat, VectorImage,
+};
+
+#[cfg(feature = "svg")]
+mod svg;
+#[cfg(feature = "tinyvg")]
+mod tinyvg;
 
 #[cfg(feature = "bmp")]
 mod bmp;
@@ -170,10 +186,7 @@ impl std::error::Error for DecodeError {}
 
 type Result<T> = std::result::Result<T, DecodeError>;
 
-/// Decodes a complete encoded image, detecting its format from the bytes.
-///
-/// The cumulative allocation budget is 512 MiB, including intermediate buffers.
-/// PNG/APNG samples above 8 bits and uncommon JPEG/BMP variants are unsupported.
+/// Decodes a complete image within 512 MiB, excluding high-bit PNG/APNG and uncommon JPEG/BMP.
 #[cfg_attr(
     not(any(
         feature = "qoi",
@@ -210,6 +223,33 @@ pub fn decode(_data: &[u8]) -> Result<Image> {
         return ico::decode(_data);
     }
     Err(DecodeError::InvalidMagic)
+}
+
+/// Detects a supported vector format without fully decoding it.
+pub fn vector_format(_data: &[u8]) -> Option<VectorFormat> {
+    #[cfg(feature = "tinyvg")]
+    if tinyvg::is_tinyvg(_data) {
+        return Some(VectorFormat::TinyVg);
+    }
+    #[cfg(feature = "svg")]
+    if svg::is_svg(_data) {
+        return Some(VectorFormat::Svg);
+    }
+    None
+}
+
+/// Decodes a supported vector image to an immutable backend-neutral display list.
+pub fn decode_vector(data: &[u8]) -> std::result::Result<VectorImage, VectorDecodeError> {
+    if data.len() > 64 * 1024 * 1024 {
+        return Err(VectorDecodeError::ResourceLimit);
+    }
+    match vector_format(data) {
+        #[cfg(feature = "tinyvg")]
+        Some(VectorFormat::TinyVg) => vector::decode_tinyvg(data),
+        #[cfg(feature = "svg")]
+        Some(VectorFormat::Svg) => svg::decode(data),
+        _ => Err(VectorDecodeError::InvalidMagic),
+    }
 }
 
 #[cfg(any(

@@ -13,7 +13,7 @@ use objc2::{class, define_class, msg_send};
 
 use crate::headers::*;
 
-/// The width and height of a single checkerboard tile.
+// The width and height of a single checkerboard tile.
 const TILE: f64 = 12.0;
 
 define_class!(
@@ -63,9 +63,7 @@ impl CheckerboardView {
     }
 }
 
-/// Creates an opaque checkerboard view that follows the effective light or dark appearance.
-///
-/// The returned view owns one retain count.
+/// Creates an owned opaque checkerboard view that follows the effective appearance.
 pub(crate) fn create_checkerboard_view(frame: Rect) -> Retained<Object> {
     // SAFETY: CheckerboardView is a registered NSView subclass initialized with a valid frame.
     unsafe {
@@ -99,10 +97,7 @@ unsafe fn uses_dark_appearance(view: *mut Object) -> bool {
     }
 }
 
-/// Returns the center of `bounds` and the number of tiles needed to cover it in each direction.
-///
-/// Tile indices run outwards from the center in both directions, so a tile keeps its parity - and
-/// therefore its color - no matter how many tiles the current size needs.
+// Returns a parity-stable centered tile grid that covers `bounds`.
 fn checker_grid(bounds: Rect) -> (Point, isize, isize) {
     let center = Point {
         x: bounds.origin.x + bounds.size.width / 2.0,
@@ -113,7 +108,7 @@ fn checker_grid(bounds: Rect) -> (Point, isize, isize) {
     (center, half_columns, half_rows)
 }
 
-/// Returns whether the tile at the given center-relative indices gets the alternate color.
+// Returns whether the tile at the given center-relative indices gets the alternate color.
 const fn tile_is_filled(row: isize, column: isize) -> bool {
     (row + column).rem_euclid(2) == 0
 }

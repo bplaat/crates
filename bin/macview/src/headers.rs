@@ -31,9 +31,6 @@ pub(crate) const NS_WINDOW_STYLE_MASK_TITLED: u64 = 1;
 #[link(name = "UniformTypeIdentifiers", kind = "framework")]
 unsafe extern "C" {}
 
-#[link(name = "WebKit", kind = "framework")]
-unsafe extern "C" {}
-
 #[link(name = "AppKit", kind = "framework")]
 unsafe extern "C" {
     pub(crate) static NSAppearanceNameAqua: *mut Object;

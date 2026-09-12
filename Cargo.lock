@@ -498,6 +498,7 @@ name = "image"
 version = "0.1.0"
 dependencies = [
  "miniz_oxide",
+ "xmlparser",
 ]
 
 [[package]]
@@ -579,7 +580,6 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 name = "macview"
 version = "0.1.0"
 dependencies = [
- "base64",
  "block2",
  "macview-appkit",
  "objc2",
@@ -591,7 +591,6 @@ version = "0.1.0"
 dependencies = [
  "image",
  "objc2",
- "tinyvg",
 ]
 
 [[package]]
@@ -1224,10 +1223,6 @@ name = "threadpool"
 version = "2.0.0"
 
 [[package]]
-name = "tinyvg"
-version = "0.1.0"
-
-[[package]]
 name = "trybuild"
 version = "1.0.120+patch"
 dependencies = [
@@ -1450,6 +1445,12 @@ version = "0.1.31+patch"
 dependencies = [
  "semver",
 ]
+
+[[package]]
+name = "xmlparser"
+version = "0.13.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 
 [[package]]
 name = "xtask"

@@ -25,7 +25,6 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library
 - [small-websocket](lib/small-websocket) A simple and small WebSocket library for the [small-http](lib/small-http) library
 - [threadpool](lib/threadpool) A fixed and scalable thread pool for Rust
-- [tinyvg](lib/tinyvg) A TinyVG vector image parser (binary and text formats)
 - [validate](lib/validate) A simple struct validation library
 - [validate_derive](lib/validate_derive) Validation derive macros library
 - [wgpu](lib/wgpu) A native GPU rendering library for bwindow

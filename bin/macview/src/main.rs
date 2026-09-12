@@ -12,7 +12,6 @@ mod browse;
 mod checkerboard;
 mod headers;
 mod scroll_view;
-mod svg;
 mod window_controller;
 
 use std::cell::{Cell, RefCell};
@@ -26,20 +25,18 @@ use checkerboard::create_checkerboard_view;
 use headers::*;
 use macview_appkit::{
     Image, NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, OwnedString, Point, Rect, Size,
-    create_image_view, decode_image, decode_image_data, decode_tinyvg_image, dispatch_async,
-    dispatch_async_main, is_tinyvg, make_error, ns_string, preferred_content_size,
+    create_image_view, decode_image, decode_image_data, dispatch_async, dispatch_async_main,
+    make_error, ns_string, preferred_content_size,
 };
 use objc2::ffi::{class_addMethod, object_getClass};
 use objc2::rc::{Allocated, Retained, autoreleasepool};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 use scroll_view::create_scroll_view;
-use svg::{Svg, create_svg_view, is_svg, parse_svg};
 use window_controller::{create_window_controller, show_media};
 
 struct DocumentIvars {
     media: RefCell<Option<DecodedMedia>>,
-    svg_view: RefCell<Option<Retained<Object>>>,
     content_version: Cell<Option<ContentVersion>>,
     browse_generation: Cell<u64>,
     reload_generation: Cell<u64>,
@@ -49,7 +46,6 @@ impl DocumentIvars {
     const fn new() -> Self {
         Self {
             media: RefCell::new(None),
-            svg_view: RefCell::new(None),
             content_version: Cell::new(None),
             browse_generation: Cell::new(0),
             reload_generation: Cell::new(0),
@@ -63,10 +59,7 @@ struct ContentVersion {
     hash: u64,
 }
 
-enum DecodedMedia {
-    Image(Image),
-    Svg(Box<Svg>),
-}
+type DecodedMedia = Image;
 
 struct MainQueueObject(Retained<Object>);
 
@@ -147,7 +140,7 @@ define_class!(
 );
 
 impl Document {
-    /// Reloads the URL watched by NSDocument after another process changes it.
+    // Reloads the URL watched by NSDocument after another process changes it.
     fn reload_presented_item(&self) {
         let this = self as *const Self as *mut Object;
         let retained = MainQueueObject(
@@ -167,7 +160,7 @@ impl Document {
         });
     }
 
-    /// Reads and decodes a changed presented item without blocking AppKit's main thread.
+    // Reads and decodes a changed presented item without blocking AppKit's main thread.
     unsafe fn start_presented_item_reload(&self, retained_document: MainQueueObject) {
         // SAFETY: This runs on the main queue with a retained document.
         let prepared = unsafe {
@@ -255,7 +248,6 @@ impl Document {
 
     fn install_media(&self, media: DecodedMedia, version: ContentVersion) {
         self.ivars().media.replace(Some(media));
-        self.ivars().svg_view.replace(None);
         self.ivars().content_version.set(Some(version));
     }
 
@@ -304,7 +296,7 @@ impl Document {
         });
     }
 
-    /// Starts loading a neighbouring file after its folder scan has completed.
+    // Starts loading a neighbouring file after its folder scan has completed.
     unsafe fn load_sibling(
         &self,
         path: std::path::PathBuf,
@@ -369,46 +361,32 @@ impl Document {
         });
     }
 
-    /// Returns the natural size of the loaded media, or `None` when the document is empty.
+    // Returns the natural size of the loaded media, or `None` when the document is empty.
     fn media_size(&self) -> Option<Size> {
-        match self.ivars().media.borrow().as_ref()? {
-            DecodedMedia::Svg(document) => Some(document.size),
-            DecodedMedia::Image(image) => Some(image.size()),
-        }
+        self.ivars().media.borrow().as_ref().map(Image::size)
     }
 
-    /// Creates an owned view that draws the loaded media inside `frame`.
-    ///
-    /// The returned view owns one retain count.
+    // Creates an owned view that draws the loaded media inside `frame`.
+    //
+    // The returned view owns one retain count.
     fn create_media_view(&self, frame: Rect) -> Retained<Object> {
         let media = self.ivars().media.borrow();
-        match media
+        let image = media
             .as_ref()
-            .expect("cannot create a view without loaded media")
-        {
-            DecodedMedia::Svg(document) => {
-                let view = create_svg_view(frame, document);
-                self.ivars().svg_view.replace(Some(view.clone()));
-                view
-            }
-            DecodedMedia::Image(image) => {
-                // SAFETY: The ivar owns a live NSImage for the duration of this call.
-                create_image_view(frame, image)
-            }
-        }
+            .expect("cannot create a view without loaded media");
+        create_image_view(frame, image)
     }
 
-    /// Returns the size the window title shows, which is the stored size of a bitmap.
+    // Returns the size the window title shows, which is the stored size of a bitmap.
     fn title_size(&self, media_size: Size) -> Size {
         let media = self.ivars().media.borrow();
-        if let Some(DecodedMedia::Image(image)) = media.as_ref() {
-            image.pixel_size().unwrap_or(media_size)
-        } else {
-            media_size
-        }
+        media
+            .as_ref()
+            .and_then(Image::pixel_size)
+            .unwrap_or(media_size)
     }
 
-    /// Shows the media this document holds now in the windows it opened before.
+    // Shows the media this document holds now in the windows it opened before.
     fn refresh_windows(&self, zoom_to_fit: bool) {
         let Some(media_size) = self.media_size() else {
             return;
@@ -489,7 +467,7 @@ impl Document {
         }
     }
 
-    /// Creates a print operation that draws the media at its natural size, scaled to fit one page.
+    // Creates a print operation that draws the media at its natural size, scaled to fit one page.
     fn print_operation(&self, settings: *mut Object) -> *mut Object {
         let Some(media_size) = self.media_size() else {
             return null_mut();
@@ -510,14 +488,6 @@ impl Document {
             let _: () = msg_send![&*print_info, setHorizontallyCentered: Bool::YES];
             let _: () = msg_send![&*print_info, setVerticallyCentered: Bool::YES];
 
-            // WebKit paginates the loaded page itself, and only the view in the window has it.
-            let svg_view = self.ivars().svg_view.borrow();
-            if let Some(svg_view) = svg_view.as_ref() {
-                let operation: *mut Object =
-                    msg_send![svg_view, printOperationWithPrintInfo: print_info.as_ptr()];
-                return operation;
-            }
-
             let view = self.create_media_view(Rect {
                 origin: Point { x: 0.0, y: 0.0 },
                 size: media_size,
@@ -531,30 +501,21 @@ impl Document {
     }
 }
 
-/// Decodes document data without creating any views or touching window state.
-///
-/// # Safety
-///
-/// `data` must point to a valid `NSData` for the duration of this call.
+// Decodes document data without creating any views or touching window state.
+//
+// # Safety
+//
+// `data` must point to a valid `NSData` for the duration of this call.
 unsafe fn decode_document(data: *mut Object) -> Result<DecodedMedia, String> {
-    // SAFETY: NSData keeps its immutable byte buffer alive for this call.
-    let bytes = unsafe { document_data_bytes(data) };
-    if is_tinyvg(bytes) {
-        return decode_tinyvg_image(bytes).map(DecodedMedia::Image);
-    }
-    if is_svg(bytes) {
-        return Ok(DecodedMedia::Svg(Box::new(parse_svg(bytes))));
-    }
-
     // SAFETY: data remains live for the initializer, which owns what it needs after this call.
-    unsafe { decode_image_data(data) }.map(DecodedMedia::Image)
+    unsafe { decode_image_data(data) }
 }
 
-/// Returns the immutable byte buffer owned by an NSData object.
-///
-/// # Safety
-///
-/// `data` must point to a valid `NSData`, and the returned slice must not outlive it.
+// Returns the immutable byte buffer owned by an NSData object.
+//
+// # Safety
+//
+// `data` must point to a valid `NSData`, and the returned slice must not outlive it.
 unsafe fn document_data_bytes<'a>(data: *mut Object) -> &'a [u8] {
     // SAFETY: The caller keeps NSData and its immutable byte buffer alive for the returned slice.
     unsafe {
@@ -569,7 +530,7 @@ unsafe fn document_data_bytes<'a>(data: *mut Object) -> &'a [u8] {
     }
 }
 
-/// Identifies file contents so presenter notifications without a content change are ignored.
+// Identifies file contents so presenter notifications without a content change are ignored.
 fn content_version(bytes: &[u8]) -> ContentVersion {
     let mut hasher = DefaultHasher::new();
     bytes.hash(&mut hasher);
@@ -579,22 +540,16 @@ fn content_version(bytes: &[u8]) -> ContentVersion {
     }
 }
 
-/// Decodes bytes read by Rust without creating views or touching window state.
+// Decodes bytes read by Rust without creating views or touching window state.
 fn decode_document_bytes(bytes: Vec<u8>) -> Result<DecodedMedia, String> {
-    if is_tinyvg(&bytes) {
-        return decode_tinyvg_image(&bytes).map(DecodedMedia::Image);
-    }
-    if is_svg(&bytes) {
-        return Ok(DecodedMedia::Svg(Box::new(parse_svg(&bytes))));
-    }
-    decode_image(bytes).map(DecodedMedia::Image)
+    decode_image(bytes)
 }
 
-/// Reads and decodes a document URL on a background queue.
-///
-/// # Safety
-///
-/// `url` must point to a retained `NSURL` for the duration of this call.
+// Reads and decodes a document URL on a background queue.
+//
+// # Safety
+//
+// `url` must point to a retained `NSURL` for the duration of this call.
 unsafe fn load_document(
     url: *mut Object,
 ) -> Result<(DecodedMedia, OwnedString, ContentVersion), String> {
@@ -639,11 +594,11 @@ unsafe fn load_document(
         .unwrap_or_else(|| Err(String::from("Could not coordinate reading the image")))
 }
 
-/// Reads and decodes a URL supplied by `NSFileCoordinator`.
-///
-/// # Safety
-///
-/// `url` must be a valid coordinated file URL for this call.
+// Reads and decodes a URL supplied by `NSFileCoordinator`.
+//
+// # Safety
+//
+// `url` must be a valid coordinated file URL for this call.
 unsafe fn decode_document_url(
     url: *mut Object,
 ) -> Result<(DecodedMedia, OwnedString, ContentVersion), String> {
@@ -660,11 +615,11 @@ unsafe fn decode_document_url(
     decode_document_bytes(bytes).map(|media| (media, identifier, version))
 }
 
-/// Returns the type identifier MacView declares for an extension.
-///
-/// # Safety
-///
-/// This calls thread-safe immutable Uniform Type Identifier APIs.
+// Returns the type identifier MacView declares for an extension.
+//
+// # Safety
+//
+// This calls thread-safe immutable Uniform Type Identifier APIs.
 unsafe fn type_identifier(extension: &str) -> Result<OwnedString, String> {
     let declared = if extension.eq_ignore_ascii_case("apng") {
         Some("org.libpng.apng")
@@ -674,8 +629,6 @@ unsafe fn type_identifier(extension: &str) -> Result<OwnedString, String> {
         Some("org.qoiformat.qoi")
     } else if extension.eq_ignore_ascii_case("tvg") {
         Some("org.tinyvg.tvg")
-    } else if extension.eq_ignore_ascii_case("tvgt") {
-        Some("org.tinyvg.tvgt")
     } else {
         None
     };
@@ -704,7 +657,7 @@ const extern "C-unwind" fn can_concurrently_read_documents(
     Bool::YES
 }
 
-/// Tells `NSDocumentController` that document decoding is safe on its background queue.
+// Tells `NSDocumentController` that document decoding is safe on its background queue.
 unsafe fn enable_concurrent_document_reading() {
     // SAFETY: Document is registered, object_getClass returns its metaclass, and the function
     // signature matches +canConcurrentlyReadDocumentsOfType: (BOOL, Class, SEL, NSString *).
@@ -828,18 +781,14 @@ fn add_item(
     }
 }
 
-/// Returns the key equivalent of a function key, which AppKit spells as a single character.
+// Returns the key equivalent of a function key, which AppKit spells as a single character.
 fn function_key(code: u16) -> String {
     char::from_u32(u32::from(code))
         .expect("function keys are characters of the private use area")
         .to_string()
 }
 
-/// Adds the submenu that `NSDocumentController` fills with the files that were opened before.
-///
-/// A menu says what it is by its name, which is how the document controller finds this one and
-/// keeps it up to date. The name is set through a method AppKit does not document, so the menu
-/// stays an ordinary one when a future release drops it.
+// Adds the named recent-files submenu that `NSDocumentController` maintains when supported.
 fn add_open_recent_menu(menu: &Object) {
     // SAFETY: menu is a valid NSMenu that retains the item, which retains the submenu.
     unsafe {
@@ -1123,7 +1072,7 @@ mod tests {
                 let url = file_url(&path);
                 load_document(url).expect("example image should load")
             };
-            assert!(matches!(media, DecodedMedia::Image(_)));
+            assert!(media.pixel_size().is_some());
             // SAFETY: kind owns a live NSString for this scope.
             let identifier: *const std::ffi::c_char =
                 unsafe { msg_send![kind.as_ptr(), UTF8String] };
@@ -1142,9 +1091,7 @@ mod tests {
                 let url = file_url(&path);
                 load_document(url).expect("BMP example should load")
             };
-            let DecodedMedia::Image(image) = media else {
-                panic!("BMP example should decode as an image");
-            };
+            let image = media;
             assert_eq!((image.size().width, image.size().height), (800.0, 600.0));
             let size = image
                 .pixel_size()
@@ -1161,7 +1108,6 @@ mod tests {
                 ("BMP", b"com.microsoft.bmp".as_slice()),
                 ("QOI", b"org.qoiformat.qoi".as_slice()),
                 ("TVG", b"org.tinyvg.tvg".as_slice()),
-                ("TVGT", b"org.tinyvg.tvgt".as_slice()),
             ] {
                 // SAFETY: Type lookup only accesses immutable UTI and NSString objects.
                 let identifier = unsafe { type_identifier(extension) }.expect("declared type");

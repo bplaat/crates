@@ -14,7 +14,7 @@ use objc2::{class, define_class, msg_send, sel};
 
 use crate::scroll_view::replace_document_view;
 
-/// The factor a single zoom step magnifies or shrinks the media by.
+// The factor a single zoom step magnifies or shrinks the media by.
 const ZOOM_STEP: f64 = 1.5;
 
 struct WindowControllerIvars {
@@ -77,7 +77,7 @@ impl WindowController {
         unsafe { msg_send![display_name, stringByAppendingString: ns_string(&suffix)] }
     }
 
-    /// Returns the scroll view that magnifies the media, or null before the window has one.
+    // Returns the scroll view that magnifies the media, or null before the window has one.
     fn scroll_view(&self) -> *mut Object {
         // SAFETY: The window and its view hierarchy are live while the controller is.
         unsafe {
@@ -100,12 +100,12 @@ impl WindowController {
         }
     }
 
-    /// Zooms the media of this window by `factor`.
+    // Zooms the media of this window by `factor`.
     fn zoom_by(&self, factor: f64) {
         self.send_to_scroll_view(sel!(zoomBy:), factor);
     }
 
-    /// Sends a zoom message that takes a single number to the scroll view of this window.
+    // Sends a zoom message that takes a single number to the scroll view of this window.
     fn send_to_scroll_view(&self, selector: objc2::runtime::Sel, value: f64) {
         let scroll_view = self.scroll_view();
         if scroll_view.is_null() {
@@ -120,10 +120,7 @@ impl WindowController {
     }
 }
 
-/// Shows another media view in the window of `controller` and titles the window with `size`.
-///
-/// The window keeps the size it has, and the media is shown the way a window that opens on it
-/// shows it. Does nothing for a controller of some other window.
+/// Replaces media in this controller without resizing its window and updates its size title.
 ///
 /// # Safety
 ///
@@ -153,9 +150,7 @@ pub(crate) unsafe fn show_media(
     }
 }
 
-/// Creates an owned `NSWindowController` that shows the media size in its window title.
-///
-/// The returned controller owns one retain count.
+/// Creates an `NSWindowController` with one owned retain count and a media-size window title.
 pub(crate) fn create_window_controller(window: *mut Object, size: Size) -> Retained<Object> {
     // SAFETY: WindowController is a registered NSWindowController subclass and window is a live
     // NSWindow. Its Rust ivars are initialized before AppKit can ask for a window title.

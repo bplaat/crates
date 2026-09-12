@@ -18,15 +18,15 @@ use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send, sel};
 
 mod headers;
-mod tinyvg;
+mod vector;
 
 use headers::*;
 pub use headers::{
     __CFConstantStringClassReference, CFConstString, CGContextFillRect, CGContextSetRGBFillColor,
     NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, ns_string,
 };
-use tinyvg::create_tinyvg_image;
-pub use tinyvg::fill_white_background;
+use vector::create_vector_image;
+pub use vector::fill_white_background;
 
 /// An owned immutable `NSString` that can be transferred between queues.
 pub struct OwnedString {
@@ -75,7 +75,7 @@ pub struct Image {
     image: Retained<Object>,
     size: Size,
     pixel_size: Option<Size>,
-    is_tinyvg: bool,
+    is_vector: bool,
 }
 
 impl Image {
@@ -100,7 +100,7 @@ impl Image {
 // AppKit or Quick Look.
 unsafe impl Send for Image {}
 
-/// The size media is shown at, which is the media itself when it lies between these bounds.
+// The size media is shown at, which is the media itself when it lies between these bounds.
 const MINIMUM_CONTENT_SIZE: Size = Size {
     width: 320.0,
     height: 240.0,
@@ -110,11 +110,7 @@ const MAXIMUM_CONTENT_SIZE: Size = Size {
     height: 800.0,
 };
 
-/// Returns the size of the window or preview panel that media is shown in.
-///
-/// Media larger than the bounds is shrunk with its shape kept, so that what shows it has the shape
-/// of the media and the media fills it. Clamping the width and the height on their own would give
-/// some other shape, which leaves a band of background along one pair of edges.
+/// Returns a bounded window or preview size that preserves the media's shape.
 pub fn preferred_content_size(media_size: Size) -> Size {
     let scale = (MAXIMUM_CONTENT_SIZE.width / media_size.width)
         .min(MAXIMUM_CONTENT_SIZE.height / media_size.height)
@@ -198,22 +194,22 @@ pub unsafe fn load_media(url: *mut Object) -> Result<Image, String> {
 }
 
 fn decode_media(bytes: Vec<u8>) -> Result<Image, String> {
-    if is_tinyvg(&bytes) {
-        return decode_tinyvg_image(&bytes);
+    if image::vector_format(&bytes).is_some() {
+        return decode_vector_image(&bytes);
     }
     decode_image(bytes)
 }
 
-/// Returns whether bytes start with a supported binary or textual TinyVG document.
-pub fn is_tinyvg(bytes: &[u8]) -> bool {
-    ::tinyvg::is_tinyvg(bytes)
+/// Returns whether bytes start with a supported vector image document.
+pub fn is_vector(bytes: &[u8]) -> bool {
+    image::vector_format(bytes).is_some()
 }
 
-/// Returns the Rust path represented by a file URL.
-///
-/// # Safety
-///
-/// `url` must point to a valid file `NSURL` for this call.
+// Returns the Rust path represented by a file URL.
+//
+// # Safety
+//
+// `url` must point to a valid file `NSURL` for this call.
 unsafe fn file_path(url: *mut Object) -> Option<PathBuf> {
     // SAFETY: NSURL owns the representation, which is copied into the Rust path before return.
     let representation: *const c_char = unsafe { msg_send![url, fileSystemRepresentation] };
@@ -225,19 +221,22 @@ unsafe fn file_path(url: *mut Object) -> Option<PathBuf> {
     Some(PathBuf::from(OsStr::from_bytes(bytes)))
 }
 
-/// Parses a TinyVG document into an `NSImage` with a vector image representation.
-pub fn decode_tinyvg_image(bytes: &[u8]) -> Result<Image, String> {
-    let document = ::tinyvg::parse_auto(bytes).map_err(|error| error.to_string())?;
-    let image = create_tinyvg_image(document);
-    // SAFETY: create_tinyvg_image returns an owned, initialized NSImage whose representation owns
+/// Parses a vector document into an `NSImage` with a vector image representation.
+pub fn decode_vector_image(bytes: &[u8]) -> Result<Image, String> {
+    let document = image::decode_vector(bytes).map_err(|error| error.to_string())?;
+    let image = create_vector_image(document);
+    // SAFETY: create_vector_image returns an owned, initialized NSImage whose representation owns
     // the parsed document.
     let mut image = unsafe { finish_image(image) };
-    image.is_tinyvg = true;
+    image.is_vector = true;
     Ok(image)
 }
 
 /// Tries the raster decoders, then AppKit, using an owned Rust buffer.
 pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
+    if image::vector_format(&bytes).is_some() {
+        return decode_vector_image(&bytes);
+    }
     if let Some(image) = decode_custom_image(&bytes) {
         return Ok(image);
     }
@@ -272,6 +271,9 @@ pub unsafe fn decode_image_data(data: *mut Object) -> Result<Image, String> {
             std::slice::from_raw_parts(bytes.cast::<u8>(), length)
         }
     };
+    if image::vector_format(bytes).is_some() {
+        return decode_vector_image(bytes);
+    }
     if let Some(image) = decode_custom_image(bytes) {
         return Ok(image);
     }
@@ -329,13 +331,11 @@ unsafe fn finish_image(image: Retained<Object>) -> Image {
         image,
         size,
         pixel_size,
-        is_tinyvg: false,
+        is_vector: false,
     }
 }
 
-/// Creates an owned image view, letting AppKit play animated image representations.
-///
-/// Call on the main thread. The view retains all images it needs.
+/// Creates an owned main-thread image view that retains and plays animated images.
 pub fn create_image_view(frame: Rect, image: &Image) -> Retained<Object> {
     // SAFETY: The wrapper owns a live NSImage; NSImageView retains it.
     unsafe {
@@ -344,7 +344,7 @@ pub fn create_image_view(frame: Rect, image: &Image) -> Retained<Object> {
         let _: () = msg_send![&*view, setImage: image.as_ptr()];
         let _: () = msg_send![&*view, setImageScaling: NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN];
         let _: () = msg_send![&*view, setAnimates: Bool::YES];
-        if image.is_tinyvg {
+        if image.is_vector {
             let _: () = msg_send![&*view, setCanDrawConcurrently: Bool::YES];
         }
         view
@@ -414,9 +414,7 @@ pub fn extension_main() -> ! {
     unreachable!("NSExtensionMain does not return");
 }
 
-/// Creates an owned `NSImage` from straight-alpha RGBA8 pixels.
-///
-/// The returned object owns one retain count.
+// Creates an `NSImage` with one owned retain count from straight-alpha RGBA8 pixels.
 fn make_image(
     width: u32,
     height: u32,
@@ -525,10 +523,10 @@ mod tests {
     }
 
     #[test]
-    fn tinyvg_uses_a_concurrent_image_view() {
+    fn vector_uses_a_concurrent_image_view() {
         autoreleasepool(|_| {
             let image =
-                decode_tinyvg_image(include_bytes!("../../../bin/macview/examples/tiger.tvg"))
+                decode_vector_image(include_bytes!("../../../bin/macview/examples/tiger.tvg"))
                     .expect("Tiger should decode");
             let view = create_image_view(
                 Rect {
@@ -597,7 +595,29 @@ mod tests {
         });
     }
 
-    /// Returns the magnification that shows all of the media inside a window of `content`.
+    #[test]
+    fn unsupported_vectors_render_partially_but_malformed_vectors_fail() {
+        autoreleasepool(|_| {
+            let filter = br#"<svg xmlns="http://www.w3.org/2000/svg"><filter id="f"/><rect filter="url(#f)"/></svg>"#;
+            let malformed = b"<svg><path d='M nan'/></svg>";
+            assert!(decode_image(filter.to_vec()).is_ok());
+            assert!(decode_image(malformed.to_vec()).is_err());
+            // SAFETY: NSData copies the bytes and remains live for this autorelease pool.
+            let filter_result = unsafe {
+                let data: *mut Object = msg_send![class!(NSData), dataWithBytes: filter.as_ptr().cast::<c_void>(), length: filter.len()];
+                decode_image_data(data)
+            };
+            assert!(filter_result.is_ok());
+            // SAFETY: NSData copies the bytes and remains live for this autorelease pool.
+            let malformed_result = unsafe {
+                let data: *mut Object = msg_send![class!(NSData), dataWithBytes: malformed.as_ptr().cast::<c_void>(), length: malformed.len()];
+                decode_image_data(data)
+            };
+            assert!(malformed_result.is_err());
+        });
+    }
+
+    // Returns the magnification that shows all of the media inside a window of `content`.
     fn fit(media: Size, content: Size) -> f64 {
         (content.width / media.width).min(content.height / media.height)
     }

@@ -88,20 +88,6 @@
             <key>NSDocumentClass</key>
             <string>MacViewDocument</string>
         </dict>
-        <dict>
-            <key>CFBundleTypeName</key>
-            <string>TinyVG Image</string>
-            <key>CFBundleTypeRole</key>
-            <string>Viewer</string>
-            <key>LSHandlerRank</key>
-            <string>Owner</string>
-            <key>LSItemContentTypes</key>
-            <array>
-                <string>org.tinyvg.tvgt</string>
-            </array>
-            <key>NSDocumentClass</key>
-            <string>MacViewDocument</string>
-        </dict>
     </array>
     <key>UTExportedTypeDeclarations</key>
     <array>
@@ -160,26 +146,6 @@
                 </array>
                 <key>public.mime-type</key>
                 <string>image/tinyvg</string>
-            </dict>
-        </dict>
-        <dict>
-            <key>UTTypeConformsTo</key>
-            <array>
-                <string>public.image</string>
-                <string>public.text</string>
-            </array>
-            <key>UTTypeDescription</key>
-            <string>TinyVG Image</string>
-            <key>UTTypeIdentifier</key>
-            <string>org.tinyvg.tvgt</string>
-            <key>UTTypeTagSpecification</key>
-            <dict>
-                <key>public.filename-extension</key>
-                <array>
-                    <string>tvgt</string>
-                </array>
-                <key>public.mime-type</key>
-                <string>text/tinyvg</string>
             </dict>
         </dict>
     </array>

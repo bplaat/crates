@@ -1,7 +1,8 @@
 # Image
 
-A small, safe Rust decoder for JPEG, PNG/APNG, GIF, BMP, ICO, and QOI images. It uses
-one complete-file API and returns straight-alpha RGBA8 pixels.
+A small, safe Rust decoder for JPEG, PNG/APNG, GIF, BMP, ICO, QOI, SVG (subset), and TinyVG
+images. Raster decoding returns straight-alpha RGBA8 pixels; vector decoding returns
+a backend-neutral display list.
 
 ## Example
 
@@ -26,10 +27,27 @@ PNG/APNG, HDR output, encoding, incremental decoding, or ICC color management.
 Decoding has a cumulative 512 MiB allocation limit.
 
 All formats are enabled by default. Disable default features and select from
-`qoi`, `jpeg`, `png`, `gif`, `bmp`, and `ico` to build only the required decoders.
-The `ico` feature enables `bmp` and `png`, since icon images can use either format.
-The `png` feature is the only feature that enables the optional `miniz_oxide`
-dependency.
+`qoi`, `jpeg`, `png`, `gif`, `bmp`, `ico`, `svg`, and `tinyvg` to build only the
+required decoders.
+
+## SVG support
+
+The decoder supports this practical static SVG subset:
+
+- Documents: static UTF-8 SVG with root or nested viewports, `viewBox`,
+  `preserveAspectRatio`, clipping, percentages, and standard units.
+- Geometry: all path commands, rectangles, circles, ellipses, lines, polygons,
+  polylines, and complete transform lists.
+- Appearance: inherited presentation attributes and inline `style=""` values for
+  fills, strokes, opacity, visibility, fill rules, caps, joins, and dashes.
+- Paint and reuse: CSS colors, linear or radial gradients, local `defs` and `use`,
+  clip paths, and nested alpha or luminance masks.
+
+Unsupported content is skipped when the XML is valid. This includes text, images,
+filters, patterns, markers, stylesheets, blend modes, animation, scripts and events,
+links, `foreignObject`, and external resources.
+
+## Tests
 
 Run `cargo run -p image --bin generate-fixtures` to regenerate fixtures with
 ImageMagick and libjpeg-turbo. The checked-in fixtures let normal builds and the

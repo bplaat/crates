@@ -15,11 +15,16 @@ use objc2::runtime::AnyObject as Object;
 use objc2::{Encode, Encoding, class, msg_send};
 
 pub(crate) const DRAW_PATH_EVEN_ODD_FILL: i32 = 1;
+pub(crate) const DRAW_PATH_FILL: i32 = 0;
 pub(crate) const DRAW_PATH_STROKE: i32 = 2;
 pub(crate) const GRADIENT_DRAWS_AFTER_END: u32 = 2;
 pub(crate) const GRADIENT_DRAWS_BEFORE_START: u32 = 1;
 pub(crate) const LINE_CAP_ROUND: i32 = 1;
+pub(crate) const LINE_CAP_BUTT: i32 = 0;
+pub(crate) const LINE_CAP_SQUARE: i32 = 2;
+pub(crate) const LINE_JOIN_MITER: i32 = 0;
 pub(crate) const LINE_JOIN_ROUND: i32 = 1;
+pub(crate) const LINE_JOIN_BEVEL: i32 = 2;
 pub(crate) const NS_IMAGE_SCALE_PROPORTIONALLY_UP_OR_DOWN: u64 = 3;
 pub(crate) const NS_IMAGE_CACHE_NEVER: u64 = 3;
 pub(crate) const NS_UTF8_STRING_ENCODING: u64 = 4;
@@ -53,9 +58,7 @@ unsafe extern "C" {
     pub(crate) static mut DISPATCH_MAIN_QUEUE: u8;
 }
 
-/// Creates an autoreleased `NSString` from a runtime string.
-///
-/// Use [`ns_string!`] instead when the string is a literal.
+/// Creates an autoreleased `NSString` from a runtime string; use [`ns_string!`] for literals.
 pub fn ns_string(value: &str) -> *mut Object {
     // SAFETY: NSString copies the valid UTF-8 bytes before the returned object is autoreleased.
     unsafe {
@@ -69,11 +72,7 @@ pub fn ns_string(value: &str) -> *mut Object {
     }
 }
 
-/// Mirrors the layout of Apple's `__CFConstantString` (`CFRuntimeBase` + data + len).
-///
-/// Statics of this type placed in `__DATA,__cfstring` are recognised by dyld as NSString
-/// literals, equivalent to Clang's `@"..."` syntax. The ISA is fixed up at load time via
-/// `__CFConstantStringClassReference`, provided by CoreFoundation.
+/// Mirrors Apple's `__CFConstantString` layout for static NSString literals fixed up by dyld.
 #[repr(C)]
 pub struct CFConstString {
     /// The class pointer, fixed up at load time.
@@ -93,15 +92,7 @@ unsafe impl Send for CFConstString {}
 // SAFETY: A constant string is immutable and lives for the whole program.
 unsafe impl Sync for CFConstString {}
 
-/// Creates a zero-cost `NSString` literal, equivalent to Clang's `@"..."` syntax.
-///
-/// The string must be ASCII without interior NUL bytes, which is checked at compile time.
-/// It returns a `*mut AnyObject` pointing at a static string in `__DATA,__cfstring`, so unlike
-/// [`ns_string`] it allocates nothing and never needs to be released.
-///
-/// Do not call this inside a closure: rustc may split the static definition into a separate
-/// codegen unit with internal linkage, which hides it from the linker (see madsmtm/objc2#258).
-/// Hoist the call to the enclosing function scope instead.
+/// Creates a compile-time checked static ASCII `NSString` literal; call it outside closures.
 #[macro_export]
 macro_rules! ns_string {
     ($s:expr) => {{
@@ -159,8 +150,6 @@ unsafe extern "C" {
     pub(crate) static kCGColorSpaceLinearSRGB: *const c_void;
 
     pub(crate) fn CGColorSpaceCreateWithName(name: *const c_void) -> *const c_void;
-    #[cfg(test)]
-    pub(crate) fn CGColorSpaceCreateDeviceRGB() -> *const c_void;
     pub(crate) fn CGColorSpaceRelease(color_space: *const c_void);
     #[cfg(test)]
     pub(crate) fn CGBitmapContextCreate(
@@ -172,42 +161,29 @@ unsafe extern "C" {
         color_space: *const c_void,
         bitmap_info: u32,
     ) -> *mut c_void;
-    pub(crate) fn CGContextAddCurveToPoint(
-        context: *mut c_void,
-        control_0_x: f64,
-        control_0_y: f64,
-        control_1_x: f64,
-        control_1_y: f64,
-        x: f64,
-        y: f64,
-    );
     pub(crate) fn CGContextAddPath(context: *mut c_void, path: *const c_void);
-    pub(crate) fn CGContextAddLineToPoint(context: *mut c_void, x: f64, y: f64);
-    pub(crate) fn CGContextAddQuadCurveToPoint(
-        context: *mut c_void,
-        control_x: f64,
-        control_y: f64,
-        x: f64,
-        y: f64,
-    );
     pub(crate) fn CGContextBeginPath(context: *mut c_void);
     pub(crate) fn CGContextClip(context: *mut c_void);
-    pub(crate) fn CGContextClosePath(context: *mut c_void);
-    pub(crate) fn CGContextConvertSizeToDeviceSpace(context: *mut c_void, size: Size) -> Size;
+    pub(crate) fn CGContextBeginTransparencyLayer(
+        context: *mut c_void,
+        auxiliary_info: *const c_void,
+    );
+    pub(crate) fn CGContextEndTransparencyLayer(context: *mut c_void);
+    pub(crate) fn CGContextConcatCTM(context: *mut c_void, transform: image::Transform);
     pub(crate) fn CGContextDrawLinearGradient(
         context: *mut c_void,
         gradient: *const c_void,
-        start: TinyVgPoint,
-        end: TinyVgPoint,
+        start: image::Point,
+        end: image::Point,
         options: u32,
     );
     pub(crate) fn CGContextDrawPath(context: *mut c_void, mode: i32);
     pub(crate) fn CGContextDrawRadialGradient(
         context: *mut c_void,
         gradient: *const c_void,
-        start_center: TinyVgPoint,
+        start_center: image::Point,
         start_radius: f64,
-        end_center: TinyVgPoint,
+        end_center: image::Point,
         end_radius: f64,
         options: u32,
     );
@@ -215,15 +191,23 @@ unsafe extern "C" {
     pub(crate) fn CGContextGetClipBoundingBox(context: *mut c_void) -> Rect;
     /// Fills a rectangle with the current fill color.
     pub fn CGContextFillRect(context: *mut c_void, rectangle: Rect);
-    pub(crate) fn CGContextMoveToPoint(context: *mut c_void, x: f64, y: f64);
-    #[cfg(test)]
-    pub(crate) fn CGContextRelease(context: *mut c_void);
     pub(crate) fn CGContextReplacePathWithStrokedPath(context: *mut c_void);
     pub(crate) fn CGContextRestoreGState(context: *mut c_void);
+    #[cfg(test)]
+    pub(crate) fn CGContextRelease(context: *mut c_void);
     pub(crate) fn CGContextSaveGState(context: *mut c_void);
     pub(crate) fn CGContextScaleCTM(context: *mut c_void, x: f64, y: f64);
     pub(crate) fn CGContextSetLineCap(context: *mut c_void, line_cap: i32);
     pub(crate) fn CGContextSetLineJoin(context: *mut c_void, line_join: i32);
+    pub(crate) fn CGContextSetLineDash(
+        context: *mut c_void,
+        phase: f64,
+        lengths: *const f64,
+        count: usize,
+    );
+    pub(crate) fn CGContextSetMiterLimit(context: *mut c_void, limit: f64);
+    pub(crate) fn CGContextSetAlpha(context: *mut c_void, alpha: f64);
+    pub(crate) fn CGContextSetBlendMode(context: *mut c_void, mode: i32);
     pub(crate) fn CGContextSetLineWidth(context: *mut c_void, width: f64);
     /// Sets the fill color of a context in the device RGB color space.
     pub fn CGContextSetRGBFillColor(
@@ -289,8 +273,6 @@ unsafe extern "C" {
     ) -> *const c_void;
     pub(crate) fn CGGradientRelease(gradient: *const c_void);
 }
-
-type TinyVgPoint = tinyvg::Point;
 
 /// A Core Graphics point.
 #[derive(Clone, Copy)]

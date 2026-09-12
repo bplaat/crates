@@ -15,24 +15,15 @@ use objc2::{class, define_class, msg_send, sel};
 
 use crate::headers::*;
 
-/// The magnification the media may be shrunk and enlarged to.
+// The magnification the media may be shrunk and enlarged to.
 const MINIMUM_MAGNIFICATION: f64 = 0.02;
 const MAXIMUM_MAGNIFICATION: f64 = 64.0;
 
-/// How much a scroll with Command held magnifies the media, as an exponent per unit scrolled.
-///
-/// Magnifying by a power keeps every step the same size on screen and returns to the magnification
-/// it started from when the same distance is scrolled back. A wheel counts in lines, of which a
-/// notch reports one, and a trackpad counts in points, of which a gesture reports many.
+// Command-scroll zoom exponent per wheel line or trackpad point.
 const WHEEL_ZOOM_RATE: f64 = 0.15;
 const TRACKPAD_ZOOM_RATE: f64 = 0.005;
 
-/// Scrolls the clip view of a scroll view as far towards `point` as the media reaches, and updates
-/// the scrollers to the position it ends up at.
-///
-/// A clip view scrolls to any point it is handed, including points past the edges of the media, so
-/// every scroll asks it for the point it constrains that one to first. That is the point the media
-/// is dragged, zoomed and centered to, which keeps it from being pushed out of the window.
+// Scrolls toward `point` within the media edges and updates the scrollers to the constrained point.
 fn scroll_to(scroll_view: *mut Object, clip_view: *mut Object, point: Point) {
     // SAFETY: Both are live AppKit views, and constraining a bounds rectangle of the visible area
     // returns the rectangle the clip view allows.
@@ -50,10 +41,9 @@ fn scroll_to(scroll_view: *mut Object, clip_view: *mut Object, point: Point) {
 }
 
 struct ClipViewIvars {
-    /// Whether the media is being dragged around with the mouse.
-    ///
+    // Whether the media is being dragged around with the mouse.
     panning: Cell<bool>,
-    /// Where the pointer was at the previous step of the drag, in window coordinates.
+    // Where the pointer was at the previous step of the drag, in window coordinates.
     pointer: Cell<Point>,
 }
 
@@ -64,12 +54,12 @@ define_class!(
     struct ClipView;
 
     impl ClipView {
-        /// Anchors the media at the top left of the window instead of the bottom left.
-        ///
-        /// A clip view scrolls in its own coordinates, so an unflipped one keeps the bottom of the
-        /// media in place while the window is resized, which leaves the view at the end of a taller
-        /// image and scrolls the top of it out of sight. Flipping it keeps the top in place, and
-        /// what a smaller window loses is scrolled to downwards.
+        // Anchors the media at the top left of the window instead of the bottom left.
+        //
+        // A clip view scrolls in its own coordinates, so an unflipped one keeps the bottom of the
+        // media in place while the window is resized, which leaves the view at the end of a taller
+        // image and scrolls the top of it out of sight. Flipping it keeps the top in place, and
+        // what a smaller window loses is scrolled to downwards.
         #[unsafe(method(isFlipped))]
         const fn _is_flipped(&self) -> Bool {
             Bool::YES
@@ -80,11 +70,11 @@ define_class!(
             self.constrain_bounds_rect(proposed)
         }
 
-        /// Answers for the mouse over the whole media area, instead of the view that draws it.
-        ///
-        /// An image view tracks clicks of its own and a web view has a menu and a cursor of its
-        /// own, none of which belongs to media that is only drawn. Keeping the mouse at the clip
-        /// view leaves every format dragging, zooming and scrolling the same way.
+        // Answers for the mouse over the whole media area, instead of the view that draws it.
+        //
+        // An image view tracks clicks of its own and a web view has a menu and a cursor of its
+        // own, none of which belongs to media that is only drawn. Keeping the mouse at the clip
+        // view leaves every format dragging, zooming and scrolling the same way.
         #[unsafe(method(hitTest:))]
         fn _hit_test(&self, point: Point) -> *mut Object {
             self.hit_test(point)
@@ -113,7 +103,7 @@ define_class!(
 );
 
 impl ClipView {
-    /// Centers media that is smaller than the visible area instead of pinning it to a corner.
+    // Centers media that is smaller than the visible area instead of pinning it to a corner.
     fn constrain_bounds_rect(&self, proposed: Rect) -> Rect {
         // SAFETY: NSClipView implements `constrainBoundsRect:` with this argument and return type,
         // and the document view is the one the scroll view installed.
@@ -136,7 +126,7 @@ impl ClipView {
         }
     }
 
-    /// Returns the clip view for every point of the visible area, and nothing outside of it.
+    // Returns the clip view for every point of the visible area, and nothing outside of it.
     fn hit_test(&self, point: Point) -> *mut Object {
         // SAFETY: The clip view is a live view whose frame is in the coordinates the point is in.
         unsafe {
@@ -150,8 +140,8 @@ impl ClipView {
         }
     }
 
-    /// Returns the magnification the media is shown at, which is the scale between the media
-    /// coordinates the clip view scrolls in and the points of the window.
+    // Returns the magnification the media is shown at, which is the scale between the media
+    // coordinates the clip view scrolls in and the points of the window.
     fn magnification(&self) -> f64 {
         // SAFETY: The clip view is a live view, whose bounds are its frame divided by the
         // magnification of the scroll view around it.
@@ -167,7 +157,7 @@ impl ClipView {
         }
     }
 
-    /// Returns whether the media is larger than the visible area, and can be dragged around.
+    // Returns whether the media is larger than the visible area, and can be dragged around.
     fn is_scrollable(&self) -> bool {
         // SAFETY: The scroll view keeps the document view alive while it is installed.
         unsafe {
@@ -186,7 +176,7 @@ impl ClipView {
         }
     }
 
-    /// Shows an open hand over media that can be dragged around.
+    // Shows an open hand over media that can be dragged around.
     fn reset_cursor_rects(&self) {
         if !self.is_scrollable() {
             return;
@@ -201,7 +191,7 @@ impl ClipView {
         }
     }
 
-    /// Takes hold of media that is larger than the window, to drag it around with.
+    // Takes hold of media that is larger than the window, to drag it around with.
     fn mouse_down(&self, event: *mut Object) {
         if !self.is_scrollable() {
             self.pass_on(sel!(mouseDown:), event);
@@ -217,7 +207,7 @@ impl ClipView {
         }
     }
 
-    /// Moves the media along with the pointer.
+    // Moves the media along with the pointer.
     fn mouse_dragged(&self, event: *mut Object) {
         if !self.ivars().panning.get() {
             self.pass_on(sel!(mouseDragged:), event);
@@ -251,7 +241,7 @@ impl ClipView {
         }
     }
 
-    /// Lets go of the media at the end of a drag.
+    // Lets go of the media at the end of a drag.
     fn mouse_up(&self, event: *mut Object) {
         if !self.ivars().panning.replace(false) {
             self.pass_on(sel!(mouseUp:), event);
@@ -263,7 +253,7 @@ impl ClipView {
         }
     }
 
-    /// Hands a mouse event that is not a drag of the media to the rest of the responder chain.
+    // Hands a mouse event that is not a drag of the media to the rest of the responder chain.
     fn pass_on(&self, selector: objc2::runtime::Sel, event: *mut Object) {
         // SAFETY: The clip view has a next responder while it is inside a window, and all mouse
         // messages take one event and return nothing.
@@ -286,14 +276,14 @@ define_class!(
     struct ScrollView;
 
     impl ScrollView {
-        /// Shows the media at the given magnification, in the middle of the window.
+        // Shows the media at the given magnification, in the middle of the window.
         #[unsafe(method(setZoom:))]
         fn _set_zoom(&self, magnification: f64) {
             self.magnify(magnification);
             self.scroll_to_center();
         }
 
-        /// Magnifies by a step, keeping the middle of the visible area in place.
+        // Magnifies by a step, keeping the middle of the visible area in place.
         #[unsafe(method(zoomBy:))]
         fn _zoom_by(&self, factor: f64) {
             // SAFETY: The scroll view magnifies itself.
@@ -302,7 +292,7 @@ define_class!(
             self.magnify_around_center(magnification * factor);
         }
 
-        /// Shows all of the media, in the middle of the window.
+        // Shows all of the media, in the middle of the window.
         #[unsafe(method(zoomToFit))]
         fn _zoom_to_fit(&self) {
             self.magnify(self.fit_magnification());
@@ -314,10 +304,10 @@ define_class!(
             self.scroll_wheel(event);
         }
 
-        /// Keeps the overlay scrollers that float over the media.
-        ///
-        /// AppKit switches to the legacy scrollers, which take a strip beside the media, when a
-        /// mouse is attached, and switches back whenever that setting changes.
+        // Keeps the overlay scrollers that float over the media.
+        //
+        // AppKit switches to the legacy scrollers, which take a strip beside the media, when a
+        // mouse is attached, and switches back whenever that setting changes.
         #[unsafe(method(setScrollerStyle:))]
         fn _set_scroller_style(&self, _style: i64) {
             self.set_scroller_style(NS_SCROLLER_STYLE_OVERLAY);
@@ -326,7 +316,7 @@ define_class!(
 );
 
 impl ScrollView {
-    /// Returns the magnification that shows all of the media.
+    // Returns the magnification that shows all of the media.
     fn fit_magnification(&self) -> f64 {
         // SAFETY: The scroll view keeps its document view alive, and its content size is the
         // visible area in points.
@@ -347,7 +337,7 @@ impl ScrollView {
         }
     }
 
-    /// Sets the scroller style, past the override of the setter.
+    // Sets the scroller style, past the override of the setter.
     fn set_scroller_style(&self, style: i64) {
         // SAFETY: NSScrollView implements `setScrollerStyle:` and its argument is an NSInteger.
         unsafe {
@@ -355,7 +345,7 @@ impl ScrollView {
         }
     }
 
-    /// Magnifies the media, leaving the scroll position to the caller.
+    // Magnifies the media, leaving the scroll position to the caller.
     fn magnify(&self, magnification: f64) {
         // SAFETY: The scroll view clamps the magnification to its own range.
         unsafe {
@@ -364,7 +354,7 @@ impl ScrollView {
         }
     }
 
-    /// Magnifies the media, keeping the middle of the visible area in place.
+    // Magnifies the media, keeping the middle of the visible area in place.
     fn magnify_around_center(&self, magnification: f64) {
         // SAFETY: The scroll view keeps its clip view alive.
         unsafe {
@@ -381,12 +371,12 @@ impl ScrollView {
         }
     }
 
-    /// Magnifies the media, keeping `anchor` of it under the point of the window it is under.
-    ///
-    /// The anchor is in the coordinates the clip view scrolls in, which are the coordinates of the
-    /// media itself. Scrolling to where the anchor ends up is what keeps it still: the media is
-    /// magnified around the middle of the visible area otherwise, and the scroll view clamps the
-    /// magnification it is given to the range it allows.
+    // Magnifies the media, keeping `anchor` of it under the point of the window it is under.
+    //
+    // The anchor is in the coordinates the clip view scrolls in, which are the coordinates of the
+    // media itself. Scrolling to where the anchor ends up is what keeps it still: the media is
+    // magnified around the middle of the visible area otherwise, and the scroll view clamps the
+    // magnification it is given to the range it allows.
     fn magnify_around(&self, magnification: f64, anchor: Point) {
         // SAFETY: The scroll view keeps its clip view alive.
         unsafe {
@@ -410,13 +400,13 @@ impl ScrollView {
         }
     }
 
-    /// Magnifies the media around the pointer for a scroll with Command held, and scrolls the
-    /// media for every other scroll.
-    ///
-    /// A mouse has no pinch gesture of its own, so Command with the wheel magnifies the media the
-    /// way two fingers on a trackpad do: continuously, and towards the point under the pointer
-    /// instead of the middle of the window. The direction follows the scroll direction the system
-    /// is set to, because AppKit reports the scroll the way the media is meant to follow it.
+    // Magnifies the media around the pointer for a scroll with Command held, and scrolls the
+    // media for every other scroll.
+    //
+    // A mouse has no pinch gesture of its own, so Command with the wheel magnifies the media the
+    // way two fingers on a trackpad do: continuously, and towards the point under the pointer
+    // instead of the middle of the window. The direction follows the scroll direction the system
+    // is set to, because AppKit reports the scroll the way the media is meant to follow it.
     fn scroll_wheel(&self, event: *mut Object) {
         // SAFETY: AppKit passes a valid NSEvent and NSScrollView implements `scrollWheel:` with
         // this argument type.
@@ -446,7 +436,7 @@ impl ScrollView {
         }
     }
 
-    /// Scrolls back to the middle of the media, so that it cannot stay stuck in a corner.
+    // Scrolls back to the middle of the media, so that it cannot stay stuck in a corner.
     fn scroll_to_center(&self) {
         // SAFETY: The scroll view keeps its document and clip views alive.
         unsafe {
@@ -470,10 +460,7 @@ impl ScrollView {
     }
 }
 
-/// Creates an owned scroll view that scrolls and magnifies `document` inside `frame`.
-///
-/// Scrolling, panning, pinching, smart magnifying, the elastic edges and the scrollers all come
-/// from `NSScrollView` itself. The returned view owns one retain count.
+/// Creates an owned native scroll view that scrolls and magnifies `document` inside `frame`.
 pub(crate) fn create_scroll_view(frame: Rect, document: *mut Object) -> Retained<Object> {
     // SAFETY: All objects are valid AppKit instances, and the clip view is released after the
     // scroll view retains it.
@@ -510,10 +497,7 @@ pub(crate) fn create_scroll_view(frame: Rect, document: *mut Object) -> Retained
     }
 }
 
-/// Replaces the media drawn by `scroll_view`, optionally fitting it to the window.
-///
-/// A refresh of the file keeps the user's magnification. Moving to another file starts that file
-/// fitted to the window, as it did when first opened.
+/// Replaces the media, preserving zoom on refresh or optionally fitting it to the window.
 ///
 /// # Safety
 ///
