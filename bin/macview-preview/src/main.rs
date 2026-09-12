@@ -101,6 +101,11 @@ impl PreviewViewController {
         // load and main-queue UI continuation have finished.
         let (this, url, completion) = unsafe {
             let this = self as *const Self as *mut Object;
+            // Quick Look may reuse a controller for another file. Clear the previous preview now
+            // so a failed replacement cannot leave stale media visible.
+            let root: *mut Object = msg_send![this, view];
+            let empty: *mut Object = msg_send![class!(NSArray), array];
+            let _: () = msg_send![root, setSubviews: empty];
             let this = MainQueueObject(
                 Retained::retain(this).expect("cannot retain a null preview controller"),
             );
@@ -125,7 +130,9 @@ impl PreviewViewController {
                             let _: () = msg_send![&*view,
                                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
                             ];
-                            let _: () = msg_send![root, addSubview: view.as_ptr()];
+                            let subviews: *mut Object =
+                                msg_send![class!(NSArray), arrayWithObject: view.as_ptr()];
+                            let _: () = msg_send![root, setSubviews: subviews];
                             let _: () = msg_send![this, setPreferredContentSize: size];
                             completion.call(null_mut());
                         }
