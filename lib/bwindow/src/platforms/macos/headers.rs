@@ -28,6 +28,11 @@ unsafe extern "C" {
     pub static NSKeyValueChangeNewKey: *const Object;
 }
 
+#[link(name = "ApplicationServices", kind = "framework")]
+unsafe extern "C" {
+    pub fn CGAssociateMouseAndMouseCursorPosition(connected: u32) -> i32;
+}
+
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct CGPoint {

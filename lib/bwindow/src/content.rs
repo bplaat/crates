@@ -8,7 +8,7 @@ use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::rc::{Rc, Weak};
 
-use crate::{WindowEvent, WindowId};
+use crate::{LogicalPoint, WindowEvent, WindowId};
 
 /// A native top-level window for implementing a content backend.
 #[derive(Clone, Copy, Debug)]
@@ -37,6 +37,8 @@ pub(crate) struct ContentHost {
     redraw: RefCell<Option<Rc<dyn Fn()>>>,
     animation_frame: RefCell<Option<Rc<dyn Fn()>>>,
     animation_frame_pending: Cell<bool>,
+    pointer_locked: Cell<bool>,
+    pointer_position: Cell<Option<LogicalPoint>>,
 }
 
 impl ContentHost {
@@ -54,6 +56,8 @@ impl ContentHost {
             redraw: RefCell::new(None),
             animation_frame: RefCell::new(None),
             animation_frame_pending: Cell::new(false),
+            pointer_locked: Cell::new(false),
+            pointer_position: Cell::new(None),
         })
     }
 
@@ -67,6 +71,20 @@ impl ContentHost {
 
     pub(crate) const fn is_closed(&self) -> bool {
         self.closed.get()
+    }
+
+    pub(crate) const fn pointer_locked(&self) -> bool {
+        self.pointer_locked.get()
+    }
+
+    pub(crate) fn set_pointer_locked(self: &Rc<Self>, locked: bool) {
+        if self.pointer_locked.replace(locked) == locked {
+            return;
+        }
+        if !locked {
+            self.pointer_position.set(None);
+        }
+        self.event_sender().send(WindowEvent::PointerLockChange);
     }
 
     pub(crate) fn set_background(&self, color: u32) {
@@ -107,6 +125,10 @@ impl ContentHost {
         if self.closed.replace(true) {
             return;
         }
+        if self.pointer_locked.replace(false) {
+            crate::platforms::release_pointer_lock();
+        }
+        self.pointer_position.set(None);
         self.handle.set(None);
         let redraw = self.redraw.borrow_mut().take();
         drop(redraw);
@@ -307,6 +329,45 @@ impl WindowEventSender {
         if let Some(host) = self.0.upgrade()
             && !host.closed.get()
         {
+            let event = match event {
+                WindowEvent::MouseMove {
+                    mut position,
+                    movement,
+                    modifiers,
+                } => {
+                    let previous = host.pointer_position.get();
+                    let movement =
+                        if host.pointer_locked.get() && (movement.x != 0.0 || movement.y != 0.0) {
+                            if let Some(previous) = previous {
+                                position = previous;
+                            }
+                            movement
+                        } else {
+                            previous.map_or(LogicalPoint::default(), |previous| {
+                                LogicalPoint::new(position.x - previous.x, position.y - previous.y)
+                            })
+                        };
+                    host.pointer_position.set(Some(position));
+                    WindowEvent::MouseMove {
+                        position,
+                        movement,
+                        modifiers,
+                    }
+                }
+                WindowEvent::MouseDown(event) => {
+                    host.pointer_position.set(Some(event.position));
+                    WindowEvent::MouseDown(event)
+                }
+                WindowEvent::MouseUp(event) => {
+                    host.pointer_position.set(Some(event.position));
+                    WindowEvent::MouseUp(event)
+                }
+                WindowEvent::MouseLeave | WindowEvent::Blur => {
+                    host.pointer_position.set(None);
+                    event
+                }
+                _ => event,
+            };
             let event = crate::Event::Window(host.id, event);
             if matches!(
                 &event,

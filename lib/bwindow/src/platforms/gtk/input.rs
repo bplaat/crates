@@ -43,6 +43,7 @@ pub unsafe fn gtk_input_event(event: *const GdkEvent, repeat: bool) -> Option<Wi
     Some(match kind {
         3 => WindowEvent::MouseMove {
             position,
+            movement: LogicalPoint::default(),
             modifiers,
         },
         4 | 7 => {

@@ -4,22 +4,28 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::ffi::{CStr, CString, c_void};
 use std::ptr::{null, null_mut};
 
 use super::event_loop::{primary_monitor_rect, send_event};
 use super::headers::*;
+use super::input::gtk_input_event;
 #[cfg(feature = "progress_bar")]
 use super::progress_bar::update_progress_bar;
 #[cfg(feature = "remember_window_state")]
 use super::window_state::{load_window_state, save_window_state};
-use crate::{CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
+use crate::{
+    CloseRequest, LogicalPoint, LogicalSize, PointerLockError, Theme, WindowBuilder, WindowEvent,
+};
 
 pub(super) struct WindowData {
     host: std::rc::Rc<crate::content::ContentHost>,
     pub(crate) window_id: crate::WindowId,
     pub(super) window: *mut GtkWindow,
     pub(super) background_color: Option<u32>,
+    keys: RefCell<HashSet<u16>>,
     #[cfg(feature = "remember_window_state")]
     pub(super) remember_window_state: bool,
     #[cfg(feature = "file_drop")]
@@ -80,6 +86,7 @@ impl PlatformWindow {
             window_id: builder.window_id,
             window: null_mut(),
             background_color: builder.background_color,
+            keys: RefCell::new(HashSet::new()),
             #[cfg(feature = "remember_window_state")]
             remember_window_state: builder.remember_window_state,
             #[cfg(feature = "file_drop")]
@@ -89,6 +96,21 @@ impl PlatformWindow {
         // Create window
         let window = unsafe {
             let window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+            gtk_widget_set_can_focus(window.cast(), 1);
+            // Motion, buttons, enter/leave, keys, focus, discrete and smooth scroll.
+            gtk_widget_add_events(
+                window.cast(),
+                (1 << 2)
+                    | (1 << 8)
+                    | (1 << 9)
+                    | (1 << 10)
+                    | (1 << 11)
+                    | (1 << 12)
+                    | (1 << 13)
+                    | (1 << 14)
+                    | (1 << 21)
+                    | (1 << 23),
+            );
             #[cfg(feature = "file_drop")]
             if builder.allow_file_drop {
                 super::file_drop::gtk_connect_file_drop(window.cast(), host.event_sender());
@@ -170,6 +192,20 @@ impl PlatformWindow {
                 null(),
                 G_CONNECT_DEFAULT,
             );
+            for (name, callback) in [
+                (c"event", window_on_input as *const c_void),
+                (c"focus-in-event", window_on_focus_in as *const c_void),
+                (c"focus-out-event", window_on_focus_out as *const c_void),
+            ] {
+                g_signal_connect_data(
+                    window.cast(),
+                    name.as_ptr(),
+                    callback,
+                    window_data.as_mut() as *mut _ as *const c_void,
+                    null(),
+                    G_CONNECT_DEFAULT,
+                );
+            }
             if !is_wayland {
                 g_signal_connect_data(
                     window as *mut GObject,
@@ -294,10 +330,111 @@ impl crate::WindowInterface for PlatformWindow {
         }
     }
 
+    fn request_pointer_lock(&mut self) -> Result<(), PointerLockError> {
+        const GDK_SEAT_CAPABILITY_POINTER: u32 = 1;
+        const GDK_BLANK_CURSOR: i32 = -2;
+
+        unsafe {
+            let display = gdk_display_get_default();
+            if display.is_null() {
+                return Err(PointerLockError(
+                    "Could not access the native pointer device".into(),
+                ));
+            }
+            let seat = gdk_display_get_default_seat(display);
+            let window = gtk_widget_get_window(self.0.window.cast());
+            if seat.is_null() || window.is_null() {
+                return Err(PointerLockError(
+                    "Could not access the native pointer device".into(),
+                ));
+            }
+
+            let cursor = gdk_cursor_new_for_display(display, GDK_BLANK_CURSOR);
+            if cursor.is_null() {
+                return Err(PointerLockError(
+                    "Could not create a hidden pointer cursor".into(),
+                ));
+            }
+            let status = gdk_seat_grab(
+                seat,
+                window,
+                GDK_SEAT_CAPABILITY_POINTER,
+                1,
+                cursor,
+                null(),
+                null(),
+                null_mut(),
+            );
+            g_object_unref(cursor.cast());
+            if status != 0 {
+                return Err(PointerLockError(format!(
+                    "GDK pointer lock failed with status {status}"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn exit_pointer_lock(&mut self) {
+        release_pointer_lock();
+    }
+
     #[cfg(feature = "progress_bar")]
     fn gtk_set_progress_bar(&mut self, progress: Option<f32>) {
         update_progress_bar(progress);
     }
+}
+
+pub(crate) fn release_pointer_lock() {
+    unsafe {
+        let display = gdk_display_get_default();
+        if display.is_null() {
+            return;
+        }
+        let seat = gdk_display_get_default_seat(display);
+        if !seat.is_null() {
+            gdk_seat_ungrab(seat);
+        }
+    }
+}
+
+extern "C" fn window_on_input(
+    window: *mut GtkWidget,
+    event: *const GdkEvent,
+    data: &WindowData,
+) -> i32 {
+    let kind = unsafe { gdk_event_get_event_type(event) };
+    let repeat = if kind == 8 || kind == 9 {
+        let mut code = 0;
+        unsafe { gdk_event_get_keycode(event, &mut code) };
+        if kind == 8 {
+            !data.keys.borrow_mut().insert(code)
+        } else {
+            data.keys.borrow_mut().remove(&code);
+            false
+        }
+    } else {
+        false
+    };
+    if kind == 4 {
+        unsafe { gtk_widget_grab_focus(window) };
+    }
+    if let Some(event) = unsafe { gtk_input_event(event, repeat) } {
+        data.host.event_sender().send(event);
+        return 1;
+    }
+    0
+}
+
+extern "C" fn window_on_focus_in(_: *mut GtkWidget, _: *const GdkEvent, data: &WindowData) -> i32 {
+    data.host.event_sender().send(WindowEvent::Focus);
+    0
+}
+
+extern "C" fn window_on_focus_out(_: *mut GtkWidget, _: *const GdkEvent, data: &WindowData) -> i32 {
+    data.keys.borrow_mut().clear();
+    data.host.event_sender().send(WindowEvent::Blur);
+    0
 }
 
 extern "C" fn window_on_move(

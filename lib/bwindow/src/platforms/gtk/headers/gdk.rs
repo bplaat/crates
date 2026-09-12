@@ -13,6 +13,12 @@ use std::ffi::{c_char, c_void};
 #[repr(C)]
 pub struct GdkDisplay([u8; 0]);
 #[repr(C)]
+pub(super) struct GdkCursor([u8; 0]);
+#[repr(C)]
+pub(super) struct GdkSeat([u8; 0]);
+#[repr(C)]
+pub(super) struct GdkWindow([u8; 0]);
+#[repr(C)]
 pub struct GdkDragContext([u8; 0]);
 #[repr(C)]
 pub struct GdkEvent([u8; 0]);
@@ -50,6 +56,22 @@ unsafe extern "C" {
     pub fn gdk_keyval_to_unicode(keyval: u32) -> u32;
     pub fn gdk_display_get_default() -> *mut GdkDisplay;
     pub fn gdk_display_get_name(display: *mut GdkDisplay) -> *const c_char;
+    pub(super) fn gdk_display_get_default_seat(display: *mut GdkDisplay) -> *mut GdkSeat;
+    pub(super) fn gdk_cursor_new_for_display(
+        display: *mut GdkDisplay,
+        cursor_type: i32,
+    ) -> *mut GdkCursor;
+    pub(super) fn gdk_seat_grab(
+        seat: *mut GdkSeat,
+        window: *mut GdkWindow,
+        capabilities: u32,
+        owner_events: i32,
+        cursor: *mut GdkCursor,
+        event: *const GdkEvent,
+        prepare_func: *const c_void,
+        prepare_func_data: *mut c_void,
+    ) -> i32;
+    pub(super) fn gdk_seat_ungrab(seat: *mut GdkSeat);
 
     // GTK < 3.22
     pub fn gdk_screen_get_default() -> *mut GdkScreen;

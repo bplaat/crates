@@ -83,6 +83,7 @@ pub type HCURSOR = HANDLE;
 pub type HICON = HANDLE;
 pub type HMENU = HANDLE;
 pub type HMONITOR = HANDLE;
+pub(super) type HRAWINPUT = HANDLE;
 pub type ATOM = u16;
 pub type WPARAM = usize;
 pub type LPARAM = isize;
@@ -208,6 +209,14 @@ pub struct POINT {
 }
 
 #[repr(C)]
+pub(super) struct RAWINPUTDEVICE {
+    pub(super) usUsagePage: u16,
+    pub(super) usUsage: u16,
+    pub(super) dwFlags: u32,
+    pub(super) hwndTarget: HWND,
+}
+
+#[repr(C)]
 #[derive(Default, Clone)]
 pub struct RECT {
     pub left: i32,
@@ -273,7 +282,27 @@ pub const WM_PAINT: u32 = 0x000f;
 pub const WM_CLOSE: u32 = 0x0010;
 pub const WM_ERASEBKGND: u32 = 0x0014;
 pub const WM_GETMINMAXINFO: u32 = 0x0024;
+pub(super) const WM_SETFOCUS: u32 = 0x0007;
+pub(super) const WM_KILLFOCUS: u32 = 0x0008;
+pub(super) const WM_SETCURSOR: u32 = 0x0020;
+pub(super) const WM_INPUT: u32 = 0x00ff;
 pub const WM_NCCREATE: u32 = 0x0081;
+pub(super) const WM_KEYDOWN: u32 = 0x0100;
+pub(super) const WM_KEYUP: u32 = 0x0101;
+pub(super) const WM_SYSKEYDOWN: u32 = 0x0104;
+pub(super) const WM_SYSKEYUP: u32 = 0x0105;
+pub(super) const WM_MOUSEMOVE: u32 = 0x0200;
+pub(super) const WM_LBUTTONDOWN: u32 = 0x0201;
+pub(super) const WM_LBUTTONUP: u32 = 0x0202;
+pub(super) const WM_RBUTTONDOWN: u32 = 0x0204;
+pub(super) const WM_RBUTTONUP: u32 = 0x0205;
+pub(super) const WM_MBUTTONDOWN: u32 = 0x0207;
+pub(super) const WM_MBUTTONUP: u32 = 0x0208;
+pub(super) const WM_MOUSEWHEEL: u32 = 0x020a;
+pub(super) const WM_XBUTTONDOWN: u32 = 0x020b;
+pub(super) const WM_XBUTTONUP: u32 = 0x020c;
+pub(super) const WM_MOUSEHWHEEL: u32 = 0x020e;
+pub(super) const WM_MOUSELEAVE: u32 = 0x02a3;
 pub const WM_DROPFILES: u32 = 0x0233;
 pub const WM_DPICHANGED: u32 = 0x02E0;
 pub const WM_USER: u32 = 0x0400;
@@ -297,6 +326,11 @@ pub const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: isize = -4isize;
 pub const MONITOR_DEFAULTTOPRIMARY: u32 = 0x00000001;
 
 pub const USER_DEFAULT_SCREEN_DPI: u32 = 96;
+pub(super) const RID_INPUT: u32 = 0x10000003;
+pub(super) const RIM_TYPEMOUSE: u32 = 0;
+pub(super) const RIDEV_REMOVE: u32 = 0x00000001;
+pub(super) const TME_LEAVE: u32 = 0x00000002;
+pub(super) const HTCLIENT: u16 = 1;
 pub const MDT_EFFECTIVE_DPI: i32 = 0;
 
 pub const SM_CXSCREEN: i32 = 0;
@@ -422,6 +456,35 @@ unsafe extern "system" {
     pub fn SetWindowPlacement(hWnd: HWND, lpwndpl: *const WINDOWPLACEMENT) -> BOOL;
     pub fn FindWindowW(lpClassName: *const w_char, lpWindowName: *const w_char) -> HWND;
     pub fn SetForegroundWindow(hWnd: HWND) -> BOOL;
+    pub(super) fn IsChild(hWndParent: HWND, hWnd: HWND) -> BOOL;
+    pub(super) fn SetFocus(hWnd: HWND) -> HWND;
+    pub(super) fn SetCapture(hWnd: HWND) -> HWND;
+    pub(super) fn ReleaseCapture() -> BOOL;
+    pub(super) fn TrackMouseEvent(lpEventTrack: *mut TRACKMOUSEEVENT) -> BOOL;
+    pub(super) fn ClipCursor(lpRect: *const RECT) -> BOOL;
+    pub(super) fn GetCursorPos(lpPoint: *mut POINT) -> BOOL;
+    pub(super) fn ShowCursor(bShow: BOOL) -> i32;
+    pub(super) fn RegisterRawInputDevices(
+        pRawInputDevices: *const RAWINPUTDEVICE,
+        uiNumDevices: u32,
+        cbSize: u32,
+    ) -> BOOL;
+    pub(super) fn GetRawInputData(
+        hRawInput: HRAWINPUT,
+        uiCommand: u32,
+        pData: *mut c_void,
+        pcbSize: *mut u32,
+        cbSizeHeader: u32,
+    ) -> u32;
+}
+
+#[repr(C)]
+#[derive(Default)]
+pub(super) struct TRACKMOUSEEVENT {
+    pub(super) cbSize: u32,
+    pub(super) dwFlags: u32,
+    pub(super) hwndTrack: HWND,
+    pub(super) dwHoverTime: u32,
 }
 
 /// # Safety

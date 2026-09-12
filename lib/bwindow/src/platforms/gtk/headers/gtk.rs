@@ -9,7 +9,7 @@
 
 use std::ffi::{c_char, c_void};
 
-use super::gdk::{GdkRGBA, GdkScreen};
+use super::gdk::{GdkRGBA, GdkScreen, GdkWindow};
 use super::glib::{GError, GSList};
 
 // MARK: GTK
@@ -56,6 +56,10 @@ unsafe extern "C" {
     pub fn gtk_widget_show(widget: *mut GtkWidget);
     pub fn gtk_widget_hide(widget: *mut GtkWidget);
     pub fn gtk_widget_show_all(window: *mut GtkWidget);
+    pub(super) fn gtk_widget_set_can_focus(widget: *mut GtkWidget, can_focus: i32);
+    pub(super) fn gtk_widget_add_events(widget: *mut GtkWidget, events: i32);
+    pub(super) fn gtk_widget_grab_focus(widget: *mut GtkWidget);
+    pub(super) fn gtk_widget_get_window(widget: *mut GtkWidget) -> *mut GdkWindow;
     pub fn gtk_drag_dest_set(
         widget: *mut GtkWidget,
         flags: i32,

@@ -375,6 +375,7 @@ unsafe extern "system" fn window_proc(
                 let _ = TrackMouseEvent(&mut track);
                 data.sender.send(WindowEvent::MouseMove {
                     position: pointer_position(hwnd, lparam),
+                    movement: LogicalPoint::default(),
                     modifiers: windows_modifiers(),
                 });
             }

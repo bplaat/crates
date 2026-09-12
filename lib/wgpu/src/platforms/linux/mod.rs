@@ -460,7 +460,8 @@ impl Surface {
     }
 
     fn is_lost(&self) -> bool {
-        self.owner.widget.lost.get() || unsafe { gtk_widget_get_window(self.widget) }.is_null()
+        self.owner.widget.lost.get()
+            || unsafe { gtk_widget_get_window(self.owner.widget.handle) }.is_null()
     }
 }
 

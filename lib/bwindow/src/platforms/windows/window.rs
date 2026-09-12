@@ -15,13 +15,17 @@ use super::event_loop::{APP_ID, send_event, system_theme};
 #[cfg(feature = "file_drop")]
 use super::file_drop::handle_file_drop;
 use super::headers::*;
+use super::input::{windows_key_event, windows_modifiers};
 #[cfg(feature = "progress_bar")]
 use super::progress_bar::ProgressBar;
 #[cfg(feature = "remember_window_state")]
 use super::window_state::{restore_window_state, save_window_state};
 #[cfg(feature = "progress_bar")]
 use crate::WindowsProgressBarState;
-use crate::{CloseRequest, LogicalPoint, LogicalSize, Theme, WindowBuilder, WindowEvent};
+use crate::{
+    ButtonState, CloseRequest, LogicalPoint, LogicalSize, MouseButton, PointerLockError,
+    ScrollDelta, Theme, WindowBuilder, WindowEvent,
+};
 
 pub(super) struct WindowData {
     host: std::rc::Rc<crate::content::ContentHost>,
@@ -350,10 +354,71 @@ impl crate::WindowInterface for PlatformWindow {
         unsafe { InvalidateRect(self.0.hwnd, null_mut(), TRUE) };
     }
 
+    fn request_pointer_lock(&mut self) -> Result<(), PointerLockError> {
+        let device = RAWINPUTDEVICE {
+            usUsagePage: 1,
+            usUsage: 2,
+            dwFlags: 0,
+            hwndTarget: self.0.hwnd,
+        };
+        if unsafe { RegisterRawInputDevices(&device, 1, size_of::<RAWINPUTDEVICE>() as u32) }
+            == FALSE
+        {
+            return Err(PointerLockError(
+                "Could not register raw mouse input".into(),
+            ));
+        }
+        let mut point = POINT { x: 0, y: 0 };
+        if unsafe { GetCursorPos(&mut point) } == FALSE {
+            unregister_raw_mouse();
+            return Err(PointerLockError(
+                "Could not read the pointer position".into(),
+            ));
+        }
+        let clip = RECT {
+            left: point.x,
+            top: point.y,
+            right: point.x + 1,
+            bottom: point.y + 1,
+        };
+        if unsafe { ClipCursor(&clip) } == FALSE {
+            unregister_raw_mouse();
+            return Err(PointerLockError("Could not confine the pointer".into()));
+        }
+        unsafe {
+            ShowCursor(FALSE);
+            SetCapture(self.0.hwnd);
+        }
+        Ok(())
+    }
+
+    fn exit_pointer_lock(&mut self) {
+        release_pointer_lock();
+    }
+
     #[cfg(feature = "progress_bar")]
     fn windows_set_progress_bar(&mut self, progress: Option<f32>, state: WindowsProgressBarState) {
         self.0.progress_bar.set(self.0.hwnd, progress, state);
     }
+}
+
+pub(crate) fn release_pointer_lock() {
+    unsafe {
+        ClipCursor(null());
+        ShowCursor(TRUE);
+        ReleaseCapture();
+    }
+    unregister_raw_mouse();
+}
+
+fn unregister_raw_mouse() {
+    let device = RAWINPUTDEVICE {
+        usUsagePage: 1,
+        usUsage: 2,
+        dwFlags: RIDEV_REMOVE,
+        hwndTarget: null_mut(),
+    };
+    unsafe { RegisterRawInputDevices(&device, 1, size_of::<RAWINPUTDEVICE>() as u32) };
 }
 
 unsafe fn set_titlebar_theme(hwnd: HWND, theme: Theme) {
@@ -389,6 +454,110 @@ unsafe extern "system" fn window_proc(
         window_data
     };
     match msg {
+        WM_SETCURSOR if _self.host.pointer_locked() && l_param as u16 == HTCLIENT => 1,
+        WM_SETFOCUS => {
+            send_event(crate::Event::Window(_self.window_id, WindowEvent::Focus));
+            0
+        }
+        WM_KILLFOCUS => {
+            if w_param == 0 || unsafe { IsChild(hwnd, w_param as HWND) } == FALSE {
+                send_event(crate::Event::Window(_self.window_id, WindowEvent::Blur));
+            }
+            0
+        }
+        WM_INPUT => {
+            if _self.host.pointer_locked()
+                && let Some(movement) = unsafe { raw_mouse_movement(l_param) }
+            {
+                _self.host.event_sender().send(WindowEvent::MouseMove {
+                    position: LogicalPoint::default(),
+                    movement,
+                    modifiers: windows_modifiers(),
+                });
+            }
+            unsafe { DefWindowProcW(hwnd, msg, w_param, l_param) }
+        }
+        WM_MOUSEMOVE => {
+            if !_self.host.pointer_locked() {
+                let mut track = TRACKMOUSEEVENT {
+                    cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+                    dwFlags: TME_LEAVE,
+                    hwndTrack: hwnd,
+                    ..Default::default()
+                };
+                unsafe { TrackMouseEvent(&mut track) };
+                _self.host.event_sender().send(WindowEvent::MouseMove {
+                    position: unsafe { pointer_position(hwnd, l_param) },
+                    movement: LogicalPoint::default(),
+                    modifiers: windows_modifiers(),
+                });
+            }
+            0
+        }
+        WM_MOUSELEAVE => {
+            _self.host.event_sender().send(WindowEvent::MouseLeave);
+            0
+        }
+        WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN
+        | WM_MBUTTONUP | WM_XBUTTONDOWN | WM_XBUTTONUP => {
+            let pressed = matches!(
+                msg,
+                WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN | WM_XBUTTONDOWN
+            );
+            if pressed {
+                unsafe {
+                    SetFocus(hwnd);
+                    SetCapture(hwnd);
+                }
+            } else if w_param & 0x73 == 0 && !_self.host.pointer_locked() {
+                unsafe { ReleaseCapture() };
+            }
+            let event = crate::MouseEvent {
+                button: mouse_button(msg, w_param),
+                position: unsafe { pointer_position(hwnd, l_param) },
+                modifiers: windows_modifiers(),
+            };
+            _self.host.event_sender().send(if pressed {
+                WindowEvent::MouseDown(event)
+            } else {
+                WindowEvent::MouseUp(event)
+            });
+            mouse_button_result(msg)
+        }
+        WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
+            let delta = (w_param >> 16) as u16 as i16 as f64 / 120.0;
+            _self.host.event_sender().send(WindowEvent::Wheel(
+                if msg == WM_MOUSEWHEEL {
+                    ScrollDelta::Lines(0.0, -delta)
+                } else {
+                    ScrollDelta::Lines(delta, 0.0)
+                },
+                windows_modifiers(),
+            ));
+            0
+        }
+        WM_KEYDOWN | WM_SYSKEYDOWN | WM_KEYUP | WM_SYSKEYUP => {
+            let pressed = matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN);
+            let event = windows_key_event(
+                w_param as u32,
+                l_param,
+                if pressed {
+                    ButtonState::Pressed
+                } else {
+                    ButtonState::Released
+                },
+            );
+            _self.host.event_sender().send(if pressed {
+                WindowEvent::KeyDown(event)
+            } else {
+                WindowEvent::KeyUp(event)
+            });
+            if matches!(msg, WM_KEYDOWN | WM_KEYUP) {
+                0
+            } else {
+                unsafe { DefWindowProcW(hwnd, msg, w_param, l_param) }
+            }
+        }
         WM_PAINT => {
             let mut paint = PAINTSTRUCT::default();
             unsafe { BeginPaint(hwnd, &mut paint) };
@@ -539,6 +708,75 @@ unsafe extern "system" fn window_proc(
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, w_param, l_param) },
     }
+}
+
+const fn mouse_button(message: u32, wparam: WPARAM) -> MouseButton {
+    match message {
+        WM_LBUTTONDOWN | WM_LBUTTONUP => MouseButton::Left,
+        WM_RBUTTONDOWN | WM_RBUTTONUP => MouseButton::Right,
+        WM_MBUTTONDOWN | WM_MBUTTONUP => MouseButton::Middle,
+        _ => MouseButton::Other(((wparam >> 16) & 0xffff) as u16),
+    }
+}
+
+const fn mouse_button_result(message: u32) -> LRESULT {
+    if matches!(message, WM_XBUTTONDOWN | WM_XBUTTONUP) {
+        1
+    } else {
+        0
+    }
+}
+
+unsafe fn pointer_position(hwnd: HWND, lparam: LPARAM) -> LogicalPoint {
+    let scale = unsafe { GetDpiForWindow(hwnd) }.max(USER_DEFAULT_SCREEN_DPI) as f32
+        / USER_DEFAULT_SCREEN_DPI as f32;
+    LogicalPoint::new(
+        lparam as u16 as i16 as f32 / scale,
+        (lparam >> 16) as u16 as i16 as f32 / scale,
+    )
+}
+
+unsafe fn raw_mouse_movement(input: LPARAM) -> Option<LogicalPoint> {
+    let header_size = if size_of::<usize>() == 8 { 24 } else { 16 };
+    let mut size = 0;
+    if unsafe {
+        GetRawInputData(
+            input as HRAWINPUT,
+            RID_INPUT,
+            null_mut(),
+            &mut size,
+            header_size,
+        )
+    } == u32::MAX
+        || size < header_size + 20
+    {
+        return None;
+    }
+    let mut bytes = vec![0u8; size as usize];
+    if unsafe {
+        GetRawInputData(
+            input as HRAWINPUT,
+            RID_INPUT,
+            bytes.as_mut_ptr().cast(),
+            &mut size,
+            header_size,
+        )
+    } == u32::MAX
+        || u32::from_ne_bytes(bytes[..4].try_into().ok()?) != RIM_TYPEMOUSE
+    {
+        return None;
+    }
+    let x = i32::from_ne_bytes(
+        bytes[header_size as usize + 12..header_size as usize + 16]
+            .try_into()
+            .ok()?,
+    );
+    let y = i32::from_ne_bytes(
+        bytes[header_size as usize + 16..header_size as usize + 20]
+            .try_into()
+            .ok()?,
+    );
+    (x != 0 || y != 0).then(|| LogicalPoint::new(x as f32, y as f32))
 }
 
 pub(crate) fn config_dir() -> PathBuf {

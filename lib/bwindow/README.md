@@ -31,6 +31,7 @@ Native input uses DOM-like names with typed Rust payloads:
 | `KeyDown` / `KeyUp`        | `keydown` / `keyup`        |
 | `MouseDown` / `MouseUp`    | `mousedown` / `mouseup`    |
 | `MouseMove` / `MouseLeave` | `mousemove` / `mouseleave` |
+| `PointerLockChange`        | `pointerlockchange`        |
 | `Wheel`                    | `wheel`                    |
 | `Focus` / `Blur`           | `focus` / `blur`           |
 
@@ -60,7 +61,11 @@ Modifiers provide `shift_key()`, `ctrl_key()`, `alt_key()`, and `meta_key()`.
 `SUPER`, and `OPTION` remain aliases for native terminology.
 
 Mouse positions are logical client-area pixels, analogous to `clientX`/`clientY`.
-Wheel deltas carry pixel or line units, with positive values scrolling right/down.
+`MouseMove::movement` contains the relative motion, analogous to DOM
+`movementX`/`movementY`. Call `window.request_pointer_lock()` from an input event,
+observe `PointerLockChange`, query `window.pointer_locked()`, and release the lock
+with `window.exit_pointer_lock()`. Wheel deltas carry pixel or line units, with
+positive values scrolling right/down.
 Close requests support `prevent_default()` and `default_prevented()`; other events
 are not cancelable. Key mappings are a subset of DOM values, and IME text input is
 not yet supported.

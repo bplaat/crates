@@ -14,9 +14,93 @@ use super::event_loop::{allow_termination_if_last_window, send_event};
 #[cfg(feature = "file_drop")]
 use super::file_drop::{perform_file_drop, register_dragged_types};
 use super::headers::*;
+use super::input::{macos_key_event, macos_pointer_event, macos_scroll_event};
 use crate::{
-    CloseRequest, LogicalPoint, LogicalSize, MacosTitlebarStyle, Theme, WindowBuilder, WindowEvent,
+    ButtonState, CloseRequest, LogicalPoint, LogicalSize, MacosTitlebarStyle, PointerLockError,
+    Theme, WindowBuilder, WindowEvent,
 };
+
+type ContentViewIvars = std::rc::Rc<crate::content::ContentHost>;
+
+define_class!(
+    #[unsafe(super(NSView))]
+    #[ivars = ContentViewIvars]
+    struct ContentView;
+
+    impl ContentView {
+        #[unsafe(method(mouseDown:))]
+        fn _mouse_down(&self, event: *mut Object) {
+            self.ivars().event_sender().send(unsafe {
+                macos_pointer_event(self as *const Self as *mut Object, event, Some(ButtonState::Pressed))
+            });
+        }
+
+        #[unsafe(method(mouseUp:))]
+        fn _mouse_up(&self, event: *mut Object) {
+            self.ivars().event_sender().send(unsafe {
+                macos_pointer_event(self as *const Self as *mut Object, event, Some(ButtonState::Released))
+            });
+        }
+
+        #[unsafe(method(rightMouseDown:))]
+        fn _right_mouse_down(&self, event: *mut Object) { self._mouse_down(event); }
+
+        #[unsafe(method(rightMouseUp:))]
+        fn _right_mouse_up(&self, event: *mut Object) { self._mouse_up(event); }
+
+        #[unsafe(method(otherMouseDown:))]
+        fn _other_mouse_down(&self, event: *mut Object) { self._mouse_down(event); }
+
+        #[unsafe(method(otherMouseUp:))]
+        fn _other_mouse_up(&self, event: *mut Object) { self._mouse_up(event); }
+
+        #[unsafe(method(mouseMoved:))]
+        fn _mouse_moved(&self, event: *mut Object) {
+            self.ivars().event_sender().send(unsafe {
+                macos_pointer_event(self as *const Self as *mut Object, event, None)
+            });
+        }
+
+        #[unsafe(method(mouseDragged:))]
+        fn _mouse_dragged(&self, event: *mut Object) { self._mouse_moved(event); }
+
+        #[unsafe(method(rightMouseDragged:))]
+        fn _right_mouse_dragged(&self, event: *mut Object) { self._mouse_moved(event); }
+
+        #[unsafe(method(otherMouseDragged:))]
+        fn _other_mouse_dragged(&self, event: *mut Object) { self._mouse_moved(event); }
+
+        #[unsafe(method(mouseExited:))]
+        fn _mouse_exited(&self, _: *mut Object) {
+            self.ivars().event_sender().send(WindowEvent::MouseLeave);
+        }
+
+        #[unsafe(method(scrollWheel:))]
+        fn _scroll_wheel(&self, event: *mut Object) {
+            self.ivars().event_sender().send(unsafe { macos_scroll_event(event) });
+        }
+
+        #[unsafe(method(keyDown:))]
+        fn _key_down(&self, event: *mut Object) {
+            self.ivars().event_sender().send(WindowEvent::KeyDown(unsafe {
+                macos_key_event(event, ButtonState::Pressed)
+            }));
+        }
+
+        #[unsafe(method(keyUp:))]
+        fn _key_up(&self, event: *mut Object) {
+            self.ivars().event_sender().send(WindowEvent::KeyUp(unsafe {
+                macos_key_event(event, ButtonState::Released)
+            }));
+        }
+
+        #[unsafe(method(isFlipped))]
+        const fn _is_flipped(&self) -> Bool { Bool::YES }
+
+        #[unsafe(method(acceptsFirstResponder))]
+        const fn _accepts_first_responder(&self) -> Bool { Bool::YES }
+    }
+);
 
 define_class!(
     #[unsafe(super(NSView))]
@@ -422,12 +506,28 @@ impl PlatformWindow {
             window
         };
 
+        let content_view = unsafe {
+            let bounds = NSRect::new(NSPoint::new(0.0, 0.0), window_rect.size);
+            let view: Allocated<ContentView> = msg_send![ContentView::class(), alloc];
+            let view: Retained<ContentView> =
+                msg_send![super(view.set_ivars(host.clone())), initWithFrame:bounds];
+            let _: () = msg_send![&*view, setAutoresizingMask:NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
+            let tracking: Allocated<Object> = msg_send![class!(NSTrackingArea), alloc];
+            let tracking: Retained<Object> = msg_send![tracking,
+                initWithRect:bounds, options:((1u64 << 0) | (1 << 1) | (1 << 5) | (1 << 9) | (1 << 10)),
+                owner:&*view, userInfo:null_mut::<Object>()];
+            let _: () = msg_send![&*view, addTrackingArea:&*tracking];
+            let _: () = msg_send![&window, setContentView:&*view];
+            let _: Bool = msg_send![&window, makeFirstResponder:&*view];
+            let _: () = msg_send![&window, setAcceptsMouseMovedEvents:Bool::YES];
+            view
+        };
+
         if !builder.should_fullscreen
             && (builder.macos_titlebar_style == MacosTitlebarStyle::Transparent
                 || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden)
         {
-            let content_view: *mut Object = unsafe { msg_send![&window, contentView] };
-            add_drag_view(window.as_ptr(), content_view);
+            add_drag_view(window.as_ptr(), content_view.as_ptr().cast::<Object>());
         }
         host.set_handle(crate::NativeWindowHandle::AppKit(window.as_ptr().cast()));
         unsafe {
@@ -525,6 +625,21 @@ impl crate::WindowInterface for PlatformWindow {
         }
     }
 
+    fn request_pointer_lock(&mut self) -> Result<(), PointerLockError> {
+        let status = unsafe { CGAssociateMouseAndMouseCursorPosition(0) };
+        if status != 0 {
+            return Err(PointerLockError(format!(
+                "Core Graphics pointer lock failed with status {status}"
+            )));
+        }
+        let _: () = unsafe { msg_send![class!(NSCursor), hide] };
+        Ok(())
+    }
+
+    fn exit_pointer_lock(&mut self) {
+        release_pointer_lock();
+    }
+
     fn macos_titlebar_size(&self) -> LogicalSize {
         let window_frame: NSRect = unsafe { msg_send![&self.0.window, frame] };
         let content_layout_rect: NSRect = unsafe { msg_send![&self.0.window, contentLayoutRect] };
@@ -537,6 +652,11 @@ impl crate::WindowInterface for PlatformWindow {
     fn macos_set_document_edited(&mut self, edited: bool) {
         let _: () = unsafe { msg_send![&self.0.window, setDocumentEdited:edited] };
     }
+}
+
+pub(crate) fn release_pointer_lock() {
+    let _ = unsafe { CGAssociateMouseAndMouseCursorPosition(1) };
+    let _: () = unsafe { msg_send![class!(NSCursor), unhide] };
 }
 
 pub(super) fn window_id(window: *mut Object) -> Option<crate::WindowId> {

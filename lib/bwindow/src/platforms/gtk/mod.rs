@@ -21,4 +21,4 @@ mod window_state;
 #[cfg(feature = "dialog")]
 pub(crate) use dialog::{PlatformFileDialog, PlatformMessageDialog};
 pub(crate) use event_loop::{PlatformEventLoop, PlatformEventLoopProxy, PlatformMonitor};
-pub(crate) use window::PlatformWindow;
+pub(crate) use window::{PlatformWindow, release_pointer_lock};

@@ -149,9 +149,15 @@ impl Surface {
                 "Metal surface creation requires the main thread".into(),
             ));
         }
-        autoreleasepool(|_| unsafe {
+        let view = unsafe {
             let window = window.cast::<AnyObject>();
-            let view: *mut AnyObject = msg_send![window, contentView];
+            msg_send![window, contentView]
+        };
+        unsafe { Self::from_view(view, sender) }
+    }
+
+    unsafe fn from_view(view: *mut AnyObject, sender: bwindow::WindowEventSender) -> Result<Self> {
+        autoreleasepool(|_| unsafe {
             let view = retained(view)?;
             let signal = Arc::new(DisplayLinkSignal {
                 target: AtomicPtr::new(ptr::null_mut()),
@@ -218,7 +224,7 @@ impl Surface {
 
     pub(super) fn request_animation_frame(&self) {
         let state = self.redraw.ivars();
-        self.synchronize_display_link();
+        self.synchronize_display_link(&self.redraw);
         state.signal.posted.store(false, Ordering::Release);
         if !state.display_link_running.replace(true) {
             let result = unsafe { CVDisplayLinkStart(state.display_link.get()) };
@@ -245,8 +251,8 @@ impl Surface {
         }
     }
 
-    fn synchronize_display_link(&self) {
-        let state = self.redraw.ivars();
+    fn synchronize_display_link(&self, redraw: &RedrawTarget) {
+        let state = redraw.ivars();
         unsafe {
             let window: *mut AnyObject = msg_send![&*self.view, window];
             if window.is_null() {
