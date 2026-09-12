@@ -4,6 +4,7 @@ version = "0.2.18+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
 
 [features]
 vendored = ["dep:rustls", "dep:webpki-roots"]

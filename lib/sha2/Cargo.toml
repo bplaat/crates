@@ -4,6 +4,7 @@ version = "0.11.0+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
 
 [dependencies]
 digest = "0.11.3"
