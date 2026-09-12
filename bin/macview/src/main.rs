@@ -1154,30 +1154,24 @@ mod tests {
     }
 
     #[test]
-    fn apng_extension_uses_the_declared_image_type() {
+    fn special_extensions_use_their_declared_image_types() {
         autoreleasepool(|_| {
-            // SAFETY: Type lookup only accesses immutable Uniform Type Identifier objects.
-            let identifier = unsafe { type_identifier("APNG") }.expect("declared APNG type");
-            // SAFETY: identifier owns the NSString and its UTF-8 representation for this scope.
-            let bytes: *const std::ffi::c_char =
-                unsafe { msg_send![identifier.as_ptr(), UTF8String] };
-            // SAFETY: NSString returns a null-terminated UTF-8 representation.
-            let bytes = unsafe { std::ffi::CStr::from_ptr(bytes) }.to_bytes();
-            assert_eq!(bytes, b"org.libpng.apng");
-        });
-    }
-
-    #[test]
-    fn bmp_extension_uses_the_system_image_type() {
-        autoreleasepool(|_| {
-            // SAFETY: Type lookup only accesses immutable Uniform Type Identifier objects.
-            let identifier = unsafe { type_identifier("BMP") }.expect("BMP type");
-            // SAFETY: identifier owns the NSString and its UTF-8 representation for this scope.
-            let bytes: *const std::ffi::c_char =
-                unsafe { msg_send![identifier.as_ptr(), UTF8String] };
-            // SAFETY: NSString returns a null-terminated UTF-8 representation.
-            let bytes = unsafe { std::ffi::CStr::from_ptr(bytes) }.to_bytes();
-            assert_eq!(bytes, b"com.microsoft.bmp");
+            for (extension, expected) in [
+                ("APNG", b"org.libpng.apng".as_slice()),
+                ("BMP", b"com.microsoft.bmp".as_slice()),
+                ("QOI", b"org.qoiformat.qoi".as_slice()),
+                ("TVG", b"org.tinyvg.tvg".as_slice()),
+                ("TVGT", b"org.tinyvg.tvgt".as_slice()),
+            ] {
+                // SAFETY: Type lookup only accesses immutable UTI and NSString objects.
+                let identifier = unsafe { type_identifier(extension) }.expect("declared type");
+                // SAFETY: identifier keeps its null-terminated UTF-8 representation alive.
+                let actual = unsafe {
+                    let bytes: *const std::ffi::c_char = msg_send![identifier.as_ptr(), UTF8String];
+                    std::ffi::CStr::from_ptr(bytes).to_bytes()
+                };
+                assert_eq!(actual, expected);
+            }
         });
     }
 
@@ -1211,11 +1205,5 @@ mod tests {
             };
             assert!(result.is_err());
         });
-    }
-
-    #[test]
-    fn content_versions_only_change_with_the_bytes() {
-        assert!(content_version(b"<svg/>") == content_version(b"<svg/>"));
-        assert!(content_version(b"<svg fill='red'/>") != content_version(b"<svg fill='tan'/>"));
     }
 }

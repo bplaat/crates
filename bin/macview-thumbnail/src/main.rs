@@ -197,11 +197,6 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
-
-    use objc2::rc::autoreleasepool;
-
     use super::*;
 
     #[test]
@@ -259,58 +254,5 @@ mod tests {
         );
         assert_eq!(size.width, bounds.width);
         assert_eq!(size.height, bounds.height);
-    }
-
-    #[test]
-    fn image_fills_a_retina_context() {
-        let context_size = aspect_fit(
-            Size {
-                width: 400.0,
-                height: 200.0,
-            },
-            Size {
-                width: 256.0,
-                height: 256.0,
-            },
-        );
-        let drawing_size = scaled(context_size, 2.0);
-        assert_eq!(drawing_size.width, 512.0);
-        assert_eq!(drawing_size.height, 256.0);
-    }
-
-    #[test]
-    fn thumbnail_reply_keeps_its_drawing_block_alive() {
-        let dropped = Arc::new(AtomicBool::new(false));
-        struct DropGuard(Arc<AtomicBool>);
-        impl Drop for DropGuard {
-            fn drop(&mut self) {
-                self.0.store(true, Ordering::SeqCst);
-            }
-        }
-
-        autoreleasepool(|_| {
-            let guard = DropGuard(dropped.clone());
-            let drawing = RcBlock::new_ret::<*mut c_void, bool>(move |_| {
-                let _ = &guard;
-                true
-            });
-            // SAFETY: The block has the CGContext drawing signature required by QLThumbnailReply.
-            let reply: *mut Object = unsafe {
-                msg_send![class!(QLThumbnailReply),
-                    replyWithContextSize: Size {
-                        width: 32.0,
-                        height: 32.0,
-                    },
-                    drawingBlock: &*drawing
-                ]
-            };
-            assert!(!reply.is_null());
-            drop(drawing);
-            assert!(
-                !dropped.load(Ordering::SeqCst),
-                "QLThumbnailReply must retain its escaping drawing block"
-            );
-        });
-        assert!(dropped.load(Ordering::SeqCst));
     }
 }

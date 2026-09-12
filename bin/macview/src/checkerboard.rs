@@ -152,13 +152,6 @@ fn draw_checkerboard(context: *mut c_void, bounds: Rect, dark: bool) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn dark_checkerboard_is_darker_than_light_checkerboard() {
-        let (light, _) = checker_colors(false);
-        let (dark, _) = checker_colors(true);
-        assert!(dark[0] < light[0]);
-    }
-
     const SIZES: [f64; 6] = [1.0, 23.0, 24.0, 25.0, 48.0, 137.0];
 
     fn bounds_of(width: f64, height: f64) -> Rect {

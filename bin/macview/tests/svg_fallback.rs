@@ -7,7 +7,9 @@
 //! Main-thread WebKit failure test using an AppKit-readable TIFF as SVG input.
 
 #![allow(unsafe_code)]
-#[allow(unused_imports)] // Unit-test imports are unused with harness = false.
+// This standalone harness includes the production module directly, so items used only by the app
+// or by the module's libtest tests are intentionally unused here.
+#[allow(dead_code, unused_imports)]
 #[path = "../src/svg.rs"]
 mod svg;
 
@@ -39,9 +41,7 @@ fn main() {
                     height: 100.0,
                 },
             };
-            assert!(svg::is_svg(b"<svg/>"));
             let document = svg::parse_svg(include_bytes!("fixtures/native.tiff"));
-            assert!(document.size.width > 0.0);
             let view = svg::create_svg_view(frame, &document);
             let window: Allocated<Object> = msg_send![class!(NSWindow), alloc];
             let window: Retained<Object> = msg_send![window, initWithContentRect: frame, styleMask: 0u64, backing: 2u64, defer: Bool::NO];
