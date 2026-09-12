@@ -509,3 +509,62 @@ pub(crate) fn create_scroll_view(frame: Rect, document: *mut Object) -> Retained
         scroll_view
     }
 }
+
+/// Replaces the media drawn by `scroll_view`, optionally fitting it to the window.
+///
+/// A refresh of the file keeps the user's magnification. Moving to another file starts that file
+/// fitted to the window, as it did when first opened.
+///
+/// # Safety
+///
+/// `scroll_view` must point to a live `NSScrollView` and `document` to a live `NSView` that the
+/// scroll view can retain.
+pub(crate) unsafe fn replace_document_view(
+    scroll_view: *mut Object,
+    document: *mut Object,
+    zoom_to_fit: bool,
+) {
+    // SAFETY: The caller supplies live AppKit views and NSScrollView implements these selectors.
+    unsafe {
+        let magnification: f64 = msg_send![scroll_view, magnification];
+        let _: () = msg_send![scroll_view, setDocumentView: document];
+        if zoom_to_fit {
+            let _: () = msg_send![scroll_view, zoomToFit];
+        } else {
+            let _: () = msg_send![scroll_view, setMagnification: magnification];
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use objc2::rc::{Allocated, Retained, autoreleasepool};
+    use objc2::{class, msg_send};
+
+    use super::*;
+
+    #[test]
+    fn replacing_document_view_can_keep_the_zoom() {
+        // SAFETY: All views stay retained for the test and every selector matches its AppKit ABI.
+        autoreleasepool(|_| unsafe {
+            let frame = Rect {
+                origin: Point { x: 0.0, y: 0.0 },
+                size: Size {
+                    width: 320.0,
+                    height: 240.0,
+                },
+            };
+            let first: Allocated<Object> = msg_send![class!(NSView), alloc];
+            let first: Retained<Object> = msg_send![first, initWithFrame: frame];
+            let second: Allocated<Object> = msg_send![class!(NSView), alloc];
+            let second: Retained<Object> = msg_send![second, initWithFrame: frame];
+            let scroll_view = create_scroll_view(frame, first.as_ptr());
+            let _: () = msg_send![&*scroll_view, setMagnification: 2.5f64];
+
+            replace_document_view(scroll_view.as_ptr(), second.as_ptr(), false);
+
+            let magnification: f64 = msg_send![&*scroll_view, magnification];
+            assert_eq!(magnification, 2.5);
+        });
+    }
+}

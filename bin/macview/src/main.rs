@@ -17,6 +17,7 @@ mod window_controller;
 
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ptr::null_mut;
 
 use block2::RcBlock;
@@ -39,6 +40,7 @@ use window_controller::{create_window_controller, show_media};
 struct DocumentIvars {
     media: RefCell<Option<DecodedMedia>>,
     svg_view: RefCell<Option<Retained<Object>>>,
+    content_version: Cell<Option<ContentVersion>>,
     browse_generation: Cell<u64>,
 }
 
@@ -47,9 +49,16 @@ impl DocumentIvars {
         Self {
             media: RefCell::new(None),
             svg_view: RefCell::new(None),
+            content_version: Cell::new(None),
             browse_generation: Cell::new(0),
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ContentVersion {
+    length: usize,
+    hash: u64,
 }
 
 enum DecodedMedia {
@@ -110,6 +119,11 @@ define_class!(
             self.make_window_controllers();
         }
 
+        #[unsafe(method(presentedItemDidChange))]
+        fn _presented_item_did_change(&self) {
+            self.reload_presented_item();
+        }
+
         #[unsafe(method(nextImage:))]
         fn _next_image(&self, _: *mut Object) {
             self.show_sibling(1);
@@ -132,11 +146,63 @@ define_class!(
 );
 
 impl Document {
+    /// Reloads the URL watched by NSDocument after another process changes it.
+    fn reload_presented_item(&self) {
+        let this = self as *const Self as *mut Object;
+        let retained = MainQueueObject(
+            // SAFETY: NSFilePresenter keeps the document alive for this callback.
+            unsafe { Retained::retain(this) }.expect("cannot retain a null document"),
+        );
+        // NSDocument delivers file-presenter callbacks on a private queue, while reverting and
+        // replacing AppKit views must happen on the main queue.
+        dispatch_async_main(move || {
+            // SAFETY: retained owns the document until this main-queue callback ends. NSDocument
+            // owns its URL and type, and revertToContentsOfURL:ofType:error: accepts a null error
+            // pointer when the caller handles failure without presenting an error.
+            unsafe {
+                let this = retained.as_ptr_on_main();
+                let url: *mut Object = msg_send![this, fileURL];
+                let kind: *mut Object = msg_send![this, fileType];
+                if url.is_null() || kind.is_null() {
+                    return;
+                }
+                let _: Bool = msg_send![this,
+                    revertToContentsOfURL: url,
+                    ofType: kind,
+                    error: null_mut::<c_void>()
+                ];
+            }
+        });
+    }
+
     fn read_from_data(&self, data: *mut Object, error_out: *mut c_void) -> Bool {
+        // SAFETY: AppKit supplied a valid NSData for the duration of this call.
+        let version = content_version(unsafe { document_data_bytes(data) });
+        if self.ivars().content_version.get() == Some(version) {
+            return Bool::YES;
+        }
         // SAFETY: AppKit supplied a valid NSData for the duration of this call.
         match unsafe { decode_document(data) } {
             Ok(media) => {
+                let refresh = self.ivars().media.borrow().is_some();
                 self.install_media(media);
+                self.ivars().content_version.set(Some(version));
+                if refresh {
+                    // NSDocument can read on its private file-presenter queue. AppKit views must
+                    // be replaced on the main queue, and the retained document keeps the decoded
+                    // media alive until then.
+                    let this = self as *const Self as *mut Object;
+                    let retained = MainQueueObject(
+                        // SAFETY: this comes from a live shared reference to the document.
+                        unsafe { Retained::retain(this) }.expect("cannot retain a null document"),
+                    );
+                    // SAFETY: retained owns the document until this main-queue callback ends.
+                    dispatch_async_main(move || unsafe {
+                        let this = retained.as_ptr_on_main();
+                        let document = &*this.cast::<Document>();
+                        document.refresh_windows(false);
+                    });
+                }
                 Bool::YES
             }
             Err(error) => {
@@ -149,6 +215,7 @@ impl Document {
     fn install_media(&self, media: DecodedMedia) {
         self.ivars().media.replace(Some(media));
         self.ivars().svg_view.replace(None);
+        self.ivars().content_version.set(None);
     }
 
     fn next_browse_generation(&self) -> u64 {
@@ -248,7 +315,7 @@ impl Document {
                                     sharedDocumentController
                                 ];
                                 let _: () = msg_send![controller, noteNewRecentDocumentURL: url];
-                                document.refresh_windows();
+                                document.refresh_windows(true);
                             }
                             Err(description) => {
                                 let error = make_error(error_domain as *mut Object, &description);
@@ -310,7 +377,7 @@ impl Document {
     }
 
     /// Shows the media this document holds now in the windows it opened before.
-    fn refresh_windows(&self) {
+    fn refresh_windows(&self, zoom_to_fit: bool) {
         let Some(media_size) = self.media_size() else {
             return;
         };
@@ -327,7 +394,7 @@ impl Document {
                     origin: Point { x: 0.0, y: 0.0 },
                     size: media_size,
                 });
-                show_media(controller, view.as_ptr(), title_size);
+                show_media(controller, view.as_ptr(), title_size, zoom_to_fit);
             }
         }
     }
@@ -439,16 +506,7 @@ impl Document {
 /// `data` must point to a valid `NSData` for the duration of this call.
 unsafe fn decode_document(data: *mut Object) -> Result<DecodedMedia, String> {
     // SAFETY: NSData keeps its immutable byte buffer alive for this call.
-    let bytes = unsafe {
-        let length: usize = msg_send![data, length];
-        let bytes: *const c_void = msg_send![data, bytes];
-        if length == 0 {
-            &[]
-        } else {
-            assert!(!bytes.is_null(), "non-empty NSData returned null bytes");
-            std::slice::from_raw_parts(bytes.cast::<u8>(), length)
-        }
-    };
+    let bytes = unsafe { document_data_bytes(data) };
     if tinyvg::is_tinyvg(bytes)
         && let Ok(document) = decode_tinyvg(bytes)
     {
@@ -460,6 +518,35 @@ unsafe fn decode_document(data: *mut Object) -> Result<DecodedMedia, String> {
 
     // SAFETY: data remains live and is retained when AppKit needs it after this call.
     unsafe { decode_image_data(data) }.map(DecodedMedia::Image)
+}
+
+/// Returns the immutable byte buffer owned by an NSData object.
+///
+/// # Safety
+///
+/// `data` must point to a valid `NSData`, and the returned slice must not outlive it.
+unsafe fn document_data_bytes<'a>(data: *mut Object) -> &'a [u8] {
+    // SAFETY: The caller keeps NSData and its immutable byte buffer alive for the returned slice.
+    unsafe {
+        let length: usize = msg_send![data, length];
+        let bytes: *const c_void = msg_send![data, bytes];
+        if length == 0 {
+            &[]
+        } else {
+            assert!(!bytes.is_null(), "non-empty NSData returned null bytes");
+            std::slice::from_raw_parts(bytes.cast::<u8>(), length)
+        }
+    }
+}
+
+/// Identifies file contents so presenter notifications without a content change are ignored.
+fn content_version(bytes: &[u8]) -> ContentVersion {
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    ContentVersion {
+        length: bytes.len(),
+        hash: hasher.finish(),
+    }
 }
 
 /// Decodes bytes read by Rust without creating views or touching window state.
@@ -1122,5 +1209,11 @@ mod tests {
             };
             assert!(result.is_err());
         });
+    }
+
+    #[test]
+    fn content_versions_only_change_with_the_bytes() {
+        assert!(content_version(b"<svg/>") == content_version(b"<svg/>"));
+        assert!(content_version(b"<svg fill='red'/>") != content_version(b"<svg fill='tan'/>"));
     }
 }

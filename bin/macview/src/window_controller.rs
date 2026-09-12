@@ -12,6 +12,8 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
+use crate::scroll_view::replace_document_view;
+
 /// The factor a single zoom step magnifies or shrinks the media by.
 const ZOOM_STEP: f64 = 1.5;
 
@@ -127,7 +129,12 @@ impl WindowController {
 ///
 /// `controller` must point to a valid `NSWindowController` and `view` to a valid `NSView`, which
 /// the scroll view of the window takes ownership of.
-pub(crate) unsafe fn show_media(controller: *mut Object, view: *mut Object, size: Size) {
+pub(crate) unsafe fn show_media(
+    controller: *mut Object,
+    view: *mut Object,
+    size: Size,
+    zoom_to_fit: bool,
+) {
     // SAFETY: The caller supplies live AppKit objects, and the class check makes the cast to the
     // window controller of this application sound.
     unsafe {
@@ -140,8 +147,7 @@ pub(crate) unsafe fn show_media(controller: *mut Object, view: *mut Object, size
 
         let scroll_view = controller_ref.scroll_view();
         if !scroll_view.is_null() {
-            let _: () = msg_send![scroll_view, setDocumentView: view];
-            let _: () = msg_send![scroll_view, zoomToFit];
+            replace_document_view(scroll_view, view, zoom_to_fit);
         }
         let _: () = msg_send![controller, synchronizeWindowTitleWithDocumentName];
     }
