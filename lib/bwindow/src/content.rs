@@ -164,10 +164,7 @@ impl std::fmt::Display for AttachError {
 
 impl std::error::Error for AttachError {}
 
-/// An exclusive content attachment. Closing or dropping the window invalidates it.
-///
-/// Dropping the attachment disconnects its hooks. Attaching replacement content
-/// to the same window is not supported.
+/// An exclusive content attachment whose hooks disconnect when it or its window is dropped.
 pub struct WindowAttachment(Rc<ContentHost>);
 
 impl WindowAttachment {

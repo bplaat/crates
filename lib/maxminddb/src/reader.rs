@@ -17,7 +17,7 @@ use crate::metadata::Metadata;
 
 /// A reader for the MaxMind DB format.
 pub struct Reader<S: AsRef<[u8]>> {
-    /// Metadata about the database.
+    // Metadata about the database.
     metadata: Metadata,
     buf: S,
     data_offset: usize,

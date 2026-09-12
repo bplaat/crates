@@ -84,8 +84,8 @@ fn extract_ivars(attrs: &[Attribute]) -> Option<syn::Expr> {
     None
 }
 
-/// Conditional compilation attributes must also apply to the generated trampoline and its
-/// registration, otherwise a cfg'd out method leaves both behind
+// Conditional compilation attributes must also apply to the generated trampoline and its
+// registration, otherwise a cfg'd out method leaves both behind
 fn is_cfg(attr: &Attribute) -> bool {
     attr.path().is_ident("cfg") || attr.path().is_ident("cfg_attr")
 }

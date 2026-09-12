@@ -12,7 +12,7 @@ use anyhow::Result;
 use small_http::{Method, Request, Response, Status};
 use small_router::RouterBuilder;
 
-/// Pre-layer that processes CORS requests
+// Pre-layer that processes CORS requests
 fn cors_pre_layer(req: &Request, _: &mut ()) -> Result<Option<Response>> {
     if req.method == Method::Options && req.headers.get("Access-Control-Request-Method").is_some() {
         Ok(Some(
@@ -29,7 +29,7 @@ fn cors_pre_layer(req: &Request, _: &mut ()) -> Result<Option<Response>> {
     }
 }
 
-/// Post-layer that processes CORS requests
+// Post-layer that processes CORS requests
 fn cors_post_layer(req: &Request, _: &(), res: Response) -> Result<Response> {
     if !(req.method == Method::Options
         && req.headers.get("Access-Control-Request-Method").is_some())

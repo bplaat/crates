@@ -77,11 +77,7 @@ impl MenuBuilder {
     }
 }
 
-/// Builder for custom macOS menu bar entries
-///
-/// Menus with standard names such as `File` and `Edit` are merged into bwindow's
-/// complete default menu bar. Same-titled items are overridden in place and
-/// custom shortcuts take precedence over defaults.
+/// Builds custom macOS entries merged by name into bwindow's default menu bar.
 #[derive(Default)]
 pub struct MenuBarBuilder {
     pub(crate) menus: Vec<MenuBuilder>,

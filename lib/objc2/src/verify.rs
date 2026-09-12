@@ -12,9 +12,9 @@ use crate::encode::Encoding;
 use crate::ffi::{class_getInstanceMethod, class_getName, method_getTypeEncoding, object_getClass};
 use crate::runtime::{AnyClass, AnyObject, Sel};
 
-/// Consume one complete ObjC type token from `s`, skipping trailing digits (offset).
-/// Returns `(token, remaining)` or `None` if empty.
-/// Returns the byte length of one ObjC type token in `s` (no leading/trailing digit stripping).
+// Consume one complete ObjC type token from `s`, skipping trailing digits (offset).
+// Returns `(token, remaining)` or `None` if empty.
+// Returns the byte length of one ObjC type token in `s` (no leading/trailing digit stripping).
 fn enc_type_len(s: &str) -> Option<usize> {
     let first = s.chars().next()?;
     match first {
@@ -79,16 +79,16 @@ fn sel_name(sel: Sel) -> String {
     }
 }
 
-/// Strip leading ObjC type modifier chars (`r`=const, `n`/`N`/`o`/`O`/`R`/`V` = in/out/inout/bycopy/byref/oneway).
+// Strip leading ObjC type modifier chars (`r`=const, `n`/`N`/`o`/`O`/`R`/`V` = in/out/inout/bycopy/byref/oneway).
 fn strip_modifiers(s: &str) -> &str {
     s.trim_start_matches(['r', 'n', 'N', 'o', 'O', 'R', 'V'])
 }
 
-/// Lenient encoding comparison:
-/// - Leading ObjC type modifiers (`r`=const, etc.) are stripped before comparison.
-/// - Exact match (after stripping) always passes.
-/// - `^v` matches any pointer (`^...`) and vice versa.
-/// - Signed/unsigned variants of same-width integers are interchangeable.
+// Lenient encoding comparison:
+// - Leading ObjC type modifiers (`r`=const, etc.) are stripped before comparison.
+// - Exact match (after stripping) always passes.
+// - `^v` matches any pointer (`^...`) and vice versa.
+// - Signed/unsigned variants of same-width integers are interchangeable.
 fn enc_match(actual: &str, expected: &str) -> bool {
     let actual = strip_modifiers(actual);
     let expected = strip_modifiers(expected);

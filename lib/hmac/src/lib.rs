@@ -9,9 +9,7 @@
 use digest::Digest;
 
 // MARK: hmac
-/// Compute HMAC over `message` with `key` using hash function `D`.
-///
-/// Returns the raw MAC bytes as `D::Output`.
+/// Computes HMAC over `message` with `key` and returns the raw `D::Output` bytes.
 pub fn hmac<D: Digest>(key: &[u8], message: &[u8]) -> D::Output {
     let mut key_block = vec![0u8; D::BLOCK_SIZE];
     if key.len() > D::BLOCK_SIZE {

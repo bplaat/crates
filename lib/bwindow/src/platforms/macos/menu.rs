@@ -12,7 +12,7 @@ use super::headers::*;
 use crate::EventLoopBuilder;
 
 // MARK: NativeAccelerator
-/// An NSMenuItem accelerator: an NSEventModifierFlags mask and a key equivalent string
+// An NSMenuItem accelerator: an NSEventModifierFlags mask and a key equivalent string
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct NativeAccelerator {
     modifiers: u64,
@@ -20,7 +20,7 @@ struct NativeAccelerator {
 }
 
 impl NativeAccelerator {
-    /// Shorthand for the Command + key accelerators that most default items use
+    // Shorthand for the Command + key accelerators that most default items use
     const fn command(key: &'static str) -> Self {
         Self {
             modifiers: NS_EVENT_MODIFIER_FLAG_COMMAND,
@@ -190,12 +190,12 @@ impl NativeMenuItem {
         self
     }
 
-    /// Shorthand for the Command + key accelerators that most default items use
+    // Shorthand for the Command + key accelerators that most default items use
     const fn command(self, key: &'static str) -> Self {
         self.accelerator(NativeAccelerator::command(key))
     }
 
-    /// Creates the NSMenuItem carrying this item's title, accelerator and target action
+    // Creates the NSMenuItem carrying this item's title, accelerator and target action
     unsafe fn create_native(self, app_delegate: *mut Object) -> Retained<Object> {
         let native_item: Retained<Object> = unsafe { msg_send![class!(NSMenuItem), new] };
         let _: () = unsafe { msg_send![&native_item, setTitle:&*NSString::new(self.title)] };
@@ -278,7 +278,7 @@ enum MenuEntry {
 }
 
 impl MenuEntry {
-    /// Appends this entry to a native NSMenu
+    // Appends this entry to a native NSMenu
     unsafe fn add_to(
         self,
         native_menu: *mut Object,
@@ -331,7 +331,7 @@ impl Menu {
         self
     }
 
-    /// Creates the menu bar entry that owns this menu's populated NSMenu
+    // Creates the menu bar entry that owns this menu's populated NSMenu
     unsafe fn create_native(
         self,
         application: *mut Object,
@@ -362,11 +362,11 @@ impl Menu {
     }
 }
 
-/// The whole macOS menu bar: bwindow's defaults with the app's own menus folded in
+// The whole macOS menu bar: bwindow's defaults with the app's own menus folded in
 struct MenuBar(Vec<Menu>);
 
 impl MenuBar {
-    /// The complete menu bar every bwindow app gets before its own menus are merged in
+    // The complete menu bar every bwindow app gets before its own menus are merged in
     fn with_defaults(app_name: &str) -> Self {
         Self(vec![
             Menu::new(app_name, MenuRole::Application)
@@ -422,7 +422,7 @@ impl MenuBar {
         ])
     }
 
-    /// Installs this menu bar as the application's main menu
+    // Installs this menu bar as the application's main menu
     unsafe fn create_native(self, application: *mut Object, app_delegate: *mut Object) {
         let menubar: Retained<Object> = unsafe { msg_send![class!(NSMenu), new] };
         let _: () = unsafe { msg_send![application, setMainMenu:menubar.as_ptr()] };
@@ -435,7 +435,7 @@ impl MenuBar {
 
 #[cfg(feature = "menu")]
 impl MenuBar {
-    /// Drops an accelerator everywhere it is already used, so app shortcuts beat the defaults
+    // Drops an accelerator everywhere it is already used, so app shortcuts beat the defaults
     fn clear_shortcut(&mut self, accelerator: NativeAccelerator) {
         for menu in &mut self.0 {
             for entry in &mut menu.entries {
@@ -448,8 +448,8 @@ impl MenuBar {
         }
     }
 
-    /// Folds the app's menus into the defaults. Menus and items matched by title are merged and
-    /// overridden in place, anything new is inserted ahead of the trailing system menus.
+    // Folds the app's menus into the defaults. Menus and items matched by title are merged and
+    // overridden in place, anything new is inserted ahead of the trailing system menus.
     fn merge(mut self, menu_bar: Option<crate::MenuBarBuilder>) -> Self {
         let Some(menu_bar) = menu_bar else {
             return self;

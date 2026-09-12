@@ -5,6 +5,7 @@
  */
 
 //! Aligned buffer suballocation. Images use separate native allocations.
+
 use std::ops::Range;
 
 pub(crate) struct Ranges {

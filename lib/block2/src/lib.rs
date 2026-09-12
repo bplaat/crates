@@ -75,7 +75,7 @@ macro_rules! impl_block_call {
 impl_block_call!(A: a);
 impl_block_call!(A: a, B: b);
 
-/// Inner heap layout for `RcBlock`: ObjC block header immediately followed by the closure.
+// Inner heap layout for `RcBlock`: ObjC block header immediately followed by the closure.
 #[repr(C)]
 struct RcBlockInner<F> {
     block: Block<F>,

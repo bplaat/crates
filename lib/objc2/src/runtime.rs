@@ -291,10 +291,7 @@ unsafe impl Encode for Bool {
     };
 }
 
-/// Trait for `extern "C-unwind"` function pointers usable as ObjC method implementations.
-///
-/// Automatically derives the ObjC type encoding from the Rust function signature.
-/// Implemented for `extern "C-unwind" fn(*mut AnyObject, Sel, ...) -> R` at supported arities.
+/// Derives ObjC encodings for supported `extern "C-unwind"` method implementation signatures.
 ///
 /// # Safety
 ///

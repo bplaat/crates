@@ -17,10 +17,7 @@ use crate::version::MicrosoftVersion;
 
 mod version;
 
-/// Windows resource compiler
-///
-/// Supports MSVC rc.exe, LLVM llvm-rc/llvm-windres, MinGW windres and zig rc.
-/// Set `RC` to override automatic resource compiler selection.
+/// Windows resource compiler supporting MSVC, LLVM, MinGW and Zig, with optional `RC` override.
 pub struct WindowsResource {
     icon_path: Option<PathBuf>,
     manifest: Option<String>,

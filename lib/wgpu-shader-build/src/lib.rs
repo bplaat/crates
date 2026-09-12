@@ -6,6 +6,7 @@
 
 //! Build-time native WGSL compilation for this repository's wgpu crate.
 //! Register explicit output names and source paths with [`Builder`].
+
 use std::collections::HashSet;
 use std::env;
 use std::path::{Path, PathBuf};

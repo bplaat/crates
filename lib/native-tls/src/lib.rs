@@ -44,10 +44,7 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 // MARK: HandshakeError
-/// Error that can occur during the TLS handshake.
-///
-/// Unlike the upstream `native-tls` crate, the underlying stream is **not** recoverable
-/// from a failed handshake. The stream is consumed and dropped when the error is returned.
+/// TLS handshake error that consumes and drops the unrecoverable underlying stream.
 #[derive(Debug)]
 pub struct HandshakeError<S> {
     error: Error,

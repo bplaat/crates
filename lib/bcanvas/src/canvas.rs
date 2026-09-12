@@ -280,10 +280,7 @@ impl Canvas {
     }
 }
 
-/// A native 2D canvas backed by tightly packed, straight-alpha RGBA8 pixels.
-///
-/// It is independent of a window and is suitable for image encoding, CPU access,
-/// or uploading to a GPU texture. Access is confined to the creating thread.
+/// A thread-bound native 2D canvas backed by tightly packed, straight-alpha RGBA8 pixels.
 pub struct OffscreenCanvas {
     platform: PlatformOffscreenCanvas,
     width: u32,

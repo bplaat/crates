@@ -34,9 +34,7 @@ mod platforms;
 mod sizes;
 mod window;
 
-/// Native ABI declarations for implementing content backends.
-///
-/// These unsafe bindings are platform-specific and are not a portable window API.
+/// Platform-specific native ABI declarations for implementing content backends.
 #[doc(hidden)]
 #[allow(missing_docs)]
 pub mod ffi {

@@ -253,7 +253,7 @@ fn write_transpiled_sources(
     Ok(())
 }
 
-/// Extracts the standard library C headers for compiler access.
+// Extracts the standard library C headers for compiler access.
 fn setup_std_headers(temp_mgr: &TempFileManager) -> Result<(), String> {
     for &(filename, content) in STD_FILES {
         let dest = temp_mgr.base_dir().join(filename);
@@ -263,7 +263,7 @@ fn setup_std_headers(temp_mgr: &TempFileManager) -> Result<(), String> {
     Ok(())
 }
 
-/// Extracts the prebuilt standard library archive.
+// Extracts the prebuilt standard library archive.
 fn setup_std_archive(temp_mgr: &TempFileManager) -> Result<String, String> {
     let archive = if std::env::var_os("CCONTINUE_SANITIZE_STD").is_some() {
         STD_SANITIZED_ARCHIVE.unwrap_or(STD_ARCHIVE)
@@ -280,7 +280,7 @@ fn setup_std_archive(temp_mgr: &TempFileManager) -> Result<String, String> {
         .to_owned())
 }
 
-/// Writes generated sources and compiles them for `-c` when requested.
+// Writes generated sources and compiles them for `-c` when requested.
 fn compile_sources(
     temp_mgr: &TempFileManager,
     include_paths: &[String],
@@ -348,7 +348,7 @@ fn run_tool(cmd: &mut Command, description: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Compiles and links inputs, then optionally runs the resulting executable.
+// Compiles and links inputs, then optionally runs the resulting executable.
 #[allow(clippy::too_many_arguments)]
 fn link_and_run(
     linker_inputs: &[String],

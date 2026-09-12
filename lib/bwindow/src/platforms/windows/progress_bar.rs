@@ -40,7 +40,7 @@ impl ProgressBar {
     }
 }
 
-/// Shows, updates or hides the taskbar button progress of a window
+// Shows, updates or hides the taskbar button progress of a window
 fn set_progress_bar(hwnd: HWND, progress: Option<f32>, state: WindowsProgressBarState) {
     let mut taskbar = null_mut::<TaskbarList3>();
     let result = unsafe {
