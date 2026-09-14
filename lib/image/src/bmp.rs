@@ -11,13 +11,14 @@ enum Compression {
     Rgb,
     Rle8,
     Rle4,
+    Rle24,
     Bitfields,
     AlphaBitfields,
 }
 
 impl Compression {
     const fn is_rle(self) -> bool {
-        matches!(self, Self::Rle8 | Self::Rle4)
+        matches!(self, Self::Rle8 | Self::Rle4 | Self::Rle24)
     }
 }
 
@@ -56,6 +57,17 @@ impl ChannelMasks {
         file: &mut Reader<'_>,
     ) -> Result<Self> {
         let mut masks = Self::defaults(depth);
+        if compression == Compression::Rgb && depth == 32 && dib_len >= 108 {
+            header.take(12)?;
+            let alpha = header.le32()?;
+            if alpha != 0 {
+                if alpha != 0xff00_0000 {
+                    return Err(DecodeError::InvalidHeader);
+                }
+                masks.0[3] = alpha;
+            }
+            return Ok(masks);
+        }
         if !matches!(
             compression,
             Compression::Bitfields | Compression::AlphaBitfields
@@ -145,7 +157,7 @@ impl BmpHeader {
     fn parse_dib(r: &mut Reader<'_>, icon: bool, icon_colors: usize) -> Result<Self> {
         // CORE and INFO-family headers arrange palettes and masks differently.
         let dib_len = r.le32()? as usize;
-        if !matches!(dib_len, 12 | 40 | 52 | 56 | 108 | 124) {
+        if !matches!(dib_len, 12 | 40 | 52 | 56 | 64 | 108 | 124) {
             return Err(DecodeError::UnsupportedFeature);
         }
         let mut h = Reader::new(r.take(dib_len - 4)?);
@@ -177,7 +189,12 @@ impl BmpHeader {
         let mut _image_size = 0;
         let mut colors = 0;
         if dib_len != 12 {
-            compression = Compression::try_from(h.le32()?)?;
+            let value = h.le32()?;
+            compression = if dib_len == 64 && value == 4 {
+                Compression::Rle24
+            } else {
+                Compression::try_from(value)?
+            };
             _image_size = h.le32()? as usize;
             h.take(8)?; // Pixels per meter.
             colors = h.le32()? as usize;
@@ -188,6 +205,7 @@ impl BmpHeader {
         }
         if (compression == Compression::Rle8 && depth != 8)
             || (compression == Compression::Rle4 && depth != 4)
+            || (compression == Compression::Rle24 && depth != 24)
             || (matches!(
                 compression,
                 Compression::Bitfields | Compression::AlphaBitfields
@@ -220,7 +238,7 @@ impl BmpHeader {
 
 pub(super) fn decode(data: &[u8]) -> Result<Image> {
     let (header, mut r) = BmpHeader::parse(data)?;
-    let (palette, palette_len) = read_palette(&mut r, &header)?;
+    let (palette, palette_len) = header.read_palette(&mut r)?;
     if header.pixel_offset < r.pos
         || header.pixel_offset > data.len()
         || (header.file_size != 0
@@ -228,15 +246,16 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
     {
         return Err(DecodeError::InvalidData);
     }
-    let end = if header.file_size == 0 {
+    let end = if header.file_size == 0
+        || (header.dib_len == 64 && header.file_size == header.pixel_offset)
+    {
         data.len()
     } else {
         header.file_size
     };
     let mut budget = Budget::default();
-    let (pixels, _) = decode_pixels(
+    let (pixels, _) = header.decode_pixels(
         &data[header.pixel_offset..end],
-        &header,
         &palette[..palette_len],
         &mut budget,
     )?;
@@ -260,15 +279,11 @@ pub(super) fn decode_icon(
     if header.width != directory_width || header.height != directory_height {
         return Err(DecodeError::InvalidHeader);
     }
-    let (palette, palette_len) = read_palette(&mut r, &header)?;
+    let (palette, palette_len) = header.read_palette(&mut r)?;
     let pixel_start = r.pos;
     let mut budget = Budget::default();
-    let (mut pixels, consumed) = decode_pixels(
-        &data[pixel_start..],
-        &header,
-        &palette[..palette_len],
-        &mut budget,
-    )?;
+    let (mut pixels, consumed) =
+        header.decode_pixels(&data[pixel_start..], &palette[..palette_len], &mut budget)?;
     let xor_len = if header.compression.is_rle() && header.image_size != 0 {
         if header.image_size < consumed {
             return Err(DecodeError::InvalidData);
@@ -284,7 +299,7 @@ pub(super) fn decode_icon(
                 .ok_or(DecodeError::InvalidData)?..,
         )
         .ok_or(DecodeError::InvalidData)?;
-    apply_icon_mask(mask, &header, &mut pixels)?;
+    header.apply_icon_mask(mask, &mut pixels)?;
     Ok(Image::still(
         Format::Ico,
         header.width,
@@ -293,143 +308,141 @@ pub(super) fn decode_icon(
     ))
 }
 
-fn read_palette(r: &mut Reader<'_>, header: &BmpHeader) -> Result<([[u8; 4]; 256], usize)> {
-    let mut palette = [[0u8, 0, 0, 255]; 256];
-    let palette_len = if header.depth <= 8 {
-        let max = 1usize << header.depth;
-        if header.colors > max {
-            return Err(DecodeError::InvalidHeader);
-        }
-        if header.colors == 0 {
-            max
+impl BmpHeader {
+    fn read_palette(&self, r: &mut Reader<'_>) -> Result<([[u8; 4]; 256], usize)> {
+        let mut palette = [[0u8, 0, 0, 255]; 256];
+        let palette_len = if self.depth <= 8 {
+            let max = 1usize << self.depth;
+            if self.colors > max {
+                return Err(DecodeError::InvalidHeader);
+            }
+            if self.colors == 0 { max } else { self.colors }
         } else {
-            header.colors
+            0
+        };
+        for color in &mut palette[..palette_len] {
+            let bgr = r.take(if self.dib_len == 12 { 3 } else { 4 })?;
+            color[..3].copy_from_slice(&[bgr[2], bgr[1], bgr[0]]);
         }
-    } else {
-        0
-    };
-    for color in &mut palette[..palette_len] {
-        let bgr = r.take(if header.dib_len == 12 { 3 } else { 4 })?;
-        color[..3].copy_from_slice(&[bgr[2], bgr[1], bgr[0]]);
+        Ok((palette, palette_len))
     }
-    Ok((palette, palette_len))
-}
 
-fn decode_pixels(
-    data: &[u8],
-    header: &BmpHeader,
-    palette: &[[u8; 4]],
-    budget: &mut Budget,
-) -> Result<(Vec<u8>, usize)> {
-    let mut r = Reader::new(data);
-    let mut pixels = budget.zeroed(header.pixel_len)?;
-    if header.compression.is_rle() {
-        pixels.as_chunks_mut::<4>().0.fill(palette[0]);
-        rle(
-            &mut r,
-            &mut pixels,
-            header.width as usize,
-            header.height as usize,
-            header.depth,
-            palette,
-        )?;
-    } else {
-        let stride =
-            usize::try_from((u64::from(header.width) * u64::from(header.depth)).div_ceil(32) * 4)
-                .map_err(|_| DecodeError::ImageTooLarge)?;
-        if r.remaining() < stride * header.height as usize {
+    fn decode_pixels(
+        &self,
+        data: &[u8],
+        palette: &[[u8; 4]],
+        budget: &mut Budget,
+    ) -> Result<(Vec<u8>, usize)> {
+        let mut r = Reader::new(data);
+        let mut pixels = budget.zeroed(self.pixel_len)?;
+        if self.compression.is_rle() {
+            pixels.as_chunks_mut::<4>().0.fill([0, 0, 0, 255]);
+            rle(
+                &mut r,
+                &mut pixels,
+                self.width as usize,
+                self.height as usize,
+                self.compression,
+                palette,
+            )?;
+        } else {
+            let stride =
+                usize::try_from((u64::from(self.width) * u64::from(self.depth)).div_ceil(32) * 4)
+                    .map_err(|_| DecodeError::ImageTooLarge)?;
+            if r.remaining() < stride * self.height as usize {
+                return Err(DecodeError::InvalidData);
+            }
+            for y in 0..self.height as usize {
+                let row = r.take(stride)?;
+                let dest_y = if self.top_down {
+                    y
+                } else {
+                    self.height as usize - 1 - y
+                };
+                let dest = &mut pixels
+                    [dest_y * self.width as usize * 4..(dest_y + 1) * self.width as usize * 4];
+                let dest = dest.as_chunks_mut::<4>().0;
+                match self.depth {
+                    1 | 4 | 8 => {
+                        for (x, pixel) in dest.iter_mut().enumerate() {
+                            let bit = x * self.depth as usize;
+                            let index = (row[bit / 8] >> (8 - self.depth as usize - bit % 8))
+                                & ((1u16 << self.depth) - 1) as u8;
+                            pixel.copy_from_slice(
+                                palette
+                                    .get(index as usize)
+                                    .ok_or(DecodeError::InvalidData)?,
+                            );
+                        }
+                    }
+                    24 => {
+                        for (pixel, s) in dest.iter_mut().zip(row.as_chunks::<3>().0) {
+                            pixel.copy_from_slice(&[s[2], s[1], s[0], 255]);
+                        }
+                    }
+                    _ => {
+                        for (x, pixel) in dest.iter_mut().enumerate() {
+                            let v = if self.depth == 16 {
+                                u32::from(u16::from_le_bytes(
+                                    row[x * 2..x * 2 + 2].try_into().expect("two bytes"),
+                                ))
+                            } else {
+                                u32::from_le_bytes(
+                                    row[x * 4..x * 4 + 4].try_into().expect("four bytes"),
+                                )
+                            };
+                            for (channel, value) in pixel[..3].iter_mut().enumerate() {
+                                *value = self.masks.component(v, channel);
+                            }
+                            pixel[3] = if self.masks.0[3] == 0 {
+                                255
+                            } else {
+                                self.masks.component(v, 3)
+                            };
+                        }
+                    }
+                }
+            }
+        }
+        Ok((pixels, r.pos))
+    }
+
+    #[cfg(feature = "ico")]
+    fn apply_icon_mask(&self, mask: &[u8], pixels: &mut [u8]) -> Result<()> {
+        let has_alpha = self.depth == 32
+            && self.masks.0[3] != 0
+            && pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0);
+        if self.depth == 32 && !has_alpha {
+            for pixel in pixels.as_chunks_mut::<4>().0 {
+                pixel[3] = 255;
+            }
+        }
+        if has_alpha {
+            return Ok(());
+        }
+        let stride = usize::try_from(u64::from(self.width).div_ceil(32) * 4)
+            .map_err(|_| DecodeError::ImageTooLarge)?;
+        let len = stride
+            .checked_mul(self.height as usize)
+            .ok_or(DecodeError::ImageTooLarge)?;
+        if mask.len() < len {
             return Err(DecodeError::InvalidData);
         }
-        for y in 0..header.height as usize {
-            let row = r.take(stride)?;
-            let dest_y = if header.top_down {
-                y
+        for source_y in 0..self.height as usize {
+            let row = &mask[source_y * stride..(source_y + 1) * stride];
+            let y = if self.top_down {
+                source_y
             } else {
-                header.height as usize - 1 - y
+                self.height as usize - 1 - source_y
             };
-            let dest = &mut pixels
-                [dest_y * header.width as usize * 4..(dest_y + 1) * header.width as usize * 4];
-            let dest = dest.as_chunks_mut::<4>().0;
-            match header.depth {
-                1 | 4 | 8 => {
-                    for (x, pixel) in dest.iter_mut().enumerate() {
-                        let bit = x * header.depth as usize;
-                        let index = (row[bit / 8] >> (8 - header.depth as usize - bit % 8))
-                            & ((1u16 << header.depth) - 1) as u8;
-                        pixel.copy_from_slice(
-                            palette
-                                .get(index as usize)
-                                .ok_or(DecodeError::InvalidData)?,
-                        );
-                    }
-                }
-                24 => {
-                    for (pixel, s) in dest.iter_mut().zip(row.as_chunks::<3>().0) {
-                        pixel.copy_from_slice(&[s[2], s[1], s[0], 255]);
-                    }
-                }
-                _ => {
-                    for (x, pixel) in dest.iter_mut().enumerate() {
-                        let v = if header.depth == 16 {
-                            u32::from(u16::from_le_bytes(
-                                row[x * 2..x * 2 + 2].try_into().expect("two bytes"),
-                            ))
-                        } else {
-                            u32::from_le_bytes(
-                                row[x * 4..x * 4 + 4].try_into().expect("four bytes"),
-                            )
-                        };
-                        for (channel, value) in pixel[..3].iter_mut().enumerate() {
-                            *value = header.masks.component(v, channel);
-                        }
-                        pixel[3] = if header.masks.0[3] == 0 {
-                            255
-                        } else {
-                            header.masks.component(v, 3)
-                        };
-                    }
+            for x in 0..self.width as usize {
+                if row[x / 8] & (0x80 >> (x % 8)) != 0 {
+                    pixels[(y * self.width as usize + x) * 4..][..4].fill(0);
                 }
             }
         }
+        Ok(())
     }
-    Ok((pixels, r.pos))
-}
-
-#[cfg(feature = "ico")]
-fn apply_icon_mask(mask: &[u8], header: &BmpHeader, pixels: &mut [u8]) -> Result<()> {
-    let has_alpha = header.depth == 32
-        && header.masks.0[3] != 0
-        && pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0);
-    if header.depth == 32 && !has_alpha {
-        for pixel in pixels.as_chunks_mut::<4>().0 {
-            pixel[3] = 255;
-        }
-    }
-    if has_alpha {
-        return Ok(());
-    }
-    let stride = usize::try_from(u64::from(header.width).div_ceil(32) * 4)
-        .map_err(|_| DecodeError::ImageTooLarge)?;
-    let len = stride
-        .checked_mul(header.height as usize)
-        .ok_or(DecodeError::ImageTooLarge)?;
-    if mask.len() < len {
-        return Ok(());
-    }
-    for source_y in 0..header.height as usize {
-        let row = &mask[source_y * stride..(source_y + 1) * stride];
-        let y = if header.top_down {
-            source_y
-        } else {
-            header.height as usize - 1 - source_y
-        };
-        for x in 0..header.width as usize {
-            if row[x / 8] & (0x80 >> (x % 8)) != 0 {
-                pixels[(y * header.width as usize + x) * 4 + 3] = 0;
-            }
-        }
-    }
-    Ok(())
 }
 
 fn rle(
@@ -437,10 +450,10 @@ fn rle(
     pixels: &mut [u8],
     width: usize,
     height: usize,
-    depth: u16,
+    compression: Compression,
     palette: &[[u8; 4]],
 ) -> Result<()> {
-    // RLE4/RLE8 alternate encoded runs with escape commands for literals, row ends, and deltas.
+    // RLE streams alternate encoded runs with escape commands for literals, row ends, and deltas.
     let mut x = 0;
     let mut y = 0;
     loop {
@@ -468,10 +481,28 @@ fn rle(
                     if y >= height || count > width - x {
                         return Err(DecodeError::InvalidData);
                     }
-                    let size = if depth == 8 { count } else { count.div_ceil(2) };
+                    if compression == Compression::Rle24 {
+                        let size = count.checked_mul(3).ok_or(DecodeError::InvalidData)?;
+                        let bytes = r.take(size)?;
+                        for (i, bgr) in bytes.as_chunks::<3>().0.iter().enumerate() {
+                            let offset = ((height - 1 - y) * width + x + i) * 4;
+                            pixels[offset..offset + 4]
+                                .copy_from_slice(&[bgr[2], bgr[1], bgr[0], 255]);
+                        }
+                        x += count;
+                        if size % 2 != 0 {
+                            r.byte()?;
+                        }
+                        continue;
+                    }
+                    let size = if compression == Compression::Rle8 {
+                        count
+                    } else {
+                        count.div_ceil(2)
+                    };
                     let bytes = r.take(size)?;
                     for i in 0..count {
-                        let index = if depth == 8 {
+                        let index = if compression == Compression::Rle8 {
                             bytes[i]
                         } else {
                             (bytes[i / 2] >> (4 - i % 2 * 4)) & 15
@@ -493,8 +524,18 @@ fn rle(
             if y >= height || count > width - x {
                 return Err(DecodeError::InvalidData);
             }
+            if compression == Compression::Rle24 {
+                let green = r.byte()?;
+                let red = r.byte()?;
+                for i in 0..count {
+                    let offset = ((height - 1 - y) * width + x + i) * 4;
+                    pixels[offset..offset + 4].copy_from_slice(&[red, green, value, 255]);
+                }
+                x += count;
+                continue;
+            }
             for i in 0..count {
-                let index = if depth == 8 {
+                let index = if compression == Compression::Rle8 {
                     value
                 } else {
                     (value >> (4 - i % 2 * 4)) & 15
@@ -686,6 +727,22 @@ mod tests {
             );
         }
         assert!(decode(&bitmap(1, 1, 8, 1, &[], &palette, &[2, 1, 0, 1])).is_err());
+
+        let sparse_palette = [[255, 0, 128, 0], [0, 0, 255, 0]];
+        assert_eq!(
+            decode(&bitmap(
+                2,
+                1,
+                8,
+                1,
+                &[],
+                &sparse_palette,
+                &[0, 2, 1, 0, 1, 1, 0, 1]
+            ))
+            .expect("sparse RLE bitmap")
+            .pixels(),
+            &[0, 0, 0, 255, 255, 0, 0, 255]
+        );
     }
 
     #[test]
@@ -710,5 +767,40 @@ mod tests {
                 &[3, 2, 1, 128]
             );
         }
+
+        let mut data = bitmap(1, 1, 32, 0, &[], &[], &[1, 2, 3, 128]);
+        data.splice(54..54, std::iter::repeat_n(0, 84));
+        let len = data.len() as u32;
+        data[2..6].copy_from_slice(&len.to_le_bytes());
+        data[10..14].copy_from_slice(&138u32.to_le_bytes());
+        data[14..18].copy_from_slice(&124u32.to_le_bytes());
+        data[66..70].copy_from_slice(&0xff00_0000u32.to_le_bytes());
+        assert_eq!(
+            decode(&data).expect("V5 BI_RGB alpha").pixels(),
+            &[3, 2, 1, 128]
+        );
+    }
+
+    #[test]
+    fn bmp_os2_rle24() {
+        let pixels = [2, 3, 2, 1, 0, 1];
+        let offset = 78u32;
+        let mut data = b"BM".to_vec();
+        data.extend_from_slice(&offset.to_le_bytes());
+        data.extend_from_slice(&[0; 4]);
+        data.extend_from_slice(&offset.to_le_bytes());
+        data.extend_from_slice(&64u32.to_le_bytes());
+        data.extend_from_slice(&2i32.to_le_bytes());
+        data.extend_from_slice(&1i32.to_le_bytes());
+        data.extend_from_slice(&1u16.to_le_bytes());
+        data.extend_from_slice(&24u16.to_le_bytes());
+        data.extend_from_slice(&4u32.to_le_bytes());
+        data.extend_from_slice(&(pixels.len() as u32).to_le_bytes());
+        data.extend_from_slice(&[0; 40]);
+        data.extend_from_slice(&pixels);
+        assert_eq!(
+            decode(&data).expect("OS/2 RLE24 bitmap").pixels(),
+            &[1, 2, 3, 255, 1, 2, 3, 255]
+        );
     }
 }

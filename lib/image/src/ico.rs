@@ -43,7 +43,9 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
         let width = dimension(r.byte()?);
         let height = dimension(r.byte()?);
         let colors = r.byte()? as usize;
-        r.byte()?; // Reserved.
+        if r.byte()? != 0 {
+            return Err(DecodeError::InvalidHeader);
+        }
         r.le16()?; // Color planes.
         let depth = r.le16()?;
         let size = r.le32()? as usize;
@@ -132,47 +134,33 @@ mod tests {
         assert_eq!(image.pixels(), &[255, 0, 0, 128, 0, 255, 0, 255]);
 
         let image = decode(&icon(&[(2, 1, 32, dib32([0, 0], 0x40))])).expect("masked icon");
-        assert_eq!(image.pixels(), &[255, 0, 0, 255, 0, 255, 0, 0]);
+        assert_eq!(image.pixels(), &[255, 0, 0, 255, 0, 0, 0, 0]);
     }
 
     #[test]
-    fn largest_png_is_the_only_payload_decoded() {
-        let png = include_bytes!("../tests/fixtures/rgb.png").to_vec();
-        let image = decode(&icon(&[(1, 1, 32, vec![0]), (19, 13, 32, png)])).expect("PNG icon");
-        assert_eq!((image.width(), image.height()), (19, 13));
-        assert_eq!(image.format(), Format::Ico);
+    fn dib_without_alpha_requires_a_complete_mask() {
+        let mut dib = dib32([0, 0], 0);
+        dib.truncate(dib.len() - 4);
         assert_eq!(
-            image.pixels(),
-            include_bytes!("../tests/fixtures/rgb.png.rgba")
+            decode(&icon(&[(2, 1, 32, dib)])),
+            Err(DecodeError::InvalidData)
         );
     }
 
     #[test]
-    fn generated_fixtures_match_reference_pixels() {
-        for (name, encoded, expected, dimensions) in [
-            (
-                "dib.ico",
-                &include_bytes!("../tests/fixtures/dib.ico")[..],
-                &include_bytes!("../tests/fixtures/dib.ico.rgba")[..],
-                (32, 32),
-            ),
-            (
-                "palette.ico",
-                &include_bytes!("../tests/fixtures/palette.ico")[..],
-                &include_bytes!("../tests/fixtures/palette.ico.rgba")[..],
-                (19, 13),
-            ),
-            (
-                "png.ico",
-                &include_bytes!("../tests/fixtures/png.ico")[..],
-                &include_bytes!("../tests/fixtures/png.ico.rgba")[..],
-                (19, 13),
-            ),
-        ] {
-            let image = decode(encoded).unwrap_or_else(|error| panic!("{name}: {error}"));
-            assert_eq!((image.width(), image.height()), dimensions, "{name}");
-            assert_eq!(image.format(), Format::Ico, "{name}");
-            assert_eq!(image.pixels(), expected, "{name}");
-        }
+    fn largest_png_is_the_only_payload_decoded() {
+        let png = include_bytes!("../tests/images/png/interlaced/basi2c08.png").to_vec();
+        let expected = png::decode(&png).expect("PNG payload");
+        let image = decode(&icon(&[(1, 1, 32, vec![0]), (32, 32, 32, png)])).expect("PNG icon");
+        assert_eq!((image.width(), image.height()), (32, 32));
+        assert_eq!(image.format(), Format::Ico);
+        assert_eq!(image.pixels(), expected.pixels());
+    }
+
+    #[test]
+    fn directory_entry_reserved_byte_must_be_zero() {
+        let mut data = vec![0, 0, 1, 0, 1, 0, 1, 1, 0, 1];
+        data.extend_from_slice(&[0; 12]);
+        assert_eq!(decode(&data), Err(DecodeError::InvalidHeader));
     }
 }

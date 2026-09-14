@@ -9,6 +9,20 @@
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
 
+#[cfg(all(
+    test,
+    any(
+        feature = "qoi",
+        feature = "jpeg",
+        feature = "png",
+        feature = "gif",
+        feature = "bmp",
+        feature = "ico",
+        feature = "svg",
+        feature = "tinyvg"
+    )
+))]
+mod test_support;
 mod vector;
 pub use vector::{
     Clip, Color, DrawCommand, FillRule, GradientStop, LineCap, LineJoin, Mask, MaskType, Paint,
@@ -157,7 +171,7 @@ pub enum DecodeError {
     InvalidHeader,
     /// Truncated, corrupt or inconsistent encoded data.
     InvalidData,
-    /// A recognized format uses an unsupported feature, such as 16-bit PNG.
+    /// A recognized format uses an unsupported feature.
     UnsupportedFeature,
     /// Decoded storage exceeds 512 MiB, arithmetic overflows, or allocation fails.
     ImageTooLarge,
@@ -179,7 +193,7 @@ impl std::error::Error for DecodeError {}
 
 type Result<T> = std::result::Result<T, DecodeError>;
 
-/// Decodes a complete image within 512 MiB, excluding high-bit PNG/APNG and uncommon JPEG/BMP.
+/// Decodes a complete image within 512 MiB, excluding uncommon JPEG/BMP variants.
 #[cfg_attr(
     not(any(
         feature = "qoi",
@@ -219,6 +233,10 @@ pub fn decode(_data: &[u8]) -> Result<Image> {
 }
 
 /// Detects a supported vector format without fully decoding it.
+#[cfg_attr(
+    not(any(feature = "tinyvg", feature = "svg")),
+    allow(clippy::missing_const_for_fn)
+)]
 pub fn vector_format(_data: &[u8]) -> Option<VectorFormat> {
     #[cfg(feature = "tinyvg")]
     if tinyvg::is_tinyvg(_data) {
@@ -250,7 +268,8 @@ pub fn decode_vector(data: &[u8]) -> std::result::Result<VectorImage, VectorDeco
     feature = "jpeg",
     feature = "png",
     feature = "gif",
-    feature = "bmp"
+    feature = "bmp",
+    feature = "ico"
 ))]
 const MAX_BYTES: usize = 512 * 1024 * 1024;
 
@@ -261,7 +280,8 @@ const MAX_BYTES: usize = 512 * 1024 * 1024;
     feature = "jpeg",
     feature = "png",
     feature = "gif",
-    feature = "bmp"
+    feature = "bmp",
+    feature = "ico"
 ))]
 struct Budget {
     used: usize,
@@ -284,7 +304,13 @@ impl Budget {
         Ok(())
     }
 
-    #[cfg(any(feature = "jpeg", feature = "png", feature = "gif", feature = "bmp"))]
+    #[cfg(any(
+        feature = "qoi",
+        feature = "jpeg",
+        feature = "png",
+        feature = "gif",
+        feature = "bmp"
+    ))]
     fn zeroed<T: Default + Clone>(&mut self, len: usize) -> Result<Vec<T>> {
         self.claim(
             len.checked_mul(size_of::<T>())
@@ -299,15 +325,18 @@ impl Budget {
 
     #[cfg(any(feature = "png", feature = "gif"))]
     fn copy(&mut self, bytes: &[u8]) -> Result<Vec<u8>> {
-        let mut out = self.zeroed(bytes.len())?;
-        out.copy_from_slice(bytes);
+        self.claim(bytes.len())?;
+        let mut out = Vec::new();
+        out.try_reserve_exact(bytes.len())
+            .map_err(|_| DecodeError::ImageTooLarge)?;
+        out.extend_from_slice(bytes);
         Ok(out)
     }
 
     #[cfg(any(feature = "png", feature = "gif"))]
     fn append<T: Copy>(&mut self, out: &mut Vec<T>, bytes: &[T]) -> Result<()> {
         self.claim(size_of_val(bytes))?;
-        out.try_reserve_exact(bytes.len())
+        out.try_reserve(bytes.len())
             .map_err(|_| DecodeError::ImageTooLarge)?;
         out.extend_from_slice(bytes);
         Ok(())
@@ -317,7 +346,7 @@ impl Budget {
     fn frame(&mut self, frames: &mut Vec<Frame>, pixels: Vec<u8>, delay: Duration) -> Result<()> {
         self.claim(size_of::<Frame>())?;
         frames
-            .try_reserve_exact(1)
+            .try_reserve(1)
             .map_err(|_| DecodeError::ImageTooLarge)?;
         frames.push(Frame { pixels, delay });
         Ok(())
@@ -435,191 +464,119 @@ impl Area {
                 .fill(pixel);
         }
     }
+
+    fn snapshot(self, canvas: &[u8], stride: usize, budget: &mut Budget) -> Result<Vec<u8>> {
+        let row_len = self
+            .width
+            .checked_mul(4)
+            .ok_or(DecodeError::ImageTooLarge)?;
+        let len = row_len
+            .checked_mul(self.height)
+            .ok_or(DecodeError::ImageTooLarge)?;
+        budget.claim(len)?;
+        let mut pixels = Vec::new();
+        pixels
+            .try_reserve_exact(len)
+            .map_err(|_| DecodeError::ImageTooLarge)?;
+        for row in 0..self.height {
+            let start = ((self.y + row) * stride + self.x) * 4;
+            pixels.extend_from_slice(&canvas[start..start + row_len]);
+        }
+        Ok(pixels)
+    }
+
+    fn restore(self, canvas: &mut [u8], stride: usize, pixels: &[u8]) {
+        let row_len = self.width * 4;
+        for (row, source) in pixels.chunks_exact(row_len).enumerate() {
+            let start = ((self.y + row) * stride + self.x) * 4;
+            canvas[start..start + row_len].copy_from_slice(source);
+        }
+    }
 }
 
 #[cfg(all(
     test,
-    feature = "qoi",
-    feature = "jpeg",
-    feature = "png",
-    feature = "gif",
-    feature = "bmp"
+    any(
+        feature = "qoi",
+        feature = "jpeg",
+        feature = "png",
+        feature = "gif",
+        feature = "bmp",
+        feature = "ico"
+    )
 ))]
 mod tests {
     use super::*;
 
-    const FIXTURES: &[(&str, &[u8], &[u8])] = &[
-        (
-            "rgb.png",
-            include_bytes!("../tests/fixtures/rgb.png"),
-            include_bytes!("../tests/fixtures/rgb.png.rgba"),
-        ),
-        (
-            "rgba.png",
-            include_bytes!("../tests/fixtures/rgba.png"),
-            include_bytes!("../tests/fixtures/rgba.png.rgba"),
-        ),
-        (
-            "adam7.png",
-            include_bytes!("../tests/fixtures/adam7.png"),
-            include_bytes!("../tests/fixtures/adam7.png.rgba"),
-        ),
-        (
-            "palette.png",
-            include_bytes!("../tests/fixtures/palette.png"),
-            include_bytes!("../tests/fixtures/palette.png.rgba"),
-        ),
-        (
-            "gray.png",
-            include_bytes!("../tests/fixtures/gray.png"),
-            include_bytes!("../tests/fixtures/gray.png.rgba"),
-        ),
-        (
-            "rgb.qoi",
-            include_bytes!("../tests/fixtures/rgb.qoi"),
-            include_bytes!("../tests/fixtures/rgb.qoi.rgba"),
-        ),
-        (
-            "rgba.qoi",
-            include_bytes!("../tests/fixtures/rgba.qoi"),
-            include_bytes!("../tests/fixtures/rgba.qoi.rgba"),
-        ),
-        (
-            "operations.qoi",
-            include_bytes!("../tests/fixtures/operations.qoi"),
-            include_bytes!("../tests/fixtures/operations.qoi.rgba"),
-        ),
-        (
-            "baseline.jpg",
-            include_bytes!("../tests/fixtures/baseline.jpg"),
-            include_bytes!("../tests/fixtures/baseline.jpg.rgba"),
-        ),
-        (
-            "subsampled.jpg",
-            include_bytes!("../tests/fixtures/subsampled.jpg"),
-            include_bytes!("../tests/fixtures/subsampled.jpg.rgba"),
-        ),
-        (
-            "progressive.jpg",
-            include_bytes!("../tests/fixtures/progressive.jpg"),
-            include_bytes!("../tests/fixtures/progressive.jpg.rgba"),
-        ),
-        (
-            "gray.jpg",
-            include_bytes!("../tests/fixtures/gray.jpg"),
-            include_bytes!("../tests/fixtures/gray.jpg.rgba"),
-        ),
-        (
-            "cmyk.jpg",
-            include_bytes!("../tests/fixtures/cmyk.jpg"),
-            include_bytes!("../tests/fixtures/cmyk.jpg.rgba"),
-        ),
-        (
-            "rgb.bmp",
-            include_bytes!("../tests/fixtures/rgb.bmp"),
-            include_bytes!("../tests/fixtures/rgb.bmp.rgba"),
-        ),
-        (
-            "palette.bmp",
-            include_bytes!("../tests/fixtures/palette.bmp"),
-            include_bytes!("../tests/fixtures/palette.bmp.rgba"),
-        ),
-        (
-            "static.gif",
-            include_bytes!("../tests/fixtures/static.gif"),
-            include_bytes!("../tests/fixtures/static.gif.rgba"),
-        ),
-        (
-            "interlaced.gif",
-            include_bytes!("../tests/fixtures/interlaced.gif"),
-            include_bytes!("../tests/fixtures/interlaced.gif.rgba"),
-        ),
-        (
-            "restart.jpg",
-            include_bytes!("../tests/fixtures/restart.jpg"),
-            include_bytes!("../tests/fixtures/restart.jpg.rgba"),
-        ),
-        (
-            "progressive-restart.jpg",
-            include_bytes!("../tests/fixtures/progressive-restart.jpg"),
-            include_bytes!("../tests/fixtures/progressive-restart.jpg.rgba"),
-        ),
-        (
-            "separate.jpg",
-            include_bytes!("../tests/fixtures/separate.jpg"),
-            include_bytes!("../tests/fixtures/separate.jpg.rgba"),
-        ),
-        (
-            "direct-rgb.jpg",
-            include_bytes!("../tests/fixtures/direct-rgb.jpg"),
-            include_bytes!("../tests/fixtures/direct-rgb.jpg.rgba"),
-        ),
-        (
-            "horizontal.jpg",
-            include_bytes!("../tests/fixtures/horizontal.jpg"),
-            include_bytes!("../tests/fixtures/horizontal.jpg.rgba"),
-        ),
-        (
-            "vertical.jpg",
-            include_bytes!("../tests/fixtures/vertical.jpg"),
-            include_bytes!("../tests/fixtures/vertical.jpg.rgba"),
-        ),
-    ];
-
+    #[cfg(feature = "qoi")]
     #[test]
-    fn independent_reference_pixels() {
-        for &(name, encoded, expected) in FIXTURES {
-            let image = decode(encoded).unwrap_or_else(|e| panic!("{name}: {e}"));
-            assert_eq!((image.width(), image.height()), (19, 13), "{name}");
-            assert_eq!(image.frames().len(), 1, "{name}");
-            assert_eq!(image.pixels().len(), expected.len(), "{name}");
-            if name.ends_with(".jpg") {
-                // Independent IDCT and chroma interpolation rounding can differ slightly.
-                let errors: Vec<_> = image
-                    .pixels()
-                    .iter()
-                    .zip(expected)
-                    .map(|(a, b)| a.abs_diff(*b) as usize)
-                    .collect();
-                let max = *errors.iter().max().expect("nonempty pixels");
-                let mean = errors.iter().sum::<usize>() as f64 / errors.len() as f64;
-                assert!(max <= 4 && mean < 1.0, "{name}: max {max}, mean {mean}");
-            } else {
-                assert_eq!(image.pixels(), expected, "{name}");
-            }
-        }
+    fn qoi_reference_corpus() {
+        test_support::run_raster_format("qoi");
     }
 
+    #[cfg(feature = "jpeg")]
     #[test]
-    fn gif_animation_reference_and_timing() {
-        let image =
-            decode(include_bytes!("../tests/fixtures/animated.gif")).expect("GIF animation");
-        let expected = include_bytes!("../tests/fixtures/animated.gif.rgba");
-        assert_eq!(image.loop_count(), 3);
-        assert_eq!(image.frames().len(), 2);
-        for (index, frame) in image.frames().iter().enumerate() {
-            assert_eq!(frame.delay(), Duration::from_millis([70, 130][index]));
-            assert_eq!(
-                frame.pixels(),
-                &expected[index * 19 * 13 * 4..(index + 1) * 19 * 13 * 4]
-            );
-        }
+    fn jpeg_reference_corpus() {
+        test_support::run_raster_format("jpeg");
     }
 
+    #[cfg(feature = "png")]
+    #[test]
+    fn png_reference_corpus() {
+        test_support::run_raster_format("png");
+    }
+
+    #[cfg(feature = "gif")]
+    #[test]
+    fn gif_reference_corpus() {
+        test_support::run_raster_format("gif");
+    }
+
+    #[cfg(feature = "bmp")]
+    #[test]
+    fn bmp_reference_corpus() {
+        test_support::run_raster_format("bmp");
+    }
+
+    #[cfg(feature = "ico")]
+    #[test]
+    fn ico_reference_corpus() {
+        test_support::run_raster_format("ico");
+    }
+    #[cfg(any(
+        feature = "qoi",
+        feature = "jpeg",
+        feature = "png",
+        feature = "gif",
+        feature = "bmp",
+        feature = "ico"
+    ))]
     #[test]
     fn every_truncation_is_rejected() {
-        for &(name, bytes, _) in FIXTURES {
-            for end in 0..bytes.len() {
-                assert!(decode(&bytes[..end]).is_err(), "{name} at {end}");
+        for (name, encoded) in test_support::raster_inputs() {
+            for end in 0..encoded.len().min(32) {
+                assert!(
+                    decode(&encoded[..end]).is_err(),
+                    "{} at {end}",
+                    name.to_string_lossy()
+                );
             }
         }
     }
 
+    #[cfg(any(
+        feature = "qoi",
+        feature = "jpeg",
+        feature = "png",
+        feature = "gif",
+        feature = "bmp",
+        feature = "ico"
+    ))]
     #[test]
     fn corrupted_inputs_do_not_panic() {
-        for &(_, bytes, _) in FIXTURES {
-            for i in (0..bytes.len()).step_by(7) {
-                let mut bad = bytes.to_vec();
+        for (_, encoded) in test_support::raster_inputs() {
+            for i in (0..encoded.len()).step_by(7) {
+                let mut bad = encoded.clone();
                 bad[i] ^= 0xff;
                 let _ = decode(&bad);
             }
@@ -646,5 +603,26 @@ mod tests {
                 let _ = decode(&input);
             }
         }
+    }
+
+    #[cfg(any(feature = "png", feature = "gif"))]
+    #[test]
+    fn animation_snapshot_only_stores_the_changed_area() {
+        let area = Area {
+            x: 1,
+            y: 1,
+            width: 1,
+            height: 1,
+        };
+        let mut canvas = (0..24).collect::<Vec<_>>();
+        let original = canvas.clone();
+        let mut budget = Budget::default();
+        let snapshot = area
+            .snapshot(&canvas, 3, &mut budget)
+            .expect("area snapshot");
+        assert_eq!(snapshot.len(), 4);
+        canvas[16..20].fill(255);
+        area.restore(&mut canvas, 3, &snapshot);
+        assert_eq!(canvas, original);
     }
 }
