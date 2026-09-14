@@ -5,7 +5,6 @@
  */
 
 #![doc = include_str!("../README.md")]
-
 #![allow(unsafe_code)]
 
 mod browse;
