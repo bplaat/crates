@@ -900,16 +900,39 @@ mod tests {
         pixels
     }
 
-    fn svg_files(directory: &Path, output: &mut Vec<PathBuf>) {
+    fn premultiplied_rgba(pixels: &[u8]) -> Vec<u8> {
+        let mut output = pixels.to_vec();
+        for pixel in output.as_chunks_mut::<4>().0 {
+            let alpha = u16::from(pixel[3]);
+            for channel in &mut pixel[..3] {
+                *channel = ((u16::from(*channel) * alpha + 127) / 255) as u8;
+            }
+        }
+        output
+    }
+
+    fn flipped_rows(pixels: &[u8], width: usize) -> Vec<u8> {
+        pixels
+            .chunks_exact(width * 4)
+            .rev()
+            .flatten()
+            .copied()
+            .collect()
+    }
+
+    fn fixture_files(directory: &Path, extension: &str, output: &mut Vec<PathBuf>) {
         let mut entries = fs::read_dir(directory)
-            .expect("read SVG fixture directory")
+            .expect("read fixture directory")
             .map(|entry| entry.expect("read SVG fixture entry").path())
             .collect::<Vec<_>>();
         entries.sort();
         for path in entries {
             if path.is_dir() {
-                svg_files(&path, output);
-            } else if path.extension().is_some_and(|extension| extension == "svg") {
+                fixture_files(&path, extension, output);
+            } else if path
+                .extension()
+                .is_some_and(|candidate| candidate == extension)
+            {
                 output.push(path);
             }
         }
@@ -1010,6 +1033,39 @@ mod tests {
         })
     }
 
+    fn tinyvg_pixel_mismatch(name: &Path, actual: &[u8], expected: &[u8]) -> Option<String> {
+        // The published PNGs come from another renderer. Bound both average error and
+        // the number of large per-pixel errors so antialiasing may differ without
+        // allowing missing geometry or broad color changes.
+        assert_eq!(actual.len(), expected.len(), "{}", name.display());
+        let pixels = actual.len() / 4;
+        let mut total_difference = 0_u64;
+        let mut outliers = 0;
+        for (actual, expected) in actual
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(expected.as_chunks::<4>().0)
+        {
+            let difference = actual
+                .iter()
+                .zip(expected)
+                .map(|(&actual, &expected)| actual.abs_diff(expected))
+                .max()
+                .expect("RGBA pixel");
+            total_difference += u64::from(difference);
+            outliers += usize::from(difference > 64);
+        }
+        let mean = total_difference as f64 / pixels as f64;
+        let allowed_outliers = pixels.div_ceil(50);
+        (mean > 5.0 || outliers > allowed_outliers).then(|| {
+            format!(
+                "{}: mean max-channel difference {mean:.3} (allowed 5.000), pixels above 64: {outliers} (allowed {allowed_outliers})",
+                name.display()
+            )
+        })
+    }
+
     #[test]
     fn renders_wpt_svg_reference_pairs() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../image/tests");
@@ -1019,7 +1075,7 @@ mod tests {
             .canonicalize()
             .expect("canonical SVG reference directory");
         let mut files = Vec::new();
-        svg_files(&image_root, &mut files);
+        fixture_files(&image_root, "svg", &mut files);
         assert_eq!(files.len(), 93, "pinned WPT SVG test count changed");
         let mut failures = Vec::new();
 
@@ -1048,6 +1104,55 @@ mod tests {
                 failures.push(failure);
             }
         }
+        assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn renders_tinyvg_reference_pngs() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../image/tests");
+        let image_root = root.join("images/tinyvg");
+        let reference_root = root.join("reference/tinyvg");
+        let mut files = Vec::new();
+        fixture_files(&image_root, "tvg", &mut files);
+        assert_eq!(files.len(), 7, "pinned TinyVG test count changed");
+        let mut references = Vec::new();
+        fixture_files(&reference_root, "png", &mut references);
+        assert_eq!(references.len(), 7, "pinned TinyVG reference count changed");
+        let mut used_references = Vec::new();
+        let mut failures = Vec::new();
+
+        for path in files {
+            let relative = path
+                .strip_prefix(&image_root)
+                .expect("relative TinyVG test");
+            let data = fs::read(&path).expect("read TinyVG test");
+            let document = image::decode_vector(&data)
+                .unwrap_or_else(|error| panic!("{}: {error}", relative.display()));
+            let reference_path = reference_root.join(relative).with_extension("tvg.png");
+            let reference_data = fs::read(&reference_path).expect("read TinyVG PNG reference");
+            used_references.push(reference_path);
+            let reference = image::decode(&reference_data)
+                .unwrap_or_else(|error| panic!("{} reference: {error}", relative.display()));
+            assert_eq!(reference.frames().len(), 1, "{}", relative.display());
+            assert_eq!(
+                (document.size().width, document.size().height),
+                (f64::from(reference.width()), f64::from(reference.height())),
+                "{}",
+                relative.display()
+            );
+            let width = reference.width() as usize;
+            // Core Graphics exposes bottom-up premultiplied pixels; PNG decoding uses
+            // top-down straight-alpha RGBA8. Compare in the native premultiplied form.
+            let actual = flipped_rows(
+                &render_pixels(&document, width, reference.height() as usize),
+                width,
+            );
+            let expected = premultiplied_rgba(reference.pixels());
+            if let Some(failure) = tinyvg_pixel_mismatch(relative, &actual, &expected) {
+                failures.push(failure);
+            }
+        }
+        assert_eq!(used_references, references);
         assert!(failures.is_empty(), "\n{}", failures.join("\n"));
     }
 
