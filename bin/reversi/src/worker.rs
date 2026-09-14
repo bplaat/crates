@@ -9,9 +9,9 @@ use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 
 use bwindow::EventLoopProxy;
+use reversi_engine::{Move, Othello, Player};
 
 use crate::AppEvent;
-use crate::engine::{Move, Othello, Player};
 
 #[derive(Clone, Copy)]
 pub(crate) struct AiJob {

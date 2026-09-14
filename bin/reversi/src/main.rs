@@ -20,9 +20,8 @@ use bwindow::{
 };
 use worker::{AiJob, AiResult, AiWorker};
 
-mod engine;
 mod worker;
-use engine::{CellState, Move, Othello, Player};
+use reversi_engine::{CellState, Move, Othello, Player};
 
 const WINDOW_WIDTH: f32 = 600.0;
 const WINDOW_HEIGHT: f32 = 600.0;

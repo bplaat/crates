@@ -889,8 +889,13 @@ version = "0.1.0"
 dependencies = [
  "bcanvas",
  "bwindow",
+ "reversi-engine",
  "winresource",
 ]
+
+[[package]]
+name = "reversi-engine"
+version = "0.1.0"
 
 [[package]]
 name = "ring"

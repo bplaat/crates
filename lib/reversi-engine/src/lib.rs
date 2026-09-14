@@ -1,15 +1,14 @@
 /*
+ * Copyright (c) 2017 Hans Wennborg
  * Copyright (c) 2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
 
-/*
- * Bitboard Othello engine derived from Hans Wennborg's C implementation:
- * https://www.hanshq.net/othello.html
- *
- * Adapted to safe Rust for Reversi. Search is bounded and cancellable.
- */
+//! Bitboard Othello engine derived from Hans Wennborg's C implementation:
+//! https://www.hanshq.net/othello.html
+//!
+//! Adapted to safe Rust. Search is bounded and cancellable.
 
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
@@ -34,13 +33,16 @@ const RIGHT_SHIFTS: [u32; DIRECTIONS] = [1, 9, 8, 7, 0, 0, 0, 0];
 
 /// A player and disk color.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Player {
+pub enum Player {
+    /// The player using black disks.
     Black,
+    /// The player using white disks.
     White,
 }
 
 impl Player {
-    pub(crate) const fn other(self) -> Self {
+    /// Return the opposing player.
+    pub const fn other(self) -> Self {
         match self {
             Self::Black => Self::White,
             Self::White => Self::Black,
@@ -54,17 +56,22 @@ impl Player {
 
 /// Contents of one board cell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CellState {
+pub enum CellState {
+    /// A black disk.
     Black,
+    /// A white disk.
     White,
+    /// An empty cell.
     Empty,
 }
 
 /// A zero-indexed board move.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Move {
-    pub(crate) row: usize,
-    pub(crate) col: usize,
+pub struct Move {
+    /// The zero-indexed board row.
+    pub row: usize,
+    /// The zero-indexed board column.
+    pub col: usize,
 }
 
 impl Move {
@@ -82,7 +89,7 @@ impl Move {
 
 /// Compact Othello state represented by one bitboard per player.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Othello {
+pub struct Othello {
     disks: [u64; 2],
 }
 
@@ -98,7 +105,8 @@ impl Default for Othello {
 }
 
 impl Othello {
-    pub(crate) fn cell_state(self, row: usize, col: usize) -> CellState {
+    /// Return the contents of a board cell.
+    pub fn cell_state(self, row: usize, col: usize) -> CellState {
         let mask = cell_mask(row, col);
         if self.disks[Player::Black.index()] & mask != 0 {
             CellState::Black
@@ -109,7 +117,8 @@ impl Othello {
         }
     }
 
-    pub(crate) fn set_cell_state(&mut self, row: usize, col: usize, state: CellState) {
+    /// Replace the contents of a board cell.
+    pub fn set_cell_state(&mut self, row: usize, col: usize, state: CellState) {
         let mask = cell_mask(row, col);
         self.disks[0] &= !mask;
         self.disks[1] &= !mask;
@@ -120,12 +129,13 @@ impl Othello {
         }
     }
 
-    pub(crate) const fn score(self, player: Player) -> u32 {
+    /// Return the number of disks owned by a player.
+    pub const fn score(self, player: Player) -> u32 {
         self.disks[player.index()].count_ones()
     }
 
-    #[cfg(test)]
-    pub(crate) fn valid_moves(self, player: Player) -> Vec<Move> {
+    /// Return all legal moves for a player in board order.
+    pub fn valid_moves(self, player: Player) -> Vec<Move> {
         let mut bits = self.valid_move_bits(player);
         let mut moves = Vec::with_capacity(bits.count_ones() as usize);
         while bits != 0 {
@@ -136,17 +146,20 @@ impl Othello {
         moves
     }
 
-    pub(crate) fn has_valid_move(self, player: Player) -> bool {
+    /// Return whether a player has at least one legal move.
+    pub fn has_valid_move(self, player: Player) -> bool {
         self.valid_move_bits(player) != 0
     }
 
-    pub(crate) fn is_valid_move(self, player: Player, movement: Move) -> bool {
+    /// Return whether a move is legal for a player.
+    pub fn is_valid_move(self, player: Player, movement: Move) -> bool {
         movement.row < 8
             && movement.col < 8
             && self.valid_move_bits(player) & (1_u64 << movement.index()) != 0
     }
 
-    pub(crate) fn make_move(&mut self, player: Player, movement: Move) -> bool {
+    /// Apply a legal move and return whether it was accepted.
+    pub fn make_move(&mut self, player: Player, movement: Move) -> bool {
         if !self.is_valid_move(player, movement) {
             return false;
         }
@@ -157,16 +170,15 @@ impl Othello {
 
     /// Find a move within a bounded number of search nodes.
     #[cfg(test)]
-    pub(crate) fn compute_move_with_budget(
-        self,
-        player: Player,
-        depth: u32,
-        nodes: u32,
-    ) -> Option<Move> {
+    fn compute_move_with_budget(self, player: Player, depth: u32, nodes: u32) -> Option<Move> {
         self.compute_move_cancellable(player, depth, nodes, &|| false)
     }
 
-    pub(crate) fn compute_move_cancellable(
+    /// Search for a move within depth and node limits.
+    ///
+    /// The search returns `None` when the player has no legal move or when
+    /// `cancelled` returns `true`.
+    pub fn compute_move_cancellable(
         self,
         player: Player,
         depth: u32,
@@ -186,7 +198,8 @@ impl Othello {
         .map(Move::from_index)
     }
 
-    pub(crate) fn valid_move_bits(self, player: Player) -> u64 {
+    /// Return a bitboard containing every legal move for a player.
+    pub fn valid_move_bits(self, player: Player) -> u64 {
         generate_moves(
             self.disks[player.index()],
             self.disks[player.other().index()],
