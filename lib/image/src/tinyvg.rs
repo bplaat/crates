@@ -6,9 +6,11 @@
 
 //! Internal TinyVG parser, converted to the crate's shared vector display list.
 
+use std::mem::size_of;
 use std::{error, fmt};
 
 const MAX_ELEMENTS: usize = 1_000_000;
+const MAX_BYTES: usize = 256 * 1024 * 1024;
 
 /// A parsed TinyVG document.
 #[derive(Clone, Debug, PartialEq)]
@@ -55,6 +57,17 @@ pub(crate) enum Command {
         path: Path,
         /// The stroke paint.
         style: Style,
+        /// The initial stroke width in display units.
+        line_width: f64,
+    },
+    /// A path filled and then stroked without duplicating its geometry.
+    FillStroke {
+        /// The shared fill and stroke geometry.
+        path: Path,
+        /// The fill paint.
+        fill_style: Style,
+        /// The stroke paint.
+        line_style: Style,
         /// The initial stroke width in display units.
         line_width: f64,
     },
@@ -150,7 +163,7 @@ pub(crate) struct Color {
 }
 
 /// A shape paint style with resolved colors.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Style {
     /// A uniform color.
     Solid(Color),
@@ -242,6 +255,42 @@ struct Parser<'a> {
     size: Size,
     colors: Vec<Color>,
     commands: Vec<Command>,
+    budget: Budget,
+}
+
+#[derive(Default)]
+struct Budget {
+    used: usize,
+}
+
+impl Budget {
+    fn claim<T>(&mut self, count: usize) -> Result<(), Error> {
+        let bytes = count
+            .checked_mul(size_of::<T>())
+            .ok_or(Error::TooManyElements)?;
+        self.used = self
+            .used
+            .checked_add(bytes)
+            .filter(|used| *used <= MAX_BYTES)
+            .ok_or(Error::TooManyElements)?;
+        Ok(())
+    }
+
+    fn vector<T>(&mut self, capacity: usize) -> Result<Vec<T>, Error> {
+        self.claim::<T>(capacity)?;
+        let mut values = Vec::new();
+        values
+            .try_reserve_exact(capacity)
+            .map_err(|_| Error::TooManyElements)?;
+        Ok(values)
+    }
+
+    fn push<T>(&mut self, values: &mut Vec<T>, value: T) -> Result<(), Error> {
+        self.claim::<T>(1)?;
+        values.try_reserve(1).map_err(|_| Error::TooManyElements)?;
+        values.push(value);
+        Ok(())
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -257,6 +306,7 @@ impl<'a> Parser<'a> {
             },
             colors: Vec::new(),
             commands: Vec::new(),
+            budget: Budget::default(),
         };
         if parser.read_exact(2)? != [0x72, 0x56] {
             return Err(Error::InvalidMagic);
@@ -304,14 +354,18 @@ impl<'a> Parser<'a> {
                 10 => self.outline_fill_path(primary_style)?,
                 _ => return Err(Error::InvalidData("unknown command")),
             }
-            if self.commands.len() > MAX_ELEMENTS {
-                return Err(Error::TooManyElements);
-            }
         }
         Ok(Document {
             size: self.size,
             commands: self.commands,
         })
+    }
+
+    fn push_command(&mut self, command: Command) -> Result<(), Error> {
+        if self.commands.len() >= MAX_ELEMENTS {
+            return Err(Error::TooManyElements);
+        }
+        self.budget.push(&mut self.commands, command)
     }
 
     fn fill_polygon(&mut self, style_kind: StyleKind) -> Result<(), Error> {
@@ -321,8 +375,7 @@ impl<'a> Parser<'a> {
         }
         let style = self.read_style(style_kind)?;
         let path = self.read_polygon(count, true)?;
-        self.commands.push(Command::Fill { path, style });
-        Ok(())
+        self.push_command(Command::Fill { path, style })
     }
 
     fn fill_rectangles(&mut self, style_kind: StyleKind) -> Result<(), Error> {
@@ -330,10 +383,7 @@ impl<'a> Parser<'a> {
         let style = self.read_style(style_kind)?;
         for _ in 0..count {
             let path = self.read_rectangle()?;
-            self.commands.push(Command::Fill {
-                path,
-                style: style.clone(),
-            });
+            self.push_command(Command::Fill { path, style })?;
         }
         Ok(())
     }
@@ -342,32 +392,29 @@ impl<'a> Parser<'a> {
         let count = self.read_count(true)?;
         let style = self.read_style(style_kind)?;
         let path = self.read_path(count)?;
-        self.commands.push(Command::Fill { path, style });
-        Ok(())
+        self.push_command(Command::Fill { path, style })
     }
 
     fn draw_lines(&mut self, style_kind: StyleKind) -> Result<(), Error> {
         let count = self.read_count(true)?;
         let style = self.read_style(style_kind)?;
         let line_width = self.read_line_width()?;
-        let mut subpaths = Vec::with_capacity(count);
+        let mut subpaths = self.budget.vector(count)?;
         for _ in 0..count {
             let start = self.read_point()?;
             let end = self.read_point()?;
-            subpaths.push(Subpath {
-                start,
-                nodes: vec![PathNode {
-                    operation: PathOperation::LineTo(end),
-                    line_width: None,
-                }],
+            let mut nodes = self.budget.vector(1)?;
+            nodes.push(PathNode {
+                operation: PathOperation::LineTo(end),
+                line_width: None,
             });
+            subpaths.push(Subpath { start, nodes });
         }
-        self.commands.push(Command::Stroke {
+        self.push_command(Command::Stroke {
             path: Path { subpaths },
             style,
             line_width,
-        });
-        Ok(())
+        })
     }
 
     fn draw_line_segments(&mut self, style_kind: StyleKind, close: bool) -> Result<(), Error> {
@@ -375,12 +422,11 @@ impl<'a> Parser<'a> {
         let style = self.read_style(style_kind)?;
         let line_width = self.read_line_width()?;
         let path = self.read_polygon(count, close)?;
-        self.commands.push(Command::Stroke {
+        self.push_command(Command::Stroke {
             path,
             style,
             line_width,
-        });
-        Ok(())
+        })
     }
 
     fn draw_path(&mut self, style_kind: StyleKind) -> Result<(), Error> {
@@ -388,12 +434,11 @@ impl<'a> Parser<'a> {
         let style = self.read_style(style_kind)?;
         let line_width = self.read_line_width()?;
         let path = self.read_path(count)?;
-        self.commands.push(Command::Stroke {
+        self.push_command(Command::Stroke {
             path,
             style,
             line_width,
-        });
-        Ok(())
+        })
     }
 
     fn outline_header(
@@ -415,31 +460,24 @@ impl<'a> Parser<'a> {
             return Err(Error::InvalidData("polygon has fewer than three points"));
         }
         let path = self.read_polygon(count, true)?;
-        self.commands.push(Command::Fill {
-            path: path.clone(),
-            style: fill_style,
-        });
-        self.commands.push(Command::Stroke {
+        self.push_command(Command::FillStroke {
             path,
-            style: line_style,
+            fill_style,
+            line_style,
             line_width,
-        });
-        Ok(())
+        })
     }
 
     fn outline_fill_rectangles(&mut self, primary_style: StyleKind) -> Result<(), Error> {
         let (count, fill_style, line_style, line_width) = self.outline_header(primary_style)?;
         for _ in 0..count {
             let path = self.read_rectangle()?;
-            self.commands.push(Command::Fill {
-                path: path.clone(),
-                style: fill_style.clone(),
-            });
-            self.commands.push(Command::Stroke {
+            self.push_command(Command::FillStroke {
                 path,
-                style: line_style.clone(),
+                fill_style,
+                line_style,
                 line_width,
-            });
+            })?;
         }
         Ok(())
     }
@@ -447,21 +485,18 @@ impl<'a> Parser<'a> {
     fn outline_fill_path(&mut self, primary_style: StyleKind) -> Result<(), Error> {
         let (count, fill_style, line_style, line_width) = self.outline_header(primary_style)?;
         let path = self.read_path(count)?;
-        self.commands.push(Command::Fill {
-            path: path.clone(),
-            style: fill_style,
-        });
-        self.commands.push(Command::Stroke {
+        self.push_command(Command::FillStroke {
             path,
-            style: line_style,
+            fill_style,
+            line_style,
             line_width,
-        });
-        Ok(())
+        })
     }
 
     fn read_polygon(&mut self, count: usize, close: bool) -> Result<Path, Error> {
         let start = self.read_point()?;
-        let mut nodes = Vec::with_capacity(count);
+        let node_count = count - usize::from(!close);
+        let mut nodes = self.budget.vector(node_count)?;
         for _ in 1..count {
             nodes.push(PathNode {
                 operation: PathOperation::LineTo(self.read_point()?),
@@ -474,9 +509,9 @@ impl<'a> Parser<'a> {
                 line_width: None,
             });
         }
-        Ok(Path {
-            subpaths: vec![Subpath { start, nodes }],
-        })
+        let mut subpaths = self.budget.vector(1)?;
+        subpaths.push(Subpath { start, nodes });
+        Ok(Path { subpaths })
     }
 
     fn read_rectangle(&mut self) -> Result<Path, Error> {
@@ -488,43 +523,45 @@ impl<'a> Parser<'a> {
         }
         let right = origin.x + width;
         let bottom = origin.y + height;
-        Ok(Path {
-            subpaths: vec![Subpath {
-                start: origin,
-                nodes: vec![
-                    PathNode {
-                        operation: PathOperation::LineTo(Point {
-                            x: right,
-                            y: origin.y,
-                        }),
-                        line_width: None,
-                    },
-                    PathNode {
-                        operation: PathOperation::LineTo(Point {
-                            x: right,
-                            y: bottom,
-                        }),
-                        line_width: None,
-                    },
-                    PathNode {
-                        operation: PathOperation::LineTo(Point {
-                            x: origin.x,
-                            y: bottom,
-                        }),
-                        line_width: None,
-                    },
-                    PathNode {
-                        operation: PathOperation::Close,
-                        line_width: None,
-                    },
-                ],
-            }],
-        })
+        let mut nodes = self.budget.vector(4)?;
+        nodes.extend([
+            PathNode {
+                operation: PathOperation::LineTo(Point {
+                    x: right,
+                    y: origin.y,
+                }),
+                line_width: None,
+            },
+            PathNode {
+                operation: PathOperation::LineTo(Point {
+                    x: right,
+                    y: bottom,
+                }),
+                line_width: None,
+            },
+            PathNode {
+                operation: PathOperation::LineTo(Point {
+                    x: origin.x,
+                    y: bottom,
+                }),
+                line_width: None,
+            },
+            PathNode {
+                operation: PathOperation::Close,
+                line_width: None,
+            },
+        ]);
+        let mut subpaths = self.budget.vector(1)?;
+        subpaths.push(Subpath {
+            start: origin,
+            nodes,
+        });
+        Ok(Path { subpaths })
     }
 
     fn read_path(&mut self, count: usize) -> Result<Path, Error> {
         Self::check_count(count)?;
-        let mut lengths = Vec::with_capacity(count);
+        let mut lengths = self.budget.vector(count)?;
         let mut total_nodes = 0usize;
         for _ in 0..count {
             let length = self.read_count(true)?;
@@ -534,11 +571,11 @@ impl<'a> Parser<'a> {
             Self::check_count(total_nodes)?;
             lengths.push(length);
         }
-        let mut subpaths = Vec::with_capacity(count);
+        let mut subpaths = self.budget.vector(count)?;
         for length in lengths {
             let start = self.read_point()?;
             let mut current = start;
-            let mut nodes = Vec::with_capacity(length);
+            let mut nodes = self.budget.vector(length)?;
             for _ in 0..length {
                 let tag = self.read_u8()?;
                 if tag & 0xe8 != 0 {
@@ -648,7 +685,7 @@ impl<'a> Parser<'a> {
 
     fn read_colors(&mut self, encoding: u8, count: usize) -> Result<Vec<Color>, Error> {
         Self::check_count(count)?;
-        let mut colors = Vec::with_capacity(count);
+        let mut colors = self.budget.vector(count)?;
         for _ in 0..count {
             let color = match encoding {
                 0 => Color {
@@ -874,6 +911,52 @@ mod tests {
     }
 
     #[test]
+    fn decodes_official_example_corpus() {
+        let corpus = crate::test_support::FixtureCorpus::new("tinyvg");
+        let images = corpus.image_files("tvg");
+        assert_eq!(images.len(), 7, "pinned TinyVG fixture count changed");
+        let references = corpus.reference_files("png");
+        assert_eq!(references.len(), 7, "pinned TinyVG reference count changed");
+        let mut used_references = std::collections::HashSet::new();
+
+        for path in images {
+            let name = corpus.relative_name(&path);
+            let encoded = std::fs::read(&path).expect("read TinyVG fixture");
+            let vector = crate::decode_vector(&encoded)
+                .unwrap_or_else(|error| panic!("{}: {error}", name.display()));
+            assert_eq!(
+                vector.format(),
+                crate::VectorFormat::TinyVg,
+                "{}",
+                name.display()
+            );
+            assert!(vector.size().width > 0.0, "{}", name.display());
+            assert!(vector.size().height > 0.0, "{}", name.display());
+            assert!(!vector.commands().is_empty(), "{}", name.display());
+            assert_ne!(vector.paths().len(), 0, "{}", name.display());
+            assert_ne!(vector.paints().len(), 0, "{}", name.display());
+
+            let reference_path = corpus.reference_for(&path, ".png");
+            assert!(reference_path.is_file(), "{} reference", name.display());
+            used_references.insert(reference_path.clone());
+            #[cfg(feature = "png")]
+            {
+                let reference_data =
+                    std::fs::read(&reference_path).expect("read TinyVG PNG reference");
+                let reference = crate::decode(&reference_data)
+                    .unwrap_or_else(|error| panic!("{} reference: {error}", name.display()));
+                assert_eq!(
+                    (f64::from(reference.width()), f64::from(reference.height())),
+                    (vector.size().width, vector.size().height),
+                    "{} reference",
+                    name.display()
+                );
+            }
+        }
+
+        assert_eq!(used_references, references.into_iter().collect());
+    }
+    #[test]
     fn parses_a_filled_polygon_into_absolute_commands() {
         let mut data = header(10, 20, &[[255, 0, 128, 255]]);
         data.extend_from_slice(&[1, 2, 0, 1, 2, 8, 2, 4, 9, 0]);
@@ -932,5 +1015,77 @@ mod tests {
         let mut data = header(10, 10, &[]);
         data.push(0x40);
         assert_eq!(parse(&data), Err(Error::InvalidData("unknown command")));
+    }
+
+    #[test]
+    fn outline_commands_keep_one_geometry_copy() {
+        let mut data = header(10, 10, &[[255, 0, 0, 255], [0, 0, 0, 255]]);
+        data.extend_from_slice(&[8, 2, 0, 1, 1, 0, 0, 9, 0, 0, 9, 0]);
+
+        let image = crate::decode_vector(&data).expect("outlined triangle");
+        assert_eq!(image.paths().len(), 1);
+        assert_eq!(image.paints().len(), 2);
+        assert_eq!(image.commands().len(), 2);
+    }
+
+    #[test]
+    fn converts_variable_width_strokes_to_tapered_fills() {
+        let mut data = header(10, 10, &[[0, 0, 0, 255]]);
+        data.extend_from_slice(&[7, 0, 0, 1, 0, 0, 0, 0x10, 2, 9, 0, 0]);
+
+        let image = crate::decode_vector(&data).expect("variable-width path");
+        let crate::DrawCommand::Fill { rule, bounds, .. } = image.commands()[0] else {
+            panic!("expected tapered fill");
+        };
+        assert_eq!(rule, crate::FillRule::NonZero);
+        assert!(bounds.y <= -1.0);
+        assert!(bounds.y + bounds.height >= 1.0);
+        let segment_count = image.paths().next().expect("stroke path").1.len();
+        assert!((7..=9).contains(&segment_count));
+    }
+
+    #[test]
+    fn outlined_variable_width_paths_keep_fill_before_stroke() {
+        let mut data = header(10, 10, &[[255, 0, 0, 255], [0, 0, 0, 255]]);
+        data.extend_from_slice(&[10, 0, 0, 1, 1, 0, 0, 0, 0x10, 2, 9, 0, 0]);
+
+        let image = crate::decode_vector(&data).expect("outlined variable-width path");
+        assert_eq!(image.paths().len(), 2);
+        assert_eq!(image.commands().len(), 2);
+        assert!(matches!(
+            image.commands(),
+            [
+                crate::DrawCommand::Fill {
+                    rule: crate::FillRule::EvenOdd,
+                    ..
+                },
+                crate::DrawCommand::Fill {
+                    rule: crate::FillRule::NonZero,
+                    ..
+                }
+            ]
+        ));
+    }
+
+    #[test]
+    fn variable_width_curves_follow_reference_subdivision_counts() {
+        let mut quadratic = header(20, 20, &[[0, 0, 0, 255]]);
+        quadratic.extend_from_slice(&[7, 0, 0, 2, 0, 1, 10, 0x17, 6, 10, 1, 19, 10, 0]);
+        let quadratic = crate::decode_vector(&quadratic).expect("variable-width quadratic");
+        let quadratic_segments = quadratic.paths().next().expect("quadratic outline").1.len();
+        assert!((112..=144).contains(&quadratic_segments));
+
+        let mut arc = header(20, 20, &[[0, 0, 0, 255]]);
+        arc.extend_from_slice(&[7, 0, 0, 2, 0, 1, 10, 0x14, 6, 0, 9, 19, 10, 0]);
+        let arc = crate::decode_vector(&arc).expect("variable-width arc");
+        let arc_segments = arc.paths().next().expect("arc outline").1.len();
+        assert!((700..=900).contains(&arc_segments));
+    }
+
+    #[test]
+    fn decoded_allocation_budget_is_bounded() {
+        let mut budget = Budget::default();
+        budget.claim::<u8>(MAX_BYTES).expect("budget limit");
+        assert_eq!(budget.claim::<u8>(1), Err(Error::TooManyElements));
     }
 }
