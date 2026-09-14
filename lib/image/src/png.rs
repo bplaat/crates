@@ -188,6 +188,83 @@ impl PngState {
             frame_data: FrameData::None,
         }
     }
+
+    fn check_sequence(&mut self, value: u32) -> Result<()> {
+        if value != self.sequence {
+            return Err(DecodeError::InvalidData);
+        }
+        self.sequence = self
+            .sequence
+            .checked_add(1)
+            .ok_or(DecodeError::InvalidData)?;
+        Ok(())
+    }
+
+    fn finish_frame(&mut self, header: &Header, budget: &mut Budget) -> Result<()> {
+        // Validate an excluded default image even though it is not emitted as a frame.
+        let Some(control) = self.control else {
+            header.raster(
+                header.width,
+                header.height,
+                &self.compressed,
+                &self.palette[..self.palette_len],
+                self.transparency,
+                budget,
+            )?;
+            return Ok(());
+        };
+        let pixels = header.raster(
+            control.area.width as u32,
+            control.area.height as u32,
+            &self.compressed,
+            &self.palette[..self.palette_len],
+            self.transparency,
+            budget,
+        )?;
+        let previous = if control.dispose == DisposeOp::Previous {
+            Some(
+                control
+                    .area
+                    .snapshot(&self.canvas, header.width as usize, budget)?,
+            )
+        } else {
+            None
+        };
+        for (row, source) in pixels.chunks_exact(control.area.width * 4).enumerate() {
+            let start = ((control.area.y + row) * header.width as usize + control.area.x) * 4;
+            let dest = &mut self.canvas[start..start + source.len()];
+            if control.blend == BlendOp::Source {
+                dest.copy_from_slice(source);
+            } else {
+                for (dest, source) in dest
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .zip(source.as_chunks::<4>().0.iter())
+                {
+                    over(dest, source);
+                }
+            }
+        }
+        let pixels = budget.copy(&self.canvas)?;
+        budget.frame(&mut self.frames, pixels, control.delay)?;
+        match control.dispose {
+            DisposeOp::Background => {
+                control
+                    .area
+                    .clear(&mut self.canvas, header.width as usize, [0; 4]);
+            }
+            DisposeOp::Previous => {
+                control.area.restore(
+                    &mut self.canvas,
+                    header.width as usize,
+                    &previous.expect("previous canvas was saved"),
+                );
+            }
+            DisposeOp::None => {}
+        }
+        Ok(())
+    }
 }
 
 pub(super) fn decode(data: &[u8]) -> Result<Image> {
@@ -208,9 +285,6 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
     }
     let interlace = InterlaceMethod::try_from(h.byte()?)?;
     let len = pixel_len(width, height)?;
-    if depth == 16 {
-        return Err(DecodeError::UnsupportedFeature);
-    }
     let header = Header {
         width,
         height,
@@ -257,14 +331,14 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
                 match color {
                     ColorType::Grayscale if bytes.len() == 2 => {
                         let value = t.be16()?;
-                        if value >= 1 << depth {
+                        if depth < 16 && value >= 1 << depth {
                             return Err(DecodeError::InvalidData);
                         }
                         state.transparency = Some([value, value, value]);
                     }
                     ColorType::Truecolor if bytes.len() == 6 => {
                         let values = [t.be16()?, t.be16()?, t.be16()?];
-                        if values.iter().any(|v| *v > 255) {
+                        if depth < 16 && values.iter().any(|v| *v > 255) {
                             return Err(DecodeError::InvalidData);
                         }
                         state.transparency = Some(values);
@@ -299,22 +373,13 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
                     return Err(DecodeError::InvalidData);
                 }
                 if state.data_phase.has_idat() {
-                    finish(
-                        &header,
-                        &state.compressed,
-                        state.control,
-                        &state.palette[..state.palette_len],
-                        state.transparency,
-                        &mut state.canvas,
-                        &mut state.frames,
-                        &mut budget,
-                    )?;
+                    state.finish_frame(&header, &mut budget)?;
                     state.compressed.clear();
                 } else if state.control.is_some() {
                     return Err(DecodeError::InvalidData);
                 }
                 let mut c = Reader::new(bytes);
-                check_sequence(c.be32()?, &mut state.sequence)?;
+                state.check_sequence(c.be32()?)?;
                 let w = c.be32()? as usize;
                 let h = c.be32()? as usize;
                 let x = c.be32()? as usize;
@@ -369,7 +434,7 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
                     return Err(DecodeError::InvalidData);
                 }
                 let mut f = Reader::new(bytes);
-                check_sequence(f.be32()?, &mut state.sequence)?;
+                state.check_sequence(f.be32()?)?;
                 budget.append(&mut state.compressed, f.take(f.remaining())?)?;
                 state.frame_data = FrameData::Fdat { seen: true };
             }
@@ -378,8 +443,7 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
                     return Err(DecodeError::InvalidData);
                 }
                 if state.animation.is_none() {
-                    let pixels = raster(
-                        &header,
+                    let pixels = header.raster(
                         width,
                         height,
                         &state.compressed,
@@ -393,16 +457,7 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
                 if state.frame_data == (FrameData::Fdat { seen: false }) {
                     return Err(DecodeError::InvalidData);
                 }
-                finish(
-                    &header,
-                    &state.compressed,
-                    state.control,
-                    &state.palette[..state.palette_len],
-                    state.transparency,
-                    &mut state.canvas,
-                    &mut state.frames,
-                    &mut budget,
-                )?;
+                state.finish_frame(&header, &mut budget)?;
                 let (count, loop_count) = state.animation.expect("animation was checked");
                 if state.frames.len() != count as usize {
                     return Err(DecodeError::InvalidData);
@@ -420,14 +475,6 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
             _ => {}
         }
     }
-}
-
-fn check_sequence(value: u32, next: &mut u32) -> Result<()> {
-    if value != *next {
-        return Err(DecodeError::InvalidData);
-    }
-    *next = next.checked_add(1).ok_or(DecodeError::InvalidData)?;
-    Ok(())
 }
 
 fn chunk<'a>(r: &mut Reader<'a>) -> Result<(&'a [u8], &'a [u8])> {
@@ -467,73 +514,6 @@ const CRC_TABLE: [u32; 256] = {
     table
 };
 
-#[allow(clippy::too_many_arguments)]
-fn finish(
-    h: &Header,
-    compressed: &[u8],
-    control: Option<Control>,
-    palette: &[[u8; 4]],
-    transparency: Option<[u16; 3]>,
-    canvas: &mut [u8],
-    frames: &mut Vec<Frame>,
-    budget: &mut Budget,
-) -> Result<()> {
-    // Save the displayed canvas before applying disposal for the following frame.
-    let Some(c) = control else {
-        // Validate the default image even when it is excluded from the animation.
-        raster(
-            h,
-            h.width,
-            h.height,
-            compressed,
-            palette,
-            transparency,
-            budget,
-        )?;
-        return Ok(());
-    };
-    let pixels = raster(
-        h,
-        c.area.width as u32,
-        c.area.height as u32,
-        compressed,
-        palette,
-        transparency,
-        budget,
-    )?;
-    let previous = if c.dispose == DisposeOp::Previous {
-        Some(budget.copy(canvas)?)
-    } else {
-        None
-    };
-    for (row, source) in pixels.chunks_exact(c.area.width * 4).enumerate() {
-        let start = ((c.area.y + row) * h.width as usize + c.area.x) * 4;
-        let dest = &mut canvas[start..start + source.len()];
-        if c.blend == BlendOp::Source {
-            dest.copy_from_slice(source);
-        } else {
-            for (d, s) in dest
-                .as_chunks_mut::<4>()
-                .0
-                .iter_mut()
-                .zip(source.as_chunks::<4>().0.iter())
-            {
-                over(d, s);
-            }
-        }
-    }
-    let pixels = budget.copy(canvas)?;
-    budget.frame(frames, pixels, c.delay)?;
-    match c.dispose {
-        DisposeOp::Background => c.area.clear(canvas, h.width as usize, [0; 4]),
-        DisposeOp::Previous => {
-            canvas.copy_from_slice(&previous.expect("previous canvas was saved"));
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
 fn over(d: &mut [u8], s: &[u8]) {
     let sa = u32::from(s[3]);
     let da = u32::from(d[3]) * (255 - sa);
@@ -559,140 +539,230 @@ const ADAM7: [(usize, usize, usize, usize); 7] = [
     (0, 1, 1, 2),
 ];
 
-fn raster(
-    h: &Header,
-    width: u32,
-    height: u32,
-    compressed: &[u8],
-    palette: &[[u8; 4]],
-    transparency: Option<[u16; 3]>,
-    budget: &mut Budget,
-) -> Result<Vec<u8>> {
-    // Adam7 writes seven sparse passes into one output; ordinary PNG uses one full-size pass.
-    let passes = if h.interlace == InterlaceMethod::Adam7 {
-        &ADAM7[..]
-    } else {
-        &[(0, 0, 1, 1)][..]
-    };
-    let width = width as usize;
-    let height = height as usize;
-    let row_bytes = |w: usize| (w * h.channels).div_ceil(8 / h.depth as usize);
-    let mut expected = 0usize;
-    for &(x, y, dx, dy) in passes {
-        let w = width.saturating_sub(x).div_ceil(dx);
-        let rows = height.saturating_sub(y).div_ceil(dy);
-        if w > 0 && rows > 0 {
-            expected = expected
-                .checked_add(
-                    (row_bytes(w) + 1)
-                        .checked_mul(rows)
-                        .ok_or(DecodeError::ImageTooLarge)?,
-                )
-                .ok_or(DecodeError::ImageTooLarge)?;
+impl Header {
+    fn raster(
+        &self,
+        width: u32,
+        height: u32,
+        compressed: &[u8],
+        palette: &[[u8; 4]],
+        transparency: Option<[u16; 3]>,
+        budget: &mut Budget,
+    ) -> Result<Vec<u8>> {
+        // Adam7 writes seven sparse passes into one output; ordinary PNG uses one full-size pass.
+        let passes = if self.interlace == InterlaceMethod::Adam7 {
+            &ADAM7[..]
+        } else {
+            &[(0, 0, 1, 1)][..]
+        };
+        let width = width as usize;
+        let height = height as usize;
+        let mut expected = 0usize;
+        for &(x, y, dx, dy) in passes {
+            let w = width.saturating_sub(x).div_ceil(dx);
+            let rows = height.saturating_sub(y).div_ceil(dy);
+            if w > 0 && rows > 0 {
+                expected = expected
+                    .checked_add(
+                        png_row_bytes(w, self.channels, self.depth)?
+                            .checked_add(1)
+                            .ok_or(DecodeError::ImageTooLarge)?
+                            .checked_mul(rows)
+                            .ok_or(DecodeError::ImageTooLarge)?,
+                    )
+                    .ok_or(DecodeError::ImageTooLarge)?;
+            }
         }
-    }
-    budget.claim(expected)?;
-    // Decompress into an exactly sized, fallibly allocated buffer; no unbounded growth.
-    let mut raw = Vec::new();
-    raw.try_reserve_exact(expected)
-        .map_err(|_| DecodeError::ImageTooLarge)?;
-    raw.resize(expected, 0);
-    let mut inflater = miniz_oxide::inflate::core::DecompressorOxide::new();
-    let flags = miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
-        | miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
-    let (status, consumed, written) =
-        miniz_oxide::inflate::core::decompress(&mut inflater, compressed, &mut raw, 0, flags);
-    if status != miniz_oxide::inflate::TINFLStatus::Done
-        || consumed != compressed.len()
-        || written != expected
-    {
-        return Err(DecodeError::InvalidData);
-    }
-    let mut pixels = budget.zeroed(pixel_len(width as u32, height as u32)?)?;
-    let bpp = (h.channels * h.depth as usize).div_ceil(8);
-    let mut cursor = 0;
-    for &(x, y, dx, dy) in passes {
-        let w = width.saturating_sub(x).div_ceil(dx);
-        let rows = height.saturating_sub(y).div_ceil(dy);
-        if w == 0 || rows == 0 {
-            continue;
+        budget.claim(expected)?;
+        // Decompress into an exactly sized, fallibly allocated buffer; no unbounded growth.
+        let mut raw = Vec::new();
+        raw.try_reserve_exact(expected)
+            .map_err(|_| DecodeError::ImageTooLarge)?;
+        raw.resize(expected, 0);
+        let mut inflater = miniz_oxide::inflate::core::DecompressorOxide::new();
+        let flags = miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
+            | miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+        let (status, consumed, written) =
+            miniz_oxide::inflate::core::decompress(&mut inflater, compressed, &mut raw, 0, flags);
+        if status != miniz_oxide::inflate::TINFLStatus::Done
+            || consumed != compressed.len()
+            || written != expected
+        {
+            return Err(DecodeError::InvalidData);
         }
-        let bytes = row_bytes(w);
-        let mut previous = budget.zeroed::<u8>(bytes)?;
-        for row in 0..rows {
-            let filter = raw[cursor];
-            cursor += 1;
-            let scan = &mut raw[cursor..cursor + bytes];
-            unfilter(scan, &previous, bpp, filter)?;
-            for col in 0..w {
-                let dest = ((y + row * dy) * width + x + col * dx) * 4;
-                let p = &mut pixels[dest..dest + 4];
-                match h.color {
-                    ColorType::Grayscale | ColorType::Indexed => {
-                        let bit = col * h.depth as usize;
-                        let sample = (scan[bit / 8] >> (8 - h.depth as usize - bit % 8))
-                            & ((1u16 << h.depth) - 1) as u8;
-                        if h.color == ColorType::Indexed {
-                            p.copy_from_slice(
-                                palette
-                                    .get(sample as usize)
-                                    .ok_or(DecodeError::InvalidData)?,
-                            );
-                        } else {
-                            let value = (u16::from(sample) * 255 / ((1 << h.depth) - 1)) as u8;
+        let mut pixels = budget.zeroed(pixel_len(width as u32, height as u32)?)?;
+        let bpp = (self.channels * self.depth as usize).div_ceil(8);
+        let mut cursor = 0;
+        for &(x, y, dx, dy) in passes {
+            let w = width.saturating_sub(x).div_ceil(dx);
+            let rows = height.saturating_sub(y).div_ceil(dy);
+            if w == 0 || rows == 0 {
+                continue;
+            }
+            let bytes = png_row_bytes(w, self.channels, self.depth)?;
+            let mut previous = None;
+            for row in 0..rows {
+                let filter = raw[cursor];
+                cursor += 1;
+                let scan_start = cursor;
+                let scan = if let Some(previous_start) = previous {
+                    let (before, current) = raw.split_at_mut(scan_start);
+                    let previous = &before[previous_start..previous_start + bytes];
+                    let scan = &mut current[..bytes];
+                    unfilter(scan, Some(previous), bpp, filter)?;
+                    scan
+                } else {
+                    let scan = &mut raw[scan_start..scan_start + bytes];
+                    unfilter(scan, None, bpp, filter)?;
+                    scan
+                };
+                for col in 0..w {
+                    let dest = ((y + row * dy) * width + x + col * dx) * 4;
+                    let p = &mut pixels[dest..dest + 4];
+                    match self.color {
+                        ColorType::Grayscale if self.depth == 16 => {
+                            let sample = sample16(scan, col * 2)?;
+                            let value = scale_16_to_8(sample);
                             p.copy_from_slice(&[
                                 value,
                                 value,
                                 value,
-                                if transparency.is_some_and(|t| t[0] == u16::from(sample)) {
+                                if transparency.is_some_and(|t| t[0] == sample) {
                                     0
                                 } else {
                                     255
                                 },
                             ]);
                         }
-                    }
-                    ColorType::Truecolor => {
-                        let s = &scan[col * 3..col * 3 + 3];
-                        p[..3].copy_from_slice(s);
-                        p[3] = if transparency
-                            == Some([u16::from(s[0]), u16::from(s[1]), u16::from(s[2])])
-                        {
-                            0
-                        } else {
-                            255
-                        };
-                    }
-                    ColorType::GrayscaleAlpha => {
-                        let s = &scan[col * 2..col * 2 + 2];
-                        p.copy_from_slice(&[s[0], s[0], s[0], s[1]]);
-                    }
-                    ColorType::TruecolorAlpha => {
-                        p.copy_from_slice(&scan[col * 4..col * 4 + 4]);
+                        ColorType::Grayscale | ColorType::Indexed => {
+                            let bit = col * self.depth as usize;
+                            let sample = (scan[bit / 8] >> (8 - self.depth as usize - bit % 8))
+                                & ((1u16 << self.depth) - 1) as u8;
+                            if self.color == ColorType::Indexed {
+                                p.copy_from_slice(
+                                    palette
+                                        .get(sample as usize)
+                                        .ok_or(DecodeError::InvalidData)?,
+                                );
+                            } else {
+                                let value =
+                                    (u16::from(sample) * 255 / ((1 << self.depth) - 1)) as u8;
+                                p.copy_from_slice(&[
+                                    value,
+                                    value,
+                                    value,
+                                    if transparency.is_some_and(|t| t[0] == u16::from(sample)) {
+                                        0
+                                    } else {
+                                        255
+                                    },
+                                ]);
+                            }
+                        }
+                        ColorType::Truecolor => {
+                            if self.depth == 16 {
+                                let offset = col * 6;
+                                let samples = [
+                                    sample16(scan, offset)?,
+                                    sample16(scan, offset + 2)?,
+                                    sample16(scan, offset + 4)?,
+                                ];
+                                p.copy_from_slice(&[
+                                    scale_16_to_8(samples[0]),
+                                    scale_16_to_8(samples[1]),
+                                    scale_16_to_8(samples[2]),
+                                    if transparency == Some(samples) {
+                                        0
+                                    } else {
+                                        255
+                                    },
+                                ]);
+                            } else {
+                                let s = &scan[col * 3..col * 3 + 3];
+                                p[..3].copy_from_slice(s);
+                                p[3] = if transparency
+                                    == Some([u16::from(s[0]), u16::from(s[1]), u16::from(s[2])])
+                                {
+                                    0
+                                } else {
+                                    255
+                                };
+                            }
+                        }
+                        ColorType::GrayscaleAlpha => {
+                            if self.depth == 16 {
+                                let offset = col * 4;
+                                let value = scale_16_to_8(sample16(scan, offset)?);
+                                let alpha = scale_16_to_8(sample16(scan, offset + 2)?);
+                                p.copy_from_slice(&[value, value, value, alpha]);
+                            } else {
+                                let s = &scan[col * 2..col * 2 + 2];
+                                p.copy_from_slice(&[s[0], s[0], s[0], s[1]]);
+                            }
+                        }
+                        ColorType::TruecolorAlpha => {
+                            if self.depth == 16 {
+                                let offset = col * 8;
+                                for (channel, value) in p.iter_mut().enumerate() {
+                                    *value = scale_16_to_8(sample16(scan, offset + channel * 2)?);
+                                }
+                            } else {
+                                p.copy_from_slice(&scan[col * 4..col * 4 + 4]);
+                            }
+                        }
                     }
                 }
+                previous = Some(scan_start);
+                cursor += bytes;
             }
-            previous.copy_from_slice(scan);
-            cursor += bytes;
         }
+        Ok(pixels)
     }
-    Ok(pixels)
 }
 
-fn unfilter(row: &mut [u8], previous: &[u8], bpp: usize, filter: u8) -> Result<()> {
-    match filter {
-        0 => {}
-        1 => {
+fn png_row_bytes(width: usize, channels: usize, depth: u8) -> Result<usize> {
+    width
+        .checked_mul(channels)
+        .and_then(|samples| samples.checked_mul(depth as usize))
+        .and_then(|bits| bits.checked_add(7))
+        .map(|bits| bits / 8)
+        .ok_or(DecodeError::ImageTooLarge)
+}
+
+fn sample16(bytes: &[u8], offset: usize) -> Result<u16> {
+    Ok(u16::from_be_bytes(
+        bytes
+            .get(offset..offset + 2)
+            .ok_or(DecodeError::InvalidData)?
+            .try_into()
+            .expect("two bytes"),
+    ))
+}
+
+const fn scale_16_to_8(value: u16) -> u8 {
+    ((value as u32 + 128) / 257) as u8
+}
+
+fn unfilter(row: &mut [u8], previous: Option<&[u8]>, bpp: usize, filter: u8) -> Result<()> {
+    if previous.is_some_and(|previous| row.len() != previous.len()) {
+        return Err(DecodeError::InvalidData);
+    }
+    match (filter, previous) {
+        (0, _) | (2, None) => {}
+        (1 | 4, None) | (1, Some(_)) => {
             for i in bpp..row.len() {
                 row[i] = row[i].wrapping_add(row[i - bpp]);
             }
         }
-        2 => {
-            for (v, up) in row.iter_mut().zip(previous) {
-                *v = v.wrapping_add(*up);
+        (2, Some(previous)) => {
+            add_bytes(row, previous);
+        }
+        (3, None) => {
+            for i in bpp..row.len() {
+                row[i] = row[i].wrapping_add(row[i - bpp] / 2);
             }
         }
-        3 | 4 => {
+        (filter @ (3 | 4), Some(previous)) => {
             for i in 0..row.len() {
                 let a = if i >= bpp { row[i - bpp] } else { 0 };
                 let b = previous[i];
@@ -708,6 +778,19 @@ fn unfilter(row: &mut [u8], previous: &[u8], bpp: usize, filter: u8) -> Result<(
         _ => return Err(DecodeError::InvalidData),
     }
     Ok(())
+}
+
+fn add_bytes(dest: &mut [u8], source: &[u8]) {
+    let (dest_chunks, dest_tail) = dest.as_chunks_mut::<16>();
+    let (source_chunks, source_tail) = source.as_chunks::<16>();
+    for (dest, source) in dest_chunks.iter_mut().zip(source_chunks) {
+        for (dest, source) in dest.iter_mut().zip(source) {
+            *dest = dest.wrapping_add(*source);
+        }
+    }
+    for (dest, source) in dest_tail.iter_mut().zip(source_tail) {
+        *dest = dest.wrapping_add(*source);
+    }
 }
 
 fn paeth(a: u8, b: u8, c: u8) -> u8 {
@@ -764,10 +847,20 @@ mod tests {
     }
 
     fn png_header(width: u32, height: u32, depth: u8, color: u8) -> Vec<u8> {
+        png_header_with_interlace(width, height, depth, color, 0)
+    }
+
+    fn png_header_with_interlace(
+        width: u32,
+        height: u32,
+        depth: u8,
+        color: u8,
+        interlace: u8,
+    ) -> Vec<u8> {
         let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
         let mut header = width.to_be_bytes().to_vec();
         header.extend_from_slice(&height.to_be_bytes());
-        header.extend_from_slice(&[depth, color, 0, 0, 0]);
+        header.extend_from_slice(&[depth, color, 0, 0, interlace]);
         chunk(&mut out, b"IHDR", &header);
         out
     }
@@ -783,16 +876,50 @@ mod tests {
     }
 
     #[test]
-    fn rejects_all_16_bit_png_types_and_apng() {
-        for color in [0, 2, 4, 6] {
-            let mut data = png_header(1, 1, 16, color);
-            chunk(&mut data, b"acTL", &[0, 0, 0, 1, 0, 0, 0, 0]);
-            assert_eq!(decode(&data), Err(DecodeError::UnsupportedFeature));
-            assert_eq!(
-                decode(&png_finish(png_header(1, 1, 16, color), &[0; 9])),
-                Err(DecodeError::UnsupportedFeature)
-            );
-        }
+    fn decodes_16_bit_png_types_to_rgba8() {
+        let mut grayscale = png_header(2, 1, 16, 0);
+        chunk(&mut grayscale, b"tRNS", &[0xab, 0xcd]);
+        assert_eq!(
+            decode(&png_finish(grayscale, &[0, 0x12, 0x34, 0xab, 0xcd]))
+                .expect("16-bit grayscale")
+                .pixels(),
+            &[0x12, 0x12, 0x12, 255, 0xab, 0xab, 0xab, 0]
+        );
+
+        let mut truecolor = png_header(1, 1, 16, 2);
+        chunk(
+            &mut truecolor,
+            b"tRNS",
+            &[0x12, 0x35, 0x56, 0x78, 0x9a, 0xbc],
+        );
+        assert_eq!(
+            decode(&png_finish(
+                truecolor,
+                &[0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc]
+            ))
+            .expect("16-bit truecolor")
+            .pixels(),
+            &[0x12, 0x56, 0x9a, 255]
+        );
+
+        assert_eq!(
+            decode(&png_finish(
+                png_header(1, 1, 16, 4),
+                &[0, 0x12, 0x34, 0xab, 0xcd]
+            ))
+            .expect("16-bit grayscale-alpha")
+            .pixels(),
+            &[0x12, 0x12, 0x12, 0xab]
+        );
+        assert_eq!(
+            decode(&png_finish(
+                png_header_with_interlace(1, 1, 16, 6, 1),
+                &[0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0]
+            ))
+            .expect("16-bit Adam7 RGBA")
+            .pixels(),
+            &[0x12, 0x56, 0x9a, 0xde]
+        );
     }
 
     #[test]
@@ -975,18 +1102,79 @@ mod tests {
     }
 
     #[test]
-    fn apng_fixture_and_grayscale_alpha() {
-        let image = decode(include_bytes!("../tests/fixtures/animated.png")).expect("APNG");
-        assert_eq!(image.loop_count(), 3);
-        assert_eq!(image.frames().len(), 2);
-        assert_eq!(image.frames()[0].pixels(), &[255, 0, 0, 255]);
-        assert_eq!(image.frames()[1].pixels(), &[0, 255, 0, 255]);
-        assert_eq!(image.frames()[0].delay(), Duration::from_millis(70));
-        assert_eq!(image.frames()[1].delay(), Duration::from_millis(130));
-        assert_eq!(
-            decode(include_bytes!("../tests/fixtures/16bit-apng.png")),
-            Err(DecodeError::UnsupportedFeature)
-        );
+    fn png_16_bit_filters_reconstruct_rows() {
+        let rows = [
+            [
+                0x12u8, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x21, 0x43, 0x65, 0x87, 0xa9,
+                0xcb, 0xed, 0x0f,
+            ],
+            [
+                0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc,
+                0xfe, 0x10,
+            ],
+        ];
+        for filter in 0..=4 {
+            let mut scan = Vec::new();
+            for (y, row) in rows.iter().enumerate() {
+                scan.push(filter);
+                for i in 0..row.len() {
+                    let a = if i >= 8 { row[i - 8] } else { 0 };
+                    let b = if y > 0 { rows[y - 1][i] } else { 0 };
+                    let c = if y > 0 && i >= 8 {
+                        rows[y - 1][i - 8]
+                    } else {
+                        0
+                    };
+                    let predictor = match filter {
+                        0 => 0,
+                        1 => a,
+                        2 => b,
+                        3 => ((u16::from(a) + u16::from(b)) / 2) as u8,
+                        4 => paeth(a, b, c),
+                        _ => unreachable!(),
+                    };
+                    scan.push(row[i].wrapping_sub(predictor));
+                }
+            }
+            assert_eq!(
+                decode(&png_finish(png_header(2, 2, 16, 6), &scan))
+                    .expect("filtered 16-bit PNG")
+                    .pixels(),
+                &[
+                    0x12, 0x56, 0x9a, 0xde, 0x21, 0x65, 0xa9, 0xec, 0x23, 0x67, 0xab, 0xee, 0x32,
+                    0x76, 0xba, 0xfd,
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn scales_16_bit_samples_to_nearest_8_bit_value() {
+        assert_eq!(scale_16_to_8(0), 0);
+        assert_eq!(scale_16_to_8(129), 1);
+        assert_eq!(scale_16_to_8(65_535), 255);
+    }
+
+    #[test]
+    fn image_rs_16_bit_apng_and_grayscale_alpha() {
+        let image =
+            decode(include_bytes!("../tests/images/png/apng/rgba16.png")).expect("16-bit APNG");
+        assert_eq!(image.frames().len(), 3);
+        for (frame, expected) in
+            image
+                .frames()
+                .iter()
+                .zip([[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]])
+        {
+            assert!(
+                frame
+                    .pixels()
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|pixel| *pixel == expected)
+            );
+        }
         assert_eq!(
             decode(&png_finish(png_header(2, 1, 8, 4), &[0, 20, 30, 40, 50]))
                 .expect("gray alpha")

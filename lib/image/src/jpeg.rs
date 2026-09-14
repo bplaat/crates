@@ -125,6 +125,38 @@ struct Component {
     approximation: [i8; 64],
 }
 
+#[derive(Clone, Copy)]
+struct Sampling {
+    width: usize,
+    height: usize,
+    max_h: usize,
+    max_v: usize,
+}
+
+impl Component {
+    fn sample(&self, plane: &[u8], x: usize, y: usize, sampling: Sampling) -> u8 {
+        let stride = self.blocks_w * 8;
+        if self.h == sampling.max_h && self.v == sampling.max_v {
+            return plane[y * stride + x];
+        }
+        let sx = ((x as f32 + 0.5) * self.h as f32 / sampling.max_h as f32 - 0.5).max(0.0);
+        let sy = ((y as f32 + 0.5) * self.v as f32 / sampling.max_v as f32 - 0.5).max(0.0);
+        let max_x = (sampling.width * self.h).div_ceil(sampling.max_h) - 1;
+        let max_y = (sampling.height * self.v).div_ceil(sampling.max_v) - 1;
+        let x0 = (sx as usize).min(max_x);
+        let x1 = (x0 + 1).min(max_x);
+        let y0 = (sy as usize).min(max_y);
+        let y1 = (y0 + 1).min(max_y);
+        let fx = sx.fract();
+        let fy = sy.fract();
+        let top = f32::from(plane[y0 * stride + x0]) * (1.0 - fx)
+            + f32::from(plane[y0 * stride + x1]) * fx;
+        let bottom = f32::from(plane[y1 * stride + x0]) * (1.0 - fx)
+            + f32::from(plane[y1 * stride + x1]) * fx;
+        (top * (1.0 - fy) + bottom * fy).round().clamp(0.0, 255.0) as u8
+    }
+}
+
 struct Jpeg {
     width: u32,
     height: u32,
@@ -144,107 +176,122 @@ struct Jpeg {
 }
 
 pub(super) fn decode(data: &[u8]) -> Result<Image> {
-    let mut r = Reader::new(&data[2..]);
-    let mut budget = Budget::default();
-    let mut j = Jpeg {
-        width: 0,
-        height: 0,
-        max_h: 0,
-        max_v: 0,
-        mcus_w: 0,
-        mcus_h: 0,
-        progressive: false,
-        components: Vec::new(),
-        quant: [None; 4],
-        dc: [None, None, None, None],
-        ac: [None, None, None, None],
-        restart: 0,
-        adobe: None,
-        jfif: false,
-        orientation: 1,
-    };
-    let mut scans = 0;
-    loop {
-        let m = marker(&mut r)?;
-        if m == 0xd9 {
-            if scans == 0 || j.components.iter().any(|c| c.approximation[0] < 0) {
-                return Err(DecodeError::InvalidData);
-            }
-            return j.render(&mut budget);
+    Jpeg::decode(data)
+}
+
+impl Jpeg {
+    const fn new() -> Self {
+        Self {
+            width: 0,
+            height: 0,
+            max_h: 0,
+            max_v: 0,
+            mcus_w: 0,
+            mcus_h: 0,
+            progressive: false,
+            components: Vec::new(),
+            quant: [None; 4],
+            dc: [None, None, None, None],
+            ac: [None, None, None, None],
+            restart: 0,
+            adobe: None,
+            jfif: false,
+            orientation: 1,
         }
-        if matches!(m, 0xd0..=0xd8 | 0x01) {
-            return Err(DecodeError::InvalidData);
-        }
-        let len = r.be16()?;
-        if len < 2 {
-            return Err(DecodeError::InvalidData);
-        }
-        let bytes = r.take(len as usize - 2)?;
-        let mut segment = Reader::new(bytes);
-        match m {
-            0xc0..=0xc2 => j.header(&mut segment, m == 0xc2, &mut budget)?,
-            0xc4 => {
-                while segment.remaining() > 0 {
-                    let id = segment.byte()?;
-                    if id & 15 > 3 || id >> 4 > 1 {
-                        return Err(DecodeError::InvalidData);
-                    }
-                    budget.claim(size_of::<Huffman>() + 256)?;
-                    let table = Huffman::read(&mut segment)?;
-                    if id >> 4 == 0 {
-                        j.dc[(id & 15) as usize] = Some(table);
-                    } else {
-                        j.ac[(id & 15) as usize] = Some(table);
-                    }
-                }
-            }
-            0xdb => {
-                while segment.remaining() > 0 {
-                    let id = segment.byte()?;
-                    if id & 15 > 3 || id >> 4 > 1 {
-                        return Err(DecodeError::InvalidData);
-                    }
-                    let mut q = [0; 64];
-                    for k in ZIGZAG {
-                        q[k] = if id >> 4 == 0 {
-                            u16::from(segment.byte()?)
-                        } else {
-                            segment.be16()?
-                        };
-                        if q[k] == 0 {
-                            return Err(DecodeError::InvalidData);
-                        }
-                    }
-                    j.quant[(id & 15) as usize] = Some(q);
-                }
-            }
-            0xdd => {
-                j.restart = segment.be16()? as usize;
-                if segment.remaining() != 0 {
+    }
+
+    fn decode(data: &[u8]) -> Result<Image> {
+        let mut r = Reader::new(&data[2..]);
+        let mut budget = Budget::default();
+        let mut jpeg = Self::new();
+        let mut scans = 0;
+        loop {
+            let m = marker(&mut r)?;
+            if m == 0xd9 {
+                if scans == 0
+                    || jpeg
+                        .components
+                        .iter()
+                        .any(|component| component.approximation[0] < 0)
+                {
                     return Err(DecodeError::InvalidData);
                 }
+                return jpeg.render(&mut budget);
             }
-            0xda => {
-                j.scan(&mut segment, &mut r)?;
-                scans += 1;
+            if matches!(m, 0xd0..=0xd8 | 0x01) {
+                return Err(DecodeError::InvalidData);
             }
-            0xe0 => {
-                if bytes.starts_with(b"JFIF\0") {
-                    j.jfif = true;
+            let len = r.be16()?;
+            if len < 2 {
+                return Err(DecodeError::InvalidData);
+            }
+            let bytes = r.take(len as usize - 2)?;
+            let mut segment = Reader::new(bytes);
+            match m {
+                0xc0..=0xc2 => jpeg.header(&mut segment, m == 0xc2, &mut budget)?,
+                0xc4 => {
+                    while segment.remaining() > 0 {
+                        let id = segment.byte()?;
+                        if id & 15 > 3 || id >> 4 > 1 {
+                            return Err(DecodeError::InvalidData);
+                        }
+                        budget.claim(size_of::<Huffman>() + 256)?;
+                        let table = Huffman::read(&mut segment)?;
+                        if id >> 4 == 0 {
+                            jpeg.dc[(id & 15) as usize] = Some(table);
+                        } else {
+                            jpeg.ac[(id & 15) as usize] = Some(table);
+                        }
+                    }
                 }
-            }
-            0xe1 => {
-                if let Some(orientation) = exif_orientation(bytes) {
-                    j.orientation = orientation;
+                0xdb => {
+                    while segment.remaining() > 0 {
+                        let id = segment.byte()?;
+                        if id & 15 > 3 || id >> 4 > 1 {
+                            return Err(DecodeError::InvalidData);
+                        }
+                        let mut q = [0; 64];
+                        for k in ZIGZAG {
+                            q[k] = if id >> 4 == 0 {
+                                u16::from(segment.byte()?)
+                            } else {
+                                segment.be16()?
+                            };
+                            if q[k] == 0 {
+                                return Err(DecodeError::InvalidData);
+                            }
+                        }
+                        jpeg.quant[(id & 15) as usize] = Some(q);
+                    }
                 }
-            }
-            0xee => {
-                if bytes.starts_with(b"Adobe") && bytes.len() >= 12 {
-                    j.adobe = Some(bytes[11]);
+                0xdd => {
+                    jpeg.restart = segment.be16()? as usize;
+                    if segment.remaining() != 0 {
+                        return Err(DecodeError::InvalidData);
+                    }
                 }
+                0xda => {
+                    jpeg.scan(&mut segment, &mut r)?;
+                    scans += 1;
+                }
+                0xe0 => {
+                    if bytes.starts_with(b"JFIF\0") {
+                        jpeg.jfif = true;
+                    }
+                }
+                0xe1 => {
+                    if let Some(orientation) = exif_orientation(bytes) {
+                        jpeg.orientation = orientation;
+                    }
+                }
+                0xee => {
+                    if bytes.starts_with(b"Adobe") && bytes.len() >= 12 {
+                        jpeg.adobe = Some(bytes[11]);
+                    }
+                }
+                0xe2..=0xed | 0xef | 0xfe => {}
+                _ => return Err(DecodeError::UnsupportedFeature),
             }
-            0xe2..=0xed | 0xef | 0xfe => {}
-            _ => return Err(DecodeError::UnsupportedFeature),
         }
     }
 }
@@ -493,7 +540,7 @@ impl Jpeg {
         Ok(())
     }
 
-    fn render(self, budget: &mut Budget) -> Result<Image> {
+    fn render(mut self, budget: &mut Budget) -> Result<Image> {
         // Transform component blocks, upsample chroma, convert to RGB, then apply EXIF orientation.
         let mut matrix = [[0f32; 8]; 8];
         for (u, row) in matrix.iter_mut().enumerate() {
@@ -506,16 +553,17 @@ impl Jpeg {
                     };
             }
         }
-        let mut planes = Vec::new();
-        for c in &self.components {
+        let mut planes = budget.zeroed::<Vec<u8>>(self.components.len())?;
+        for (c, output) in self.components.iter_mut().zip(&mut planes) {
             let stride = c.blocks_w * 8;
             let mut plane = budget.zeroed::<u8>(stride * c.blocks_h * 8)?;
             let quant = c.quant.ok_or(DecodeError::InvalidData)?;
+            let coefficients = std::mem::take(&mut c.coefficients);
             for by in 0..c.blocks_h {
                 for bx in 0..c.blocks_w {
                     let offset = (by * c.blocks_w + bx) * 64;
                     idct(
-                        &c.coefficients[offset..offset + 64],
+                        &coefficients[offset..offset + 64],
                         &quant,
                         &matrix,
                         &mut plane[(by * 8 * stride + bx * 8)..],
@@ -523,7 +571,8 @@ impl Jpeg {
                     );
                 }
             }
-            planes.push(plane);
+            drop(coefficients);
+            *output = plane;
         }
         let mut pixels = budget.zeroed(pixel_len(self.width, self.height)?)?;
         let rgb = !self.jfif
@@ -536,20 +585,17 @@ impl Jpeg {
         if self.adobe.is_some_and(|v| v > 2) {
             return Err(DecodeError::UnsupportedFeature);
         }
+        let sampling = Sampling {
+            width: self.width as usize,
+            height: self.height as usize,
+            max_h: self.max_h,
+            max_v: self.max_v,
+        };
         for (y, row) in pixels.chunks_exact_mut(self.width as usize * 4).enumerate() {
             for (x, p) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                 let mut values = [0u8; 4];
                 for (i, c) in self.components.iter().enumerate() {
-                    values[i] = sample(
-                        &planes[i],
-                        c,
-                        x,
-                        y,
-                        self.width as usize,
-                        self.height as usize,
-                        self.max_h,
-                        self.max_v,
-                    );
+                    values[i] = c.sample(&planes[i], x, y, sampling);
                 }
                 match self.components.len() {
                     1 => p.copy_from_slice(&[values[0], values[0], values[0], 255]),
@@ -725,58 +771,25 @@ fn idct(block: &[i32], quant: &[u16; 64], matrix: &[[f32; 8]; 8], dest: &mut [u8
     for v in 0..8 {
         for u in 0..8 {
             let coefficient = block[v * 8 + u] as f32 * f32::from(quant[v * 8 + u]);
-            for x in 0..8 {
-                temp[v][x] += coefficient * matrix[u][x];
+            for (value, basis) in temp[v].iter_mut().zip(&matrix[u]) {
+                *value += coefficient * basis;
             }
         }
     }
 
     let mut output = [[128.0f32; 8]; 8];
     for v in 0..8 {
-        for y in 0..8 {
-            let basis = matrix[v][y];
-            for x in 0..8 {
-                output[y][x] += temp[v][x] * basis;
+        for (row, basis) in output.iter_mut().zip(&matrix[v]) {
+            for (value, temp) in row.iter_mut().zip(&temp[v]) {
+                *value += temp * basis;
             }
         }
     }
-    for y in 0..8 {
-        for x in 0..8 {
-            dest[y * stride + x] = output[y][x].round().clamp(0.0, 255.0) as u8;
+    for (source, dest) in output.iter().zip(dest.chunks_mut(stride)) {
+        for (source, dest) in source.iter().zip(dest) {
+            *dest = source.round().clamp(0.0, 255.0) as u8;
         }
     }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn sample(
-    plane: &[u8],
-    c: &Component,
-    x: usize,
-    y: usize,
-    width: usize,
-    height: usize,
-    max_h: usize,
-    max_v: usize,
-) -> u8 {
-    let stride = c.blocks_w * 8;
-    if c.h == max_h && c.v == max_v {
-        return plane[y * stride + x];
-    }
-    let sx = ((x as f32 + 0.5) * c.h as f32 / max_h as f32 - 0.5).max(0.0);
-    let sy = ((y as f32 + 0.5) * c.v as f32 / max_v as f32 - 0.5).max(0.0);
-    let max_x = (width * c.h).div_ceil(max_h) - 1;
-    let max_y = (height * c.v).div_ceil(max_v) - 1;
-    let x0 = (sx as usize).min(max_x);
-    let x1 = (x0 + 1).min(max_x);
-    let y0 = (sy as usize).min(max_y);
-    let y1 = (y0 + 1).min(max_y);
-    let fx = sx.fract();
-    let fy = sy.fract();
-    let top =
-        f32::from(plane[y0 * stride + x0]) * (1.0 - fx) + f32::from(plane[y0 * stride + x1]) * fx;
-    let bottom =
-        f32::from(plane[y1 * stride + x0]) * (1.0 - fx) + f32::from(plane[y1 * stride + x1]) * fx;
-    (top * (1.0 - fy) + bottom * fy).round().clamp(0.0, 255.0) as u8
 }
 
 fn ycbcr(v: [u8; 4]) -> [u8; 3] {
@@ -870,8 +883,10 @@ mod tests {
 
     #[test]
     fn jpeg_applies_all_exif_orientations() {
-        let jpeg = include_bytes!("../tests/fixtures/baseline.jpg");
+        let jpeg = include_bytes!("../tests/images/jpeg/progressive/test.jpg");
         let base = decode(jpeg).expect("base JPEG");
+        let base_width = base.width();
+        let base_height = base.height();
         for little in [false, true] {
             for orientation in 1u16..=8 {
                 let short = |v: u16| {
@@ -904,22 +919,26 @@ mod tests {
                 data.extend_from_slice(&exif);
                 data.extend_from_slice(&jpeg[2..]);
                 let image = decode(&data).expect("oriented JPEG");
-                let (w, h) = if orientation >= 5 { (13, 19) } else { (19, 13) };
+                let (w, h) = if orientation >= 5 {
+                    (base_height, base_width)
+                } else {
+                    (base_width, base_height)
+                };
                 assert_eq!((image.width(), image.height()), (w, h));
                 for y in 0..h {
                     for x in 0..w {
                         let (sx, sy) = match orientation {
                             1 => (x, y),
-                            2 => (18 - x, y),
-                            3 => (18 - x, 12 - y),
-                            4 => (x, 12 - y),
+                            2 => (base_width - 1 - x, y),
+                            3 => (base_width - 1 - x, base_height - 1 - y),
+                            4 => (x, base_height - 1 - y),
                             5 => (y, x),
-                            6 => (y, 12 - x),
-                            7 => (18 - y, 12 - x),
-                            8 => (18 - y, x),
+                            6 => (y, base_height - 1 - x),
+                            7 => (base_width - 1 - y, base_height - 1 - x),
+                            8 => (base_width - 1 - y, x),
                             _ => unreachable!(),
                         };
-                        let src = ((sy * 19 + sx) * 4) as usize;
+                        let src = ((sy * base_width + sx) * 4) as usize;
                         let dst = ((y * w + x) * 4) as usize;
                         assert_eq!(&image.pixels()[dst..dst + 4], &base.pixels()[src..src + 4]);
                     }

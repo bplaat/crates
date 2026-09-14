@@ -504,6 +504,8 @@ mod tests {
             include_bytes!("../tests/fixtures/rgb.bmp"),
             include_bytes!("../tests/fixtures/dib.ico"),
             include_bytes!("../tests/fixtures/rgb.qoi"),
+            include_bytes!("../tests/fixtures/16bit.png"),
+            include_bytes!("../tests/fixtures/16bit-apng.png"),
         ];
         for &bytes in cases {
             autoreleasepool(|_| {
@@ -522,11 +524,7 @@ mod tests {
 
     #[test]
     fn unsupported_rasters_do_not_fall_back_to_nsimage() {
-        let cases: &[&[u8]] = &[
-            include_bytes!("../tests/fixtures/16bit.png"),
-            include_bytes!("../tests/fixtures/16bit-apng.png"),
-            include_bytes!("../tests/fixtures/native.tiff"),
-        ];
+        let cases: &[&[u8]] = &[include_bytes!("../tests/fixtures/native.tiff")];
         for &bytes in cases {
             autoreleasepool(|_| {
                 assert!(decode_image(bytes.to_vec()).is_err());
