@@ -490,74 +490,134 @@ pub(crate) fn decode_tinyvg(data: &[u8]) -> Result<VectorImage, VectorDecodeErro
             height: document.size.height,
         },
     );
+    let command_capacity = document
+        .commands
+        .iter()
+        .try_fold(0usize, |count, command| {
+            count
+                .checked_add(if matches!(command, tinyvg::Command::FillStroke { .. }) {
+                    2
+                } else {
+                    1
+                })
+                .ok_or(VectorDecodeError::ResourceLimit)
+        })?;
+    let path_capacity = document
+        .commands
+        .iter()
+        .try_fold(0usize, |count, command| {
+            let paths = match command {
+                tinyvg::Command::FillStroke {
+                    path, line_width, ..
+                } if has_variable_width(path, *line_width) => 2,
+                _ => 1,
+            };
+            count
+                .checked_add(paths)
+                .ok_or(VectorDecodeError::ResourceLimit)
+        })?;
+    image
+        .paths
+        .try_reserve(path_capacity)
+        .map_err(|_| VectorDecodeError::ResourceLimit)?;
+    image
+        .paints
+        .try_reserve(command_capacity)
+        .map_err(|_| VectorDecodeError::ResourceLimit)?;
+    image
+        .commands
+        .try_reserve(command_capacity)
+        .map_err(|_| VectorDecodeError::ResourceLimit)?;
     for command in document.commands {
-        let (path, style, stroke) = match command {
-            tinyvg::Command::Fill { path, style } => (path, style, None),
+        match command {
+            tinyvg::Command::Fill { path, style } => {
+                let paint = image.add_paint(convert_paint(style)?);
+                let segments = convert_path(&path)?;
+                let bounds = path_bounds(&segments).ok_or(VectorDecodeError::InvalidData)?;
+                let path = image.add_path(segments);
+                image.push(DrawCommand::Fill {
+                    path,
+                    paint,
+                    transform: Transform::IDENTITY,
+                    rule: FillRule::EvenOdd,
+                    bounds,
+                });
+            }
             tinyvg::Command::Stroke {
                 path,
                 style,
                 line_width,
-            } => (path, style, Some(line_width)),
-        };
-        let paint = image.add_paint(convert_paint(style));
-        if let Some(initial_width) = stroke {
-            let variable = path
-                .subpaths
-                .iter()
-                .any(|subpath| subpath.nodes.iter().any(|node| node.line_width.is_some()));
-            if variable {
-                for subpath in path.subpaths {
-                    let mut current = subpath.start;
-                    let mut width = initial_width;
-                    for node in subpath.nodes {
-                        let next_width = node.line_width.unwrap_or(width);
-                        let mut segments = vec![PathSegment::MoveTo(point(current))];
-                        append_tinyvg_operation(
-                            &mut segments,
-                            current,
-                            subpath.start,
-                            &node.operation,
-                        );
-                        let bounds = path_bounds(&segments)
-                            .unwrap_or(Rect::from_points(point(current), point(current)))
-                            .expand((width + next_width).max(0.0) / 4.0);
-                        let path = image.add_path(segments);
-                        image.push(DrawCommand::Stroke {
-                            path,
-                            paint,
-                            transform: Transform::IDENTITY,
-                            style: tinyvg_stroke((width + next_width) / 2.0),
-                            bounds,
-                        });
-                        current = operation_end(subpath.start, &node.operation);
-                        width = next_width;
-                    }
+            } => {
+                let paint = image.add_paint(convert_paint(style)?);
+                let variable_width = has_variable_width(&path, line_width);
+                let segments = if variable_width {
+                    TinyVgStrokeBuilder::build(&path, line_width)?
+                } else {
+                    convert_path(&path)?
+                };
+                let mut bounds = path_bounds(&segments).ok_or(VectorDecodeError::InvalidData)?;
+                if !variable_width {
+                    bounds = bounds.expand(line_width / 2.0);
                 }
-            } else {
-                let segments = convert_path(&path);
-                let bounds = path_bounds(&segments)
-                    .ok_or(VectorDecodeError::InvalidData)?
-                    .expand(initial_width.max(0.0) / 2.0);
                 let path = image.add_path(segments);
-                image.push(DrawCommand::Stroke {
-                    path,
-                    paint,
-                    transform: Transform::IDENTITY,
-                    style: tinyvg_stroke(initial_width),
-                    bounds,
+                image.push(if variable_width {
+                    DrawCommand::Fill {
+                        path,
+                        paint,
+                        transform: Transform::IDENTITY,
+                        rule: FillRule::NonZero,
+                        bounds,
+                    }
+                } else {
+                    DrawCommand::Stroke {
+                        path,
+                        paint,
+                        transform: Transform::IDENTITY,
+                        style: tinyvg_stroke(line_width),
+                        bounds,
+                    }
                 });
             }
-        } else {
-            let segments = convert_path(&path);
-            let bounds = path_bounds(&segments).ok_or(VectorDecodeError::InvalidData)?;
-            let path = image.add_path(segments);
-            image.push(DrawCommand::Fill {
+            tinyvg::Command::FillStroke {
                 path,
-                paint,
-                transform: Transform::IDENTITY,
-                rule: FillRule::EvenOdd,
-                bounds,
-            });
+                fill_style,
+                line_style,
+                line_width,
+            } => {
+                let variable_width = has_variable_width(&path, line_width);
+                let segments = convert_path(&path)?;
+                let bounds = path_bounds(&segments).ok_or(VectorDecodeError::InvalidData)?;
+                let fill_path = image.add_path(segments);
+                let fill_paint = image.add_paint(convert_paint(fill_style)?);
+                image.push(DrawCommand::Fill {
+                    path: fill_path,
+                    paint: fill_paint,
+                    transform: Transform::IDENTITY,
+                    rule: FillRule::EvenOdd,
+                    bounds,
+                });
+                let line_paint = image.add_paint(convert_paint(line_style)?);
+                if variable_width {
+                    let stroke = TinyVgStrokeBuilder::build(&path, line_width)?;
+                    let bounds = path_bounds(&stroke).ok_or(VectorDecodeError::InvalidData)?;
+                    let stroke_path = image.add_path(stroke);
+                    image.push(DrawCommand::Fill {
+                        path: stroke_path,
+                        paint: line_paint,
+                        transform: Transform::IDENTITY,
+                        rule: FillRule::NonZero,
+                        bounds,
+                    });
+                } else {
+                    image.push(DrawCommand::Stroke {
+                        path: fill_path,
+                        paint: line_paint,
+                        transform: Transform::IDENTITY,
+                        style: tinyvg_stroke(line_width),
+                        bounds: bounds.expand(line_width / 2.0),
+                    });
+                }
+            }
         }
     }
     let segment_count = image
@@ -567,6 +627,393 @@ pub(crate) fn decode_tinyvg(data: &[u8]) -> Result<VectorImage, VectorDecodeErro
         return Err(VectorDecodeError::ResourceLimit);
     }
     Ok(image)
+}
+
+#[cfg(feature = "tinyvg")]
+fn has_variable_width(path: &tinyvg::Path, initial_width: f64) -> bool {
+    path.subpaths.iter().any(|subpath| {
+        let mut width = initial_width;
+        subpath.nodes.iter().any(|node| {
+            let next = node.line_width.unwrap_or(width);
+            let changed = next != width;
+            width = next;
+            changed
+        })
+    })
+}
+
+#[cfg(feature = "tinyvg")]
+struct TinyVgStrokeBuilder {
+    output: Vec<PathSegment>,
+    arc: Vec<PathSegment>,
+}
+
+#[cfg(feature = "tinyvg")]
+impl TinyVgStrokeBuilder {
+    const CURVE_STEPS: usize = 16;
+    const ARC_STEPS: usize = 100;
+    const MAX_SEGMENTS: usize = 1_000_000;
+    const MIN_RADIUS: f64 = 0.35;
+
+    fn build(
+        path: &tinyvg::Path,
+        initial_width: f64,
+    ) -> Result<Vec<PathSegment>, VectorDecodeError> {
+        let mut builder = Self {
+            output: Vec::new(),
+            arc: Vec::new(),
+        };
+        builder
+            .arc
+            .try_reserve_exact(4)
+            .map_err(|_| VectorDecodeError::ResourceLimit)?;
+        for subpath in &path.subpaths {
+            builder.append_subpath(subpath, initial_width)?;
+        }
+        if builder.output.is_empty() {
+            let start = path
+                .subpaths
+                .first()
+                .ok_or(VectorDecodeError::InvalidData)?
+                .start;
+            builder.reserve(1)?;
+            builder.output.push(PathSegment::MoveTo(point(start)));
+        }
+        Ok(builder.output)
+    }
+
+    fn append_subpath(
+        &mut self,
+        subpath: &tinyvg::Subpath,
+        initial_width: f64,
+    ) -> Result<(), VectorDecodeError> {
+        let mut current = point(subpath.start);
+        let start = current;
+        let mut width = initial_width;
+        for node in &subpath.nodes {
+            let next_width = node.line_width.unwrap_or(width);
+            self.append_operation(current, start, width, next_width, &node.operation)?;
+            current = point(operation_end(subpath.start, &node.operation));
+            width = next_width;
+        }
+        Ok(())
+    }
+
+    fn append_operation(
+        &mut self,
+        from: Point,
+        start: Point,
+        width: f64,
+        next_width: f64,
+        operation: &tinyvg::PathOperation,
+    ) -> Result<(), VectorDecodeError> {
+        match operation {
+            tinyvg::PathOperation::LineTo(to) => {
+                self.append_capsule(from, point(*to), width, next_width)
+            }
+            tinyvg::PathOperation::Close => self.append_capsule(from, start, width, next_width),
+            tinyvg::PathOperation::QuadraticTo { control, to } => {
+                let control = point(*control);
+                let to = point(*to);
+                self.append_curve(from, width, next_width, Self::CURVE_STEPS, |t| {
+                    let u = 1.0 - t;
+                    Point {
+                        x: u * u * from.x + 2.0 * u * t * control.x + t * t * to.x,
+                        y: u * u * from.y + 2.0 * u * t * control.y + t * t * to.y,
+                    }
+                })
+            }
+            tinyvg::PathOperation::CubicTo {
+                control_0,
+                control_1,
+                to,
+            } => {
+                let control_0 = point(*control_0);
+                let control_1 = point(*control_1);
+                let to = point(*to);
+                self.append_curve(from, width, next_width, Self::CURVE_STEPS, |t| {
+                    let u = 1.0 - t;
+                    let uu = u * u;
+                    let tt = t * t;
+                    Point {
+                        x: uu * u * from.x
+                            + 3.0 * uu * t * control_0.x
+                            + 3.0 * u * tt * control_1.x
+                            + tt * t * to.x,
+                        y: uu * u * from.y
+                            + 3.0 * uu * t * control_0.y
+                            + 3.0 * u * tt * control_1.y
+                            + tt * t * to.y,
+                    }
+                })
+            }
+            tinyvg::PathOperation::ArcTo {
+                radius_x,
+                radius_y,
+                rotation,
+                large_arc,
+                sweep,
+                to,
+            } => {
+                let to = point(*to);
+                self.arc.clear();
+                append_arc(
+                    &mut self.arc,
+                    from,
+                    to,
+                    *radius_x,
+                    *radius_y,
+                    *rotation,
+                    *large_arc,
+                    !*sweep,
+                );
+                let part_count = self.arc.len();
+                let mut part_start = from;
+                let mut completed_steps = 0;
+                for index in 0..part_count {
+                    let segment = self.arc[index];
+                    match segment {
+                        PathSegment::LineTo(to) => {
+                            self.append_capsule(part_start, to, width, next_width)?;
+                            part_start = to;
+                        }
+                        PathSegment::CubicTo {
+                            control_0,
+                            control_1,
+                            to,
+                        } => {
+                            let steps = Self::ARC_STEPS / part_count
+                                + usize::from(index < Self::ARC_STEPS % part_count);
+                            let begin = completed_steps as f64 / Self::ARC_STEPS as f64;
+                            completed_steps += steps;
+                            let end = completed_steps as f64 / Self::ARC_STEPS as f64;
+                            let begin_width = lerp(width, next_width, begin);
+                            let end_width = lerp(width, next_width, end);
+                            self.append_curve(part_start, begin_width, end_width, steps, |t| {
+                                let u = 1.0 - t;
+                                let uu = u * u;
+                                let tt = t * t;
+                                Point {
+                                    x: uu * u * part_start.x
+                                        + 3.0 * uu * t * control_0.x
+                                        + 3.0 * u * tt * control_1.x
+                                        + tt * t * to.x,
+                                    y: uu * u * part_start.y
+                                        + 3.0 * uu * t * control_0.y
+                                        + 3.0 * u * tt * control_1.y
+                                        + tt * t * to.y,
+                                }
+                            })?;
+                            part_start = to;
+                        }
+                        _ => return Err(VectorDecodeError::InvalidData),
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn append_curve(
+        &mut self,
+        from: Point,
+        width: f64,
+        next_width: f64,
+        steps: usize,
+        point_at: impl Fn(f64) -> Point,
+    ) -> Result<(), VectorDecodeError> {
+        let mut previous = from;
+        for index in 1..=steps {
+            let t = index as f64 / steps as f64;
+            let next = point_at(t);
+            self.append_capsule(
+                previous,
+                next,
+                lerp(width, next_width, (index - 1) as f64 / steps as f64),
+                lerp(width, next_width, t),
+            )?;
+            previous = next;
+        }
+        Ok(())
+    }
+
+    fn append_capsule(
+        &mut self,
+        from: Point,
+        to: Point,
+        width: f64,
+        next_width: f64,
+    ) -> Result<(), VectorDecodeError> {
+        let radius = (width / 2.0).max(Self::MIN_RADIUS);
+        let next_radius = (next_width / 2.0).max(Self::MIN_RADIUS);
+        let dx = to.x - from.x;
+        let dy = to.y - from.y;
+        let distance = dx.hypot(dy);
+        if distance <= f64::EPSILON {
+            return Ok(());
+        }
+        if distance <= (radius - next_radius).abs() {
+            let (center, radius) = if radius >= next_radius {
+                (from, radius)
+            } else {
+                (to, next_radius)
+            };
+            self.reserve(6)?;
+            self.append_circle(center, radius);
+            return Ok(());
+        }
+
+        let ux = dx / distance;
+        let uy = dy / distance;
+        let sin = (radius - next_radius) / distance;
+        let cos = (1.0 - sin * sin).sqrt();
+        let side_0 = Point {
+            x: ux * sin - uy * cos,
+            y: uy * sin + ux * cos,
+        };
+        let side_1 = Point {
+            x: ux * sin + uy * cos,
+            y: uy * sin - ux * cos,
+        };
+        let offset = |center: Point, side: Point, radius: f64| Point {
+            x: center.x + side.x * radius,
+            y: center.y + side.y * radius,
+        };
+        let from_0 = offset(from, side_0, radius);
+        let from_1 = offset(from, side_1, radius);
+        let to_1 = offset(to, side_1, next_radius);
+        let to_0 = offset(to, side_0, next_radius);
+        let first_cap = Self::cap_segments(from, from_0, from_1);
+        let second_cap = Self::cap_segments(to, to_1, to_0);
+        self.reserve(3 + first_cap + second_cap)?;
+        self.output.push(PathSegment::MoveTo(from_0));
+        self.append_cap(from, radius, from_0, from_1, first_cap);
+        self.output.push(PathSegment::LineTo(to_1));
+        self.append_cap(to, next_radius, to_1, to_0, second_cap);
+        self.output.push(PathSegment::Close);
+        Ok(())
+    }
+
+    fn cap_segments(center: Point, from: Point, to: Point) -> usize {
+        let start = (from.y - center.y).atan2(from.x - center.x);
+        let end = (to.y - center.y).atan2(to.x - center.x);
+        let delta = (end - start).rem_euclid(std::f64::consts::TAU);
+        (delta / std::f64::consts::FRAC_PI_2).ceil() as usize
+    }
+
+    fn append_cap(&mut self, center: Point, radius: f64, from: Point, to: Point, count: usize) {
+        let start = (from.y - center.y).atan2(from.x - center.x);
+        let end = (to.y - center.y).atan2(to.x - center.x);
+        let delta = (end - start).rem_euclid(std::f64::consts::TAU);
+        let step = delta / count as f64;
+        for index in 0..count {
+            let first = start + step * index as f64;
+            let second = first + step;
+            let alpha = 4.0 / 3.0 * (step / 4.0).tan();
+            let (sin_0, cos_0) = first.sin_cos();
+            let (sin_1, cos_1) = second.sin_cos();
+            self.output.push(PathSegment::CubicTo {
+                control_0: Point {
+                    x: center.x + radius * (cos_0 - alpha * sin_0),
+                    y: center.y + radius * (sin_0 + alpha * cos_0),
+                },
+                control_1: Point {
+                    x: center.x + radius * (cos_1 + alpha * sin_1),
+                    y: center.y + radius * (sin_1 - alpha * cos_1),
+                },
+                to: if index + 1 == count {
+                    to
+                } else {
+                    Point {
+                        x: center.x + radius * cos_1,
+                        y: center.y + radius * sin_1,
+                    }
+                },
+            });
+        }
+    }
+
+    fn append_circle(&mut self, center: Point, radius: f64) {
+        const KAPPA: f64 = 0.552_284_749_830_793_6;
+        let control = radius * KAPPA;
+        self.output.extend([
+            PathSegment::MoveTo(Point {
+                x: center.x + radius,
+                y: center.y,
+            }),
+            PathSegment::CubicTo {
+                control_0: Point {
+                    x: center.x + radius,
+                    y: center.y + control,
+                },
+                control_1: Point {
+                    x: center.x + control,
+                    y: center.y + radius,
+                },
+                to: Point {
+                    x: center.x,
+                    y: center.y + radius,
+                },
+            },
+            PathSegment::CubicTo {
+                control_0: Point {
+                    x: center.x - control,
+                    y: center.y + radius,
+                },
+                control_1: Point {
+                    x: center.x - radius,
+                    y: center.y + control,
+                },
+                to: Point {
+                    x: center.x - radius,
+                    y: center.y,
+                },
+            },
+            PathSegment::CubicTo {
+                control_0: Point {
+                    x: center.x - radius,
+                    y: center.y - control,
+                },
+                control_1: Point {
+                    x: center.x - control,
+                    y: center.y - radius,
+                },
+                to: Point {
+                    x: center.x,
+                    y: center.y - radius,
+                },
+            },
+            PathSegment::CubicTo {
+                control_0: Point {
+                    x: center.x + control,
+                    y: center.y - radius,
+                },
+                control_1: Point {
+                    x: center.x + radius,
+                    y: center.y - control,
+                },
+                to: Point {
+                    x: center.x + radius,
+                    y: center.y,
+                },
+            },
+            PathSegment::Close,
+        ]);
+    }
+
+    fn reserve(&mut self, additional: usize) -> Result<(), VectorDecodeError> {
+        if self.output.len().saturating_add(additional) > Self::MAX_SEGMENTS {
+            return Err(VectorDecodeError::ResourceLimit);
+        }
+        self.output
+            .try_reserve(additional)
+            .map_err(|_| VectorDecodeError::ResourceLimit)
+    }
+}
+
+#[cfg(feature = "tinyvg")]
+fn lerp(start: f64, end: f64, amount: f64) -> f64 {
+    start + (end - start) * amount
 }
 
 #[cfg(feature = "tinyvg")]
@@ -604,18 +1051,20 @@ const fn color(value: tinyvg::Color) -> Color {
 }
 
 #[cfg(feature = "tinyvg")]
-fn convert_paint(style: tinyvg::Style) -> Paint {
-    match style {
+fn convert_paint(style: tinyvg::Style) -> Result<Paint, VectorDecodeError> {
+    Ok(match style {
         tinyvg::Style::Solid(value) => Paint::Solid(color(value)),
         tinyvg::Style::LinearGradient {
             start,
             end,
             start_color,
             end_color,
-        } => Paint::LinearGradient {
-            start: point(start),
-            end: point(end),
-            stops: vec![
+        } => {
+            let mut stops = Vec::new();
+            stops
+                .try_reserve_exact(2)
+                .map_err(|_| VectorDecodeError::ResourceLimit)?;
+            stops.extend([
                 GradientStop {
                     offset: 0.0,
                     color: color(start_color),
@@ -624,20 +1073,26 @@ fn convert_paint(style: tinyvg::Style) -> Paint {
                     offset: 1.0,
                     color: color(end_color),
                 },
-            ],
-            spread: SpreadMethod::Pad,
-            transform: Transform::IDENTITY,
-        },
+            ]);
+            Paint::LinearGradient {
+                start: point(start),
+                end: point(end),
+                stops,
+                spread: SpreadMethod::Pad,
+                transform: Transform::IDENTITY,
+            }
+        }
         tinyvg::Style::RadialGradient {
             center,
             edge,
             center_color,
             edge_color,
-        } => Paint::RadialGradient {
-            center: point(center),
-            focal: point(center),
-            radius: (edge.x - center.x).hypot(edge.y - center.y),
-            stops: vec![
+        } => {
+            let mut stops = Vec::new();
+            stops
+                .try_reserve_exact(2)
+                .map_err(|_| VectorDecodeError::ResourceLimit)?;
+            stops.extend([
                 GradientStop {
                     offset: 0.0,
                     color: color(center_color),
@@ -646,16 +1101,36 @@ fn convert_paint(style: tinyvg::Style) -> Paint {
                     offset: 1.0,
                     color: color(edge_color),
                 },
-            ],
-            spread: SpreadMethod::Pad,
-            transform: Transform::IDENTITY,
-        },
-    }
+            ]);
+            Paint::RadialGradient {
+                center: point(center),
+                focal: point(center),
+                radius: (edge.x - center.x).hypot(edge.y - center.y),
+                stops,
+                spread: SpreadMethod::Pad,
+                transform: Transform::IDENTITY,
+            }
+        }
+    })
 }
 
 #[cfg(feature = "tinyvg")]
-fn convert_path(path: &tinyvg::Path) -> Vec<PathSegment> {
+fn convert_path(path: &tinyvg::Path) -> Result<Vec<PathSegment>, VectorDecodeError> {
     let mut output = Vec::new();
+    let capacity = path.subpaths.iter().try_fold(0usize, |count, subpath| {
+        let nodes = subpath
+            .nodes
+            .len()
+            .checked_mul(4)
+            .ok_or(VectorDecodeError::ResourceLimit)?;
+        count
+            .checked_add(1)
+            .and_then(|count| count.checked_add(nodes))
+            .ok_or(VectorDecodeError::ResourceLimit)
+    })?;
+    output
+        .try_reserve_exact(capacity)
+        .map_err(|_| VectorDecodeError::ResourceLimit)?;
     for subpath in &path.subpaths {
         output.push(PathSegment::MoveTo(point(subpath.start)));
         let mut current = subpath.start;
@@ -664,7 +1139,7 @@ fn convert_path(path: &tinyvg::Path) -> Vec<PathSegment> {
             current = operation_end(subpath.start, &node.operation);
         }
     }
-    output
+    Ok(output)
 }
 
 #[cfg(feature = "tinyvg")]
