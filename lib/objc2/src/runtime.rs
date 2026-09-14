@@ -55,7 +55,7 @@ impl AnyProtocol {
 
 /// An Objective-C selector (pointer-sized, equivalent to C's `SEL`).
 #[repr(transparent)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Sel(pub *const c_void);
 
 // Selectors are globally registered by `sel_registerName` and never freed; they are safe
@@ -449,6 +449,12 @@ mod test {
     fn test_anyprotocol_get_known() {
         let protocol = AnyProtocol::get(c"NSCopying");
         assert!(protocol.is_some(), "NSCopying should always exist");
+    }
+
+    #[test]
+    fn test_selector_equality() {
+        assert!(sel!(zoomIn:) == sel!(zoomIn:));
+        assert!(sel!(zoomIn:) != sel!(zoomOut:));
     }
 
     #[test]
