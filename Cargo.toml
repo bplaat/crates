@@ -72,3 +72,15 @@ overflow-checks = false
 
 [profile.release.package.image]
 opt-level = 3
+
+[profile.release.package.miniz_oxide]
+opt-level = 3
+
+[profile.release.package.pbkdf2]
+opt-level = 3
+
+[profile.release.package.reversi-engine]
+opt-level = 3
+
+[profile.release.package.sha2]
+opt-level = 3
