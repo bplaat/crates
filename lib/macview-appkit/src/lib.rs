@@ -232,12 +232,12 @@ pub fn decode_vector_image(bytes: &[u8]) -> Result<Image, String> {
     Ok(image)
 }
 
-/// Tries the raster decoders, then AppKit, using an owned Rust buffer.
+/// Decodes an image using the local decoders.
 pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
     if image::vector_format(&bytes).is_some() {
         return decode_vector_image(&bytes);
     }
-    if let Some(image) = decode_custom_image(&bytes) {
+    if let Some(image) = decode_custom_image(&bytes)? {
         return Ok(image);
     }
 
@@ -254,7 +254,7 @@ pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
     unsafe { decode_native_image(data) }
 }
 
-/// Tries the raster decoders, then AppKit, using data supplied by AppKit.
+/// Decodes an image using the local decoders and data supplied by AppKit.
 ///
 /// # Safety
 ///
@@ -274,7 +274,7 @@ pub unsafe fn decode_image_data(data: *mut Object) -> Result<Image, String> {
     if image::vector_format(bytes).is_some() {
         return decode_vector_image(bytes);
     }
-    if let Some(image) = decode_custom_image(bytes) {
+    if let Some(image) = decode_custom_image(bytes)? {
         return Ok(image);
     }
     // SAFETY: NSImage's data initializer takes responsibility for any data it needs after return.
@@ -351,12 +351,12 @@ pub fn create_image_view(frame: Rect, image: &Image) -> Retained<Object> {
     }
 }
 
-fn decode_custom_image(bytes: &[u8]) -> Option<Image> {
-    let decoded = image::decode(bytes).ok()?;
+fn decode_custom_image(bytes: &[u8]) -> Result<Option<Image>, String> {
+    let decoded = image::decode(bytes).map_err(|error| error.to_string())?;
     // NSImageView natively plays animated NSBitmapImageRep objects and preserves their frame
     // durations and loop count. Leave animations encoded so AppKit can create that representation.
     if decoded.frames().len() != 1 {
-        return None;
+        return Ok(None);
     }
     let frame = &decoded.frames()[0];
     let native_image = make_image(
@@ -364,7 +364,8 @@ fn decode_custom_image(bytes: &[u8]) -> Option<Image> {
         decoded.height(),
         decoded.color_space(),
         frame.pixels(),
-    )?;
+    )
+    .ok_or_else(|| String::from("Could not create the decoded image"))?;
     // SAFETY: The frame was constructed as an owned, initialized NSImage.
     // NSImage may expose the CGImage representation in backing pixels on a Retina display, so
     // keep the decoder's format dimensions as the authoritative value.
@@ -373,7 +374,7 @@ fn decode_custom_image(bytes: &[u8]) -> Option<Image> {
         width: f64::from(decoded.width()),
         height: f64::from(decoded.height()),
     });
-    Some(image)
+    Ok(Some(image))
 }
 
 /// Creates an autoreleased `NSError` that carries `description` as its localized description.
@@ -503,9 +504,6 @@ mod tests {
             include_bytes!("../tests/fixtures/rgb.bmp"),
             include_bytes!("../tests/fixtures/dib.ico"),
             include_bytes!("../tests/fixtures/rgb.qoi"),
-            include_bytes!("../tests/fixtures/16bit.png"),
-            include_bytes!("../tests/fixtures/16bit-apng.png"),
-            include_bytes!("../tests/fixtures/native.tiff"),
         ];
         for &bytes in cases {
             autoreleasepool(|_| {
@@ -518,6 +516,26 @@ mod tests {
                 };
                 assert!(image.pixel_size().is_some());
                 assert!(image.size.width > 0.0 && image.size.height > 0.0);
+            });
+        }
+    }
+
+    #[test]
+    fn unsupported_rasters_do_not_fall_back_to_nsimage() {
+        let cases: &[&[u8]] = &[
+            include_bytes!("../tests/fixtures/16bit.png"),
+            include_bytes!("../tests/fixtures/16bit-apng.png"),
+            include_bytes!("../tests/fixtures/native.tiff"),
+        ];
+        for &bytes in cases {
+            autoreleasepool(|_| {
+                assert!(decode_image(bytes.to_vec()).is_err());
+                // SAFETY: NSData copies the fixture and stays live through this pool.
+                let result = unsafe {
+                    let data: *mut Object = msg_send![class!(NSData), dataWithBytes: bytes.as_ptr().cast::<c_void>(), length: bytes.len()];
+                    decode_image_data(data)
+                };
+                assert!(result.is_err());
             });
         }
     }
