@@ -8,8 +8,8 @@ use std::ffi::c_void;
 use std::ptr::null;
 
 use image::{
-    Color, DrawCommand, FillRule, LineCap, LineJoin, MaskType, Paint, PathSegment, SpreadMethod,
-    Transform, VectorColorSpace, VectorImage,
+    BlendMode, Color, DrawCommand, FillRule, LineCap, LineJoin, MaskType, Paint, PathSegment,
+    SpreadMethod, Transform, VectorColorSpace, VectorImage,
 };
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
@@ -372,6 +372,27 @@ impl RenderMode {
     }
 }
 
+const fn blend_mode_value(mode: BlendMode) -> i32 {
+    match mode {
+        BlendMode::Normal => 0,
+        BlendMode::Multiply => 1,
+        BlendMode::Screen => 2,
+        BlendMode::Overlay => 3,
+        BlendMode::Darken => 4,
+        BlendMode::Lighten => 5,
+        BlendMode::ColorDodge => 6,
+        BlendMode::ColorBurn => 7,
+        BlendMode::SoftLight => 8,
+        BlendMode::HardLight => 9,
+        BlendMode::Difference => 10,
+        BlendMode::Exclusion => 11,
+        BlendMode::Hue => 12,
+        BlendMode::Saturation => 13,
+        BlendMode::Color => 14,
+        BlendMode::Luminosity => 15,
+    }
+}
+
 fn collect_paint_modes(commands: &[DrawCommand], mode: RenderMode, modes: &mut [u8]) {
     for command in commands {
         match command {
@@ -408,6 +429,8 @@ unsafe fn render_commands(
         match command {
             DrawCommand::PushScope {
                 opacity,
+                blend_mode,
+                isolated,
                 clips,
                 mask,
                 ..
@@ -434,7 +457,8 @@ unsafe fn render_commands(
                         CGContextRestoreGState(context);
                         CGContextClip(context);
                     }
-                    let transparent = *opacity < 1.0 || mask.is_some();
+                    CGContextSetBlendMode(context, blend_mode_value(*blend_mode));
+                    let transparent = *opacity < 1.0 || *isolated || mask.is_some();
                     if transparent {
                         CGContextSetAlpha(context, *opacity);
                         CGContextBeginTransparencyLayer(context, null());
@@ -534,6 +558,9 @@ unsafe fn draw_path(
     rule: FillRule,
     mode: RenderMode,
 ) {
+    if stroke.is_some_and(|style| style.width <= 0.0) {
+        return;
+    }
     // SAFETY: Prepared indexes correspond to validated display-list resource IDs.
     unsafe {
         CGContextSaveGState(context);
@@ -541,7 +568,7 @@ unsafe fn draw_path(
         CGContextBeginPath(context);
         CGContextAddPath(context, paths[path].0);
         if let Some(style) = stroke {
-            CGContextSetLineWidth(context, if style.width > 0.0 { style.width } else { 1.0 });
+            CGContextSetLineWidth(context, style.width);
             CGContextSetLineCap(
                 context,
                 match style.line_cap {
@@ -811,9 +838,21 @@ pub unsafe fn fill_white_background(context: *mut c_void, bounds: Size) {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
     use super::*;
 
     fn render_pixels(document: &VectorImage, width: usize, height: usize) -> Vec<u8> {
+        render_pixels_with_background(document, width, height, false)
+    }
+
+    fn render_pixels_with_background(
+        document: &VectorImage,
+        width: usize,
+        height: usize,
+        white_background: bool,
+    ) -> Vec<u8> {
         let paths = document
             .paths()
             .map(|(_, path)| NativePath::new(path).expect("native path"))
@@ -836,6 +875,15 @@ mod tests {
                 1 | (4 << 12),
             );
             assert!(!context.is_null());
+            if white_background {
+                fill_white_background(
+                    context,
+                    Size {
+                        width: width as f64,
+                        height: height as f64,
+                    },
+                );
+            }
             render_fitted(
                 context,
                 document,
@@ -850,6 +898,157 @@ mod tests {
             CGColorSpaceRelease(color_space);
         }
         pixels
+    }
+
+    fn svg_files(directory: &Path, output: &mut Vec<PathBuf>) {
+        let mut entries = fs::read_dir(directory)
+            .expect("read SVG fixture directory")
+            .map(|entry| entry.expect("read SVG fixture entry").path())
+            .collect::<Vec<_>>();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                svg_files(&path, output);
+            } else if path.extension().is_some_and(|extension| extension == "svg") {
+                output.push(path);
+            }
+        }
+    }
+
+    fn attribute<'a>(tag: &'a str, wanted: &str) -> Option<&'a str> {
+        let bytes = tag.as_bytes();
+        let mut offset = 0;
+        while let Some(found) = tag[offset..].find(wanted) {
+            let start = offset + found;
+            let before_is_boundary =
+                start == 0 || bytes[start - 1].is_ascii_whitespace() || bytes[start - 1] == b'<';
+            let mut cursor = start + wanted.len();
+            if !before_is_boundary
+                || (cursor < bytes.len()
+                    && !bytes[cursor].is_ascii_whitespace()
+                    && bytes[cursor] != b'=')
+            {
+                offset = cursor;
+                continue;
+            }
+            while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+                cursor += 1;
+            }
+            if bytes.get(cursor) != Some(&b'=') {
+                offset = cursor;
+                continue;
+            }
+            cursor += 1;
+            while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+                cursor += 1;
+            }
+            let quote = *bytes.get(cursor)?;
+            if quote != b'\'' && quote != b'"' {
+                return None;
+            }
+            cursor += 1;
+            let end = bytes[cursor..].iter().position(|&byte| byte == quote)? + cursor;
+            return Some(&tag[cursor..end]);
+        }
+        None
+    }
+
+    fn tag_with_attribute<'a>(source: &'a str, name: &str, value: &str) -> Option<&'a str> {
+        source
+            .split('<')
+            .filter_map(|tail| tail.split_once('>').map(|pair| pair.0))
+            .find(|tag| attribute(tag, name) == Some(value))
+    }
+
+    fn match_reference(source: &str) -> &str {
+        let tag = tag_with_attribute(source, "rel", "match").expect("WPT match link");
+        attribute(tag, "href").expect("WPT match href")
+    }
+
+    fn fuzzy_limits(source: &str) -> (u8, usize) {
+        let Some(tag) = tag_with_attribute(source, "name", "fuzzy") else {
+            return (0, 0);
+        };
+        let content = attribute(tag, "content").expect("WPT fuzzy content");
+        let numbers = content
+            .split(|character: char| !character.is_ascii_digit())
+            .filter(|part| !part.is_empty())
+            .map(|part| part.parse::<usize>().expect("WPT fuzzy number"))
+            .collect::<Vec<_>>();
+        assert_eq!(numbers.len(), 4, "WPT fuzzy limits");
+        (
+            u8::try_from(numbers[1]).expect("WPT channel difference"),
+            numbers[3],
+        )
+    }
+
+    fn pixel_mismatch(name: &Path, actual: &[u8], expected: &[u8], source: &str) -> Option<String> {
+        assert_eq!(actual.len(), expected.len(), "{}", name.display());
+        let (allowed_difference, allowed_pixels) = fuzzy_limits(source);
+        let mut maximum_difference = 0;
+        let mut different_pixels = 0;
+        for (actual, expected) in actual
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(expected.as_chunks::<4>().0)
+        {
+            let difference = actual
+                .iter()
+                .zip(expected)
+                .map(|(&actual, &expected)| actual.abs_diff(expected))
+                .max()
+                .expect("RGBA pixel");
+            maximum_difference = maximum_difference.max(difference);
+            different_pixels += usize::from(difference != 0);
+        }
+        (maximum_difference > allowed_difference || different_pixels > allowed_pixels).then(|| {
+            format!(
+                "{}: max difference {maximum_difference} (allowed {allowed_difference}), different pixels {different_pixels} (allowed {allowed_pixels})",
+                name.display()
+            )
+        })
+    }
+
+    #[test]
+    fn renders_wpt_svg_reference_pairs() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../image/tests");
+        let image_root = root.join("images/svg");
+        let reference_root = root
+            .join("reference/svg")
+            .canonicalize()
+            .expect("canonical SVG reference directory");
+        let mut files = Vec::new();
+        svg_files(&image_root, &mut files);
+        assert_eq!(files.len(), 93, "pinned WPT SVG test count changed");
+        let mut failures = Vec::new();
+
+        for path in files {
+            let relative = path.strip_prefix(&image_root).expect("relative SVG test");
+            let data = fs::read(&path).expect("read WPT SVG test");
+            let source = std::str::from_utf8(&data).expect("WPT SVG is UTF-8");
+            let reference_path = path
+                .parent()
+                .expect("SVG test directory")
+                .join(match_reference(source))
+                .canonicalize()
+                .expect("resolve WPT SVG reference");
+            assert!(reference_path.starts_with(&reference_root));
+            let reference_data = fs::read(reference_path).expect("read WPT SVG reference");
+            let document = image::decode_vector(&data)
+                .unwrap_or_else(|error| panic!("{}: {error}", relative.display()));
+            let reference = image::decode_vector(&reference_data)
+                .unwrap_or_else(|error| panic!("{} reference: {error}", relative.display()));
+            assert_eq!(document.size(), reference.size(), "{}", relative.display());
+            let width = document.size().width.ceil() as usize;
+            let height = document.size().height.ceil() as usize;
+            let actual = render_pixels_with_background(&document, width, height, true);
+            let expected = render_pixels_with_background(&reference, width, height, true);
+            if let Some(failure) = pixel_mismatch(relative, &actual, &expected, source) {
+                failures.push(failure);
+            }
+        }
+        assert!(failures.is_empty(), "\n{}", failures.join("\n"));
     }
 
     #[test]

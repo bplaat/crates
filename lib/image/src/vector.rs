@@ -16,10 +16,10 @@ use crate::tinyvg;
 /// A supported vector file format.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VectorFormat {
-    /// Binary TinyVG.
-    TinyVg,
     /// Scalable Vector Graphics.
     Svg,
+    /// Binary TinyVG.
+    TinyVg,
 }
 
 /// A vector decoding failure.
@@ -86,7 +86,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    #[cfg(any(feature = "tinyvg", feature = "svg"))]
+    #[cfg(any(feature = "svg", feature = "tinyvg"))]
     pub(crate) fn from_points(a: Point, b: Point) -> Self {
         Self {
             x: a.x.min(b.x),
@@ -96,7 +96,7 @@ impl Rect {
         }
     }
 
-    #[cfg(any(feature = "tinyvg", feature = "svg"))]
+    #[cfg(any(feature = "svg", feature = "tinyvg"))]
     pub(crate) fn include(&mut self, point: Point) {
         let max_x = (self.x + self.width).max(point.x);
         let max_y = (self.y + self.height).max(point.y);
@@ -106,7 +106,7 @@ impl Rect {
         self.height = max_y - self.y;
     }
 
-    #[cfg(any(feature = "tinyvg", feature = "svg"))]
+    #[cfg(any(feature = "svg", feature = "tinyvg"))]
     pub(crate) fn expand(self, amount: f64) -> Self {
         Self {
             x: self.x - amount,
@@ -335,6 +335,29 @@ pub enum MaskType {
     Luminance,
 }
 
+/// Compositing operation used when drawing a vector element or group.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BlendMode {
+    /// Source-over compositing without color blending.
+    #[default]
+    Normal,
+    Multiply,
+    Screen,
+    Overlay,
+    Darken,
+    Lighten,
+    ColorDodge,
+    ColorBurn,
+    HardLight,
+    SoftLight,
+    Difference,
+    Exclusion,
+    Hue,
+    Saturation,
+    Color,
+    Luminosity,
+}
+
 /// A resolved local SVG mask.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mask {
@@ -352,6 +375,8 @@ pub enum DrawCommand {
     /// Saves graphics state, applies optional clipping, and starts opacity isolation.
     PushScope {
         opacity: f64,
+        blend_mode: BlendMode,
+        isolated: bool,
         clips: Vec<Clip>,
         mask: Option<Mask>,
         bounds: Rect,
@@ -422,7 +447,7 @@ impl VectorImage {
             .map(|(index, paint)| (PaintId(index), paint))
     }
 
-    #[cfg(any(feature = "tinyvg", feature = "svg"))]
+    #[cfg(any(feature = "svg", feature = "tinyvg"))]
     pub(crate) const fn new(format: VectorFormat, size: Size) -> Self {
         Self {
             format,
@@ -432,19 +457,19 @@ impl VectorImage {
             commands: Vec::new(),
         }
     }
-    #[cfg(any(feature = "tinyvg", feature = "svg"))]
+    #[cfg(any(feature = "svg", feature = "tinyvg"))]
     pub(crate) fn add_path(&mut self, path: Vec<PathSegment>) -> PathId {
         let id = PathId(self.paths.len());
         self.paths.push(path);
         id
     }
-    #[cfg(any(feature = "tinyvg", feature = "svg"))]
+    #[cfg(any(feature = "svg", feature = "tinyvg"))]
     pub(crate) fn add_paint(&mut self, paint: Paint) -> PaintId {
         let id = PaintId(self.paints.len());
         self.paints.push(paint);
         id
     }
-    #[cfg(any(feature = "tinyvg", feature = "svg"))]
+    #[cfg(any(feature = "svg", feature = "tinyvg"))]
     pub(crate) fn push(&mut self, command: DrawCommand) {
         self.commands.push(command);
     }
@@ -1201,7 +1226,7 @@ fn append_tinyvg_operation(
     }
 }
 
-#[cfg(any(feature = "tinyvg", feature = "svg"))]
+#[cfg(any(feature = "svg", feature = "tinyvg"))]
 pub(crate) fn path_bounds(path: &[PathSegment]) -> Option<Rect> {
     let mut bounds = None;
     for segment in path {
@@ -1226,7 +1251,7 @@ pub(crate) fn path_bounds(path: &[PathSegment]) -> Option<Rect> {
     bounds
 }
 
-#[cfg(any(feature = "tinyvg", feature = "svg"))]
+#[cfg(any(feature = "svg", feature = "tinyvg"))]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn append_arc(
     output: &mut Vec<PathSegment>,

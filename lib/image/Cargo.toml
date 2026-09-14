@@ -13,15 +13,15 @@ workspace = true
 path = "src/mod.rs"
 
 [features]
-default = ["qoi", "jpeg", "png", "gif", "bmp", "ico", "tinyvg", "svg"]
+default = ["qoi", "jpeg", "png", "gif", "bmp", "ico", "svg", "tinyvg"]
 qoi = []
 jpeg = []
 png = ["dep:miniz_oxide"]
 gif = []
 bmp = []
 ico = ["bmp", "png"]
-tinyvg = []
 svg = ["dep:xmlparser"]
+tinyvg = []
 
 [dependencies]
 miniz_oxide = { version = "0.9.1", optional = true }
