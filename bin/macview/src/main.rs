@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A native macOS document-based image viewer.
+#![doc = include_str!("../README.md")]
 
 #![allow(unsafe_code)]
 

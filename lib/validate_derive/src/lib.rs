@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Validation derive macro's library
+#![doc = include_str!("../README.md")]
 
 use proc_macro::TokenStream;
 use quote::{ToTokens, quote};

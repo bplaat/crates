@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! OpenAPI Generator cli
+#![doc = include_str!("../../README.md")]
 
 use openapi_generator::{Generator, generate_schemas};
 

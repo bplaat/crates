@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Native GPU rendering for bwindow using Metal, Vulkan, or Direct3D 12.
-//!
-//! This crate shares some API design with upstream wgpu but is not API-compatible
-//! with it. GPU objects remain on their creating thread.
+#![doc = include_str!("../README.md")]
 #![allow(missing_docs)]
 #![allow(unsafe_code)]
 #![allow(clippy::undocumented_unsafe_blocks)]

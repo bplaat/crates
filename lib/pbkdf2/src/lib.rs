@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A PBKDF2-HMAC-SHA256 password hashing library
+#![doc = include_str!("../README.md")]
 
 use hmac::hmac;
 use sha2::Sha256;

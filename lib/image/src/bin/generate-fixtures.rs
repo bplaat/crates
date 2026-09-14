@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Generator for the checked-in image decoder fixtures.
+#![doc = include_str!("../../README.md")]
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};

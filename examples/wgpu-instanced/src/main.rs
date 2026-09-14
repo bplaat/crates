@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Showcases instancing, storage buffers, texture arrays, mipmaps, and render textures.
+#![doc = include_str!("../README.md")]
 
 use std::num::NonZeroU64;
 use std::time::{Duration, Instant};

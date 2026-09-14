@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple and small websocket library for the [small-http](lib/small-http) library
+#![doc = include_str!("../README.md")]
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};

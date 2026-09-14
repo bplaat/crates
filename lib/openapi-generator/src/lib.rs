@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! OpenAPI Generator
+#![doc = include_str!("../README.md")]
 
 use std::path::Path;
 use std::str::FromStr;

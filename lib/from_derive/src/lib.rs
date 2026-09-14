@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A [FromEnum] and [FromStruct] derive macro library
+#![doc = include_str!("../README.md")]
 
 use proc_macro::TokenStream;
 use quote::quote;

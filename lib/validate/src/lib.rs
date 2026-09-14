@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple struct validation library
+#![doc = include_str!("../README.md")]
 
 use std::collections::HashMap;
 use std::error;

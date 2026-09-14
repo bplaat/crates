@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A simple Cargo plugin that builds macOS application bundles.
+#![doc = include_str!("../README.md")]
 
 use std::fs;
 use std::process::{ExitCode, exit};

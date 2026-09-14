@@ -4,14 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Complete-file raster decoding to straight-alpha RGBA8 frames.
-//!
-//! Supports QOI, 8-bit sequential/progressive JPEG, PNG/APNG up to 8 bits per
-//! channel, GIF, common BMP variants and ICO. Decoding is synchronous and does not
-//! publish intermediate progressive scans. ICC profiles are not applied.
-//! Static SVG decoding supports paths and basic shapes, transforms, inherited
-//! presentation styles, colors, gradients, local references, clips, and masks.
-//! Well-formed unsupported SVG content is ignored so supported content can render.
+#![doc = include_str!("../README.md")]
 
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;

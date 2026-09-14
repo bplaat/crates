@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Build-time native WGSL compilation for this repository's wgpu crate.
-//! Register explicit output names and source paths with [`Builder`].
+#![doc = include_str!("../README.md")]
 
 use std::collections::HashSet;
 use std::env;
