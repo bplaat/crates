@@ -226,15 +226,41 @@ pub(super) fn length(source: &str, percentage: f64) -> Result<f64, VectorDecodeE
     };
     Ok(value
         * match unit {
-            None | Some("px" | "pt") => 1.0,
-            Some("pc") => 12.0,
-            Some("in") => 72.0,
-            Some("cm") => 72.0 / 2.54,
-            Some("mm") => 72.0 / 25.4,
-            Some("Q") => 72.0 / 101.6,
+            None | Some("px") => 1.0,
+            Some("pt") => 96.0 / 72.0,
+            Some("pc") => 16.0,
+            Some("in") => 96.0,
+            Some("cm") => 96.0 / 2.54,
+            Some("mm") => 96.0 / 25.4,
+            Some("Q") => 96.0 / 101.6,
             Some("%") => percentage / 100.0,
             _ => return Err(VectorDecodeError::UnsupportedFeature("length unit")),
         })
+}
+
+pub(super) fn length_list(source: &str, percentage: f64) -> Result<Vec<f64>, VectorDecodeError> {
+    let separated = source.replace(',', " , ");
+    let mut values = Vec::new();
+    let mut needs_value = true;
+    for token in separated.split_ascii_whitespace() {
+        if token == "," {
+            if needs_value {
+                return Err(VectorDecodeError::InvalidData);
+            }
+            needs_value = true;
+        } else {
+            values.push(length(token, percentage)?);
+            needs_value = false;
+        }
+    }
+    if values.is_empty() || needs_value {
+        return Err(VectorDecodeError::InvalidData);
+    }
+    Ok(values)
+}
+
+pub(super) fn normalized_diagonal(width: f64, height: f64) -> f64 {
+    width.hypot(height) / std::f64::consts::SQRT_2
 }
 
 pub(super) fn compatible_length(
@@ -249,7 +275,7 @@ pub(super) fn compatible_length(
 
 pub(super) fn parse_view_box(source: &str) -> Result<Rect, VectorDecodeError> {
     let values = number_list(source)?;
-    if values.len() != 4 || values[2] <= 0.0 || values[3] <= 0.0 {
+    if values.len() != 4 || values[2] < 0.0 || values[3] < 0.0 {
         return Err(VectorDecodeError::InvalidData);
     }
     Ok(Rect {
@@ -400,6 +426,59 @@ pub(super) fn parse_transform(source: &str) -> Result<Transform, VectorDecodeErr
         rest = next;
     }
     Ok(result)
+}
+
+pub(super) fn parse_css_transform(source: &str) -> Result<Transform, VectorDecodeError> {
+    let mut normalized = String::with_capacity(source.len());
+    let mut rest = source.trim();
+    while !rest.is_empty() {
+        let open = rest.find('(').ok_or(VectorDecodeError::InvalidData)?;
+        let close = rest[open + 1..]
+            .find(')')
+            .map(|index| index + open + 1)
+            .ok_or(VectorDecodeError::InvalidData)?;
+        let name = rest[..open].trim();
+        normalized.push_str(name);
+        normalized.push('(');
+        let mut arguments = &rest[open + 1..close];
+        while let Some(index) = arguments.find(|character: char| character.is_ascii_alphabetic()) {
+            normalized.push_str(&arguments[..index]);
+            arguments = &arguments[index..];
+            let end = arguments
+                .find(|character: char| !character.is_ascii_alphabetic())
+                .unwrap_or(arguments.len());
+            let unit = &arguments[..end];
+            let allowed = matches!((name, unit), ("translate", "px"))
+                || matches!((name, unit), ("rotate" | "skewX" | "skewY", "deg"));
+            if allowed {
+                arguments = &arguments[end..];
+            } else if matches!(unit, "e" | "E") {
+                normalized.push_str(unit);
+                arguments = &arguments[end..];
+            } else {
+                return Err(VectorDecodeError::InvalidData);
+            }
+        }
+        normalized.push_str(arguments);
+        normalized.push(')');
+        let tail = &rest[close + 1..];
+        let mut next = tail.trim_start();
+        let had_whitespace = next.len() != tail.len();
+        if let Some(tail) = next.strip_prefix(',') {
+            next = tail.trim_start();
+            if next.is_empty() {
+                return Err(VectorDecodeError::InvalidData);
+            }
+            normalized.push(' ');
+        } else if !next.is_empty() {
+            if !had_whitespace {
+                return Err(VectorDecodeError::InvalidData);
+            }
+            normalized.push(' ');
+        }
+        rest = next;
+    }
+    parse_transform(&normalized)
 }
 
 pub(super) fn rotation(angle: f64) -> Transform {

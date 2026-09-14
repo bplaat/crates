@@ -6,8 +6,7 @@
 
 use xmlparser::{Token, Tokenizer};
 
-use self::render::Builder;
-use self::xml::XmlDocument;
+use self::render::Decoder;
 use crate::{VectorDecodeError, VectorImage};
 
 mod geometry;
@@ -20,9 +19,15 @@ mod xml;
 const SVG_NS: &str = "http://www.w3.org/2000/svg";
 const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
 const XMLNS_NS: &str = "http://www.w3.org/2000/xmlns/";
+const MAX_SOURCE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_ELEMENTS: usize = 1_000_000;
 const MAX_DEPTH: usize = 256;
 const MAX_ITEMS: usize = 1_000_000;
+const MAX_ATTRIBUTES: usize = 1_000_000;
+const MAX_STYLESHEET_BYTES: usize = 4 * 1024 * 1024;
+const MAX_CSS_RULES: usize = 65_536;
+const MAX_CSS_SELECTORS: usize = 65_536;
+const MAX_CSS_DECLARATIONS: usize = 262_144;
 
 pub(crate) fn is_svg(data: &[u8]) -> bool {
     let Ok(source) = std::str::from_utf8(data) else {
@@ -43,9 +48,7 @@ pub(crate) fn is_svg(data: &[u8]) -> bool {
 }
 
 pub(crate) fn decode(data: &[u8]) -> Result<VectorImage, VectorDecodeError> {
-    let source = std::str::from_utf8(data).map_err(|_| VectorDecodeError::InvalidData)?;
-    let document = XmlDocument::parse(source.strip_prefix('\u{feff}').unwrap_or(source))?;
-    Builder::new(&document)?.build()
+    Decoder::new(data)?.decode()
 }
 
 #[cfg(test)]

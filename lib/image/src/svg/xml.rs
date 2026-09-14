@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use xmlparser::{ElementEnd, Token, Tokenizer};
 
-use super::{MAX_DEPTH, MAX_ELEMENTS, SVG_NS, XML_NS, XMLNS_NS};
+use super::{MAX_ATTRIBUTES, MAX_DEPTH, MAX_ELEMENTS, SVG_NS, XML_NS, XMLNS_NS};
 use crate::VectorDecodeError;
 
 #[derive(Debug)]
@@ -19,6 +19,23 @@ pub(super) struct Element<'a> {
     pub(super) children: Vec<usize>,
     pub(super) parent: Option<usize>,
     pub(super) is_svg: bool,
+    pub(super) text: String,
+}
+
+impl Element<'_> {
+    pub(super) fn attr(&self, name: &str) -> Option<&str> {
+        self.attributes
+            .iter()
+            .find(|&&(prefix, local, _)| prefix.is_empty() && local == name)
+            .map(|&(_, _, value)| value)
+    }
+
+    pub(super) fn attr_prefixed(&self, wanted_prefix: &str, name: &str) -> Option<&str> {
+        self.attributes
+            .iter()
+            .find(|&&(prefix, local, _)| prefix == wanted_prefix && local == name)
+            .map(|&(_, _, value)| value)
+    }
 }
 
 pub(super) struct XmlDocument<'a> {
@@ -34,6 +51,7 @@ impl<'a> XmlDocument<'a> {
         let mut pending = None;
         let mut roots = Vec::new();
         let mut ids = HashMap::new();
+        let mut attributes = 0usize;
         for token in Tokenizer::from(source) {
             match token.map_err(|_| VectorDecodeError::InvalidData)? {
                 Token::ElementStart { prefix, local, .. } => {
@@ -51,6 +69,7 @@ impl<'a> XmlDocument<'a> {
                         children: Vec::new(),
                         parent: None,
                         is_svg: false,
+                        text: String::new(),
                     });
                     pending = Some(index);
                 }
@@ -61,6 +80,12 @@ impl<'a> XmlDocument<'a> {
                     ..
                 } => {
                     let index = pending.ok_or(VectorDecodeError::InvalidData)?;
+                    attributes = attributes
+                        .checked_add(1)
+                        .ok_or(VectorDecodeError::ResourceLimit)?;
+                    if attributes > MAX_ATTRIBUTES {
+                        return Err(VectorDecodeError::ResourceLimit);
+                    }
                     let name = local.as_str();
                     let prefix = prefix.as_str();
                     if elements[index]
@@ -108,10 +133,16 @@ impl<'a> XmlDocument<'a> {
                     if stack.is_empty() && !text.as_str().trim().is_empty() {
                         return Err(VectorDecodeError::InvalidData);
                     }
+                    if let Some(index) = stack.last() {
+                        elements[*index].text.push_str(text.as_str());
+                    }
                 }
                 Token::Cdata { text, .. } => {
                     if stack.is_empty() && !text.as_str().trim().is_empty() {
                         return Err(VectorDecodeError::InvalidData);
+                    }
+                    if let Some(index) = stack.last() {
+                        elements[*index].text.push_str(text.as_str());
                     }
                 }
                 Token::DtdStart { .. }
@@ -129,19 +160,19 @@ impl<'a> XmlDocument<'a> {
             return Err(VectorDecodeError::InvalidData);
         }
         let namespaces = (0..elements.len())
-            .map(|index| element_namespace(&elements, index))
+            .map(|index| Self::element_namespace(&elements, index))
             .collect::<Result<Vec<_>, _>>()?;
         if namespaces[root].is_some_and(|namespace| namespace != SVG_NS) {
             return Err(VectorDecodeError::InvalidData);
         }
         for (index, namespace) in namespaces.into_iter().enumerate() {
             elements[index].is_svg = namespace.is_none_or(|namespace| namespace == SVG_NS);
-            validate_namespace_declarations(&elements[index])?;
+            Self::validate_namespace_declarations(&elements[index])?;
             for &(prefix, _, _) in &elements[index].attributes {
                 if !prefix.is_empty()
                     && prefix != "xmlns"
                     && prefix != "xml"
-                    && resolve_namespace(&elements, index, prefix).is_none()
+                    && Self::resolve_namespace(&elements, index, prefix).is_none()
                 {
                     return Err(VectorDecodeError::InvalidData);
                 }
@@ -153,7 +184,7 @@ impl<'a> XmlDocument<'a> {
                 let namespace = if prefix.is_empty() {
                     None
                 } else {
-                    resolve_namespace(&elements, index, prefix)
+                    Self::resolve_namespace(&elements, index, prefix)
                 };
                 if elements[index].attributes[..position].iter().any(
                     |&(other_prefix, other_name, _)| {
@@ -163,7 +194,7 @@ impl<'a> XmlDocument<'a> {
                             && (if other_prefix.is_empty() {
                                 None
                             } else {
-                                resolve_namespace(&elements, index, other_prefix)
+                                Self::resolve_namespace(&elements, index, other_prefix)
                             }) == namespace
                     },
                 ) {
@@ -177,63 +208,62 @@ impl<'a> XmlDocument<'a> {
             ids,
         })
     }
-}
-
-fn element_namespace<'a>(
-    elements: &[Element<'a>],
-    index: usize,
-) -> Result<Option<&'a str>, VectorDecodeError> {
-    let prefix = elements[index].prefix;
-    if prefix.is_empty() {
-        Ok(resolve_namespace(elements, index, ""))
-    } else {
-        resolve_namespace(elements, index, prefix)
-            .map(Some)
-            .ok_or(VectorDecodeError::InvalidData)
-    }
-}
-
-fn resolve_namespace<'a>(
-    elements: &[Element<'a>],
-    mut index: usize,
-    prefix: &str,
-) -> Option<&'a str> {
-    if prefix == "xml" {
-        return Some(XML_NS);
-    }
-    loop {
-        let declaration =
-            elements[index]
-                .attributes
-                .iter()
-                .find(|&&(attribute_prefix, name, _)| {
-                    if prefix.is_empty() {
-                        attribute_prefix.is_empty() && name == "xmlns"
-                    } else {
-                        attribute_prefix == "xmlns" && name == prefix
-                    }
-                });
-        if let Some(&(_, _, namespace)) = declaration {
-            return Some(namespace);
+    fn element_namespace(
+        elements: &[Element<'a>],
+        index: usize,
+    ) -> Result<Option<&'a str>, VectorDecodeError> {
+        let prefix = elements[index].prefix;
+        if prefix.is_empty() {
+            Ok(Self::resolve_namespace(elements, index, ""))
+        } else {
+            Self::resolve_namespace(elements, index, prefix)
+                .map(Some)
+                .ok_or(VectorDecodeError::InvalidData)
         }
-        index = elements[index].parent?;
     }
-}
 
-fn validate_namespace_declarations(element: &Element<'_>) -> Result<(), VectorDecodeError> {
-    for &(prefix, name, value) in &element.attributes {
-        if prefix.is_empty() && name == "xmlns" {
-            if matches!(value, XML_NS | XMLNS_NS) {
+    fn resolve_namespace(
+        elements: &[Element<'a>],
+        mut index: usize,
+        prefix: &str,
+    ) -> Option<&'a str> {
+        if prefix == "xml" {
+            return Some(XML_NS);
+        }
+        loop {
+            let declaration =
+                elements[index]
+                    .attributes
+                    .iter()
+                    .find(|&&(attribute_prefix, name, _)| {
+                        if prefix.is_empty() {
+                            attribute_prefix.is_empty() && name == "xmlns"
+                        } else {
+                            attribute_prefix == "xmlns" && name == prefix
+                        }
+                    });
+            if let Some(&(_, _, namespace)) = declaration {
+                return Some(namespace);
+            }
+            index = elements[index].parent?;
+        }
+    }
+
+    fn validate_namespace_declarations(element: &Element<'_>) -> Result<(), VectorDecodeError> {
+        for &(prefix, name, value) in &element.attributes {
+            if prefix.is_empty() && name == "xmlns" {
+                if matches!(value, XML_NS | XMLNS_NS) {
+                    return Err(VectorDecodeError::InvalidData);
+                }
+            } else if prefix == "xmlns"
+                && (value.is_empty()
+                    || name == "xmlns"
+                    || name == "xml" && value != XML_NS
+                    || name != "xml" && matches!(value, XML_NS | XMLNS_NS))
+            {
                 return Err(VectorDecodeError::InvalidData);
             }
-        } else if prefix == "xmlns"
-            && (value.is_empty()
-                || name == "xmlns"
-                || name == "xml" && value != XML_NS
-                || name != "xml" && matches!(value, XML_NS | XMLNS_NS))
-        {
-            return Err(VectorDecodeError::InvalidData);
         }
+        Ok(())
     }
-    Ok(())
 }

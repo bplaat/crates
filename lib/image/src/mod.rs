@@ -25,8 +25,8 @@ use std::time::Duration;
 mod test_support;
 mod vector;
 pub use vector::{
-    Clip, Color, DrawCommand, FillRule, GradientStop, LineCap, LineJoin, Mask, MaskType, Paint,
-    PaintId, PathId, PathSegment, Point, Rect, Size, SpreadMethod, StrokeStyle, Transform,
+    BlendMode, Clip, Color, DrawCommand, FillRule, GradientStop, LineCap, LineJoin, Mask, MaskType,
+    Paint, PaintId, PathId, PathSegment, Point, Rect, Size, SpreadMethod, StrokeStyle, Transform,
     VectorColorSpace, VectorDecodeError, VectorFormat, VectorImage,
 };
 
@@ -234,17 +234,17 @@ pub fn decode(_data: &[u8]) -> Result<Image> {
 
 /// Detects a supported vector format without fully decoding it.
 #[cfg_attr(
-    not(any(feature = "tinyvg", feature = "svg")),
+    not(any(feature = "svg", feature = "tinyvg")),
     allow(clippy::missing_const_for_fn)
 )]
 pub fn vector_format(_data: &[u8]) -> Option<VectorFormat> {
-    #[cfg(feature = "tinyvg")]
-    if tinyvg::is_tinyvg(_data) {
-        return Some(VectorFormat::TinyVg);
-    }
     #[cfg(feature = "svg")]
     if svg::is_svg(_data) {
         return Some(VectorFormat::Svg);
+    }
+    #[cfg(feature = "tinyvg")]
+    if tinyvg::is_tinyvg(_data) {
+        return Some(VectorFormat::TinyVg);
     }
     None
 }
@@ -255,10 +255,10 @@ pub fn decode_vector(data: &[u8]) -> std::result::Result<VectorImage, VectorDeco
         return Err(VectorDecodeError::ResourceLimit);
     }
     match vector_format(data) {
-        #[cfg(feature = "tinyvg")]
-        Some(VectorFormat::TinyVg) => vector::decode_tinyvg(data),
         #[cfg(feature = "svg")]
         Some(VectorFormat::Svg) => svg::decode(data),
+        #[cfg(feature = "tinyvg")]
+        Some(VectorFormat::TinyVg) => vector::decode_tinyvg(data),
         _ => Err(VectorDecodeError::InvalidMagic),
     }
 }

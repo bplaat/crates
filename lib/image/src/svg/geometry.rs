@@ -12,6 +12,216 @@ use crate::{
     VectorDecodeError, VectorImage,
 };
 
+pub(super) struct PathMetrics<'a> {
+    path: &'a [PathSegment],
+}
+
+impl<'a> PathMetrics<'a> {
+    pub(super) const fn new(path: &'a [PathSegment]) -> Self {
+        Self { path }
+    }
+
+    pub(super) fn length(&self) -> f64 {
+        let curves = self
+            .path
+            .iter()
+            .filter(|segment| {
+                matches!(
+                    segment,
+                    PathSegment::QuadraticTo { .. } | PathSegment::CubicTo { .. }
+                )
+            })
+            .count();
+        let curve_steps = (65_536 / curves.max(1)).clamp(1, 32);
+        let mut length = 0.0;
+        let mut current = Point { x: 0.0, y: 0.0 };
+        let mut start = current;
+        for segment in self.path {
+            match *segment {
+                PathSegment::MoveTo(point) => {
+                    current = point;
+                    start = point;
+                }
+                PathSegment::LineTo(point) => {
+                    length += distance(current, point);
+                    current = point;
+                }
+                PathSegment::QuadraticTo { control, to } => {
+                    length += curve_length(current, curve_steps, |t| {
+                        let u = 1.0 - t;
+                        Point {
+                            x: u * u * current.x + 2.0 * u * t * control.x + t * t * to.x,
+                            y: u * u * current.y + 2.0 * u * t * control.y + t * t * to.y,
+                        }
+                    });
+                    current = to;
+                }
+                PathSegment::CubicTo {
+                    control_0,
+                    control_1,
+                    to,
+                } => {
+                    length += curve_length(current, curve_steps, |t| {
+                        let u = 1.0 - t;
+                        Point {
+                            x: u * u * u * current.x
+                                + 3.0 * u * u * t * control_0.x
+                                + 3.0 * u * t * t * control_1.x
+                                + t * t * t * to.x,
+                            y: u * u * u * current.y
+                                + 3.0 * u * u * t * control_0.y
+                                + 3.0 * u * t * t * control_1.y
+                                + t * t * t * to.y,
+                        }
+                    });
+                    current = to;
+                }
+                PathSegment::Close => {
+                    length += distance(current, start);
+                    current = start;
+                }
+            }
+        }
+        length
+    }
+}
+
+fn curve_length(mut previous: Point, steps: usize, point: impl Fn(f64) -> Point) -> f64 {
+    let mut length = 0.0;
+    for step in 1..=steps {
+        let current = point(step as f64 / steps as f64);
+        length += distance(previous, current);
+        previous = current;
+    }
+    length
+}
+
+fn distance(a: Point, b: Point) -> f64 {
+    (b.x - a.x).hypot(b.y - a.y)
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct MarkerPlacement {
+    pub(super) point: Point,
+    pub(super) angle: f64,
+}
+
+impl PathMetrics<'_> {
+    pub(super) fn marker_positions(
+        &self,
+    ) -> (
+        Vec<MarkerPlacement>,
+        Vec<MarkerPlacement>,
+        Vec<MarkerPlacement>,
+    ) {
+        let mut starts = Vec::new();
+        let mut mids = Vec::new();
+        let mut ends = Vec::new();
+        let mut vertices = Vec::<(Point, Option<Point>, Option<Point>)>::new();
+        let flush = |vertices: &mut Vec<(Point, Option<Point>, Option<Point>)>,
+                     starts: &mut Vec<MarkerPlacement>,
+                     mids: &mut Vec<MarkerPlacement>,
+                     ends: &mut Vec<MarkerPlacement>| {
+            if vertices.len() < 2 {
+                vertices.clear();
+                return;
+            }
+            let angle = |incoming: Option<Point>, outgoing: Option<Point>| {
+                let unit = |point: Point| {
+                    let length = point.x.hypot(point.y);
+                    (length > 0.0).then(|| Point {
+                        x: point.x / length,
+                        y: point.y / length,
+                    })
+                };
+                match (incoming.and_then(unit), outgoing.and_then(unit)) {
+                    (Some(a), Some(b)) if (a.x + b.x).hypot(a.y + b.y) > 1e-12 => {
+                        (a.y + b.y).atan2(a.x + b.x)
+                    }
+                    (Some(a), _) => a.y.atan2(a.x),
+                    (_, Some(b)) => b.y.atan2(b.x),
+                    _ => 0.0,
+                }
+            };
+            let first = vertices[0];
+            let last = *vertices.last().expect("at least two marker vertices");
+            starts.push(MarkerPlacement {
+                point: first.0,
+                angle: angle(None, first.2),
+            });
+            for vertex in &vertices[1..vertices.len() - 1] {
+                mids.push(MarkerPlacement {
+                    point: vertex.0,
+                    angle: angle(vertex.1, vertex.2),
+                });
+            }
+            ends.push(MarkerPlacement {
+                point: last.0,
+                angle: angle(last.1, None),
+            });
+            vertices.clear();
+        };
+        let mut current = Point { x: 0.0, y: 0.0 };
+        let mut start = current;
+        for segment in self.path {
+            match *segment {
+                PathSegment::MoveTo(point) => {
+                    flush(&mut vertices, &mut starts, &mut mids, &mut ends);
+                    current = point;
+                    start = point;
+                    vertices.push((point, None, None));
+                }
+                PathSegment::LineTo(to) => {
+                    append_marker_vertex(&mut vertices, current, to, current, to);
+                    current = to;
+                }
+                PathSegment::QuadraticTo { control, to } => {
+                    append_marker_vertex(&mut vertices, current, control, control, to);
+                    current = to;
+                }
+                PathSegment::CubicTo {
+                    control_0,
+                    control_1,
+                    to,
+                } => {
+                    append_marker_vertex(&mut vertices, current, control_0, control_1, to);
+                    current = to;
+                }
+                PathSegment::Close => {
+                    append_marker_vertex(&mut vertices, current, start, current, start);
+                    current = start;
+                }
+            }
+        }
+        flush(&mut vertices, &mut starts, &mut mids, &mut ends);
+        (starts, mids, ends)
+    }
+}
+
+fn append_marker_vertex(
+    vertices: &mut Vec<(Point, Option<Point>, Option<Point>)>,
+    from: Point,
+    first_control: Point,
+    last_control: Point,
+    to: Point,
+) {
+    let outgoing = Point {
+        x: first_control.x - from.x,
+        y: first_control.y - from.y,
+    };
+    if let Some(vertex) = vertices.last_mut() {
+        vertex.2 = Some(outgoing);
+    }
+    vertices.push((
+        to,
+        Some(Point {
+            x: to.x - last_control.x,
+            y: to.y - last_control.y,
+        }),
+        None,
+    ));
+}
+
 pub(super) fn transform_bounds(bounds: Rect, transform: Transform) -> Rect {
     let points = [
         transform.map(Point {

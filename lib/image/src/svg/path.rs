@@ -5,116 +5,90 @@
  */
 
 use super::MAX_ITEMS;
-use super::values::{NumberParser, length};
+use super::style::{GeometryStyle, GeometryValue};
+use super::values::NumberParser;
 use super::xml::Element;
 use crate::vector::append_arc;
 use crate::{PathSegment, Point, VectorDecodeError};
 
-pub(super) fn shape_path(
-    element: &Element<'_>,
-    viewport: crate::Size,
-) -> Result<Option<Vec<PathSegment>>, VectorDecodeError> {
-    let x = |name| {
-        element
-            .attr(name)
-            .map(|v| length(v, viewport.width))
-            .transpose()
-            .map(|v| v.unwrap_or(0.0))
-    };
-    let y = |name| {
-        element
-            .attr(name)
-            .map(|v| length(v, viewport.height))
-            .transpose()
-            .map(|v| v.unwrap_or(0.0))
-    };
-    Ok(match element.name {
-        "path" => Some(parse_path(element.attr("d").unwrap_or(""))?),
-        "line" => Some(vec![
-            PathSegment::MoveTo(Point {
-                x: x("x1")?,
-                y: y("y1")?,
-            }),
-            PathSegment::LineTo(Point {
-                x: x("x2")?,
-                y: y("y2")?,
-            }),
-        ]),
-        "polyline" | "polygon" => {
-            let points = point_list(element.attr("points").unwrap_or(""))?;
-            if points.is_empty() {
-                Some(Vec::new())
-            } else {
-                let mut path = vec![PathSegment::MoveTo(points[0])];
-                path.extend(points[1..].iter().copied().map(PathSegment::LineTo));
-                if element.name == "polygon" {
-                    path.push(PathSegment::Close);
+impl GeometryStyle {
+    pub(super) fn path(
+        &self,
+        element: &Element<'_>,
+    ) -> Result<Option<Vec<PathSegment>>, VectorDecodeError> {
+        let value = |value: Option<GeometryValue>| value.map_or(0.0, |value| value.length_or(0.0));
+        Ok(match element.name {
+            "path" => Some(parse_path(element.attr("d").unwrap_or(""))?),
+            "line" => Some(vec![
+                PathSegment::MoveTo(Point {
+                    x: value(self.x1),
+                    y: value(self.y1),
+                }),
+                PathSegment::LineTo(Point {
+                    x: value(self.x2),
+                    y: value(self.y2),
+                }),
+            ]),
+            "polyline" | "polygon" => {
+                let points = point_list(element.attr("points").unwrap_or(""))?;
+                if points.is_empty() {
+                    Some(Vec::new())
+                } else {
+                    let mut path = vec![PathSegment::MoveTo(points[0])];
+                    path.extend(points[1..].iter().copied().map(PathSegment::LineTo));
+                    if element.name == "polygon" {
+                        path.push(PathSegment::Close);
+                    }
+                    Some(path)
                 }
-                Some(path)
             }
-        }
-        "rect" => {
-            let px = x("x")?;
-            let py = y("y")?;
-            let width = x("width")?;
-            let height = y("height")?;
-            if width < 0.0 || height < 0.0 {
-                return Err(VectorDecodeError::InvalidData);
+            "rect" => {
+                let px = value(self.x);
+                let py = value(self.y);
+                let width = value(self.width);
+                let height = value(self.height);
+                if width <= 0.0 || height <= 0.0 {
+                    return Ok(Some(Vec::new()));
+                }
+                let (rx, ry) = Self::radius_pair(self.rx, self.ry);
+                Some(rect_path(px, py, width, height, rx, ry))
             }
-            let mut rx = element
-                .attr("rx")
-                .map(|v| length(v, viewport.width))
-                .transpose()?
-                .unwrap_or(0.0);
-            let mut ry = element
-                .attr("ry")
-                .map(|v| length(v, viewport.height))
-                .transpose()?
-                .unwrap_or(rx);
-            if element.attr("rx").is_some() && element.attr("ry").is_none() {
-                ry = rx;
+            "circle" => {
+                let cx = value(self.cx);
+                let cy = value(self.cy);
+                let r = value(self.r);
+                if r <= 0.0 {
+                    return Ok(Some(Vec::new()));
+                }
+                Some(ellipse_path(cx, cy, r, r))
             }
-            if element.attr("ry").is_some() && element.attr("rx").is_none() {
-                rx = ry;
+            "ellipse" => {
+                let cx = value(self.cx);
+                let cy = value(self.cy);
+                let (rx, ry) = Self::radius_pair(self.rx, self.ry);
+                if rx <= 0.0 || ry <= 0.0 {
+                    return Ok(Some(Vec::new()));
+                }
+                Some(ellipse_path(cx, cy, rx, ry))
             }
-            if rx < 0.0 || ry < 0.0 {
-                return Err(VectorDecodeError::InvalidData);
-            }
-            Some(rect_path(px, py, width, height, rx, ry))
-        }
-        "circle" => {
-            let cx = x("cx")?;
-            let cy = y("cy")?;
-            let r = element
-                .attr("r")
-                .map(|v| length(v, viewport.width.min(viewport.height)))
-                .transpose()?
-                .unwrap_or(0.0);
-            if r < 0.0 {
-                return Err(VectorDecodeError::InvalidData);
-            }
-            Some(ellipse_path(cx, cy, r, r))
-        }
-        "ellipse" => {
-            let cx = x("cx")?;
-            let cy = y("cy")?;
-            let rx = element
-                .attr("rx")
-                .map(|v| length(v, viewport.width))
-                .transpose()?
-                .unwrap_or(0.0);
-            let ry = element
-                .attr("ry")
-                .map(|v| length(v, viewport.height))
-                .transpose()?
-                .unwrap_or(0.0);
-            if rx < 0.0 || ry < 0.0 {
-                return Err(VectorDecodeError::InvalidData);
-            }
-            Some(ellipse_path(cx, cy, rx, ry))
-        }
-        _ => None,
-    })
+            _ => None,
+        })
+    }
+
+    fn radius_pair(first: Option<GeometryValue>, second: Option<GeometryValue>) -> (f64, f64) {
+        let first = first.and_then(|value| match value {
+            GeometryValue::Auto => None,
+            GeometryValue::Length(value) => (value >= 0.0).then_some(value),
+        });
+        let second = second.and_then(|value| match value {
+            GeometryValue::Auto => None,
+            GeometryValue::Length(value) => (value >= 0.0).then_some(value),
+        });
+        (
+            first.or(second).unwrap_or(0.0),
+            second.or(first).unwrap_or(0.0),
+        )
+    }
 }
 
 pub(super) fn rect_path(
@@ -216,10 +190,83 @@ pub(super) fn ellipse_path(cx: f64, cy: f64, rx: f64, ry: f64) -> Vec<PathSegmen
     if rx < 0.0 || ry < 0.0 {
         return Vec::new();
     }
-    rect_path(cx - rx, cy - ry, rx * 2.0, ry * 2.0, rx, ry)
+    let k = 0.552_284_749_830_793_6;
+    vec![
+        PathSegment::MoveTo(Point { x: cx + rx, y: cy }),
+        PathSegment::CubicTo {
+            control_0: Point {
+                x: cx + rx,
+                y: cy + ry * k,
+            },
+            control_1: Point {
+                x: cx + rx * k,
+                y: cy + ry,
+            },
+            to: Point { x: cx, y: cy + ry },
+        },
+        PathSegment::CubicTo {
+            control_0: Point {
+                x: cx - rx * k,
+                y: cy + ry,
+            },
+            control_1: Point {
+                x: cx - rx,
+                y: cy + ry * k,
+            },
+            to: Point { x: cx - rx, y: cy },
+        },
+        PathSegment::CubicTo {
+            control_0: Point {
+                x: cx - rx,
+                y: cy - ry * k,
+            },
+            control_1: Point {
+                x: cx - rx * k,
+                y: cy - ry,
+            },
+            to: Point { x: cx, y: cy - ry },
+        },
+        PathSegment::CubicTo {
+            control_0: Point {
+                x: cx + rx * k,
+                y: cy - ry,
+            },
+            control_1: Point {
+                x: cx + rx,
+                y: cy - ry * k,
+            },
+            to: Point { x: cx + rx, y: cy },
+        },
+        PathSegment::Close,
+    ]
 }
 
 pub(super) fn parse_path(source: &str) -> Result<Vec<PathSegment>, VectorDecodeError> {
+    if source.len() > 1024 * 1024 {
+        return Err(VectorDecodeError::ResourceLimit);
+    }
+    if matches!(source.trim(), "" | "none") || source.trim_start().starts_with('#') {
+        return Ok(Vec::new());
+    }
+    match parse_path_strict(source) {
+        Ok(path) => Ok(path),
+        Err(VectorDecodeError::InvalidData) => {
+            for (index, _) in source.char_indices().rev().take(256) {
+                if index == 0 {
+                    continue;
+                }
+                match parse_path_strict(&source[..index]) {
+                    Ok(path) if !path.is_empty() => return Ok(path),
+                    _ => {}
+                }
+            }
+            Err(VectorDecodeError::InvalidData)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn parse_path_strict(source: &str) -> Result<Vec<PathSegment>, VectorDecodeError> {
     let mut parser = NumberParser::new_compact(source);
     let mut path = Vec::new();
     let mut command = None;

@@ -40,7 +40,7 @@ unsafe extern "C" {}
 
 #[link(name = "Foundation", kind = "framework")]
 unsafe extern "C" {
-    /// The class of compile-time constant strings, which [`ns_string!`] fills in at load time.
+    /// The class of compile-time constant strings, which `ns_string!` fills in at load time.
     pub static __CFConstantStringClassReference: Object;
 
     pub(crate) fn NSExtensionMain(argc: i32, argv: *const *const c_char) -> i32;
@@ -58,7 +58,7 @@ unsafe extern "C" {
     pub(crate) static mut DISPATCH_MAIN_QUEUE: u8;
 }
 
-/// Creates an autoreleased `NSString` from a runtime string; use [`ns_string!`] for literals.
+/// Creates an autoreleased `NSString` from a runtime string; use `ns_string!` for literals.
 pub fn ns_string(value: &str) -> *mut Object {
     // SAFETY: NSString copies the valid UTF-8 bytes before the returned object is autoreleased.
     unsafe {
