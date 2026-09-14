@@ -6,7 +6,7 @@ a backend-neutral display list.
 
 ## Example
 
-```rust
+```rs
 let bytes = std::fs::read("picture.png").expect("read image");
 let image = image::decode(&bytes).expect("decode image");
 println!("{}x{}", image.width(), image.height());
