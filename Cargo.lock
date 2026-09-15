@@ -219,6 +219,7 @@ dependencies = [
 name = "ccontinue"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "indexmap",
  "regex",
 ]

@@ -117,8 +117,8 @@ Options:
   -v, --version               Print the version number
 
 Environment:
-  CC                          C compiler command (default: clang)
-  LD                          Linker used by the C compiler
+  CC                          Override the platform C compiler
+  LD                          Linker used by GNU-like compilers
   CFLAGS                      Additional C compiler flags
   LDFLAGS                     Additional linker flags"
         );
@@ -264,13 +264,17 @@ fn setup_std_headers(temp_mgr: &TempFileManager) -> Result<(), String> {
 }
 
 // Extracts the prebuilt standard library archive.
-fn setup_std_archive(temp_mgr: &TempFileManager) -> Result<String, String> {
+fn setup_std_archive(temp_mgr: &TempFileManager, is_like_msvc: bool) -> Result<String, String> {
     let archive = if std::env::var_os("CCONTINUE_SANITIZE_STD").is_some() {
         STD_SANITIZED_ARCHIVE.unwrap_or(STD_ARCHIVE)
     } else {
         STD_ARCHIVE
     };
-    let archive_path = temp_mgr.base_dir().join("libccontinue_std.a");
+    let archive_path = temp_mgr.base_dir().join(if is_like_msvc {
+        "ccontinue_std.lib"
+    } else {
+        "libccontinue_std.a"
+    });
     std::fs::write(&archive_path, archive)
         .map_err(|error| format!("can't write standard library archive: {error}"))?;
 
@@ -280,6 +284,33 @@ fn setup_std_archive(temp_mgr: &TempFileManager) -> Result<String, String> {
         .to_owned())
 }
 
+fn compiler_build(temp_mgr: &TempFileManager, include_paths: &[String]) -> cc::Build {
+    let mut build = cc::Build::new();
+    build
+        .cargo_metadata(false)
+        .target(BUILD_TARGET)
+        .host(BUILD_TARGET)
+        .out_dir(temp_mgr.base_dir())
+        .opt_level(0)
+        .debug(false)
+        .static_crt(BUILD_STATIC_CRT)
+        .std("c11")
+        .warnings(true)
+        .extra_warnings(true)
+        .warnings_into_errors(true)
+        .includes(include_paths);
+    build.flag_if_supported("-Wpedantic");
+    build
+}
+
+fn object_path(path: &str) -> String {
+    std::path::Path::new(path)
+        .with_extension(if cfg!(windows) { "obj" } else { "o" })
+        .to_str()
+        .expect("object path is valid UTF-8")
+        .to_owned()
+}
+
 // Writes generated sources and compiles them for `-c` when requested.
 fn compile_sources(
     temp_mgr: &TempFileManager,
@@ -287,17 +318,19 @@ fn compile_sources(
     sources: &[SourceInput],
     output: &Option<String>,
     flag_compile: bool,
-    cc: &str,
-    cflags: &[String],
-) -> Result<(Vec<String>, bool), String> {
+) -> Result<Vec<String>, String> {
     let mut linker_inputs: Vec<String> = Vec::new();
-    let mut has_sources = false;
 
     for source in sources {
         let path = match source {
             SourceInput::Transpiled { path, .. } | SourceInput::Native(path) => path,
         };
-        if path.ends_with(".o") {
+        if ["o", "obj", "a", "lib"].contains(
+            &std::path::Path::new(path)
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .unwrap_or_default(),
+        ) {
             linker_inputs.push(path.clone());
             continue;
         }
@@ -312,30 +345,30 @@ fn compile_sources(
             SourceInput::Native(path) => path.clone(),
         };
 
+        let mut build = compiler_build(temp_mgr, include_paths);
+        build.file(&source_path);
+        let compiled_objects = build
+            .try_compile_intermediates()
+            .map_err(|error| format!("compiler failed: {error}"))?;
+        let compiled_object = compiled_objects
+            .first()
+            .expect("one source produces one object file");
         if flag_compile {
-            let object_path = output
-                .clone()
-                .unwrap_or_else(|| path.replace(".cc", ".o").replace(".c", ".o"));
-            let mut cmd = Command::new(cc);
-            add_compiler_flags(&mut cmd, include_paths, cflags);
-            cmd.args(["-c", &source_path, "-o", &object_path]);
-            run_tool(&mut cmd, "compiler")?;
+            let destination = output.clone().unwrap_or_else(|| object_path(path));
+            std::fs::copy(compiled_object, &destination)
+                .map_err(|error| format!("can't write {destination}: {error}"))?;
             continue;
         }
 
-        linker_inputs.push(source_path);
-        has_sources = true;
+        linker_inputs.push(
+            compiled_object
+                .to_str()
+                .expect("object path is valid UTF-8")
+                .to_owned(),
+        );
     }
 
-    Ok((linker_inputs, has_sources))
-}
-
-fn add_compiler_flags(cmd: &mut Command, include_paths: &[String], cflags: &[String]) {
-    cmd.args(["--std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror"]);
-    cmd.args(cflags);
-    for include_path in include_paths {
-        cmd.arg(format!("-I{include_path}"));
-    }
+    Ok(linker_inputs)
 }
 
 fn run_tool(cmd: &mut Command, description: &str) -> Result<(), String> {
@@ -349,17 +382,13 @@ fn run_tool(cmd: &mut Command, description: &str) -> Result<(), String> {
 }
 
 // Compiles and links inputs, then optionally runs the resulting executable.
-#[allow(clippy::too_many_arguments)]
 fn link_and_run(
     linker_inputs: &[String],
-    has_sources: bool,
     output: &Option<String>,
     files: &[String],
-    cc: &str,
+    compiler: &cc::Tool,
     ld: Option<&str>,
     flag_run: bool,
-    include_paths: &[String],
-    cflags: &[String],
     ldflags: &[String],
 ) -> Result<i32, String> {
     let exe_path = output.clone().unwrap_or_else(|| {
@@ -371,16 +400,22 @@ fn link_and_run(
         )
     });
 
-    let mut link_cmd = Command::new(cc);
+    let mut link_cmd = compiler.to_command();
     if let Some(ld) = ld {
+        if compiler.is_like_msvc() {
+            return Err("LD is not supported with an MSVC compiler".to_owned());
+        }
         link_cmd.arg(format!("-fuse-ld={ld}"));
     }
-    if has_sources {
-        add_compiler_flags(&mut link_cmd, include_paths, cflags);
-    }
     link_cmd.args(linker_inputs);
-    link_cmd.args(ldflags);
-    link_cmd.args(["-o", &exe_path]);
+    if compiler.is_like_msvc() {
+        link_cmd.arg(format!("/Fe{exe_path}"));
+        if !ldflags.is_empty() {
+            link_cmd.arg("/link").args(ldflags);
+        }
+    } else {
+        link_cmd.args(ldflags).args(["-o", &exe_path]);
+    }
     run_tool(&mut link_cmd, "linker")?;
 
     if flag_run {
@@ -408,9 +443,7 @@ fn env_flags(name: &str) -> Vec<String> {
 
 fn run() -> Result<i32, String> {
     let args = parse_args();
-    let cc = std::env::var("CC").unwrap_or_else(|_| "clang".to_owned());
     let ld = std::env::var("LD").ok();
-    let cflags = env_flags("CFLAGS");
     let ldflags = env_flags("LDFLAGS");
 
     let mut transpiler_include_paths = vec![".".to_owned()];
@@ -433,32 +466,30 @@ fn run() -> Result<i32, String> {
 
     setup_std_headers(&temp_mgr)?;
 
-    let (mut linker_inputs, has_sources) = compile_sources(
+    let compiler = compiler_build(&temp_mgr, &include_paths)
+        .try_get_compiler()
+        .map_err(|error| format!("can't find C compiler: {error}"))?;
+    let mut linker_inputs = compile_sources(
         &temp_mgr,
         &include_paths,
         &sources,
         &args.output,
         args.flag_compile,
-        &cc,
-        &cflags,
     )?;
     if args.flag_compile {
         return Ok(0);
     }
-    let std_archive_path = setup_std_archive(&temp_mgr)?;
+    let std_archive_path = setup_std_archive(&temp_mgr, compiler.is_like_msvc())?;
     linker_inputs.push(std_archive_path);
 
     // Link and optionally run
     link_and_run(
         &linker_inputs,
-        has_sources,
         &args.output,
         &args.files,
-        &cc,
+        &compiler,
         ld.as_deref(),
         args.flag_run,
-        &include_paths,
-        &cflags,
         &ldflags,
     )
 }

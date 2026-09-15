@@ -15,7 +15,6 @@ use regex::Regex;
 const SANITIZER_CFLAGS: &str =
     "-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all";
 const SANITIZER_LDFLAGS: &str = "-fsanitize=address,undefined";
-const OPTIMIZED_CFLAGS: &str = "-O1 -g";
 
 struct TestDirectory {
     path: PathBuf,
@@ -39,12 +38,8 @@ impl Drop for TestDirectory {
     }
 }
 
-const fn compiler_flags() -> (&'static str, &'static str) {
-    if cfg!(target_os = "windows") {
-        (OPTIMIZED_CFLAGS, "")
-    } else {
-        (SANITIZER_CFLAGS, SANITIZER_LDFLAGS)
-    }
+const fn sanitizers_enabled() -> bool {
+    cfg!(any(target_os = "linux", target_os = "macos"))
 }
 
 fn parse_test_meta(filepath: &str) -> (i32, String) {
@@ -133,17 +128,20 @@ fn build_group(
     fs::write(&source_path, merged_source).map_err(|error| error.to_string())?;
 
     let std_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/std");
-    let (cflags, ldflags) = compiler_flags();
-    let result = Command::new(ccc_bin)
+    let mut command = Command::new(ccc_bin);
+    command
         .arg(&source_path)
         .arg("-o")
         .arg(&exe_path)
         .arg("-I")
-        .arg(std_dir)
-        .env("CC", "clang")
-        .env("CFLAGS", cflags)
-        .env("LDFLAGS", ldflags)
-        .env("CCONTINUE_SANITIZE_STD", "1")
+        .arg(std_dir);
+    if sanitizers_enabled() {
+        command
+            .env("CFLAGS", SANITIZER_CFLAGS)
+            .env("LDFLAGS", SANITIZER_LDFLAGS)
+            .env("CCONTINUE_SANITIZE_STD", "1");
+    }
+    let result = command
         .output()
         .map_err(|e| format!("failed to run ccc: {e}"))?;
 
