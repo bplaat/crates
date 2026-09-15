@@ -1,0 +1,176 @@
+openapi: 3.0.0
+info:
+  title: PlaatMoney API
+  description: Self-hosted read-only stock search and price history API
+  version: 0.1.0
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /api/health:
+    get:
+      summary: Check service health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/search:
+    get:
+      summary: Search global ticker symbols
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 80
+      responses:
+        '200':
+          description: Matching instruments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SearchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+  /api/chart/{symbol}:
+    get:
+      summary: Get current quote metadata and historical chart points
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 20
+        - name: range
+          in: query
+          schema:
+            type: string
+            enum: [1d, 5d, 1mo, 6mo, 1y, 5y, max]
+            default: 1d
+      responses:
+        '200':
+          description: Current quote and chart series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+  /api/sync:
+    get:
+      summary: Get durable background import progress
+      responses:
+        '200':
+          description: Current ticker and history synchronization status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatus'
+  /api/sync/stream:
+    get:
+      summary: Stream synchronization status over WebSocket
+      responses:
+        '101':
+          description: WebSocket connection established
+
+components:
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BadGateway:
+      description: Upstream market data is unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Health:
+      type: object
+      required: [status, version]
+      properties:
+        status: { type: string }
+        version: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    SearchResult:
+      type: object
+      required: [symbol, name, exchange, instrumentType]
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        exchange: { type: string }
+        instrumentType: { type: string }
+        sector: { type: string, nullable: true }
+        industry: { type: string, nullable: true }
+    ChartPoint:
+      type: object
+      required: [time, open, high, low, close, volume]
+      properties:
+        time: { type: integer, format: int64 }
+        open: { type: number, format: double }
+        high: { type: number, format: double }
+        low: { type: number, format: double }
+        close: { type: number, format: double }
+        volume: { type: integer, format: int64 }
+    Chart:
+      type: object
+      required: [symbol, name, exchange, instrumentType, currency, timezone, regularMarketPrice, previousClose, change, changePercent, marketTime, range, interval, provider, points]
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        exchange: { type: string }
+        instrumentType: { type: string }
+        currency: { type: string }
+        timezone: { type: string }
+        regularMarketPrice: { type: number, format: double }
+        previousClose: { type: number, format: double }
+        change: { type: number, format: double }
+        changePercent: { type: number, format: double }
+        marketTime: { type: integer, format: int64 }
+        dayHigh: { type: number, format: double, nullable: true }
+        dayLow: { type: number, format: double, nullable: true }
+        volume: { type: integer, format: int64, nullable: true }
+        fiftyTwoWeekHigh: { type: number, format: double, nullable: true }
+        fiftyTwoWeekLow: { type: number, format: double, nullable: true }
+        range: { type: string }
+        interval: { type: string }
+        provider: { type: string }
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChartPoint'
+    SyncStatus:
+      type: object
+      required: [phase, status, current, total, message, errorCount, updatedAt, instrumentCount, historySyncedCount, storedBarCount]
+      properties:
+        phase: { type: string }
+        status: { type: string }
+        current: { type: integer, format: int64 }
+        total: { type: integer, format: int64 }
+        cursor: { type: string, nullable: true }
+        message: { type: string }
+        errorCount: { type: integer, format: int64 }
+        updatedAt: { type: integer, format: int64 }
+        instrumentCount: { type: integer, format: int64 }
+        historySyncedCount: { type: integer, format: int64 }
+        storedBarCount: { type: integer, format: int64 }

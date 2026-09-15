@@ -1,0 +1,22 @@
+{
+    "name": "plaatmoney",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite --mode debug",
+        "build-debug": "tsc -p tsconfig.app.json --noEmit && vite build --mode debug --minify=false",
+        "build-release": "tsc -p tsconfig.app.json --noEmit && vite build --mode release"
+    },
+    "dependencies": {
+        "plaatui": "file:../../../npm-lib/plaatui",
+        "@preact/signals": "^2.3.1",
+        "preact": "^10.26.9"
+    },
+    "devDependencies": {
+        "@preact/preset-vite": "^2.10.1",
+        "@types/node": "^26.1.0",
+        "typescript": "^5.9.3",
+        "vite": "^8.0.0"
+    }
+}
