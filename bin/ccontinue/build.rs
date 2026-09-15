@@ -12,7 +12,6 @@ pub mod ccontinue;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::{env, fs};
 
 use ccontinue::Transpiler;
@@ -28,13 +27,6 @@ fn sorted_files(directory: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn run_command(command: &mut Command, description: &str) {
-    let status = command
-        .status()
-        .unwrap_or_else(|error| panic!("failed to run {description}: {error}"));
-    assert!(status.success(), "{description} failed with {status}");
-}
-
 fn compile_standard_library(
     generated_dir: &Path,
     output_dir: &Path,
@@ -42,47 +34,25 @@ fn compile_standard_library(
     archive_name: &str,
     extra_flags: &[&str],
 ) -> PathBuf {
-    let archive_stem = archive_name.trim_end_matches(".a");
-    let mut object_files = Vec::with_capacity(c_files.len());
-    for (index, c_file) in c_files.iter().enumerate() {
-        let object_file = output_dir.join(format!("{archive_stem}_{index}.o"));
-        let mut command = Command::new("clang");
-        command
-            .arg("-std=c11")
-            .arg("-Wall")
-            .arg("-Wextra")
-            .arg("-Wpedantic")
-            .arg("-Werror")
-            .args(extra_flags)
-            .arg("-I")
-            .arg(generated_dir)
-            .arg("-c")
-            .arg(c_file)
-            .arg("-o")
-            .arg(&object_file);
-        let target = env::var("TARGET").expect("target triple");
-        let host = env::var("HOST").expect("host triple");
-        if target != host {
-            command.arg(format!("--target={target}"));
-        }
-        run_command(&mut command, "clang");
-        object_files.push(object_file);
-    }
-
     let archive_path = output_dir.join(archive_name);
     if archive_path.exists() {
         fs::remove_file(&archive_path).expect("remove old standard library archive");
     }
-    let archiver = env::var("AR").unwrap_or_else(|_| {
-        if cfg!(windows) {
-            "llvm-ar".to_owned()
-        } else {
-            "ar".to_owned()
-        }
-    });
-    let mut command = Command::new(&archiver);
-    command.arg("rcs").arg(&archive_path).args(&object_files);
-    run_command(&mut command, &archiver);
+    let mut build = cc::Build::new();
+    build
+        .cargo_metadata(false)
+        .files(c_files)
+        .include(generated_dir)
+        .out_dir(output_dir)
+        .std("c11")
+        .warnings(true)
+        .extra_warnings(true)
+        .warnings_into_errors(true);
+    build.flag_if_supported("-Wpedantic");
+    for flag in extra_flags {
+        build.flag_if_supported(flag);
+    }
+    build.compile(archive_name);
     archive_path
 }
 
@@ -137,8 +107,15 @@ fn generate_tests(manifest_dir: &Path, output_dir: &Path) {
 }
 
 fn main() {
-    println!("cargo:rerun-if-env-changed=AR");
+    let toolchain = cc::Build::new();
+    let _ = toolchain.get_compiler();
+    let _ = toolchain.get_archiver();
+
+    let target = env::var("TARGET").expect("target triple");
+    println!("cargo:rerun-if-env-changed=CARGO_CFG_TARGET_FEATURE");
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest dir"));
+    let static_crt = env::var("CARGO_CFG_TARGET_FEATURE")
+        .is_ok_and(|features| features.split(',').any(|feature| feature == "crt-static"));
     let std_dir = manifest_dir.join("std");
     println!("cargo:rerun-if-changed={}", std_dir.display());
     let output_dir = PathBuf::from(env::var_os("OUT_DIR").expect("output dir"));
@@ -210,9 +187,10 @@ fn main() {
         "libccontinue_std.a",
         &["-O2"],
     );
-    let sanitizer_archive_path = if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
-        None
-    } else {
+    let sanitizer_archive_path = if matches!(
+        env::var("CARGO_CFG_TARGET_OS").as_deref(),
+        Ok("linux" | "macos")
+    ) {
         Some(compile_standard_library(
             &generated_dir,
             &output_dir,
@@ -226,6 +204,8 @@ fn main() {
                 "-fno-sanitize-recover=all",
             ],
         ))
+    } else {
+        None
     };
 
     let mut generated = String::from(
@@ -239,6 +219,16 @@ fn main() {
     } else {
         generated.push_str("None");
     }
+    generated.push_str(
+        ";\n\
+        pub(crate) const BUILD_TARGET: &str = ",
+    );
+    write!(generated, "{target:?}").expect("write build target");
+    generated.push_str(
+        ";\n\
+        pub(crate) const BUILD_STATIC_CRT: bool = ",
+    );
+    write!(generated, "{static_crt:?}").expect("write static CRT setting");
     generated.push_str(
         ";\n\
         pub(crate) const STD_FILES: &[(&str, &str)] = &[\n",

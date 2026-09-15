@@ -161,7 +161,7 @@ These libraries are minimal replacements for commonly used crates.
 
 ## Getting Started
 
-- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [Hadolint](https://github.com/hadolint/hadolint) and a [LLVM toolchain](https://llvm.org/) (including Clang and clang-format)
+- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [Hadolint](https://github.com/hadolint/hadolint), a C toolchain (such as GCC, Clang or MSVC) and clang-format
 - Install Rust nightly toolchain, `cargo-binstall`, `cargo-deny` and `cargo-nextest`:
 
     ```sh
