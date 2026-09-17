@@ -693,7 +693,19 @@ define_class!(
 
         #[unsafe(method(applicationShouldOpenUntitledFile:))]
         const fn _should_open_untitled_file(&self, _: *mut Object) -> Bool {
-            Bool::NO
+            Bool::YES
+        }
+
+        #[unsafe(method(applicationOpenUntitledFile:))]
+        fn _open_untitled_file(&self, _: *mut Object) -> Bool {
+            // SAFETY: AppKit calls this on the main thread. The shared document controller is
+            // live for the application lifetime and handles the panel and opened documents.
+            unsafe {
+                let controller: *mut Object =
+                    msg_send![class!(NSDocumentController), sharedDocumentController];
+                let _: () = msg_send![controller, openDocument: null_mut::<Object>()];
+            }
+            Bool::YES
         }
 
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
