@@ -85,7 +85,7 @@ pub use imp::TlsStream;
 mod tests {
     use std::io::{Read, Write};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
-    use std::sync::{Arc, Once};
+    use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 
@@ -146,11 +146,6 @@ mod tests {
     }
 
     fn local_tls_server_config(cert_pem: &[u8], key_pem: &[u8]) -> rustls::ServerConfig {
-        static INSTALL_CRYPTO_PROVIDER: Once = Once::new();
-        INSTALL_CRYPTO_PROVIDER.call_once(|| {
-            let _ = rustls::crypto::ring::default_provider().install_default();
-        });
-
         let certs = vec![
             rustls_pki_types::CertificateDer::from_pem_slice(cert_pem)
                 .expect("test certificate should parse"),
@@ -158,7 +153,9 @@ mod tests {
         let key = rustls_pki_types::PrivateKeyDer::from_pem_slice(key_pem)
             .expect("test private key should parse");
 
-        rustls::ServerConfig::builder()
+        rustls::ServerConfig::builder_with_provider(Arc::new(rustls_graviola::default_provider()))
+            .with_safe_default_protocol_versions()
+            .expect("test TLS protocol versions should be supported")
             .with_no_client_auth()
             .with_single_cert(certs, key)
             .expect("test TLS server config should build")

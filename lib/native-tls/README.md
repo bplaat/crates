@@ -31,9 +31,9 @@ Without the `vendored` feature, the platform's native TLS library is used:
 
 With the `vendored` feature, rustls is used on all platforms instead:
 
-| Platform | Backend               | TLS 1.2 | TLS 1.3 |
-| -------- | --------------------- | ------- | ------- |
-| All      | rustls + webpki-roots | Yes     | Yes     |
+| Platform | Backend                          | TLS 1.2 | TLS 1.3 |
+| -------- | -------------------------------- | ------- | ------- |
+| All      | rustls + Graviola + webpki-roots | Yes     | Yes     |
 
 ¹ macOS (without `vendored`) uses the legacy SecureTransport API (deprecated since macOS 10.15 but
 still functional). SecureTransport is limited to TLS 1.2. TLS 1.3 on macOS requires
@@ -45,7 +45,8 @@ callback machinery.
 
 ## Features
 
-- `vendored` - Use [rustls](https://crates.io/crates/rustls) with embedded CA roots
+- `vendored` - Use [rustls](https://crates.io/crates/rustls) with the
+  [Graviola](https://crates.io/crates/rustls-graviola) crypto provider and embedded CA roots
   ([webpki-roots](https://crates.io/crates/webpki-roots)) on all platforms instead of the native
   TLS library. Provides a fully self-contained TLS stack with no system library dependencies and
   supports TLS 1.2 and 1.3 everywhere.

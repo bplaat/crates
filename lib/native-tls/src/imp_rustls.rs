@@ -6,7 +6,7 @@
 
 //! rustls TLS implementation for the `vendored` feature.
 //!
-//! Uses rustls with the ring backend and webpki-roots for embedded CA certificates.
+//! Uses rustls with the Graviola backend and webpki-roots for embedded CA certificates.
 //! Fully self-contained: no system OpenSSL or C compilation required.
 
 use std::io::{self, Read, Write};
@@ -28,9 +28,12 @@ impl TlsConnector {
     pub fn new() -> Result<Self, Error> {
         let mut roots = RootCertStore::empty();
         roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        let config = ClientConfig::builder()
-            .with_root_certificates(roots)
-            .with_no_client_auth();
+        let config =
+            ClientConfig::builder_with_provider(Arc::new(rustls_graviola::default_provider()))
+                .with_safe_default_protocol_versions()
+                .map_err(|e| Error(e.to_string()))?
+                .with_root_certificates(roots)
+                .with_no_client_auth();
         Ok(Self {
             config: Arc::new(config),
         })
@@ -74,16 +77,19 @@ impl TlsConnector {
             }
 
             fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-                rustls::crypto::ring::default_provider()
+                rustls_graviola::default_provider()
                     .signature_verification_algorithms
                     .supported_schemes()
             }
         }
 
-        let config = ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
-            .with_no_client_auth();
+        let config =
+            ClientConfig::builder_with_provider(Arc::new(rustls_graviola::default_provider()))
+                .with_safe_default_protocol_versions()
+                .map_err(|e| Error(e.to_string()))?
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
+                .with_no_client_auth();
         Ok(Self {
             config: Arc::new(config),
         })
