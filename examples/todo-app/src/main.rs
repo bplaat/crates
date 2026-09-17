@@ -11,7 +11,7 @@
 use std::fs;
 
 use bwebview::{WebviewBuilder, WebviewEvent};
-use bwindow::{Event, EventLoopBuilder, LogicalSize, WindowBuilder};
+use bwindow::{Event, EventLoopBuilder, LogicalSize, Theme, WindowBuilder, WindowEvent};
 use directories::ProjectDirs;
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -40,19 +40,28 @@ enum AppEvent {
     Webview(bwindow::WindowId, WebviewEvent),
 }
 
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Dark => 0x222222,
+        Theme::Light => 0xffffff,
+    }
+}
+
 fn main() {
     let event_loop = EventLoopBuilder::new()
         .with_user_event::<AppEvent>()
         .app_id("nl", "bplaat", "TodoApp")
         .build();
 
-    let window = WindowBuilder::new()
+    let mut window = WindowBuilder::new()
         .title("Todo App")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(640.0, 480.0))
+        .background_color(background_color(event_loop.theme()))
         .center()
         .remember_window_state()
         .build();
+    let window_id = window.id();
 
     let mut webview = WebviewBuilder::new(&window)
         .on_event(event_loop.create_proxy(), AppEvent::Webview)
@@ -64,11 +73,12 @@ fn main() {
     fs::create_dir_all(&config_dir).expect("Can't create config directory");
     let todos_config_path = config_dir.join("todos.json");
 
-    event_loop.run(move |event| {
-        if let Event::UserEvent(AppEvent::Webview(
-            _window_id,
-            WebviewEvent::MessageReceive(message),
-        )) = event
+    event_loop.run(move |event| match event {
+        Event::Window(id, WindowEvent::ThemeChanged(theme)) if id == window_id => {
+            window.set_background_color(background_color(theme));
+        }
+        Event::UserEvent(AppEvent::Webview(id, WebviewEvent::MessageReceive(message)))
+            if id == window_id =>
         {
             match serde_json::from_str(&message).expect("Can't parse message") {
                 IpcMessage::GetTodos => {
@@ -91,5 +101,6 @@ fn main() {
                 _ => unimplemented!(),
             }
         }
+        _ => {}
     });
 }

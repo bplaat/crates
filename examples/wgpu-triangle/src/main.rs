@@ -8,6 +8,8 @@
 
 use bwindow::{Event, EventLoop, KeyCode, LogicalSize, Theme, WindowBuilder, WindowEvent};
 
+const BACKGROUND_COLOR: u32 = 0x000000;
+
 struct Gpu {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
@@ -117,12 +119,10 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.015,
-                            g: 0.02,
-                            b: 0.04,
-                            a: 1.,
-                        }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::from_rgb8(
+                            BACKGROUND_COLOR,
+                            self.config.format,
+                        )),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -150,6 +150,7 @@ fn main() {
         .min_size(LogicalSize::new(480.0, 360.0))
         .resizable(true)
         .theme(Theme::Dark)
+        .background_color(BACKGROUND_COLOR)
         .center()
         .build();
     let mut gpu = Gpu::new(window.attach_content().expect("Attach graphics surface"));

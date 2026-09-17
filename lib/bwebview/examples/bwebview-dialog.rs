@@ -9,10 +9,18 @@
 use bwebview::{WebviewBuilder, WebviewEvent};
 use bwindow::{
     Event, EventLoopBuilder, FileDialog, MessageButtons, MessageDialog, Theme, WindowBuilder,
+    WindowEvent,
 };
 
 enum AppEvent {
     Webview(bwindow::WindowId, WebviewEvent),
+}
+
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
 }
 
 fn main() {
@@ -20,13 +28,9 @@ fn main() {
         .with_user_event::<AppEvent>()
         .build();
 
-    let window = WindowBuilder::new()
+    let mut window = WindowBuilder::new()
         .title("Dialog Example")
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .build();
     let mut webview = WebviewBuilder::new(&window).on_event(event_loop.create_proxy(), AppEvent::Webview)
         .load_html(
@@ -62,6 +66,9 @@ window.ipc.addEventListener('message', e => {
         .build();
 
     event_loop.run(move |event| {
+        if let Event::Window(_, WindowEvent::ThemeChanged(theme)) = &event {
+            window.set_background_color(background_color(*theme));
+        }
         if let Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::MessageReceive(msg))) =
             event
         {

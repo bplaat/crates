@@ -10,8 +10,15 @@
 
 use bwebview::WebviewBuilder;
 #[cfg(target_os = "macos")]
-use bwindow::{Accelerator, Event, KeyCode, MenuBarBuilder, MenuBuilder, MenuItem, Modifiers};
-use bwindow::{EventLoopBuilder, Theme, WindowBuilder};
+use bwindow::{Accelerator, KeyCode, MenuBarBuilder, MenuBuilder, MenuItem, Modifiers};
+use bwindow::{Event, EventLoopBuilder, Theme, WindowBuilder, WindowEvent};
+
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
+}
 
 fn main() {
     let builder = EventLoopBuilder::new().app_id("nl", "bplaat", "BwebviewMenuExample");
@@ -65,13 +72,9 @@ fn main() {
 
     let event_loop = builder.build();
 
-    let window = WindowBuilder::new()
+    let mut window = WindowBuilder::new()
         .title("Menu Example")
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .center()
         .build();
     let mut webview = WebviewBuilder::new(&window)
@@ -107,7 +110,9 @@ window.ipc.addEventListener('message', e => {
         .build();
 
     event_loop.run(move |event| {
-        let _ = &window;
+        if let Event::Window(_, WindowEvent::ThemeChanged(theme)) = &event {
+            window.set_background_color(background_color(*theme));
+        }
         #[cfg(target_os = "macos")]
         if let Event::MacosMenuItem(action) = event {
             webview.send_ipc_message(format!("Selected: {action}"));

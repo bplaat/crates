@@ -21,6 +21,7 @@ const INSTANCED_UNIFORM_SIZE: u64 = 32;
 const DISPLAY_UNIFORM_SIZE: u64 = 16;
 const INSTANCE_SIZE: u64 = 48;
 const INSTANCE_BUFFER_SIZE: u64 = INSTANCE_SIZE * INSTANCE_COUNT as u64;
+const BACKGROUND_COLOR: u32 = 0x101627;
 
 #[derive(rust_embed::Embed)]
 #[folder = "assets"]
@@ -582,12 +583,10 @@ impl Gpu {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.005,
-                            g: 0.008,
-                            b: 0.02,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::from_rgb8(
+                            BACKGROUND_COLOR,
+                            self.config.format,
+                        )),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -1055,7 +1054,7 @@ fn main() {
         .title("WGPU Instanced")
         .size(LogicalSize::new(960.0, 720.0))
         .theme(Theme::Dark)
-        .background_color(0x000000)
+        .background_color(BACKGROUND_COLOR)
         .center()
         .build();
     let mut gpu = Gpu::new(window.attach_content().expect("Attach graphics surface"));

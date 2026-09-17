@@ -1271,6 +1271,13 @@ pub(crate) enum AppEvent {
     UserEvent(String),
 }
 
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
+}
+
 fn main() {
     let startup_path = std::env::args().nth(1);
     let state: State = Arc::new(Mutex::new(DatabaseState::default()));
@@ -1335,11 +1342,7 @@ fn main() {
         .title("Sequel Explorer")
         .size(LogicalSize::new(1200.0, 768.0))
         .min_size(LogicalSize::new(800.0, 480.0))
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .center()
         .remember_window_state()
         .allow_file_drop(true);
@@ -1377,6 +1380,9 @@ fn main() {
     let mut pending_open_path = startup_path;
     let mut initial_restore_sent = false;
     event_loop.run(move |event| match event {
+        Event::Window(_, bwindow::WindowEvent::ThemeChanged(theme)) => {
+            window.set_background_color(background_color(theme));
+        }
         #[cfg(target_os = "macos")]
         Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageLoadStart)) => {
             page_ready = false

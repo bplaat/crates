@@ -33,6 +33,13 @@ pub(crate) enum AppEvent {
     UserEvent(String),
 }
 
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
+}
+
 fn main() {
     elevation::wait_for_parent_if_requested();
 
@@ -65,11 +72,7 @@ fn main() {
         .title("Binman")
         .size(LogicalSize::new(1080.0, 720.0))
         .min_size(LogicalSize::new(820.0, 560.0))
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .remember_window_state()
         .center()
         .build();
@@ -80,6 +83,9 @@ fn main() {
         .build();
 
     event_loop.run(move |event| match event {
+        Event::Window(_, bwindow::WindowEvent::ThemeChanged(theme)) => {
+            window.set_background_color(background_color(theme));
+        }
         Event::UserEvent(AppEvent::UserEvent(json)) => {
             if let Some(json) = json.strip_prefix(PROGRESS_EVENT_PREFIX) {
                 if let Ok(state) = serde_json::from_str(json) {

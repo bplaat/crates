@@ -228,6 +228,13 @@ fn background_worker(cmd_rx: mpsc::Receiver<GuiCommand>, proxy: Arc<EventLoopPro
 
 // MARK: Entry point
 
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
+}
+
 pub(crate) fn run() {
     let event_loop = EventLoopBuilder::new()
         .with_user_event::<AppEvent>()
@@ -248,11 +255,7 @@ pub(crate) fn run() {
         .title("Music Downloader")
         .size(LogicalSize::new(1200.0, 720.0))
         .min_size(LogicalSize::new(900.0, 500.0))
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .center()
         .remember_window_state();
     #[cfg(target_os = "macos")]
@@ -276,6 +279,9 @@ pub(crate) fn run() {
     );
 
     event_loop.run(move |event| match event {
+        Event::Window(_, bwindow::WindowEvent::ThemeChanged(theme)) => {
+            window.set_background_color(background_color(theme));
+        }
         Event::UserEvent(AppEvent::UserEvent(json)) => webview.send_ipc_message(json),
         Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageTitleChange(title))) => {
             window.set_title(title)

@@ -9,16 +9,19 @@
 use bwebview::WebviewBuilder;
 use bwindow::{Event, EventLoop, Theme, WindowBuilder, WindowEvent};
 
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
+}
+
 fn main() {
     let event_loop = EventLoop::new();
 
-    let window = WindowBuilder::new()
+    let mut window = WindowBuilder::new()
         .title("File Drop Example")
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .allow_file_drop(true)
         .build();
     let mut webview = WebviewBuilder::new(&window)
@@ -51,6 +54,9 @@ window.ipc.addEventListener('message', e => {
         .build();
 
     event_loop.run(move |event| {
+        if let Event::Window(_, WindowEvent::ThemeChanged(theme)) = &event {
+            window.set_background_color(background_color(*theme));
+        }
         if let Event::Window(_, WindowEvent::DroppedFile(path)) = event {
             webview.send_ipc_message(path.to_string_lossy());
         }

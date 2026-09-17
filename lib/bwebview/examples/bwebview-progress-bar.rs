@@ -28,10 +28,25 @@ use bwindow::WindowsProgressBarState;
     target_os = "netbsd",
     windows
 ))]
-use bwindow::{Event, EventLoopBuilder, Theme, WindowBuilder};
+use bwindow::{Event, EventLoopBuilder, Theme, WindowBuilder, WindowEvent};
 
 #[cfg(target_os = "macos")]
 fn main() {}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    windows
+))]
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
+}
 
 #[cfg(any(
     target_os = "linux",
@@ -50,11 +65,7 @@ fn main() {
     let progress = event_loop.create_proxy();
     let mut window = WindowBuilder::new()
         .title("Progress Bar Example")
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .center()
         .build();
     let mut _webview = WebviewBuilder::new(&window)
@@ -101,6 +112,9 @@ body { font: 16px system-ui, sans-serif; height: 100vh; margin: 0; display: flex
 
     event_loop.run(move |event| {
         let _ = &_webview;
+        if let Event::Window(_, WindowEvent::ThemeChanged(theme)) = &event {
+            window.set_background_color(background_color(*theme));
+        }
         let Event::UserEvent(data) = event else {
             return;
         };

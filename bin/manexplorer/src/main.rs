@@ -86,6 +86,13 @@ pub(crate) enum AppEvent {
     Webview(bwindow::WindowId, WebviewEvent),
 }
 
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
+}
+
 fn main() {
     if !cfg!(any(target_os = "linux", target_os = "macos")) {
         eprintln!("ManExplorer can only be run on Linux and macOS");
@@ -107,11 +114,7 @@ fn main() {
         .title("Man Explorer")
         .size(LogicalSize::new(1024.0, 768.0))
         .min_size(LogicalSize::new(800.0, 480.0))
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .center()
         .remember_window_state();
     #[cfg(target_os = "macos")]
@@ -143,6 +146,9 @@ fn main() {
     );
 
     event_loop.run(move |event| match event {
+        Event::Window(_, bwindow::WindowEvent::ThemeChanged(theme)) => {
+            window.set_background_color(background_color(theme));
+        }
         Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageTitleChange(title))) => {
             window.set_title(title)
         }

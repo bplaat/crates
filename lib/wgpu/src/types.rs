@@ -380,6 +380,48 @@ impl Color {
         b: 0.,
         a: 1.,
     };
+
+    /// Convert a packed `0xRRGGBB` sRGB color to a clear color for the target format.
+    pub fn from_rgb8(color: u32, format: TextureFormat) -> Self {
+        fn channel(value: u8, srgb: bool) -> f64 {
+            let value = f64::from(value) / 255.0;
+            if !srgb {
+                value
+            } else if value <= 0.04045 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        }
+
+        let srgb = format.is_srgb();
+        Self {
+            r: channel((color >> 16) as u8, srgb),
+            g: channel((color >> 8) as u8, srgb),
+            b: channel(color as u8, srgb),
+            a: 1.0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod color_tests {
+    use super::{Color, TextureFormat};
+
+    #[test]
+    fn rgb8_clear_color_matches_target_encoding() {
+        let unorm = Color::from_rgb8(0x808080, TextureFormat::Bgra8Unorm);
+        let srgb = Color::from_rgb8(0x808080, TextureFormat::Bgra8UnormSrgb);
+        let navy = Color::from_rgb8(0x04050a, TextureFormat::Bgra8Unorm);
+
+        assert!((unorm.r - 128.0 / 255.0).abs() < 1e-12);
+        assert!((srgb.r - 0.215_860_500_113_899_26).abs() < 1e-12);
+        assert!((navy.r - 4.0 / 255.0).abs() < 1e-12);
+        assert!((navy.g - 5.0 / 255.0).abs() < 1e-12);
+        assert!((navy.b - 10.0 / 255.0).abs() < 1e-12);
+        assert_eq!(unorm.a, 1.0);
+        assert_eq!(srgb.a, 1.0);
+    }
 }
 
 #[derive(Clone, Copy)]

@@ -92,6 +92,13 @@ pub(crate) enum AppEvent {
     Webview(bwindow::WindowId, WebviewEvent),
 }
 
+const fn background_color(theme: Theme) -> u32 {
+    match theme {
+        Theme::Light => 0xffffff,
+        Theme::Dark => 0x222222,
+    }
+}
+
 fn main() {
     let startup_path = std::env::args().nth(1);
     #[allow(unused_mut)]
@@ -211,11 +218,7 @@ fn main() {
         .title("8x8 Pixel Font Editor")
         .size(LogicalSize::new(640.0, 860.0))
         .min_size(LogicalSize::new(640.0, 520.0))
-        .background_color(if event_loop.theme() == Theme::Dark {
-            0x222222
-        } else {
-            0xffffff
-        })
+        .background_color(background_color(event_loop.theme()))
         .center()
         .remember_window_state()
         .allow_file_drop(true)
@@ -231,6 +234,9 @@ fn main() {
     #[cfg(target_os = "macos")]
     let mut pending_menu_action: Option<String> = None;
     event_loop.run(move |event| {
+        if let Event::Window(_, WindowEvent::ThemeChanged(theme)) = &event {
+            window.set_background_color(background_color(*theme));
+        }
         if let Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageLoadStart)) = &event
         {
             page_ready = false;
