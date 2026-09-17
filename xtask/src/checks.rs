@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
 
@@ -96,7 +97,7 @@ impl Xtask {
                     && !relative.ends_with(".min.js")
             })
             .collect::<Vec<_>>();
-        for files in files.chunks(100) {
+        for files in command_batches(&files, prettier_argument_budget(self.os)?, self.os)? {
             let mut command = Command::new(npx_program(self.os));
             command.args(["--no-install", "prettier", "--check"]);
             command.args(files);
@@ -357,6 +358,73 @@ impl Xtask {
     }
 }
 
+fn prettier_argument_budget(os: Os) -> Result<usize> {
+    // npx.cmd runs through cmd.exe, which accepts at most 8191 characters.
+    #[cfg(windows)]
+    let limit = 8191usize;
+    #[cfg(unix)]
+    let limit = unix_arg_max()?;
+    let environment = if os == Os::Windows {
+        0
+    } else {
+        env::vars_os()
+            .map(|(key, value)| key.to_string_lossy().len() + value.to_string_lossy().len() + 18)
+            .sum()
+    };
+    let fixed_args = npx_program(os).len() + " --no-install prettier --check".len();
+    // Leave room for the command interpreter on Windows and argv overhead on Unix.
+    let reserve = if os == Os::Windows { 1024 } else { 4096 };
+    limit
+        .checked_sub(environment + fixed_args + reserve)
+        .context("environment leaves no room for Prettier arguments")
+}
+
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn unix_arg_max() -> Result<usize> {
+    // SAFETY: sysconf only reads the requested process configuration value.
+    let limit = unsafe { crate::headers::sysconf(crate::headers::SC_ARG_MAX) };
+    usize::try_from(limit)
+        .ok()
+        .filter(|limit| *limit > 0)
+        .context("sysconf failed to read ARG_MAX")
+}
+
+fn command_batches(files: &[PathBuf], budget: usize, os: Os) -> Result<Vec<&[PathBuf]>> {
+    let mut batches = Vec::new();
+    let mut start = 0;
+    let mut used = 0;
+    for (index, file) in files.iter().enumerate() {
+        let size = command_argument_size(file, os);
+        if size > budget {
+            bail!(
+                "path is too long for a Prettier command: {}",
+                file.display()
+            );
+        }
+        if used + size > budget {
+            batches.push(&files[start..index]);
+            start = index;
+            used = 0;
+        }
+        used += size;
+    }
+    if start < files.len() {
+        batches.push(&files[start..]);
+    }
+    Ok(batches)
+}
+
+fn command_argument_size(path: &Path, os: Os) -> usize {
+    if os == Os::Windows {
+        // Quoting can double backslashes; count UTF-16 code units for cmd.exe.
+        path.to_string_lossy().encode_utf16().count() * 2 + 4
+    } else {
+        // Include the terminating NUL and argv pointer, with some margin.
+        path.to_string_lossy().len() + 16
+    }
+}
+
 fn editor_check_command(excludes: &std::collections::BTreeSet<String>) -> Command {
     let mut command = Command::new("cargo");
     command.args([
@@ -381,6 +449,28 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
+
+    #[test]
+    fn prettier_batches_fit_the_command_budget() -> Result<()> {
+        let files = [
+            PathBuf::from("short.json"),
+            PathBuf::from("a/deeply/nested/file.json"),
+            PathBuf::from("another/deeply/nested/file.json"),
+        ];
+        let budget = command_argument_size(&files[0], Os::Windows)
+            + command_argument_size(&files[1], Os::Windows);
+        let batches = command_batches(&files, budget, Os::Windows)?;
+        assert_eq!(batches, [&files[..2], &files[2..]]);
+        assert!(batches.iter().all(|batch| {
+            batch
+                .iter()
+                .map(|file| command_argument_size(file, Os::Windows))
+                .sum::<usize>()
+                <= budget
+        }));
+        assert!(command_batches(&files, 1, Os::Windows).is_err());
+        Ok(())
+    }
 
     #[test]
     fn editor_check_emits_cargo_json_and_excludes_unsupported_packages() {

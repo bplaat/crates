@@ -18,6 +18,8 @@ use crate::utils::collect_source_files;
 
 mod build;
 mod checks;
+#[cfg(unix)]
+mod headers;
 mod metadata;
 mod process;
 mod utils;
