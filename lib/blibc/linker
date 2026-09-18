@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+arguments=()
+for argument in "$@"; do
+    case "$argument" in
+        -lc|-ldl|-lgcc|-lgcc_eh|-lm|-lpthread|-lrt|-lutil)
+            ;;
+        *.so|*.so.*)
+            echo "unsupported native library: $argument" >&2
+            exit 1
+            ;;
+        *)
+            arguments+=("$argument")
+            ;;
+    esac
+done
+
+exec gcc -Wl,--allow-multiple-definition "${arguments[@]}"

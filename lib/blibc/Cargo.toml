@@ -1,0 +1,18 @@
+[package]
+name = "blibc"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+dlmalloc = { version = "0.2.14", default-features = false }
+libm = { version = "0.2.16", default-features = false }
+unwinding = { version = "0.2.10", default-features = false, features = ["dwarf-expr", "fde-gnu-eh-frame-hdr", "hide-trace", "unwinder"] }
+
+[lints.clippy]
+uninlined_format_args = "deny"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

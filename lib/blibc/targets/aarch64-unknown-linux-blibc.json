@@ -1,0 +1,32 @@
+{
+  "arch": "aarch64",
+  "cpu": "generic",
+  "crt-static-default": true,
+  "crt-static-respected": true,
+  "data-layout": "e-m:e-p270:32:32-p271:32:32-p272:64:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32",
+  "dynamic-linking": false,
+  "env": "gnu",
+  "executables": true,
+  "features": "+v8a,+outline-atomics",
+  "linker": "/runtime/blibc-linker",
+  "linker-flavor": "gnu-cc",
+  "late-link-args": {
+    "gnu-cc": ["/runtime/blibc.a"]
+  },
+  "llvm-target": "aarch64-unknown-linux-gnu",
+  "max-atomic-width": 128,
+  "no-default-libraries": true,
+  "os": "linux",
+  "panic-strategy": "unwind",
+  "position-independent-executables": false,
+  "pre-link-args": {
+    "gnu-cc": ["-nostdlib", "-static", "-no-pie", "-Wl,-z,separate-code", "/runtime/crt1.o"]
+  },
+  "relocation-model": "static",
+  "stack-probes": {
+    "kind": "inline"
+  },
+  "target-endian": "little",
+  "target-family": ["unix"],
+  "target-pointer-width": 64
+}

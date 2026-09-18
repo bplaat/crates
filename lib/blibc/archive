@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_directory=$1
+output=$2
+
+mapfile -d '' libraries < <(
+    find "$target_directory" -type f -name '*.rlib' ! -path '*/build/blibc/*' -print0 | sort -z
+)
+{
+    echo "CREATE $output"
+    for library in "${libraries[@]}"; do
+        echo "ADDLIB $library"
+    done
+    echo "SAVE"
+    echo "END"
+} | ar -M
