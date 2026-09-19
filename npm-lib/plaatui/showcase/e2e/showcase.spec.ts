@@ -53,6 +53,19 @@ test.describe('PlaatUI showcase', () => {
         await expect(page.locator('html')).toHaveClass(/dark/);
     });
 
+    test('supports accent color overrides', async ({ page }) => {
+        await page.goto('./');
+        await page.locator('html').evaluate((html) => {
+            html.style.setProperty('--color-accent', '#7c3aed');
+            html.style.setProperty('--color-accent-hover', '#6d28d9');
+        });
+
+        const button = page.getByRole('button', { name: 'Primary', exact: true });
+        await expect(button).toHaveCSS('background-color', 'rgb(124, 58, 237)');
+        await button.hover();
+        await expect(button).toHaveCSS('background-color', 'rgb(109, 40, 217)');
+    });
+
     test('updates input, search, select and checkbox controls', async ({ page }) => {
         await page.goto('./');
         const section = page.locator('#inputs');

@@ -1,0 +1,387 @@
+openapi: 3.0.0
+info:
+  title: Plaat Deploy API
+  description: A minimal self-hosted deployment service
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /api:
+    get:
+      summary: Get API name and version
+      responses:
+        '200': { description: API information }
+  /api/auth/login:
+    post:
+      summary: Log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginBody' }
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+  /api/auth/validate:
+    get:
+      summary: Validate a session
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Valid session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthValidateResponse' }
+  /api/auth/logout:
+    post:
+      summary: Log out
+      security: [{ BearerAuth: [] }]
+      responses:
+        '204': { description: Logged out }
+  /api/account:
+    put:
+      summary: Update the current account
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountUpdateBody' }
+      responses:
+        '200':
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '409': { description: Email address already in use }
+  /api/account/password:
+    post:
+      summary: Change the current password and revoke other sessions
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordBody' }
+      responses:
+        '204': { description: Password changed }
+  /api/account/github:
+    put:
+      summary: Connect a GitHub personal access token
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GitHubTokenBody' }
+      responses:
+        '200':
+          description: GitHub connection
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubConnection' }
+    delete:
+      summary: Disconnect GitHub
+      security: [{ BearerAuth: [] }]
+      responses:
+        '204': { description: Disconnected }
+  /api/sessions:
+    get:
+      summary: List the current account sessions
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Session' }
+  /api/sessions/{sessionId}:
+    delete:
+      summary: Revoke a session
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Revoked }
+  /api/github/repositories:
+    get:
+      summary: List accessible GitHub repositories
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Repositories
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/GitHubRepository' }
+  /api/github/repositories/scan:
+    post:
+      summary: Detect deployment settings for a GitHub repository
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GitHubRepositoryScanBody' }
+      responses:
+        '200':
+          description: Suggested deployment settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubRepositoryScan' }
+  /api/projects:
+    get:
+      summary: List projects
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Project' }
+    post:
+      summary: Create and deploy a project
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectBody' }
+      responses:
+        '201':
+          description: Created project
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+  /api/projects/{projectId}:
+    get:
+      summary: Get a project
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Project
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+    delete:
+      summary: Delete a project
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '204': { description: Deleted }
+  /api/projects/{projectId}/deployments:
+    get:
+      summary: List project deployments
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Deployments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Deployment' }
+    post:
+      summary: Redeploy a project
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '202': { description: Deployment queued }
+  /api/webhooks/github/{projectId}:
+    post:
+      summary: Handle a GitHub push webhook
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '202': { description: Deployment queued }
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    Report:
+      type: object
+      additionalProperties:
+        type: array
+        items: { type: string }
+    LoginBody:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+    LoginResponse:
+      type: object
+      required: [userId, token]
+      properties:
+        userId: { type: string, format: uuid }
+        token: { type: string }
+    AuthValidateResponse:
+      type: object
+      required: [user, session]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        session: { $ref: '#/components/schemas/Session' }
+    User:
+      type: object
+      required: [id, firstName, lastName, email, theme, language, role, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        theme: { $ref: '#/components/schemas/UserTheme' }
+        language: { type: string }
+        role: { $ref: '#/components/schemas/UserRole' }
+        githubLogin: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UserTheme:
+      type: string
+      enum: [system, light, dark]
+    UserRole:
+      type: string
+      enum: [normal, admin]
+    Session:
+      type: object
+      required: [id, userId, ip, client, expiresAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        ip: { $ref: '#/components/schemas/SessionIp' }
+        client: { $ref: '#/components/schemas/SessionClient' }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SessionIp:
+      type: object
+      properties:
+        address: { type: string, nullable: true }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        country: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+    SessionClient:
+      type: object
+      properties:
+        name: { type: string, nullable: true }
+        version: { type: string, nullable: true }
+        os: { type: string, nullable: true }
+    AccountUpdateBody:
+      type: object
+      required: [firstName, lastName, email, theme, language]
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 254 }
+        theme: { $ref: '#/components/schemas/UserTheme' }
+        language: { type: string, pattern: '^[a-z]{2}$' }
+    ChangePasswordBody:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword: { type: string, minLength: 1, maxLength: 128 }
+        newPassword: { type: string, minLength: 8, maxLength: 128 }
+    GitHubTokenBody:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 1, maxLength: 255 }
+    GitHubConnection:
+      type: object
+      required: [login]
+      properties:
+        login: { type: string }
+    GitHubRepository:
+      type: object
+      required: [fullName, name, defaultBranch, private, htmlUrl]
+      properties:
+        fullName: { type: string }
+        name: { type: string }
+        defaultBranch: { type: string }
+        private: { type: boolean }
+        htmlUrl: { type: string }
+    GitHubRepositoryScanBody:
+      type: object
+      required: [githubRepo]
+      properties:
+        githubRepo:
+          type: string
+          pattern: '^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9._-]{1,100}$'
+    GitHubRepositoryScan:
+      type: object
+      required: [deploymentMode]
+      properties:
+        deploymentMode: { $ref: '#/components/schemas/DeploymentMode' }
+        dockerfilePath: { type: string, nullable: true }
+    CreateProjectBody:
+      type: object
+      required: [githubRepo, deploymentMode]
+      properties:
+        githubRepo:
+          type: string
+          pattern: '^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9._-]{1,100}$'
+        deploymentMode: { $ref: '#/components/schemas/DeploymentMode' }
+        dockerfilePath: { type: string, maxLength: 255, nullable: true }
+    Project:
+      type: object
+      required: [id, name, slug, githubRepo, githubBranch, deploymentUrl, deploymentMode, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        githubRepo: { type: string }
+        githubBranch: { type: string }
+        deploymentUrl: { type: string }
+        deploymentMode: { $ref: '#/components/schemas/DeploymentMode' }
+        dockerfilePath: { type: string, nullable: true }
+        containerPort: { type: integer, format: int64, nullable: true }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        lastDeployedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DeploymentMode:
+      type: string
+      enum: [static, dockerfile]
+    ProjectStatus:
+      type: string
+      enum: [pending, deploying, running, failed]
+    Deployment:
+      type: object
+      required: [id, projectId, commitSha, commitMessage, status, log, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        commitSha: { type: string }
+        commitMessage: { type: string }
+        status: { $ref: '#/components/schemas/DeploymentStatus' }
+        log: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DeploymentStatus:
+      type: string
+      enum: [pending, deploying, succeeded, failed]

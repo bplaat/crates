@@ -1,0 +1,45 @@
+[package]
+name = "plaatdeploy"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.23.1"
+bsql = { version = "0.1.2", features = ["uuid", "chrono"] }
+chrono = { version = "0.4.45", default-features = false, features = ["now", "serde"] }
+dotenvy = "0.15.7"
+from_derive = { path = "../../lib/from_derive" }
+getrandom = "0.4.3"
+hmac = "0.13.0"
+log = "0.4.34"
+maxminddb = "0.30.3"
+mime_guess = { version = "2.0", default-features = false }
+miniz_oxide = "0.9.1"
+pbkdf2 = { path = "../../lib/pbkdf2" }
+rust-embed = { version = "8.12", features = ["interpolate-folder-path"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_urlencoded = "0.7.1"
+sha2 = "0.11.0"
+simple-useragent = { version = "0.1.2", features = ["serde"] }
+simple_logger = "5.2"
+small-http = { version = "0.2.1", features = ["json", "form", "log", "tls"] }
+small-router = { version = "0.2.1", features = ["log"] }
+uuid = { version = "1.25", features = ["v7", "serde"] }
+validate = { path = "../../lib/validate", features = ["email"] }
+zeroize = "1.9"
+
+[target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
+bsql = { version = "0.1.2", features = ["uuid", "chrono", "sqlite-bundled"] }
+native-tls = { version = "0.2.18", features = ["vendored"] }
+
+[build-dependencies]
+copy_dir = "0.1.3"
+openapi-generator = { path = "../../lib/openapi-generator" }

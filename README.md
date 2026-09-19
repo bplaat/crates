@@ -120,6 +120,7 @@ Various tools and websites. For the deployed sites, go to [crates.bplaat.nl](htt
 - [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
 - [ccontinue](bin/ccontinue) A transpiler that translates an OOP extension for the C programming language back to C
 - [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin that builds macOS app bundles
+- [plaatdeploy](bin/plaatdeploy) A small self-hosted deployment service for repositories
 - [plaatnotes](bin/plaatnotes) A self-hosted note-taking web app with rich Markdown support
 
 ### Replacement libraries

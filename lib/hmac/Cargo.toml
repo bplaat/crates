@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 digest = "0.11.3"
+subtle = "2.6"
 
 [dev-dependencies]
 sha2 = "0.11.0"

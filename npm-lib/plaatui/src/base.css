@@ -28,13 +28,17 @@
     --color-input-background: #ffffff;
     --color-input-border: #d1d5db;
 
-    --color-accent-background: #facc15;
-    --color-accent-background-hover: #eab308;
-    --color-accent-fg: #ffffff;
-    --color-accent-text: #a16207;
-    --color-accent-soft-background: #fefce8;
-    --color-badge-background: #fef9c3;
-    --color-focus-ring: rgba(250, 204, 21, 0.55);
+    /* Override these source colors to theme every accent state. */
+    --color-accent: #facc15;
+    --color-accent-hover: #eab308;
+    --color-on-accent: #ffffff;
+    --color-accent-background: var(--color-accent);
+    --color-accent-background-hover: var(--color-accent-hover);
+    --color-accent-fg: var(--color-on-accent);
+    --color-accent-text: color-mix(in srgb, var(--color-accent) 65%, black);
+    --color-accent-soft-background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+    --color-badge-background: color-mix(in srgb, var(--color-accent) 25%, var(--color-surface));
+    --color-focus-ring: color-mix(in srgb, var(--color-accent) 55%, transparent);
 
     --color-danger: #ef4444;
     --color-danger-hover: #dc2626;
@@ -62,13 +66,13 @@ html.dark {
     --color-input-background: #3f3f46;
     --color-input-border: #52525b;
 
-    --color-accent-background: rgba(113, 63, 18, 0.4);
-    --color-accent-background-hover: rgba(113, 63, 18, 0.6);
-    --color-accent-fg: #facc15;
-    --color-accent-text: #facc15;
-    --color-accent-soft-background: rgba(113, 63, 18, 0.3);
-    --color-badge-background: rgba(113, 63, 18, 0.4);
-    --color-focus-ring: rgba(234, 179, 8, 0.5);
+    --color-accent-background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+    --color-accent-background-hover: color-mix(in srgb, var(--color-accent-hover) 40%, transparent);
+    --color-accent-fg: color-mix(in srgb, var(--color-accent) 65%, white);
+    --color-accent-text: color-mix(in srgb, var(--color-accent) 65%, white);
+    --color-accent-soft-background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    --color-badge-background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+    --color-focus-ring: color-mix(in srgb, var(--color-accent) 50%, transparent);
 
     --color-danger: #f87171;
     --color-danger-hover: #f87171;
@@ -150,10 +154,7 @@ a {
     color: var(--color-text-subtle);
 }
 .is-active {
-    color: #eab308;
-}
-html.dark .is-active {
-    color: #facc15;
+    color: var(--color-accent-text);
 }
 .is-active-danger {
     color: var(--color-danger);

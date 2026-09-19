@@ -1,4 +1,11 @@
 .git
+.env
+**/.env
+**/*.db*
+**/*.mmdb
+**/.DS_Store
 **/target
 **/node_modules
 **/dist
+**/playwright-report
+**/test-results

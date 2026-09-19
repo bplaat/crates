@@ -7,6 +7,7 @@
 //! A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
 
 use digest::Digest;
+use subtle::ConstantTimeEq;
 
 // MARK: hmac
 /// Computes HMAC over `message` with `key` and returns the raw `D::Output` bytes.
@@ -38,6 +39,16 @@ pub fn hmac<D: Digest>(key: &[u8], message: &[u8]) -> D::Output {
     h.finalize_reset()
 }
 
+/// Verifies that `tag` is the HMAC of `message` under `key` in constant time.
+pub fn verify<D: Digest>(key: &[u8], message: &[u8], tag: &[u8]) -> bool {
+    let actual = hmac::<D>(key, message);
+    let actual = actual.as_ref();
+    if actual.len() != tag.len() {
+        return false;
+    }
+    actual.ct_eq(tag).into()
+}
+
 // MARK: Tests
 #[cfg(test)]
 mod test {
@@ -60,5 +71,13 @@ mod test {
             ),
             expected
         );
+    }
+
+    #[test]
+    fn test_verify_hmac_sha256() {
+        let tag = hmac::<Sha256>(b"secret", b"payload");
+        assert!(verify::<Sha256>(b"secret", b"payload", &tag));
+        assert!(!verify::<Sha256>(b"secret", b"changed", &tag));
+        assert!(!verify::<Sha256>(b"secret", b"payload", &tag[..31]));
     }
 }

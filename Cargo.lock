@@ -514,6 +514,7 @@ version = "0.13.0+patch"
 dependencies = [
  "digest",
  "sha2",
+ "subtle",
 ]
 
 [[package]]
@@ -837,6 +838,40 @@ dependencies = [
  "serde",
  "serde_json",
  "winresource",
+]
+
+[[package]]
+name = "plaatdeploy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "bsql",
+ "chrono",
+ "copy_dir",
+ "dotenvy",
+ "from_derive",
+ "getrandom 0.4.3+patch",
+ "hmac",
+ "log",
+ "maxminddb",
+ "mime_guess",
+ "miniz_oxide",
+ "native-tls",
+ "openapi-generator",
+ "pbkdf2",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha2",
+ "simple-useragent",
+ "simple_logger",
+ "small-http",
+ "small-router",
+ "uuid",
+ "validate",
+ "zeroize",
 ]
 
 [[package]]
