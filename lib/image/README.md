@@ -25,7 +25,7 @@ animation disposal. PNG samples wider than 8 bits are reduced to the same RGBA8
 output used by the other raster formats. ICO decoding selects its largest image
 and supports embedded PNG or the same DIB variants as the BMP decoder. It does
 not support HDR output, encoding, incremental decoding, or ICC color management.
-Decoding has a cumulative 512 MiB allocation limit.
+Decoding has a cumulative 1 GiB allocation limit.
 TinyVG variable-width path strokes preserve their width transitions as tapered,
 round-capped outlines.
 

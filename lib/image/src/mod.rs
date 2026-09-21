@@ -173,7 +173,7 @@ pub enum DecodeError {
     InvalidData,
     /// A recognized format uses an unsupported feature.
     UnsupportedFeature,
-    /// Decoded storage exceeds 512 MiB, arithmetic overflows, or allocation fails.
+    /// Decoded storage exceeds 1 GiB, arithmetic overflows, or allocation fails.
     ImageTooLarge,
 }
 
@@ -193,7 +193,7 @@ impl std::error::Error for DecodeError {}
 
 type Result<T> = std::result::Result<T, DecodeError>;
 
-/// Decodes a complete image within 512 MiB, excluding uncommon JPEG/BMP variants.
+/// Decodes a complete image within 1 GiB, excluding uncommon JPEG/BMP variants.
 #[cfg_attr(
     not(any(
         feature = "qoi",
@@ -271,7 +271,7 @@ pub fn decode_vector(data: &[u8]) -> std::result::Result<VectorImage, VectorDeco
     feature = "bmp",
     feature = "ico"
 ))]
-const MAX_BYTES: usize = 512 * 1024 * 1024;
+const MAX_BYTES: usize = 1024 * 1024 * 1024;
 
 // Count cumulative allocations conservatively, including buffers later discarded.
 #[derive(Default)]
