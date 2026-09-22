@@ -29,7 +29,11 @@ use macview_appkit::{
 };
 use objc2::ffi::{class_addMethod, object_getClass};
 use objc2::rc::{Allocated, Retained, autoreleasepool};
+#[allow(unused_imports)]
+use objc2::runtime::NSObject;
 use objc2::runtime::{AnyObject as Object, Bool};
+#[allow(unused_imports)]
+use objc2::{ClassType as _, DefinedClass as _};
 use objc2::{class, define_class, msg_send, sel};
 use scroll_view::create_scroll_view;
 use window_controller::{create_window_controller, show_media};
@@ -67,8 +71,9 @@ struct MainQueueObject(Retained<Object>);
 unsafe impl Send for MainQueueObject {}
 
 impl MainQueueObject {
-    const fn as_ptr_on_main(&self) -> *mut Object {
-        self.0.as_ptr()
+    #[allow(clippy::missing_const_for_fn)]
+    fn as_ptr_on_main(&self) -> *mut Object {
+        Retained::as_ptr(&self.0).cast_mut()
     }
 }
 
@@ -78,8 +83,9 @@ struct SendableUrl(Retained<Object>);
 unsafe impl Send for SendableUrl {}
 
 impl SendableUrl {
-    const fn as_ptr(&self) -> *mut Object {
-        self.0.as_ptr()
+    #[allow(clippy::missing_const_for_fn)]
+    fn as_ptr(&self) -> *mut Object {
+        Retained::as_ptr(&self.0).cast_mut()
     }
 }
 
@@ -272,7 +278,12 @@ impl Document {
             let generation = self.next_browse_generation();
             let retained =
                 MainQueueObject(Retained::retain(this).expect("cannot retain a null document"));
-            (path, generation, retained, Self::class() as usize)
+            (
+                path,
+                generation,
+                retained,
+                Self::class() as *const objc2::runtime::AnyClass as usize,
+            )
         };
 
         dispatch_async(move || {
@@ -403,7 +414,12 @@ impl Document {
                     origin: Point { x: 0.0, y: 0.0 },
                     size: media_size,
                 });
-                show_media(controller, view.as_ptr(), title_size, zoom_to_fit);
+                show_media(
+                    controller,
+                    Retained::as_ptr(&view).cast_mut(),
+                    title_size,
+                    zoom_to_fit,
+                );
             }
         }
     }
@@ -450,19 +466,20 @@ impl Document {
                 origin: Point { x: 0.0, y: 0.0 },
                 size: media_size,
             });
-            let scroll_view = create_scroll_view(rect, media_view.as_ptr());
+            let scroll_view = create_scroll_view(rect, Retained::as_ptr(&media_view).cast_mut());
             // A window opens on the zoom the Zoom to Fit item sets, so that the media is shown
             // the same way however it got there.
             let _: () = msg_send![&*scroll_view, zoomToFit];
-            let _: () = msg_send![&*checkerboard, addSubview: scroll_view.as_ptr()];
+            let _: () = msg_send![&*checkerboard, addSubview: Retained::as_ptr(&scroll_view)];
             let _: () = msg_send![&*checkerboard,
                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
             ];
-            let _: () = msg_send![&*window, setContentView: checkerboard.as_ptr()];
+            let _: () = msg_send![&*window, setContentView: Retained::as_ptr(&checkerboard)];
 
-            let controller = create_window_controller(window.as_ptr(), title_size);
+            let controller =
+                create_window_controller(Retained::as_ptr(&window).cast_mut(), title_size);
             let this = self as *const Self as *mut Object;
-            let _: () = msg_send![this, addWindowController: controller.as_ptr()];
+            let _: () = msg_send![this, addWindowController: Retained::as_ptr(&controller)];
         }
     }
 
@@ -492,8 +509,8 @@ impl Document {
                 size: media_size,
             });
             let operation: *mut Object = msg_send![class!(NSPrintOperation),
-                printOperationWithView: view.as_ptr(),
-                printInfo: print_info.as_ptr()
+                printOperationWithView: Retained::as_ptr(&view),
+                printInfo: Retained::as_ptr(&print_info)
             ];
             operation
         }
@@ -554,7 +571,7 @@ unsafe fn load_document(
 ) -> Result<(DecodedMedia, OwnedString, ContentVersion), String> {
     let result = std::sync::Arc::new(std::sync::Mutex::new(None));
     let accessor_result = result.clone();
-    let accessor = RcBlock::new::<*mut Object>(move |coordinated_url| {
+    let accessor = RcBlock::new::<(*mut Object,), (), _>(move |coordinated_url| {
         // SAFETY: NSFileCoordinator supplies a live coordinated file URL for this synchronous
         // accessor invocation. Catching a panic here prevents unwinding across the Objective-C
         // block ABI.
@@ -657,20 +674,31 @@ const extern "C-unwind" fn can_concurrently_read_documents(
 }
 
 // Tells `NSDocumentController` that document decoding is safe on its background queue.
+#[allow(clippy::unnecessary_cast)]
 unsafe fn enable_concurrent_document_reading() {
     // SAFETY: Document is registered, object_getClass returns its metaclass, and the function
     // signature matches +canConcurrentlyReadDocumentsOfType: (BOOL, Class, SEL, NSString *).
     unsafe {
-        let metaclass = object_getClass(Document::class());
+        let metaclass = object_getClass(
+            (Document::class() as *const objc2::runtime::AnyClass).cast::<Object>(),
+        );
         let encoding = if cfg!(target_arch = "aarch64") {
             c"B@:@"
         } else {
             c"c@:@"
         };
-        let added = class_addMethod(
-            metaclass,
-            sel!(canConcurrentlyReadDocumentsOfType:).0,
-            can_concurrently_read_documents as *const c_void,
+        let add_method: unsafe extern "C-unwind" fn(
+            *mut objc2::runtime::AnyClass,
+            objc2::runtime::Sel,
+            unsafe extern "C-unwind" fn(),
+            *const std::ffi::c_char,
+        ) -> Bool = std::mem::transmute(class_addMethod as *const ());
+        let implementation: unsafe extern "C-unwind" fn() =
+            std::mem::transmute(can_concurrently_read_documents as *const ());
+        let added = add_method(
+            metaclass.cast::<objc2::runtime::AnyClass>() as *mut objc2::runtime::AnyClass,
+            sel!(canConcurrentlyReadDocumentsOfType:),
+            implementation,
             encoding.as_ptr(),
         );
         assert!(
@@ -692,7 +720,8 @@ define_class!(
         }
 
         #[unsafe(method(applicationShouldOpenUntitledFile:))]
-        const fn _should_open_untitled_file(&self, _: *mut Object) -> Bool {
+        #[allow(clippy::missing_const_for_fn)]
+        fn _should_open_untitled_file(&self, _: *mut Object) -> Bool {
             Bool::YES
         }
 
@@ -709,7 +738,8 @@ define_class!(
         }
 
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
-        const fn _should_terminate_after_last_window(&self, _: *mut Object) -> Bool {
+        #[allow(clippy::missing_const_for_fn)]
+        fn _should_terminate_after_last_window(&self, _: *mut Object) -> Bool {
             Bool::NO
         }
     }
@@ -771,8 +801,8 @@ fn add_menu(main_menu: &Object, title: &str) -> Retained<Object> {
         }
         let menu: Allocated<Object> = msg_send![class!(NSMenu), alloc];
         let menu: Retained<Object> = msg_send![menu, initWithTitle: ns_string(title)];
-        let _: () = msg_send![&*item, setSubmenu: menu.as_ptr()];
-        let _: () = msg_send![main_menu, addItem: item.as_ptr()];
+        let _: () = msg_send![&*item, setSubmenu: Retained::as_ptr(&menu)];
+        let _: () = msg_send![main_menu, addItem: Retained::as_ptr(&item)];
         menu
     }
 }
@@ -788,7 +818,7 @@ fn add_item(
     // SAFETY: menu is a valid NSMenu and retains the item before its Rust owner is dropped.
     unsafe {
         let item = menu_item(title, action, key, modifiers, target);
-        let _: () = msg_send![menu, addItem: item.as_ptr()];
+        let _: () = msg_send![menu, addItem: Retained::as_ptr(&item)];
     }
 }
 
@@ -820,8 +850,8 @@ fn add_open_recent_menu(menu: &Object) {
             0,
             null_mut(),
         );
-        let _: () = msg_send![&*item, setSubmenu: recent_menu.as_ptr()];
-        let _: () = msg_send![menu, addItem: item.as_ptr()];
+        let _: () = msg_send![&*item, setSubmenu: Retained::as_ptr(&recent_menu)];
+        let _: () = msg_send![menu, addItem: Retained::as_ptr(&item)];
     }
 }
 
@@ -852,9 +882,9 @@ fn create_menu(application: *mut Object) {
         let services_item: Retained<Object> = msg_send![class!(NSMenuItem), new];
         let _: () = msg_send![&*services_item, setTitle: ns_string!("Services")];
         let services_menu: Retained<Object> = msg_send![class!(NSMenu), new];
-        let _: () = msg_send![&*services_item, setSubmenu: services_menu.as_ptr()];
-        let _: () = msg_send![&*app_menu, addItem: services_item.as_ptr()];
-        let _: () = msg_send![application, setServicesMenu: services_menu.as_ptr()];
+        let _: () = msg_send![&*services_item, setSubmenu: Retained::as_ptr(&services_menu)];
+        let _: () = msg_send![&*app_menu, addItem: Retained::as_ptr(&services_item)];
+        let _: () = msg_send![application, setServicesMenu: Retained::as_ptr(&services_menu)];
         add_separator(&app_menu);
         add_item(
             &app_menu,
@@ -1039,12 +1069,12 @@ fn create_menu(application: *mut Object) {
             null_mut(),
         );
         add_item(&window_menu, "Zoom", sel!(performZoom:), "", 0, null_mut());
-        let _: () = msg_send![application, setWindowsMenu: window_menu.as_ptr()];
+        let _: () = msg_send![application, setWindowsMenu: Retained::as_ptr(&window_menu)];
 
         let help_menu = add_menu(&main_menu, "Help");
-        let _: () = msg_send![application, setHelpMenu: help_menu.as_ptr()];
+        let _: () = msg_send![application, setHelpMenu: Retained::as_ptr(&help_menu)];
 
-        let _: () = msg_send![application, setMainMenu: main_menu.as_ptr()];
+        let _: () = msg_send![application, setMainMenu: Retained::as_ptr(&main_menu)];
     }
 }
 
@@ -1062,7 +1092,7 @@ fn main() {
             setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_REGULAR
         ];
         let delegate: Retained<Object> = msg_send![AppDelegate::class(), new];
-        let _: () = msg_send![application, setDelegate: delegate.as_ptr()];
+        let _: () = msg_send![application, setDelegate: Retained::as_ptr(&delegate)];
         create_menu(application);
         let _: () = msg_send![application, run];
     });

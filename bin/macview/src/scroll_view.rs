@@ -11,6 +11,8 @@ use std::ptr::null_mut;
 use macview_appkit::{NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
+#[allow(unused_imports)]
+use objc2::{ClassType as _, DefinedClass as _};
 use objc2::{class, define_class, msg_send, sel};
 
 use crate::headers::*;
@@ -61,7 +63,8 @@ define_class!(
         // image and scrolls the top of it out of sight. Flipping it keeps the top in place, and
         // what a smaller window loses is scrolled to downwards.
         #[unsafe(method(isFlipped))]
-        const fn _is_flipped(&self) -> Bool {
+        #[allow(clippy::missing_const_for_fn)]
+        fn _is_flipped(&self) -> Bool {
             Bool::YES
         }
 
@@ -478,7 +481,7 @@ pub(crate) fn create_scroll_view(frame: Rect, document: *mut Object) -> Retained
         ];
         // The checkerboard behind the scroll view is the background of the window.
         let _: () = msg_send![&*clip_view, setDrawsBackground: Bool::NO];
-        let _: () = msg_send![&*scroll_view, setContentView: clip_view.as_ptr()];
+        let _: () = msg_send![&*scroll_view, setContentView: Retained::as_ptr(&clip_view)];
 
         let _: () = msg_send![&*scroll_view, setDrawsBackground: Bool::NO];
         let _: () = msg_send![&*scroll_view, setBorderType: NS_NO_BORDER];
@@ -542,10 +545,14 @@ mod tests {
             let first: Retained<Object> = msg_send![first, initWithFrame: frame];
             let second: Allocated<Object> = msg_send![class!(NSView), alloc];
             let second: Retained<Object> = msg_send![second, initWithFrame: frame];
-            let scroll_view = create_scroll_view(frame, first.as_ptr());
+            let scroll_view = create_scroll_view(frame, Retained::as_ptr(&first).cast_mut());
             let _: () = msg_send![&*scroll_view, setMagnification: 2.5f64];
 
-            replace_document_view(scroll_view.as_ptr(), second.as_ptr(), false);
+            replace_document_view(
+                Retained::as_ptr(&scroll_view).cast_mut(),
+                Retained::as_ptr(&second).cast_mut(),
+                false,
+            );
 
             let magnification: f64 = msg_send![&*scroll_view, magnification];
             assert_eq!(magnification, 2.5);

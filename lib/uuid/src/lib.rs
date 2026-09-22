@@ -6,7 +6,6 @@
 
 //! A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 
-use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::str::FromStr;
 
@@ -27,9 +26,9 @@ impl Uuid {
     }
 
     /// Create UUID from slice
-    pub const fn from_slice(slice: &[u8]) -> Result<Uuid, InvalidError> {
+    pub const fn from_slice(slice: &[u8]) -> Result<Uuid, Error> {
         if slice.len() != 16 {
-            return Err(InvalidError);
+            return Err(Error);
         }
         let mut bytes = [0; 16];
         bytes.copy_from_slice(slice);
@@ -62,17 +61,17 @@ impl Display for Uuid {
 }
 
 impl FromStr for Uuid {
-    type Err = InvalidError;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() != 36 {
-            return Err(InvalidError);
+            return Err(Error);
         }
         let mut bytes = [0; 16];
         let mut n = 0;
         for (i, c) in s.chars().enumerate() {
             if i == 8 || i == 13 || i == 18 || i == 23 {
                 if c != '-' {
-                    return Err(InvalidError);
+                    return Err(Error);
                 }
                 continue;
             }
@@ -80,7 +79,7 @@ impl FromStr for Uuid {
                 '0'..='9' => c as u8 - b'0',
                 'a'..='f' => c as u8 - b'a' + 10,
                 'A'..='F' => c as u8 - b'A' + 10,
-                _ => return Err(InvalidError),
+                _ => return Err(Error),
             };
             if n % 2 == 0 {
                 bytes[n / 2] = x << 4;
@@ -116,12 +115,10 @@ impl Uuid {
 #[cfg(feature = "v7")]
 impl Uuid {
     /// Create UUID v7 with time
-    pub fn new_v7(time: std::time::SystemTime) -> Uuid {
+    pub fn new_v7(time: Timestamp) -> Uuid {
         let mut bytes = [0; 16];
-        let timestamp = time
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_millis() as u64;
+        let (seconds, nanoseconds) = time.to_unix();
+        let timestamp = seconds * 1_000 + u64::from(nanoseconds / 1_000_000);
         bytes[0] = (timestamp >> 40) as u8;
         bytes[1] = (timestamp >> 32) as u8;
         bytes[2] = (timestamp >> 24) as u8;
@@ -136,7 +133,10 @@ impl Uuid {
 
     /// Create UUID v7 with current time
     pub fn now_v7() -> Uuid {
-        Self::new_v7(std::time::SystemTime::now())
+        Self::new_v7(
+            Timestamp::try_from(std::time::SystemTime::now())
+                .expect("system time must be after the Unix epoch"),
+        )
     }
 }
 
@@ -155,18 +155,67 @@ impl<'de> serde::Deserialize<'de> for Uuid {
     }
 }
 
-// MARK: InvalidError
+// MARK: Error
 /// Invalid UUID error
-#[derive(Debug)]
-pub struct InvalidError;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Error;
 
-impl Display for InvalidError {
+impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Invalid UUID")
     }
 }
 
-impl Error for InvalidError {}
+impl std::error::Error for Error {}
+
+// MARK: Timestamp
+#[cfg(feature = "v7")]
+/// Timestamp support for time-based UUIDs.
+pub mod timestamp {
+    /// A timestamp used when constructing time-based UUIDs.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct Timestamp {
+        seconds: u64,
+        nanoseconds: u32,
+    }
+
+    impl Timestamp {
+        /// Creates a timestamp from Unix time and clock-sequence metadata.
+        pub const fn from_unix_time(
+            seconds: u64,
+            nanoseconds: u32,
+            _counter: u128,
+            _usable_counter_bits: u8,
+        ) -> Self {
+            Self {
+                seconds,
+                nanoseconds,
+            }
+        }
+
+        /// Returns this timestamp as seconds and nanoseconds since the Unix epoch.
+        pub const fn to_unix(&self) -> (u64, u32) {
+            (self.seconds, self.nanoseconds)
+        }
+    }
+
+    impl TryFrom<std::time::SystemTime> for Timestamp {
+        type Error = crate::Error;
+
+        fn try_from(time: std::time::SystemTime) -> Result<Self, Self::Error> {
+            let duration = time
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| crate::Error)?;
+            Ok(Self {
+                seconds: duration.as_secs(),
+                nanoseconds: duration.subsec_nanos(),
+            })
+        }
+    }
+}
+
+#[cfg(feature = "v7")]
+pub use timestamp::Timestamp;
 
 // MARK: Tests
 #[cfg(test)]
@@ -187,7 +236,7 @@ mod test {
     fn test_from_slice_invalid() {
         let uuid =
             Uuid::from_slice(&[0xa0, 0xb1, 0xc2, 0xd3, 0xe4, 0xf5, 0x67, 0x89, 0x9a]).unwrap_err();
-        assert!(matches!(uuid, InvalidError));
+        assert!(matches!(uuid, Error));
     }
 
     #[test]
@@ -218,10 +267,10 @@ mod test {
         let uuid = "a0b1c2d3e4f567899a0bcdef01234567"
             .parse::<Uuid>()
             .unwrap_err();
-        assert!(matches!(uuid, InvalidError));
+        assert!(matches!(uuid, Error));
 
         let uuid = "a0b1c2d3-e4f5-6789-9a0".parse::<Uuid>().unwrap_err();
-        assert!(matches!(uuid, InvalidError));
+        assert!(matches!(uuid, Error));
     }
 
     #[test]

@@ -291,13 +291,14 @@ impl MenuEntry {
                 let native_item: Retained<Object> = msg_send![class!(NSMenuItem), new];
                 let _: () = msg_send![&native_item, setTitle:&*NSString::new(title)];
                 let services_menu: Retained<Object> = msg_send![class!(NSMenu), new];
-                let _: () = msg_send![&native_item, setSubmenu:services_menu.as_ptr()];
-                let _: () = msg_send![application, setServicesMenu:services_menu.as_ptr()];
+                let _: () = msg_send![&native_item, setSubmenu:Retained::as_ptr(&services_menu)];
+                let _: () =
+                    msg_send![application, setServicesMenu:Retained::as_ptr(&services_menu)];
                 native_item
             },
             MenuEntry::Item(item) => unsafe { item.create_native(app_delegate) },
         };
-        let _: () = unsafe { msg_send![native_menu, addItem:native_item.as_ptr()] };
+        let _: () = unsafe { msg_send![native_menu, addItem:Retained::as_ptr(&native_item)] };
     }
 }
 
@@ -344,19 +345,28 @@ impl Menu {
         }
 
         let native_menu: Retained<Object> = unsafe { msg_send![class!(NSMenu), new] };
-        let _: () = unsafe { msg_send![&menu_item, setSubmenu:native_menu.as_ptr()] };
+        let _: () = unsafe { msg_send![&menu_item, setSubmenu:Retained::as_ptr(&native_menu)] };
         match self.role {
             MenuRole::Window => {
-                let _: () = unsafe { msg_send![application, setWindowsMenu:native_menu.as_ptr()] };
+                let _: () = unsafe {
+                    msg_send![application, setWindowsMenu:Retained::as_ptr(&native_menu)]
+                };
             }
             MenuRole::Help => {
-                let _: () = unsafe { msg_send![application, setHelpMenu:native_menu.as_ptr()] };
+                let _: () =
+                    unsafe { msg_send![application, setHelpMenu:Retained::as_ptr(&native_menu)] };
             }
             MenuRole::Application | MenuRole::Normal => {}
         }
 
         for entry in self.entries {
-            unsafe { entry.add_to(native_menu.as_ptr(), application, app_delegate) };
+            unsafe {
+                entry.add_to(
+                    Retained::as_ptr(&native_menu).cast_mut(),
+                    application,
+                    app_delegate,
+                )
+            };
         }
         menu_item
     }
@@ -425,10 +435,10 @@ impl MenuBar {
     // Installs this menu bar as the application's main menu
     unsafe fn create_native(self, application: *mut Object, app_delegate: *mut Object) {
         let menubar: Retained<Object> = unsafe { msg_send![class!(NSMenu), new] };
-        let _: () = unsafe { msg_send![application, setMainMenu:menubar.as_ptr()] };
+        let _: () = unsafe { msg_send![application, setMainMenu:Retained::as_ptr(&menubar)] };
         for menu in self.0 {
             let menu_item = unsafe { menu.create_native(application, app_delegate) };
-            let _: () = unsafe { msg_send![&menubar, addItem:menu_item.as_ptr()] };
+            let _: () = unsafe { msg_send![&menubar, addItem:Retained::as_ptr(&menu_item)] };
         }
     }
 }
@@ -517,7 +527,9 @@ pub(super) unsafe fn create_menu_bar(
     app_delegate: *mut Object,
     builder: &mut EventLoopBuilder,
 ) {
-    let app_name: NSString = unsafe { msg_send![application, valueForKey:ns_string!("name")] };
+    let app_name: Retained<Object> =
+        unsafe { msg_send![application, valueForKey:ns_string!("name")] };
+    let app_name = NSString::from(app_name);
     let menu_bar = MenuBar::with_defaults(&app_name.to_string());
     #[cfg(feature = "menu")]
     let menu_bar = menu_bar.merge(builder.macos_menu.take());

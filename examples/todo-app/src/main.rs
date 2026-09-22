@@ -70,7 +70,7 @@ fn main() {
 
     let project_dirs = ProjectDirs::from("nl", "bplaat", "TodoApp").expect("Can't get dirs");
     let config_dir = project_dirs.config_dir();
-    fs::create_dir_all(&config_dir).expect("Can't create config directory");
+    fs::create_dir_all(config_dir).expect("Can't create config directory");
     let todos_config_path = config_dir.join("todos.json");
 
     event_loop.run(move |event| match event {

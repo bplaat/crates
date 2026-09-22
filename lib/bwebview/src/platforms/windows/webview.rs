@@ -715,7 +715,7 @@ extern "system" fn web_resource_requested(
     unsafe { (*webview2_request).Release() };
 
     for custom_protocol in &_self.custom_protocols {
-        if http_request.url.host() == Some(&format!("{}.localhost", custom_protocol.scheme)) {
+        if http_request.url.host_str() == Some(&format!("{}.localhost", custom_protocol.scheme)) {
             let response = (custom_protocol.handler)(&http_request);
 
             let webview2_response = http_response_to_webview2_response(

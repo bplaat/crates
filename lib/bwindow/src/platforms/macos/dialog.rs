@@ -49,7 +49,7 @@ impl crate::MessageDialogInterface for PlatformMessageDialog {
 
             let parent = dialog
                 .parent
-                .map(|window| window.0.window.as_ptr())
+                .map(|window| Retained::as_ptr(&window.0.window))
                 .unwrap_or_else(|| msg_send![NSApp, keyWindow]);
             let response: i64 = if parent.is_null() {
                 msg_send![&alert, runModal]
@@ -82,7 +82,8 @@ impl crate::FileDialogInterface for PlatformFileDialog {
             if result == NS_MODAL_RESPONSE_OK {
                 let urls: *mut Object = msg_send![panel, URLs];
                 let url: *mut Object = msg_send![urls, objectAtIndex: 0usize];
-                let path: NSString = msg_send![url, path];
+                let path: Retained<Object> = msg_send![url, path];
+                let path = NSString::from(path);
                 Some(std::path::PathBuf::from(path.to_string()))
             } else {
                 None
@@ -104,7 +105,8 @@ impl crate::FileDialogInterface for PlatformFileDialog {
                 let paths: Vec<_> = (0..count)
                     .map(|i| {
                         let url: *mut Object = msg_send![urls, objectAtIndex: i];
-                        let path: NSString = msg_send![url, path];
+                        let path: Retained<Object> = msg_send![url, path];
+                        let path = NSString::from(path);
                         std::path::PathBuf::from(path.to_string())
                     })
                     .collect();
@@ -125,7 +127,8 @@ impl crate::FileDialogInterface for PlatformFileDialog {
             let result: i64 = run_panel_modal(panel, dialog.parent);
             if result == NS_MODAL_RESPONSE_OK {
                 let url: *mut Object = msg_send![panel, URL];
-                let path: NSString = msg_send![url, path];
+                let path: Retained<Object> = msg_send![url, path];
+                let path = NSString::from(path);
                 Some(std::path::PathBuf::from(path.to_string()))
             } else {
                 None
@@ -152,7 +155,7 @@ unsafe fn setup_ns_panel(panel: *mut Object, dialog: &crate::FileDialog<'_>) {
                 }
             }
             // setAllowedFileTypes: is deprecated in macOS 12 but still functional
-            let _: () = msg_send![panel, setAllowedFileTypes: arr.as_ptr()];
+            let _: () = msg_send![panel, setAllowedFileTypes: Retained::as_ptr(&arr)];
         }
     }
 }
@@ -163,7 +166,7 @@ unsafe fn run_panel_modal(
 ) -> i64 {
     unsafe {
         let parent = parent
-            .map(|window| window.0.window.as_ptr())
+            .map(|window| Retained::as_ptr(&window.0.window))
             .unwrap_or_else(|| msg_send![NSApp, keyWindow]);
         if !parent.is_null() {
             // Show as a sheet attached to the active window

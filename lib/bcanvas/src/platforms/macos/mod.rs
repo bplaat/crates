@@ -15,6 +15,8 @@ use bwindow::ffi::*;
 use bwindow::{NativeWindowHandle, WindowAttachment, WindowEventSender};
 use objc2::rc::{Allocated, Retained, autoreleasepool};
 use objc2::runtime::{AnyObject as Object, Bool};
+#[allow(unused_imports)]
+use objc2::{ClassType as _, DefinedClass as _};
 use objc2::{class, define_class, msg_send, sel};
 
 pub(crate) use self::context::PlatformCanvasContext;
@@ -160,11 +162,13 @@ define_class!(
 
         #[cfg(feature = "file_drop")]
         #[unsafe(method(draggingEntered:))]
-        const fn _dragging_entered(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _dragging_entered(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
 
         #[cfg(feature = "file_drop")]
         #[unsafe(method(prepareForDragOperation:))]
-        const fn _prepare_for_drag_operation(&self, _: *mut Object) -> Bool { Bool::YES }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _prepare_for_drag_operation(&self, _: *mut Object) -> Bool { Bool::YES }
 
         #[cfg(feature = "file_drop")]
         #[unsafe(method(performDragOperation:))]
@@ -173,10 +177,12 @@ define_class!(
         }
 
         #[unsafe(method(isFlipped))]
-        const fn _is_flipped(&self) -> Bool { Bool::YES }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _is_flipped(&self) -> Bool { Bool::YES }
 
         #[unsafe(method(acceptsFirstResponder))]
-        const fn _accepts_first_responder(&self) -> Bool { Bool::YES }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _accepts_first_responder(&self) -> Bool { Bool::YES }
 
         #[unsafe(method(drawRect:))]
         fn _draw_rect(&self, _: NSRect) { self.paint(); }
@@ -299,7 +305,8 @@ impl CanvasView {
             return;
         }
         // Application code can drop its canvas or close the parent during paint.
-        let retained: Retained<Self> = unsafe { msg_send![self, retain] };
+        let retained = unsafe { Retained::retain(self as *const Self as *mut Self) }
+            .expect("cannot retain a live canvas view");
         let state = retained.ivars();
         if state.painting.get() {
             self.request_redraw();
@@ -364,7 +371,9 @@ impl PlatformCanvas {
                 }))),
                 initWithFrame:bounds
             ];
-            signal.target.store(view.as_ptr().cast(), Ordering::Release);
+            signal
+                .target
+                .store(Retained::as_ptr(&view).cast_mut().cast(), Ordering::Release);
             let mut display_link = null_mut();
             let result = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
             assert_eq!(

@@ -7,6 +7,8 @@
 use std::ffi::c_void;
 
 use macview_appkit::{CGContextFillRect, CGContextSetRGBFillColor, Point, Rect, Size};
+#[allow(unused_imports)]
+use objc2::ClassType as _;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
@@ -28,7 +30,8 @@ define_class!(
         }
 
         #[unsafe(method(isOpaque))]
-        const fn _is_opaque(&self) -> Bool {
+        #[allow(clippy::missing_const_for_fn)]
+        fn _is_opaque(&self) -> Bool {
             Bool::YES
         }
 

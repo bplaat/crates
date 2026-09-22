@@ -35,7 +35,7 @@ define_class!(
 
 #[test]
 fn test_define_class_no_methods_class_ptr_non_null() {
-    assert!(!NoMethodsClass::class().is_null());
+    assert_eq!(NoMethodsClass::class(), NoMethodsClass::class());
 }
 
 #[test]
@@ -333,7 +333,7 @@ define_class!(
             unsafe {
                 let super_info = objc_super {
                     receiver: this.cast::<AnyObject>(),
-                    super_class: class!(NSObject).cast::<AnyClass>(),
+                    super_class: class!(NSObject) as *const AnyClass,
                 };
                 let send: unsafe extern "C-unwind" fn(*const objc_super, *const c_void) =
                     std::mem::transmute(objc_msgSendSuper as *const c_void);
@@ -370,7 +370,7 @@ extern_class!(
 
 #[test]
 fn test_extern_class_returns_non_null() {
-    assert!(!ExternNSObject::class().is_null());
+    assert_eq!(ExternNSObject::class(), class!(NSObject));
 }
 
 #[test]

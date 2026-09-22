@@ -11,8 +11,13 @@ use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 
 use objc2::rc::{Allocated, Retained};
-use objc2::runtime::AnyObject as Object;
-use objc2::{Encode, Encoding, class, msg_send};
+use objc2::runtime::{AnyObject as Object, NSObject};
+use objc2::{Encode, Encoding, class, extern_class, msg_send};
+
+extern_class!(
+    #[unsafe(super(NSObject))]
+    pub struct NSView;
+);
 
 #[link(name = "Foundation", kind = "framework")]
 unsafe extern "C" {
@@ -112,12 +117,9 @@ pub const NS_DRAG_OPERATION_COPY: u64 = 1;
 #[repr(transparent)]
 pub struct NSString(Retained<Object>);
 
-unsafe impl Encode for NSString {
-    const ENCODING: Encoding = Encoding::Object;
-    const IS_OBJECT_OWNERSHIP: bool = true;
-
-    unsafe fn from_object_return(pointer: *mut c_void, owned: bool) -> Self {
-        Self(unsafe { <Retained<Object> as Encode>::from_object_return(pointer, owned) })
+impl From<Retained<Object>> for NSString {
+    fn from(string: Retained<Object>) -> Self {
+        Self(string)
     }
 }
 
@@ -228,7 +230,8 @@ pub use ns_string;
 #[cfg(test)]
 mod tests {
     use objc2::msg_send;
-    use objc2::rc::autoreleasepool;
+    use objc2::rc::{Retained, autoreleasepool};
+    use objc2::runtime::AnyObject as Object;
 
     use super::NSString;
 
@@ -248,10 +251,11 @@ mod tests {
 
     #[test]
     fn string_return_values_are_retained() {
-        let description: NSString = autoreleasepool(|_| unsafe {
+        let description: Retained<Object> = autoreleasepool(|_| unsafe {
             let string = NSString::new("retained return");
             msg_send![&*string, description]
         });
+        let description = NSString::from(description);
         autoreleasepool(|_| assert_eq!(description.to_string(), "retained return"));
     }
 }

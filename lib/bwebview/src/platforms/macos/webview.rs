@@ -11,8 +11,8 @@ use std::rc::Rc;
 
 use block2::Block;
 use objc2::rc::{Allocated, Retained};
-use objc2::runtime::{AnyObject as Object, Bool};
-use objc2::{class, define_class, msg_send};
+use objc2::runtime::{AnyObject as Object, Bool, NSObject};
+use objc2::{ClassType as _, DefinedClass as _, class, define_class, msg_send};
 
 #[cfg(feature = "file_drop")]
 use super::file_drop::droppable_webview_class;
@@ -89,10 +89,12 @@ impl WebviewDelegate {
     }
 
     fn observe_value(&self, key_path: &Object, change: *mut Object) {
-        let key_path: NSString = unsafe { msg_send![key_path, copy] };
+        let key_path: Retained<Object> = unsafe { msg_send![key_path, copy] };
+        let key_path = NSString::from(key_path);
         if key_path.to_string() == "title" {
-            let change: NSString =
+            let change: Retained<Object> =
                 unsafe { msg_send![change, objectForKey:NSKeyValueChangeNewKey] };
+            let change = NSString::from(change);
             self.emit(WebviewEvent::PageTitleChange(change.to_string()));
         }
     }
@@ -113,9 +115,11 @@ impl WebviewDelegate {
     }
 
     fn did_receive_script_message(&self, message: *mut Object) {
-        let name: NSString = unsafe { msg_send![message, name] };
+        let name: Retained<Object> = unsafe { msg_send![message, name] };
+        let name = NSString::from(name);
         let name = name.to_string();
-        let body: NSString = unsafe { msg_send![message, body] };
+        let body: Retained<Object> = unsafe { msg_send![message, body] };
+        let body = NSString::from(body);
         let body = body.to_string();
 
         #[cfg(feature = "log")]
@@ -182,11 +186,15 @@ impl PlatformWebview {
         // Create WebviewDelegate instance (registers class lazily on first call)
         let delegate: Allocated<WebviewDelegate> =
             unsafe { msg_send![WebviewDelegate::class(), alloc] };
-        let webview_delegate: Retained<Object> = unsafe {
+        let webview_delegate: Retained<WebviewDelegate> = unsafe {
             msg_send![
                 super(delegate.set_ivars(builder.event_handler.take())),
                 init
             ]
+        };
+        let webview_delegate = unsafe {
+            Retained::from_raw(Retained::into_raw(webview_delegate).cast::<Object>())
+                .expect("webview delegate initialization returned null")
         };
 
         // Create webview
@@ -206,8 +214,10 @@ impl PlatformWebview {
                     super(delegate.set_ivars(CustomProtocolDelegateIvars { custom_protocol })),
                     init
                 ];
-                let _: () = msg_send![&webview_config, setURLSchemeHandler:delegate.as_ptr(), forURLScheme:&*url_scheme];
-                self.0.protocol_delegates.push(Retained::into_any(delegate));
+                let _: () = msg_send![&webview_config, setURLSchemeHandler:Retained::as_ptr(&delegate), forURLScheme:&*url_scheme];
+                let delegate = Retained::from_raw(Retained::into_raw(delegate).cast::<Object>())
+                    .expect("custom protocol delegate initialization returned null");
+                self.0.protocol_delegates.push(delegate);
             }
 
             // Get content view rect
@@ -224,14 +234,15 @@ impl PlatformWebview {
             #[cfg(not(feature = "file_drop"))]
             let webview_class = class!(WKWebView);
             let webview: Allocated<Object> = msg_send![webview_class, alloc];
-            let webview: Retained<Object> = msg_send![webview, initWithFrame:webview_rect, configuration:webview_config.as_ptr()];
+            let webview: Retained<Object> = msg_send![webview, initWithFrame:webview_rect, configuration:Retained::as_ptr(&webview_config)];
             #[cfg(feature = "file_drop")]
             if self.0.attachment.allow_file_drop() {
-                register_dragged_types(webview.as_ptr());
+                register_dragged_types(Retained::as_ptr(&webview).cast_mut());
             }
             let _: () = msg_send![&webview, setHidden:Bool::YES];
-            let _: () = msg_send![&webview, setNavigationDelegate:webview_delegate.as_ptr()];
-            let _: () = msg_send![content_view, addSubview:webview.as_ptr(), positioned:NS_WINDOW_BELOW, relativeTo:null_mut::<Object>()];
+            let _: () =
+                msg_send![&webview, setNavigationDelegate:Retained::as_ptr(&webview_delegate)];
+            let _: () = msg_send![content_view, addSubview:Retained::as_ptr(&webview), positioned:NS_WINDOW_BELOW, relativeTo:null_mut::<Object>()];
             let _: () = msg_send![&webview, setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE];
             if self.0.background_color.is_some() {
                 let value: *mut Object = msg_send![class!(NSNumber), numberWithBool:Bool::NO];
@@ -246,7 +257,7 @@ impl PlatformWebview {
             let _: () = msg_send![&webview, setCustomUserAgent:&*NSString::new(&useragent)];
             let _: () = msg_send![
                 &webview,
-                addObserver:webview_delegate.as_ptr(),
+                addObserver:Retained::as_ptr(&webview_delegate),
                 forKeyPath:ns_string!("title"),
                 options:NS_KEY_VALUE_OBSERVING_OPTION_NEW,
                 context:null::<c_void>()
@@ -282,10 +293,11 @@ impl PlatformWebview {
                     initWithSource:&*NSString::new(script),
                     injectionTime:WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_START,
                     forMainFrameOnly:Bool::YES];
-            let _: () = msg_send![user_content_controller, addUserScript:user_script.as_ptr()];
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate.as_ptr(), name:ns_string!("ipc")];
+            let _: () =
+                msg_send![user_content_controller, addUserScript:Retained::as_ptr(&user_script)];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:Retained::as_ptr(&webview_delegate), name:ns_string!("ipc")];
             #[cfg(feature = "log")]
-            let _: () = msg_send![user_content_controller, addScriptMessageHandler:webview_delegate.as_ptr(), name:ns_string!("console")];
+            let _: () = msg_send![user_content_controller, addScriptMessageHandler:Retained::as_ptr(&webview_delegate), name:ns_string!("console")];
         }
 
         let content = webview.clone();
@@ -309,7 +321,8 @@ impl crate::WebviewInterface for PlatformWebview {
         unsafe {
             let url: *mut Object = msg_send![self.webview(), URL];
             if !url.is_null() {
-                let url: NSString = msg_send![url, absoluteString];
+                let url: Retained<Object> = msg_send![url, absoluteString];
+                let url = NSString::from(url);
                 Some(url.to_string())
             } else {
                 None
@@ -364,7 +377,8 @@ impl crate::WebviewInterface for PlatformWebview {
                         InjectionTime::DocumentLoaded => WK_USER_SCRIPT_INJECTION_TIME_AT_DOCUMENT_END,
                     },
                     forMainFrameOnly:Bool::YES];
-            let _: () = msg_send![user_content_controller, addUserScript:user_script.as_ptr()];
+            let _: () =
+                msg_send![user_content_controller, addUserScript:Retained::as_ptr(&user_script)];
         }
     }
 
@@ -441,8 +455,9 @@ impl CustomProtocolDelegate {
         let res = (custom_protocol.handler)(&req);
         let (ns_response, ns_data) = http_response_to_ns_response(&res, &req);
         unsafe {
-            let _: () = msg_send![url_scheme_task, didReceiveResponse:ns_response.as_ptr()];
-            let _: () = msg_send![url_scheme_task, didReceiveData:ns_data.as_ptr()];
+            let _: () =
+                msg_send![url_scheme_task, didReceiveResponse:Retained::as_ptr(&ns_response)];
+            let _: () = msg_send![url_scheme_task, didReceiveData:Retained::as_ptr(&ns_data)];
             let _: () = msg_send![url_scheme_task, didFinish];
         }
     }
@@ -452,10 +467,12 @@ impl CustomProtocolDelegate {
 fn ns_request_to_http_request(ns_request: *mut Object) -> small_http::Request {
     use std::str::FromStr;
 
-    let method: NSString = unsafe { msg_send![ns_request, HTTPMethod] };
+    let method: Retained<Object> = unsafe { msg_send![ns_request, HTTPMethod] };
+    let method = NSString::from(method);
     let method = method.to_string();
     let url: *mut Object = unsafe { msg_send![ns_request, URL] };
-    let url: NSString = unsafe { msg_send![url, absoluteString] };
+    let url: Retained<Object> = unsafe { msg_send![url, absoluteString] };
+    let url = NSString::from(url);
     let url = url.to_string();
     let mut req = small_http::Request::with_method_and_url(
         small_http::Method::from_str(&method).unwrap_or(small_http::Method::Get),
@@ -466,8 +483,10 @@ fn ns_request_to_http_request(ns_request: *mut Object) -> small_http::Request {
     let keys: *mut Object = unsafe { msg_send![headers, allKeys] };
     let count: usize = unsafe { msg_send![keys, count] };
     for i in 0..count {
-        let key: NSString = unsafe { msg_send![keys, objectAtIndex:i] };
-        let value: NSString = unsafe { msg_send![headers, objectForKey:&*key] };
+        let key: Retained<Object> = unsafe { msg_send![keys, objectAtIndex:i] };
+        let key = NSString::from(key);
+        let value: Retained<Object> = unsafe { msg_send![headers, objectForKey:&*key] };
+        let value = NSString::from(value);
         req = req.header(key.to_string(), value.to_string());
     }
 

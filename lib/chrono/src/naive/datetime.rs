@@ -22,8 +22,8 @@ impl NaiveDateTime {
     /// Create a [NaiveDateTime] from a unix timestamp
     #[deprecated]
     #[allow(unused_variables)]
-    pub const fn from_timestamp(secs: i64, nsecs: u32) -> Option<Self> {
-        Some(Self(secs))
+    pub const fn from_timestamp(secs: i64, nsecs: u32) -> Self {
+        Self(secs)
     }
 
     /// Get the [NaiveDate] of the date and time
@@ -48,7 +48,7 @@ impl Add<Duration> for NaiveDateTime {
 
     fn add(self, duration: Duration) -> Self::Output {
         #[allow(deprecated)]
-        Self::from_timestamp(self.0 + duration.as_secs() as i64, 0).expect("Should be some")
+        Self::from_timestamp(self.0 + duration.as_secs() as i64, 0)
     }
 }
 
@@ -57,7 +57,7 @@ impl Sub<Duration> for NaiveDateTime {
 
     fn sub(self, duration: Duration) -> Self::Output {
         #[allow(deprecated)]
-        Self::from_timestamp(self.0 - duration.as_secs() as i64, 0).expect("Should be some")
+        Self::from_timestamp(self.0 - duration.as_secs() as i64, 0)
     }
 }
 
@@ -146,7 +146,7 @@ mod test {
 
     #[test]
     fn test_timestamp() {
-        let datetime = NaiveDateTime::from_timestamp(1609459345, 0).unwrap();
+        let datetime = NaiveDateTime::from_timestamp(1609459345, 0);
         assert_eq!(datetime.timestamp(), 1609459345);
     }
 
@@ -172,24 +172,24 @@ mod test {
 
     #[test]
     fn test_display() {
-        let datetime = NaiveDateTime::from_timestamp(1551355200, 0).unwrap();
+        let datetime = NaiveDateTime::from_timestamp(1551355200, 0);
         assert_eq!(datetime.to_string(), "2019-02-28 12:00:00");
-        let datetime = NaiveDateTime::from_timestamp(1582977600, 0).unwrap();
+        let datetime = NaiveDateTime::from_timestamp(1582977600, 0);
         assert_eq!(datetime.to_string(), "2020-02-29 12:00:00");
-        let datetime = NaiveDateTime::from_timestamp(-1000000, 0).unwrap();
+        let datetime = NaiveDateTime::from_timestamp(-1000000, 0);
         assert_eq!(datetime.to_string(), "1969-12-20 10:13:20");
     }
 
     #[test]
     fn test_add_duration() {
-        let datetime = NaiveDateTime::from_timestamp(1609459200, 0).unwrap();
+        let datetime = NaiveDateTime::from_timestamp(1609459200, 0);
         let new_datetime = datetime + Duration::from_secs(1);
         assert_eq!(new_datetime.timestamp(), 1609459201);
     }
 
     #[test]
     fn test_sub_duration() {
-        let datetime = NaiveDateTime::from_timestamp(1609459200, 0).unwrap();
+        let datetime = NaiveDateTime::from_timestamp(1609459200, 0);
         let new_datetime = datetime - Duration::from_secs(1);
         assert_eq!(new_datetime.timestamp(), 1609459199);
     }

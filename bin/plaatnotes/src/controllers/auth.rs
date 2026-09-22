@@ -178,8 +178,8 @@ pub(crate) fn create_session(req: &Request, ctx: &Context, user_id: Uuid) -> Res
                         Ok(Some(city)) => (
                             city.location.latitude,
                             city.location.longitude,
-                            city.country.iso_code,
-                            city.city.names.english,
+                            city.country.iso_code.map(|value| value.to_string()),
+                            city.city.names.english.map(|value| value.to_string()),
                         ),
                         _ => (None, None, None, None),
                     },

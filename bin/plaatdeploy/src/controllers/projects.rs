@@ -6,7 +6,9 @@
 
 use anyhow::{Context as _, Result};
 use base64::prelude::*;
-use hmac::verify;
+#[allow(unused_imports)]
+use hmac::KeyInit as _;
+use hmac::{Hmac, Mac as _};
 use serde::Deserialize;
 use sha2::Sha256;
 use small_http::{Request, Response, Status};
@@ -422,7 +424,11 @@ fn verify_signature(secret: &str, body: &[u8], signature: &str) -> bool {
     let Some(expected) = decode_hex(hex) else {
         return false;
     };
-    verify::<Sha256>(secret.as_bytes(), body, &expected)
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
+        return false;
+    };
+    mac.update(body);
+    mac.verify_slice(&expected).is_ok()
 }
 
 fn decode_hex(value: &str) -> Option<Vec<u8>> {

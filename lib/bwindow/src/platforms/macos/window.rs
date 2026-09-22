@@ -7,8 +7,8 @@
 use std::ptr::null_mut;
 
 use objc2::rc::{Allocated, Retained};
-use objc2::runtime::{AnyObject as Object, Bool};
-use objc2::{class, define_class, msg_send};
+use objc2::runtime::{AnyObject as Object, Bool, NSObject};
+use objc2::{ClassType as _, DefinedClass as _, class, define_class, msg_send};
 
 use super::event_loop::{allow_termination_if_last_window, send_event};
 #[cfg(feature = "file_drop")]
@@ -24,7 +24,8 @@ define_class!(
 
     impl DraggableView {
         #[unsafe(method(acceptsFirstMouse:))]
-        const fn _accepts_first_mouse(&self, _: *mut Object) -> Bool { Bool::YES }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _accepts_first_mouse(&self, _: *mut Object) -> Bool { Bool::YES }
 
         #[unsafe(method(mouseDown:))]
         fn _mouse_down(&self, event: *mut Object) {
@@ -77,7 +78,8 @@ fn titlebar_double_click_action() -> TitlebarDoubleClickAction {
         return TitlebarDoubleClickAction::Zoom;
     }
 
-    let action: NSString = unsafe { msg_send![action, copy] };
+    let action: Retained<Object> = unsafe { msg_send![action, copy] };
+    let action = NSString::from(action);
     TitlebarDoubleClickAction::from_preference(Some(&action.to_string()))
 }
 
@@ -110,7 +112,8 @@ define_class!(
         #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
         fn appearance_changed(&self, _: *mut Object, window: *mut Object, _: *mut Object, _: *mut std::ffi::c_void) {
             let appearance: *mut Object = unsafe { msg_send![window, effectiveAppearance] };
-            let name: NSString = unsafe { msg_send![appearance, name] };
+            let name: Retained<Object> = unsafe { msg_send![appearance, name] };
+            let name = NSString::from(name);
             self.ivars().theme_changed(if name.to_string().contains("Dark") { Theme::Dark } else { Theme::Light });
         }
         #[unsafe(method(windowDidBecomeKey:))]
@@ -152,15 +155,18 @@ define_class!(
 
         #[cfg(feature = "file_drop")]
         #[unsafe(method(draggingEntered:))]
-        const fn _dragging_entered(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _dragging_entered(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
 
         #[cfg(feature = "file_drop")]
         #[unsafe(method(draggingUpdated:))]
-        const fn _dragging_updated(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _dragging_updated(&self, _: *mut Object) -> u64 { NS_DRAG_OPERATION_COPY }
 
         #[cfg(feature = "file_drop")]
         #[unsafe(method(prepareForDragOperation:))]
-        const fn _prepare_for_drag_operation(&self, _: *mut Object) -> Bool { Bool::YES }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _prepare_for_drag_operation(&self, _: *mut Object) -> Bool { Bool::YES }
 
         #[cfg(feature = "file_drop")]
         #[unsafe(method(performDragOperation:))]
@@ -182,7 +188,7 @@ impl WindowDelegate {
             ),
             move || {
                 if !request.default_prevented() && !host.is_closed() {
-                    allow_termination_if_last_window(window.as_ptr());
+                    allow_termination_if_last_window(Retained::as_ptr(&window).cast_mut());
                     let _: () = unsafe { msg_send![&window, close] };
                 }
             },
@@ -297,7 +303,7 @@ fn add_drag_view(window: *mut Object, content_view: *mut Object) {
     let _: () = unsafe {
         msg_send![&drag_view, setAutoresizingMask:NS_VIEW_WIDTH_SIZABLE | NS_VIEW_MIN_Y_MARGIN]
     };
-    let _: () = unsafe { msg_send![content_view, addSubview:drag_view.as_ptr()] };
+    let _: () = unsafe { msg_send![content_view, addSubview:Retained::as_ptr(&drag_view)] };
 }
 
 pub(super) struct PlatformWindowData {
@@ -328,8 +334,12 @@ impl PlatformWindow {
         // Create WindowDelegate instance
         let delegate: Allocated<WindowDelegate> =
             unsafe { msg_send![WindowDelegate::class(), alloc] };
-        let window_delegate: Retained<Object> =
+        let window_delegate: Retained<WindowDelegate> =
             unsafe { msg_send![super(delegate.set_ivars(host.clone())), init] };
+        let window_delegate = unsafe {
+            Retained::from_raw(Retained::into_raw(window_delegate).cast::<Object>())
+                .expect("window delegate initialization returned null")
+        };
 
         // Create window
         let screen_rect: NSRect = if let Some(monitor) = builder.monitor {
@@ -414,10 +424,10 @@ impl PlatformWindow {
             if builder.remember_window_state {
                 let _: Bool = msg_send![&window, setFrameAutosaveName:ns_string!("window")];
             }
-            let _: () = msg_send![&window, setDelegate:window_delegate.as_ptr()];
+            let _: () = msg_send![&window, setDelegate:Retained::as_ptr(&window_delegate)];
             #[cfg(feature = "file_drop")]
             if builder.allow_file_drop {
-                register_dragged_types(window.as_ptr());
+                register_dragged_types(Retained::as_ptr(&window).cast_mut());
             }
             window
         };
@@ -427,11 +437,13 @@ impl PlatformWindow {
                 || builder.macos_titlebar_style == MacosTitlebarStyle::Hidden)
         {
             let content_view: *mut Object = unsafe { msg_send![&window, contentView] };
-            add_drag_view(window.as_ptr(), content_view);
+            add_drag_view(Retained::as_ptr(&window).cast_mut(), content_view);
         }
-        host.set_handle(crate::NativeWindowHandle::AppKit(window.as_ptr().cast()));
+        host.set_handle(crate::NativeWindowHandle::AppKit(
+            Retained::as_ptr(&window).cast_mut().cast(),
+        ));
         unsafe {
-            let _: () = msg_send![&window, addObserver:window_delegate.as_ptr(), forKeyPath:ns_string!("effectiveAppearance"), options:5usize, context:null_mut::<std::ffi::c_void>()];
+            let _: () = msg_send![&window, addObserver:Retained::as_ptr(&window_delegate), forKeyPath:ns_string!("effectiveAppearance"), options:5usize, context:null_mut::<std::ffi::c_void>()];
         }
         PlatformWindow(Box::new(PlatformWindowData {
             host: host.clone(),
@@ -449,7 +461,7 @@ impl Drop for PlatformWindow {
     fn drop(&mut self) {
         let key = NSString::new("effectiveAppearance");
         let _: () = unsafe {
-            msg_send![&self.0.window, removeObserver:self.0._delegate.as_ptr(), forKeyPath:&*key]
+            msg_send![&self.0.window, removeObserver:Retained::as_ptr(&self.0._delegate), forKeyPath:&*key]
         };
         // NSWindow.delegate is non-owning, so clear it before the retained delegate is dropped.
         let _: () = unsafe { msg_send![&self.0.window, setDelegate:null_mut::<Object>()] };
@@ -458,7 +470,7 @@ impl Drop for PlatformWindow {
 
 impl crate::WindowInterface for PlatformWindow {
     fn close(&mut self) {
-        allow_termination_if_last_window(self.0.window.as_ptr());
+        allow_termination_if_last_window(Retained::as_ptr(&self.0.window).cast_mut());
         let _: () = unsafe { msg_send![&self.0.window, close] };
     }
 
@@ -547,7 +559,7 @@ pub(super) fn window_id(window: *mut Object) -> Option<crate::WindowId> {
     if delegate.is_null() {
         return None;
     }
-    let class = WindowDelegate::class().cast::<objc2::runtime::AnyClass>();
+    let class = WindowDelegate::class();
     let is_ours: Bool = unsafe { msg_send![delegate, isKindOfClass:class] };
     if is_ours == Bool::NO {
         return None;

@@ -25,7 +25,7 @@ pub struct Allocated<T: Message> {
 
 impl<T: Message> Allocated<T> {
     /// Returns the possibly null allocation pointer.
-    pub const fn as_ptr(&self) -> *mut T {
+    pub const fn as_ptr(&self) -> *const T {
         self.pointer
     }
 
@@ -150,7 +150,7 @@ impl<T: Message> Retained<T> {
     }
 
     /// Returns the object pointer, which remains valid while this value is alive.
-    pub const fn as_ptr(&self) -> *mut T {
+    pub const fn as_ptr(&self) -> *const T {
         self.pointer.as_ptr()
     }
 
@@ -177,7 +177,8 @@ impl<T: Message> Retained<T> {
 impl<T: Message> Clone for Retained<T> {
     fn clone(&self) -> Self {
         // SAFETY: self keeps the initialized object live during the retain.
-        unsafe { Self::retain(self.as_ptr()) }.expect("retaining a non-null object returned null")
+        unsafe { Self::retain(self.as_ptr().cast_mut()) }
+            .expect("retaining a non-null object returned null")
     }
 }
 
@@ -239,12 +240,35 @@ unsafe impl<T: Message> Encode for Option<Retained<T>> {
 }
 
 /// A token representing an active autorelease pool
-pub struct AutoreleasePool(());
+#[derive(Clone, Copy, Debug)]
+pub struct AutoreleasePool<'pool>(PhantomData<&'pool mut &'pool ()>);
+
+impl<'pool> AutoreleasePool<'pool> {
+    /// Convert a non-null pointer into a reference tied to this pool.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must remain valid until the pool is drained.
+    pub const unsafe fn ptr_as_ref<T: ?Sized>(self, pointer: *const T) -> &'pool T {
+        // SAFETY: The caller guarantees validity for the lifetime represented by this token.
+        unsafe { &*pointer }
+    }
+}
+
+/// Return values that may safely cross an autorelease-pool boundary.
+///
+/// # Safety
+///
+/// Implementors must not contain references tied to an active autorelease pool.
+pub unsafe trait AutoreleaseSafe {}
+
+// SAFETY: This minimal implementation does not expose pool-borrowing APIs implicitly.
+unsafe impl<T> AutoreleaseSafe for T {}
 
 /// Run a closure within an autorelease pool
-pub fn autoreleasepool<F, R>(f: F) -> R
+pub fn autoreleasepool<R, F>(f: F) -> R
 where
-    F: FnOnce(&AutoreleasePool) -> R,
+    for<'pool> F: AutoreleaseSafe + FnOnce(AutoreleasePool<'pool>) -> R,
 {
     // SAFETY: `objc_autoreleasePoolPush` and `objc_autoreleasePoolPop` must be called in
     // matched pairs on the same thread. The token from Push is immediately passed back to
@@ -259,7 +283,7 @@ where
 
     // SAFETY: The guard guarantees a matching pop, including while unwinding.
     let _guard = PoolGuard(unsafe { objc_autoreleasePoolPush() });
-    f(&AutoreleasePool(()))
+    f(AutoreleasePool(PhantomData))
 }
 
 // MARK: Tests
@@ -291,7 +315,7 @@ mod test {
     #[test]
     fn test_autoreleasepool_token_accessible() {
         autoreleasepool(|pool| {
-            let _: &AutoreleasePool = pool;
+            let _: AutoreleasePool<'_> = pool;
         });
     }
 

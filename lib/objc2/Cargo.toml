@@ -10,4 +10,5 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-objc2-proc-macros = "0.2.0"
+objc2-encode = "4.1.0"
+objc2-proc-macros = { version = "0.2.0", path = "../objc2-proc-macros" }

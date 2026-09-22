@@ -9,6 +9,48 @@
 #![allow(missing_docs)]
 
 use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
+
+/// A MIME token borrowed from a [`Mime`] value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Name<'a>(&'a str);
+
+impl<'a> Name<'a> {
+    /// Returns this token as a string slice.
+    pub const fn as_str(&self) -> &'a str {
+        self.0
+    }
+}
+
+impl AsRef<str> for Name<'_> {
+    fn as_ref(&self) -> &str {
+        self.0
+    }
+}
+
+impl Display for Name<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl<'a> From<Name<'a>> for &'a str {
+    fn from(name: Name<'a>) -> Self {
+        name.0
+    }
+}
+
+impl PartialEq<&str> for Name<'_> {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<Name<'_>> for &str {
+    fn eq(&self, other: &Name<'_>) -> bool {
+        *self == other.0
+    }
+}
 
 // MARK: Mime
 /// A MIME type
@@ -34,18 +76,21 @@ impl Mime {
     }
 
     /// Type
-    pub const fn type_(&self) -> &str {
-        self.type_
+    pub const fn type_(&self) -> Name<'_> {
+        Name(self.type_)
     }
 
     /// Subtype
-    pub const fn subtype(&self) -> &str {
-        self.subtype
+    pub const fn subtype(&self) -> Name<'_> {
+        Name(self.subtype)
     }
 
     /// Suffix
-    pub const fn suffix(&self) -> Option<&str> {
-        self.suffix
+    pub const fn suffix(&self) -> Option<Name<'_>> {
+        match self.suffix {
+            Some(suffix) => Some(Name(suffix)),
+            None => None,
+        }
     }
 }
 
@@ -59,11 +104,30 @@ impl Display for Mime {
     }
 }
 
+impl FromStr for Mime {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let (type_, subtype) = value.split_once('/').ok_or("missing MIME type separator")?;
+        let (subtype, suffix) = subtype
+            .split_once('+')
+            .map_or((subtype, None), |(subtype, suffix)| (subtype, Some(suffix)));
+        if type_.is_empty() || subtype.is_empty() {
+            return Err("empty MIME type component");
+        }
+        Ok(Self::new(
+            Box::leak(type_.to_owned().into_boxed_str()),
+            Box::leak(subtype.to_owned().into_boxed_str()),
+            suffix.map(|suffix| Box::leak(suffix.to_owned().into_boxed_str()) as &'static str),
+        ))
+    }
+}
+
 // MARK: Common MIME types
 pub const APPLICATION_GZIP: Mime = Mime::new("application", "gzip", None);
 pub const APPLICATION_JAVASCRIPT: Mime = Mime::new("application", "javascript", None);
 pub const APPLICATION_JSON: Mime = Mime::new("application", "json", None);
-pub const APPLICATION_MANIFEST_JSON: Mime = Mime::new("application", "manifest+json", None);
+pub const APPLICATION_MANIFEST_JSON: Mime = Mime::new("application", "manifest", Some("json"));
 pub const APPLICATION_OCTET_STREAM: Mime = Mime::new("application", "octet-stream", None);
 pub const APPLICATION_PDF: Mime = Mime::new("application", "pdf", None);
 pub const APPLICATION_WASM: Mime = Mime::new("application", "wasm", None);

@@ -202,7 +202,7 @@ pub fn extern_class(input: TokenStream) -> TokenStream {
         unsafe impl ::objc2::runtime::Message for #struct_name {}
 
         impl #struct_name {
-            fn class() -> *mut ::objc2::runtime::AnyObject {
+            fn class() -> &'static ::objc2::runtime::AnyClass {
                 ::objc2::class!(#class_ident)
             }
         }
@@ -330,10 +330,10 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                         });
                         registrations.push(quote! {
                             #(#cfg_attrs)*
-                            assert!(builder.add_method(
+                            unsafe { builder.add_method::<::objc2::runtime::AnyObject, _>(
                                 #sel_mac,
                                 Self::#trampoline_name as extern "C-unwind" fn(_, _),
-                            ));
+                            ); }
                         });
 
                         let filtered_attrs: Vec<&Attribute> = method
@@ -381,10 +381,10 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                             objc_arg_types.iter().map(|_| quote! { _ }).collect();
                         registrations.push(quote! {
                             #(#cfg_attrs)*
-                            assert!(builder.add_method(
+                            unsafe { builder.add_method::<::objc2::runtime::AnyObject, _>(
                                 #sel_mac,
                                 Self::#trampoline_name as extern "C-unwind" fn(_, _, #(#wildcards,)*) #ret,
-                            ));
+                            ); }
                         });
 
                         let filtered_attrs: Vec<&Attribute> = method
@@ -418,10 +418,10 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                     let wildcards: Vec<_> = (0..n_args).map(|_| quote! { _ }).collect();
                     registrations.push(quote! {
                         #(#cfg_attrs)*
-                        assert!(builder.add_method(
+                        unsafe { builder.add_method::<::objc2::runtime::AnyObject, _>(
                             #sel_mac,
                             Self::#trampoline_name as extern "C-unwind" fn(_, _, #(#wildcards,)*) #ret,
-                        ));
+                        ); }
                     });
 
                     let filtered_attrs: Vec<&Attribute> = method
@@ -453,12 +453,12 @@ pub fn define_class(input: TokenStream) -> TokenStream {
     let ivar_reg = ivars_expr.as_ref().map(|ivars| {
         quote! {
             assert!(builder.add_ivar_raw::<#ivars>(c"__ivars"));
-            assert!(builder.add_ivar::<u8>(c"__ivars_initialized"));
+            builder.add_ivar::<u8>(c"__ivars_initialized");
             if ::std::mem::needs_drop::<#ivars>() {
-                assert!(builder.add_method(
+                unsafe { builder.add_method::<::objc2::runtime::AnyObject, _>(
                     ::objc2::sel!(dealloc),
                     Self::__trampoline_destroy_ivars as extern "C-unwind" fn(_, _),
-                ));
+                ); }
             }
         }
     });
@@ -504,7 +504,7 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                     static OFFSET: ::std::sync::OnceLock<usize> = ::std::sync::OnceLock::new();
                     *OFFSET.get_or_init(|| unsafe {
                         let ivar = ::objc2::ffi::class_getInstanceVariable(
-                            Self::class() as *const _,
+                            (Self::class() as *const ::objc2::runtime::AnyClass).cast(),
                             c"__ivars".as_ptr(),
                         );
                         assert!(!ivar.is_null(), "__ivars ivar not found on class");
@@ -516,7 +516,7 @@ pub fn define_class(input: TokenStream) -> TokenStream {
                     static OFFSET: ::std::sync::OnceLock<usize> = ::std::sync::OnceLock::new();
                     *OFFSET.get_or_init(|| unsafe {
                         let ivar = ::objc2::ffi::class_getInstanceVariable(
-                            Self::class() as *const _,
+                            (Self::class() as *const ::objc2::runtime::AnyClass).cast(),
                             c"__ivars_initialized".as_ptr(),
                         );
                         assert!(!ivar.is_null(), "__ivars_initialized ivar not found on class");
@@ -532,24 +532,25 @@ pub fn define_class(input: TokenStream) -> TokenStream {
         #[allow(clippy::undocumented_unsafe_blocks)]
         unsafe impl ::objc2::runtime::ClassType for #struct_name {
             fn __superclass() -> *const ::objc2::runtime::AnyClass {
-                ::objc2::class!(#super_path).cast::<::objc2::runtime::AnyClass>()
+                ::objc2::class!(#super_path) as *const ::objc2::runtime::AnyClass
             }
         }
     };
 
     let class_method = quote! {
         #[allow(clippy::undocumented_unsafe_blocks)]
-        fn class() -> *mut ::objc2::runtime::AnyObject {
+        fn class() -> &'static ::objc2::runtime::AnyClass {
             static CLASS: ::std::sync::OnceLock<usize> = ::std::sync::OnceLock::new();
-            *CLASS.get_or_init(|| unsafe {
+            let pointer = *CLASS.get_or_init(|| {
                 let mut builder = ::objc2::runtime::ClassBuilder::new(
                     #class_name_c,
                     ::objc2::class!(#super_path),
                 ).expect(concat!("class \"", #class_name, "\" already registered"));
                 #ivar_reg
                 #(#registrations)*
-                builder.register() as usize
-            }) as *mut ::objc2::runtime::AnyObject
+                builder.register() as *const ::objc2::runtime::AnyClass as usize
+            }) as *const ::objc2::runtime::AnyClass;
+            unsafe { &*pointer }
         }
     };
 

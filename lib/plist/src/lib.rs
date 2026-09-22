@@ -9,11 +9,140 @@
 
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::ops::{Index, IndexMut};
 use std::path::Path;
 
 // MARK: Types
-/// A plist dictionary (ordered by key).
-pub type Dictionary = BTreeMap<String, Value>;
+/// A plist dictionary ordered by key.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Dictionary(BTreeMap<String, Value>);
+
+impl Dictionary {
+    /// Creates an empty dictionary.
+    pub const fn new() -> Self {
+        Self(BTreeMap::new())
+    }
+
+    /// Inserts a value.
+    pub fn insert(&mut self, key: String, value: Value) -> Option<Value> {
+        self.0.insert(key, value)
+    }
+
+    /// Returns the value for a key.
+    pub fn get(&self, key: &str) -> Option<&Value> {
+        self.0.get(key)
+    }
+
+    /// Returns the number of entries.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns whether the dictionary is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl Extend<(String, Value)> for Dictionary {
+    fn extend<T: IntoIterator<Item = (String, Value)>>(&mut self, iter: T) {
+        self.0.extend(iter);
+    }
+}
+
+impl IntoIterator for Dictionary {
+    type Item = (String, Value);
+    type IntoIter = std::collections::btree_map::IntoIter<String, Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Dictionary {
+    type Item = (&'a String, &'a Value);
+    type IntoIter = std::collections::btree_map::Iter<'a, String, Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl Index<&str> for Dictionary {
+    type Output = Value;
+
+    fn index(&self, key: &str) -> &Self::Output {
+        &self.0[key]
+    }
+}
+
+impl IndexMut<&str> for Dictionary {
+    fn index_mut(&mut self, key: &str) -> &mut Self::Output {
+        self.0.get_mut(key).expect("no entry found for key")
+    }
+}
+
+/// An integer stored in a property list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Integer(IntegerRepr);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum IntegerRepr {
+    Signed(i64),
+    Unsigned(u64),
+}
+
+impl Integer {
+    /// Returns the value as a signed integer when representable.
+    pub const fn as_signed(self) -> Option<i64> {
+        match self.0 {
+            IntegerRepr::Signed(value) => Some(value),
+            IntegerRepr::Unsigned(value) if value <= i64::MAX as u64 => Some(value as i64),
+            IntegerRepr::Unsigned(_) => None,
+        }
+    }
+
+    /// Returns the value as an unsigned integer when representable.
+    pub const fn as_unsigned(self) -> Option<u64> {
+        match self.0 {
+            IntegerRepr::Signed(value) if value >= 0 => Some(value as u64),
+            IntegerRepr::Signed(_) => None,
+            IntegerRepr::Unsigned(value) => Some(value),
+        }
+    }
+}
+
+macro_rules! impl_integer_from_signed {
+    ($($type:ty),* $(,)?) => {$(
+        impl From<$type> for Integer {
+            fn from(value: $type) -> Self {
+                Self(IntegerRepr::Signed(value.into()))
+            }
+        }
+    )*};
+}
+
+macro_rules! impl_integer_from_unsigned {
+    ($($type:ty),* $(,)?) => {$(
+        impl From<$type> for Integer {
+            fn from(value: $type) -> Self {
+                Self(IntegerRepr::Unsigned(value.into()))
+            }
+        }
+    )*};
+}
+
+impl_integer_from_signed!(i8, i16, i32, i64);
+impl_integer_from_unsigned!(u8, u16, u32, u64);
+
+impl std::fmt::Display for Integer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            IntegerRepr::Signed(value) => write!(f, "{value}"),
+            IntegerRepr::Unsigned(value) => write!(f, "{value}"),
+        }
+    }
+}
 
 /// A plist value.
 #[derive(Clone, Debug, PartialEq)]
@@ -21,7 +150,7 @@ pub enum Value {
     /// A boolean value.
     Boolean(bool),
     /// A signed 64-bit integer value.
-    Integer(i64),
+    Integer(Integer),
     /// A 64-bit floating-point value.
     Real(f64),
     /// A UTF-8 string value.
@@ -42,7 +171,7 @@ impl From<bool> for Value {
 
 impl From<i64> for Value {
     fn from(n: i64) -> Self {
-        Value::Integer(n)
+        Value::Integer(n.into())
     }
 }
 
@@ -139,7 +268,10 @@ impl Collector {
     fn collect(&mut self, value: &Value) -> usize {
         match value {
             Value::Boolean(b) => self.push(Obj::Bool(*b)),
-            Value::Integer(n) => self.push(Obj::Int(*n)),
+            Value::Integer(n) => self
+                .push(Obj::Int(n.as_signed().unwrap_or_else(|| {
+                    n.as_unsigned().expect("integer representation") as i64
+                }))),
             Value::Real(f) => self.push(Obj::Real(*f)),
             Value::String(s) => self.push(Obj::Str(s.clone())),
             Value::Data(d) => self.push(Obj::Data(d.clone())),
@@ -444,7 +576,7 @@ fn parse_value(tokens: &[Token], pos: &mut usize) -> Result<Value, Error> {
                         consume_close(tokens, pos, "integer");
                         text.trim()
                             .parse::<i64>()
-                            .map(Value::Integer)
+                            .map(|value| Value::Integer(value.into()))
                             .map_err(|e| Error(e.to_string()))
                     }
                     "real" => {
@@ -613,28 +745,28 @@ mod tests {
 
     #[test]
     fn test_binary_int_1_byte() {
-        let b = write_binary(&Value::Integer(42));
+        let b = write_binary(&Value::Integer(42.into()));
         assert_eq!(b[8], 0x10);
         assert_eq!(b[9], 42);
     }
 
     #[test]
     fn test_binary_int_2_bytes() {
-        let b = write_binary(&Value::Integer(256));
+        let b = write_binary(&Value::Integer(256.into()));
         assert_eq!(b[8], 0x11);
         assert_eq!(&b[9..11], &[0x01, 0x00]);
     }
 
     #[test]
     fn test_binary_int_4_bytes() {
-        let b = write_binary(&Value::Integer(0x10000));
+        let b = write_binary(&Value::Integer(0x10000.into()));
         assert_eq!(b[8], 0x12);
         assert_eq!(&b[9..13], &[0x00, 0x01, 0x00, 0x00]);
     }
 
     #[test]
     fn test_binary_int_8_bytes_negative() {
-        let b = write_binary(&Value::Integer(-1));
+        let b = write_binary(&Value::Integer((-1).into()));
         assert_eq!(b[8], 0x13);
         assert_eq!(&b[9..17], &[0xFF; 8]);
     }
@@ -710,7 +842,7 @@ mod tests {
         assert_eq!(dict["Name"], Value::String("TestApp".to_string()));
         assert_eq!(dict["Version"], Value::String("1.2.3".to_string()));
         assert_eq!(dict["Flag"], Value::Boolean(true));
-        assert_eq!(dict["Count"], Value::Integer(42));
+        assert_eq!(dict["Count"], Value::Integer(42.into()));
     }
 
     #[test]
@@ -738,7 +870,7 @@ mod tests {
         };
         assert_eq!(arr.len(), 3);
         assert_eq!(arr[0], Value::String("a".to_string()));
-        assert_eq!(arr[1], Value::Integer(3));
+        assert_eq!(arr[1], Value::Integer(3.into()));
         assert_eq!(arr[2], Value::Boolean(false));
     }
 
@@ -765,7 +897,7 @@ mod tests {
         let Value::Dictionary(inner) = &outer["inner"] else {
             panic!("expected inner dict");
         };
-        assert_eq!(inner["x"], Value::Integer(42));
+        assert_eq!(inner["x"], Value::Integer(42.into()));
     }
 
     #[test]
@@ -780,7 +912,7 @@ mod tests {
     fn test_from_impls() {
         assert_eq!(Value::from(true), Value::Boolean(true));
         assert_eq!(Value::from(false), Value::Boolean(false));
-        assert_eq!(Value::from(42i64), Value::Integer(42));
+        assert_eq!(Value::from(42i64), Value::Integer(42.into()));
         assert_eq!(Value::from(1.0f64), Value::Real(1.0));
         assert_eq!(Value::from("hello"), Value::String("hello".to_string()));
         assert_eq!(
@@ -835,10 +967,10 @@ mod tests {
     fn test_plutil_primitives() {
         assert!(plutil_lint(&write_binary(&Value::Boolean(true))));
         assert!(plutil_lint(&write_binary(&Value::Boolean(false))));
-        assert!(plutil_lint(&write_binary(&Value::Integer(0))));
-        assert!(plutil_lint(&write_binary(&Value::Integer(255))));
-        assert!(plutil_lint(&write_binary(&Value::Integer(65536))));
-        assert!(plutil_lint(&write_binary(&Value::Integer(-1))));
+        assert!(plutil_lint(&write_binary(&Value::Integer(0.into()))));
+        assert!(plutil_lint(&write_binary(&Value::Integer(255.into()))));
+        assert!(plutil_lint(&write_binary(&Value::Integer(65536.into()))));
+        assert!(plutil_lint(&write_binary(&Value::Integer((-1).into()))));
         assert!(plutil_lint(&write_binary(&Value::Real(
             std::f64::consts::PI
         ))));
@@ -854,7 +986,10 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn test_plutil_array() {
-        let arr = Value::Array(vec![Value::Integer(1), Value::String("a".to_string())]);
+        let arr = Value::Array(vec![
+            Value::Integer(1.into()),
+            Value::String("a".to_string()),
+        ]);
         assert!(plutil_lint(&write_binary(&arr)));
     }
 
@@ -880,14 +1015,14 @@ mod tests {
     fn test_plutil_roundtrip() {
         let mut dict = Dictionary::new();
         dict.insert("Name".to_string(), "MyApp".into());
-        dict.insert("Count".to_string(), Value::Integer(42));
+        dict.insert("Count".to_string(), Value::Integer(42.into()));
         dict.insert("Flag".to_string(), Value::Boolean(true));
         let bytes = write_binary(&Value::Dictionary(dict));
         let Value::Dictionary(result) = plutil_roundtrip(&bytes) else {
             panic!("expected dict");
         };
         assert_eq!(result["Name"], Value::String("MyApp".to_string()));
-        assert_eq!(result["Count"], Value::Integer(42));
+        assert_eq!(result["Count"], Value::Integer(42.into()));
         assert_eq!(result["Flag"], Value::Boolean(true));
     }
 }

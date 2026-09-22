@@ -6,6 +6,8 @@
 
 //! A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
 
+pub use digest::Digest;
+
 /// SHA-1 hasher
 pub struct Sha1 {
     state: [u32; 5],
@@ -30,7 +32,7 @@ impl Sha1 {
     }
 
     /// Compute the SHA-1 digest of the given data
-    pub fn digest(data: impl AsRef<[u8]>) -> [u8; 20] {
+    pub fn digest(data: impl AsRef<[u8]>) -> digest::Output<Self> {
         let mut h = Self::new();
         h.update(data);
         h.finalize_reset()
@@ -52,12 +54,12 @@ impl Sha1 {
     }
 
     /// Finalize the hash and return the digest
-    pub fn finalize(mut self) -> [u8; 20] {
+    pub fn finalize(mut self) -> digest::Output<Self> {
         self.finalize_reset()
     }
 
     /// Finalize the hash, reset the hasher, and return the digest
-    pub fn finalize_reset(&mut self) -> [u8; 20] {
+    pub fn finalize_reset(&mut self) -> digest::Output<Self> {
         let mut padding = [0u8; 64];
         padding[0] = 0x80;
         let length_bits = self.length * 8;
@@ -73,7 +75,7 @@ impl Sha1 {
             chunk.copy_from_slice(&self.state[i].to_be_bytes());
         }
         self.reset();
-        result
+        result.into()
     }
 
     fn reset(&mut self) {
@@ -535,19 +537,40 @@ impl Sha1 {
     }
 }
 
-// MARK: Digest impl
-impl digest::Digest for Sha1 {
-    const BLOCK_SIZE: usize = 64;
-    type Output = [u8; 20];
-
+// MARK: Digest traits
+impl digest::Update for Sha1 {
     fn update(&mut self, data: &[u8]) {
         self.update(data);
     }
+}
 
-    fn finalize_reset(&mut self) -> Self::Output {
-        self.finalize_reset()
+impl crypto_common::OutputSizeUser for Sha1 {
+    type OutputSize = crypto_common::array::sizes::U20;
+}
+
+impl crypto_common::BlockSizeUser for Sha1 {
+    type BlockSize = crypto_common::array::sizes::U64;
+}
+
+impl crypto_common::Reset for Sha1 {
+    fn reset(&mut self) {
+        *self = Self::default();
     }
 }
+
+impl digest::FixedOutput for Sha1 {
+    fn finalize_into(self, out: &mut digest::Output<Self>) {
+        *out = self.finalize();
+    }
+}
+
+impl digest::FixedOutputReset for Sha1 {
+    fn finalize_into_reset(&mut self, out: &mut digest::Output<Self>) {
+        *out = self.finalize_reset();
+    }
+}
+
+impl digest::HashMarker for Sha1 {}
 
 // MARK: Tests
 #[cfg(test)]

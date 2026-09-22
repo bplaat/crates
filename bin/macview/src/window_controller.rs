@@ -10,8 +10,12 @@ use std::ptr::null_mut;
 use macview_appkit::{Size, ns_string};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
+#[allow(unused_imports)]
+use objc2::{ClassType as _, DefinedClass as _};
 use objc2::{class, define_class, msg_send, sel};
 
+#[allow(unused_imports)]
+use crate::headers::NSWindowController;
 use crate::scroll_view::replace_document_view;
 
 // The factor a single zoom step magnifies or shrinks the media by.
@@ -163,6 +167,7 @@ pub(crate) fn create_window_controller(window: *mut Object, size: Size) -> Retai
             initWithWindow: window
         ];
 
-        Retained::into_any(controller)
+        Retained::from_raw(Retained::into_raw(controller).cast::<Object>())
+            .expect("window controller initialization returned null")
     }
 }

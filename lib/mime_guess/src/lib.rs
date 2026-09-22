@@ -7,11 +7,23 @@
 //! A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
 
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 use mime::Mime;
 
+fn parse_mime(value: &'static str) -> Mime {
+    static CACHE: OnceLock<Mutex<std::collections::HashMap<&'static str, Mime>>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+        .lock()
+        .expect("MIME cache mutex poisoned")
+        .entry(value)
+        .or_insert_with(|| value.parse().expect("static MIME type must be valid"))
+        .clone()
+}
+
 /// Create a new `MimeGuess` from a file path
-pub fn from_path(path: impl AsRef<Path>) -> MimeGuess {
+pub fn from_path<P: AsRef<Path>>(path: P) -> MimeGuess {
     MimeGuess::from_path(path.as_ref())
 }
 
@@ -22,7 +34,7 @@ pub struct MimeGuess {
 
 impl MimeGuess {
     /// Create a new `MimeGuess` from a file path
-    pub fn from_path(path: impl AsRef<Path>) -> Self {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
         let extension = path
             .as_ref()
             .extension()
@@ -42,42 +54,42 @@ impl MimeGuess {
             "xml" => mime::TEXT_XML,
             "txt" => mime::TEXT_PLAIN,
             "csv" => mime::TEXT_CSV,
-            "md" | "markdown" => mime::TEXT_MARKDOWN,
-            "yaml" | "yml" => mime::APPLICATION_YAML,
+            "md" | "markdown" => parse_mime("text/markdown"),
+            "yaml" | "yml" => parse_mime("application/yaml"),
             // Web
-            "wasm" => mime::APPLICATION_WASM,
-            "webmanifest" => mime::APPLICATION_MANIFEST_JSON,
+            "wasm" => parse_mime("application/wasm"),
+            "webmanifest" => parse_mime("application/manifest+json"),
             // Images
             "png" => mime::IMAGE_PNG,
             "jpg" | "jpeg" => mime::IMAGE_JPEG,
             "gif" => mime::IMAGE_GIF,
             "svg" => mime::IMAGE_SVG,
-            "webp" => mime::IMAGE_WEBP,
-            "ico" => mime::IMAGE_X_ICON,
-            "avif" => mime::IMAGE_AVIF,
+            "webp" => parse_mime("image/webp"),
+            "ico" => parse_mime("image/x-icon"),
+            "avif" => parse_mime("image/avif"),
             "bmp" => mime::IMAGE_BMP,
-            "tiff" | "tif" => mime::IMAGE_TIFF,
+            "tiff" | "tif" => parse_mime("image/tiff"),
             // Fonts
             "woff" => mime::FONT_WOFF,
             "woff2" => mime::FONT_WOFF2,
-            "ttf" => mime::FONT_TTF,
-            "otf" => mime::FONT_OTF,
+            "ttf" => parse_mime("font/ttf"),
+            "otf" => parse_mime("font/otf"),
             // Audio
-            "mp3" => mime::AUDIO_MPEG,
-            "wav" => mime::AUDIO_WAV,
-            "ogg" => mime::AUDIO_OGG,
-            "opus" => mime::AUDIO_OPUS,
-            "flac" => mime::AUDIO_FLAC,
-            "m4a" | "aac" => mime::AUDIO_AAC,
+            "mp3" => parse_mime("audio/mpeg"),
+            "wav" => parse_mime("audio/wav"),
+            "ogg" => parse_mime("audio/ogg"),
+            "opus" => parse_mime("audio/opus"),
+            "flac" => parse_mime("audio/flac"),
+            "m4a" | "aac" => parse_mime("audio/aac"),
             // Video
-            "mp4" => mime::VIDEO_MP4,
-            "webm" => mime::VIDEO_WEBM,
-            "ogv" => mime::VIDEO_OGG,
+            "mp4" => parse_mime("video/mp4"),
+            "webm" => parse_mime("video/webm"),
+            "ogv" => parse_mime("video/ogg"),
             // Documents & archives
             "pdf" => mime::APPLICATION_PDF,
-            "zip" => mime::APPLICATION_ZIP,
-            "gz" => mime::APPLICATION_GZIP,
-            "tar" => mime::APPLICATION_X_TAR,
+            "zip" => parse_mime("application/zip"),
+            "gz" => parse_mime("application/gzip"),
+            "tar" => parse_mime("application/x-tar"),
             _ => mime::APPLICATION_OCTET_STREAM,
         }
     }
@@ -91,64 +103,55 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_guess() {
-        // Text / markup
-        assert_eq!(MimeGuess::from_path("index.html").first_or_octet_stream(), mime::TEXT_HTML);
-        assert_eq!(MimeGuess::from_path("index.htm").first_or_octet_stream(), mime::TEXT_HTML);
-        assert_eq!(MimeGuess::from_path("style.css").first_or_octet_stream(), mime::TEXT_CSS);
-        assert_eq!(MimeGuess::from_path("script.js").first_or_octet_stream(), mime::APPLICATION_JAVASCRIPT);
-        assert_eq!(MimeGuess::from_path("module.mjs").first_or_octet_stream(), mime::APPLICATION_JAVASCRIPT);
-        assert_eq!(MimeGuess::from_path("data.json").first_or_octet_stream(), mime::APPLICATION_JSON);
-        assert_eq!(MimeGuess::from_path("feed.xml").first_or_octet_stream(), mime::TEXT_XML);
-        assert_eq!(MimeGuess::from_path("readme.txt").first_or_octet_stream(), mime::TEXT_PLAIN);
-        assert_eq!(MimeGuess::from_path("data.csv").first_or_octet_stream(), mime::TEXT_CSV);
-        assert_eq!(MimeGuess::from_path("docs.md").first_or_octet_stream(), mime::TEXT_MARKDOWN);
-        assert_eq!(MimeGuess::from_path("docs.markdown").first_or_octet_stream(), mime::TEXT_MARKDOWN);
-        assert_eq!(MimeGuess::from_path("config.yaml").first_or_octet_stream(), mime::APPLICATION_YAML);
-        assert_eq!(MimeGuess::from_path("config.yml").first_or_octet_stream(), mime::APPLICATION_YAML);
+        let cases = [
+            ("index.html", "text/html"),
+            ("index.htm", "text/html"),
+            ("style.css", "text/css"),
+            ("script.js", "application/javascript"),
+            ("module.mjs", "application/javascript"),
+            ("data.json", "application/json"),
+            ("feed.xml", "text/xml"),
+            ("readme.txt", "text/plain"),
+            ("data.csv", "text/csv"),
+            ("docs.md", "text/markdown"),
+            ("docs.markdown", "text/markdown"),
+            ("config.yaml", "application/yaml"),
+            ("config.yml", "application/yaml"),
+            ("app.wasm", "application/wasm"),
+            ("app.webmanifest", "application/manifest+json"),
+            ("image.png", "image/png"),
+            ("photo.jpg", "image/jpeg"),
+            ("photo.jpeg", "image/jpeg"),
+            ("anim.gif", "image/gif"),
+            ("icon.svg", "image/svg+xml"),
+            ("image.webp", "image/webp"),
+            ("favicon.ico", "image/x-icon"),
+            ("image.avif", "image/avif"),
+            ("image.bmp", "image/bmp"),
+            ("image.tiff", "image/tiff"),
+            ("image.tif", "image/tiff"),
+            ("font.woff", "font/woff"),
+            ("font.woff2", "font/woff2"),
+            ("font.ttf", "font/ttf"),
+            ("font.otf", "font/otf"),
+            ("audio.mp3", "audio/mpeg"),
+            ("audio.wav", "audio/wav"),
+            ("audio.ogg", "audio/ogg"),
+            ("audio.opus", "audio/opus"),
+            ("audio.flac", "audio/flac"),
+            ("audio.aac", "audio/aac"),
+            ("video.mp4", "video/mp4"),
+            ("video.webm", "video/webm"),
+            ("video.ogv", "video/ogg"),
+            ("doc.pdf", "application/pdf"),
+            ("archive.zip", "application/zip"),
+            ("archive.gz", "application/gzip"),
+            ("archive.tar", "application/x-tar"),
+            ("unknown.xyz", "application/octet-stream"),
+        ];
 
-        // Web
-        assert_eq!(MimeGuess::from_path("app.wasm").first_or_octet_stream(), mime::APPLICATION_WASM);
-        assert_eq!(MimeGuess::from_path("app.webmanifest").first_or_octet_stream(), mime::APPLICATION_MANIFEST_JSON);
-
-        // Images
-        assert_eq!(MimeGuess::from_path("image.png").first_or_octet_stream(), mime::IMAGE_PNG);
-        assert_eq!(MimeGuess::from_path("photo.jpg").first_or_octet_stream(), mime::IMAGE_JPEG);
-        assert_eq!(MimeGuess::from_path("photo.jpeg").first_or_octet_stream(), mime::IMAGE_JPEG);
-        assert_eq!(MimeGuess::from_path("anim.gif").first_or_octet_stream(), mime::IMAGE_GIF);
-        assert_eq!(MimeGuess::from_path("icon.svg").first_or_octet_stream(), mime::IMAGE_SVG);
-        assert_eq!(MimeGuess::from_path("image.webp").first_or_octet_stream(), mime::IMAGE_WEBP);
-        assert_eq!(MimeGuess::from_path("favicon.ico").first_or_octet_stream(), mime::IMAGE_X_ICON);
-        assert_eq!(MimeGuess::from_path("image.avif").first_or_octet_stream(), mime::IMAGE_AVIF);
-        assert_eq!(MimeGuess::from_path("image.bmp").first_or_octet_stream(), mime::IMAGE_BMP);
-        assert_eq!(MimeGuess::from_path("image.tiff").first_or_octet_stream(), mime::IMAGE_TIFF);
-        assert_eq!(MimeGuess::from_path("image.tif").first_or_octet_stream(), mime::IMAGE_TIFF);
-
-        // Fonts
-        assert_eq!(MimeGuess::from_path("font.woff").first_or_octet_stream(), mime::FONT_WOFF);
-        assert_eq!(MimeGuess::from_path("font.woff2").first_or_octet_stream(), mime::FONT_WOFF2);
-        assert_eq!(MimeGuess::from_path("font.ttf").first_or_octet_stream(), mime::FONT_TTF);
-        assert_eq!(MimeGuess::from_path("font.otf").first_or_octet_stream(), mime::FONT_OTF);
-
-        // Audio
-        assert_eq!(MimeGuess::from_path("audio.mp3").first_or_octet_stream(), mime::AUDIO_MPEG);
-        assert_eq!(MimeGuess::from_path("audio.wav").first_or_octet_stream(), mime::AUDIO_WAV);
-        assert_eq!(MimeGuess::from_path("audio.ogg").first_or_octet_stream(), mime::AUDIO_OGG);
-        assert_eq!(MimeGuess::from_path("audio.opus").first_or_octet_stream(), mime::AUDIO_OPUS);
-        assert_eq!(MimeGuess::from_path("audio.flac").first_or_octet_stream(), mime::AUDIO_FLAC);
-        assert_eq!(MimeGuess::from_path("audio.aac").first_or_octet_stream(), mime::AUDIO_AAC);
-
-        // Video
-        assert_eq!(MimeGuess::from_path("video.mp4").first_or_octet_stream(), mime::VIDEO_MP4);
-        assert_eq!(MimeGuess::from_path("video.webm").first_or_octet_stream(), mime::VIDEO_WEBM);
-        assert_eq!(MimeGuess::from_path("video.ogv").first_or_octet_stream(), mime::VIDEO_OGG);
-
-        // Documents & archives
-        assert_eq!(MimeGuess::from_path("doc.pdf").first_or_octet_stream(), mime::APPLICATION_PDF);
-        assert_eq!(MimeGuess::from_path("archive.zip").first_or_octet_stream(), mime::APPLICATION_ZIP);
-        assert_eq!(MimeGuess::from_path("archive.gz").first_or_octet_stream(), mime::APPLICATION_GZIP);
-        assert_eq!(MimeGuess::from_path("archive.tar").first_or_octet_stream(), mime::APPLICATION_X_TAR);
-
-        // Fallback
-        assert_eq!(MimeGuess::from_path("unknown.xyz").first_or_octet_stream(), mime::APPLICATION_OCTET_STREAM);
+        for (path, expected) in cases {
+            assert_eq!(MimeGuess::from_path(path).first_or_octet_stream().to_string(), expected);
+        }
     }
 }

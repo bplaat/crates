@@ -75,7 +75,7 @@ impl Config {
             let project_dirs = directories::ProjectDirs::from("nl", "bplaat", "BassieLight")
                 .expect("Can't get dirs");
             let config_dir = project_dirs.config_dir();
-            std::fs::create_dir_all(&config_dir).expect("Can't create directories");
+            std::fs::create_dir_all(config_dir).expect("Can't create directories");
             config_dir.join("config.json")
         } else {
             PathBuf::from("config.json")

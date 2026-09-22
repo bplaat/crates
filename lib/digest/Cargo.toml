@@ -6,5 +6,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[dependencies]
+crypto-common = "0.2.2"
+
 [lints]
 workspace = true

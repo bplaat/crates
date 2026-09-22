@@ -8,7 +8,31 @@
 
 #![allow(non_snake_case, non_upper_case_globals)]
 
+use objc2::extern_class;
 use objc2::runtime::AnyObject as Object;
+#[allow(unused_imports)]
+use objc2::runtime::NSObject;
+
+extern_class!(
+    #[unsafe(super(NSObject))]
+    pub(crate) struct NSView;
+);
+extern_class!(
+    #[unsafe(super(NSView))]
+    pub(crate) struct NSClipView;
+);
+extern_class!(
+    #[unsafe(super(NSView))]
+    pub(crate) struct NSScrollView;
+);
+extern_class!(
+    #[unsafe(super(NSObject))]
+    pub(crate) struct NSWindowController;
+);
+extern_class!(
+    #[unsafe(super(NSObject))]
+    pub(crate) struct NSDocument;
+);
 
 pub(crate) const NS_APPLICATION_ACTIVATION_POLICY_REGULAR: i64 = 0;
 pub(crate) const NS_BACKING_STORE_BUFFERED: u64 = 2;

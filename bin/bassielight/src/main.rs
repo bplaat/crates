@@ -43,9 +43,9 @@ pub(crate) enum AppEvent {
 fn main() {
     // Init logger
     simple_logger::init_with_level(if cfg!(debug_assertions) {
-        log::LevelFilter::Trace
+        log::Level::Trace
     } else {
-        log::LevelFilter::Info
+        log::Level::Info
     })
     .expect("Failed to init logger");
 

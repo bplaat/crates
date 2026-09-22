@@ -472,7 +472,7 @@ impl Request {
     /// Write request to TCP stream
     pub fn write_to_stream(mut self, stream: &mut dyn Write, keep_alive: bool) {
         // Finish headers
-        let host = self.url.host().expect("No host in URL");
+        let host = self.url.host_str().expect("No host in URL");
         self.headers.insert(
             "Host".to_string(),
             if host.contains(':') {
@@ -531,7 +531,7 @@ impl Request {
 
     /// Fetch request with http client
     pub fn fetch(self) -> Result<Response, FetchError> {
-        let host = self.url.host().ok_or(FetchError)?;
+        let host = self.url.host_str().ok_or(FetchError)?;
         let is_https = self.url.scheme() == "https";
         let port = self.url.port().unwrap_or(if is_https { 443 } else { 80 });
 

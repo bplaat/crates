@@ -11,7 +11,7 @@ use std::{fs, io};
 pub(crate) fn cache_dir() -> PathBuf {
     let project_dirs =
         directories::ProjectDirs::from_path(PathBuf::from("bob")).expect("Can't get dirs");
-    project_dirs.cache_dir()
+    project_dirs.cache_dir().to_path_buf()
 }
 
 pub(crate) fn format_bytes(bytes: u64) -> String {

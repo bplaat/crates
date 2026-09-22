@@ -8,7 +8,7 @@
 
 // MARK: Engine
 /// Trait for base64 encoding and decoding engines.
-pub trait Engine {
+pub trait Engine: Send + Sync {
     /// Encode bytes to a base64 `String`.
     fn encode<T: AsRef<[u8]>>(&self, input: T) -> String;
     /// Decode a base64 byte string to `Vec<u8>`.
@@ -16,12 +16,37 @@ pub trait Engine {
 }
 
 /// Error returned when decoding invalid base64 input.
-#[derive(Debug)]
-pub struct DecodeError;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DecodeError {
+    /// An invalid byte and its input offset.
+    InvalidByte(usize, u8),
+    /// The final symbol contains non-zero trailing bits.
+    InvalidLastSymbol {
+        /// Byte offset of the final symbol.
+        offset: usize,
+        /// Encoded final symbol.
+        symbol: u8,
+        /// Decoded six-bit value of the final symbol.
+        symbol_value: u8,
+    },
+    /// The encoded input has an invalid length.
+    InvalidLength(usize),
+    /// Padding is invalid for this engine.
+    InvalidPadding,
+}
 
 impl std::fmt::Display for DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid base64")
+        match self {
+            Self::InvalidByte(offset, byte) => {
+                write!(f, "invalid byte {byte} at offset {offset}")
+            }
+            Self::InvalidLastSymbol { offset, symbol, .. } => {
+                write!(f, "invalid last symbol {symbol} at offset {offset}")
+            }
+            Self::InvalidLength(length) => write!(f, "invalid length {length}"),
+            Self::InvalidPadding => f.write_str("invalid padding"),
+        }
     }
 }
 
@@ -75,13 +100,13 @@ impl Engine for GeneralPurpose {
         let mut buf = 0u32;
         let mut bits = 0u32;
 
-        for &byte in input {
+        for (index, &byte) in input.iter().enumerate() {
             if byte == b'=' {
                 break;
             }
             let val = self.decode_table[byte as usize];
             if val == 0xFF {
-                return Err(DecodeError);
+                return Err(DecodeError::InvalidByte(index, byte));
             }
             buf = (buf << 6) | val as u32;
             bits += 6;
@@ -147,11 +172,13 @@ pub static BASE64_URL_SAFE: GeneralPurpose = GeneralPurpose {
 // MARK: Modules
 /// Common engine constants (mirrors `base64::engine::general_purpose`).
 pub mod engine {
+    pub use crate::Engine;
+
     /// General-purpose base64 engines.
     pub mod general_purpose {
         pub use crate::{
             BASE64_STANDARD as STANDARD, BASE64_STANDARD_NO_PAD as STANDARD_NO_PAD,
-            BASE64_URL_SAFE as URL_SAFE, BASE64_URL_SAFE_NO_PAD,
+            BASE64_URL_SAFE as URL_SAFE, BASE64_URL_SAFE_NO_PAD, GeneralPurpose,
         };
     }
 }

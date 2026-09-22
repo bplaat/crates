@@ -15,10 +15,14 @@ use std::ptr::null_mut;
 use std::sync::Mutex;
 
 use block2::{Block, RcBlock};
+#[allow(unused_imports)]
+use headers::QLThumbnailProvider;
 use macview_appkit::{
     Point, Rect, Size, dispatch_async, extension_main, fill_white_background, load_media,
     make_error, ns_string,
 };
+#[allow(unused_imports)]
+use objc2::ClassType as _;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
@@ -48,8 +52,9 @@ struct SendableUrl(Retained<Object>);
 unsafe impl Send for SendableUrl {}
 
 impl SendableUrl {
-    const fn as_ptr(&self) -> *mut Object {
-        self.0.as_ptr()
+    #[allow(clippy::missing_const_for_fn)]
+    fn as_ptr(&self) -> *mut Object {
+        Retained::as_ptr(&self.0).cast_mut()
     }
 }
 
@@ -101,25 +106,27 @@ fn provide_thumbnail(request: *mut Object, completion: &Block<dyn Fn(*mut Object
             y: (drawing_size.height - fitted_size.height) / 2.0,
         };
         let media = Mutex::new(media);
-        let drawing = RcBlock::new_ret::<*mut c_void, bool>(move |context| {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                // SAFETY: Quick Look owns the drawing context for this call. The copied drawing
-                // block owns media and drawing is synchronous within the block invocation.
-                unsafe {
-                    fill_white_background(context, drawing_size);
-                    let image = media.lock().unwrap_or_else(|error| error.into_inner());
-                    draw_image(
-                        context,
-                        image.as_ptr(),
-                        Rect {
-                            origin: fitted_origin,
-                            size: fitted_size,
-                        },
-                    );
-                }
-                true
-            }))
-            .unwrap_or(false)
+        let drawing: RcBlock<dyn Fn(*mut c_void) -> Bool> = RcBlock::new(move |context| {
+            Bool::new(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    // SAFETY: Quick Look owns the drawing context for this call. The copied drawing
+                    // block owns media and drawing is synchronous within the block invocation.
+                    unsafe {
+                        fill_white_background(context, drawing_size);
+                        let image = media.lock().unwrap_or_else(|error| error.into_inner());
+                        draw_image(
+                            context,
+                            image.as_ptr(),
+                            Rect {
+                                origin: fitted_origin,
+                                size: fitted_size,
+                            },
+                        );
+                    }
+                    true
+                }))
+                .unwrap_or(false),
+            )
         });
 
         // SAFETY: QLThumbnailReply copies the drawing block for deferred rendering.

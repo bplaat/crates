@@ -10,6 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+crypto-common = "0.2.2"
 digest = "0.11.3"
 subtle = "2.6"
 

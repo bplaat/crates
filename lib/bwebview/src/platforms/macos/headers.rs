@@ -5,6 +5,12 @@
  */
 
 pub(crate) use bwindow::ffi::*;
+use objc2::extern_class;
+
+extern_class!(
+    #[unsafe(super(NSView))]
+    pub struct WKWebView;
+);
 
 #[link(name = "WebKit", kind = "framework")]
 unsafe extern "C" {}

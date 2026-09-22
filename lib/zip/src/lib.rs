@@ -37,22 +37,29 @@ struct CdEntry {
 }
 
 // MARK: ZipFile
-/// A file entry within a ZIP archive.
-pub struct ZipFile {
-    name: String,
-    data: Cursor<Vec<u8>>,
-}
+/// ZIP archive reading types.
+pub mod read {
+    use std::io::{self, Cursor, Read};
+    use std::marker::PhantomData;
 
-impl ZipFile {
-    /// Returns the name of the file.
-    pub fn name(&self) -> &str {
-        &self.name
+    /// A file entry borrowed from a ZIP archive.
+    pub struct ZipFile<'a, R: Read + ?Sized> {
+        pub(crate) name: String,
+        pub(crate) data: Cursor<Vec<u8>>,
+        pub(crate) reader: PhantomData<&'a mut R>,
     }
-}
 
-impl Read for ZipFile {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.data.read(buf)
+    impl<R: Read + ?Sized> ZipFile<'_, R> {
+        /// Returns the name of the file.
+        pub fn name(&self) -> &str {
+            &self.name
+        }
+    }
+
+    impl<R: Read + ?Sized> Read for ZipFile<'_, R> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.data.read(buf)
+        }
     }
 }
 
@@ -181,7 +188,7 @@ impl<R: Read + Seek> ZipArchive<R> {
     }
 
     /// Returns the entry at the given index.
-    pub fn by_index(&mut self, index: usize) -> Result<ZipFile, ZipError> {
+    pub fn by_index(&mut self, index: usize) -> Result<read::ZipFile<'_, R>, ZipError> {
         let entry = self.entries.get(index).ok_or(ZipError::FileNotFound)?;
         let name = entry.name.clone();
         let name_bytes = entry.name_bytes.clone();
@@ -266,9 +273,10 @@ impl<R: Read + Seek> ZipArchive<R> {
         }
         self.extracted_size += data.len();
 
-        Ok(ZipFile {
+        Ok(read::ZipFile {
             name,
             data: Cursor::new(data),
+            reader: std::marker::PhantomData,
         })
     }
 }

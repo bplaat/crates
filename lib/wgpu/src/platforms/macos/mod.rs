@@ -15,7 +15,11 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 
 use headers::*;
 use objc2::rc::{Allocated, Retained, autoreleasepool};
+#[allow(unused_imports)]
+use objc2::runtime::NSObject;
 use objc2::runtime::{AnyObject, Bool};
+#[allow(unused_imports)]
+use objc2::{ClassType as _, DefinedClass as _};
 use objc2::{class, define_class, msg_send, sel};
 
 use super::*;
@@ -168,9 +172,10 @@ impl Surface {
                 }))),
                 init
             ];
-            signal
-                .target
-                .store(redraw.as_ptr().cast(), Ordering::Release);
+            signal.target.store(
+                Retained::as_ptr(&redraw).cast_mut().cast(),
+                Ordering::Release,
+            );
             let mut display_link = ptr::null_mut();
             let result = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
             if result != 0 {

@@ -78,8 +78,8 @@ impl WindowsResource {
     }
 
     /// Compile the resources
-    pub fn compile(&self) -> Result<(), String> {
-        self.compile_inner(false)
+    pub fn compile(&self) -> io::Result<()> {
+        self.compile_inner(false).map_err(io::Error::other)
     }
 
     /// Compile resources and link them only into examples of the current package

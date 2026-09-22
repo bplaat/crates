@@ -6,90 +6,7 @@
 
 use std::ffi::{c_char, c_void};
 
-/// Encoding types for Objective-C
-#[allow(missing_docs)]
-pub enum Encoding {
-    Char,
-    Short,
-    Int,
-    Long,
-    LongLong,
-    UChar,
-    UShort,
-    UInt,
-    ULong,
-    ULongLong,
-    Float,
-    Double,
-    LongDouble,
-    FloatComplex,
-    DoubleComplex,
-    LongDoubleComplex,
-    Bool,
-    Void,
-    String,
-    Object,
-    Block,
-    Class,
-    Sel,
-    Unknown,
-    BitField(u8, Option<&'static (u64, Encoding)>),
-    Pointer(&'static Encoding),
-    Atomic(&'static Encoding),
-    Array(u64, &'static Encoding),
-    Struct(&'static str, &'static [Encoding]),
-    Union(&'static str, &'static [Encoding]),
-    None,
-}
-impl std::fmt::Display for Encoding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Char => write!(f, "c"),
-            Self::Short => write!(f, "s"),
-            Self::Int => write!(f, "i"),
-            Self::Long => write!(f, "l"),
-            Self::LongLong => write!(f, "q"),
-            Self::UChar => write!(f, "C"),
-            Self::UShort => write!(f, "S"),
-            Self::UInt => write!(f, "I"),
-            Self::ULong => write!(f, "L"),
-            Self::ULongLong => write!(f, "Q"),
-            Self::Float => write!(f, "f"),
-            Self::Double => write!(f, "d"),
-            Self::LongDouble => write!(f, "D"),
-            Self::FloatComplex => write!(f, "jf"),
-            Self::DoubleComplex => write!(f, "jd"),
-            Self::LongDoubleComplex => write!(f, "jD"),
-            Self::Bool => write!(f, "B"),
-            Self::Void => write!(f, "v"),
-            Self::String => write!(f, "*"),
-            Self::Object => write!(f, "@"),
-            Self::Block => write!(f, "@?"),
-            Self::Class => write!(f, "#"),
-            Self::Sel => write!(f, ":"),
-            Self::Unknown => write!(f, "?"),
-            Self::BitField(size, _) => write!(f, "b{size}"),
-            Self::Pointer(ty) => write!(f, "^{ty}"),
-            Self::Atomic(ty) => write!(f, "A{ty}"),
-            Self::Array(len, ty) => write!(f, "[{len}{ty}]"),
-            Self::Struct(name, fields) => {
-                write!(f, "{{{name}=")?;
-                for field in fields.iter() {
-                    write!(f, "{field}")?;
-                }
-                write!(f, "}}")
-            }
-            Self::Union(name, fields) => {
-                write!(f, "({name}=")?;
-                for field in fields.iter() {
-                    write!(f, "{field}")?;
-                }
-                write!(f, ")")
-            }
-            Self::None => Ok(()),
-        }
-    }
-}
+pub use objc2_encode::{Encoding, EncodingBox, ParseError};
 
 /// Trait for types that can be encoded in Objective-C.
 ///
@@ -116,6 +33,45 @@ pub unsafe trait Encode {
         unreachable!("non-object return converted as an Objective-C object")
     }
 }
+
+/// Types that are safe as Objective-C return values.
+///
+/// # Safety
+///
+/// Implementors must have a valid Objective-C return ABI.
+pub unsafe trait EncodeReturn {}
+
+// SAFETY: Every locally supported encoded type has a valid Objective-C return ABI.
+unsafe impl<T: Encode> EncodeReturn for T {}
+
+/// Types that are safe as Objective-C arguments.
+///
+/// # Safety
+///
+/// Implementors must have a valid Objective-C argument ABI.
+pub unsafe trait EncodeArgument {}
+
+// SAFETY: Every locally supported encoded type has a valid Objective-C argument ABI.
+unsafe impl<T: Encode> EncodeArgument for T {}
+
+/// A tuple of Objective-C arguments.
+pub trait EncodeArguments {}
+
+impl EncodeArguments for () {}
+impl<T: EncodeArgument> EncodeArguments for (T,) {}
+impl<T: EncodeArgument, U: EncodeArgument> EncodeArguments for (T, U) {}
+
+macro_rules! impl_encode_arguments {
+    ($($type:ident),+) => {
+        impl<$($type: EncodeArgument),+> EncodeArguments for ($($type,)+) {}
+    };
+}
+impl_encode_arguments!(A, B, C);
+impl_encode_arguments!(A, B, C, D);
+impl_encode_arguments!(A, B, C, D, E);
+impl_encode_arguments!(A, B, C, D, E, F);
+impl_encode_arguments!(A, B, C, D, E, F, G);
+impl_encode_arguments!(A, B, C, D, E, F, G, H);
 
 // Implementations for primitive types.
 // SAFETY: each type below maps to the standard ObjC type encoding defined by the

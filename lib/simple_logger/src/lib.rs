@@ -102,6 +102,6 @@ pub fn init() -> Result<(), log::SetLoggerError> {
 }
 
 /// Initialize the global logger with the given log level
-pub fn init_with_level(level: LevelFilter) -> Result<(), log::SetLoggerError> {
-    SimpleLogger::new_with_level(level).init()
+pub fn init_with_level(level: Level) -> Result<(), log::SetLoggerError> {
+    SimpleLogger::new_with_level(level.to_level_filter()).init()
 }

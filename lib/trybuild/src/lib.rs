@@ -132,7 +132,7 @@ impl TestCases {
     }
 
     /// Adds files that must compile and run successfully.
-    pub fn pass(&self, pattern: impl AsRef<Path>) {
+    pub fn pass<P: AsRef<Path>>(&self, pattern: P) {
         self.tests.borrow_mut().push(Test {
             pattern: pattern.as_ref().to_owned(),
             expected: Expected::Pass,
@@ -140,7 +140,7 @@ impl TestCases {
     }
 
     /// Adds files that must fail with their adjacent `.stderr` diagnostics.
-    pub fn compile_fail(&self, pattern: impl AsRef<Path>) {
+    pub fn compile_fail<P: AsRef<Path>>(&self, pattern: P) {
         self.tests.borrow_mut().push(Test {
             pattern: pattern.as_ref().to_owned(),
             expected: Expected::CompileFail,

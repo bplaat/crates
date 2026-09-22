@@ -15,7 +15,7 @@ use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::ptr::NonNull;
 
-use objc2::encode::{Encode, Encoding};
+use objc2::encode::{Encode, EncodeArgument, EncodeArguments, EncodeReturn, Encoding};
 
 #[link(name = "System", kind = "dylib")]
 unsafe extern "C-unwind" {
@@ -54,7 +54,7 @@ unsafe impl<F: ?Sized> Encode for &Block<F> {
 
 macro_rules! impl_block_call {
     ($($t:ident: $a:ident),*) => {
-        impl<R: 'static + Copy + Encode, $($t: 'static + Copy + Encode),*>
+        impl<R: 'static + Copy + EncodeReturn, $($t: 'static + Copy + EncodeArgument),*>
             Block<dyn Fn($($t),*) -> R>
         {
             /// Call this block with the given arguments.
@@ -77,19 +77,19 @@ impl_block_call!(A: a, B: b);
 
 // Inner heap layout for `RcBlock`: ObjC block header immediately followed by the closure.
 #[repr(C)]
-struct RcBlockInner<F> {
+struct RcBlockInner<F: ?Sized, C> {
     block: Block<F>,
-    closure: F,
+    closure: C,
 }
 
-struct BlockDescriptorFor<F>(PhantomData<F>);
+struct BlockDescriptorFor<F: ?Sized, C>(PhantomData<(*const F, C)>);
 
-impl<F> BlockDescriptorFor<F> {
+impl<F: ?Sized, C> BlockDescriptorFor<F, C> {
     const VALUE: BlockDescriptor = BlockDescriptor {
         reserved: 0,
-        size: size_of::<RcBlockInner<F>>(),
-        copy: copy_closure::<F>,
-        dispose: dispose_closure::<F>,
+        size: size_of::<RcBlockInner<F, C>>(),
+        copy: copy_closure::<C>,
+        dispose: dispose_closure::<F, C>,
     };
 }
 
@@ -98,12 +98,12 @@ const unsafe extern "C-unwind" fn copy_closure<F>(_: *mut c_void, _: *const c_vo
     // bytes into the heap block, and RcBlock::make forgets the stack copy.
 }
 
-unsafe extern "C-unwind" fn dispose_closure<F>(block: *mut c_void) {
+unsafe extern "C-unwind" fn dispose_closure<F: ?Sized, C>(block: *mut c_void) {
     // SAFETY: The Blocks runtime calls this exactly once when the heap block's final reference is
     // released. RcBlock::make transferred ownership of the closure into that block.
     unsafe {
         std::ptr::drop_in_place(std::ptr::addr_of_mut!(
-            (*block.cast::<RcBlockInner<F>>()).closure
+            (*block.cast::<RcBlockInner<F, C>>()).closure
         ));
     }
 }
@@ -113,8 +113,8 @@ pub struct RcBlock<F: ?Sized> {
     inner: NonNull<Block<F>>,
 }
 
-impl<F> RcBlock<F> {
-    fn make(closure: F, invoke: *const c_void) -> Self {
+impl<F: ?Sized> RcBlock<F> {
+    fn make<C>(closure: C, invoke: *const c_void) -> Self {
         let stack = RcBlockInner {
             block: Block {
                 // SAFETY: `_NSConcreteStackBlock` is a valid extern static exported by
@@ -123,7 +123,7 @@ impl<F> RcBlock<F> {
                 _flags: BLOCK_HAS_COPY_DISPOSE,
                 _reserved: 0,
                 _invoke: invoke,
-                _descriptor: &BlockDescriptorFor::<F>::VALUE,
+                _descriptor: &BlockDescriptorFor::<F, C>::VALUE,
                 _marker: PhantomData,
             },
             closure,
@@ -140,27 +140,27 @@ impl<F> RcBlock<F> {
         Self { inner }
     }
 
-    /// Create a new heap-allocated block from a single-argument closure.
-    pub fn new<A: 'static + Copy + Encode>(closure: F) -> Self
+    /// Create a new heap-allocated block from a closure.
+    pub fn new<'f, A, R, Closure>(closure: Closure) -> Self
     where
-        F: Fn(A) + 'static,
+        A: EncodeArguments,
+        R: EncodeReturn,
+        Closure: IntoBlock<'f, A, R, Dyn = F>,
     {
-        extern "C-unwind" fn invoke_impl<F: Fn(A), A: Copy>(block: *const RcBlockInner<F>, a: A) {
-            // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
-            // owned by the invoking block; it stays alive for the duration of this call.
-            let closure = unsafe { &(*block).closure };
-            closure(a);
-        }
-        Self::make(closure, invoke_impl::<F, A> as *const c_void)
+        closure.into_block()
     }
+}
 
+impl<F> RcBlock<F> {
     /// Create a new heap-allocated block from a single-argument closure returning `R`.
-    pub fn new_ret<A: 'static + Copy + Encode, R: 'static + Copy + Encode>(closure: F) -> Self
+    pub fn new_ret<A: 'static + Copy + EncodeArgument, R: 'static + Copy + EncodeReturn>(
+        closure: F,
+    ) -> Self
     where
         F: Fn(A) -> R + 'static,
     {
         extern "C-unwind" fn invoke_impl<F: Fn(A) -> R, A: Copy, R: Copy>(
-            block: *const RcBlockInner<F>,
+            block: *const RcBlockInner<F, F>,
             a: A,
         ) -> R {
             // SAFETY: `block` is a valid non-null pointer to a live `RcBlockInner<F>`
@@ -169,6 +169,67 @@ impl<F> RcBlock<F> {
             closure(a)
         }
         Self::make(closure, invoke_impl::<F, A, R> as *const c_void)
+    }
+}
+
+/// Conversion from a Rust closure to its dynamic Objective-C block signature.
+///
+/// # Safety
+///
+/// Implementations must use a dynamic function signature matching `A` and `R`.
+pub unsafe trait IntoBlock<'f, A, R>
+where
+    A: EncodeArguments,
+    R: EncodeReturn,
+{
+    /// The dynamic function type stored in the block.
+    type Dyn: ?Sized;
+
+    #[doc(hidden)]
+    fn into_block(self) -> RcBlock<Self::Dyn>;
+}
+
+// SAFETY: The invoke function uses the same one-argument ABI as the dynamic signature.
+unsafe impl<'f, T, R, C> IntoBlock<'f, (T,), R> for C
+where
+    T: 'static + Copy + EncodeArgument,
+    R: 'static + Copy + EncodeReturn,
+    C: Fn(T) -> R + 'f,
+{
+    type Dyn = dyn Fn(T) -> R + 'f;
+
+    fn into_block(self) -> RcBlock<Self::Dyn> {
+        extern "C-unwind" fn invoke<C: Fn(T) -> R, T: Copy, R: Copy>(
+            block: *const RcBlockInner<dyn Fn(T) -> R, C>,
+            value: T,
+        ) -> R {
+            // SAFETY: The block stores `C` directly after a header with this dynamic signature.
+            unsafe { ((*block).closure)(value) }
+        }
+        RcBlock::make(self, invoke::<C, T, R> as *const c_void)
+    }
+}
+
+// SAFETY: The invoke function uses the same two-argument ABI as the dynamic signature.
+unsafe impl<'f, T, U, R, C> IntoBlock<'f, (T, U), R> for C
+where
+    T: 'static + Copy + EncodeArgument,
+    U: 'static + Copy + EncodeArgument,
+    R: 'static + Copy + EncodeReturn,
+    C: Fn(T, U) -> R + 'f,
+{
+    type Dyn = dyn Fn(T, U) -> R + 'f;
+
+    fn into_block(self) -> RcBlock<Self::Dyn> {
+        extern "C-unwind" fn invoke<C: Fn(T, U) -> R, T: Copy, U: Copy, R: Copy>(
+            block: *const RcBlockInner<dyn Fn(T, U) -> R, C>,
+            first: T,
+            second: U,
+        ) -> R {
+            // SAFETY: The block stores `C` directly after a header with this dynamic signature.
+            unsafe { ((*block).closure)(first, second) }
+        }
+        RcBlock::make(self, invoke::<C, T, U, R> as *const c_void)
     }
 }
 
@@ -217,12 +278,6 @@ mod test {
 
     use super::*;
 
-    fn as_dyn<A: 'static + Copy, F: Fn(A) + 'static>(block: &RcBlock<F>) -> &Block<dyn Fn(A)> {
-        // SAFETY: `Block<F>` and `Block<dyn Fn(A)>` have identical `repr(C)` layouts;
-        // `PhantomData<*const F>` is zero-sized so the bit-pattern is the same either way.
-        unsafe { &*((&**block) as *const Block<F> as *const Block<dyn Fn(A)>) }
-    }
-
     fn as_dyn_ret<A: 'static + Copy, R: 'static + Copy, F: Fn(A) -> R + 'static>(
         block: &RcBlock<F>,
     ) -> &Block<dyn Fn(A) -> R> {
@@ -233,10 +288,10 @@ mod test {
     #[test]
     fn test_block_call_1_arg() {
         static RESULT: AtomicI32 = AtomicI32::new(0);
-        let block = RcBlock::new::<i32>(|x: i32| {
+        let block = RcBlock::new::<(i32,), (), _>(|x: i32| {
             RESULT.store(x * 2, Ordering::SeqCst);
         });
-        as_dyn(&block).call((21,));
+        block.call((21,));
         assert_eq!(RESULT.load(Ordering::SeqCst), 42);
     }
 
@@ -244,10 +299,10 @@ mod test {
     fn test_block_call_via_ref() {
         // Simulate how bwebview passes &*block to ObjC and then Rust calls it
         static RESULT: AtomicI32 = AtomicI32::new(0);
-        let block = RcBlock::new::<i32>(|x: i32| {
+        let block = RcBlock::new::<(i32,), (), _>(|x: i32| {
             RESULT.store(x + 10, Ordering::SeqCst);
         });
-        let block_ref: &Block<dyn Fn(i32)> = as_dyn(&block);
+        let block_ref: &Block<dyn Fn(i32)> = &block;
         block_ref.call((32,));
         assert_eq!(RESULT.load(Ordering::SeqCst), 42);
     }
@@ -256,10 +311,10 @@ mod test {
     fn test_block_capture() {
         static RESULT: AtomicI32 = AtomicI32::new(0);
         let multiplier = 7i32;
-        let block = RcBlock::new::<i32>(move |x: i32| {
+        let block = RcBlock::new::<(i32,), (), _>(move |x: i32| {
             RESULT.store(x * multiplier, Ordering::SeqCst);
         });
-        as_dyn(&block).call((6,));
+        block.call((6,));
         assert_eq!(RESULT.load(Ordering::SeqCst), 42);
     }
 
@@ -274,7 +329,7 @@ mod test {
         }
 
         let guard = DropGuard(dropped.clone());
-        let block = RcBlock::new::<i32>(move |_: i32| {
+        let block = RcBlock::new::<(i32,), (), _>(move |_: i32| {
             let _ = &guard;
         });
         assert!(!dropped.load(Ordering::SeqCst));
@@ -296,7 +351,7 @@ mod test {
         }
 
         let guard = DropGuard(dropped.clone());
-        let block = RcBlock::new::<i32>(move |_: i32| {
+        let block = RcBlock::new::<(i32,), (), _>(move |_: i32| {
             let _ = &guard;
         });
         // SAFETY: `block` is a valid Objective-C block and remains alive for this call.
@@ -323,20 +378,20 @@ mod test {
         }
 
         let guard = DropGuard(dropped.clone());
-        let block = RcBlock::new::<i32>(move |_| {
+        let block = RcBlock::new::<(i32,), (), _>(move |_| {
             let _ = &guard;
         });
         let cloned = block.clone();
         drop(block);
         assert!(!dropped.load(Ordering::SeqCst));
-        as_dyn(&cloned).call((0,));
+        cloned.call((0,));
         drop(cloned);
         assert!(dropped.load(Ordering::SeqCst));
     }
 
     #[test]
     fn test_block_is_objective_c_object() {
-        let block = RcBlock::new::<i32>(|_| {});
+        let block = RcBlock::new::<(i32,), (), _>(|_| {});
         // SAFETY: A block is an Objective-C object and responds to the NSObject self selector.
         unsafe {
             let object = (&*block as *const Block<_>).cast::<AnyObject>().cast_mut();

@@ -15,6 +15,8 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+#[allow(unused_imports)]
+use sha1::Digest as _;
 use sha1::Sha1;
 use small_http::{Request, Response, Status};
 
@@ -110,7 +112,7 @@ impl WebSocket {
         if parsed_url.scheme() != "ws" {
             return Err(ConnectError);
         }
-        let host = parsed_url.host().ok_or(ConnectError)?;
+        let host = parsed_url.host_str().ok_or(ConnectError)?;
         let port = parsed_url.port().unwrap_or(80);
         let address = if host.contains(':') {
             format!("[{host}]:{port}")

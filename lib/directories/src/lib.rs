@@ -8,7 +8,7 @@
 
 #![allow(unused)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[cfg(not(any(unix, windows)))]
 compile_error!("Unsupported platform");
@@ -118,90 +118,91 @@ pub(crate) mod windows {
 // MARK: ProjectDirs
 /// Computes the location of cache, config or data directories for a specific application
 pub struct ProjectDirs {
-    home_dir: PathBuf,
     project_path: PathBuf,
+    cache_dir: PathBuf,
+    config_dir: PathBuf,
 }
 
 impl ProjectDirs {
     /// Creates a ProjectDirs struct from values describing the project
     pub fn from(qualifier: &str, organization: &str, application: &str) -> Option<Self> {
-        Some(Self {
-            home_dir: std::env::home_dir()?,
-            project_path: cfg_select! {
-                all(unix, not(target_os = "macos")) => PathBuf::from(application),
-                target_os = "macos" => {
-                    PathBuf::from(format!("{qualifier}.{organization}.{application}"))
-                }
-                windows => PathBuf::from(organization).join(application),
-                _ => unreachable!(),
-            },
-        })
+        let project_path = cfg_select! {
+            all(unix, not(target_os = "macos")) => PathBuf::from(application),
+            target_os = "macos" => {
+                PathBuf::from(format!("{qualifier}.{organization}.{application}"))
+            }
+            windows => PathBuf::from(organization).join(application),
+            _ => unreachable!(),
+        };
+        Self::from_path(project_path)
     }
 
     /// Creates a ProjectDirs struct from a project path. This is strongly discouraged, as its results will not follow operating system standards.
     pub fn from_path(project_path: PathBuf) -> Option<Self> {
+        let home_dir = std::env::home_dir()?;
+        let cache_dir =
+            cfg_select! {
+                all(unix, not(target_os = "macos")) => std::env::var("XDG_CACHE_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| home_dir.join(".cache")),
+                target_os = "macos" => home_dir.join("Library").join("Caches"),
+                windows => windows::get_known_folder_path(&windows::FOLDERID_LOCAL_APPDATA),
+                _ => unreachable!(),
+            }
+            .join(&project_path);
+        let config_dir =
+            cfg_select! {
+                all(unix, not(target_os = "macos")) => std::env::var("XDG_CONFIG_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| home_dir.join(".config")),
+                target_os = "macos" => home_dir.join("Library").join("Application Support"),
+                windows => windows::get_known_folder_path(&windows::FOLDERID_ROAMING_APPDATA),
+                _ => unreachable!(),
+            }
+            .join(&project_path);
         Some(Self {
-            home_dir: std::env::home_dir()?,
             project_path,
+            cache_dir,
+            config_dir,
         })
     }
 
     /// Returns the path to the project’s cache directory
-    pub fn cache_dir(&self) -> PathBuf {
-        let cache_dir = {
-            cfg_select! {
-                all(unix, not(target_os = "macos")) => {
-                    let xdg_cache = std::env::var("XDG_CACHE_HOME").map(PathBuf::from);
-                    xdg_cache.unwrap_or_else(|_| self.home_dir.join(".cache"))
-                }
-                target_os = "macos" => self.home_dir.join("Library").join("Caches"),
-                windows => windows::get_known_folder_path(&windows::FOLDERID_LOCAL_APPDATA),
-                _ => unreachable!(),
-            }
-        };
-        cache_dir.join(&self.project_path)
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
     }
 
     /// Returns the path to the project’s config directory
-    pub fn config_dir(&self) -> PathBuf {
-        let config_dir = {
-            cfg_select! {
-                all(unix, not(target_os = "macos")) => {
-                    let xdg_config = std::env::var("XDG_CONFIG_HOME").map(PathBuf::from);
-                    xdg_config.unwrap_or_else(|_| self.home_dir.join(".config"))
-                }
-                target_os = "macos" => self.home_dir.join("Library").join("Application Support"),
-                windows => windows::get_known_folder_path(&windows::FOLDERID_ROAMING_APPDATA),
-                _ => unreachable!(),
-            }
-        };
-        config_dir.join(&self.project_path)
+    pub fn config_dir(&self) -> &Path {
+        &self.config_dir
     }
 }
 
 // MARK: UserDirs
 /// Provides paths of user-facing standard directories
 pub struct UserDirs {
-    home_dir: PathBuf,
+    audio_dir: Option<PathBuf>,
 }
 
 impl UserDirs {
     /// Creates a UserDirs struct which holds the paths to user-facing directories
     pub fn new() -> Option<Self> {
         let home_dir = std::env::home_dir()?;
-        Some(Self { home_dir })
+        let audio_dir = cfg_select! {
+            all(unix, not(target_os = "macos")) => std::env::var("XDG_MUSIC_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| home_dir.join("Music")),
+            target_os = "macos" => home_dir.join("Music"),
+            windows => windows::get_known_folder_path(&windows::FOLDERID_MUSIC),
+            _ => unreachable!(),
+        };
+        Some(Self {
+            audio_dir: Some(audio_dir),
+        })
     }
 
     /// Returns the path to the user’s audio directory
-    pub fn audio_dir(&self) -> PathBuf {
-        cfg_select! {
-            all(unix, not(target_os = "macos")) => {
-                let xdg_music = std::env::var("XDG_MUSIC_DIR").map(PathBuf::from);
-                xdg_music.unwrap_or_else(|_| self.home_dir.join("Music"))
-            }
-            target_os = "macos" => self.home_dir.join("Music"),
-            windows => windows::get_known_folder_path(&windows::FOLDERID_MUSIC),
-            _ => unreachable!(),
-        }
+    pub fn audio_dir(&self) -> Option<&Path> {
+        self.audio_dir.as_deref()
     }
 }

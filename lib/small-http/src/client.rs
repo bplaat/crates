@@ -98,7 +98,7 @@ impl Client {
         self.apply_default_headers(&mut request);
 
         // Build connection key and address
-        let host = request.url.host().ok_or(FetchError)?.to_string();
+        let host = request.url.host_str().ok_or(FetchError)?.to_string();
         let is_https = request.url.scheme() == "https";
         let port = request
             .url

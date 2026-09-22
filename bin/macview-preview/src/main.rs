@@ -13,11 +13,15 @@ mod headers;
 use std::ptr::null_mut;
 
 use block2::{Block, RcBlock};
+#[allow(unused_imports)]
+use headers::NSViewController;
 use macview_appkit::{
     NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, create_image_view,
     dispatch_async, dispatch_async_main, extension_main, load_media, make_error, ns_string,
     preferred_content_size,
 };
+#[allow(unused_imports)]
+use objc2::ClassType as _;
 use objc2::ffi::class_addProtocol;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject as Object, AnyProtocol};
@@ -54,8 +58,9 @@ struct MainQueueObject(Retained<Object>);
 unsafe impl Send for MainQueueObject {}
 
 impl MainQueueObject {
-    const fn as_ptr_on_main(&self) -> *mut Object {
-        self.0.as_ptr()
+    #[allow(clippy::missing_const_for_fn)]
+    fn as_ptr_on_main(&self) -> *mut Object {
+        Retained::as_ptr(&self.0).cast_mut()
     }
 }
 
@@ -65,8 +70,9 @@ struct SendableUrl(Retained<Object>);
 unsafe impl Send for SendableUrl {}
 
 impl SendableUrl {
-    const fn as_ptr(&self) -> *mut Object {
-        self.0.as_ptr()
+    #[allow(clippy::missing_const_for_fn)]
+    fn as_ptr(&self) -> *mut Object {
+        Retained::as_ptr(&self.0).cast_mut()
     }
 }
 
@@ -92,7 +98,7 @@ impl PreviewViewController {
                 }
             ];
             let this = self as *const Self as *mut Object;
-            let _: () = msg_send![this, setView: view.as_ptr()];
+            let _: () = msg_send![this, setView: Retained::as_ptr(&view)];
         }
     }
 
@@ -130,8 +136,7 @@ impl PreviewViewController {
                             let _: () = msg_send![&*view,
                                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
                             ];
-                            let subviews: *mut Object =
-                                msg_send![class!(NSArray), arrayWithObject: view.as_ptr()];
+                            let subviews: *mut Object = msg_send![class!(NSArray), arrayWithObject: Retained::as_ptr(&view)];
                             let _: () = msg_send![root, setSubviews: subviews];
                             let _: () = msg_send![this, setPreferredContentSize: size];
                             completion.call(null_mut());
@@ -156,7 +161,7 @@ fn main() {
         let protocol = AnyProtocol::get(c"QLPreviewingController")
             .expect("QLPreviewingController is unavailable");
         assert!(
-            class_addProtocol(preview_class.cast::<AnyClass>(), protocol).as_bool(),
+            class_addProtocol((preview_class as *const AnyClass).cast_mut(), protocol).as_bool(),
             "failed to adopt QLPreviewingController"
         );
     }

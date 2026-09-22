@@ -28,7 +28,7 @@ impl<T: TimeZone> DateTime<T> {
     /// Get the NaiveDateTime
     pub const fn naive_utc(&self) -> NaiveDateTime {
         #[allow(deprecated)]
-        NaiveDateTime::from_timestamp(self.0, 0).expect("Should be some")
+        NaiveDateTime::from_timestamp(self.0, 0)
     }
 
     /// Get the unix timestamp of the date and time

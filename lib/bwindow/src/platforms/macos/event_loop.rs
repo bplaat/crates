@@ -11,8 +11,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use objc2::rc::{Allocated, Retained, autoreleasepool};
-use objc2::runtime::{AnyClass, AnyObject as Object, Bool};
-use objc2::{class, define_class, msg_send, sel};
+use objc2::runtime::{AnyClass, AnyObject as Object, Bool, NSObject};
+use objc2::{ClassType as _, DefinedClass as _, class, define_class, msg_send, sel};
 
 use super::headers::*;
 use super::menu::create_menu_bar;
@@ -53,7 +53,8 @@ define_class!(
         fn _did_finish_launching(&self, notification: *mut Object) { self.did_finish_launching(notification); }
 
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
-        const fn _should_terminate(&self, _: *mut Object) -> Bool { Bool::NO }
+        #[allow(clippy::missing_const_for_fn)]
+        fn _should_terminate(&self, _: *mut Object) -> Bool { Bool::NO }
 
         #[unsafe(method(applicationShouldTerminate:))]
         fn _application_should_terminate(&self, _: *mut Object) -> u64 { self.application_should_terminate() }
@@ -139,7 +140,8 @@ impl AppDelegate {
                 let url: *mut Object = msg_send![urls, objectAtIndex:index];
                 let is_file_url: Bool = msg_send![url, isFileURL];
                 if is_file_url == Bool::YES {
-                    let path: NSString = msg_send![url, path];
+                    let path: Retained<Object> = msg_send![url, path];
+                    let path = NSString::from(path);
                     paths.push(PathBuf::from(path.to_string()));
                 }
             }
@@ -155,7 +157,8 @@ impl AppDelegate {
 
     #[cfg(feature = "menu")]
     fn menu_item_selected(&self, sender: *mut Object) {
-        let action: NSString = unsafe { msg_send![sender, representedObject] };
+        let action: Retained<Object> = unsafe { msg_send![sender, representedObject] };
+        let action = NSString::from(action);
         send_event(Event::MacosMenuItem(action.to_string()));
     }
 }
@@ -182,8 +185,8 @@ impl PlatformEventLoop {
         // Create menu
         unsafe {
             create_menu_bar(
-                application.as_ptr(),
-                app_delegate.as_ptr().cast::<Object>(),
+                Retained::as_ptr(&application).cast_mut(),
+                Retained::as_ptr(&app_delegate).cast_mut().cast::<Object>(),
                 &mut builder,
             );
         }
@@ -202,7 +205,7 @@ impl Drop for PlatformEventLoop {
         // Menu targets and NSApplication.delegate are non-owning. Clear the application-owned
         // references before our retained delegate is dropped.
         let current: *mut Object = unsafe { msg_send![&self.application, delegate] };
-        if current == self.delegate.as_ptr().cast::<Object>() {
+        if current == Retained::as_ptr(&self.delegate).cast::<Object>().cast_mut() {
             unsafe {
                 let _: () =
                     msg_send![&self.application, setMainMenu:std::ptr::null_mut::<Object>()];
@@ -224,7 +227,8 @@ fn system_theme() -> Theme {
     unsafe {
         let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
         let appearance: *mut Object = msg_send![application, effectiveAppearance];
-        let name: NSString = msg_send![appearance, name];
+        let name: Retained<Object> = msg_send![appearance, name];
+        let name = NSString::from(name);
         if name.to_string().contains("Dark") {
             Theme::Dark
         } else {
@@ -279,7 +283,7 @@ pub(super) fn allow_termination_if_last_window(closing_window: *mut Object) {
     if app_delegate.is_null() {
         return;
     }
-    let app_delegate_class = AppDelegate::class().cast::<AnyClass>();
+    let app_delegate_class = AppDelegate::class();
     let is_ours: Bool = unsafe { msg_send![app_delegate, isKindOfClass:app_delegate_class] };
     if is_ours == Bool::NO {
         return;
@@ -363,7 +367,8 @@ impl PlatformMonitor {
 
 impl crate::MonitorInterface for PlatformMonitor {
     fn name(&self) -> String {
-        let name: NSString = unsafe { msg_send![&self.screen, localizedName] };
+        let name: Retained<Object> = unsafe { msg_send![&self.screen, localizedName] };
+        let name = NSString::from(name);
         name.to_string()
     }
 
@@ -384,6 +389,6 @@ impl crate::MonitorInterface for PlatformMonitor {
 
     fn is_primary(&self) -> bool {
         let main_screen: *mut Object = unsafe { msg_send![class!(NSScreen), mainScreen] };
-        self.screen.as_ptr() == main_screen
+        Retained::as_ptr(&self.screen) == main_screen
     }
 }

@@ -434,7 +434,8 @@ fn ensure_project_volumes(project: &Project, paths: &[String]) -> Result<Vec<Str
 }
 
 fn volume_name(project_id: Uuid, path: &str) -> String {
-    use sha2::Sha256;
+    #[allow(unused_imports)]
+    use sha2::{Digest as _, Sha256};
 
     let hash = Sha256::digest(path.as_bytes());
     let suffix = hash[..6]

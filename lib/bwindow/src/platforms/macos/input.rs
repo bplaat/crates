@@ -7,6 +7,7 @@
 use std::ptr::null_mut;
 
 use objc2::msg_send;
+use objc2::rc::Retained;
 use objc2::runtime::{AnyObject as Object, Bool};
 
 use super::headers::*;
@@ -117,7 +118,8 @@ pub unsafe fn macos_key_event(event: *mut Object, state: ButtonState) -> Keyboar
             if chars.is_null() {
                 Key::Unidentified
             } else {
-                let chars: NSString = unsafe { msg_send![chars, copy] };
+                let chars: Retained<Object> = unsafe { msg_send![chars, copy] };
+                let chars = NSString::from(chars);
                 let text = chars.to_string();
                 match text.chars().next() {
                     Some(c) if ('\u{f704}'..='\u{f71b}').contains(&c) => {

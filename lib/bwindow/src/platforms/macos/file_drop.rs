@@ -6,6 +6,7 @@
 
 use std::path::PathBuf;
 
+use objc2::rc::Retained;
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
 
@@ -31,7 +32,8 @@ pub unsafe fn perform_file_drop(sender: *mut Object) -> Bool {
         }
         let count: usize = msg_send![filenames, count];
         for index in 0..count {
-            let filename: NSString = msg_send![filenames, objectAtIndex:index];
+            let filename: Retained<Object> = msg_send![filenames, objectAtIndex:index];
+            let filename = NSString::from(filename);
             send_event(crate::Event::Window(
                 window_id,
                 WindowEvent::DroppedFile(PathBuf::from(filename.to_string())),

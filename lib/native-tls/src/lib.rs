@@ -8,7 +8,6 @@
 #![allow(unsafe_code)]
 
 use std::fmt::{self, Display, Formatter};
-use std::marker::PhantomData;
 
 cfg_select! {
     // The vendored feature uses rustls on every platform.
@@ -44,34 +43,64 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 // MARK: HandshakeError
-/// TLS handshake error that consumes and drops the unrecoverable underlying stream.
+/// TLS handshake error.
 #[derive(Debug)]
-pub struct HandshakeError<S> {
-    error: Error,
-    _stream: PhantomData<S>,
+pub enum HandshakeError<S> {
+    /// The handshake failed and cannot be resumed.
+    Failure(Error),
+    /// The stream is temporarily unable to complete the handshake.
+    WouldBlock(MidHandshakeTlsStream<S>),
 }
 
 impl<S> HandshakeError<S> {
     pub(crate) const fn new(error: Error) -> Self {
-        Self {
-            error,
-            _stream: PhantomData,
-        }
+        Self::Failure(error)
     }
 
     /// Returns the underlying TLS error
     pub const fn error(&self) -> &Error {
-        &self.error
+        match self {
+            Self::Failure(error) => error,
+            Self::WouldBlock(stream) => &stream.error,
+        }
     }
 }
 
-impl<S> Display for HandshakeError<S> {
+impl<S: 'static + fmt::Debug> Display for HandshakeError<S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.error.fmt(f)
+        self.error().fmt(f)
     }
 }
 
-impl<S: fmt::Debug> std::error::Error for HandshakeError<S> {}
+impl<S: 'static + fmt::Debug> std::error::Error for HandshakeError<S> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.error())
+    }
+}
+
+/// A TLS stream whose handshake can be resumed.
+#[derive(Debug)]
+pub struct MidHandshakeTlsStream<S> {
+    stream: S,
+    error: Error,
+}
+
+impl<S> MidHandshakeTlsStream<S> {
+    /// Returns a shared reference to the underlying stream.
+    pub const fn get_ref(&self) -> &S {
+        &self.stream
+    }
+
+    /// Returns a mutable reference to the underlying stream.
+    pub const fn get_mut(&mut self) -> &mut S {
+        &mut self.stream
+    }
+
+    /// Attempts to resume the handshake.
+    pub const fn handshake(self) -> Result<TlsStream<S>, HandshakeError<S>> {
+        Err(HandshakeError::WouldBlock(self))
+    }
+}
 
 // MARK: TlsConnector
 /// A TLS connector for creating TLS connections

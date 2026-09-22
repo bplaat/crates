@@ -14,6 +14,28 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
+// MARK: Host
+/// A parsed URL host.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Host<S> {
+    /// A domain name.
+    Domain(S),
+    /// An IPv4 address.
+    Ipv4(std::net::Ipv4Addr),
+    /// An IPv6 address.
+    Ipv6(std::net::Ipv6Addr),
+}
+
+impl<S: AsRef<str>> Display for Host<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Domain(domain) => f.write_str(domain.as_ref()),
+            Self::Ipv4(address) => Display::fmt(address, f),
+            Self::Ipv6(address) => Display::fmt(address, f),
+        }
+    }
+}
+
 // MARK: URL
 /// Url
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,7 +74,19 @@ impl Url {
     }
 
     /// Get the URL host
-    pub fn host(&self) -> Option<&str> {
+    pub fn host(&self) -> Option<Host<&str>> {
+        let authority = self.authority.as_ref()?;
+        if authority.is_ipv6 {
+            return authority.host.parse().ok().map(Host::Ipv6);
+        }
+        match authority.host.parse() {
+            Ok(address) => Some(Host::Ipv4(address)),
+            Err(_) => Some(Host::Domain(&authority.host)),
+        }
+    }
+
+    /// Get the URL host as a string.
+    pub fn host_str(&self) -> Option<&str> {
         self.authority.as_ref().map(|auth| auth.host.as_str())
     }
 
@@ -91,7 +125,7 @@ impl FromStr for Url {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (scheme, remainder) = s
             .split_once("://")
-            .ok_or_else(|| ParseError("URL must contain an authority".to_string()))?;
+            .ok_or(ParseError::RelativeUrlWithoutBase)?;
         validate_scheme(scheme)?;
 
         let authority_end = remainder.find(['/', '?', '#']).unwrap_or(remainder.len());
@@ -131,14 +165,14 @@ fn validate_scheme(scheme: &str) -> Result<(), ParseError> {
     if !chars.next().is_some_and(|ch| ch.is_ascii_alphabetic())
         || !chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
     {
-        return Err(ParseError("Invalid scheme".to_string()));
+        return Err(ParseError::RelativeUrlWithoutBase);
     }
     Ok(())
 }
 
 fn parse_authority(authority: &str) -> Result<Authority, ParseError> {
     if authority.is_empty() {
-        return Err(ParseError("Host is empty".to_string()));
+        return Err(ParseError::EmptyHost);
     }
 
     let (userinfo, host_and_port) = match authority.rsplit_once('@') {
@@ -152,26 +186,22 @@ fn parse_authority(authority: &str) -> Result<Authority, ParseError> {
     };
 
     let (host, port, is_ipv6) = if let Some(address) = host_and_port.strip_prefix('[') {
-        let closing = address
-            .find(']')
-            .ok_or_else(|| ParseError("IPv6 host is missing a closing bracket".to_string()))?;
+        let closing = address.find(']').ok_or(ParseError::InvalidIpv6Address)?;
         let host = &address[..closing];
         let suffix = &address[closing + 1..];
         let address = host
             .parse::<std::net::Ipv6Addr>()
-            .map_err(|_| ParseError("Invalid IPv6 host".to_string()))?;
+            .map_err(|_| ParseError::InvalidIpv6Address)?;
         let port = parse_port_suffix(suffix)?;
         (address.to_string(), port, true)
     } else {
         if host_and_port.contains(['[', ']']) {
-            return Err(ParseError("Invalid host brackets".to_string()));
+            return Err(ParseError::InvalidDomainCharacter);
         }
         let (host, port) = match host_and_port.rsplit_once(':') {
             Some((host, port)) => {
                 if host.contains(':') {
-                    return Err(ParseError(
-                        "IPv6 hosts must be enclosed in brackets".to_string(),
-                    ));
+                    return Err(ParseError::InvalidIpv6Address);
                 }
                 (host, Some(parse_port(port)?))
             }
@@ -184,7 +214,7 @@ fn parse_authority(authority: &str) -> Result<Authority, ParseError> {
     };
 
     if host.is_empty() {
-        return Err(ParseError("Host is empty".to_string()));
+        return Err(ParseError::EmptyHost);
     }
     Ok(Authority {
         userinfo,
@@ -200,23 +230,20 @@ fn parse_port_suffix(suffix: &str) -> Result<Option<u16>, ParseError> {
     } else if let Some(port) = suffix.strip_prefix(':') {
         parse_port(port).map(Some)
     } else {
-        Err(ParseError("Invalid characters after IPv6 host".to_string()))
+        Err(ParseError::InvalidIpv6Address)
     }
 }
 
 fn parse_port(port: &str) -> Result<u16, ParseError> {
     if port.is_empty() || !port.bytes().all(|byte| byte.is_ascii_digit()) {
-        return Err(ParseError("Invalid port".to_string()));
+        return Err(ParseError::InvalidPort);
     }
-    port.parse()
-        .map_err(|_| ParseError("Port is out of range".to_string()))
+    port.parse().map_err(|_| ParseError::InvalidPort)
 }
 
 fn normalize_path(path: &str) -> Result<String, ParseError> {
     if !path.starts_with('/') {
-        return Err(ParseError(
-            "Path after an authority must start with '/'".to_string(),
-        ));
+        return Err(ParseError::RelativeUrlWithCannotBeABaseBase);
     }
     normalize_component(path, "path", |byte| is_path_character(byte) || byte == b'/')
 }
@@ -229,7 +256,7 @@ fn normalize_query_or_fragment(value: &str, name: &str) -> Result<String, ParseE
 
 fn normalize_component(
     value: &str,
-    name: &str,
+    _name: &str,
     is_allowed: impl Fn(u8) -> bool,
 ) -> Result<String, ParseError> {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -247,7 +274,7 @@ fn normalize_component(
                     .get(index + 2)
                     .is_none_or(|byte| !byte.is_ascii_hexdigit())
             {
-                return Err(ParseError(format!("Invalid percent escape in {name}")));
+                return Err(ParseError::InvalidDomainCharacter);
             }
             normalized.push('%');
             normalized.push(bytes[index + 1] as char);
@@ -257,7 +284,7 @@ fn normalize_component(
             normalized.push(byte as char);
             index += 1;
         } else if byte.is_ascii_control() || byte == b'\\' {
-            return Err(ParseError(format!("Invalid character in {name}")));
+            return Err(ParseError::InvalidDomainCharacter);
         } else {
             normalized.push('%');
             normalized.push(HEX[(byte >> 4) as usize] as char);
@@ -270,7 +297,7 @@ fn normalize_component(
 
 fn validate_component(
     value: &str,
-    name: &str,
+    _name: &str,
     is_allowed: impl Fn(u8) -> bool,
 ) -> Result<(), ParseError> {
     let bytes = value.as_bytes();
@@ -285,13 +312,13 @@ fn validate_component(
                     .get(index + 2)
                     .is_none_or(|byte| !byte.is_ascii_hexdigit())
             {
-                return Err(ParseError(format!("Invalid percent escape in {name}")));
+                return Err(ParseError::InvalidDomainCharacter);
             }
             index += 3;
         } else if byte.is_ascii() && is_allowed(byte) {
             index += 1;
         } else {
-            return Err(ParseError(format!("Invalid character in {name}")));
+            return Err(ParseError::InvalidDomainCharacter);
         }
     }
     Ok(())
@@ -341,12 +368,45 @@ impl Display for Url {
 
 // MARK: ParseError
 /// Url parser error
-#[derive(Debug)]
-pub struct ParseError(String);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ParseError {
+    /// The URL host is empty.
+    EmptyHost,
+    /// Internationalized domain-name processing failed.
+    IdnaError,
+    /// The domain contains an invalid character.
+    InvalidDomainCharacter,
+    /// The IPv4 address is invalid.
+    InvalidIpv4Address,
+    /// The IPv6 address is invalid.
+    InvalidIpv6Address,
+    /// The port is invalid.
+    InvalidPort,
+    /// A numeric component overflowed.
+    Overflow,
+    /// A relative URL was resolved against an unsuitable base.
+    RelativeUrlWithCannotBeABaseBase,
+    /// A relative URL was provided without a base URL.
+    RelativeUrlWithoutBase,
+    /// A host was set on a URL that cannot have one.
+    SetHostOnCannotBeABaseUrl,
+}
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "URL parse error: {}", self.0)
+        f.write_str(match self {
+            Self::EmptyHost => "empty host",
+            Self::IdnaError => "invalid international domain name",
+            Self::InvalidDomainCharacter => "invalid domain character",
+            Self::InvalidIpv4Address => "invalid IPv4 address",
+            Self::InvalidIpv6Address => "invalid IPv6 address",
+            Self::InvalidPort => "invalid port number",
+            Self::Overflow => "numeric overflow",
+            Self::RelativeUrlWithCannotBeABaseBase => "relative URL with a cannot-be-a-base base",
+            Self::RelativeUrlWithoutBase => "relative URL without a base",
+            Self::SetHostOnCannotBeABaseUrl => "cannot set a host on a cannot-be-a-base URL",
+        })
     }
 }
 
@@ -410,7 +470,7 @@ mod test {
 
         assert_eq!(url.scheme(), "https");
         assert_eq!(url.userinfo(), Some("user:pass"));
-        assert_eq!(url.host(), Some("example.com"));
+        assert_eq!(url.host(), Some(Host::Domain("example.com")));
         assert_eq!(url.domain(), Some("example.com"));
         assert_eq!(url.port(), Some(8443));
         assert_eq!(url.path(), "/");
@@ -434,12 +494,15 @@ mod test {
     #[test]
     fn parses_ipv4_and_ipv6_hosts() {
         let ipv4 = Url::parse("http://127.0.0.1:0/").unwrap();
-        assert_eq!(ipv4.host(), Some("127.0.0.1"));
+        assert_eq!(ipv4.host(), Some(Host::Ipv4("127.0.0.1".parse().unwrap())));
         assert_eq!(ipv4.domain(), None);
         assert_eq!(ipv4.port(), Some(0));
 
         let ipv6 = Url::parse("http://[2001:0db8::1]:8080/path").unwrap();
-        assert_eq!(ipv6.host(), Some("2001:db8::1"));
+        assert_eq!(
+            ipv6.host(),
+            Some(Host::Ipv6("2001:db8::1".parse().unwrap()))
+        );
         assert_eq!(ipv6.domain(), None);
         assert_eq!(ipv6.port(), Some(8080));
         assert_eq!(ipv6.to_string(), "http://[2001:db8::1]:8080/path");

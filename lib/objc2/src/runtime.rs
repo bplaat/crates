@@ -7,12 +7,29 @@
 use std::ffi::{CStr, CString, c_void};
 use std::ptr::NonNull;
 
-use crate::encode::{Encode, Encoding};
+use crate::encode::{Encode, EncodeArguments, EncodeReturn, Encoding};
 use crate::ffi::*;
 
 /// Class type (opaque).
 #[repr(C)]
 pub struct AnyClass([u8; 0]);
+
+impl PartialEq for AnyClass {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+    }
+}
+
+impl Eq for AnyClass {}
+
+impl std::fmt::Debug for AnyClass {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_tuple("AnyClass")
+            .field(&(self as *const Self))
+            .finish()
+    }
+}
 
 // SAFETY: Objective-C Class values are pointers with the `#` type encoding.
 unsafe impl Encode for *const AnyClass {
@@ -21,6 +38,11 @@ unsafe impl Encode for *const AnyClass {
 
 // SAFETY: Objective-C Class values are pointers with the `#` type encoding.
 unsafe impl Encode for *mut AnyClass {
+    const ENCODING: Encoding = Encoding::Class;
+}
+
+// SAFETY: An Objective-C class reference is passed as a Class pointer.
+unsafe impl Encode for &AnyClass {
     const ENCODING: Encoding = Encoding::Class;
 }
 
@@ -73,6 +95,9 @@ unsafe impl Encode for Sel {
 /// AnyObject type (opaque).
 #[repr(C)]
 pub struct AnyObject([u8; 0]);
+
+/// The root class of most Objective-C class hierarchies.
+pub type NSObject = AnyObject;
 
 /// Marker trait for types represented by Objective-C object pointers.
 ///
@@ -255,6 +280,11 @@ pub struct Bool {
     value: i8,
 }
 impl Bool {
+    /// Creates an Objective-C boolean from a Rust boolean.
+    pub const fn new(value: bool) -> Self {
+        if value { Self::YES } else { Self::NO }
+    }
+
     /// `YES`
     pub const YES: Self = Self {
         #[cfg(target_arch = "aarch64")]
@@ -271,7 +301,7 @@ impl Bool {
     };
 
     /// Convert the Objective-C boolean to a Rust boolean.
-    pub const fn as_bool(&self) -> bool {
+    pub const fn as_bool(self) -> bool {
         #[cfg(target_arch = "aarch64")]
         {
             self.value
@@ -299,7 +329,14 @@ unsafe impl Encode for Bool {
 /// signature that exactly matches the encoding returned by `type_encoding()`. A mismatch
 /// causes the ObjC runtime to call the function with incorrectly typed arguments, resulting
 /// in undefined behavior.
-pub unsafe trait MethodImpl: Copy {
+pub trait MethodImplementation: Copy {
+    /// Objective-C receiver type.
+    type Callee: ?Sized + Message;
+    /// Explicit Objective-C argument tuple.
+    type Arguments: EncodeArguments;
+    /// Objective-C return type.
+    type Return: EncodeReturn;
+
     /// Returns the function pointer cast to `*const c_void`.
     fn imp_ptr(self) -> *const c_void;
     /// Builds the ObjC type encoding string for this function's full signature.
@@ -310,9 +347,13 @@ macro_rules! impl_method_impl {
     ($($t:ident),*) => {
         // SAFETY: `type_encoding()` is derived mechanically from the same generic bounds
         // that constrain `imp_ptr()`, so the encoding always matches the function signature.
-        unsafe impl<Ret: Encode, $($t: Encode,)*> MethodImpl
-            for extern "C-unwind" fn(*mut AnyObject, Sel $(, $t)*) -> Ret
+        impl<Callee: Message, Ret: Encode, $($t: Encode,)*> MethodImplementation
+            for extern "C-unwind" fn(*mut Callee, Sel $(, $t)*) -> Ret
         {
+            type Callee = Callee;
+            type Arguments = ($($t,)*);
+            type Return = Ret;
+
             fn imp_ptr(self) -> *const c_void {
                 self as *const c_void
             }
@@ -336,20 +377,19 @@ impl_method_impl!(A, B, C, D, E, F);
 impl_method_impl!(A, B, C, D, E, F, G);
 impl_method_impl!(A, B, C, D, E, F, G, H);
 
+#[doc(hidden)]
+pub use MethodImplementation as MethodImpl;
+
 /// Class declaration builder.
 pub struct ClassBuilder(*mut c_void);
 
 impl ClassBuilder {
     /// Create a new class with the given name and superclass.
-    /// Note: unlike the real `objc2`, `superclass` here is `*mut AnyObject` (as returned by `class!`).
-    ///
-    /// # Safety
-    ///
-    /// `superclass` must be a valid Objective-C class pointer or null.
-    pub unsafe fn new(name: &CStr, superclass: *mut AnyObject) -> Option<Self> {
-        // SAFETY: The caller guarantees that superclass is null or a valid class pointer.
-        let class =
-            unsafe { objc_allocateClassPair(superclass as *const c_void, name.as_ptr(), 0) };
+    pub fn new(name: &CStr, superclass: &AnyClass) -> Option<Self> {
+        // SAFETY: `superclass` is a live class object and `name` is null-terminated.
+        let class = unsafe {
+            objc_allocateClassPair((superclass as *const AnyClass).cast(), name.as_ptr(), 0)
+        };
         if class.is_null() {
             None
         } else {
@@ -378,11 +418,11 @@ impl ClassBuilder {
     }
 
     /// Add an instance variable of type `T`.
-    pub fn add_ivar<T: Encode>(&mut self, name: &CStr) -> bool {
+    pub fn add_ivar<T: Encode>(&mut self, name: &CStr) {
         let types = CString::new(T::ENCODING.to_string()).expect("Can't convert to CString");
         // SAFETY: `self.0` is a valid class pair not yet registered; `name` is null-terminated;
         // size and alignment are computed from `T`'s actual layout via `size_of`/`align_of`.
-        unsafe {
+        let added = unsafe {
             class_addIvar(
                 self.0,
                 name.as_ptr(),
@@ -391,19 +431,29 @@ impl ClassBuilder {
                 types.as_ptr(),
             )
             .as_bool()
-        }
+        };
+        assert!(added, "failed to add instance variable");
     }
 
     /// Add a method to the class.
     ///
     /// The ObjC type encoding is derived automatically from `T`'s function pointer type.
-    pub fn add_method<T: MethodImpl>(&mut self, sel: Sel, imp: T) -> bool {
-        let encoding = T::type_encoding();
+    ///
+    /// # Safety
+    ///
+    /// The function signature must match the method signature expected by Objective-C callers.
+    pub unsafe fn add_method<T, F>(&mut self, sel: Sel, imp: F)
+    where
+        T: Message + ?Sized,
+        F: MethodImplementation<Callee = T>,
+    {
+        let encoding = F::type_encoding();
         let imp_ptr = imp.imp_ptr();
         // SAFETY: `self.0` is a valid class pair not yet registered; `sel.0` is a registered
         // selector; `imp_ptr` is a valid `extern "C"` function pointer whose signature matches
         // `encoding` by the `MethodImpl` safety contract.
-        unsafe { class_addMethod(self.0, sel.0, imp_ptr, encoding.as_ptr()).as_bool() }
+        let added = unsafe { class_addMethod(self.0, sel.0, imp_ptr, encoding.as_ptr()).as_bool() };
+        assert!(added, "failed to add method");
     }
 
     /// Make the class conform to the given protocol.
@@ -413,14 +463,15 @@ impl ClassBuilder {
         unsafe { class_addProtocol(self.0.cast(), protocol).as_bool() }
     }
 
-    /// Register the class and return it as a `*mut AnyObject`.
+    /// Register the class and return the class object.
     ///
     /// Consumes the builder since ivars and methods cannot be added after registration.
-    pub fn register(self) -> *mut AnyObject {
+    pub fn register(self) -> &'static AnyClass {
         // SAFETY: `self.0` is a valid, not-yet-registered class pair produced by
         // `objc_allocateClassPair`; registering it is safe exactly once (enforced by consuming self).
         unsafe { objc_registerClassPair(self.0) };
-        self.0 as *mut AnyObject
+        // SAFETY: Registered Objective-C classes live for the rest of the process.
+        unsafe { &*self.0.cast::<AnyClass>() }
     }
 }
 
@@ -460,9 +511,8 @@ mod test {
     #[test]
     fn test_class_add_protocol() {
         let protocol = AnyProtocol::get(c"NSCopying").expect("NSCopying should exist");
-        // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
-        let mut builder = unsafe { ClassBuilder::new(c"TestProtocolClass", class!(NSObject)) }
-            .expect("create class");
+        let mut builder =
+            ClassBuilder::new(c"TestProtocolClass", class!(NSObject)).expect("create class");
         assert!(builder.add_protocol(protocol));
         builder.register();
     }
@@ -471,21 +521,25 @@ mod test {
     fn test_class_declaration() {
         extern "C-unwind" fn test_method(_self: *mut AnyObject, _cmd: Sel) {}
 
-        // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
-        let mut builder = unsafe { ClassBuilder::new(c"TestClass2", class!(NSObject)) }
-            .expect("Failed to create class");
-        assert!(builder.add_ivar::<i32>(c"test_ivar"));
-        assert!(builder.add_method(sel!(testMethod), test_method as extern "C-unwind" fn(_, _)));
+        let mut builder =
+            ClassBuilder::new(c"TestClass2", class!(NSObject)).expect("Failed to create class");
+        builder.add_ivar::<i32>(c"test_ivar");
+        // SAFETY: The implementation has the declared receiver and selector ABI.
+        unsafe {
+            builder.add_method::<AnyObject, _>(
+                sel!(testMethod),
+                test_method as extern "C-unwind" fn(_, _),
+            );
+        }
         let class = builder.register();
-        assert!(!class.is_null());
+        assert_eq!(class, AnyClass::get(c"TestClass2").unwrap());
     }
 
     #[test]
     fn test_ivar_read_write() {
-        // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
         let mut builder =
-            unsafe { ClassBuilder::new(c"TestIvarClass", class!(NSObject)) }.expect("create class");
-        assert!(builder.add_ivar::<i64>(c"value"));
+            ClassBuilder::new(c"TestIvarClass", class!(NSObject)).expect("create class");
+        builder.add_ivar::<i64>(c"value");
         let class = builder.register();
 
         // SAFETY: `class` is a freshly registered class; alloc returns a valid uninitialized object.
@@ -535,13 +589,15 @@ mod test {
     fn test_classbuilder_duplicate_name_returns_none() {
         extern "C-unwind" fn noop(_this: *mut AnyObject, _cmd: Sel) {}
         // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
-        let mut builder = unsafe { ClassBuilder::new(c"DupTestClass", class!(NSObject)) }
-            .expect("first registration ok");
-        assert!(builder.add_method(sel!(noop), noop as extern "C-unwind" fn(_, _)));
+        let mut builder =
+            ClassBuilder::new(c"DupTestClass", class!(NSObject)).expect("first registration ok");
+        // SAFETY: The implementation has the declared receiver and selector ABI.
+        unsafe {
+            builder.add_method::<AnyObject, _>(sel!(noop), noop as extern "C-unwind" fn(_, _));
+        }
         builder.register();
         assert!(
-            // SAFETY: NSObject is a valid Objective-C class returned by the runtime.
-            unsafe { ClassBuilder::new(c"DupTestClass", class!(NSObject)) }.is_none(),
+            ClassBuilder::new(c"DupTestClass", class!(NSObject)).is_none(),
             "re-registering an existing class name must return None"
         );
     }

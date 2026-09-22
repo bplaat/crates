@@ -16,6 +16,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use std::{env, fs, thread};
 
+#[allow(unused_imports)]
+use sha1::Digest as _;
 use sha1::Sha1;
 use threadpool::ThreadPool;
 
@@ -63,7 +65,7 @@ impl Task {
                     exit(1)
                 });
                 if !buffer.is_empty() {
-                    Some(Sha1::digest(buffer))
+                    Some(Sha1::digest(buffer).into())
                 } else {
                     None
                 }
@@ -120,7 +122,7 @@ impl Task {
                         exit(1)
                     });
                     if !buffer.is_empty() {
-                        Some(Sha1::digest(buffer))
+                        Some(Sha1::digest(buffer).into())
                     } else {
                         None
                     }

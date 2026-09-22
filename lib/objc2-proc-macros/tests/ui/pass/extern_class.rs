@@ -9,6 +9,7 @@ extern crate self as objc2;
 use objc2_proc_macros::extern_class;
 
 pub mod runtime {
+    pub struct AnyClass;
     pub struct AnyObject;
     pub unsafe trait Message {}
 }
@@ -16,7 +17,7 @@ pub mod runtime {
 #[macro_export]
 macro_rules! class {
     ($name:ident) => {
-        ::std::ptr::null_mut::<$crate::runtime::AnyObject>()
+        &$crate::runtime::AnyClass
     };
 }
 

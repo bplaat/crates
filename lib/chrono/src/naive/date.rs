@@ -24,25 +24,32 @@ impl NaiveDate {
     }
 
     /// Create a [NaiveDate] from year, month and day
-    pub fn from_ymd_opt(year: u32, month: u32, day: u32) -> Option<Self> {
-        if !(1..=MONTHS_IN_YEAR as u32).contains(&month)
-            || !(1..=days_in_year_month(year, month) as u32).contains(&day)
-        {
+    pub const fn from_ymd_opt(year: i32, month: u32, day: u32) -> Option<Self> {
+        if month == 0 || month > MONTHS_IN_YEAR as u32 {
+            return None;
+        }
+        if day == 0 || day > days_in_year_month(year, month) as u32 {
             return None;
         }
 
         let mut days_epoch_diff = 0;
-        if year >= EPOCH_YEAR as u32 {
-            for year in (EPOCH_YEAR as u32)..year {
-                days_epoch_diff += days_in_year(year);
+        if year >= EPOCH_YEAR as i32 {
+            let mut current_year = EPOCH_YEAR as i32;
+            while current_year < year {
+                days_epoch_diff += days_in_year(current_year);
+                current_year += 1;
             }
         } else {
-            for year in (year..(EPOCH_YEAR as u32)).rev() {
-                days_epoch_diff -= days_in_year(year);
+            let mut current_year = EPOCH_YEAR as i32;
+            while current_year > year {
+                current_year -= 1;
+                days_epoch_diff -= days_in_year(current_year);
             }
         }
-        for month in 1..month {
-            days_epoch_diff += days_in_year_month(year, month);
+        let mut current_month = 1;
+        while current_month < month {
+            days_epoch_diff += days_in_year_month(year, current_month);
+            current_month += 1;
         }
         days_epoch_diff += day as i64 - 1;
 
@@ -52,8 +59,11 @@ impl NaiveDate {
     /// Create a [NaiveDateTime] from date with hour, minute and second
     pub const fn and_hms_opt(&self, hour: u32, minute: u32, second: u32) -> Option<NaiveDateTime> {
         let secs = (hour as i64) * SECS_IN_HOUR + (minute as i64) * SECS_IN_MIN + (second as i64);
+        if hour >= 24 || minute >= 60 || second >= 60 {
+            return None;
+        }
         #[allow(deprecated)]
-        NaiveDateTime::from_timestamp(self.0 + secs, 0)
+        Some(NaiveDateTime::from_timestamp(self.0 + secs, 0))
     }
 
     #[cfg(test)]
@@ -83,7 +93,7 @@ impl FromStr for NaiveDate {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split('-');
-        let year: u32 = parts
+        let year: i32 = parts
             .next()
             .ok_or(ParseError)?
             .parse()
@@ -142,6 +152,9 @@ mod test {
 
     #[test]
     fn test_timestamp() {
+        const UNIX_EPOCH: Option<NaiveDate> = NaiveDate::from_ymd_opt(1970, 1, 1);
+        assert_eq!(UNIX_EPOCH.unwrap().timestamp(), 0);
+
         let date = NaiveDate::from_timestamp(1609459200);
         assert_eq!(date.timestamp(), 1609459200);
         let date = NaiveDate::from_timestamp(1609459300);

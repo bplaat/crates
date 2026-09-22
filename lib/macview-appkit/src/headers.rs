@@ -12,7 +12,14 @@ use std::ffi::{c_char, c_void};
 
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject as Object;
-use objc2::{Encode, Encoding, class, msg_send};
+#[allow(unused_imports)]
+use objc2::runtime::NSObject;
+use objc2::{Encode, Encoding, class, extern_class, msg_send};
+
+extern_class!(
+    #[unsafe(super(NSObject))]
+    pub(crate) struct NSImageRep;
+);
 
 pub(crate) const DRAW_PATH_EVEN_ODD_FILL: i32 = 1;
 pub(crate) const DRAW_PATH_FILL: i32 = 0;

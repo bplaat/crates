@@ -10,7 +10,7 @@ use std::path::Path;
 use std::{fs, io};
 
 /// Recursively copies all files and directories from `from` to `to`.
-pub fn copy_dir(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
+pub fn copy_dir<Q: AsRef<Path>, P: AsRef<Path>>(from: P, to: Q) -> io::Result<Vec<io::Error>> {
     let src = from.as_ref();
     let dst = to.as_ref();
     let source_type = fs::symlink_metadata(src)?.file_type();
@@ -58,7 +58,7 @@ pub fn copy_dir(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> 
         Ok(())
     }
     copy_dir(src, dst)?;
-    Ok(())
+    Ok(Vec::new())
 }
 
 fn resolve_destination(path: &Path) -> io::Result<std::path::PathBuf> {

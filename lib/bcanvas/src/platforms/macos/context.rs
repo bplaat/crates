@@ -219,10 +219,11 @@ impl PlatformCanvasContext {
             color: s.fill,
             alpha: s.alpha.to_bits(),
         };
-        self.text_attributes
+        let attributes = self
+            .text_attributes
             .entry(key)
-            .or_insert_with(|| unsafe { create_text_attributes(s) })
-            .as_ptr()
+            .or_insert_with(|| unsafe { create_text_attributes(s) });
+        Retained::as_ptr(attributes).cast_mut()
     }
     fn fill_style(&mut self, s: &CanvasState) {
         let fill = (s.fill, s.alpha.to_bits());
@@ -268,7 +269,7 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> CGRect {
 unsafe fn create_text_attributes(s: &CanvasState) -> Retained<Object> {
     let family = NSString::new(&s.font_family);
     let mut font: *mut Object =
-        unsafe { msg_send![class!(NSFont),fontWithName:family,size:s.font_size as f64] };
+        unsafe { msg_send![class!(NSFont),fontWithName:&*family,size:s.font_size as f64] };
     if font.is_null() {
         font = unsafe { msg_send![class!(NSFont),systemFontOfSize:s.font_size as f64] };
     }

@@ -6,22 +6,79 @@
 
 //! A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
 
-use digest::Digest;
+use crypto_common::BlockSizeUser;
+pub use crypto_common::KeyInit;
+use digest::{Digest, FixedOutputReset, Output, Reset};
 use subtle::ConstantTimeEq;
 
+/// An error returned when an HMAC key has an invalid length.
+#[derive(Debug)]
+pub struct InvalidLength;
+
+/// An error returned when an HMAC tag does not match.
+#[derive(Debug)]
+pub struct MacError;
+
+/// A streaming HMAC computation.
+pub struct Hmac<D> {
+    key: Vec<u8>,
+    message: Vec<u8>,
+    digest: std::marker::PhantomData<D>,
+}
+
+impl<D> Hmac<D> {
+    /// Creates an HMAC computation from a key of any length.
+    pub fn new_from_slice(key: &[u8]) -> Result<Self, InvalidLength> {
+        Ok(Self {
+            key: key.to_vec(),
+            message: Vec::new(),
+            digest: std::marker::PhantomData,
+        })
+    }
+}
+
+/// Common operations for message authentication codes.
+pub trait Mac: Sized {
+    /// Adds message bytes to this computation.
+    fn update(&mut self, data: &[u8]);
+
+    /// Verifies a complete tag in constant time.
+    fn verify_slice(self, tag: &[u8]) -> Result<(), MacError>;
+}
+
+impl<D> Mac for Hmac<D>
+where
+    D: Digest + BlockSizeUser + FixedOutputReset + Reset,
+{
+    fn update(&mut self, data: &[u8]) {
+        self.message.extend_from_slice(data);
+    }
+
+    fn verify_slice(self, tag: &[u8]) -> Result<(), MacError> {
+        verify::<D>(&self.key, &self.message, tag)
+            .then_some(())
+            .ok_or(MacError)
+    }
+}
+
 // MARK: hmac
-/// Computes HMAC over `message` with `key` and returns the raw `D::Output` bytes.
-pub fn hmac<D: Digest>(key: &[u8], message: &[u8]) -> D::Output {
-    let mut key_block = vec![0u8; D::BLOCK_SIZE];
-    if key.len() > D::BLOCK_SIZE {
+/// Computes HMAC over `message` with `key` and returns the raw digest bytes.
+pub fn hmac<D>(key: &[u8], message: &[u8]) -> Output<D>
+where
+    D: Digest + BlockSizeUser + FixedOutputReset + Reset,
+{
+    let block_size = D::block_size();
+    let mut key_block = vec![0u8; block_size];
+    if key.len() > block_size {
         let hashed = D::digest(key);
-        key_block[..hashed.as_ref().len()].copy_from_slice(hashed.as_ref());
+        let hashed: &[u8] = hashed.as_ref();
+        key_block[..hashed.len()].copy_from_slice(hashed);
     } else {
         key_block[..key.len()].copy_from_slice(key);
     }
 
-    let mut ikey = vec![0u8; D::BLOCK_SIZE];
-    let mut okey = vec![0u8; D::BLOCK_SIZE];
+    let mut ikey = vec![0u8; block_size];
+    let mut okey = vec![0u8; block_size];
     for (ik, &kb) in ikey.iter_mut().zip(key_block.iter()) {
         *ik = kb ^ 0x36;
     }
@@ -29,20 +86,24 @@ pub fn hmac<D: Digest>(key: &[u8], message: &[u8]) -> D::Output {
         *ok = kb ^ 0x5c;
     }
 
-    let mut h = D::default();
-    h.update(&ikey);
-    h.update(message);
+    let mut h = D::new();
+    Digest::update(&mut h, &ikey);
+    Digest::update(&mut h, message);
     let inner = h.finalize_reset();
 
-    h.update(&okey);
-    h.update(inner.as_ref());
+    Digest::update(&mut h, &okey);
+    let inner: &[u8] = inner.as_ref();
+    Digest::update(&mut h, inner);
     h.finalize_reset()
 }
 
 /// Verifies that `tag` is the HMAC of `message` under `key` in constant time.
-pub fn verify<D: Digest>(key: &[u8], message: &[u8], tag: &[u8]) -> bool {
+pub fn verify<D>(key: &[u8], message: &[u8], tag: &[u8]) -> bool
+where
+    D: Digest + BlockSizeUser + FixedOutputReset + Reset,
+{
     let actual = hmac::<D>(key, message);
-    let actual = actual.as_ref();
+    let actual: &[u8] = actual.as_ref();
     if actual.len() != tag.len() {
         return false;
     }

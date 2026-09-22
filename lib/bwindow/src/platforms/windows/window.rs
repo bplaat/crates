@@ -559,5 +559,5 @@ pub(crate) fn config_dir() -> PathBuf {
         }
     }
     .expect("Can't get dirs");
-    project_dirs.config_dir()
+    project_dirs.config_dir().to_path_buf()
 }

@@ -6,6 +6,8 @@
 
 //! A minimal replacement for the [sha2](https://crates.io/crates/sha2) crate
 
+pub use digest::Digest;
+
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -44,7 +46,7 @@ impl Sha256 {
     }
 
     /// Compute the SHA-256 digest of the given data
-    pub fn digest(data: impl AsRef<[u8]>) -> [u8; 32] {
+    pub fn digest(data: impl AsRef<[u8]>) -> digest::Output<Self> {
         let mut h = Self::new();
         h.update(data);
         h.finalize_reset()
@@ -66,12 +68,12 @@ impl Sha256 {
     }
 
     /// Finalize the hash and return the digest
-    pub fn finalize(mut self) -> [u8; 32] {
+    pub fn finalize(mut self) -> digest::Output<Self> {
         self.finalize_reset()
     }
 
     /// Finalize the hash, reset the hasher, and return the digest
-    pub fn finalize_reset(&mut self) -> [u8; 32] {
+    pub fn finalize_reset(&mut self) -> digest::Output<Self> {
         let mut padding = [0u8; 64];
         padding[0] = 0x80;
         let length_bits = self.length * 8;
@@ -87,7 +89,7 @@ impl Sha256 {
             chunk.copy_from_slice(&self.state[i].to_be_bytes());
         }
         self.reset();
-        result
+        result.into()
     }
 
     fn reset(&mut self) {
@@ -533,19 +535,40 @@ impl Sha256 {
     }
 }
 
-// MARK: Digest impl
-impl digest::Digest for Sha256 {
-    const BLOCK_SIZE: usize = 64;
-    type Output = [u8; 32];
-
+// MARK: Digest traits
+impl digest::Update for Sha256 {
     fn update(&mut self, data: &[u8]) {
         self.update(data);
     }
+}
 
-    fn finalize_reset(&mut self) -> Self::Output {
-        self.finalize_reset()
+impl crypto_common::OutputSizeUser for Sha256 {
+    type OutputSize = crypto_common::array::sizes::U32;
+}
+
+impl crypto_common::BlockSizeUser for Sha256 {
+    type BlockSize = crypto_common::array::sizes::U64;
+}
+
+impl crypto_common::Reset for Sha256 {
+    fn reset(&mut self) {
+        *self = Self::default();
     }
 }
+
+impl digest::FixedOutput for Sha256 {
+    fn finalize_into(self, out: &mut digest::Output<Self>) {
+        *out = self.finalize();
+    }
+}
+
+impl digest::FixedOutputReset for Sha256 {
+    fn finalize_into_reset(&mut self, out: &mut digest::Output<Self>) {
+        *out = self.finalize_reset();
+    }
+}
+
+impl digest::HashMarker for Sha256 {}
 
 // MARK: Tests
 #[cfg(test)]

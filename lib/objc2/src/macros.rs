@@ -13,14 +13,11 @@ use crate::runtime::{AnyObject, Sel};
 #[macro_export]
 macro_rules! class {
     ($name:ident) => {{
-        #[allow(unused_unsafe)]
-        // SAFETY: `name` is a compile-time null-terminated string literal. The returned
-        // pointer is either a valid class pointer or null (caller is responsible for checking).
-        unsafe {
-            let name = concat!(stringify!($name), '\0');
-            $crate::ffi::objc_getClass(name.as_ptr() as *const std::ffi::c_char)
-                as *mut $crate::runtime::AnyObject
-        }
+        $crate::runtime::AnyClass::get(
+            ::core::ffi::CStr::from_bytes_with_nul(concat!(stringify!($name), '\0').as_bytes())
+                .expect("class name contains an interior null"),
+        )
+        .expect(concat!("Objective-C class not found: ", stringify!($name)))
     }};
 }
 
@@ -186,9 +183,17 @@ impl<T: crate::runtime::Message> MessageReceiver for &T {
     }
 }
 
+impl MessageReceiver for &crate::runtime::AnyClass {
+    fn into_raw(self) -> *mut AnyObject {
+        (self as *const crate::runtime::AnyClass)
+            .cast_mut()
+            .cast::<AnyObject>()
+    }
+}
+
 impl<T: crate::runtime::Message> MessageReceiver for &crate::rc::Retained<T> {
     fn into_raw(self) -> *mut AnyObject {
-        self.as_ptr().cast::<AnyObject>()
+        self.as_ptr().cast_mut().cast::<AnyObject>()
     }
 }
 
@@ -435,15 +440,15 @@ mod test {
     }
 
     #[test]
-    fn test_class_macro_returns_null_for_unknown() {
-        let cls = class!(NoSuchClassXyzAbc999);
-        assert!(cls.is_null(), "unknown class name must return null");
+    #[should_panic(expected = "Objective-C class not found")]
+    fn test_class_macro_panics_for_unknown() {
+        let _ = class!(NoSuchClassXyzAbc999);
     }
 
     #[test]
     fn test_class_macro_returns_non_null_for_known() {
         let cls = class!(NSObject);
-        assert!(!cls.is_null(), "NSObject must always be resolvable");
+        assert_eq!(cls, class!(NSObject));
     }
 
     #[test]

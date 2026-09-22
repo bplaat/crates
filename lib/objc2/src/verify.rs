@@ -293,13 +293,16 @@ mod test {
 
     #[test]
     fn test_class_name_known_class() {
-        assert_eq!(class_name(class!(NSObject) as *mut _), "NSObject");
+        assert_eq!(
+            class_name((class!(NSObject) as *const AnyClass).cast_mut().cast()),
+            "NSObject"
+        );
     }
 
     #[test]
     fn test_verify_super_send_uses_superclass() {
         verify_super_send(
-            class!(NSObject).cast::<AnyClass>(),
+            class!(NSObject) as *const AnyClass,
             crate::sel!(description),
             &[],
             &Encoding::Object,

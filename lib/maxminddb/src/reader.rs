@@ -7,9 +7,9 @@
 use std::net::IpAddr;
 use std::path::Path;
 
-use serde::de::DeserializeOwned;
+use serde::Deserialize;
 
-use crate::decoder::{Value, decode_value_at, from_value};
+use crate::decoder::{decode_value_at, from_value};
 use crate::error::MaxMindDbError;
 use crate::metadata::Metadata;
 
@@ -25,7 +25,7 @@ pub struct Reader<S: AsRef<[u8]>> {
 
 impl Reader<Vec<u8>> {
     /// Open a MaxMind DB database file by loading it into memory.
-    pub fn open_readfile(path: impl AsRef<Path>) -> Result<Self, MaxMindDbError> {
+    pub fn open_readfile<P: AsRef<Path>>(path: P) -> Result<Self, MaxMindDbError> {
         let buf = std::fs::read(path)?;
         Self::from_source(buf)
     }
@@ -62,7 +62,7 @@ impl<S: AsRef<[u8]>> Reader<S> {
     }
 
     /// Look up an IP address in the database.
-    pub fn lookup(&self, addr: IpAddr) -> Result<LookupResult, MaxMindDbError> {
+    pub fn lookup(&self, addr: IpAddr) -> Result<LookupResult<'_, S>, MaxMindDbError> {
         let data = self.buf.as_ref();
         let node_count = self.metadata.node_count as usize;
 
@@ -91,7 +91,10 @@ impl<S: AsRef<[u8]>> Reader<S> {
                     let record = self.read_record(data, node, false)?;
                     if record >= node_count {
                         // IP not in database.
-                        return Ok(LookupResult { data_value: None });
+                        return Ok(LookupResult {
+                            data: None,
+                            source: std::marker::PhantomData,
+                        });
                     }
                     node = record;
                 }
@@ -107,22 +110,29 @@ impl<S: AsRef<[u8]>> Reader<S> {
             let record = self.read_record(data, node, bit != 0)?;
             if record == node_count {
                 // No data for this IP.
-                return Ok(LookupResult { data_value: None });
+                return Ok(LookupResult {
+                    data: None,
+                    source: std::marker::PhantomData,
+                });
             }
             if record > node_count {
                 // This is a pointer into the data section.
                 // Pointer values within the data section are relative to the data section start.
                 let data_record_offset = record - node_count - 16;
                 let data_section = &data[self.data_offset..];
-                let (value, _) = decode_value_at(data_section, data_record_offset)?;
+                decode_value_at(data_section, data_record_offset)?;
                 return Ok(LookupResult {
-                    data_value: Some(value),
+                    data: Some((data_section, data_record_offset)),
+                    source: std::marker::PhantomData,
                 });
             }
             node = record;
         }
 
-        Ok(LookupResult { data_value: None })
+        Ok(LookupResult {
+            data: None,
+            source: std::marker::PhantomData,
+        })
     }
 
     fn read_record(&self, data: &[u8], node: usize, right: bool) -> Result<usize, MaxMindDbError> {
@@ -193,23 +203,28 @@ impl<S: AsRef<[u8]>> Reader<S> {
 // MARK: LookupResult
 
 /// The result of looking up an IP address in a MaxMind DB.
-pub struct LookupResult {
-    pub(crate) data_value: Option<Value>,
+#[derive(Clone, Copy, Debug)]
+pub struct LookupResult<'a, S: AsRef<[u8]>> {
+    data: Option<(&'a [u8], usize)>,
+    source: std::marker::PhantomData<&'a S>,
 }
 
-impl LookupResult {
+impl<'a, S: AsRef<[u8]>> LookupResult<'a, S> {
     /// Returns `true` if the database contains data for the looked-up IP.
     pub const fn has_data(&self) -> bool {
-        self.data_value.is_some()
+        self.data.is_some()
     }
 
     /// Decode the record into a strongly-typed value.
     ///
     /// Returns `Ok(None)` if the IP address was not found in the database.
-    pub fn decode<T: DeserializeOwned>(&self) -> Result<Option<T>, MaxMindDbError> {
-        match &self.data_value {
+    pub fn decode<T: Deserialize<'a>>(&self) -> Result<Option<T>, MaxMindDbError> {
+        match self.data {
             None => Ok(None),
-            Some(v) => from_value::<T>(v).map(Some),
+            Some((data, offset)) => {
+                let (value, _) = decode_value_at(data, offset)?;
+                from_value::<T>(&value).map(Some)
+            }
         }
     }
 }

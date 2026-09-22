@@ -33,7 +33,11 @@ impl Default for Args {
         Self {
             subcommand: Subcommand::Help,
             query: String::new(),
-            output_dir: user_dirs.audio_dir().display().to_string(),
+            output_dir: user_dirs
+                .audio_dir()
+                .expect("Can't get audio directory")
+                .display()
+                .to_string(),
             is_id: false,
             is_artist: false,
             with_singles: false,

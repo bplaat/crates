@@ -13,6 +13,8 @@ use image::{
 };
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
+#[allow(unused_imports)]
+use objc2::{ClassType as _, DefinedClass as _};
 use objc2::{class, define_class, msg_send};
 
 use crate::headers::*;
@@ -302,7 +304,7 @@ pub(crate) fn create_vector_image(document: VectorImage) -> Retained<Object> {
         let image: Allocated<Object> = msg_send![class!(NSImage), alloc];
         let image: Retained<Object> = msg_send![image, initWithSize: size];
         let _: () = msg_send![&*image, setCacheMode: NS_IMAGE_CACHE_NEVER];
-        let _: () = msg_send![&*image, addRepresentation: representation.as_ptr()];
+        let _: () = msg_send![&*image, addRepresentation: Retained::as_ptr(&representation)];
         image
     }
 }

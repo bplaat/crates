@@ -49,8 +49,9 @@ impl OwnedString {
     }
 
     /// Returns the string pointer, which remains valid while this value is alive.
-    pub const fn as_ptr(&self) -> *mut Object {
-        self.string.as_ptr()
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_ptr(&self) -> *mut Object {
+        Retained::as_ptr(&self.string).cast_mut()
     }
 
     /// Retains an existing immutable string.
@@ -80,8 +81,9 @@ pub struct Image {
 
 impl Image {
     /// Returns the image, which stays alive for as long as this value does.
-    pub const fn as_ptr(&self) -> *mut Object {
-        self.image.as_ptr()
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_ptr(&self) -> *mut Object {
+        Retained::as_ptr(&self.image).cast_mut()
     }
 
     /// Returns the natural image size in points.
