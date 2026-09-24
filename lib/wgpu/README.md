@@ -39,12 +39,12 @@ thread, and surface creation must happen on the main thread on macOS.
 ```sh
 cargo run -p example-wgpu-triangle
 cargo run -p example-wgpu-cube
-cargo run -p example-wgpu-instanced
+cargo run -p example-wgpu-blocks
 ```
 
 See [wgpu-triangle](../../examples/wgpu-triangle),
 [wgpu-cube](../../examples/wgpu-cube), and
-[wgpu-instanced](../../examples/wgpu-instanced).
+[wgpu-blocks](../../examples/wgpu-blocks).
 
 ## License
 

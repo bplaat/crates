@@ -8,8 +8,8 @@
 
 fn main() -> wgpu_shader_build::Result<()> {
     wgpu_shader_build::Builder::new()
-        .shader("instances.wgsl", "src/instances.wgsl")
-        .shader("textured-cube.wgsl", "src/textured-cube.wgsl")
+        .shader("blocks.wgsl", "src/blocks.wgsl")
+        .shader("sky.wgsl", "src/sky.wgsl")
         .shader("overlay.wgsl", "src/overlay.wgsl")
         .compile()
 }
