@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-use super::{Budget, DecodeError, Format, Image, Reader, Result, pixel_len};
+use super::{
+    Bitmap, Budget, DecodeError, EncodeError, EncodingStyle, Format, Image, Reader, Result,
+    pixel_len,
+};
 
 const ZIGZAG: [usize; 64] = [
     0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20,
@@ -15,6 +18,7 @@ const ZIGZAG: [usize; 64] = [
 // Codes up to this length decode with a single table lookup.
 const LOOKUP_BITS: u32 = 9;
 
+// MARK: Decoder
 struct Huffman {
     first: [u32; 17],
     count: [u32; 17],
@@ -1061,9 +1065,680 @@ fn orient(
     Ok((w, h, output))
 }
 
+// MARK: Encoder
+const JPEG_LUMA_QUANT: [u8; 64] = [
+    16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55, 14, 13, 16, 24, 40, 57, 69, 56,
+    14, 17, 22, 29, 51, 87, 80, 62, 18, 22, 37, 56, 68, 109, 103, 77, 24, 35, 55, 64, 81, 104, 113,
+    92, 49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99,
+];
+const JPEG_CHROMA_QUANT: [u8; 64] = [
+    17, 18, 24, 47, 99, 99, 99, 99, 18, 21, 26, 66, 99, 99, 99, 99, 24, 26, 56, 99, 99, 99, 99, 99,
+    47, 66, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+    99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
+];
+const JPEG_LUMA_DC_CODE_LENGTHS: [u8; 16] = [
+    0x00, 0x01, 0x05, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+const JPEG_LUMA_DC_VALUES: [u8; 12] = [
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+];
+const JPEG_CHROMA_DC_CODE_LENGTHS: [u8; 16] = [
+    0x00, 0x03, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+const JPEG_CHROMA_DC_VALUES: [u8; 12] = [
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+];
+const JPEG_LUMA_AC_CODE_LENGTHS: [u8; 16] = [
+    0x00, 0x02, 0x01, 0x03, 0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00, 0x01, 0x7D,
+];
+const JPEG_LUMA_AC_VALUES: [u8; 162] = [
+    0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06, 0x13, 0x51, 0x61, 0x07,
+    0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xA1, 0x08, 0x23, 0x42, 0xB1, 0xC1, 0x15, 0x52, 0xD1, 0xF0,
+    0x24, 0x33, 0x62, 0x72, 0x82, 0x09, 0x0A, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x25, 0x26, 0x27, 0x28,
+    0x29, 0x2A, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
+    0x4A, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
+    0x6A, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+    0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
+    0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5,
+    0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xE1, 0xE2,
+    0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8,
+    0xF9, 0xFA,
+];
+const JPEG_CHROMA_AC_CODE_LENGTHS: [u8; 16] = [
+    0x00, 0x02, 0x01, 0x02, 0x04, 0x04, 0x03, 0x04, 0x07, 0x05, 0x04, 0x04, 0x00, 0x01, 0x02, 0x77,
+];
+const JPEG_CHROMA_AC_VALUES: [u8; 162] = [
+    0x00, 0x01, 0x02, 0x03, 0x11, 0x04, 0x05, 0x21, 0x31, 0x06, 0x12, 0x41, 0x51, 0x07, 0x61, 0x71,
+    0x13, 0x22, 0x32, 0x81, 0x08, 0x14, 0x42, 0x91, 0xA1, 0xB1, 0xC1, 0x09, 0x23, 0x33, 0x52, 0xF0,
+    0x15, 0x62, 0x72, 0xD1, 0x0A, 0x16, 0x24, 0x34, 0xE1, 0x25, 0xF1, 0x17, 0x18, 0x19, 0x1A, 0x26,
+    0x27, 0x28, 0x29, 0x2A, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48,
+    0x49, 0x4A, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68,
+    0x69, 0x6A, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3, 0xA4, 0xA5,
+    0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3,
+    0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA,
+    0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8,
+    0xF9, 0xFA,
+];
+
+struct JpegBits<'a> {
+    data: &'a mut Vec<u8>,
+    bits: u64,
+    count: u8,
+}
+
+impl<'a> JpegBits<'a> {
+    const fn new(data: &'a mut Vec<u8>) -> Self {
+        Self {
+            data,
+            bits: 0,
+            count: 0,
+        }
+    }
+
+    fn write(&mut self, value: u32, count: u8) {
+        self.bits = (self.bits << count) | u64::from(value);
+        self.count += count;
+        if self.count >= 32 {
+            self.count -= 32;
+            let bytes = ((self.bits >> self.count) as u32).to_be_bytes();
+            // Most words contain no 0xff byte, so they skip the byte stuffing loop.
+            if bytes.contains(&0xff) {
+                self.push_stuffed(&bytes);
+            } else {
+                self.data.extend_from_slice(&bytes);
+            }
+        }
+    }
+
+    fn push_stuffed(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.data.push(byte);
+            if byte == 0xff {
+                self.data.push(0);
+            }
+        }
+    }
+
+    fn finish(&mut self) {
+        let padding = (8 - self.count % 8) % 8;
+        self.write((1 << padding) - 1, padding);
+        if self.count != 0 {
+            let bytes = (self.bits << (64 - self.count)).to_be_bytes();
+            self.push_stuffed(&bytes[..usize::from(self.count / 8)]);
+            self.count = 0;
+        }
+    }
+}
+
+fn jpeg_huffman(lengths: &[u8; 16], values: &[u8]) -> [(u16, u8); 256] {
+    let mut table = [(0, 0); 256];
+    let mut code = 0u16;
+    let mut offset = 0;
+    for (index, &count) in lengths.iter().enumerate() {
+        for &symbol in &values[offset..offset + usize::from(count)] {
+            table[usize::from(symbol)] = (code, (index + 1) as u8);
+            code += 1;
+        }
+        offset += usize::from(count);
+        code <<= 1;
+    }
+    table
+}
+
+fn jpeg_segment(out: &mut Vec<u8>, marker: u8, data: &[u8]) {
+    out.extend_from_slice(&[0xff, marker]);
+    out.extend_from_slice(&((data.len() + 2) as u16).to_be_bytes());
+    out.extend_from_slice(data);
+}
+
+fn jpeg_quant(base: &[u8; 64], quality: u8) -> [u8; 64] {
+    let scale = if quality < 50 {
+        5000 / u32::from(quality)
+    } else {
+        200 - 2 * u32::from(quality)
+    };
+    base.map(|value| ((u32::from(value) * scale + 50) / 100).clamp(1, 255) as u8)
+}
+
+struct JpegPlanes {
+    width: usize,
+    height: usize,
+    stride: usize,
+    rows: usize,
+    y: Vec<u8>,
+    cb: Vec<u8>,
+    cr: Vec<u8>,
+}
+
+impl JpegPlanes {
+    // Converts once to fixed-point YCbCr planes padded to whole MCUs, so blocks need no bounds
+    // clamping and every sampling layout shares the conversion.
+    fn new(bitmap: &Bitmap, gray: bool) -> Self {
+        let (width, height) = (bitmap.width as usize, bitmap.height as usize);
+        let (stride, rows) = (width.next_multiple_of(16), height.next_multiple_of(16));
+        let plane = |enabled: bool| vec![0; if enabled { stride * rows } else { 0 }];
+        let (mut y, mut cb, mut cr) = (plane(true), plane(!gray), plane(!gray));
+        for (index, row) in bitmap.data.chunks_exact(width * 4).enumerate() {
+            let pixels = row.as_chunks::<4>().0;
+            let lines = index * stride..(index + 1) * stride;
+            if gray {
+                // Gray pixels have equal channels, so luma is the red channel.
+                for (luma, pixel) in y[lines.clone()].iter_mut().zip(pixels) {
+                    *luma = pixel[0];
+                }
+            } else {
+                for (((luma, blue), red), pixel) in y[lines.clone()]
+                    .iter_mut()
+                    .zip(&mut cb[lines.clone()])
+                    .zip(&mut cr[lines.clone()])
+                    .zip(pixels)
+                {
+                    let [r, g, b] = [0, 1, 2].map(|channel| i32::from(pixel[channel]));
+                    *luma = ((19595 * r + 38470 * g + 7471 * b + 32768) >> 16) as u8;
+                    *blue =
+                        ((-11059 * r - 21709 * g + 32768 * b + (128 << 16) + 32767) >> 16) as u8;
+                    *red = ((32768 * r - 27439 * g - 5329 * b + (128 << 16) + 32767) >> 16) as u8;
+                }
+            }
+            for plane in [&mut y, &mut cb, &mut cr] {
+                if let Some(line) = plane.get_mut(lines.clone()) {
+                    let last = line[width - 1];
+                    line[width..].fill(last);
+                }
+            }
+        }
+        for plane in [&mut y, &mut cb, &mut cr] {
+            if !plane.is_empty() {
+                let last = (height - 1) * stride;
+                for row in height..rows {
+                    plane.copy_within(last..last + stride, row * stride);
+                }
+            }
+        }
+        Self {
+            width,
+            height,
+            stride,
+            rows,
+            y,
+            cb,
+            cr,
+        }
+    }
+
+    fn downsample<const H: usize, const V: usize>(&self) -> (Vec<u8>, Vec<u8>) {
+        let (count, stride) = ((H * V) as u16, self.stride / H);
+        let mut sums = vec![0u16; stride];
+        [&self.cb, &self.cr]
+            .map(|plane| {
+                let mut out = Vec::with_capacity(stride * (self.rows / V));
+                for lines in plane.chunks_exact(self.stride * V) {
+                    sums.fill(count / 2);
+                    for line in lines.chunks_exact(self.stride) {
+                        for (sum, samples) in sums.iter_mut().zip(line.as_chunks::<H>().0) {
+                            *sum += samples.iter().map(|&value| u16::from(value)).sum::<u16>();
+                        }
+                    }
+                    out.extend(sums.iter().map(|&sum| (sum / count) as u8));
+                }
+                out
+            })
+            .into()
+    }
+
+    fn blocks(&self, h: usize, v: usize, tables: &JpegTables) -> Vec<[i16; 64]> {
+        let gray = self.cb.is_empty();
+        let chroma = match (h, v) {
+            _ if gray => None,
+            (2, 2) => Some(self.downsample::<2, 2>()),
+            (2, 1) => Some(self.downsample::<2, 1>()),
+            (1, 2) => Some(self.downsample::<1, 2>()),
+            _ => None,
+        };
+        let (cb, cr) = chroma
+            .as_ref()
+            .map_or((&self.cb[..], &self.cr[..]), |(cb, cr)| (&cb[..], &cr[..]));
+        let per_mcu = if gray { 1 } else { h * v + 2 };
+        let mcus = self.width.div_ceil(h * 8) * self.height.div_ceil(v * 8);
+        let mut blocks = Vec::with_capacity(mcus * per_mcu);
+        for y in (0..self.height).step_by(v * 8) {
+            for x in (0..self.width).step_by(h * 8) {
+                for by in 0..v {
+                    for bx in 0..h {
+                        let block = &self.y[(y + by * 8) * self.stride + x + bx * 8..];
+                        blocks.push(jpeg_fdct(block, self.stride, &tables.luma));
+                    }
+                }
+                if !gray {
+                    let stride = self.stride / h;
+                    for plane in [cb, cr] {
+                        let block = &plane[y / v * stride + x / h..];
+                        blocks.push(jpeg_fdct(block, stride, &tables.chroma));
+                    }
+                }
+            }
+        }
+        blocks
+    }
+}
+
+// The Arai-Agui-Nakajima DCT needs 5 multiplications; its output scale is folded into the
+// quantizer reciprocals.
+fn jpeg_aan(d: [f32; 8]) -> [f32; 8] {
+    let (tmp0, tmp7) = (d[0] + d[7], d[0] - d[7]);
+    let (tmp1, tmp6) = (d[1] + d[6], d[1] - d[6]);
+    let (tmp2, tmp5) = (d[2] + d[5], d[2] - d[5]);
+    let (tmp3, tmp4) = (d[3] + d[4], d[3] - d[4]);
+    let (tmp10, tmp13) = (tmp0 + tmp3, tmp0 - tmp3);
+    let (tmp11, tmp12) = (tmp1 + tmp2, tmp1 - tmp2);
+    let z1 = (tmp12 + tmp13) * std::f32::consts::FRAC_1_SQRT_2;
+    let (odd10, odd11, odd12) = (tmp4 + tmp5, tmp5 + tmp6, tmp6 + tmp7);
+    let z5 = (odd10 - odd12) * 0.382_683_43;
+    let z2 = odd10 * 0.541_196_1 + z5;
+    let z4 = odd12 * 1.306_563 + z5;
+    let z3 = odd11 * std::f32::consts::FRAC_1_SQRT_2;
+    let (z11, z13) = (tmp7 + z3, tmp7 - z3);
+    [
+        tmp10 + tmp11,
+        z11 + z4,
+        tmp13 + z1,
+        z13 - z2,
+        tmp10 - tmp11,
+        z13 + z2,
+        tmp13 - z1,
+        z11 - z4,
+    ]
+}
+
+fn jpeg_fdct(plane: &[u8], stride: usize, scale: &[f32; 64]) -> [i16; 64] {
+    let mut data = [[0.0f32; 8]; 8];
+    for (y, row) in data.iter_mut().enumerate() {
+        let samples = &plane[y * stride..y * stride + 8];
+        *row = jpeg_aan(std::array::from_fn(|x| f32::from(samples[x]) - 128.0));
+    }
+    for x in 0..8 {
+        let column = jpeg_aan(std::array::from_fn(|y| data[y][x]));
+        for (row, value) in data.iter_mut().zip(column) {
+            row[x] = value;
+        }
+    }
+    std::array::from_fn(|index| (data[index / 8][index % 8] * scale[index]).round() as i16)
+}
+
+fn jpeg_amplitude(value: i16) -> (u8, u16) {
+    if value == 0 {
+        return (0, 0);
+    }
+    let magnitude = value.unsigned_abs();
+    let size = 16 - magnitude.leading_zeros() as u8;
+    let bits = if value < 0 {
+        (i32::from(value) - 1) as u16 & ((1 << size) - 1)
+    } else {
+        value as u16
+    };
+    (size, bits)
+}
+
+const JPEG_UNZIGZAG: [u8; 64] = {
+    let mut table = [0; 64];
+    let mut index = 0;
+    while index < 64 {
+        table[ZIGZAG[index]] = index as u8;
+        index += 1;
+    }
+    table
+};
+
+// Nonzero AC coefficients become a zigzag-ordered bit mask, so zero runs need no scanning.
+fn jpeg_block_symbols(
+    block: &[i16; 64],
+    previous: &mut i16,
+    mut emit: impl FnMut(bool, usize, u16, u8),
+) {
+    let difference = block[0] - *previous;
+    *previous = block[0];
+    let (size, value) = jpeg_amplitude(difference.clamp(-2047, 2047));
+    emit(true, size as usize, value, size);
+    let mut natural = block
+        .iter()
+        .enumerate()
+        .fold(0u64, |mask, (index, &value)| {
+            mask | u64::from(value != 0) << index
+        })
+        & !1;
+    let mut mask = 0u64;
+    while natural != 0 {
+        mask |= 1 << JPEG_UNZIGZAG[natural.trailing_zeros() as usize];
+        natural &= natural - 1;
+    }
+    let mut last = 0;
+    while mask != 0 {
+        let index = mask.trailing_zeros() as usize;
+        mask &= mask - 1;
+        let mut zeros = index - last - 1;
+        last = index;
+        while zeros >= 16 {
+            emit(false, 0xf0, 0, 0);
+            zeros -= 16;
+        }
+        let (size, amplitude) = jpeg_amplitude(block[ZIGZAG[index]].clamp(-1023, 1023));
+        emit(false, (zeros << 4) | usize::from(size), amplitude, size);
+    }
+    if last != 63 {
+        emit(false, 0, 0, 0);
+    }
+}
+
+struct JpegOptimizedHuffman {
+    lengths: [u8; 16],
+    values: Vec<u8>,
+    codes: [(u16, u8); 256],
+}
+
+fn jpeg_least_frequency(frequencies: &[u32; 257], exclude: usize) -> Option<usize> {
+    frequencies
+        .iter()
+        .enumerate()
+        .filter(|&(index, &count)| index != exclude && count != 0)
+        .min_by_key(|&(index, &count)| (count, usize::MAX - index))
+        .map(|(index, _)| index)
+}
+
+fn jpeg_optimized_huffman(mut frequencies: [u32; 257]) -> JpegOptimizedHuffman {
+    frequencies[256] = 1;
+    let mut links = [-1i16; 257];
+    let mut sizes = [0u8; 257];
+    while let Some(first) = jpeg_least_frequency(&frequencies, usize::MAX) {
+        let Some(second) = jpeg_least_frequency(&frequencies, first) else {
+            break;
+        };
+        frequencies[first] += frequencies[second];
+        frequencies[second] = 0;
+        for root in [first, second] {
+            let mut node = root;
+            loop {
+                sizes[node] += 1;
+                if links[node] < 0 {
+                    break;
+                }
+                node = links[node] as usize;
+            }
+            if root == first {
+                links[node] = second as i16;
+            }
+        }
+    }
+
+    let mut counts = [0u16; 257];
+    for &size in &sizes {
+        if size != 0 {
+            counts[size as usize] += 1;
+        }
+    }
+    for size in (17..counts.len()).rev() {
+        while counts[size] != 0 {
+            let shorter = (1..size - 1)
+                .rev()
+                .find(|&index| counts[index] != 0)
+                .expect("Huffman tree has a shorter code");
+            counts[size] -= 2;
+            counts[size - 1] += 1;
+            counts[shorter + 1] += 2;
+            counts[shorter] -= 1;
+        }
+    }
+    let longest = (1..=16)
+        .rev()
+        .find(|&index| counts[index] != 0)
+        .expect("Huffman tree has a code");
+    counts[longest] -= 1; // Remove the pseudo-symbol reserved to avoid all-ones codes.
+
+    let lengths = std::array::from_fn(|index| counts[index + 1] as u8);
+    let mut values = Vec::new();
+    for size in 1..sizes.len() {
+        for (symbol, &actual) in sizes[..256].iter().enumerate() {
+            if actual as usize == size {
+                values.push(symbol as u8);
+            }
+        }
+    }
+    let codes = jpeg_huffman(&lengths, &values);
+    JpegOptimizedHuffman {
+        lengths,
+        values,
+        codes,
+    }
+}
+
+pub(super) fn encode(
+    bitmap: &Bitmap,
+    quality: u8,
+    style: EncodingStyle,
+) -> std::result::Result<Vec<u8>, EncodeError> {
+    if !(1..=100).contains(&quality) {
+        return Err(EncodeError::InvalidQuality);
+    }
+    let width = u16::try_from(bitmap.width).map_err(|_| EncodeError::InvalidDimensions)?;
+    let height = u16::try_from(bitmap.height).map_err(|_| EncodeError::InvalidDimensions)?;
+    let pixels = bitmap.data.as_chunks::<4>().0;
+    if pixels.iter().any(|pixel| pixel[3] != 255) {
+        return Err(EncodeError::AlphaUnsupported);
+    }
+    let gray = pixels
+        .iter()
+        .all(|pixel| pixel[0] == pixel[1] && pixel[1] == pixel[2]);
+    let max = style == EncodingStyle::MaxCompression;
+    let samplings: &[(usize, usize)] = match (gray, max) {
+        (true, _) => &[(1, 1)],
+        (false, false) => &[(2, 2)],
+        (false, true) => &[(2, 2), (2, 1), (1, 2), (1, 1)],
+    };
+    let tables = JpegTables::new(quality);
+    let planes = JpegPlanes::new(bitmap, gray);
+    let mut best: Option<Vec<u8>> = None;
+    for &(h, v) in samplings {
+        let blocks = planes.blocks(h, v, &tables);
+        for optimized in [false, true].into_iter().take(if max { 2 } else { 1 }) {
+            let candidate = jpeg_write(width, height, gray, (h, v), &tables, &blocks, optimized);
+            if best
+                .as_ref()
+                .is_none_or(|best| candidate.len() < best.len())
+            {
+                best = Some(candidate);
+            }
+        }
+    }
+    Ok(best.expect("JPEG has a sampling layout"))
+}
+
+struct JpegTables {
+    quant: [[u8; 64]; 2],
+    luma: [f32; 64],
+    chroma: [f32; 64],
+    huffman: [[(u16, u8); 256]; 4],
+}
+
+impl JpegTables {
+    fn new(quality: u8) -> Self {
+        let quant = [
+            jpeg_quant(&JPEG_LUMA_QUANT, quality),
+            jpeg_quant(&JPEG_CHROMA_QUANT, quality),
+        ];
+        const AAN: [f32; 8] = [
+            1.0,
+            1.387_039_8,
+            1.306_563,
+            1.175_875_6,
+            1.0,
+            0.785_694_96,
+            0.541_196_1,
+            0.275_899_38,
+        ];
+        let reciprocals = |quant: &[u8; 64]| {
+            std::array::from_fn(|index| {
+                1.0 / (f32::from(quant[index]) * AAN[index / 8] * AAN[index % 8] * 8.0)
+            })
+        };
+        Self {
+            luma: reciprocals(&quant[0]),
+            chroma: reciprocals(&quant[1]),
+            quant,
+            huffman: [
+                jpeg_huffman(&JPEG_LUMA_DC_CODE_LENGTHS, &JPEG_LUMA_DC_VALUES),
+                jpeg_huffman(&JPEG_CHROMA_DC_CODE_LENGTHS, &JPEG_CHROMA_DC_VALUES),
+                jpeg_huffman(&JPEG_LUMA_AC_CODE_LENGTHS, &JPEG_LUMA_AC_VALUES),
+                jpeg_huffman(&JPEG_CHROMA_AC_CODE_LENGTHS, &JPEG_CHROMA_AC_VALUES),
+            ],
+        }
+    }
+}
+
+// Visits each symbol with its Huffman table index: luma DC, chroma DC, luma AC, chroma AC.
+fn jpeg_symbols(
+    blocks: &[[i16; 64]],
+    gray: bool,
+    (h, v): (usize, usize),
+    mut emit: impl FnMut(usize, usize, u16, u8),
+) {
+    let per_mcu = if gray { 1 } else { h * v + 2 };
+    let mut previous = [0i16; 3];
+    for (index, block) in blocks.iter().enumerate() {
+        let component = (index % per_mcu).saturating_sub(h * v - 1);
+        let chroma = usize::from(component != 0);
+        jpeg_block_symbols(
+            block,
+            &mut previous[component],
+            |is_dc, symbol, bits, size| {
+                emit(if is_dc { chroma } else { 2 + chroma }, symbol, bits, size);
+            },
+        );
+    }
+}
+
+fn jpeg_optimized_tables(
+    blocks: &[[i16; 64]],
+    gray: bool,
+    sampling: (usize, usize),
+) -> [JpegOptimizedHuffman; 4] {
+    let mut frequencies = [[0u32; 257]; 4];
+    jpeg_symbols(blocks, gray, sampling, |table, symbol, _, _| {
+        frequencies[table][symbol] += 1;
+    });
+    std::array::from_fn(|index| {
+        if frequencies[index].iter().all(|&count| count == 0) {
+            frequencies[index][0] = 1;
+        }
+        jpeg_optimized_huffman(frequencies[index])
+    })
+}
+
+fn jpeg_write(
+    width: u16,
+    height: u16,
+    gray: bool,
+    (h, v): (usize, usize),
+    tables: &JpegTables,
+    blocks: &[[i16; 64]],
+    optimized: bool,
+) -> Vec<u8> {
+    let optimized_tables = optimized.then(|| jpeg_optimized_tables(blocks, gray, (h, v)));
+    let codes: [&[(u16, u8); 256]; 4] = std::array::from_fn(|index| {
+        optimized_tables
+            .as_ref()
+            .map_or(&tables.huffman[index], |tables| &tables[index].codes)
+    });
+    let components = if gray { 1 } else { 3 };
+    let mut out = Vec::with_capacity((blocks.len() * 16 + 1024).min(1024 * 1024));
+    out.extend_from_slice(&[0xff, 0xd8]);
+    jpeg_segment(&mut out, 0xe0, b"JFIF\0\x01\x01\0\0\x01\0\x01\0\0");
+    let mut dqt = [0u8; 130];
+    for (index, table) in tables
+        .quant
+        .iter()
+        .take(if gray { 1 } else { 2 })
+        .enumerate()
+    {
+        let start = index * 65;
+        dqt[start] = index as u8;
+        for (i, &natural) in ZIGZAG.iter().enumerate() {
+            dqt[start + i + 1] = table[natural];
+        }
+    }
+    jpeg_segment(&mut out, 0xdb, &dqt[..if gray { 65 } else { 130 }]);
+    let mut sof = [0u8; 15];
+    sof[0] = 8;
+    sof[1..3].copy_from_slice(&height.to_be_bytes());
+    sof[3..5].copy_from_slice(&width.to_be_bytes());
+    sof[5] = components;
+    for component in 0..components {
+        sof[6 + usize::from(component) * 3..][..3].copy_from_slice(&[
+            component + 1,
+            if component == 0 {
+                (h as u8) << 4 | v as u8
+            } else {
+                0x11
+            },
+            u8::from(component != 0),
+        ]);
+    }
+    jpeg_segment(&mut out, 0xc0, &sof[..6 + usize::from(components) * 3]);
+    let standard: [(&[u8; 16], &[u8]); 4] = [
+        (&JPEG_LUMA_DC_CODE_LENGTHS, &JPEG_LUMA_DC_VALUES),
+        (&JPEG_CHROMA_DC_CODE_LENGTHS, &JPEG_CHROMA_DC_VALUES),
+        (&JPEG_LUMA_AC_CODE_LENGTHS, &JPEG_LUMA_AC_VALUES),
+        (&JPEG_CHROMA_AC_CODE_LENGTHS, &JPEG_CHROMA_AC_VALUES),
+    ];
+    for (index, (id, (lengths, values))) in [0x00, 0x01, 0x10, 0x11]
+        .into_iter()
+        .zip(standard)
+        .enumerate()
+    {
+        if gray && index % 2 == 1 {
+            continue;
+        }
+        let (lengths, values) = optimized_tables
+            .as_ref()
+            .map_or((lengths, values), |tables| {
+                (&tables[index].lengths, &tables[index].values[..])
+            });
+        let mut dht = [0u8; 179];
+        dht[0] = id;
+        dht[1..17].copy_from_slice(lengths);
+        dht[17..17 + values.len()].copy_from_slice(values);
+        jpeg_segment(&mut out, 0xc4, &dht[..17 + values.len()]);
+    }
+    let mut sos = [0u8; 10];
+    sos[0] = components;
+    for component in 0..components {
+        sos[1 + usize::from(component) * 2..][..2]
+            .copy_from_slice(&[component + 1, if component == 0 { 0 } else { 0x11 }]);
+    }
+    let sos_tail = 1 + usize::from(components) * 2;
+    sos[sos_tail..sos_tail + 3].copy_from_slice(&[0, 63, 0]);
+    jpeg_segment(&mut out, 0xda, &sos[..sos_tail + 3]);
+    let mut bits = JpegBits::new(&mut out);
+    jpeg_symbols(blocks, gray, (h, v), |table, symbol, amplitude, size| {
+        let (code, count) = codes[table][symbol];
+        bits.write(u32::from(code) << size | u32::from(amplitude), count + size);
+    });
+    bits.finish();
+    out.extend_from_slice(&[0xff, 0xd9]);
+    out
+}
+
+// MARK: Tests
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{EncodeOptions, Format, encode, encode_with_options};
+
+    fn smallest() -> EncodeOptions {
+        EncodeOptions {
+            style: EncodingStyle::MaxCompression,
+            ..EncodeOptions::default()
+        }
+    }
 
     #[test]
     fn jpeg_simple_orientations_reuse_pixel_buffer() {
@@ -1215,6 +1890,158 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[cfg(feature = "jpeg")]
+    #[test]
+    fn jpeg_rejects_alpha() {
+        let bitmap = Bitmap::new(1, 1, vec![255, 0, 0, 128]).unwrap();
+        assert_eq!(
+            encode(&bitmap, Format::Jpeg),
+            Err(EncodeError::AlphaUnsupported)
+        );
+    }
+
+    #[cfg(feature = "jpeg")]
+    #[test]
+    fn jpeg_encodes_opaque_pixels() {
+        let bitmap = Bitmap::new(8, 8, [64, 128, 192, 255].repeat(64)).unwrap();
+        let decoded = crate::decode(&encode(&bitmap, Format::Jpeg).unwrap()).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (8, 8));
+        for pixel in decoded.pixels().as_chunks::<4>().0 {
+            assert!(pixel[0].abs_diff(64) < 8);
+            assert!(pixel[1].abs_diff(128) < 8);
+            assert!(pixel[2].abs_diff(192) < 8);
+            assert_eq!(pixel[3], 255);
+        }
+
+        let mut pixels = Vec::new();
+        for y in 0..24u8 {
+            for x in 0..37u8 {
+                pixels.extend_from_slice(&[x * 6, y * 10, 255 - x * 3 - y * 4, 255]);
+            }
+        }
+        let bitmap = Bitmap::new(37, 24, pixels).unwrap();
+        for options in [EncodeOptions::default(), smallest()] {
+            let encoded = encode_with_options(&bitmap, Format::Jpeg, options).unwrap();
+            let decoded = crate::decode(&encoded).unwrap();
+            let error = decoded
+                .pixels()
+                .iter()
+                .zip(bitmap.data())
+                .map(|(&actual, &expected)| u32::from(actual.abs_diff(expected)))
+                .sum::<u32>();
+            assert!(error < bitmap.data().len() as u32 * 2, "{error}");
+        }
+    }
+
+    #[cfg(feature = "jpeg")]
+    #[test]
+    fn compact_jpeg_preserves_quality_setting() {
+        let bitmap = Bitmap::new(32, 32, [64, 128, 192, 255].repeat(1024)).unwrap();
+        let fast = encode(&bitmap, Format::Jpeg).unwrap();
+        let small = encode_with_options(&bitmap, Format::Jpeg, smallest()).unwrap();
+        assert!(small.len() < fast.len());
+        let decoded = crate::decode(&small).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (32, 32));
+    }
+
+    #[test]
+    fn optimized_huffman_limits_code_lengths() {
+        let mut frequencies = [0u32; 257];
+        let (mut previous, mut current) = (1u32, 1u32);
+        for count in frequencies.iter_mut().take(30) {
+            *count = current;
+            (previous, current) = (current, previous + current);
+        }
+        let table = jpeg_optimized_huffman(frequencies);
+        assert_eq!(table.values.len(), 30);
+        assert_eq!(
+            table
+                .lengths
+                .iter()
+                .map(|&count| usize::from(count))
+                .sum::<usize>(),
+            30
+        );
+        for &(code, length) in &table.codes[..30] {
+            assert!((1..=16).contains(&length));
+            assert_ne!(u32::from(code), (1u32 << length) - 1);
+        }
+
+        let mut state = 7u32;
+        for _ in 0..64 {
+            let mut frequencies = [0u32; 257];
+            for count in frequencies.iter_mut().take(162) {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                *count = if state & 3 == 0 { 0 } else { state % 1024 + 1 };
+            }
+            frequencies[0] = 1;
+            let table = jpeg_optimized_huffman(frequencies);
+            assert_eq!(
+                table
+                    .lengths
+                    .iter()
+                    .map(|&count| usize::from(count))
+                    .sum::<usize>(),
+                table.values.len()
+            );
+            for (symbol, &count) in frequencies.iter().enumerate().take(162) {
+                if count != 0 {
+                    let (code, length) = table.codes[symbol];
+                    assert!((1..=16).contains(&length));
+                    assert_ne!(u32::from(code), (1u32 << length) - 1);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn jpeg_high_quality_checkerboard_decodes() {
+        let mut pixels = Vec::new();
+        for y in 0..17 {
+            for x in 0..19 {
+                let color = if (x + y) % 2 == 0 { 0 } else { 255 };
+                pixels.extend_from_slice(&[color, 255 - color, color, 255]);
+            }
+        }
+        let bitmap = Bitmap::new(19, 17, pixels).unwrap();
+        let tables = JpegTables::new(100);
+        let planes = JpegPlanes::new(&bitmap, false);
+        for sampling in [(1, 1), (2, 1), (1, 2), (2, 2)] {
+            let blocks = planes.blocks(sampling.0, sampling.1, &tables);
+            let [standard, optimized] = [false, true].map(|optimized| {
+                let encoded = jpeg_write(19, 17, false, sampling, &tables, &blocks, optimized);
+                crate::decode(&encoded).unwrap()
+            });
+            assert_eq!((optimized.width(), optimized.height()), (19, 17));
+            assert_eq!(optimized.pixels(), standard.pixels());
+        }
+        let gray = Bitmap::new(19, 17, [127, 127, 127, 255].repeat(19 * 17)).unwrap();
+        let blocks = JpegPlanes::new(&gray, true).blocks(1, 1, &tables);
+        let [standard, optimized] = [false, true].map(|optimized| {
+            let encoded = jpeg_write(19, 17, true, (1, 1), &tables, &blocks, optimized);
+            crate::decode(&encoded).unwrap()
+        });
+        assert_eq!(optimized.pixels(), standard.pixels());
+        for style in [
+            EncodingStyle::NormalCompression,
+            EncodingStyle::MaxCompression,
+        ] {
+            let encoded = encode_with_options(
+                &bitmap,
+                Format::Jpeg,
+                EncodeOptions {
+                    style,
+                    jpeg_quality: 100,
+                },
+            )
+            .unwrap();
+            let decoded = crate::decode(&encoded).unwrap();
+            assert_eq!((decoded.width(), decoded.height()), (19, 17));
         }
     }
 }
