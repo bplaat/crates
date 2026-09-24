@@ -881,6 +881,7 @@ pub(crate) fn is_tinyvg(data: &[u8]) -> bool {
     data.starts_with(&[0x72, 0x56])
 }
 
+// MARK: Tests
 #[cfg(test)]
 mod tests {
     use super::*;
