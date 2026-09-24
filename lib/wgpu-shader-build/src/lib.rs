@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::env;
 use std::path::{Path, PathBuf};
 
-use compile::compile_shader;
+use crate::compile::compile_shader;
 
 mod compile;
 mod hlsl;

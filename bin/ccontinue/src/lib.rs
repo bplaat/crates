@@ -6,8 +6,8 @@
 
 #![doc = include_str!("../README.md")]
 
-mod transpiler;
+pub use crate::transpiler::Transpiler;
+
+pub(crate) mod transpiler;
 mod types;
 mod utils;
-
-pub use transpiler::Transpiler;

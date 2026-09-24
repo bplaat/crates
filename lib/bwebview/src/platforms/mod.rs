@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-pub(crate) use scripts::*;
+pub(crate) use crate::platforms::scripts::*;
+
 mod scripts;
 
 cfg_select! {
@@ -15,15 +16,15 @@ cfg_select! {
         target_os = "openbsd",
         target_os = "netbsd"
     ) => {
-        pub(crate) use gtk::*;
+        pub(crate) use crate::platforms::gtk::*;
         mod gtk;
     }
     target_os = "macos" => {
-        pub(crate) use macos::*;
+        pub(crate) use crate::platforms::macos::*;
         mod macos;
     }
     windows => {
-        pub(crate) use windows::*;
+        pub(crate) use crate::platforms::windows::*;
         mod windows;
     }
     _ => {

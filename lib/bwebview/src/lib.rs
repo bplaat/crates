@@ -10,8 +10,9 @@
 #![allow(clippy::undocumented_unsafe_blocks)]
 
 use bwindow::{NativeWindowHandle, Window, WindowAttachment, WindowEvent, WindowId};
-pub use event::*;
-pub use webview::*;
+
+pub use crate::event::*;
+pub use crate::webview::*;
 mod event;
 mod platforms;
 mod webview;

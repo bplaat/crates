@@ -10,6 +10,11 @@
 #[cfg(not(any(feature = "mysql", feature = "sqlite")))]
 compile_error!("bsql requires the `mysql` or `sqlite` feature");
 
+#[cfg(all(feature = "derive", feature = "sqlite"))]
+pub use bsql_derive::run_migrations;
+#[cfg(all(feature = "derive", any(feature = "mysql", feature = "sqlite")))]
+pub use bsql_derive::{FromRow, FromValue};
+
 #[cfg(any(feature = "mysql", feature = "sqlite"))]
 pub use crate::bind::Bind;
 #[cfg(any(feature = "mysql", feature = "sqlite"))]
@@ -39,8 +44,3 @@ mod sqlite;
 mod statement;
 #[cfg(any(feature = "mysql", feature = "sqlite"))]
 mod value;
-
-#[cfg(all(feature = "derive", feature = "sqlite"))]
-pub use bsql_derive::run_migrations;
-#[cfg(all(feature = "derive", any(feature = "mysql", feature = "sqlite")))]
-pub use bsql_derive::{FromRow, FromValue};

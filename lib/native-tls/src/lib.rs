@@ -13,20 +13,20 @@ use std::marker::PhantomData;
 cfg_select! {
     // The vendored feature uses rustls on every platform.
     feature = "vendored" => {
+        use crate::imp_rustls as imp;
         mod imp_rustls;
-        use imp_rustls as imp;
     }
     target_os = "macos" => {
+        use crate::imp_macos as imp;
         mod imp_macos;
-        use imp_macos as imp;
     }
     windows => {
+        use crate::imp_windows as imp;
         mod imp_windows;
-        use imp_windows as imp;
     }
     _ => {
+        use crate::imp_openssl as imp;
         mod imp_openssl;
-        use imp_openssl as imp;
     }
 }
 

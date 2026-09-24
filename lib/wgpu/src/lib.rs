@@ -9,10 +9,16 @@
 #![allow(unsafe_code)]
 #![allow(clippy::undocumented_unsafe_blocks)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
+
+use std::cell::{Cell, RefCell, RefMut};
+use std::marker::PhantomData;
+use std::ops::{Bound, Range, RangeBounds};
+use std::rc::{Rc, Weak};
+
+pub use crate::types::*;
+
 #[cfg(any(target_os = "linux", test))]
 mod allocation;
-mod types;
-pub use types::*;
 #[cfg(target_os = "macos")]
 #[path = "platforms/macos/mod.rs"]
 mod platform;
@@ -22,13 +28,10 @@ mod platform;
 #[cfg(target_os = "windows")]
 #[path = "platforms/windows/mod.rs"]
 mod platform;
+mod types;
+
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 compile_error!("This crate supports macOS, Linux, and Windows only");
-
-use std::cell::{Cell, RefCell, RefMut};
-use std::marker::PhantomData;
-use std::ops::{Bound, Range, RangeBounds};
-use std::rc::{Rc, Weak};
 
 #[derive(Debug)]
 pub struct Error(pub(crate) String);

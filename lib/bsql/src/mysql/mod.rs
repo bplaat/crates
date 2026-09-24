@@ -14,16 +14,15 @@ use native_tls::TlsConnector;
 use sha1::Sha1;
 use sha2::Sha256;
 
+pub use crate::mysql::connection::MysqlTransport;
+pub(crate) use crate::mysql::connection::{Client, MysqlOptions, OpenedStream, Stream};
+pub(crate) use crate::mysql::statement::{Column, Prepared};
+use crate::mysql::utils::*;
 use crate::{StatementError, Value};
 
 mod connection;
 mod statement;
 mod utils;
-
-pub use connection::MysqlTransport;
-pub(crate) use connection::{Client, MysqlOptions, OpenedStream, Stream};
-pub(crate) use statement::{Column, Prepared};
-use utils::*;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]

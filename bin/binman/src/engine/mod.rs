@@ -14,19 +14,20 @@ use std::time::Duration;
 use serde::Serialize;
 
 use crate::catalog::{CleanupDefinition, CleanupKind, PathRoot};
+use crate::engine::filesystem::{clean_roots, clean_rules, scan_roots, scan_rules};
+pub(crate) use crate::engine::system::disk_free_space;
+use crate::engine::system::{
+    clean_delivery_optimization, clean_windows_update, current_user_sid, process_is_running,
+    run_dism_cleanup, scan_dism,
+};
+use crate::engine::tools::{
+    clean_docker_build_cache, clean_uv_cache, scan_docker_build_cache, scan_uv_cache,
+};
 
 mod filesystem;
 mod rustup;
 mod system;
 mod tools;
-
-use filesystem::{clean_roots, clean_rules, scan_roots, scan_rules};
-pub(crate) use system::disk_free_space;
-use system::{
-    clean_delivery_optimization, clean_windows_update, current_user_sid, process_is_running,
-    run_dism_cleanup, scan_dism,
-};
-use tools::{clean_docker_build_cache, clean_uv_cache, scan_docker_build_cache, scan_uv_cache};
 
 pub(crate) fn command(program: impl AsRef<OsStr>) -> Command {
     use std::os::windows::process::CommandExt;

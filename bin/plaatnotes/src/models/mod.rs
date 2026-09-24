@@ -7,10 +7,10 @@
 use serde::Deserialize;
 use validate::Validate;
 
-pub(crate) use self::note::Note;
-pub(crate) use self::session::Session;
-pub(crate) use self::user::{User, UserRole};
 use crate::api;
+pub(crate) use crate::models::note::Note;
+pub(crate) use crate::models::session::Session;
+pub(crate) use crate::models::user::{User, UserRole};
 
 pub(crate) mod note;
 pub(crate) mod session;

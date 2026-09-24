@@ -6,6 +6,14 @@
 
 #![doc = include_str!("../../README.md")]
 
+use std::collections::HashMap;
+use std::process::Command;
+
+use ccontinue::Transpiler;
+
+use crate::args::parse_args;
+use crate::temp::TempFileManager;
+
 mod args {
     use std::env;
     use std::process::exit;
@@ -190,13 +198,6 @@ mod temp {
         }
     }
 }
-
-use std::collections::HashMap;
-use std::process::Command;
-
-use args::parse_args;
-use ccontinue::Transpiler;
-use temp::TempFileManager;
 
 include!(concat!(env!("OUT_DIR"), "/embedded_std.rs"));
 

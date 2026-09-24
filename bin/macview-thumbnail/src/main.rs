@@ -8,8 +8,6 @@
 
 #![allow(unsafe_code)]
 
-mod headers;
-
 use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::sync::Mutex;
@@ -22,6 +20,8 @@ use macview_appkit::{
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
+
+mod headers;
 
 define_class!(
     #[unsafe(super(QLThumbnailProvider))]

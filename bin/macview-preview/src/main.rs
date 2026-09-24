@@ -8,8 +8,6 @@
 
 #![allow(unsafe_code)]
 
-mod headers;
-
 use std::ptr::null_mut;
 
 use block2::{Block, RcBlock};
@@ -22,6 +20,8 @@ use objc2::ffi::class_addProtocol;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject as Object, AnyProtocol};
 use objc2::{class, define_class, msg_send};
+
+mod headers;
 
 define_class!(
     #[unsafe(super(NSViewController))]

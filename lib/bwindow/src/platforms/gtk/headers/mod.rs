@@ -6,10 +6,10 @@
 
 #![allow(missing_docs)]
 
+pub use crate::platforms::gtk::headers::gdk::*;
+pub use crate::platforms::gtk::headers::glib::*;
+pub use crate::platforms::gtk::headers::gtk::*;
+
 mod gdk;
 mod glib;
 mod gtk;
-
-pub use self::gdk::*;
-pub use self::glib::*;
-pub use self::gtk::*;

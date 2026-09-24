@@ -6,6 +6,6 @@
 
 //! GeoIP2 and GeoLite2 database record structures.
 
-pub use city::*;
+pub use crate::geoip2::city::*;
 
 mod city;

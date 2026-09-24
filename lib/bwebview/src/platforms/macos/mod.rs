@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+pub(crate) use crate::platforms::macos::webview::PlatformWebview;
+
 #[cfg(feature = "file_drop")]
 mod file_drop;
 mod headers;
 mod webview;
-
-pub(crate) use webview::PlatformWebview;

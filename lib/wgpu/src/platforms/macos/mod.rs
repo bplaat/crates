@@ -13,12 +13,12 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 
-use headers::*;
 use objc2::rc::{Allocated, Retained, autoreleasepool};
 use objc2::runtime::{AnyObject, Bool};
 use objc2::{class, define_class, msg_send, sel};
 
 use super::*;
+use crate::platform::headers::*;
 
 mod headers;
 

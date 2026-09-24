@@ -22,9 +22,9 @@
 //! }
 //! ```
 
-pub use error::MaxMindDbError;
-pub use metadata::Metadata;
-pub use reader::{LookupResult, Reader};
+pub use crate::error::MaxMindDbError;
+pub use crate::metadata::Metadata;
+pub use crate::reader::{LookupResult, Reader};
 
 pub mod geoip2;
 

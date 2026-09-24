@@ -16,11 +16,10 @@ use std::ptr::{self, NonNull};
 use std::sync::{Arc, LazyLock, Mutex, mpsc};
 use std::time::Duration;
 
+use crate::windows::headers::*;
 use crate::{DeviceDescriptor, Error};
 
 mod headers;
-
-use headers::*;
 
 static TRANSFER_REAPER: LazyLock<Option<mpsc::Sender<PendingTransfer>>> = LazyLock::new(|| {
     let (sender, receiver) = mpsc::channel::<PendingTransfer>();

@@ -12,15 +12,15 @@ use std::rc::Rc;
 
 use bwindow::ffi::*;
 use bwindow::{NativeWindowHandle, WindowAttachment, WindowEvent, WindowEventSender};
-pub(crate) use context::PlatformCanvasContext;
 
 use crate::CanvasRenderingContext2d;
+pub(crate) use crate::platforms::gtk::context::PlatformCanvasContext;
+use crate::platforms::gtk::headers::*;
+pub(crate) use crate::platforms::gtk::offscreen::PlatformOffscreenCanvas;
+
 mod context;
 mod headers;
 mod offscreen;
-
-use headers::*;
-pub(crate) use offscreen::PlatformOffscreenCanvas;
 
 struct CanvasData {
     cursor: Cell<crate::CursorIcon>,

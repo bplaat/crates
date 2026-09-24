@@ -6,8 +6,8 @@
 
 #![doc = include_str!("../README.md")]
 
-pub use context::Context;
-pub use value::Value;
+pub use crate::context::Context;
+pub use crate::value::Value;
 
 mod buildins;
 mod context;

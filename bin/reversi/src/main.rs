@@ -18,10 +18,11 @@ use bwindow::{
     Event, EventLoopBuilder, Key, LogicalPoint, LogicalSize, MouseButton, MouseEvent, Theme,
     WindowBuilder, WindowEvent,
 };
-use worker::{AiJob, AiResult, AiWorker};
+use reversi_engine::{CellState, Move, Othello, Player};
+
+use crate::worker::{AiJob, AiResult, AiWorker};
 
 mod worker;
-use reversi_engine::{CellState, Move, Othello, Player};
 
 const WINDOW_WIDTH: f32 = 600.0;
 const WINDOW_HEIGHT: f32 = 600.0;

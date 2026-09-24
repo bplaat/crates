@@ -10,12 +10,12 @@ use std::fmt::{self, Display, Formatter};
 
 cfg_select! {
     target_os = "macos" => {
+        use crate::macos as imp;
         mod macos;
-        use macos as imp;
     }
     windows => {
+        use crate::windows as imp;
         mod windows;
-        use windows as imp;
     }
     any(
         target_os = "linux",
@@ -24,8 +24,8 @@ cfg_select! {
         target_os = "openbsd",
         target_os = "netbsd"
     ) => {
+        use crate::libsecret as imp;
         mod libsecret;
-        use libsecret as imp;
     }
     _ => {
         compile_error!("Unsupported platform");

@@ -7,22 +7,23 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod catalog;
-mod elevation;
-mod engine;
-mod ipc;
-mod win32;
-mod worker;
-
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
 
 use bwebview::{WebviewBuilder, WebviewEvent};
 use bwindow::{Event, EventLoopBuilder, LogicalSize, Theme, WindowBuilder};
-use ipc::{IpcPush, IpcRequest, PROGRESS_EVENT_PREFIX, update_progress};
 use rust_embed::Embed;
-use worker::{OPERATION_CLEAN, OPERATION_IDLE, OPERATION_SCAN, WorkerCommand};
+
+use crate::ipc::{IpcPush, IpcRequest, PROGRESS_EVENT_PREFIX, update_progress};
+use crate::worker::{OPERATION_CLEAN, OPERATION_IDLE, OPERATION_SCAN, WorkerCommand};
+
+mod catalog;
+mod elevation;
+mod engine;
+mod ipc;
+mod win32;
+mod worker;
 
 #[derive(Embed)]
 #[folder = "web"]

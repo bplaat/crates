@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+pub(crate) use crate::platforms::windows::webview::PlatformWebview;
+
 mod callback;
 #[cfg(feature = "file_drop")]
 mod file_drop;
 mod headers;
 mod loader;
 mod webview;
-
-pub(crate) use webview::PlatformWebview;

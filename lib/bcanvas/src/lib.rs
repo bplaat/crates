@@ -8,7 +8,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::undocumented_unsafe_blocks)]
 
-pub use canvas::*;
+pub use crate::canvas::*;
 mod canvas;
 #[cfg(any(windows, test))]
 #[cfg_attr(not(windows), allow(dead_code))]

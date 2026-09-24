@@ -6,7 +6,7 @@
 
 use xmlparser::{Token, Tokenizer};
 
-use self::render::Decoder;
+use crate::svg::render::Decoder;
 use crate::{VectorDecodeError, VectorImage};
 
 mod geometry;

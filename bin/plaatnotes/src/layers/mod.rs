@@ -8,9 +8,9 @@ use anyhow::Result;
 use log::info;
 use small_http::{Method, Request, Response, Status};
 
-pub(crate) use self::auth::{auth_optional_pre_layer, auth_required_pre_layer};
-pub(crate) use self::spa_file_server::spa_file_server_pre_layer;
 use crate::Context;
+pub(crate) use crate::layers::auth::{auth_optional_pre_layer, auth_required_pre_layer};
+pub(crate) use crate::layers::spa_file_server::spa_file_server_pre_layer;
 
 mod auth;
 mod spa_file_server;

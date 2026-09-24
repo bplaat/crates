@@ -7,21 +7,12 @@
 #![doc = include_str!("../README.md")]
 #![allow(unsafe_code)]
 
-mod browse;
-mod checkerboard;
-mod headers;
-mod scroll_view;
-mod window_controller;
-
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ptr::null_mut;
 
 use block2::RcBlock;
-use browse::{file_url, neighbour_path, url_path};
-use checkerboard::create_checkerboard_view;
-use headers::*;
 use macview_appkit::{
     Image, NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, OwnedString, Point, Rect, Size,
     create_image_view, decode_image, decode_image_data, dispatch_async, dispatch_async_main,
@@ -31,8 +22,18 @@ use objc2::ffi::{class_addMethod, object_getClass};
 use objc2::rc::{Allocated, Retained, autoreleasepool};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send, sel};
-use scroll_view::create_scroll_view;
-use window_controller::{create_window_controller, show_media};
+
+use crate::browse::{file_url, neighbour_path, url_path};
+use crate::checkerboard::create_checkerboard_view;
+use crate::headers::*;
+use crate::scroll_view::create_scroll_view;
+use crate::window_controller::{create_window_controller, show_media};
+
+mod browse;
+mod checkerboard;
+mod headers;
+mod scroll_view;
+mod window_controller;
 
 struct DocumentIvars {
     media: RefCell<Option<DecodedMedia>>,

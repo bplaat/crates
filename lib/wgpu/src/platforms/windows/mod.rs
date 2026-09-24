@@ -12,8 +12,7 @@ use std::ffi::c_void;
 use std::ptr;
 use std::rc::Rc;
 
-use headers::*;
-
+use crate::platform::headers::*;
 use crate::*;
 
 mod headers;

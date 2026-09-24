@@ -6,10 +6,11 @@
 
 //! for-in and for-of iteration tests.
 
-mod common;
-
-use common::assert_js;
 use js::Value;
+
+use crate::common::assert_js;
+
+mod common;
 
 #[test]
 fn test_for_in_objects() {

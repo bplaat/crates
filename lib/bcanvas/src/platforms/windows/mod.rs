@@ -13,17 +13,17 @@ use bwindow::{
     ButtonState, LogicalPoint, MouseButton, NativeWindowHandle, ScrollDelta, WindowAttachment,
     WindowEvent, WindowEventSender,
 };
-pub(crate) use context::PlatformCanvasContext;
-use headers::*;
 
-use self::com::ComPtr;
 use crate::CanvasRenderingContext2d;
+use crate::platforms::windows::com::ComPtr;
+pub(crate) use crate::platforms::windows::context::PlatformCanvasContext;
+use crate::platforms::windows::headers::*;
+pub(crate) use crate::platforms::windows::offscreen::PlatformOffscreenCanvas;
+
 mod com;
 mod context;
 mod headers;
 mod offscreen;
-
-pub(crate) use offscreen::PlatformOffscreenCanvas;
 
 struct CanvasData {
     cursor: Cell<crate::CursorIcon>,

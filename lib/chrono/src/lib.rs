@@ -9,10 +9,10 @@
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
-pub use datetime::DateTime;
-pub use naive::date::NaiveDate;
-pub use naive::datetime::NaiveDateTime;
-pub use timezone::{TimeZone, Utc};
+pub use crate::datetime::DateTime;
+pub use crate::naive::date::NaiveDate;
+pub use crate::naive::datetime::NaiveDateTime;
+pub use crate::timezone::{TimeZone, Utc};
 
 mod consts;
 mod datetime;

@@ -6,16 +6,18 @@
 
 //! Generates and compiles the embedded cContinue standard library.
 
-#[path = "src/lib.rs"]
-pub mod ccontinue;
-
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
-use ccontinue::Transpiler;
 use regex::Regex;
+
+// The library source is also compiled as this build script's ccontinue module.
+use crate::ccontinue::{Transpiler, transpiler};
+
+#[path = "src/lib.rs"]
+pub mod ccontinue;
 
 fn sorted_files(directory: &Path) -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = fs::read_dir(directory)

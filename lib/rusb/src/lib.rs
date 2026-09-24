@@ -13,12 +13,12 @@ use std::time::Duration;
 
 cfg_select! {
     target_os = "macos" => {
+        use crate::macos as backend;
         mod macos;
-        use macos as backend;
     }
     windows => {
+        use crate::windows as backend;
         mod windows;
-        use windows as backend;
     }
     any(
         target_os = "linux",
@@ -29,8 +29,8 @@ cfg_select! {
         target_os = "illumos",
         target_os = "solaris"
     ) => {
+        use crate::unix as backend;
         mod unix;
-        use unix as backend;
     }
     _ => {
         compile_error!("Unsupported platform");

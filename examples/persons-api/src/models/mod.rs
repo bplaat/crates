@@ -7,8 +7,8 @@
 use serde::Deserialize;
 use validate::Validate;
 
-pub(crate) use self::person::*;
 use crate::api;
+pub(crate) use crate::models::person::*;
 
 mod person;
 

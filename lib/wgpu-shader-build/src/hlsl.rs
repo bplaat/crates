@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use crate::Result;
+pub(crate) use crate::hlsl::platform::compile;
 
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code, clippy::undocumented_unsafe_blocks)]
@@ -197,5 +198,3 @@ mod platform {
         Err("HLSL bytecode compilation requires a Windows host".into())
     }
 }
-
-pub(crate) use platform::compile;

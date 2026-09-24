@@ -7,8 +7,8 @@
 use anyhow::Result;
 use small_http::{Request, Response, Status};
 
-pub(crate) use self::persons::*;
 use crate::Context;
+pub(crate) use crate::controllers::persons::*;
 
 pub(crate) mod persons;
 

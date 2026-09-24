@@ -12,15 +12,14 @@ use std::ffi::{CStr, c_ulong, c_void};
 use std::ptr;
 use std::rc::Rc;
 
-use headers as vk;
-use headers::{
+use super::*;
+use crate::platform::headers as vk;
+use crate::platform::headers::{
     GetProc, dlclose, dlopen, dlsym, gdk_wayland_display_get_wl_display,
     gdk_wayland_window_get_wl_surface, gdk_window_get_display, gdk_x11_display_get_xdisplay,
     gdk_x11_window_get_xid, gtk_widget_add_tick_callback, gtk_widget_get_scale_factor,
     gtk_widget_get_window, gtk_widget_remove_tick_callback,
 };
-
-use super::*;
 
 mod headers;
 mod widget;

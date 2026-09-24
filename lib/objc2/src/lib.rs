@@ -9,9 +9,10 @@
 #![cfg(target_vendor = "apple")]
 #![allow(unsafe_code)]
 
-pub use encode::{Encode, Encoding};
 pub use objc2_proc_macros::{define_class, extern_class};
-pub use runtime::{ClassType, DefinedClass, Message};
+
+pub use crate::encode::{Encode, Encoding};
+pub use crate::runtime::{ClassType, DefinedClass, Message};
 
 /// Encode
 pub mod encode;
