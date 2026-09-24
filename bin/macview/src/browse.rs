@@ -84,8 +84,12 @@ unsafe fn is_openable(path: &Path, readable: &[*mut Object]) -> bool {
     };
     // SAFETY: The type database answers with an autoreleased type or with nothing at all.
     unsafe {
-        let kind: *mut Object =
-            msg_send![class!(UTType), typeWithFilenameExtension: ns_string(extension)];
+        // macOS can classify .jfif as a dynamic type that does not conform to public.image.
+        let kind: *mut Object = if extension.eq_ignore_ascii_case("jfif") {
+            msg_send![class!(UTType), typeWithIdentifier: ns_string("public.jpeg")]
+        } else {
+            msg_send![class!(UTType), typeWithFilenameExtension: ns_string(extension)]
+        };
         if kind.is_null() {
             return false;
         }
@@ -247,12 +251,22 @@ mod tests {
         autoreleasepool(|_| {
             let folder = folder_with(
                 "sorted",
-                &["10.png", "2.png", "notes.txt", ".hidden.png", "photo.jpeg"],
+                &[
+                    "10.png",
+                    "2.png",
+                    "notes.txt",
+                    ".hidden.png",
+                    "photo.jpeg",
+                    "photo.jfif",
+                ],
             );
             // SAFETY: The types live in the autorelease pool around this call.
             let siblings = unsafe { openable_siblings(&folder.join("2.png"), &image_types()) };
-            // Numbers sort naturally, hidden and unreadable files are excluded.
-            assert_eq!(names_of(&siblings), ["2.png", "10.png", "photo.jpeg"]);
+            // Numbers sort naturally; hidden and unreadable files are excluded.
+            assert_eq!(
+                names_of(&siblings),
+                ["2.png", "10.png", "photo.jfif", "photo.jpeg"]
+            );
             let _ = std::fs::remove_dir_all(&folder);
         });
     }

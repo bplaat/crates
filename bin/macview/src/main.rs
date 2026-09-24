@@ -621,6 +621,8 @@ unsafe fn type_identifier(extension: &str) -> Result<OwnedString, String> {
         Some("org.libpng.apng")
     } else if extension.eq_ignore_ascii_case("bmp") {
         Some("com.microsoft.bmp")
+    } else if extension.eq_ignore_ascii_case("jfif") {
+        Some("org.jpeg.jfif")
     } else if extension.eq_ignore_ascii_case("qoi") {
         Some("org.qoiformat.qoi")
     } else if extension.eq_ignore_ascii_case("tvg") {
@@ -1108,11 +1110,61 @@ mod tests {
     }
 
     #[test]
+    fn dib_and_jfif_examples_load() {
+        autoreleasepool(|_| {
+            for extension in ["dib", "jfif"] {
+                let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join(format!("examples/dice.{extension}"));
+                // SAFETY: Each path names an existing image and the pool keeps its URL alive.
+                let (media, _, _) = unsafe { load_document(file_url(&path)) }
+                    .unwrap_or_else(|error| panic!("failed to load .{extension}: {error}"));
+                let size = media.pixel_size().expect("example has decoded dimensions");
+                assert_eq!((size.width, size.height), (800.0, 600.0));
+            }
+        });
+    }
+
+    #[test]
+    fn common_raster_extensions_load() {
+        autoreleasepool(|_| {
+            let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../lib/macview-appkit/tests/fixtures");
+            let folder = std::env::temp_dir()
+                .join(format!("macview-raster-extensions-{}", std::process::id()));
+            std::fs::create_dir_all(&folder).expect("create raster extension test folder");
+            for (extension, fixture) in [
+                ("bmp", "rgb.bmp"),
+                ("dib", "rgb.bmp"),
+                ("jpg", "progressive.jpg"),
+                ("jpeg", "progressive.jpg"),
+                ("jpe", "progressive.jpg"),
+                ("jfif", "progressive.jpg"),
+                ("png", "rgb.png"),
+                ("gif", "animated.gif"),
+            ] {
+                let path = folder.join(format!("image.{extension}"));
+                let bytes = std::fs::read(fixtures.join(fixture)).expect("read raster fixture");
+                let bytes = if extension == "dib" {
+                    &bytes[14..]
+                } else {
+                    &bytes
+                };
+                std::fs::write(&path, bytes).expect("write raster fixture");
+                // SAFETY: Each URL names an existing image and the pool keeps the URL alive.
+                let result = unsafe { load_document(file_url(&path)) };
+                result.unwrap_or_else(|error| panic!("failed to load .{extension}: {error}"));
+            }
+            std::fs::remove_dir_all(folder).expect("remove raster extension test folder");
+        });
+    }
+
+    #[test]
     fn special_extensions_use_their_declared_image_types() {
         autoreleasepool(|_| {
             for (extension, expected) in [
                 ("APNG", b"org.libpng.apng".as_slice()),
                 ("BMP", b"com.microsoft.bmp".as_slice()),
+                ("JFIF", b"org.jpeg.jfif".as_slice()),
                 ("QOI", b"org.qoiformat.qoi".as_slice()),
                 ("TVG", b"org.tinyvg.tvg".as_slice()),
             ] {
