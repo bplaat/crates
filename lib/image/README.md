@@ -11,13 +11,17 @@ let bytes = std::fs::read("picture.png").expect("read image");
 let image = image::decode(&bytes).expect("decode image");
 println!("{}x{}", image.width(), image.height());
 for frame in image.frames() {
-    println!("{} RGBA bytes, {:?}", frame.pixels().len(), frame.delay());
+    let bitmap = frame.bitmap();
+    println!("{}x{}: {} RGBA bytes, {:?}", bitmap.width(), bitmap.height(), bitmap.data().len(), frame.delay());
 }
 ```
 
-Each animation frame contains the complete canvas after blending and before
-disposal. Static images have one frame. Animation delays and loop counts are
-preserved, and JPEG EXIF orientation is applied to the pixels and dimensions.
+Each animation frame contains a `Bitmap` with the complete canvas after blending
+and before disposal, plus its display delay. Static images have one frame.
+`image.is_animated()` reports animation even when an animated file contains one
+frame. `image.loop_count()` returns `LoopCount::Infinite` or
+`LoopCount::Finite(plays)`; static images return `Finite(1)`. Animation delays
+are preserved, and JPEG EXIF orientation is applied to the pixels and dimensions.
 
 The decoder supports common JPEG, PNG/APNG, GIF, BMP, ICO, and QOI variants,
 including progressive JPEG, Adam7 PNG, GIF interlacing, BMP bitfields/RLE, and

@@ -325,7 +325,7 @@ fn applies_gradient_color_interpolation() {
     )
     .expect("linear RGB gradient");
     assert!(image.paints().any(|(_, paint)| {
-        matches!(paint, Paint::LinearGradient { stops, .. } if stops.iter().all(|stop| stop.color.color_space == crate::VectorColorSpace::LinearSrgb))
+        matches!(paint, Paint::LinearGradient { stops, .. } if stops.iter().all(|stop| stop.color.color_space == crate::ColorSpace::LinearSrgb))
     }));
 }
 

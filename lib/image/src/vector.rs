@@ -10,6 +10,7 @@
 
 use std::fmt::{self, Display, Formatter};
 
+use crate::ColorSpace;
 #[cfg(feature = "tinyvg")]
 use crate::tinyvg;
 
@@ -208,15 +209,6 @@ pub enum PathSegment {
     Close,
 }
 
-/// A color's RGB transfer function.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum VectorColorSpace {
-    /// Standard RGB.
-    Srgb,
-    /// Linear extended sRGB.
-    LinearSrgb,
-}
-
 /// A straight-alpha color.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Color {
@@ -229,7 +221,7 @@ pub struct Color {
     /// Alpha component.
     pub alpha: f64,
     /// RGB transfer function.
-    pub color_space: VectorColorSpace,
+    pub color_space: ColorSpace,
 }
 
 /// A gradient color stop.
@@ -1068,10 +1060,7 @@ const fn color(value: tinyvg::Color) -> Color {
         green: value.green,
         blue: value.blue,
         alpha: value.alpha,
-        color_space: match value.color_space {
-            tinyvg::ColorSpace::Srgb => VectorColorSpace::Srgb,
-            tinyvg::ColorSpace::LinearSrgb => VectorColorSpace::LinearSrgb,
-        },
+        color_space: value.color_space,
     }
 }
 

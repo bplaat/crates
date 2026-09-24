@@ -332,6 +332,24 @@ fn run_raster_case(case: RasterCase) {
             .expect("reference dimensions");
 
         for (index, (frame, reference)) in image.frames().iter().zip(references).enumerate() {
+            assert_eq!(
+                frame.bitmap().width(),
+                image.width(),
+                "{} frame {index}",
+                name.display()
+            );
+            assert_eq!(
+                frame.bitmap().height(),
+                image.height(),
+                "{} frame {index}",
+                name.display()
+            );
+            assert_eq!(
+                frame.bitmap().data(),
+                frame.pixels(),
+                "{} frame {index}",
+                name.display()
+            );
             let expected = fs::read(&reference).expect("read raster reference");
             assert_eq!(
                 expected.len(),

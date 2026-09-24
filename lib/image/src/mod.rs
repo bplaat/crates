@@ -9,6 +9,12 @@
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
 
+pub use crate::vector::{
+    BlendMode, Clip, Color, DrawCommand, FillRule, GradientStop, LineCap, LineJoin, Mask, MaskType,
+    Paint, PaintId, PathId, PathSegment, Point, Rect, Size, SpreadMethod, StrokeStyle, Transform,
+    VectorDecodeError, VectorFormat, VectorImage,
+};
+
 #[cfg(all(
     test,
     any(
@@ -24,11 +30,6 @@ use std::time::Duration;
 ))]
 mod test_support;
 mod vector;
-pub use vector::{
-    BlendMode, Clip, Color, DrawCommand, FillRule, GradientStop, LineCap, LineJoin, Mask, MaskType,
-    Paint, PaintId, PathId, PathSegment, Point, Rect, Size, SpreadMethod, StrokeStyle, Transform,
-    VectorColorSpace, VectorDecodeError, VectorFormat, VectorImage,
-};
 
 #[cfg(feature = "svg")]
 mod svg;
@@ -74,23 +75,62 @@ pub enum Format {
 /// The interpretation of decoded color channels. Alpha is always linear.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColorSpace {
-    /// sRGB (also the default for images without supported color metadata).
+    /// Standard RGB.
     Srgb,
-    /// Linear sRGB, as declared by QOI.
-    Linear,
+    /// Linear extended sRGB.
+    LinearSrgb,
+}
+
+/// The number of times an animation is played.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LoopCount {
+    /// The animation repeats indefinitely.
+    Infinite,
+    /// The animation plays this many times in total.
+    Finite(u32),
+}
+
+/// A row-major, straight-alpha RGBA8 bitmap.
+#[derive(Debug, Eq, PartialEq)]
+pub struct Bitmap {
+    width: u32,
+    height: u32,
+    data: Vec<u8>,
+}
+
+impl Bitmap {
+    /// Returns the width in pixels.
+    pub const fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Returns the height in pixels.
+    pub const fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Returns the row-major, straight-alpha RGBA8 pixels.
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 /// A complete displayed frame, after animation blending and before disposal.
 #[derive(Debug, Eq, PartialEq)]
 pub struct Frame {
-    pixels: Vec<u8>,
+    bitmap: Bitmap,
     delay: Duration,
 }
 
 impl Frame {
+    /// Returns the complete displayed bitmap.
+    pub const fn bitmap(&self) -> &Bitmap {
+        &self.bitmap
+    }
+
     /// Returns canvas-sized, row-major, straight-alpha RGBA8 pixels.
     pub fn pixels(&self) -> &[u8] {
-        &self.pixels
+        self.bitmap.data()
     }
 
     /// Returns the encoded display duration; static images have zero duration.
@@ -103,11 +143,10 @@ impl Frame {
 #[derive(Debug, Eq, PartialEq)]
 pub struct Image {
     format: Format,
-    width: u32,
-    height: u32,
     color_space: ColorSpace,
     frames: Vec<Frame>,
-    loop_count: u32,
+    is_animated: bool,
+    loop_count: LoopCount,
 }
 
 impl Image {
@@ -117,13 +156,13 @@ impl Image {
     }
 
     /// Returns the displayed canvas width in pixels.
-    pub const fn width(&self) -> u32 {
-        self.width
+    pub fn width(&self) -> u32 {
+        self.frames[0].bitmap.width()
     }
 
     /// Returns the displayed canvas height in pixels.
-    pub const fn height(&self) -> u32 {
-        self.height
+    pub fn height(&self) -> u32 {
+        self.frames[0].bitmap.height()
     }
 
     /// Returns the interpretation of the decoded color channels.
@@ -138,11 +177,16 @@ impl Image {
 
     /// Returns the first displayed frame's RGBA8 pixels.
     pub fn pixels(&self) -> &[u8] {
-        &self.frames[0].pixels
+        self.frames[0].pixels()
     }
 
-    /// Returns total animation plays, or zero for infinite playback.
-    pub const fn loop_count(&self) -> u32 {
+    /// Returns whether the image has animation frames or playback metadata.
+    pub const fn is_animated(&self) -> bool {
+        self.is_animated
+    }
+
+    /// Returns the total animation plays.
+    pub const fn loop_count(&self) -> LoopCount {
         self.loop_count
     }
 
@@ -150,14 +194,17 @@ impl Image {
     fn still(format: Format, width: u32, height: u32, pixels: Vec<u8>) -> Self {
         Self {
             format,
-            width,
-            height,
             color_space: ColorSpace::Srgb,
             frames: vec![Frame {
-                pixels,
+                bitmap: Bitmap {
+                    width,
+                    height,
+                    data: pixels,
+                },
                 delay: Duration::ZERO,
             }],
-            loop_count: 1,
+            is_animated: false,
+            loop_count: LoopCount::Finite(1),
         }
     }
 }
@@ -343,12 +390,26 @@ impl Budget {
     }
 
     #[cfg(any(feature = "png", feature = "gif"))]
-    fn frame(&mut self, frames: &mut Vec<Frame>, pixels: Vec<u8>, delay: Duration) -> Result<()> {
+    fn frame(
+        &mut self,
+        frames: &mut Vec<Frame>,
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+        delay: Duration,
+    ) -> Result<()> {
         self.claim(size_of::<Frame>())?;
         frames
             .try_reserve(1)
             .map_err(|_| DecodeError::ImageTooLarge)?;
-        frames.push(Frame { pixels, delay });
+        frames.push(Frame {
+            bitmap: Bitmap {
+                width,
+                height,
+                data: pixels,
+            },
+            delay,
+        });
         Ok(())
     }
 }

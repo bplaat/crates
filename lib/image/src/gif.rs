@@ -7,7 +7,9 @@
 use std::mem;
 use std::time::Duration;
 
-use super::{Area, Budget, ColorSpace, DecodeError, Format, Image, Reader, Result, pixel_len};
+use super::{
+    Area, Budget, ColorSpace, DecodeError, Format, Image, LoopCount, Reader, Result, pixel_len,
+};
 
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 enum DisposalMethod {
@@ -49,7 +51,8 @@ struct Decoder<'a> {
     budget: Budget,
     canvas: Vec<u8>,
     frames: Vec<super::Frame>,
-    loop_count: u32,
+    has_loop_extension: bool,
+    loop_count: LoopCount,
     control: GraphicControl,
 }
 
@@ -80,7 +83,8 @@ impl<'a> Decoder<'a> {
             budget: Budget::default(),
             canvas: Vec::new(),
             frames: Vec::new(),
-            loop_count: 1,
+            has_loop_extension: false,
+            loop_count: LoopCount::Finite(1),
             control: GraphicControl::default(),
         })
     }
@@ -96,9 +100,8 @@ impl<'a> Decoder<'a> {
                     }
                     return Ok(Image {
                         format: Format::Gif,
-                        width: self.width,
-                        height: self.height,
                         color_space: ColorSpace::Srgb,
+                        is_animated: self.has_loop_extension || self.frames.len() > 1,
                         frames: self.frames,
                         loop_count: self.loop_count,
                     });
@@ -138,10 +141,11 @@ impl<'a> Decoder<'a> {
                         return Err(DecodeError::InvalidData);
                     }
                     let repeats = u16::from_le_bytes([bytes[1], bytes[2]]);
+                    self.has_loop_extension = true;
                     self.loop_count = if repeats == 0 {
-                        0
+                        LoopCount::Infinite
                     } else {
-                        u32::from(repeats) + 1
+                        LoopCount::Finite(u32::from(repeats) + 1)
                     };
                 } else {
                     Self::skip_blocks(&mut self.reader)?;
@@ -222,7 +226,13 @@ impl<'a> Decoder<'a> {
             }
         }
         let pixels = self.budget.copy(&self.canvas)?;
-        self.budget.frame(&mut self.frames, pixels, control.delay)?;
+        self.budget.frame(
+            &mut self.frames,
+            self.width,
+            self.height,
+            pixels,
+            control.delay,
+        )?;
         match control.disposal {
             DisposalMethod::Background => {
                 area.clear(&mut self.canvas, self.width as usize, bg);
@@ -414,6 +424,29 @@ mod tests {
     }
 
     #[test]
+    fn gif_animation_metadata_distinguishes_single_frame_playback() {
+        let mut single_frame = b"GIF89a\x01\0\x01\0\x80\0\0".to_vec();
+        single_frame.extend_from_slice(&[255, 0, 0, 0, 0, 0]);
+        gif_frame(&mut single_frame, 0, 0, 0, false);
+        single_frame.push(0x3b);
+
+        let image = decode(&single_frame).expect("single-frame GIF");
+        assert!(!image.is_animated());
+        assert_eq!(image.loop_count(), LoopCount::Finite(1));
+
+        for (repeats, expected) in [(0u16, LoopCount::Infinite), (2, LoopCount::Finite(3))] {
+            let mut animated = single_frame[..19].to_vec();
+            animated.extend_from_slice(b"\x21\xff\x0bNETSCAPE2.0\x03\x01");
+            animated.extend_from_slice(&repeats.to_le_bytes());
+            animated.push(0);
+            animated.extend_from_slice(&single_frame[19..]);
+            let image = decode(&animated).expect("looping single-frame GIF");
+            assert!(image.is_animated());
+            assert_eq!(image.loop_count(), expected);
+        }
+    }
+
+    #[test]
     fn gif_transparency_restore_background_and_previous() {
         for disposal in [2, 3] {
             let mut data = b"GIF89a\x02\0\x01\0\x81\0\0".to_vec();
@@ -423,6 +456,8 @@ mod tests {
             gif_frame(&mut data, 1, 3, 0, true);
             data.push(0x3b);
             let image = decode(&data).expect("GIF disposal");
+            assert!(image.is_animated());
+            assert_eq!(image.loop_count(), LoopCount::Finite(1));
             assert_eq!(image.frames()[0].pixels(), &[255, 0, 0, 255, 0, 0, 0, 0]);
             assert_eq!(image.frames()[1].pixels(), &[0, 255, 0, 255, 0, 0, 0, 0]);
             let left = if disposal == 2 {

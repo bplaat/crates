@@ -7,7 +7,8 @@
 use std::time::Duration;
 
 use super::{
-    Area, Budget, ColorSpace, DecodeError, Format, Frame, Image, Reader, Result, pixel_len,
+    Area, Budget, ColorSpace, DecodeError, Format, Frame, Image, LoopCount, Reader, Result,
+    pixel_len,
 };
 
 struct Header {
@@ -247,7 +248,13 @@ impl PngState {
             }
         }
         let pixels = budget.copy(&self.canvas)?;
-        budget.frame(&mut self.frames, pixels, control.delay)?;
+        budget.frame(
+            &mut self.frames,
+            header.width,
+            header.height,
+            pixels,
+            control.delay,
+        )?;
         match control.dispose {
             DisposeOp::Background => {
                 control
@@ -458,17 +465,20 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
                     return Err(DecodeError::InvalidData);
                 }
                 state.finish_frame(&header, &mut budget)?;
-                let (count, loop_count) = state.animation.expect("animation was checked");
+                let (count, plays) = state.animation.expect("animation was checked");
                 if state.frames.len() != count as usize {
                     return Err(DecodeError::InvalidData);
                 }
                 return Ok(Image {
                     format: Format::Png,
-                    width,
-                    height,
                     color_space: ColorSpace::Srgb,
                     frames: state.frames,
-                    loop_count,
+                    is_animated: true,
+                    loop_count: if plays == 0 {
+                        LoopCount::Infinite
+                    } else {
+                        LoopCount::Finite(plays)
+                    },
                 });
             }
             _ if kind[0] & 32 == 0 => return Err(DecodeError::UnsupportedFeature),
@@ -970,6 +980,23 @@ mod tests {
     }
 
     #[test]
+    fn single_frame_apng_retains_animation_metadata() {
+        let scanline = [0, 255, 0, 0, 255];
+        let still = decode(&png_finish(png_header(1, 1, 8, 6), &scanline)).expect("static PNG");
+        assert!(!still.is_animated());
+        assert_eq!(still.loop_count(), LoopCount::Finite(1));
+
+        let mut animated = png_header(1, 1, 8, 6);
+        chunk(&mut animated, b"acTL", &[0, 0, 0, 1, 0, 0, 0, 0]);
+        frame_control(&mut animated, 0, [1, 1, 0, 0], 0, 0);
+        let image = decode(&png_finish(animated, &scanline)).expect("single-frame APNG");
+        assert!(image.is_animated());
+        assert_eq!(image.loop_count(), LoopCount::Infinite);
+        assert_eq!(image.frames().len(), 1);
+        assert_eq!(image.pixels(), still.pixels());
+    }
+
+    #[test]
     fn apng_blending_disposal_and_excluded_default() {
         for excluded in [false, true] {
             let mut out = png_header(2, 1, 8, 6);
@@ -1014,7 +1041,8 @@ mod tests {
             chunk(&mut out, b"fdAT", &bytes);
             chunk(&mut out, b"IEND", &[]);
             let image = decode(&out).expect("APNG");
-            assert_eq!(image.loop_count(), 2);
+            assert!(image.is_animated());
+            assert_eq!(image.loop_count(), LoopCount::Finite(2));
             assert_eq!(image.frames().len(), 4);
             assert_eq!(image.frames()[3].pixels(), &[255, 0, 0, 255, 0, 0, 0, 0]);
             assert_eq!(

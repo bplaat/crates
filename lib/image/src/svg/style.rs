@@ -10,14 +10,13 @@ use super::values::{
 };
 use super::xml::Element;
 use crate::{
-    BlendMode, Color, FillRule, LineCap, LineJoin, Size, StrokeStyle, VectorColorSpace,
-    VectorDecodeError,
+    BlendMode, Color, ColorSpace, FillRule, LineCap, LineJoin, Size, StrokeStyle, VectorDecodeError,
 };
 
 #[derive(Clone)]
 pub(super) struct Style {
     pub(super) color: Color,
-    pub(super) color_interpolation: VectorColorSpace,
+    pub(super) color_interpolation: ColorSpace,
     pub(super) fill: PaintValue,
     pub(super) stroke: PaintValue,
     pub(super) context_fill: PaintValue,
@@ -122,11 +121,11 @@ impl Default for Style {
             green: 0.0,
             blue: 0.0,
             alpha: 1.0,
-            color_space: VectorColorSpace::Srgb,
+            color_space: ColorSpace::Srgb,
         };
         Self {
             color: black,
-            color_interpolation: VectorColorSpace::Srgb,
+            color_interpolation: ColorSpace::Srgb,
             fill: PaintValue::Color(black),
             stroke: PaintValue::None,
             context_fill: PaintValue::None,
@@ -439,8 +438,8 @@ impl Stylesheet {
                     "color" => {}
                     "color-interpolation" => {
                         style.color_interpolation = match value.to_ascii_lowercase().as_str() {
-                            "srgb" | "auto" => VectorColorSpace::Srgb,
-                            "linearrgb" => VectorColorSpace::LinearSrgb,
+                            "srgb" | "auto" => ColorSpace::Srgb,
+                            "linearrgb" => ColorSpace::LinearSrgb,
                             _ => return Err(VectorDecodeError::InvalidData),
                         }
                     }
@@ -862,7 +861,7 @@ pub(super) fn parse_color(value: &str, current: Color) -> Result<Color, VectorDe
         green: f64::from(rgba[1]) / 255.0,
         blue: f64::from(rgba[2]) / 255.0,
         alpha: f64::from(rgba[3]) / 255.0,
-        color_space: VectorColorSpace::Srgb,
+        color_space: ColorSpace::Srgb,
     })
 }
 

@@ -8,8 +8,8 @@ use std::ffi::c_void;
 use std::ptr::null;
 
 use image::{
-    BlendMode, Color, DrawCommand, FillRule, LineCap, LineJoin, MaskType, Paint, PathSegment,
-    SpreadMethod, Transform, VectorColorSpace, VectorImage,
+    BlendMode, Color, ColorSpace, DrawCommand, FillRule, LineCap, LineJoin, MaskType, Paint,
+    PathSegment, SpreadMethod, Transform, VectorImage,
 };
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
@@ -779,7 +779,7 @@ fn mask_color(color: Color, mode: RenderMode) -> Color {
             green: 1.0,
             blue: 1.0,
             alpha: color.alpha,
-            color_space: VectorColorSpace::LinearSrgb,
+            color_space: ColorSpace::LinearSrgb,
         },
         RenderMode::LuminanceMask => {
             let [red, green, blue, alpha] = linear_components(color);
@@ -788,26 +788,26 @@ fn mask_color(color: Color, mode: RenderMode) -> Color {
                 green: 1.0,
                 blue: 1.0,
                 alpha: alpha * (red * 0.2126 + green * 0.7152 + blue * 0.0722),
-                color_space: VectorColorSpace::LinearSrgb,
+                color_space: ColorSpace::LinearSrgb,
             }
         }
     }
 }
 
 fn display_color(mut color: Color) -> Color {
-    if color.color_space == VectorColorSpace::LinearSrgb {
+    if color.color_space == ColorSpace::LinearSrgb {
         color.red = color.red.max(0.0).powf(1.0 / 2.2);
         color.green = color.green.max(0.0).powf(1.0 / 2.2);
         color.blue = color.blue.max(0.0).powf(1.0 / 2.2);
-        color.color_space = VectorColorSpace::Srgb;
+        color.color_space = ColorSpace::Srgb;
     }
     color
 }
 
 fn linear_components(color: Color) -> [f64; 4] {
     let convert = |value: f64| match color.color_space {
-        VectorColorSpace::Srgb => value.max(0.0).powf(2.2),
-        VectorColorSpace::LinearSrgb => value,
+        ColorSpace::Srgb => value.max(0.0).powf(2.2),
+        ColorSpace::LinearSrgb => value,
     };
     [
         convert(color.red),

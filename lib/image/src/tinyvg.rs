@@ -9,6 +9,8 @@
 use std::mem::size_of;
 use std::{error, fmt};
 
+use crate::ColorSpace;
+
 const MAX_ELEMENTS: usize = 1_000_000;
 const MAX_BYTES: usize = 256 * 1024 * 1024;
 
@@ -136,15 +138,6 @@ pub(crate) enum PathOperation {
     },
     /// Close the current subpath.
     Close,
-}
-
-/// A color's source color space.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ColorSpace {
-    /// Standard RGB.
-    Srgb,
-    /// Linear extended sRGB (scRGB).
-    LinearSrgb,
 }
 
 /// A straight-alpha RGBA color.

@@ -17,16 +17,16 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, msg_send, sel};
 
-mod headers;
-mod vector;
-
-use headers::*;
-pub use headers::{
+use crate::headers::*;
+pub use crate::headers::{
     __CFConstantStringClassReference, CFConstString, CGContextFillRect, CGContextSetRGBFillColor,
     NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, ns_string,
 };
-use vector::create_vector_image;
-pub use vector::fill_white_background;
+use crate::vector::create_vector_image;
+pub use crate::vector::fill_white_background;
+
+mod headers;
+mod vector;
 
 /// An owned immutable `NSString` that can be transferred between queues.
 pub struct OwnedString {
@@ -355,7 +355,7 @@ fn decode_custom_image(bytes: &[u8]) -> Result<Option<Image>, String> {
     let decoded = image::decode(bytes).map_err(|error| error.to_string())?;
     // NSImageView natively plays animated NSBitmapImageRep objects and preserves their frame
     // durations and loop count. Leave animations encoded so AppKit can create that representation.
-    if decoded.frames().len() != 1 {
+    if decoded.is_animated() {
         return Ok(None);
     }
     let frame = &decoded.frames()[0];
@@ -437,7 +437,7 @@ fn make_image(
         }
         let color_space_name = match color_space {
             image::ColorSpace::Srgb => kCGColorSpaceSRGB,
-            image::ColorSpace::Linear => kCGColorSpaceLinearSRGB,
+            image::ColorSpace::LinearSrgb => kCGColorSpaceLinearSRGB,
         };
         let color_space = CGColorSpaceCreateWithName(color_space_name);
         if color_space.is_null() {

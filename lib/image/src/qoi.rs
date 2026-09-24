@@ -118,7 +118,7 @@ impl<'a> Decoder<'a> {
         image.color_space = if self.data[13] == 0 {
             ColorSpace::Srgb
         } else {
-            ColorSpace::Linear
+            ColorSpace::LinearSrgb
         };
         Ok(image)
     }
@@ -151,5 +151,7 @@ mod tests {
             .expect("image-rs QOI fixture");
         assert_eq!((image.width(), image.height()), (5, 5));
         assert_eq!(image.pixels().len(), 5 * 5 * 4);
+        assert!(!image.is_animated());
+        assert_eq!(image.loop_count(), crate::LoopCount::Finite(1));
     }
 }

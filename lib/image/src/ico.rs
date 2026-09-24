@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use super::{DecodeError, Format, Image, Reader, Result, bmp, png};
+use super::{DecodeError, Format, Image, LoopCount, Reader, Result, bmp, png};
 
 #[derive(Clone, Copy)]
 struct Entry {
@@ -74,13 +74,14 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
         .ok_or(DecodeError::InvalidData)?;
     if payload.starts_with(b"\x89PNG\r\n\x1a\n") {
         let mut image = png::decode(payload)?;
-        if image.width != entry.width || image.height != entry.height {
+        if image.width() != entry.width || image.height() != entry.height {
             return Err(DecodeError::InvalidHeader);
         }
         image.format = Format::Ico;
         image.frames.truncate(1);
         image.frames[0].delay = Duration::ZERO;
-        image.loop_count = 1;
+        image.is_animated = false;
+        image.loop_count = LoopCount::Finite(1);
         Ok(image)
     } else {
         bmp::decode_icon(payload, entry.width, entry.height, entry.colors)
