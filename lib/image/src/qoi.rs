@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-use super::{Budget, ColorSpace, DecodeError, Format, Image};
+use super::{Bitmap, Budget, ColorSpace, DecodeError, EncodeError, Format, Image};
 
 const HEADER_LEN: usize = 14;
 const END_MARKER: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 1];
 const MAX_PIXELS: u64 = 400_000_000;
 
+// MARK: Decoder
 struct Decoder<'a> {
     data: &'a [u8],
     cursor: usize,
@@ -137,9 +138,81 @@ impl<'a> Decoder<'a> {
     }
 }
 
+// MARK: Encoder
+pub(super) fn encode(bitmap: &Bitmap) -> Result<Vec<u8>, EncodeError> {
+    let mut out = Vec::new();
+    out.try_reserve(
+        bitmap
+            .data
+            .len()
+            .checked_add(22)
+            .ok_or(EncodeError::ImageTooLarge)?,
+    )
+    .map_err(|_| EncodeError::ImageTooLarge)?;
+    out.extend_from_slice(b"qoif");
+    out.extend_from_slice(&bitmap.width.to_be_bytes());
+    out.extend_from_slice(&bitmap.height.to_be_bytes());
+    out.extend_from_slice(&[4, 0]);
+    let mut previous = [0, 0, 0, 255];
+    let mut index = [[0; 4]; 64];
+    let mut run = 0u8;
+    for pixel in bitmap.data.as_chunks::<4>().0 {
+        if *pixel == previous {
+            run += 1;
+            if run == 62 {
+                out.push(0xc0 | (run - 1));
+                run = 0;
+            }
+            continue;
+        }
+        if run != 0 {
+            out.push(0xc0 | (run - 1));
+            run = 0;
+        }
+        let hash = (usize::from(pixel[0]) * 3
+            + usize::from(pixel[1]) * 5
+            + usize::from(pixel[2]) * 7
+            + usize::from(pixel[3]) * 11)
+            % 64;
+        if index[hash] == *pixel {
+            out.push(hash as u8);
+        } else {
+            index[hash] = *pixel;
+            if pixel[3] == previous[3] {
+                let dr = i16::from(pixel[0].wrapping_sub(previous[0]) as i8);
+                let dg = i16::from(pixel[1].wrapping_sub(previous[1]) as i8);
+                let db = i16::from(pixel[2].wrapping_sub(previous[2]) as i8);
+                if (-2..=1).contains(&dr) && (-2..=1).contains(&dg) && (-2..=1).contains(&db) {
+                    out.push(0x40 | ((dr + 2) as u8) << 4 | ((dg + 2) as u8) << 2 | (db + 2) as u8);
+                } else if (-32..=31).contains(&dg)
+                    && (-8..=7).contains(&(dr - dg))
+                    && (-8..=7).contains(&(db - dg))
+                {
+                    out.extend_from_slice(&[
+                        0x80 | (dg + 32) as u8,
+                        ((dr - dg + 8) as u8) << 4 | (db - dg + 8) as u8,
+                    ]);
+                } else {
+                    out.extend_from_slice(&[0xfe, pixel[0], pixel[1], pixel[2]]);
+                }
+            } else {
+                out.extend_from_slice(&[0xff, pixel[0], pixel[1], pixel[2], pixel[3]]);
+            }
+        }
+        previous = *pixel;
+    }
+    if run != 0 {
+        out.push(0xc0 | (run - 1));
+    }
+    out.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 1]);
+    Ok(out)
+}
+
+// MARK: Tests
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Format, encode};
 
     #[test]
     fn image_rs_basic_fixture_decodes() {
@@ -149,5 +222,28 @@ mod tests {
         assert_eq!(image.pixels().len(), 5 * 5 * 4);
         assert!(!image.is_animated());
         assert_eq!(image.loop_count(), crate::LoopCount::Finite(1));
+    }
+
+    #[cfg(feature = "qoi")]
+    #[test]
+    fn qoi_uses_difference_opcodes() {
+        let bitmap = Bitmap::new(
+            3,
+            1,
+            vec![10, 20, 30, 255, 11, 21, 30, 255, 20, 28, 40, 255],
+        )
+        .unwrap();
+        let encoded = encode(&bitmap, Format::Qoi).unwrap();
+        assert!(
+            encoded[14..encoded.len() - 8]
+                .iter()
+                .any(|b| b & 0xc0 == 0x40)
+        );
+        assert!(
+            encoded[14..encoded.len() - 8]
+                .iter()
+                .any(|b| b & 0xc0 == 0x80)
+        );
+        assert_eq!(crate::decode(&encoded).unwrap().pixels(), bitmap.data());
     }
 }
